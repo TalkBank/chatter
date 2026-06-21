@@ -9,6 +9,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { targetToPlatformKey } from "./generate-latest-json.mjs";
 
@@ -29,6 +30,9 @@ function main() {
   writeFileSync(join(outDir, `${key}.json`), `${JSON.stringify(sidecar)}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL handles Windows paths (backslashes + drive letter); the naive
+// `file://${process.argv[1]}` only matches on POSIX, so on Windows main() was
+// skipped and no sidecar was written.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

@@ -17,6 +17,7 @@
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const RELEASE_ASSET_BASE = "https://github.com";
 
@@ -108,6 +109,8 @@ function main() {
 }
 
 // Only run main when invoked as a script, not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL handles Windows paths; the naive `file://${argv[1]}` only
+// matches on POSIX (see write-sidecar.mjs for the failure it caused).
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }
