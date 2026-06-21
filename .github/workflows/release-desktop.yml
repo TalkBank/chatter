@@ -251,8 +251,12 @@ jobs:
           # the updater bundle is the installer .exe.
           BUNDLE="$EXE"
           SIG="${EXE}.sig"
+          # Write the sidecar to a workspace-relative, forward-slash dir. On
+          # Windows $RUNNER_TEMP is a backslash path (D:\a\_temp), and a
+          # backslash glob in upload-artifact is read as escape sequences, so the
+          # upload finds no files. A relative "sidecar" dir avoids that.
           node apps/chatter-desktop/scripts/write-sidecar.mjs \
-            "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "$RUNNER_TEMP/sidecar"
+            "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "sidecar"
           echo "UPDATER_BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
           echo "UPDATER_SIG=$SIG" >> "$GITHUB_ENV"
 
@@ -267,7 +271,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: updater-sidecar-windows-x86_64
-          path: ${{ runner.temp }}/sidecar/*.json
+          path: sidecar/*.json
           if-no-files-found: error
 
       - name: Upload installer and updater bundle to the GitHub Release
