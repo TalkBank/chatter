@@ -257,7 +257,6 @@ jobs:
           SIDECAR_DIR="${RUNNER_TEMP//\\//}/sidecar"
           node apps/chatter-desktop/scripts/write-sidecar.mjs \
             "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "$SIDECAR_DIR"
-          echo "sidecar dir after write:"; ls -la "$SIDECAR_DIR" || echo "MISSING $SIDECAR_DIR"
           # Grouped redirect (shellcheck SC2129).
           {
             echo "INSTALLER=$EXE"
