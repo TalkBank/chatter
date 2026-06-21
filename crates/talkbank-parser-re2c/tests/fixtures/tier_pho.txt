@@ -1,0 +1,404 @@
+# tier_pho — 200 samples extracted from ~/talkbank/data/*-data
+# Each entry is separated by a blank line.
+# Lines may include tab-continuations (multi-physical-line entries).
+
+%pho:	ˈap
+
+%pho:	ˈɑp
+
+%pho:	ˈɑpow
+
+%pho:	ˈplɔm
+
+%pho:	ˈbɛt̪
+
+%pho:	ˈbet͡jeĭs
+
+%pho:	ˈɛs̠t͡ji̞
+
+%pho:	ˈbɛk̠it͡je
+
+%pho:	ˈlɑˈfa
+
+%pho:	ˈblɛm
+
+%pho:	ˈblɔm
+
+%pho:	bəˈlɔm
+
+%pho:	ˈpilɔm
+
+%pho:	ˈblɔmə
+
+%pho:	ˈbu
+
+%pho:	ˈpɑt
+
+%pho:	ˈbɔcəs̠
+
+%pho:	ˈblʉs
+
+%pho:	ˈti
+
+%pho:	ɪ̆ˈkuˌkɪdz
+
+%pho:	ˈɛ̝koc
+
+%pho:	ɑ ˈpɪs̠ːa
+
+%pho:	ˈen
+
+%pho:	ɛˈmʉs
+
+%pho:	ˈɛs̪ɔ
+
+%pho:	ˈlɑfɪ
+
+%pho:	ˈlɑfːʉ
+
+%pho:	ˈlɑf
+
+%pho:	ˈa
+
+%pho:	ˈɛt
+
+%pho:	ˈɑys̪
+
+%pho:	ˈɑʃ
+
+%pho:	ˈɪ̈ ˈtɑt
+
+%pho:	ˈleuw
+
+%pho:	ˈkikɔmɔi
+
+%pho:	ˈkɔmˑɛ
+
+%pho:	ˈkɑkuku
+
+%pho:	ˈkχɑlɑˌku
+
+%pho:	ˈka̠k
+
+%pho:	ˈkikɑ
+
+%pho:	ˈkiˌkɑp
+
+%pho:	ˈtitɑ
+
+%pho:	ˈkɪ̝p
+
+%pho:	ˈkɪp
+
+%pho:	ˈkipɛs̠
+
+%pho:	kə̆ˈlɔk
+
+%pho:	ˈkɔ̞k
+
+%pho:	ˈklɔk
+
+%pho:	ˈklɒk
+
+%pho:	ˈtu̞
+
+%pho:	ˈbuχɛ̞kə
+
+%pho:	kɔˈŋɛiŋ
+
+%pho:	kuŋˈɡɑŋ
+
+%pho:	kəˈlan
+
+%pho:	kuˈnɔ̝k
+
+%pho:	ˈkɔ
+
+%pho:	ˈkɑkɑ
+
+%pho:	ˈkɔkʉi
+
+%pho:	ˈkɔkɑ
+
+%pho:	ˈkɔkets̠
+
+%pho:	ˈkʉkəlʉk
+
+%pho:	ˈlɑm
+
+%pho:	ˈlɑməzɪ̈s̪
+
+%pho:	ˈlɑmɛ̈t͡jes̠
+
+%pho:	ˈlɛkɑ
+
+%pho:	ˈleˑsɪ
+
+%pho:	ˌpiˈfɛiʃ̟ɛ̈
+
+%pho:	ˈmɑmi
+
+%pho:	ˈmɑmɛ̈
+
+%pho:	ˈmam
+
+%pho:	ˈmɛˑm
+
+%pho:	ˈmɛ̝sˑ
+
+%pho:	ˈmoi
+
+%pho:	ˈmɒi
+
+%pho:	ˈmɒ
+
+%pho:	ˈmuʃ̟lə
+
+%pho:	ˈmus̠ɑ
+
+%pho:	ˈmʉ̞s
+
+%pho:	ˈmʉst t͡sɑ
+
+%pho:	ˈmʉst jɛ
+
+%pho:	ˈneĭpat
+
+%pho:	ɔ ˈʒɑ̝i
+
+%pho:	ʉʋ ˈje
+
+%pho:	ˈofɑn
+
+%pho:	ˈɔfɑɲ
+
+%pho:	ˈɔ̞ˌfɑn
+
+%pho:	ˈɔfɑt͡jə
+
+%pho:	ˈœy̆χ
+
+%pho:	ˈpat
+
+%pho:	ˈkam
+
+%pho:	ˈkeikam
+
+%pho:	ˈpy̞s̪
+
+%pho:	ˈpʉs̠
+
+%pho:	ˈp̺iʃ̟
+
+%pho:	ˈpu̟s̠
+
+%pho:	ˈlʉps
+
+%pho:	ˈnʉps
+
+%pho:	ˈχa̠p
+
+%pho:	ˈplɛχ
+
+%pho:	ˈplaχ
+
+%pho:	ˈplɑχ
+
+%pho:	ˈlɑk
+
+%pho:	ˈflɑ̟χ
+
+%pho:	ˈʋlak
+
+%pho:	ˈsnŭpisɛ
+
+%pho:	ˈsɭupi
+
+%pho:	ˌm̩pəsˈte̝
+
+%pho:	ˈsʉmpi̞
+
+%pho:	ˈtsʉkə ˈmakɔ̈
+
+%pho:	ˈtɔː
+
+%pho:	ˈtaχk͡χə
+
+%pho:	ˈtɛiχə
+
+%pho:	ˈtɑχəpˈχaʔ
+
+%pho:	ˈtaχkɑ
+
+%pho:	ˈtɑχɑ
+
+%pho:	ˈtɑχa
+
+%pho:	ˈt̪ɪ tɑ
+
+%pho:	ˈtɪḳ ˌtɑḳ
+
+%pho:	ˈfɑχtu
+
+%pho:	ˈʋɑt͡juχ
+
+%pho:	kʁuˈloʋa
+
+%pho:	ˈpɑk
+
+%pho:	ˈfɑk
+
+%pho:	ˈfɪs̠
+
+%pho:	ˈfitsɑ
+
+%pho:	ˈwisʉ
+
+%pho:	ˈfeĭt͡sɑ
+
+%pho:	ˈfɪs̪ɑ
+
+%pho:	ˈfɪχtɑ
+
+%pho:	ˈfɪs̪t͡sɑ
+
+%pho:	ˈfɪtɑuχ
+
+%pho:	ˈplɪnɛ̈
+
+%pho:	ˈflɪnɛ̈ʃ̟ɪt
+
+%pho:	ˈflɪneçi
+
+%pho:	ˈflɪnʉsʉt
+
+%pho:	ˈfɑχɒ
+
+%pho:	ˈfʉχɔ
+
+%pho:	ˈfʉχ ˈet
+
+%pho:	ˈfɔχt̪ɪt̪
+
+%pho:	ˈfɪk
+
+%pho:	ˈʋɔs̪
+
+%pho:	ˈba̠f
+
+%pho:	ˈʋɔtʉm
+
+%pho:	ˈʋɑhija
+
+%pho:	ˈʋɑˌteĭtɛ
+
+%pho:	ˈʋɑ χ ˈtɑ ˈnɑu
+
+%pho:	ˈʋɪ̈ s ˈtɑt
+
+%pho:	ʔɑ
+
+%pho:	ˈtɛ nɑ
+
+%pho:	ˈfʉtɔ̈
+
+%pho:	ˈʃ̟ɔn
+
+%pho:	ˈt̪a
+
+%pho:	ˈd̪a
+
+%pho:	ˈpiə̆
+
+%pho:	ˈpɛ̞ˌpɑ
+
+%pho:	ˈpapɑ̈
+
+%pho:	ˈpapɑ
+
+%pho:	ˈpɑˌpɑ
+
+%pho:	ˈpɑpːɑ
+
+%pho:	ˈpɒpɑ
+
+%pho:	pəˈpɑ
+
+%pho:	ˈʋɑpɑ
+
+%pho:	ˈɑpou
+
+%pho:	ˈɑpɑl
+
+%pho:	ˈapɑu
+
+%pho:	ˈhoːto
+
+%pho:	ˈɑutɒw
+
+%pho:	ˈoːtoː
+
+%pho:	ˈbɑmü
+
+%pho:	ˈbeçi
+
+%pho:	ˈpɛl ˌɔ̃
+
+%pho:	ˈbɛi
+
+%pho:	ˈblɔma
+
+%pho:	ˈbɔu
+
+%pho:	ˈpɔː
+
+%pho:	ˈboə̆tɑs
+
+%pho:	ˈbɔĭt͡s
+
+%pho:	ˈblʉm
+
+%pho:	ˈbɔ̝tɔlə
+
+%pho:	bəˈjɒχ
+
+%pho:	ˈt ɑ ˈsfe
+
+%pho:	ˈde̞ka̠
+
+%pho:	ˈti̞tɑy̆n
+
+%pho:	ˈɑitɑ
+
+%pho:	ˈki̞sɔʋ
+
+%pho:	ˈχɑ̟t
+
+%pho:	ˈχaĭṭ
+
+%pho:	ˈhɪtɑ
+
+%pho:	ˈlɑfː
+
+%pho:	ˈlaf ˌɛt
+
+%pho:	ˈhɛmp
+
+%pho:	ˈɦɔˑt
+
+%pho:	ˈjɔt
+
+%pho:	ˈjɑ
+
+%pho:	ˈjɑpi
+
+%pho:	ˈjapi
+
+%pho:	ˈkɛmɑu
+
+%pho:	ˈkafu
+
+%pho:	ˈkɑʔχ
+
+%pho:	ˈkɑk̠
+

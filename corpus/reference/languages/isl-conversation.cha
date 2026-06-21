@@ -1,0 +1,23 @@
+@UTF8
+@Begin
+@Languages:	isl
+@Participants:	CHI 360-118-3 Target_Child
+@ID:	isl|corpus|CHI|7;08.|male|||Target_Child|||
+@Comment:	Icelandic child word naming task
+@Comment:	Constructs: Icelandic language coverage, Latin script with special characters
+*CHI:	gíraffi .
+%mor:	noun|gíraff-Neut-Nom .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	stelpa .
+%mor:	noun|stelpa-Fem-Nom .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	tromma .
+%mor:	noun|trommi-Fem-Nom .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	fiðrildi .
+%mor:	noun|fiðrildi-Neut-Nom .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	draugur .
+%mor:	noun|draugur-Masc-Nom .
+%gra:	1|0|ROOT 2|1|PUNCT
+@End

@@ -1,0 +1,20 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child,
+	MOT Mother,
+	FAT Father
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|FAT|||||Father|||
+@Comment:	Multi-line continuation across headers and tiers
+@Comment:	Constructs: continuation, newline, line, header_gap,
+	tab-prefixed continuation on @Participants and dependent tiers
+@Situation:	Free play session in the lab playroom with a variety of toys
+	available on the floor and table
+*CHI:	mama I want to go to the park and play on the swings and
+	the slide and the monkey bars .
+%com:	CHI is pulling on MOT's hand while speaking, gesturing
+	toward the door
+*MOT:	maybe after lunch we can go .
+@End

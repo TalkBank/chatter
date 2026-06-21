@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
+%mor:	co|hello .
+%gra:	0|0|ROOT 1|0|PUNCT
+@End

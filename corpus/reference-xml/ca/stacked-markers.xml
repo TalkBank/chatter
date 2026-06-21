@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="dan"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="SPK"
+      role="Speaker"
+      language="dan"
+
+    />
+    <participant
+      id="LSN"
+      role="Adult"
+      language="dan"
+
+    />
+  </Participants>
+  <comment type="Generic">Stacked CA markers: multiple structural markers before word text. Exercises repeat1 in word_body marker-initial path.</comment>
+  <u who="SPK" uID="u0">
+    <w><ca-delimiter type="begin" label="softer"/><ca-element type="pitch up"/>hello<ca-delimiter type="end" label="softer"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u1">
+    <w><ca-delimiter type="begin" label="softer"/><ca-delimiter type="end" label="softer"/>pianissimo<ca-delimiter type="begin" label="softer"/><ca-delimiter type="end" label="softer"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u2">
+    <w><ca-delimiter type="begin" label="softer"/><ca-element type="pitch up"/><ca-element type="pitch down"/>complex<ca-delimiter type="end" label="softer"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u3">
+    <overlap-point start-end="start" top-bottom="top"/>
+    <w><ca-delimiter type="begin" label="softer"/>overlapping<wk type="cmp"/>soft<overlap-point start-end="end" top-bottom="top"/><ca-delimiter type="end" label="softer"/></w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

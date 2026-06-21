@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker, LSN Adult
+@Options:	CA
+@ID:	eng|corpus|SPK|||||Speaker|||
+@ID:	eng|corpus|LSN|||||Adult|||
+@Comment:	Uptake continuation, CA continuation markers, CA special
+@Comment:	Constructs: uptake_symbol, ca_continuation_marker,
+	unmarked_ending (missing terminator in CA)
+*SPK:	I didn't give you anything today ≡
+*LSN:	≡ nothing that adds to what we had earlier .
+*SPK:	right ≡
+*LSN:	≡ his counsel says he will not permit him to plead .
+@End

@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	dan
+@Participants:	SPK Speaker, LSN Adult
+@Options:	CA
+@ID:	dan|corpus|SPK|||||Speaker|||
+@ID:	dan|corpus|LSN|||||Adult|||
+@Comment:	Stacked CA markers: multiple structural markers before word text.
+	Exercises repeat1 in word_body marker-initial path.
+*SPK:	°↑hello° .
+*SPK:	°°pianissimo°° .
+*LSN:	°↑↓complex° .
+*LSN:	⌈°overlapping+soft⌉° .
+@End

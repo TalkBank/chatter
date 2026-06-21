@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Regular groups <content> with scoped annotations, nested groups
+@Comment:	Constructs: group_with_annotations, greater_than, less_than,
+	base_annotations, contents within groups
+*CHI:	hey [= foo] man <what in the world> [= bar] isn't [= baz] this ?
+*MOT:	<the big> [/] the small dog .
+*CHI:	<<happy and> [?]> [>] .
+*MOT:	<<see the> [?] working> [<] .
+*CHI:	<ingroup [/]> [<] after .
+@End

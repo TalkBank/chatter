@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+            DesignType="long"
+            ActivityType="toyplay"
+            GroupType="TD"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P2Y06M"
+      sex="male"
+      group="TD"
+      SES="UC"
+      education="graduate"
+      custom-field="custom field"
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+      sex="female"
+      SES="White,MC"
+
+    />
+  </Participants>
+  <comment type="Time Start">8:30:31</comment>
+  <comment type="Time Duration">17:30-18:00</comment>
+  <comment type="Types">long, toyplay, TD</comment>
+  <comment type="Generic">Time, type, and option headers</comment>
+  <comment type="Generic">Constructs: time_start_header, time_duration_header, time_duration_contents, types_header, types_design, types_activity, types_group, options_header, options_contents, option_name, id_corpus, id_age, id_sex, id_group, id_ses, id_education, id_custom_field</comment>
+  <u who="CHI" uID="u0">
+    <w>look</w>
+    <w>at</w>
+    <w>the</w>
+    <w>doggy</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>yes</w>
+    <w>he</w>
+    <w>is</w>
+    <w>a</w>
+    <w>nice</w>
+    <w>doggy</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

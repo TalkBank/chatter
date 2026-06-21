@@ -1,0 +1,36 @@
+[package]
+name = "talkbank-cache"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "SQLite-backed pass/fail cache for CHAT validation and roundtrip results"
+readme = "README.md"
+
+[dependencies]
+blake3 = { workspace = true }
+dirs = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+# Panic-site audit completed 2026-04-29 (inherited from talkbank-transform's
+# audit when this crate was extracted).
+[lints.clippy]
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+unreachable   = "deny"
+todo          = "deny"
+unimplemented = "deny"

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P2Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Special word forms: omissions (0word), babbling (&amp;word), neologisms, family/child-specific words, at-markers (@s, @c, @f, @wp, @x, @q, @l, etc.)</comment>
+  <comment type="Generic">Constructs: zero (0word), nonword (&amp;word), event (&amp;=action), other_spoken_event (&amp;*SPEAKER:word), form markers (@s, @c, @f, @wp, etc.)</comment>
+  <u who="CHI" uID="u0">
+    <e><action/><ga type="explanation">did nothing</ga></e>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <w type="omission">she</w>
+    <w>want</w>
+    <w>her</w>
+    <w>toy</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w type="nonword">baba</w>
+    <w type="nonword">goo</w>
+    <w>mama</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w formType="family-specific">mama</w>
+    <w>is</w>
+    <w>here</w>
+    <w>sweetie</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u4">
+    <w formType="child-invented">doggy</w>
+    <w formType="words to be excluded">run</w>
+    <w>fast</w>
+    <w formType="quoted metareference">okay</w>
+    <w formType="quoted metareference">merci</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u5">
+    <w><langs><single>zho</single></langs>hao3</w>
+    <w>means</w>
+    <w><langs><multiple>eng zho</multiple></langs>good</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u6">
+    <w formType="word play">nana</w>
+    <w>loves</w>
+    <w>me</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

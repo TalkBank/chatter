@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Timed pauses with numeric durations
+@Comment:	Constructs: timed pauses (N.), (N.N), (M:SS.N) alongside named pauses
+*CHI:	I (.) want (3.) a cookie (..) please (...) .
+*MOT:	okay (0.5) let me get one .
+*CHI:	and (1:30.5) then we eat .
+@End

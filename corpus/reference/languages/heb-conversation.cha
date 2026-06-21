@@ -1,0 +1,25 @@
+@UTF8
+@Begin
+@Languages:	heb
+@Participants:	MOT Mother, CHI Target_Child, FAT Father
+@ID:	heb|corpus|MOT||female|||Mother|||
+@ID:	heb|corpus|CHI|2;04.28|female|||Target_Child|||
+@ID:	heb|corpus|FAT||male|||Father|||
+@Comment:	Hebrew family conversation, child on potty
+@Comment:	Constructs: Hebrew script (right-to-left), Hebrew language coverage
+*MOT:	הגרי , מה .
+%mor:	propn|הגרי cm|cm pron|מה-Int-S1 .
+%gra:	1|0|ROOT 2|3|PUNCT 3|1|PARATAXIS 4|1|PUNCT
+*CHI:	קקי ו#פיפי .
+%mor:	propn|קקי x|ו_פיפי .
+%gra:	1|0|ROOT 2|1|FLAT 3|1|PUNCT
+*MOT:	מה קקי ו#פיפי ?
+%mor:	pron|מה-Int-S1 noun|קקי-Masc pron|_פפיף-Prs-Gen-S3 ?
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|AMOD 4|2|PUNCT
+*CHI:	יוצא קקי ו#פיפי .
+%mor:	verb|יצא-Part-Pres-paal-S3 noun|קקי-Masc pron|_פפיף-Prs-Gen-S3 .
+%gra:	1|0|ROOT 2|1|NSUBJ 3|2|AMOD 4|1|PUNCT
+*CHI:	כן .
+%mor:	adv|כן .
+%gra:	1|0|ROOT 2|1|PUNCT
+@End

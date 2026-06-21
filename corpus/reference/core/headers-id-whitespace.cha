@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant, INV Investigator
+@ID:	eng|corpus|PAR|43;|male|Broca||Participant||73.9 |
+@ID:	eng|corpus|INV|||||Investigator|||
+@Comment:	@ID header with trailing whitespace in custom field.
+@Comment:	Constructs: id_header with trailing space in 10th field,
+	field whitespace trimming
+*PAR:	hello .
+*INV:	hello .
+@End

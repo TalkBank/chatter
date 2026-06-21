@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="SPK"
+      role="Speaker"
+      language="eng"
+
+    />
+    <participant
+      id="LSN"
+      role="Adult"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">CA diacritics: blocking, pitch, inhalation, constriction, laugh in word, segment repetition, quality delimiters (faster, slower, creaky, soft, etc.)</comment>
+  <comment type="Generic">Constructs: nonvocal_simple, CA inline diacritics, quality delimiter pairs (all 12)</comment>
+  <u who="SPK" uID="u0">
+    <w>rub-b-b<ca-element type="blocked segments"/>bber</w>
+    <w>is</w>
+    <w>blocked</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u1">
+    <w>p<ca-element type="pitch up"/>itch</w>
+    <w>up</w>
+    <w>and</w>
+    <w>p<ca-element type="pitch down"/>itch</w>
+    <w>down</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u2">
+    <w>in<ca-element type="inhalation"/>halation</w>
+    <w>and</w>
+    <w>constriction<ca-element type="constriction"/></w>
+    <w>and</w>
+    <w>lau<ca-element type="laugh in word"/>gh</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u3">
+    <w><ca-element type="pitch reset"/>pitch</w>
+    <w>reset</w>
+    <w>here</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u4">
+    <w><ca-delimiter type="begin" label="repeated-segment"/>s-s-s<ca-delimiter type="end" label="repeated-segment"/>segment</w>
+    <w>repetition</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u5">
+    <w><ca-delimiter type="begin" label="faster"/>faster<ca-delimiter type="end" label="faster"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="slower"/>slower<ca-delimiter type="end" label="slower"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="creaky"/>creaky<ca-delimiter type="end" label="creaky"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="softer"/>softer<ca-delimiter type="end" label="softer"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u6">
+    <w><ca-delimiter type="begin" label="low-pitch"/>lowpitch<ca-delimiter type="end" label="low-pitch"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="high-pitch"/>highpitch<ca-delimiter type="end" label="high-pitch"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="smile voice"/>smilevoice<ca-delimiter type="end" label="smile voice"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u7">
+    <w><ca-delimiter type="begin" label="breathy voice"/>breathyvoice<ca-delimiter type="end" label="breathy voice"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="unsure"/>unsure<ca-delimiter type="end" label="unsure"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="whisper"/>whisper<ca-delimiter type="end" label="whisper"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u8">
+    <w><ca-delimiter type="begin" label="yawn"/>yawn<ca-delimiter type="end" label="yawn"/></w>
+    <w>and</w>
+    <w><ca-delimiter type="begin" label="singing"/>singing<ca-delimiter type="end" label="singing"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u9">
+    <w><ca-element type="hurried start"/>quick</w>
+    <w>start</w>
+    <w>and</w>
+    <w>then</w>
+    <w>a</w>
+    <w>sudden</w>
+    <w>cutoff<ca-element type="sudden stop"/></w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u10">
+    <w>also</w>
+    <w>hard<ca-element type="hardening"/>ening</w>
+    <w>inside</w>
+    <w>a</w>
+    <w>word</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u11">
+    <w>CA</w>
+    <w>uses</w>
+    <w><shortening>parens</shortening></w>
+    <w>for</w>
+    <w>uncertain</w>
+    <w>words</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

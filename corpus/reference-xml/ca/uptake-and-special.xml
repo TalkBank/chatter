@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="SPK"
+      role="Speaker"
+      language="eng"
+
+    />
+    <participant
+      id="LSN"
+      role="Adult"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Uptake continuation, CA continuation markers, CA special</comment>
+  <comment type="Generic">Constructs: uptake_symbol, ca_continuation_marker, unmarked_ending (missing terminator in CA)</comment>
+  <u who="SPK" uID="u0">
+    <w>I</w>
+    <w>didn't</w>
+    <w>give</w>
+    <w>you</w>
+    <w>anything</w>
+    <w>today</w>
+    <s type="uptake"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="LSN" uID="u1">
+    <s type="uptake"/>
+    <w>nothing</w>
+    <w>that</w>
+    <w>adds</w>
+    <w>to</w>
+    <w>what</w>
+    <w>we</w>
+    <w>had</w>
+    <w>earlier</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u2">
+    <w>right</w>
+    <s type="uptake"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="LSN" uID="u3">
+    <s type="uptake"/>
+    <w>his</w>
+    <w>counsel</w>
+    <w>says</w>
+    <w>he</w>
+    <w>will</w>
+    <w>not</w>
+    <w>permit</w>
+    <w>him</w>
+    <w>to</w>
+    <w>plead</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

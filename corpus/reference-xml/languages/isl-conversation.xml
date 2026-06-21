@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="isl" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="isl" age="P7Y08M" sex="male" name="360-118-3"/>
+  </Participants>
+  <comment type="Generic">Icelandic child word naming task</comment>
+  <comment type="Generic">Constructs: Icelandic language coverage, Latin script with special characters</comment>
+  <u who="CHI" uID="u0">
+    <w>gíraffi<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>gíraff</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>stelpa<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>stelpa</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>tromma<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>trommi</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>fiðrildi<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>fiðrildi</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u4">
+    <w>draugur<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>draugur</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

@@ -1,0 +1,5 @@
+# Fuzz testing artifacts (separate cargo workspace)
+/target/
+/corpus/
+/artifacts/
+/coverage/

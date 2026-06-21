@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Media="long-features" Mediatypes="audio unlinked"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Long feature spans and nonvocal begin/end markers</comment>
+  <comment type="Generic">Constructs: long_feature, long_feature_begin, long_feature_begin_marker, long_feature_end, long_feature_end_marker, long_feature_label, nonvocal, nonvocal_begin, nonvocal_begin_marker, nonvocal_end, nonvocal_end_marker, nonvocal_simple</comment>
+  <u who="CHI" uID="u0">
+    <long-feature type="begin">X</long-feature>
+    <w>deal</w>
+    <w>with</w>
+    <long-feature type="end">X</long-feature>
+    <w>the</w>
+    <w>slightest</w>
+    <w>pressure</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <long-feature type="begin">PAR</long-feature>
+    <w>is</w>
+    <nonvocal type="begin">THUMP</nonvocal>
+    <e><happening>nonvocal</happening></e>
+    <w>this</w>
+    <e><happening>nonvocal</happening></e>
+    <long-feature type="begin">X</long-feature>
+    <w>one</w>
+    <long-feature type="end">X</long-feature>
+    <w>working</w>
+    <nonvocal type="end">THUMP</nonvocal>
+    <long-feature type="end">PAR</long-feature>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <nonvocal type="simple">BANG</nonvocal>
+    <w>what</w>
+    <w>was</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

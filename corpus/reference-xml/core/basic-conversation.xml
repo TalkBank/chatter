@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+      sex="female"
+      group="typical"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Minimal valid CHAT file with two speakers</comment>
+  <comment type="Generic">Constructs: basic utterances, three standard terminators (. ? !), simple words</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>want</w>
+    <w>some</w>
+    <w>cookies</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>what</w>
+    <w>kind</w>
+    <w>of</w>
+    <w>cookies</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>the</w>
+    <w>chocolate</w>
+    <w>ones</w>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>we</w>
+    <w>can</w>
+    <w>make</w>
+    <w>some</w>
+    <w>together</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

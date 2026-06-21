@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|2;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	groups-sign, video, unlinked
+@Comment:	Sign language groups on main tier using CJK brackets
+@Comment:	Constructs: main_sin_group, sin_begin_group, sin_end_group
+*CHI:	0 foo 0 〔bar baz〕 .
+%sin:	g:toy:dpoint b 〔c d〕 e
+@End

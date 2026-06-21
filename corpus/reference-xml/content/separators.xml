@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Separators: comma (,), tag-question („), vocative (‡)</comment>
+  <comment type="Generic">Constructs: separator, comma, non_colon_separator, tag_marker (‡ „)</comment>
+  <u who="CHI" uID="u0">
+    <w>well</w>
+    <tagMarker type="comma"></tagMarker>
+    <w>I</w>
+    <w>think</w>
+    <w>so</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <w>it</w>
+    <w>was</w>
+    <w>lowering</w>
+    <w>concrete</w>
+    <w>girders</w>
+    <w>off</w>
+    <w>a</w>
+    <w>lorry</w>
+    <tagMarker type="tag"></tagMarker>
+    <w>wasn't</w>
+    <w>it</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="MOT" uID="u2">
+    <w>it</w>
+    <w>was</w>
+    <w>lowering</w>
+    <w>concrete</w>
+    <w>girders</w>
+    <w>off</w>
+    <w>a</w>
+    <w>lorry</w>
+    <tagMarker type="vocative"></tagMarker>
+    <w>wasn't</w>
+    <w>it</w>
+    <t type="q"></t>
+
+  </u>
+</CHAT>

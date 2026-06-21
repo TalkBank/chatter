@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Group runs by workflow + ref. The conditional cancel-in-progress
+# expression was confusing in practice (cancelling main-branch runs
+# when I'd expected only PR runs). Simpler and clearer: always allow
+# every push to main to run, even if a faster one supersedes it. PRs
+# can be re-triggered by pushing the branch again.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least-privilege default. Individual jobs can grant more if they need to.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+  # Book toolchain. mdBook + mdbook-mermaid are pinned to the 0.4.x era: the
+  # mermaid preprocessor is protocol-sensitive to mdBook's wire format and no
+  # released mdbook-mermaid supports mdBook 0.5. Link-checking is decoupled
+  # onto lychee, which runs on the built HTML and is independent of mdBook.
+  MDBOOK_VERSION: '0.4.52'
+  MDBOOK_MERMAID_VERSION: '0.16.2'
+  LYCHEE_VERSION: '0.24.2'
+
+jobs:
+  rust:
+    name: Rust build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned in lockstep with rust-toolchain.toml (channel =
+      # "1.96.0"). Drift against latest-stable is caught by the
+      # weekly .github/workflows/clippy-rolling.yml job; bump this
+      # action version + the rust-toolchain.toml channel together
+      # when that job goes red.
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: rustfmt, clippy
+
+      # The chatter-desktop Tauri crate links against GTK / webkit /
+      # libsoup on Linux. If Tauri-on-Linux maintenance starts costing
+      # more than it earns, move chatter-desktop into a workspace that's
+      # excluded from default workspace build.
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            pkg-config
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Distinct caches per job so the rust and book jobs don't
+          # invalidate each other.
+          shared-key: rust-job
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo build
+        run: cargo build --workspace --all-targets --locked
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --locked
+
+      # Two-pass clippy. Production code (lib + bin) is held to the
+      # strict per-crate `deny` lints (panic-audit policy). Test
+      # targets get the same `unwrap_used` / `expect_used` / `panic`
+      # / `unreachable` / `todo` / `unimplemented` lints relaxed;
+      # tests are allowed to unwrap fixtures by convention. Mirrors
+      # the workspace's `#![cfg_attr(test, allow(...))]` pattern at
+      # the lib-level but extended to integration tests in tests/*.rs.
+      #
+      # `-D warnings` on both passes turns any new clippy warning
+      # into a hard CI failure, preventing the kind of silent
+      # multi-month drift that left ~100 warnings unfixed before
+      # the 2026-05-29 sweep. The Rust version above is pinned, so
+      # new clippy lints (which ship with new stable releases) won't
+      # cause sudden mid-PR flap; drift is caught by the weekly
+      # clippy-rolling.yml job.
+      - name: cargo clippy (lib + bins, strict)
+        run: cargo clippy --workspace --lib --bins --locked -- -D warnings
+
+      - name: cargo clippy (tests, relaxed panic lints)
+        run: |
+          cargo clippy --workspace --tests --locked -- \
+            -A clippy::unwrap_used \
+            -A clippy::expect_used \
+            -A clippy::panic \
+            -A clippy::unreachable \
+            -A clippy::todo \
+            -A clippy::unimplemented \
+            -D warnings
+
+  book:
+    name: mdBook build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + target (book tooling)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: book-job
+
+      - name: Install mdbook + mdbook-mermaid + lychee
+        run: |
+          cargo install \
+            mdbook@"${MDBOOK_VERSION}" \
+            mdbook-mermaid@"${MDBOOK_MERMAID_VERSION}" \
+            lychee@"${LYCHEE_VERSION}" \
+            --locked
+
+      - name: mdbook build
+        run: cd book && mdbook build
+
+      - name: Link-check book (lychee, offline)
+        run: lychee --offline --root-dir "${GITHUB_WORKSPACE}/book/build" "${GITHUB_WORKSPACE}/book/build"
+
+  rust-version-sync:
+    name: Rust version pins in sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      # Cheap guard (pure Python, no Rust build): every numeric Rust-version
+      # pin in the workflows must match its source of truth, the dev toolchain
+      # from rust-toolchain.toml or, for the marked MSRV pin, Cargo.toml
+      # rust-version. Bumping Rust is then: edit the source file, run
+      # `just rust-sync`, and this job enforces no pin was missed.
+      - name: Check Rust version pins
+        run: python3 scripts/sync-rust-versions.py --check
+
+  shellcheck:
+    name: Shell scripts (shellcheck, strictest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      # Every tracked shell script must pass shellcheck at its default
+      # (strictest) severity. ubuntu-latest ships shellcheck; the runner finds
+      # every *.sh plus shebang scripts via git ls-files. See CLAUDE.md.
+      - name: shellcheck all shell scripts
+        run: bash scripts/lint/shellcheck-all.sh

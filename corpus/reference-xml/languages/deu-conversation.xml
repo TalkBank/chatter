@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="deu" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="deu" age="P1Y03M01D" name="Caroline"/>
+    <participant id="MOT" role="Mother" language="deu" sex="female" name="Katharina"/>
+  </Participants>
+  <comment type="Generic">German mother-child interaction with picture book</comment>
+  <comment type="Generic">Constructs: German language coverage, Latin script with umlauts</comment>
+  <u who="MOT" uID="u0">
+    <w>was<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>was</stem>
+          <mk type="sfx">Int,Rel</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>isn<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>isnen</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S2</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>da<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>da</stem>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>Caroline<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>Caroline</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="4" head="2" relation="OBJ"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="5" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>öh<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>öh</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="MOT" uID="u2">
+    <w>ja<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>ja</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>das<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>der</stem>
+          <mk type="sfx">Dem,Rel</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="2" head="5" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>ist<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>sein</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="COP"/>
+      </mor>
+    </w>
+    <w>die<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>der</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="DET"/>
+      </mor>
+    </w>
+    <w>Eisenbahn<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>Eisenbahn</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="5" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>und<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>und</stem>
+        </mw>
+        <gra type="gra" index="6" head="9" relation="CC"/>
+      </mor>
+    </w>
+    <w>da<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>da</stem>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>bimmel<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>bimmeln</stem>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>limmel<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>limmel</stem>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="9" head="5" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>lim<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>lim</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="10" head="9" relation="COP"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple" length="1"/>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="11" head="5" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>äh<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>äh</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>ja<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>ja</stem>
+        </mw>
+        <gra type="gra" index="2" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>ba<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>ba</stem>
+        </mw>
+        <gra type="gra" index="3" head="6" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>ma<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>ma</stem>
+        </mw>
+        <gra type="gra" index="4" head="6" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>ja<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>ja</stem>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple" length="2"/>
+    <w>sa<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>sa</stem>
+        </mw>
+        <gra type="gra" index="6" head="1" relation="DEP"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple" length="1"/>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="7" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="MOT" uID="u4">
+    <w>und<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>und</stem>
+        </mw>
+        <gra type="gra" index="1" head="7" relation="CC"/>
+      </mor>
+    </w>
+    <w>wer<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>wer</stem>
+          <mk type="sfx">Int,Rel</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="2" head="7" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>ist<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>sein</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="7" relation="PARATAXIS"/>
+      </mor>
+    </w>
+    <w>da<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>da</stem>
+        </mw>
+        <gra type="gra" index="4" head="7" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>gleich<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>gleich</stem>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>danach<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>danach</stem>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>hört<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>hören</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="7" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>man<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>man</stem>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="8" head="7" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>ein<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ein</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="9" head="10" relation="DET"/>
+      </mor>
+    </w>
+    <w>Rufen<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>Ruf</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="10" head="7" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>aus<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>aus</stem>
+        </mw>
+        <gra type="gra" index="11" head="13" relation="CASE"/>
+      </mor>
+    </w>
+    <w>dem<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>der</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="12" head="13" relation="DET"/>
+      </mor>
+    </w>
+    <w>Brommelbärenschlag<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>Brommelbärenschlag</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Dat</mk>
+        </mw>
+        <gra type="gra" index="13" head="10" relation="NMOD"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>vierzehn<mor type="mor">
+        <mw>
+          <pos>
+            <c>num</c>
+          </pos>
+          <stem>vierzehn</stem>
+        </mw>
+        <gra type="gra" index="14" head="15" relation="NUMMOD"/>
+      </mor>
+    </w>
+    <w>Hasen<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>Hase</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Plur</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="15" head="16" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>rufen<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>rufen</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">P3</mk>
+        </mw>
+        <gra type="gra" index="16" head="7" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>heiter<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>heiter</stem>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="17" head="19" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>Caroline<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>Caroline</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="18" head="19" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>guten<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>gut</stem>
+          <mk type="sfx">Acc</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="19" head="20" relation="AMOD"/>
+      </mor>
+    </w>
+    <w>Tag<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>Tag</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="20" head="16" relation="OBJ"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple" length="15"/>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="21" head="7" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

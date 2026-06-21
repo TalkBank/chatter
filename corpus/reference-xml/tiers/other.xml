@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Other dependent tiers: %add, %alt, %def, %gls, %coh, %par, %tim</comment>
+  <comment type="Generic">Constructs: add_dependent_tier, alt_dependent_tier, def_dependent_tier, gls_dependent_tier, coh_dependent_tier, par_dependent_tier, tim_dependent_tier</comment>
+  <u who="CHI" uID="u0">
+    <w>thingy</w>
+    <w>there</w>
+    <t type="p"></t>
+
+    <a type="addressee">MOT</a>
+    <a type="alternative">thing there</a>
+    <a type="SALT">thingy = toy car</a>
+    <a type="target gloss">thingy means the toy car</a>
+    <a type="cohesion">deictic reference</a>
+    <a type="paralinguistics">whispered</a>
+    <a type="time stamp">14:00:00</a>
+  </u>
+</CHAT>

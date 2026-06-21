@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Regular groups &lt;content&gt; with scoped annotations, nested groups</comment>
+  <comment type="Generic">Constructs: group_with_annotations, greater_than, less_than, base_annotations, contents within groups</comment>
+  <u who="CHI" uID="u0">
+    <g><w>hey</w><ga type="explanation">foo</ga></g>
+    <w>man</w>
+    <g><w>what</w>
+    <w>in</w>
+    <w>the</w>
+    <w>world</w><ga type="explanation">bar</ga></g>
+    <g><w>isn't</w><ga type="explanation">baz</ga></g>
+    <w>this</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <g><w>the</w>
+    <w>big</w><k type="retracing"/></g>
+    <w>the</w>
+    <w>small</w>
+    <w>dog</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <g><g><w>happy</w>
+    <w>and</w><k type="best guess"/></g><overlap type="overlap follows"/></g>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <g><g><w>see</w>
+    <w>the</w><k type="best guess"/></g>
+    <w>working</w><overlap type="overlap precedes"/></g>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u4">
+    <g><g><w>ingroup</w><k type="retracing"/></g><overlap type="overlap precedes"/></g>
+    <w>after</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

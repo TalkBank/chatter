@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	spa, eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	spa , eng|corpus|CHI|2;08.20||||Target_Child|||
+@ID:	spa , eng|corpus|MOT||female|||Mother|||
+@Comment:	Spanish-English bilingual mother-child interaction
+@Comment:	Constructs: Spanish language coverage, code-switching
+*CHI:	María .
+%mor:	propn|María .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	yo tengo un regalo para ti .
+%mor:	pron|yo-Prs-Nom-S1 verb|tener-Fin-Ind-Pres-S1 det|uno-Masc-Ind-Art-Sing noun|regalo-Masc-Acc adp|para pron|tú-Prs-Acc-S1 .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|6|CASE 6|4|NMOD 7|2|PUNCT
+*CHI:	yo tengo muchos huevos para ti .
+%mor:	pron|yo-Prs-Nom-S1 verb|tener-Fin-Ind-Pres-S1 det|mucho-Masc-Def-Ind-Plur noun|huevo-Masc-Plur-Acc adp|para pron|tú-Prs-Acc-S1 .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|6|CASE 6|2|OBL 7|2|PUNCT
+*MOT:	cuando salgas de la clase es la hora de la comida .
+%mor:	sconj|cuando verb|salir-Fin-Ind-Pres-S1 adp|de det|el-Fem-Def-Art-Sing noun|clase-Fem aux|ser-Fin-Ind-Pres-S3 det|el-Fem-Def-Art-Sing noun|hora-Fem adp|de det|el-Fem-Def-Art-Sing noun|comida-Fem .
+%gra:	1|2|MARK 2|8|ADVCL 3|5|CASE 4|5|DET 5|2|OBL 6|8|COP 7|8|DET 8|0|ROOT 9|11|CASE 10|11|DET 11|8|NMOD 12|8|PUNCT
+*CHI:	mira a mi [/] mira a mi .
+%mor:	verb|mirar-Fin-Ind-Pres-S3 adp|a noun|mira adp|a pron|mi-Prs-Nom-S2 .
+%gra:	1|0|ROOT 2|1|ADVMOD 3|2|FIXED 4|5|CASE 5|1|OBJ 6|1|PUNCT
+@End

@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng, hrv, spa
+@Participants:	CHI Child, MOT Mother, INV Investigator, SIS Sister
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|INV|||||Investigator|||
+@ID:	eng|corpus|SIS|||||Sister|||
+@Comment:	Multiple linkers on a single utterance
+@Comment:	Constructs: two or more linkers before main content
+@Comment:	Source: ca-data Croatian and CallFriend Spanish examples
+*INV:	tell me more .
+*CHI:	+< +, the dog ran away .
+*SIS:	+, ++ in the park !
+*MOT:	+< +" give me that .
+@End

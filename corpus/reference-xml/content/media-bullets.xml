@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Media="media-bullets" Mediatypes="video"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="sample"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P2Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Inline timing bullets on main tier and dependent tiers, inline_pic</comment>
+  <comment type="Generic">Constructs: inline_bullet, timing_annotation, text_with_bullets, text_with_bullets_and_pics, media bullets on dependent tiers, inline_pic</comment>
+  <u who="CHI" uID="u0">
+    <w>hello</w>
+    <w>there</w>
+    <t type="p"></t>
+    <media
+      start="2041.689"
+      end="2042.652"
+      unit="s"
+    />
+    <a type="coding">this is junk <media
+      start="2041.689"
+      end="2042.652"
+      unit="s"
+    /></a>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>how</w>
+    <w>are</w>
+    <w>you</w>
+    <t type="q"></t>
+    <media
+      start="5041.689"
+      end="5042.652"
+      unit="s"
+    />
+    <a type="actions">foo <media
+      start="2061.689"
+      end="2062.652"
+      unit="s"
+    /> bar <media
+      start="2061.689"
+      end="2062.652"
+      unit="s"
+    /></a>
+    <a type="comments">pic002 <mediaPic href="a18/image002.jpg"/></a>
+  </u>
+</CHAT>

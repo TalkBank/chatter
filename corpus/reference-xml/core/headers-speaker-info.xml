@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng ara"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng ara"
+      age="P1Y08M02D"
+      sex="female"
+      group="normal"
+
+      birthday="2001-06-28"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng ara"
+      sex="female"
+
+      birthday="1975-03-15"
+       birthplace="Taipei, Taiwan"
+
+    />
+    <participant
+      id="F_A_T"
+      role="Father"
+      language="eng ara"
+
+      first-language="ara"
+
+    />
+  </Participants>
+  <comment type="Generic">Speaker info headers: @Birth of, @Birthplace of, @L1 of</comment>
+  <comment type="Generic">Constructs: birth_of_header, birthplace_of_header, l1_of_header, age_format, multiple @Languages codes, participant with special chars</comment>
+  <u who="CHI" uID="u0">
+    <w>mama</w>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>what</w>
+    <w>is</w>
+    <w>it</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="F_A_T" uID="u2">
+    <w>she</w>
+    <w>wants</w>
+    <w>her</w>
+    <w>toy</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Media="russian-child-narrative" Mediatypes="audio" Version="3.2.3" Lang="rus" Corpus="corpus" Date="2008-04-08">
+  <Participants>
+    <participant id="EX1" role="Investigator" language="rus"/>
+    <participant id="CHI" role="Target_Child" language="rus" age="P4Y07M03D" sex="male"/>
+  </Participants>
+  <comment type="Date">08-APR-2008</comment>
+  <comment type="Generic">Russian child narrative with audio, %mor, %gra, %wor tiers</comment>
+  <comment type="Generic">Constructs: audio-linked Cyrillic file with word-level timing</comment>
+  <u who="EX1" uID="u0">
+    <w>вот<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>вот</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>история<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>история</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>здесь<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>здесь</stem>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>начинается<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>начинаться</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="5" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="0.460" end="2.868" unit="s"/>
+    <wor>
+      <w>вот</w>
+      <w>история</w>
+      <internal-media start="0.460" end="0.580" unit="s"/>
+      <w>здесь</w>
+      <internal-media start="0.580" end="0.660" unit="s"/>
+      <w>начинается</w>
+      <internal-media start="0.660" end="2.868" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+  <u who="EX1" uID="u1">
+    <w>что<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>что</stem>
+          <mk type="sfx">Int,Rel</mk>
+          <mk type="sfx">Acc</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>можно<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>можно</stem>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>сказать<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>сказать</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="CSUBJ"/>
+      </mor>
+    </w>
+    <w>про<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>про</stem>
+        </mw>
+        <gra type="gra" index="4" head="6" relation="CASE"/>
+      </mor>
+    </w>
+    <w>эту<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>этот</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="DET"/>
+      </mor>
+    </w>
+    <w>картинку<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>картинка</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="6" head="3" relation="OBL"/>
+      </mor>
+    </w>
+    <t type="q">
+      <mor type="mor">
+        <mt type="q"/>
+        <gra type="gra" index="7" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="2.990" end="5.238" unit="s"/>
+    <wor>
+      <w>что</w>
+      <internal-media start="2.990" end="3.280" unit="s"/>
+      <w>можно</w>
+      <internal-media start="3.280" end="3.500" unit="s"/>
+      <w>сказать</w>
+      <internal-media start="3.500" end="3.940" unit="s"/>
+      <w>про</w>
+      <internal-media start="3.940" end="4.180" unit="s"/>
+      <w>эту</w>
+      <internal-media start="4.180" end="4.340" unit="s"/>
+      <w>картинку</w>
+      <internal-media start="4.340" end="5.238" unit="s"/>
+      <t type="q"/>
+    </wor>
+  </u>
+</CHAT>

@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat .
+%pho:	kæt
+%xphosyl:	k:Oæ:N
+@Comment:	ERROR: stripping codes from %xphosyl gives 'kæ', which does not match %pho 'kæt'
+@End

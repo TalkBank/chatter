@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	@Bg/@Eg gem markers, postcodes [+ code], freecodes [^ text]
+@Comment:	Constructs: bg_header, eg_header, postcode, freecode
+@Bg:	morning play
+*CHI:	hello . [+ bch]
+*MOT:	good morning .
+*CHI:	[^ yawning] I want cereal .
+*MOT:	what kind ? [+ ask]
+*CHI:	the chocolate ones . [+ pref] [+ food]
+@Eg:	morning play
+@Bg:	reading time
+*MOT:	let us read a book .
+*CHI:	[^ pointing] that one . [+ bch]
+*CHI:	I like [^ emphasis] this story .
+@Eg:	reading time
+@End

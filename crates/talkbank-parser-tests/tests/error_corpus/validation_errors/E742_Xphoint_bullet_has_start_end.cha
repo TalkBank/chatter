@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat . 0_300
+%pho:	kæt
+%xphoint:	k 0_100 æ 100_200 t 250_200
+@Comment:	ERROR: the bullet for 't' has start 250 >= end 200
+@End

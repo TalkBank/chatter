@@ -1,0 +1,902 @@
+/* ============================================================================
+   Chatter desktop, "Proofreader's Desk" theme.
+
+   A copy-editor's proofing surface for CHAT transcripts: warm parchment, ink,
+   vermilion proofreader's red, and a deliberate type system, serif for prose,
+   monospace for data (error codes, line numbers, file paths, diagnostics).
+   The pilcrow (the proofreader's "new paragraph" mark) is the signature glyph,
+   and a vermilion margin rule runs down the workspace like a ruled page.
+
+   Integration note: the validation diagnostics are pre-rendered to HTML on the
+   Rust side (ansi-to-html), which emits `color: var(--red, #a00)` and friends.
+   The ANSI palette below themes that output to ink-on-parchment in both modes.
+   ========================================================================== */
+
+/* ── Light theme: "Foolscap" (default) ───────────────────────────────────── */
+:root {
+  /* Surfaces and ink */
+  --color-bg: #f2ead7; /* parchment */
+  --color-surface: #fbf6ea; /* clean leaf */
+  --color-border: #ddceb0; /* sepia rule */
+  --color-border-strong: #c8b794;
+  --color-text: #2a2620; /* warm ink */
+  --color-text-secondary: #7c7059; /* faded ink */
+  --color-code-bg: #ece1c8; /* boxed quotation */
+
+  /* Proofreader's marks */
+  --color-error: #b23a2e; /* vermilion */
+  --color-warning: #a4730d; /* ochre */
+  --color-valid: #3f6a49; /* ink green */
+  --color-accent: #355b7b; /* fountain-pen blue */
+  --color-accent-hover: #2a4d6a;
+  --color-selected-text: #fbf6ea;
+
+  --color-drop-bg: #efe6cf;
+  --color-drop-border: #b23a2e;
+
+  /* ANSI palette for pre-rendered miette HTML (normal + bright) */
+  --black: #2a2620;
+  --red: #b23a2e;
+  --green: #3f6a49;
+  --yellow: #8a6a12;
+  --blue: #355b7b;
+  --magenta: #8a4a73;
+  --cyan: #2c6f72;
+  --white: #6f6450;
+  --bright-black: #7c7059;
+  --bright-red: #c14536;
+  --bright-green: #4a7a55;
+  --bright-yellow: #9a7714;
+  --bright-blue: #3d6890;
+  --bright-magenta: #9c5683;
+  --bright-cyan: #338084;
+  --bright-white: #2a2620;
+
+  --radius: 7px;
+  --radius-lg: 12px;
+  --rule-width: 3px;
+  --shadow: 0 1px 2px rgba(70, 52, 28, 0.10), 0 6px 18px -10px rgba(70, 52, 28, 0.22);
+  --shadow-lift: 0 2px 4px rgba(70, 52, 28, 0.14), 0 14px 30px -14px rgba(70, 52, 28, 0.32);
+
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua",
+    "Hoefler Text", Georgia, "Times New Roman", serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Cascadia Code", "Berkeley Mono",
+    Menlo, Monaco, Consolas, "DejaVu Sans Mono", monospace;
+
+  font-family: var(--font-serif);
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Dark theme: "Archive" (system preference, unless user forced light) ──── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #211d17;
+    --color-surface: #2a251d;
+    --color-border: #3d3729;
+    --color-border-strong: #524a38;
+    --color-text: #ece1cd;
+    --color-text-secondary: #a2957b;
+    --color-code-bg: #1b1812;
+
+    --color-error: #e07a5f;
+    --color-warning: #e0b341;
+    --color-valid: #84b07f;
+    --color-accent: #7aa7c4;
+    --color-accent-hover: #95bcd4;
+    --color-selected-text: #211d17;
+
+    --color-drop-bg: #2f2920;
+    --color-drop-border: #e07a5f;
+
+    --black: #1b1812;
+    --red: #e07a5f;
+    --green: #84b07f;
+    --yellow: #e0b341;
+    --blue: #7aa7c4;
+    --magenta: #c98fb3;
+    --cyan: #6fc0c2;
+    --white: #d6c9b1;
+    --bright-black: #a2957b;
+    --bright-red: #ef8c72;
+    --bright-green: #97c191;
+    --bright-yellow: #efc45a;
+    --bright-blue: #8fb9d4;
+    --bright-magenta: #d8a3c4;
+    --bright-cyan: #87d2d4;
+    --bright-white: #ece1cd;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px -10px rgba(0, 0, 0, 0.6);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 14px 30px -14px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ── Dark theme: forced override ─────────────────────────────────────────── */
+[data-theme="dark"] {
+  --color-bg: #211d17;
+  --color-surface: #2a251d;
+  --color-border: #3d3729;
+  --color-border-strong: #524a38;
+  --color-text: #ece1cd;
+  --color-text-secondary: #a2957b;
+  --color-code-bg: #1b1812;
+
+  --color-error: #e07a5f;
+  --color-warning: #e0b341;
+  --color-valid: #84b07f;
+  --color-accent: #7aa7c4;
+  --color-accent-hover: #95bcd4;
+  --color-selected-text: #211d17;
+
+  --color-drop-bg: #2f2920;
+  --color-drop-border: #e07a5f;
+
+  --black: #1b1812;
+  --red: #e07a5f;
+  --green: #84b07f;
+  --yellow: #e0b341;
+  --blue: #7aa7c4;
+  --magenta: #c98fb3;
+  --cyan: #6fc0c2;
+  --white: #d6c9b1;
+  --bright-black: #a2957b;
+  --bright-red: #ef8c72;
+  --bright-green: #97c191;
+  --bright-yellow: #efc45a;
+  --bright-blue: #8fb9d4;
+  --bright-magenta: #d8a3c4;
+  --bright-cyan: #87d2d4;
+  --bright-white: #ece1cd;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px -10px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 14px 30px -14px rgba(0, 0, 0, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+/* Faint paper grain over the whole workspace, fixed so it reads as the desk
+   surface rather than scrolling content. Kept very subtle. */
+.app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+/* ── Typography roles ────────────────────────────────────────────────────── */
+/* Monospace is reserved for data: codes, line numbers, file paths, diagnostics.
+   Everything else (prose, headings, hints) is the editorial serif. */
+
+/* ── Buttons: editorial, lightly engraved ────────────────────────────────── */
+button {
+  cursor: pointer;
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius);
+  padding: 6px 15px;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.08s ease,
+    box-shadow 0.16s ease;
+}
+
+button:hover {
+  background: var(--color-bg);
+  border-color: var(--color-text-secondary);
+}
+
+button:active {
+  transform: translateY(0.5px);
+}
+
+button.primary {
+  background: var(--color-accent);
+  color: var(--color-selected-text);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow);
+}
+
+button.primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+::selection {
+  background: rgba(178, 58, 46, 0.22);
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  z-index: 1;
+}
+
+.app > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Top toolbar, the desk's header rail. */
+.drop-zone-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* Wordmark with the pilcrow proofreader's mark. */
+.app-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-text);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.app-wordmark .mark {
+  color: var(--color-error);
+  font-size: 17px;
+  transform: translateY(1px);
+}
+
+.main-panels {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  /* The vermilion margin rule of the proofing page. */
+  border-left: var(--rule-width) solid var(--color-error);
+}
+
+.file-tree-panel {
+  width: 268px;
+  min-width: 210px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow-y: auto;
+  padding: 6px 0 16px;
+}
+
+.error-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 26px 28px;
+  background: var(--color-bg);
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  gap: 14px;
+}
+
+.status-bar .actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Drop zone (lives in the toolbar) ────────────────────────────────────── */
+.drop-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-lg);
+  padding: 3px 5px;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.drop-zone.dragging {
+  background: var(--color-drop-bg);
+  border: 2px dashed var(--color-drop-border);
+}
+
+.drop-zone .hint {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── File tree ───────────────────────────────────────────────────────────── */
+.tree-node {
+  user-select: none;
+}
+
+.tree-node-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.tree-node-label:hover {
+  background: var(--color-bg);
+  border-left-color: var(--color-border-strong);
+}
+
+.tree-node-label.selected {
+  background: var(--color-accent);
+  color: var(--color-selected-text);
+  border-left-color: var(--color-error);
+}
+
+.tree-node-label .badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-weight: 600;
+  margin-left: auto;
+  flex-shrink: 0;
+  line-height: 1.55;
+}
+
+.badge.error {
+  background: var(--color-error);
+  color: #fbf6ea;
+}
+
+.badge.valid {
+  background: var(--color-valid);
+  color: #fbf6ea;
+}
+
+.tree-children {
+  padding-left: 14px;
+}
+
+.tree-toggle {
+  width: 14px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* ── Tree header / section label ─────────────────────────────────────────── */
+.tree-header {
+  padding: 12px 14px 10px;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Error panel ─────────────────────────────────────────────────────────── */
+.error-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  font-size: 15px;
+  text-align: center;
+  padding: 0 32px;
+}
+
+.error-panel h2 {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The count tail after the file name reads as an editorial annotation. */
+.error-panel h2 .file-path-link {
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+/* ── Filter bar ──────────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.filter-bar input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.filter-bar input::placeholder {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.filter-bar input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(53, 91, 123, 0.16);
+}
+
+.filter-bar .bulk-toggle {
+  font-size: 11.5px;
+  padding: 5px 10px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+/* ── Segmented controls (severity + theme) ───────────────────────────────── */
+.severity-toggle,
+.theme-toggle {
+  display: flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.theme-toggle {
+  margin-left: auto;
+}
+
+.severity-toggle button,
+.theme-toggle button {
+  border: none;
+  border-radius: 0;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.severity-toggle button:hover,
+.theme-toggle button:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.severity-toggle button.active,
+.theme-toggle button.active {
+  background: var(--color-accent);
+  color: var(--color-selected-text);
+}
+
+.severity-toggle button + button,
+.theme-toggle button + button {
+  border-left: 1px solid var(--color-border);
+}
+
+/* ── Error cards: a stacked proof, each margin-ruled by severity ─────────── */
+.error-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: var(--rule-width) solid var(--color-border-strong);
+  border-radius: var(--radius);
+  padding: 13px 17px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  animation: card-in 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Severity-aware margin rule (the proofreader's colored mark). */
+.error-card:has(.error-code.error) {
+  border-left-color: var(--color-error);
+}
+
+.error-card:has(.error-code.warning) {
+  border-left-color: var(--color-warning);
+}
+
+/* Stagger the reveal so a long proof settles in like stacked pages. */
+.error-card:nth-of-type(1) { animation-delay: 0.00s; }
+.error-card:nth-of-type(2) { animation-delay: 0.03s; }
+.error-card:nth-of-type(3) { animation-delay: 0.06s; }
+.error-card:nth-of-type(4) { animation-delay: 0.09s; }
+.error-card:nth-of-type(5) { animation-delay: 0.12s; }
+.error-card:nth-of-type(6) { animation-delay: 0.15s; }
+.error-card:nth-of-type(7) { animation-delay: 0.18s; }
+.error-card:nth-of-type(8) { animation-delay: 0.21s; }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.error-card-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.error-card-toggle:hover .error-message {
+  color: var(--color-text);
+}
+
+.error-card-chevron {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  width: 12px;
+  flex-shrink: 0;
+  transition: transform 0.16s ease;
+}
+
+.error-card-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.error-code {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.error-code.error {
+  color: var(--color-error);
+}
+
+.error-code.warning {
+  color: var(--color-warning);
+}
+
+.error-message {
+  font-family: var(--font-serif);
+  color: var(--color-text);
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+
+.error-location {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.error-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.error-card-body {
+  overflow: hidden;
+  transition: max-height 0.22s ease-out, opacity 0.16s ease;
+  max-height: 1400px;
+  opacity: 1;
+}
+
+.error-card-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.error-card-summary {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Pre-rendered miette diagnostic: a boxed quotation from the source ────── */
+.error-miette {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 11px 0 4px;
+  padding: 12px 14px;
+  color: var(--color-text);
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+/* Legacy structured snippet (kept for the non-miette fallback path). */
+.error-snippet {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--color-code-bg);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.5;
+}
+
+.snippet-line { display: flex; }
+
+.snippet-lineno {
+  color: var(--color-text-secondary);
+  text-align: right;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.snippet-sep {
+  color: var(--color-text-secondary);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.snippet-caret {
+  color: var(--color-error);
+  font-weight: 700;
+}
+
+.snippet-label-caret {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.snippet-label-message {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent);
+  line-height: 1.3;
+}
+
+.snippet-underlined {
+  text-decoration: underline;
+  text-decoration-color: var(--color-text-secondary);
+}
+
+.error-suggestion {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--color-accent);
+  margin-top: 6px;
+}
+
+/* ── Per-card actions ────────────────────────────────────────────────────── */
+.error-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 7px;
+}
+
+.error-actions button {
+  font-size: 12.5px;
+  padding: 4px 12px;
+}
+
+/* ── Clickable file path ─────────────────────────────────────────────────── */
+.error-panel h2 .file-path-link {
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.error-panel h2 .file-path-link:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-underline-offset: 3px;
+}
+
+/* ── Progress + status ───────────────────────────────────────────────────── */
+.progress-track {
+  flex: 1;
+  height: 5px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 320px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-error));
+  transition: width 0.2s ease-out;
+}
+
+.progress-text {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.error-count-text {
+  font-family: var(--font-mono);
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.eta-text {
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.last-target-hint {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.12s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.last-target-hint:hover {
+  color: var(--color-accent);
+}
+
+/* ── Onboarding overlay: a slipped-in instruction card ───────────────────── */
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(33, 29, 23, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: onboarding-fade-in 0.2s ease-out;
+}
+
+@keyframes onboarding-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.onboarding-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-left: var(--rule-width) solid var(--color-error);
+  border-radius: var(--radius-lg);
+  padding: 26px 30px 22px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: var(--shadow-lift);
+  animation: onboarding-slide-up 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes onboarding-slide-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.onboarding-card h2 {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 600;
+  margin-bottom: 18px;
+  color: var(--color-text);
+}
+
+.onboarding-callouts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.onboarding-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.onboarding-icon {
+  font-size: 18px;
+  line-height: 1.3;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.onboarding-callout p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.onboarding-callout strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.onboarding-callout strong:first-child {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.onboarding-card .dismiss-btn {
+  width: 100%;
+  padding: 9px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ── Reduced-motion: honor the user's preference ─────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .error-card,
+  .onboarding-backdrop,
+  .onboarding-card {
+    animation: none;
+  }
+  .error-card { animation-delay: 0s; }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

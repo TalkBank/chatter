@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng hrv spa"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+    <participant
+      id="INV"
+      role="Investigator"
+      language="eng"
+
+    />
+    <participant
+      id="SIS"
+      role="Sister"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Multiple linkers on a single utterance</comment>
+  <comment type="Generic">Constructs: two or more linkers before main content</comment>
+  <comment type="Generic">Source: ca-data Croatian and CallFriend Spanish examples</comment>
+  <u who="INV" uID="u0">
+    <w>tell</w>
+    <w>me</w>
+    <w>more</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <linker type="lazy overlap mark"/><linker type="self completion"/>
+    <w>the</w>
+    <w>dog</w>
+    <w>ran</w>
+    <w>away</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SIS" uID="u2">
+    <linker type="self completion"/><linker type="other completion"/>
+    <w>in</w>
+    <w>the</w>
+    <w>park</w>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <linker type="lazy overlap mark"/><linker type="quoted utterance next"/>
+    <w>give</w>
+    <w>me</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

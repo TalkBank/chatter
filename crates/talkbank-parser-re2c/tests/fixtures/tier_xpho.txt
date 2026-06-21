@@ -1,0 +1,404 @@
+# tier_xpho — 200 samples extracted from ~/talkbank/data/*-data
+# Each entry is separated by a blank line.
+# Lines may include tab-continuations (multi-physical-line entries).
+
+%xpho:	va ale əː
+
+%xpho:	ɛl ɛl va ale əː ɔ̃ navɛ di kɛl alɛ dɑ̃ te bʁa
+
+%xpho:	e lɥi ɔ̃ nave di kɛl ə kil alɛ avɛk ɛl dɑ̃ lə sak
+
+%xpho:	ɔp dabɔʁ lɥi isi
+
+%xpho:	ʒavuː ublie i fo k ʒə mɛt lə dʁa dədɑ̃
+
+%xpho:	katʁ ɑ̃ e dmi
+
+%xpho:	bɔ̃ ə vwala yn mɛzɔ̃ː
+
+%xpho:	ə pus isi l a de ʒøː
+
+%xpho:	isi l a ɛ̃ tabloː
+
+%xpho:	la l a mɔ̃ byʁoː
+
+%xpho:	la l a mɔ̃ liː bjɛ̃syʁː
+
+%xpho:	lə li d me pupeː
+
+%xpho:	e əː
+
+%xpho:	me ɑ̃ fɛt sa seː dø ʃɛz puʁ ʒwe əː kɑ̃t l a yn əː yn asistɑ̃t e əː
+
+%xpho:	dy ku ʒɑ̃ mɛ dø puʁ əː
+
+%xpho:	yn puʁ la metʁɛs e yn puʁ lɛ̃sistɑ̃t
+
+%xpho:	me apʁɛ ʒ la ʁəmɛː ə puʁ mɔ̃ byʁo
+
+%xpho:	se səlɥila pas kə la l a boku d ʃoz
+
+%xpho:	eː mɔ̃ byʁo ə abit
+
+%xpho:	se yn lymjɛʁ
+
+%xpho:	atɑ̃ ɛl e u
+
+%xpho:	ʒe fɛ ɛ̃ kolje la
+
+%xpho:	wiː ɛ̃ pti pø
+
+%xpho:	bɔ̃ œː
+
+%xpho:	wi
+
+%xpho:	ɔ̃ va diʁ kə se ɛ̃ bɛʁso sak
+
+%xpho:	pas kə l a diʒ pas kə l  ɑ̃ na dø dədɑ̃ əː
+
+%xpho:	e la ɔ̃ demenaʒ
+
+%xpho:	ɔ̃ se pa ɑ̃kɔʁ
+
+%xpho:	sa ɔ̃ nɑ̃ na pa bzwɛ̃
+
+%xpho:	ɛl avɛ fɛ la silwɛt də ʃakɛ̃
+
+%xpho:	me la ʃ pø pa ləː butone pas kə ləː lə butɔ̃ e pɛʁdy
+
+%xpho:	la
+
+%xpho:	e se ply paʁatik də l pʁɑ̃dʁ kɔm sa kə kɔm sa
+
+%xpho:	ɔ̃ ɔ̃ pø l pʁqɑ̃dʁ kɔm sa u kɔm sa
+
+%xpho:	əː bɔ̃ ʒ ve pʁɑ̃dʁ lə sak
+
+%xpho:	e ʒespɛʁ
+
+%xpho:	bɔ̃ aj aj aj
+
+%xpho:	nɑ̃
+
+%xpho:	əː ty pø pʁɑ̃dʁ lə bɛʁso siltəplɛ
+
+%xpho:	atɑ̃ ʒ ve ʁataʃe sa
+
+%xpho:	nɑ̃ œː mɔ̃ nɑ̃fɑ̃
+
+%xpho:	nɑ̃ twa t e mɔ̃ nɑ̃fɑ̃ e ʒe de deː zelɛv imaʒinɛʁ
+
+%xpho:	ɔp
+
+%xpho:	ɔ̃ dwa avɑ̃ avɑ̃ dale əː fɛʁ la metʁɛs i fo akɔ̃paɲe ɛ̃ ty t rapɛl i fo ɑ̃ nakɔ̃paɲe ɛ̃ ʃe l medsɛ̃
+
+%xpho:	se əː sɥila
+
+%xpho:	səlɥi avɛk de fʁɛz pas kə il a le dwa abime
+
+%xpho:	ɔ̃ vaː diʁ kɔ̃ nabit isi mɛ̃tønɑ̃
+
+%xpho:	lə sak ɔ̃ va l mɛt la
+
+%xpho:	ʒ ve sɔʁtiʁ le dø la
+
+%xpho:	yn pɛ̃s ʁuʒ
+
+%xpho:	avɛk de əː
+
+%xpho:	ɔ̃ diʁ kə la se l li də ɛl ɔp
+
+%xpho:	ʒ ve la kuʃe
+
+%xpho:	ʒ ve lɥi mɛt ə la tɛt isi pas kə əː
+
+%xpho:	e ʒ ve lɥi mɛt kɔm sa ɔp
+
+%xpho:	atɑ̃ ʒ li
+
+%xpho:	X
+
+%xpho:	atɑ̃
+
+%xpho:	ɛm əː be
+
+%xpho:	ɛm nɑ̃
+
+%xpho:	nɑ̃ ʒvɛ din ɛm a
+
+%xpho:	ɛm a beː əː iː
+
+%xpho:	ɛl
+
+%xpho:	əː mː
+
+%xpho:	əː
+
+%xpho:	iː ɛl ə se pa tʁɛ bjɛ̃ əː
+
+%xpho:	pa tʁɛ bjɛ̃ nekʁi kɑ̃mɛm
+
+%xpho:	ʒ ve lɥi done la tetin
+
+%xpho:	əː la teti ɛl e u
+
+%xpho:	la tetin ʁoz
+
+%xpho:	wi lə ʁoz
+
+%xpho:	mɛʁsi
+
+%xpho:	* ɔp i fo bjɛ̃syʁ pʁɑ̃d ləː lə sak u l a u ɔ̃ mɛ le kuʃ
+
+%xpho:	əː dødɑ̃ l a lə bibʁɔ̃ e la kʁɛm
+
+%xpho:	əː wi me la ə ɔ̃ nɛ̃stal tu sa e apʁrɛ la yn nunu ki vjɛ̃ e ɔ̃ ɔ̃ ɔ̃ l akɔ̃paɲ əː ʃe l dɔktœʁ
+
+%xpho:	pask ɔ̃ pø pa ɑ̃pɔʁte tu le zɑ̃fɑ̃
+
+%xpho:	ʒ dwa lœʁ mɛtə la kʁɛm(.) avɑ̃ d paʁtiʁ
+
+%xpho:	ʒ lave mi laddɑ̃
+
+%xpho:	nɔ̃ː
+
+%xpho:	se ɛl sɛʁ əː
+
+%xpho:	a kə əː ʃ kɔm i sɔ̃ː i zɔ̃ suvɑ̃ de bobo əː e bɛ̃ se yn kʁɛm kiː sɛʁ aː
+
+%xpho:	pas kəː sinɔ̃ i fo lœʁ mɛt pas kə sinɔ̃ i zɔ̃ de bobo
+
+%xpho:	e dɔ̃k ʒ lœʁ mɛ ʃak ʒuʁ
+
+%xpho:	bɔ̃ əː la əː i zɔ̃ pa pʁi l le
+
+%xpho:	əː wi(.) ɑ̃ n a yn puʁ le pəti me ki e tut əː dʁwat
+
+%xpho:	tut dʁwat
+
+%xpho:	nɔ̃ me sa ʒə ʃ kone pa alɔʁ ʒɑ̃lɛv pa me le kaje ə i sɔ̃ i sɔ̃ tus əː
+
+%xpho:	pa bjɛ̃ mi
+
+%xpho:	eː ʒv dwa mɛt la tulmɔ̃d dwa mɛt la kʁɛm
+
+%xpho:	sa s me əː paʁtu syʁ lə vizaʒ e syʁ le mɛ̃
+
+%xpho:	e syʁ le ʒɑ̃b
+
+%xpho:	ba wi ɔ̃ pø avwaʁ de boo syʁ le ʒɑ̃b syʁ le mɛ̃ syʁ le bʁa əː syʁ la figyʁ
+
+%xpho:	ɔ̃ mə avwaʁ de bobo paʁtu
+
+%xpho:	sa ɑ̃pɛʃ le bobo
+
+%xpho:	me ɛl ɛl ʁɛst tultɑ̃ dɑ̃ sɔ̃ li alɔʁ alɔʁ ɛl a pa d bobo
+
+%xpho:	ə wi ʒ mə ʁapɛl
+
+%xpho:	nɑ̃ se pas kə l a yn vwatyʁ də baʁbi e l a pa d baʁi avɛk
+
+%xpho:	e əː l a pa d baʁbi avɛk
+
+%xpho:	ʒ ve done ɛ̃ pti ʒ ve mɛt la kʁɛm a tulmɔ̃d
+
+%xpho:	m
+
+%xpho:	e mwa ʒ mə mɛ ɛ̃ pti pø la kʁɛm kɑ̃mɛm əː
+
+%xpho:	pas kə mwa osi ʃ pø avwaʁ le bobo ɛ̃
+
+%xpho:	o ba wi ɛ̃
+
+%xpho:	ʒɑ̃ me ɛ̃ pti pø syʁ le pje ɛ̃
+
+%xpho:	pas kə me pje sɔ̃ ny ɔp
+
+%xpho:	vy k ʒe pa d kolɑ̃ ɛ̃
+
+%xpho:	ɔ̃ diʁɛ ɛ̃
+
+%xpho:	sete paskə əː ɔ̃ nete ale a ʃɑ̃pjɔn e spɔʁ
+
+%xpho:	ɔ̃ lvave aʃte puʁ ʃɑ̃pjɔn e spɔʁ
+
+%xpho:	me ɔ̃ dɑ̃ mɔ̃n aʁmɔ̃ ɔ̃ ɔ̃ nave ʁtʁuve ɛ̃ blɑ̃
+
+%xpho:	e ʃː ɔ̃ pøtɛt kə il ete a maʁi
+
+%xpho:	pas kə nu mwa ɔ̃ nɑ̃ ɔ̃ nɑ̃ ve ave ɛ̃ aʃte ɛ̃ nwaʁ
+
+%xpho:	ʒave feː əː avɛk de kɔm əː atɑ̃
+
+%xpho:	kɔm əː ɛ̃ː kɛlkə ʃoz kɔm etjɛn fɛ avɛk deː de bal
+
+%xpho:	e əː ʒave ʒɑ̃ e əː ɑ̃ fɛt oljød avwaʁ de bul ɔ̃ nave deː de pti de ptit ʃoz tu tu pla
+
+%xpho:	a wi ɔ̃ fzɛ dy
+
+%xpho:	wi ɔ̃ nave fe dy palɛ
+
+%xpho:	əː dɑ̃ ʁjɛ̃ meː i falɛ lə ɔ̃ nete fas a fas
+
+%xpho:	e əː l ɑ̃ na nu ɔ̃ le fas a fas ɔ̃ nɑ̃ nave ɔ̃ nave ʃakɛ̃ ə ɛ̃ tʁyk puʁ puse
+
+%xpho:	ɛ̃ klœb
+
+%xpho:	e əː ɔ̃ nave ʃakɛ̃ ɛ̃ klœb e ɔ̃ nete ɑ̃ fas
+
+%xpho:	e əː l ɑ̃ na ɛ̃ ki na pa dəː palɛ
+
+%xpho:	e l ɑ̃ na ɛ̃ ki ɑ̃ na e i dwa ʒøte l palɛ a lotʁ
+
+%xpho:	e lot dwa ʒøte l palɛ a lotʁ
+
+%xpho:	lot dwa ʒøte l palɛ a lotʁ
+
+%xpho:	lot dwa ʒøte a lotʀ
+
+%xpho:	mwa ʒ ve fɛʁ sa
+
+%xpho:	mwa ʒ lə fzɛ pøtɛtʁ avɛk ɔktav ʒ mə ʁapɛl
+
+%xpho:	si ʒ mə ʁapɛl bjɛ̃
+
+%xpho:	ɔp ʃ ɥi dezole ɔ̃ va lɥi mɛt syʁ le pje kɑ̃mɛm
+
+%xpho:	əː wi me sete pa de vʁɛ zepe
+
+%xpho:	kɔm əː la u e ɔktav e ɔktav i fe d leskʁim avɛk
+
+%xpho:	ty sɛ la u il a ɛ̃skʁi əː u il e ɛ̃skʁi
+
+%xpho:	wi e ba
+
+%xpho:	e ba ty sɛ kə il ɛ ɛ̃skʁi
+
+%xpho:	e bɛ̃ loʁɑ̃s nɑ̃ ə blɑ̃din ɛl e ɛ̃skʁi avɛk lɥi
+
+%xpho:	wi dɔ̃k ə j ɑ̃ na dø d la mɛm klas ki pœv sə vwaʁ
+
+%xpho:	o miljø d la ʒuʁne kɑ̃ tse pa əː lekɔl
+
+%xpho:	ɔ̃ ne
+
+%xpho:	əː vɑ̃dʁødi
+
+%xpho:	mɛʁkʁødi
+
+%xpho:	mɛʁkʁødi ʁoz ɔ̃ sə ʁəpoz
+
+%xpho:	lɛ̃di tu gʁi lə lɛ̃di e tu gʁi
+
+%xpho:	ʒon klɛʁ e lə maʁdi me vwasi mɛʁkʁədi ʁoz ɔ̃ sə ʁəpoz
+
+%xpho:	ʒødi blø vjɛ̃ ta sɔ̃ tuʁ
+
+%xpho:	vɑ̃dʁədi vɛʁ lə sɥi tuʒuʁ
+
+%xpho:	samdi ʁuʒ dimɑ̃ʃ blɑ̃ se la ʒwa de zɑ̃fɑ̃
+
+%xpho:	e i fɔ̃s i e əː se a lekɔl kɔ̃ la fɛ
+
+%xpho:	e əː tulmɔ̃d fɛ apʁɛ əː kɑ̃ ti diz əː kɑ̃t ə la metʁɛs di əː se la ʒwa de zɑ̃fɑ̃ i fɔ̃s wɛː
+
+%xpho:	e la me i fɔ̃ wɛː tʁɛ fɔʁ e əː la metʁɛs ɛ əː mwa ʒve mal a la tɛt dɔ̃k ə ʒ lə fɛ pa
+
+%xpho:	e ə ɑ̃ fɛt la metʀɛs ɛl di pa də pa l fɛʁ
+
+%xpho:	ɛl di də də də fɛʁ wɛ ɑ̃ ʃyʃotɑ̃
+
+%xpho:	əː əː
+
+%xpho:	la fɛt a la suʁi
+
+%xpho:	se dømɛ̃ ʒødi la fɛt a la suʁi
+
+%xpho:	ki balɛj sɔ̃ tapi avɛk sɔ̃ mɑ̃to gʁi
+
+%xpho:	tʁuv yn pɔm dapi la kup e la kɥi e la dɔn a se pøti
+
+%xpho:	ə sinɔ̃ ʒɑ̃ ne yn se əː dwa degize vwasi ɛ̃ nuʁs e pøti pus
+
+%xpho:	mwa ʒ pʁefɛʁ
+
+%xpho:	bɔ̃ əː dwa degize vwasi ɛ̃ nuʁs sɛ pøti pus
+
+%xpho:	ɛ̃ nɛ̃dɛ mɔ̃ nɛ̃d yn pʁɛ̃sɛs sɛ mɔ̃ nɛ̃dɛks
+
+%xpho:	ɛ̃ gʁɑ̃ seɲœʁ se lə maʒœʁ
+
+%xpho:	lanylɛʁ e loʁikylɛʁ sɔ̃ tu le dø de lytɛ̃ vɛʁ
+
+%xpho:	se la fɛt tu me dwa sɔ̃ degize
+
+%xpho:	se la fɛt il vɔ̃ dɑ̃se
+
+%xpho:	e ø i f eː ø i fɔ̃ wɛː
+
+%xpho:	wi əː alɔʁ kə əː seː plyto le dwa ki dɑ̃s ɛ̃ː
+
+%xpho:	se pa la buʃ ɛ̃
+
+%xpho:	se plyto le dwa
+
+%xpho:	əː ə ʒil ʒ lave ubje dɑ̃ la valiz
+
+%xpho:	ʒ lave ublje ʒe mi ʒe mi la kʁɛm a tu le ɑ̃fɑ̃ sof lɥi
+
+%xpho:	e ʒespɛʁ kil aː pa deʒa ɛ̃ bobo ɛ̃
+
+%xpho:	ɔ̃ dwa ale ʃe ʃe l medsɛ̃ puʁ əː ʃaʁlɔt ɛ̃
+
+%xpho:	nɑ̃ sa se pa dɑ̃ː laː əː dɑ̃ laː
+
+%xpho:	la poezi
+
+%xpho:	a ba se oʁozmɑ̃ ɛ̃
+
+%xpho:	nɔ̃
+
+%xpho:	a sːi l a ynː poezi yn nuvɛl poezi
+
+%xpho:	ɑ̃kɔʁ yn nuvɛl
+
+%xpho:	e se kɑ̃ tɔ̃ ne pøti ɔ̃ ɔ̃ ne a la otœʁ deː ʁadi
+
+%xpho:	de kaʁɔt
+
+%xpho:	eː de salad
+
+%xpho:	pas kə le salad se əː se paʁtɛʁ
+
+%xpho:	dɔ̃k ə kɑ̃ tɔ̃ ne tu pøti ɔ̃ː ɔ̃ː pø køjiʁ deː de salad
+
+%xpho:	pɥisk ɔ̃ ne kɔm sa eː ɔ̃ pø ʁamase
+
+%xpho:	mː kɑ̃ tɔ̃ s a sɛ̃k ɑ̃ ɔ̃ sə is a la otœʁ de kasis
+
+%xpho:	de gʁozɛj ekaʁlat
+
+%xpho:	deː
+
+%xpho:	e de tomats
+
+%xpho:	əː kɑ̃ tɔ̃ døvjɛ̃ ɛ̃ nɔm
+
+%xpho:	ɔ̃ bʁekɔlt de pɔm
+
+%xpho:	de pʁyn e de miʁabɛl
+
+%xpho:	le bʁa løve vɛʁ lə sjɛl
+
+%xpho:	kwa
+
+%xpho:	mwa ʒ kœj əː de gʁozɛj ekaʁlat
+
+%xpho:	e de tomat
+
+%xpho:	e ø iː iː kʁwav kə ɔ̃ mɔ̃t a a yn kɔʁd puʁ sə is
+
+%xpho:	ɔ̃ ɔ̃ mɔ̃t pa a yn kɔʁd
+
+%xpho:	ɛl a di kɑ̃ tɔ̃ na sɛ̃k ɑ̃
+

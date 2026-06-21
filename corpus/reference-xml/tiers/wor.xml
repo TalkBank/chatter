@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Media="wor" Mediatypes="audio"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="sample"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P2Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Word-level timing tier (%wor) with per-word timestamps</comment>
+  <comment type="Generic">Constructs: wor_dependent_tier, wor_tier_prefix, wor_tier_body, wor_word_item</comment>
+  <u who="CHI" uID="u0">
+    <w>hello</w>
+    <w>world</w>
+    <t type="p"></t>
+    <media
+      start="0.100"
+      end="0.600"
+      unit="s"
+    />
+    <wor>
+      <w>hello</w>
+      <internal-media
+        start="0.100"
+        end="0.300"
+        unit="s"
+      />
+      <w>world</w>
+      <internal-media
+        start="0.300"
+        end="0.600"
+        unit="s"
+      />
+      <t type="p"></t>
+
+    </wor>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>how</w>
+    <w>are</w>
+    <w>you</w>
+    <t type="q"></t>
+    <media
+      start="0.700"
+      end="1.200"
+      unit="s"
+    />
+    <wor>
+      <w>how</w>
+      <internal-media
+        start="0.700"
+        end="0.800"
+        unit="s"
+      />
+      <w>are</w>
+      <internal-media
+        start="0.800"
+        end="1.000"
+        unit="s"
+      />
+      <w>you</w>
+      <internal-media
+        start="1.000"
+        end="1.200"
+        unit="s"
+      />
+      <t type="p"></t>
+
+    </wor>
+  </u>
+</CHAT>

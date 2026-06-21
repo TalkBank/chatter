@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	ita, fra
+@Participants:	206 Subject, INV Investigator
+@ID:	ita|corpus|206|18;00.00|female|gaco1||Subject|||
+@ID:	ita|corpus|INV|||||Investigator|||
+@Comment:	Italian picture description task with L2 French speaker
+@Comment:	Constructs: Italian language coverage, L2 speech errors
+*206:	dunque: uh prima &~v &~v vedo: un [/] un ragazzo che [/] che è al [*] zoo↑ .
+%mor:	adv|dunque intj|uh adv|prima verb|vedere-Fin-Ind-Pres-S1 det|uno-Masc-Ind-Art-Sing noun|ragazzo-Masc-Acc pron|che-Rel-S1 aux|essere-Fin-Ind-Pres-S3 adp|a noun|zoo-Masc .
+%gra:	1|4|ADVMOD 2|4|DISCOURSE 3|4|ADVMOD 4|0|ROOT 5|6|DET 6|4|OBJ 7|10|NSUBJ 8|10|COP 9|10|DET 10|6|ACL-RELCL 11|4|PUNCT
+*206:	dunque sta mangiando: un cioccolatino↑ eh ma: um c'è: [/] c'è u:n [/] un elefanto [*] &=rire .
+%mor:	adv|dunque aux|stare-Fin-Ind-Pres-S3 verb|mangiare-Ger-S det|uno-Masc-Ind-Art-Sing noun|cioccolatino-Masc-Acc intj|eh cconj|ma intj|um verb|cièire-Fin-Ind-Pres-S3 det|uno-Masc-Ind-Art-Sing noun|elefanto-Masc-Acc .
+%gra:	1|3|ADVMOD 2|3|AUX 3|0|ROOT 4|5|DET 5|3|OBJ 6|3|DISCOURSE 7|9|CC 8|9|DISCOURSE 9|3|CONJ 10|11|DET 11|9|OBJ 12|3|PUNCT
+*206:	dunque 0subj si buffa [*] di: [/] di lui uh perché: vuole [/] &=bouche vuole &~don &~don donarlo [*] ma: [/] ma [/] ma [/] &~n ma è solo: un [/] uh un buffo [*] .
+%mor:	adv|dunque pron|si-Prs-S3 verb|buffare-Fin-Ind-Pres-S3 adp|di pron|lui-Prs-S3 intj|uh sconj|perché aux|volere-Fin-Ind-Pres-S3 verb|donare-Inf-S cconj|ma aux|essere-Fin-Ind-Pres-S3 adv|solo intj|uh det|uno-Masc-Ind-Art-Sing noun|buffo-Masc .
+%gra:	1|3|ADVMOD 2|3|EXPL 3|0|ROOT 4|5|CASE 5|3|OBL 6|3|DISCOURSE 7|9|MARK 8|9|AUX 9|3|ADVCL 10|15|CC 11|15|COP 12|15|ADVMOD 13|15|DISCOURSE 14|15|DET 15|3|CONJ 16|3|PUNCT
+*206:	e &=rire quest'uomo .
+%mor:	cconj|e noun|questuomo-Masc .
+%gra:	1|2|CC 2|0|ROOT 3|2|PUNCT
+*INV:	ok .
+%mor:	intj|ok .
+%gra:	1|0|ROOT 2|1|PUNCT
+@End

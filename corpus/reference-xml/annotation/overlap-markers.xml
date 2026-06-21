@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Overlap markers: [&lt;] precedes, [&gt;] follows, indexed [&lt;2] [&gt;2]</comment>
+  <comment type="Generic">Constructs: indexed_overlap_precedes, indexed_overlap_follows</comment>
+  <u who="MOT" uID="u0">
+    <w>if</w>
+    <w>we</w>
+    <w>have</w>
+    <g><w>some</w>
+    <w>time</w><overlap type="overlap follows"/></g>
+    <w>we</w>
+    <w>can</w>
+    <w>get</w>
+    <w>tickets</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <g><w>Mom</w><overlap type="overlap precedes"/></g>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u2">
+    <w>if</w>
+    <w>we</w>
+    <w>have</w>
+    <g><w>some</w>
+    <w>time</w><overlap type="overlap follows" index="1"/></g>
+    <w>we</w>
+    <w>can</w>
+    <w>get</w>
+    <g><w>tickets</w>
+    <w>to</w><overlap type="overlap follows" index="2"/></g>
+    <w>the</w>
+    <w>opera</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <g><w>Mom</w><overlap type="overlap precedes" index="1"/></g>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <g><w>honey</w>
+    <w>we</w>
+    <w>need</w><overlap type="overlap precedes" index="2"/></g>
+    <w>to</w>
+    <w>go</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <w>my</w>
+    <g><w>foo</w><overlap type="overlap follows"/><overlap type="overlap precedes"/></g>
+    <w>bar</w>
+    <w>is</w>
+    <w>broken</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

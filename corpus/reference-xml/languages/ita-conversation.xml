@@ -1,0 +1,583 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="ita fra" Corpus="corpus">
+  <Participants>
+    <participant id="206" role="Subject" language="ita" age="P18Y00M00D" sex="female" group="gaco1"/>
+    <participant id="INV" role="Investigator" language="ita"/>
+  </Participants>
+  <comment type="Generic">Italian picture description task with L2 French speaker</comment>
+  <comment type="Generic">Constructs: Italian language coverage, L2 speech errors</comment>
+  <u who="206" uID="u0">
+    <w>dunque<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>dunque</stem>
+        </mw>
+        <gra type="gra" index="1" head="4" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>uh<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>uh</stem>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <w>prima<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>prima</stem>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w type="nonword">v</w>
+    <w type="nonword">v</w>
+    <w>vedo<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>vedere</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <g>
+      <w>un</w>
+      <k type="retracing"/>
+    </g>
+    <w>un<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>uno</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="DET"/>
+      </mor>
+    </w>
+    <w>ragazzo<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ragazzo</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="6" head="4" relation="OBJ"/>
+      </mor>
+    </w>
+    <g>
+      <w>che</w>
+      <k type="retracing"/>
+    </g>
+    <w>che<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>che</stem>
+          <mk type="sfx">Rel</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="7" head="10" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>è<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>essere</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="8" head="10" relation="COP"/>
+      </mor>
+    </w>
+    <g>
+      <w>al<mor type="mor">
+          <mw>
+            <pos>
+              <c>adp</c>
+            </pos>
+            <stem>a</stem>
+          </mw>
+          <gra type="gra" index="9" head="10" relation="DET"/>
+        </mor>
+      </w>
+      <error/>
+    </g>
+    <w>zoo<ca-element type="pitch up"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>zoo</stem>
+          <mk type="sfx">Masc</mk>
+        </mw>
+        <gra type="gra" index="10" head="6" relation="ACL-RELCL"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="11" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="206" uID="u1">
+    <w>dunque<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>dunque</stem>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>sta<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>stare</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="AUX"/>
+      </mor>
+    </w>
+    <w>mangiando<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>mangiare</stem>
+          <mk type="sfx">Ger</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>un<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>uno</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="DET"/>
+      </mor>
+    </w>
+    <w>cioccolatino<ca-element type="pitch up"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>cioccolatino</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="5" head="3" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>eh<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>eh</stem>
+        </mw>
+        <gra type="gra" index="6" head="3" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <w>ma<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>ma</stem>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="CC"/>
+      </mor>
+    </w>
+    <w>um<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>um</stem>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <g>
+      <w>c'è<p type="drawl"/>
+      </w>
+      <k type="retracing"/>
+    </g>
+    <w>c'è<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>cièire</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="9" head="3" relation="CONJ"/>
+      </mor>
+    </w>
+    <g>
+      <w>u<p type="drawl"/>n</w>
+      <k type="retracing"/>
+    </g>
+    <w>un<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>uno</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="10" head="11" relation="DET"/>
+      </mor>
+    </w>
+    <g>
+      <w>elefanto<mor type="mor">
+          <mw>
+            <pos>
+              <c>noun</c>
+            </pos>
+            <stem>elefanto</stem>
+            <mk type="sfx">Masc</mk>
+            <mk type="sfx">Acc</mk>
+          </mw>
+          <gra type="gra" index="11" head="9" relation="OBJ"/>
+        </mor>
+      </w>
+      <error/>
+    </g>
+    <e>
+      <happening>rire</happening>
+    </e>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="12" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="206" uID="u2">
+    <w>dunque<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>dunque</stem>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w type="omission">subj</w>
+    <w>si<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>si</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="EXPL"/>
+      </mor>
+    </w>
+    <g>
+      <w>buffa<mor type="mor">
+          <mw>
+            <pos>
+              <c>verb</c>
+            </pos>
+            <stem>buffare</stem>
+            <mk type="sfx">Fin</mk>
+            <mk type="sfx">Ind</mk>
+            <mk type="sfx">Pres</mk>
+            <mk type="sfx">S3</mk>
+          </mw>
+          <gra type="gra" index="3" head="0" relation="ROOT"/>
+        </mor>
+      </w>
+      <error/>
+    </g>
+    <g>
+      <w>di<p type="drawl"/>
+      </w>
+      <k type="retracing"/>
+    </g>
+    <w>di<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>di</stem>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="CASE"/>
+      </mor>
+    </w>
+    <w>lui<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>lui</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="5" head="3" relation="OBL"/>
+      </mor>
+    </w>
+    <w>uh<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>uh</stem>
+        </mw>
+        <gra type="gra" index="6" head="3" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <w>perché<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>perché</stem>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="MARK"/>
+      </mor>
+    </w>
+    <g>
+      <w>vuole</w>
+      <k type="retracing"/>
+    </g>
+    <e>
+      <happening>bouche</happening>
+    </e>
+    <w>vuole<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>volere</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="AUX"/>
+      </mor>
+    </w>
+    <w type="nonword">don</w>
+    <w type="nonword">don</w>
+    <g>
+      <w>donarlo<mor type="mor">
+          <mw>
+            <pos>
+              <c>verb</c>
+            </pos>
+            <stem>donare</stem>
+            <mk type="sfx">Inf</mk>
+            <mk type="sfx">S</mk>
+          </mw>
+          <gra type="gra" index="9" head="3" relation="ADVCL"/>
+        </mor>
+      </w>
+      <error/>
+    </g>
+    <g>
+      <w>ma<p type="drawl"/>
+      </w>
+      <k type="retracing"/>
+    </g>
+    <g>
+      <w>ma</w>
+      <k type="retracing"/>
+    </g>
+    <g>
+      <w>ma</w>
+      <k type="retracing"/>
+    </g>
+    <w type="nonword">n</w>
+    <w>ma<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>ma</stem>
+        </mw>
+        <gra type="gra" index="10" head="15" relation="CC"/>
+      </mor>
+    </w>
+    <w>è<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>essere</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="11" head="15" relation="COP"/>
+      </mor>
+    </w>
+    <w>solo<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>solo</stem>
+        </mw>
+        <gra type="gra" index="12" head="15" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <g>
+      <w>un</w>
+      <k type="retracing"/>
+    </g>
+    <w>uh<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>uh</stem>
+        </mw>
+        <gra type="gra" index="13" head="15" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <w>un<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>uno</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="14" head="15" relation="DET"/>
+      </mor>
+    </w>
+    <g>
+      <w>buffo<mor type="mor">
+          <mw>
+            <pos>
+              <c>noun</c>
+            </pos>
+            <stem>buffo</stem>
+            <mk type="sfx">Masc</mk>
+          </mw>
+          <gra type="gra" index="15" head="3" relation="CONJ"/>
+        </mor>
+      </w>
+      <error/>
+    </g>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="16" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="206" uID="u3">
+    <w>e<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>e</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="CC"/>
+      </mor>
+    </w>
+    <e>
+      <happening>rire</happening>
+    </e>
+    <w>quest'uomo<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>questuomo</stem>
+          <mk type="sfx">Masc</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="3" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="INV" uID="u4">
+    <w>ok<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>ok</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Question-variant terminators: interrupted question (+/?),
+	self-interrupted question (+//?), trailing off question (+..?),
+	broken question (+!?)
+@Comment:	Constructs: interrupted_question, self_interrupted_question,
+	trailing_off_question, broken_question
+*MOT:	what kind of things would they have in a +/?
+*CHI:	maybe blocks and stuff .
+*MOT:	what were you going to say about +//?
+*CHI:	I forgot .
+*MOT:	anything you have to do to belong to the club or +..?
+*CHI:	no you just go !
+*MOT:	but what if they +!?
+@End

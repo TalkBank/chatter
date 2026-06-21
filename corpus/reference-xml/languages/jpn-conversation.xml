@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="jpn" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="jpn" age="P1Y05M22D" sex="male"/>
+    <participant id="FAT" role="Father" language="jpn"/>
+    <participant id="MOT" role="Mother" language="jpn"/>
+  </Participants>
+  <comment type="Generic">Japanese family interaction during toy play</comment>
+  <comment type="Generic">Constructs: Japanese language, hiragana and katakana scripts</comment>
+  <u who="CHI" uID="u0">
+    <w>パパ<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>パパ</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="FAT" uID="u1">
+    <w>はい<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>はい</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="MOT" uID="u2">
+    <w>これ<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>此れ</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>何<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>何</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="q">
+      <mor type="mor">
+        <mt type="q"/>
+        <gra type="gra" index="3" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="MOT" uID="u3">
+    <w>また<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>又</stem>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>バナナ<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>バナナ</stem>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>くれる<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>呉れる</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>の<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>の</stem>
+        </mw>
+        <gra type="gra" index="4" head="3" relation="MARK"/>
+      </mor>
+    </w>
+    <t type="q">
+      <mor type="mor">
+        <mt type="q"/>
+        <gra type="gra" index="5" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="MOT" uID="u4">
+    <w>ありがとう<mor type="mor">
+        <mw>
+          <pos>
+            <c>intj</c>
+          </pos>
+          <stem>有り難う</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

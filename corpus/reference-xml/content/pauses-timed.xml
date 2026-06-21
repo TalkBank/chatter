@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Timed pauses with numeric durations</comment>
+  <comment type="Generic">Constructs: timed pauses (N.), (N.N), (M:SS.N) alongside named pauses</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <pause symbolic-length="simple"></pause>
+    <w>want</w>
+    <pause symbolic-length="simple" length="3"></pause>
+    <w>a</w>
+    <w>cookie</w>
+    <pause symbolic-length="long"></pause>
+    <w>please</w>
+    <pause symbolic-length="very long"></pause>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>okay</w>
+    <pause symbolic-length="simple" length="0.5"></pause>
+    <w>let</w>
+    <w>me</w>
+    <w>get</w>
+    <w>one</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>and</w>
+    <pause symbolic-length="simple" length="90.5"></pause>
+    <w>then</w>
+    <w>we</w>
+    <w>eat</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

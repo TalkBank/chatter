@@ -1,0 +1,1567 @@
+{
+  "fixtures": [
+    {
+      "fixture": "E202_Illegal_characters_in_word.cha",
+      "expected_codes": [
+        "E202"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E243_auto.md"
+    },
+    {
+      "fixture": "E209_Word_has_no_spoken_content.cha",
+      "expected_codes": [
+        "E209"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E209_auto.md"
+    },
+    {
+      "fixture": "E212_Invalid_word_format.cha",
+      "expected_codes": [
+        "E212"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E212_auto.md"
+    },
+    {
+      "fixture": "E214_Empty_scoped_annotation_content.cha",
+      "expected_codes": [
+        "E214"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E214_auto.md"
+    },
+    {
+      "fixture": "E220_Illegal_digits_in_word_content.cha",
+      "expected_codes": [
+        "E220"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_auto.md"
+    },
+    {
+      "fixture": "E220_Illegal_digits_in_word_content_2.cha",
+      "expected_codes": [
+        "E220"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_auto.md"
+    },
+    {
+      "fixture": "E230_Unbalanced_CA_delimiter.cha",
+      "expected_codes": [
+        "E230"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E230_auto.md"
+    },
+    {
+      "fixture": "E233_Empty_compound_part.cha",
+      "expected_codes": [
+        "E233"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E233_auto.md"
+    },
+    {
+      "fixture": "E241_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E241"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_auto.md"
+    },
+    {
+      "fixture": "E241_Illegal_Untranscribed_Marker_xx.cha",
+      "expected_codes": [
+        "E241"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
+    },
+    {
+      "fixture": "E244_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E244"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_auto.md"
+    },
+    {
+      "fixture": "E246_Lengthening_marker_not_after_spoken_material.cha",
+      "expected_codes": [
+        "E246"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E246_auto.md"
+    },
+    {
+      "fixture": "E247_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E247"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E247_auto.md"
+    },
+    {
+      "fixture": "E248_Bare_shortcut_in_tertiary_language_context.cha",
+      "expected_codes": [
+        "E248"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E248_auto.md"
+    },
+    {
+      "fixture": "E249_Bare_shortcut_with_no_secondary_language.cha",
+      "expected_codes": [
+        "E249"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E249_auto.md"
+    },
+    {
+      "fixture": "E250_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E250"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E250_auto.md"
+    },
+    {
+      "fixture": "E252_Syntax_error_caret_at_word_start.cha",
+      "expected_codes": [
+        "E252"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E252_auto.md"
+    },
+    {
+      "fixture": "E258_Consecutive_commas.cha",
+      "expected_codes": [
+        "E258"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E258_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_2.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_3.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_4.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_5.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_6.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_7.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_Comma_after_non_spoken_content_8.cha",
+      "expected_codes": [
+        "E259"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E305_Missing_terminator.cha",
+      "expected_codes": [
+        "E305"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_auto.md"
+    },
+    {
+      "fixture": "E305_Unknown_error.cha",
+      "expected_codes": [
+        "E305",
+        "E600"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E999_auto.md"
+    },
+    {
+      "fixture": "E306_Empty_word_content.cha",
+      "expected_codes": [
+        "E306"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E253_auto.md"
+    },
+    {
+      "fixture": "E306_Utterance_has_no_content.cha",
+      "expected_codes": [
+        "E306"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E306_auto.md"
+    },
+    {
+      "fixture": "E308_Invalid_speaker_format.cha",
+      "expected_codes": [
+        "E308"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E308_auto.md"
+    },
+    {
+      "fixture": "E308_Invalid_speaker_format_2.cha",
+      "expected_codes": [
+        "E308"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E308_auto.md"
+    },
+    {
+      "fixture": "E310_Parser_failed_to_produce_valid_parse_tree.cha",
+      "expected_codes": [
+        "E310"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E310_auto.md"
+    },
+    {
+      "fixture": "E316_Compound_marker_at_word_start.cha",
+      "expected_codes": [
+        "E316"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E232_auto.md"
+    },
+    {
+      "fixture": "E316_Deprecated_Skip_Bullet.cha",
+      "expected_codes": [
+        "E316"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E360_deprecated_skip_bullet.md"
+    },
+    {
+      "fixture": "E316_InvalidOverlapIndex.cha",
+      "expected_codes": [
+        "E316"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E373_auto.md"
+    },
+    {
+      "fixture": "E316_Unbalanced_quotation_marks.cha",
+      "expected_codes": [
+        "E316"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E242_auto.md"
+    },
+    {
+      "fixture": "E326_UnexpectedLineType.cha",
+      "expected_codes": [
+        "E326"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E326_auto.md"
+    },
+    {
+      "fixture": "E341_UnbalancedQuotationCrossUtterance.cha",
+      "expected_codes": [
+        "E341"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E341_auto.md"
+    },
+    {
+      "fixture": "E341_UnbalancedQuotationCrossUtterance_2.cha",
+      "expected_codes": [
+        "E341"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E341_auto.md"
+    },
+    {
+      "fixture": "E342_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E342"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/W601_auto.md"
+    },
+    {
+      "fixture": "E342_Participants_header_cannot_be_empty.cha",
+      "expected_codes": [
+        "E342"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E522_auto.md"
+    },
+    {
+      "fixture": "E347_Unbalanced_cross_speaker_overlap_indexed_markers.cha",
+      "expected_codes": [
+        "E347"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E347_auto.md"
+    },
+    {
+      "fixture": "E348_Unpaired_overlap_marker_within_utterance.cha",
+      "expected_codes": [
+        "E348"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E348_auto.md"
+    },
+    {
+      "fixture": "E351_MissingQuoteBegin.cha",
+      "expected_codes": [
+        "E351"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E351_auto.md"
+    },
+    {
+      "fixture": "E352_MissingQuoteEnd.cha",
+      "expected_codes": [
+        "E352"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E352_auto.md"
+    },
+    {
+      "fixture": "E353_MissingOtherCompletionContext.cha",
+      "expected_codes": [
+        "E353"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E353_auto.md"
+    },
+    {
+      "fixture": "E354_MissingTrailingOffTerminator.cha",
+      "expected_codes": [
+        "E354"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E354_auto.md"
+    },
+    {
+      "fixture": "E355_InterleavedScopedAnnotations.cha",
+      "expected_codes": [
+        "E355"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E355_auto.md"
+    },
+    {
+      "fixture": "E356_UnmatchedUnderlineBegin.cha",
+      "expected_codes": [
+        "E356"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E356_auto.md"
+    },
+    {
+      "fixture": "E357_UnmatchedUnderlineEnd.cha",
+      "expected_codes": [
+        "E357"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E357_auto.md"
+    },
+    {
+      "fixture": "E358_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E358"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E358_auto.md"
+    },
+    {
+      "fixture": "E359_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E359"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E359_auto.md"
+    },
+    {
+      "fixture": "E362_Bullet_timestamps_must_be_monotonic.cha",
+      "expected_codes": [
+        "E362"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E362_auto.md"
+    },
+    {
+      "fixture": "E365_Malformed_tier_content.cha",
+      "expected_codes": [
+        "E365"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E365_auto.md"
+    },
+    {
+      "fixture": "E367_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E367"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E367_auto.md"
+    },
+    {
+      "fixture": "E368_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E368"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E368_auto.md"
+    },
+    {
+      "fixture": "E370_Structural_order_error.cha",
+      "expected_codes": [
+        "E370"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_auto.md"
+    },
+    {
+      "fixture": "E370_Structural_order_error_2.cha",
+      "expected_codes": [
+        "E370"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_auto.md"
+    },
+    {
+      "fixture": "E371_Pause_inside_phonological_group.cha",
+      "expected_codes": [
+        "E371"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E371_auto.md"
+    },
+    {
+      "fixture": "E372_Nested_quotation.cha",
+      "expected_codes": [
+        "E372"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E372_auto.md"
+    },
+    {
+      "fixture": "E373_InvalidOverlapIndex.cha",
+      "expected_codes": [
+        "E373"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E373_auto.md"
+    },
+    {
+      "fixture": "E387_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E387"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E387_auto.md"
+    },
+    {
+      "fixture": "E387_Deprecated_replaced_by_E387.cha",
+      "expected_codes": [
+        "E387"
+      ],
+      "status": "deprecated",
+      "source_spec": "spec/errors/E210_auto.md"
+    },
+    {
+      "fixture": "E388_Replacement_on_non_word.cha",
+      "expected_codes": [
+        "E388"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E388_auto.md"
+    },
+    {
+      "fixture": "E389_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E389"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E389_auto.md"
+    },
+    {
+      "fixture": "E390_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E390"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E390_auto.md"
+    },
+    {
+      "fixture": "E391_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E391"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E391_auto.md"
+    },
+    {
+      "fixture": "E391_Deprecated_replaced_by_E391.cha",
+      "expected_codes": [
+        "E391"
+      ],
+      "status": "deprecated",
+      "source_spec": "spec/errors/E213_auto.md"
+    },
+    {
+      "fixture": "E401_Duplicate_dependent_tiers.cha",
+      "expected_codes": [
+        "E401"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E401_auto.md"
+    },
+    {
+      "fixture": "E401_Duplicate_dependent_tiers_2.cha",
+      "expected_codes": [
+        "E401"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E401_auto.md"
+    },
+    {
+      "fixture": "E404_Orphaned_dependent_tier.cha",
+      "expected_codes": [
+        "E404"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E404_auto.md"
+    },
+    {
+      "fixture": "E502_Missing_required_End_header.cha",
+      "expected_codes": [
+        "E502"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E502_auto.md"
+    },
+    {
+      "fixture": "E503_Missing_required_UTF8_header.cha",
+      "expected_codes": [
+        "E503"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E503_auto.md"
+    },
+    {
+      "fixture": "E504_Missing_required_header.cha",
+      "expected_codes": [
+        "E504"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E504_auto.md"
+    },
+    {
+      "fixture": "E504_Missing_required_header_2.cha",
+      "expected_codes": [
+        "E504"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E504_auto.md"
+    },
+    {
+      "fixture": "E505_Invalid_ID_format.cha",
+      "expected_codes": [
+        "E505"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E505_auto.md"
+    },
+    {
+      "fixture": "E505_Invalid_ID_format_2.cha",
+      "expected_codes": [
+        "E505"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E505_auto.md"
+    },
+    {
+      "fixture": "E505_Invalid_ID_format_3.cha",
+      "expected_codes": [
+        "E505"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E505_auto.md"
+    },
+    {
+      "fixture": "E507_Languages_header_cannot_be_empty.cha",
+      "expected_codes": [
+        "E507"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E507_auto.md"
+    },
+    {
+      "fixture": "E509_Media_header_cannot_be_empty.cha",
+      "expected_codes": [
+        "E509"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E509_auto.md"
+    },
+    {
+      "fixture": "E513_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E513"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E512_auto.md"
+    },
+    {
+      "fixture": "E513_Participant_entry_should_have_both_code_and_role.cha",
+      "expected_codes": [
+        "E513"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E513_auto.md"
+    },
+    {
+      "fixture": "E515_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E515"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E515_auto.md"
+    },
+    {
+      "fixture": "E516_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E516"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E516_auto.md"
+    },
+    {
+      "fixture": "E516_Date_header_cannot_be_empty.cha",
+      "expected_codes": [
+        "E516"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E508_auto.md"
+    },
+    {
+      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern.cha",
+      "expected_codes": [
+        "E517"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_2.cha",
+      "expected_codes": [
+        "E517"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_3.cha",
+      "expected_codes": [
+        "E517"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_4.cha",
+      "expected_codes": [
+        "E517"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_5.cha",
+      "expected_codes": [
+        "E517"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E518_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E518"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_Auto_generated_from_corpus_2.cha",
+      "expected_codes": [
+        "E518"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_Auto_generated_from_corpus_3.cha",
+      "expected_codes": [
+        "E518"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_Auto_generated_from_corpus_4.cha",
+      "expected_codes": [
+        "E518"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_Auto_generated_from_corpus_5.cha",
+      "expected_codes": [
+        "E518"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_Auto_generated_from_corpus_6.cha",
+      "expected_codes": [
+        "E518"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E519_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E519"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E519_auto.md"
+    },
+    {
+      "fixture": "E522_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E522",
+        "E523"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E511_auto.md"
+    },
+    {
+      "fixture": "E522_Participants_header_cannot_be_empty.cha",
+      "expected_codes": [
+        "E522"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E522_auto.md"
+    },
+    {
+      "fixture": "E522_Undefined_Participant_in_Utterance.cha",
+      "expected_codes": [
+        "E522"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E522_undefined_participant.md"
+    },
+    {
+      "fixture": "E523_Orphan_ID_header.cha",
+      "expected_codes": [
+        "E523"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E523_auto.md"
+    },
+    {
+      "fixture": "E524_Birth_header_for_unknown_participant.cha",
+      "expected_codes": [
+        "E524"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E524_auto.md"
+    },
+    {
+      "fixture": "E525_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E525"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E526_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E526"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E526_Auto_generated_from_corpus_2.cha",
+      "expected_codes": [
+        "E526"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E526_auto.md"
+    },
+    {
+      "fixture": "E527_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E527"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E527_Auto_generated_from_corpus_2.cha",
+      "expected_codes": [
+        "E527"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E527_auto.md"
+    },
+    {
+      "fixture": "E528_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E528"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E528_auto.md"
+    },
+    {
+      "fixture": "E529_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E529"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E529_Nested_background_with_identical_label.cha",
+      "expected_codes": [
+        "E529"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E529_auto.md"
+    },
+    {
+      "fixture": "E530_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E530"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E530_Lazy_gem_inside_background.cha",
+      "expected_codes": [
+        "E530"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E530_auto.md"
+    },
+    {
+      "fixture": "E531_Media_filename_mismatch.cha",
+      "expected_codes": [
+        "E531"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E531_auto.md"
+    },
+    {
+      "fixture": "E532_Invalid_participant_role.cha",
+      "expected_codes": [
+        "E532"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E532_auto.md"
+    },
+    {
+      "fixture": "E533_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E533"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E533_auto.md"
+    },
+    {
+      "fixture": "E534_Unsupported_Options_Value.cha",
+      "expected_codes": [
+        "E534"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E534_unsupported_option.md"
+    },
+    {
+      "fixture": "E535_Unsupported_Media_Type.cha",
+      "expected_codes": [
+        "E535"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E535_unsupported_media_type.md"
+    },
+    {
+      "fixture": "E536_Unsupported_Media_Status.cha",
+      "expected_codes": [
+        "E536"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E536_unsupported_media_status.md"
+    },
+    {
+      "fixture": "E537_Unsupported_Number_Value.cha",
+      "expected_codes": [
+        "E537"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E537_unsupported_number.md"
+    },
+    {
+      "fixture": "E538_Unsupported_Recording_Quality_Value.cha",
+      "expected_codes": [
+        "E538"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E538_unsupported_recording_quality.md"
+    },
+    {
+      "fixture": "E539_Unsupported_Transcription_Value.cha",
+      "expected_codes": [
+        "E539"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E539_unsupported_transcription.md"
+    },
+    {
+      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern.cha",
+      "expected_codes": [
+        "E540"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_invalid_time_duration.md"
+    },
+    {
+      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern_2.cha",
+      "expected_codes": [
+        "E540"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_invalid_time_duration.md"
+    },
+    {
+      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern_3.cha",
+      "expected_codes": [
+        "E540"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_invalid_time_duration.md"
+    },
+    {
+      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern_4.cha",
+      "expected_codes": [
+        "E540"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_invalid_time_duration.md"
+    },
+    {
+      "fixture": "E541_does_not_match_a_legal_CLAN_time_pattern.cha",
+      "expected_codes": [
+        "E541"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E541_invalid_time_start.md"
+    },
+    {
+      "fixture": "E541_does_not_match_a_legal_CLAN_time_pattern_2.cha",
+      "expected_codes": [
+        "E541"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E541_invalid_time_start.md"
+    },
+    {
+      "fixture": "E541_does_not_match_a_legal_CLAN_time_pattern_3.cha",
+      "expected_codes": [
+        "E541"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E541_invalid_time_start.md"
+    },
+    {
+      "fixture": "E542_Unsupported_ID_Sex_Value.cha",
+      "expected_codes": [
+        "E542"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E542_unsupported_sex.md"
+    },
+    {
+      "fixture": "E543_Header_out_of_canonical_order.cha",
+      "expected_codes": [
+        "E543"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E543_header_out_of_order.md"
+    },
+    {
+      "fixture": "E544_claims_linkage_but_transcript_has_no_timing_evidence.cha",
+      "expected_codes": [
+        "E544"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E544_media_linkage_without_timing.md"
+    },
+    {
+      "fixture": "E544_claims_linkage_but_transcript_has_no_timing_evidence_2.cha",
+      "expected_codes": [
+        "E544"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E544_media_linkage_without_timing.md"
+    },
+    {
+      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern.cha",
+      "expected_codes": [
+        "E545"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
+    },
+    {
+      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern_2.cha",
+      "expected_codes": [
+        "E545"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
+    },
+    {
+      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern_3.cha",
+      "expected_codes": [
+        "E545"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
+    },
+    {
+      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern_4.cha",
+      "expected_codes": [
+        "E545"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
+    },
+    {
+      "fixture": "E546_Unsupported_ID_SES_Value.cha",
+      "expected_codes": [
+        "E546"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E546_unsupported_ses.md"
+    },
+    {
+      "fixture": "E600_Tier_alignment_skipped_due_to_parse_errors.cha",
+      "expected_codes": [
+        "E600"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E600_auto.md"
+    },
+    {
+      "fixture": "E601_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E601"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E601_auto.md"
+    },
+    {
+      "fixture": "E602_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E602"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E602_auto.md"
+    },
+    {
+      "fixture": "E603_Invalid_tim_Tier_Format.cha",
+      "expected_codes": [
+        "E603"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E603_invalid_tim_tier_format.md"
+    },
+    {
+      "fixture": "E604_Empty_GRA_relation.cha",
+      "expected_codes": [
+        "E604"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E604_auto.md"
+    },
+    {
+      "fixture": "E604_gra_Tier_Without_mor_Tier.cha",
+      "expected_codes": [
+        "E604"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E604_gra_without_mor.md"
+    },
+    {
+      "fixture": "E605_Unsupported_Dependent_Tier.cha",
+      "expected_codes": [
+        "E605"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E605_unsupported_dependent_tier.md"
+    },
+    {
+      "fixture": "E701_Per_speaker_start_time_not_monotonically_increasing.cha",
+      "expected_codes": [
+        "E701"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E701_auto.md"
+    },
+    {
+      "fixture": "E704_Speaker_self_overlap_overlapping_overlap_markers.cha",
+      "expected_codes": [
+        "E704"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E704_auto.md"
+    },
+    {
+      "fixture": "E705_Mor_count_mismatch_too_few_items.cha",
+      "expected_codes": [
+        "E705"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E705_auto.md"
+    },
+    {
+      "fixture": "E705_Mor_count_mismatch_too_few_items_2.cha",
+      "expected_codes": [
+        "E705"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E705_auto.md"
+    },
+    {
+      "fixture": "E706_Mor_count_mismatch_too_many_mor_items.cha",
+      "expected_codes": [
+        "E706"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E706_auto.md"
+    },
+    {
+      "fixture": "E706_Mor_count_mismatch_too_many_mor_items_2.cha",
+      "expected_codes": [
+        "E706"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E706_auto.md"
+    },
+    {
+      "fixture": "E706_Mor_count_mismatch_too_many_mor_items_3.cha",
+      "expected_codes": [
+        "E706"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E706_auto.md"
+    },
+    {
+      "fixture": "E706_Mor_count_mismatch_too_many_mor_items_4.cha",
+      "expected_codes": [
+        "E706"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E706_auto.md"
+    },
+    {
+      "fixture": "E707_Mor_terminator_presence_mismatch.cha",
+      "expected_codes": [
+        "E707"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E707.md"
+    },
+    {
+      "fixture": "E707_Mor_terminator_presence_mismatch_2.cha",
+      "expected_codes": [
+        "E707"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E707.md"
+    },
+    {
+      "fixture": "E708_Malformed_grammar_relation_on_gra_tier.cha",
+      "expected_codes": [
+        "E708"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E708_auto.md"
+    },
+    {
+      "fixture": "E709_Invalid_grammar_index.cha",
+      "expected_codes": [
+        "E709"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E709_auto.md"
+    },
+    {
+      "fixture": "E711_Mor_empty_content.cha",
+      "expected_codes": [
+        "E711"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E711.md"
+    },
+    {
+      "fixture": "E711_Mor_empty_content_2.cha",
+      "expected_codes": [
+        "E711"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E711.md"
+    },
+    {
+      "fixture": "E712_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "E712"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E712_auto.md"
+    },
+    {
+      "fixture": "E713_Gra_head_index_invalid.cha",
+      "expected_codes": [
+        "E713"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E713_auto.md"
+    },
+    {
+      "fixture": "E714_alignment_count_mismatch_too_few_tokens.cha",
+      "expected_codes": [
+        "E714"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E714_auto.md"
+    },
+    {
+      "fixture": "E715_alignment_count_mismatch_too_many_tokens.cha",
+      "expected_codes": [
+        "E715"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E715_auto.md"
+    },
+    {
+      "fixture": "E716_Mor_terminator_value_mismatch.cha",
+      "expected_codes": [
+        "E716"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E716.md"
+    },
+    {
+      "fixture": "E716_Mor_terminator_value_mismatch_2.cha",
+      "expected_codes": [
+        "E716"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E716.md"
+    },
+    {
+      "fixture": "E716_Mor_terminator_value_mismatch_3.cha",
+      "expected_codes": [
+        "E716"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E716.md"
+    },
+    {
+      "fixture": "E718_Sin_count_mismatch_too_few_sin_tokens.cha",
+      "expected_codes": [
+        "E718"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E718_auto.md"
+    },
+    {
+      "fixture": "E719_Sin_count_mismatch_too_many_sin_tokens.cha",
+      "expected_codes": [
+        "E719"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E719_auto.md"
+    },
+    {
+      "fixture": "E720_Mor_Gra_count_mismatch.cha",
+      "expected_codes": [
+        "E720"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E720_auto.md"
+    },
+    {
+      "fixture": "E721_GRA_non_sequential_index.cha",
+      "expected_codes": [
+        "E721"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E721_auto.md"
+    },
+    {
+      "fixture": "E722_GRA_has_no_ROOT.cha",
+      "expected_codes": [
+        "E722"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E722_auto.md"
+    },
+    {
+      "fixture": "E723_GRA_has_multiple_ROOTs.cha",
+      "expected_codes": [
+        "E723"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E723_auto.md"
+    },
+    {
+      "fixture": "E724_GRA_has_circular_dependency.cha",
+      "expected_codes": [
+        "E724"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E724_gra_circular_dependency.md"
+    },
+    {
+      "fixture": "E724_GRA_has_circular_dependency_2.cha",
+      "expected_codes": [
+        "E724"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E724_gra_circular_dependency.md"
+    },
+    {
+      "fixture": "E724_GRA_has_circular_dependency_3.cha",
+      "expected_codes": [
+        "E724"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E724_gra_circular_dependency.md"
+    },
+    {
+      "fixture": "E725_Modsyl_tier_word_count_does_not_match_mod_tier.cha",
+      "expected_codes": [
+        "E725"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E725_modsyl_mod_count_mismatch.md"
+    },
+    {
+      "fixture": "E726_Phosyl_tier_word_count_does_not_match_pho_tier.cha",
+      "expected_codes": [
+        "E726"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E726_phosyl_pho_count_mismatch.md"
+    },
+    {
+      "fixture": "E727_Phoaln_tier_word_count_does_not_match_mod_tier.cha",
+      "expected_codes": [
+        "E727"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E727_phoaln_mod_count_mismatch.md"
+    },
+    {
+      "fixture": "E728_Phoaln_tier_word_count_does_not_match_pho_tier.cha",
+      "expected_codes": [
+        "E728"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E728_phoaln_pho_count_mismatch.md"
+    },
+    {
+      "fixture": "E733_alignment_count_mismatch_too_few_tokens.cha",
+      "expected_codes": [
+        "E733"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E733_auto.md"
+    },
+    {
+      "fixture": "E734_alignment_count_mismatch_too_many_tokens.cha",
+      "expected_codes": [
+        "E734"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E734_auto.md"
+    },
+    {
+      "fixture": "E735_Syllabification_unit_is_not_a_phone_CODE_pair.cha",
+      "expected_codes": [
+        "E735"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E735_syl_unit_malformed.md"
+    },
+    {
+      "fixture": "E736_Illegal_syllable_constituent_code.cha",
+      "expected_codes": [
+        "E736"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E736_syl_illegal_constituent_code.md"
+    },
+    {
+      "fixture": "E737_Modsyl_does_not_reproduce_the_mod_word.cha",
+      "expected_codes": [
+        "E737"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E737_modsyl_reconstruction_mismatch.md"
+    },
+    {
+      "fixture": "E738_Phosyl_does_not_reproduce_the_pho_word.cha",
+      "expected_codes": [
+        "E738"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E738_phosyl_reconstruction_mismatch.md"
+    },
+    {
+      "fixture": "E739_Phoaln_pair_is_malformed.cha",
+      "expected_codes": [
+        "E739"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E739_phoaln_pair_malformed.md"
+    },
+    {
+      "fixture": "E740_Phoaln_model_side_does_not_reproduce_the_mod_word.cha",
+      "expected_codes": [
+        "E740"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E740_phoaln_mod_reconstruction_mismatch.md"
+    },
+    {
+      "fixture": "E741_Phoaln_actual_side_does_not_reproduce_the_pho_word.cha",
+      "expected_codes": [
+        "E741"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E741_phoaln_pho_reconstruction_mismatch.md"
+    },
+    {
+      "fixture": "E742_Xphoint_bullet_has_start_end.cha",
+      "expected_codes": [
+        "E742"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E742_xphoint_bullet_invalid.md"
+    },
+    {
+      "fixture": "E743_Xphoint_interval_starts_are_not_non_decreasing.cha",
+      "expected_codes": [
+        "E743"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E743_xphoint_interval_not_monotonic.md"
+    },
+    {
+      "fixture": "E744_Xphoint_intervals_fall_outside_the_media_bullet.cha",
+      "expected_codes": [
+        "E744"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E744_xphoint_media_bounds_violation.md"
+    },
+    {
+      "fixture": "E745_Xphoint_group_does_not_reproduce_the_pho_word.cha",
+      "expected_codes": [
+        "E745"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E745_xphoint_phone_reconstruction_mismatch.md"
+    },
+    {
+      "fixture": "E746_Xphoint_group_count_does_not_match_the_pho_word_count.cha",
+      "expected_codes": [
+        "E746"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E746_xphoint_group_count_mismatch.md"
+    },
+    {
+      "fixture": "W108_Auto_generated_from_corpus.cha",
+      "expected_codes": [
+        "W108"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/W108_auto.md"
+    },
+    {
+      "fixture": "W602_Deprecated_experimental_tier_name.cha",
+      "expected_codes": [
+        "W602"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/W602_auto.md"
+    }
+  ],
+  "implemented_specs_without_examples": []
+}

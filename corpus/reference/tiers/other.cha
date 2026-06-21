@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Other dependent tiers: %add, %alt, %def, %gls, %coh, %par, %tim
+@Comment:	Constructs: add_dependent_tier, alt_dependent_tier, def_dependent_tier,
+	gls_dependent_tier, coh_dependent_tier, par_dependent_tier, tim_dependent_tier
+*CHI:	thingy there .
+%add:	MOT
+%alt:	thing there
+%def:	thingy = toy car
+%gls:	thingy means the toy car
+%coh:	deictic reference
+%par:	whispered
+%tim:	14:00:00
+@End

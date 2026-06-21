@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	nld
+@Participants:	CHI Child, MOT Mother
+@ID:	nld|corpus|CHI|2;00.||||Child|||
+@ID:	nld|corpus|MOT|||||Mother|||
+*MOT:	muts ja .
+%pho:	ˈmʉst ˈjɛ
+%xphoaln:	m↔m,œ↔ʉ,t↔s,s↔t
+@Comment:	ERROR: %pho has 2 words but %xphoaln has only 1
+@End

@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Child, MOT Mother
+@ID:	eng, spa|corpus|CHI|3;06.||||Child|||
+@ID:	eng, spa|corpus|MOT|||||Mother|||
+@Comment:	Multi-language file with utterance-level [- lang] switching
+	and word-level @s markers
+@Comment:	Constructs: language_code, language_switching, @s markers
+*CHI:	I want agua@s:spa please .
+*MOT:	[- spa] dame la leche .
+*CHI:	mira@s:spa the perro@s:spa is running .
+*MOT:	yes the dog is running .
+*CHI:	[- spa] quiero galletas .
+*MOT:	you want cookies@s:eng ?
+@End

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng heb spa"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Smart-quote quotation groups (Unicode left/right double quotes)</comment>
+  <comment type="Generic">Constructs: quotation groups with U+201C/U+201D delimiters, including pauses inside quotes</comment>
+  <comment type="Generic">Source: Hebrew-Berman Frogs and CallFriend Spanish examples</comment>
+  <u who="CHI" uID="u0">
+    <w>amar</w>
+    <w>lekalbo</w>
+    <tagMarker type="comma"></tagMarker>
+    <quotation type="begin"></quotation>
+    <w>shhh</w>
+    <pause symbolic-length="long"></pause>
+    <w>shhh</w>
+    <pause symbolic-length="long"></pause>
+    <quotation type="end"></quotation>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>she</w>
+    <w>said</w>
+    <quotation type="begin"></quotation>
+    <w>hello</w>
+    <quotation type="end"></quotation>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

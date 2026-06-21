@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	INV Investigator
+@ID:	eng|corpus|INV|||||Investigator|||
+@Comment:	Event segment (&=...) bodies that contain `^`, `{`, `}`, or `$` —
+@Comment:	all four are allowed inside event_segment per grammar.js's
+@Comment:	EVENT_SEGMENT_FORBIDDEN (none of them appear in the forbidden
+@Comment:	set). One wild-corpus example exists in shaddend.cha as
+@Comment:	`&=reads:boardLas^_Palmas`. The re2c lexer's `ev_char` was
+@Comment:	over-restrictive (forbade all four), splitting otherwise-whole
+@Comment:	events into separate event + word tokens. Found by the re2c
+@Comment:	parity oracle on 2026-04-30; lexer aligned to grammar.js.
+*INV:	+< &=reads:boardLas^_Palmas .
+*INV:	&=points^upward yes .
+*INV:	&=foo{bar} ok .
+*INV:	&=baz}qux ok .
+*INV:	&=name$suffix done .
+@End

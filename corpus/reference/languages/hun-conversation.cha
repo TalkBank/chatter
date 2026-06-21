@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	hun
+@Participants:	CHI Target_Child, BRI Investigator
+@ID:	hun|corpus|CHI|1;06.29||||Target_Child|||
+@ID:	hun|corpus|BRI|||||Investigator|||
+@Comment:	Hungarian child-investigator interaction with toys
+@Comment:	Constructs: Hungarian language coverage, Latin script with diacritics
+*CHI:	otta bácsi .
+%mor:	propn|otta-Nom noun|bácsi-Nom .
+%gra:	1|0|ROOT 2|1|FLAT-NAME 3|1|PUNCT
+*CHI:	maci .
+%mor:	noun|maci-Nom .
+%gra:	1|0|ROOT 2|1|PUNCT
+*BRI:	menjünk a rádiohoz .
+%mor:	verb|megy-Fin-Ind-Pres-P1 det|a-Def-Art noun|rádioh-All .
+%gra:	1|0|ROOT 2|3|DET 3|1|NSUBJ 4|1|PUNCT
+*CHI:	jó .
+%mor:	adj|jó-Nom-S1 .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	jött az az anyuci (.) nincs (.) ement (.) ott kint az anyuci .
+%mor:	verb|jön-Fin-Ind-Past-S3 pron|az-Dem-Nom-S3 det|az-Def-Art noun|anyuci-Nom verb|nincs-Fin-Ind-Pres-S3 noun|ement-Acc adv|ott adv|kint det|az-Def-Art noun|anyuci-Nom .
+%gra:	1|0|ROOT 2|1|NSUBJ 3|4|DET 4|5|NSUBJ 5|1|CONJ 6|5|NSUBJ 7|8|ADVMOD-MODE 8|5|ADVMOD-LOCY 9|10|DET 10|5|NSUBJ 11|1|PUNCT
+@End

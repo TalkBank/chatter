@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	fra
+@Participants:	CHI Child, MOT Mother
+@ID:	fra|corpus|CHI|2;06.||||Child|||
+@ID:	fra|corpus|MOT|||||Mother|||
+@Comment:	Phonological groups on main tier using angle brackets
+@Comment:	Constructs: main_pho_group, pho_begin_group, pho_end_group
+*CHI:	non ‹il y a› pas .
+*MOT:	‹A› B C .
+%mod:	d e f
+%pho:	a b c
+@End

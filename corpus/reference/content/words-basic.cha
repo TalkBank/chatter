@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Simple words, compound words (A+B), hyphens
+@Comment:	Constructs: standalone_word, word_with_optional_annotations,
+	compound words with +, hyphenated words
+*CHI:	I want ice+cream .
+*MOT:	what about choo+choo's wheel ?
+*CHI:	the merry-go-round is fun .
+*MOT:	let us get some .
+@End

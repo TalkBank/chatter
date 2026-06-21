@@ -1,0 +1,17 @@
+@UTF8
+@Begin
+@Languages:	nld
+@Participants:	CHI Tom Target_Child
+@ID:	nld|corpus|CHI|1;00.24|male|||Target_Child|||
+@Comment:	Dutch child vocalizations with phonological annotation
+@Comment:	Constructs: Dutch language coverage, early vocalization
+*CHI:	aai .
+%mor:	verb|aanaaien-Fin-Pres-S .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	aai .
+%mor:	verb|aanaaien-Fin-Pres-S .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	aai .
+%mor:	verb|aanaaien-Fin-Pres-S .
+%gra:	1|0|ROOT 2|1|PUNCT
+@End

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">@Bg/@Eg gem markers, postcodes [+ code], freecodes [^ text]</comment>
+  <comment type="Generic">Constructs: bg_header, eg_header, postcode, freecode</comment>
+  <begin-gem label="morning play"/>
+  <u who="CHI" uID="u0">
+    <w>hello</w>
+    <t type="p"></t>
+    <postcode>bch</postcode>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>good</w>
+    <w>morning</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <freecode>yawning</freecode>
+    <w>I</w>
+    <w>want</w>
+    <w>cereal</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>what</w>
+    <w>kind</w>
+    <t type="q"></t>
+    <postcode>ask</postcode>
+
+  </u>
+  <u who="CHI" uID="u4">
+    <w>the</w>
+    <w>chocolate</w>
+    <w>ones</w>
+    <t type="p"></t>
+    <postcode>pref</postcode><postcode>food</postcode>
+
+  </u>
+  <end-gem label="morning play"/>
+  <begin-gem label="reading time"/>
+  <u who="MOT" uID="u5">
+    <w>let</w>
+    <w>us</w>
+    <w>read</w>
+    <w>a</w>
+    <w>book</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u6">
+    <freecode>pointing</freecode>
+    <w>that</w>
+    <w>one</w>
+    <t type="p"></t>
+    <postcode>bch</postcode>
+
+  </u>
+  <u who="CHI" uID="u7">
+    <w>I</w>
+    <w>like</w>
+    <freecode>emphasis</freecode>
+    <w>this</w>
+    <w>story</w>
+    <t type="p"></t>
+
+  </u>
+  <end-gem label="reading time"/>
+</CHAT>

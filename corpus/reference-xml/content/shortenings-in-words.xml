@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="fra eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="fra"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="fra"
+
+    />
+  </Participants>
+  <comment type="Generic">Words with shortenings (parenthesized content within words)</comment>
+  <comment type="Generic">Constructs: shortening inside word body, e.g., parc(e), parcequ(e)</comment>
+  <comment type="Generic">Source: French child speech corpora</comment>
+  <u who="CHI" uID="u0">
+    <w>parc<shortening>e</shortening></w>
+    <w>qu'il</w>
+    <w>veut</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>parcequ<shortening>e</shortening></w>
+    <w>tu</w>
+    <w>veux</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>I</w>
+    <w>do<shortening>n't</shortening></w>
+    <w>know</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

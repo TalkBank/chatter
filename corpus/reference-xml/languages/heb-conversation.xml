@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="heb" Corpus="corpus">
+  <Participants>
+    <participant id="MOT" role="Mother" language="heb" sex="female"/>
+    <participant id="CHI" role="Target_Child" language="heb" age="P2Y04M28D" sex="female"/>
+    <participant id="FAT" role="Father" language="heb" sex="male"/>
+  </Participants>
+  <comment type="Generic">Hebrew family conversation, child on potty</comment>
+  <comment type="Generic">Constructs: Hebrew script (right-to-left), Hebrew language coverage</comment>
+  <u who="MOT" uID="u0">
+    <w>הגרי<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>הגרי</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>מה<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>מה</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="3" head="1" relation="PARATAXIS"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="4" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>קקי<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>קקי</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>ו#פיפי<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>ו_פיפי</stem>
+        </mw>
+        <gra type="gra" index="2" head="1" relation="FLAT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="3" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="MOT" uID="u2">
+    <w>מה<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>מה</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>קקי<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>קקי</stem>
+          <mk type="sfx">Masc</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>ו#פיפי<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>_פפיף</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Gen</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="AMOD"/>
+      </mor>
+    </w>
+    <t type="q">
+      <mor type="mor">
+        <mt type="q"/>
+        <gra type="gra" index="4" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>יוצא<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>יצא</stem>
+          <mk type="sfx">Part</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">paal</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>קקי<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>קקי</stem>
+          <mk type="sfx">Masc</mk>
+        </mw>
+        <gra type="gra" index="2" head="1" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>ו#פיפי<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>_פפיף</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Gen</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="AMOD"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="4" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u4">
+    <w>כן<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>כן</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

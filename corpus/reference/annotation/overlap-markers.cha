@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Overlap markers: [<] precedes, [>] follows, indexed [<2] [>2]
+@Comment:	Constructs: indexed_overlap_precedes, indexed_overlap_follows
+*MOT:	if we have <some time> [>] we can get tickets .
+*CHI:	Mom [<] !
+*MOT:	if we have <some time> [>1] we can get <tickets to> [>2] the opera .
+*CHI:	Mom [<1] !
+*MOT:	<honey we need> [<2] to go .
+*CHI:	my foo [>] [<] bar is broken .
+@End

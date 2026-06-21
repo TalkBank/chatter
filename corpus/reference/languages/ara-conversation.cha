@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	ara
+@Participants:	MOT mother Mother, CHI Khaled Target_Child
+@ID:	ara|corpus|MOT||female|||Mother|||
+@ID:	ara|corpus|CHI|1;10.|male|||Target_Child|||
+@Comment:	Kuwaiti Arabic mother-child interaction
+@Comment:	Constructs: Arabic language coverage, Arabic script
+*CHI:	Qay .
+%mor:	x|Qay .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	this .
+%mor:	x|this .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	Qay .
+%mor:	x|Qay .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	dada .
+%mor:	x|dada .
+%gra:	1|0|ROOT 2|1|PUNCT
+@End

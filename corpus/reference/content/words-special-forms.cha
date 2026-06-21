@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|2;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Special word forms: omissions (0word), babbling (&word), neologisms,
+	family/child-specific words, at-markers (@s, @c, @f, @wp, @x, @q, @l, etc.)
+@Comment:	Constructs: zero (0word), nonword (&word), event (&=action),
+	other_spoken_event (&*SPEAKER:word), form markers (@s, @c, @f, @wp, etc.)
+*CHI:	0 [= did nothing] .
+*CHI:	0she want her toy .
+*CHI:	&~baba &~goo mama .
+*MOT:	mama@f is here sweetie .
+*CHI:	doggy@c run@x fast okay@q merci@q .
+*MOT:	hao3@s:zho means good@s:eng+zho .
+*CHI:	nana@wp loves me .
+@End

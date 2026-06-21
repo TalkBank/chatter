@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="eng" Corpus="corpus" Date="2001-07-28">
+  <Participants>
+    <participant id="CHI" role="Child" language="eng" age="P2Y06M15D" sex="male" group="TD"/>
+    <participant id="MOT" role="Mother" language="eng"/>
+  </Participants>
+  <comment type="Date">28-JUL-2001</comment>
+  <comment type="Location">Pittsburgh, PA</comment>
+  <comment type="Situation">Free play in the living room with blocks and dolls</comment>
+  <comment type="Activities">block play, doll play</comment>
+  <comment type="Transcriber">chris harris, mike jackson</comment>
+  <comment type="Transcription">eye_dialect</comment>
+  <comment type="Generic">Metadata headers: @Date, @Location, @Situation, @Activities, @Transcriber, @Transcription</comment>
+  <comment type="Generic">Constructs: date_header, location_header, situation_header, activities_header, transcriber_header, transcription_header</comment>
+  <u who="CHI" uID="u0">
+    <w>look</w>
+    <w>at</w>
+    <w>my</w>
+    <w>tower</w>
+    <t type="p"/>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>that</w>
+    <w>is</w>
+    <w>a</w>
+    <w>big</w>
+    <w>tower</w>
+    <t type="p"/>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>it</w>
+    <w>is</w>
+    <w>going</w>
+    <w>to</w>
+    <w>fall</w>
+    <w>down</w>
+    <t type="e"/>
+  </u>
+</CHAT>

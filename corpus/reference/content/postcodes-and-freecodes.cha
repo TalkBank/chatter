@@ -1,0 +1,17 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Postcodes [+ code] and freecodes [^ text]:
+	pre-utterance, inline, and post-terminator positions
+@Comment:	Constructs: postcode, freecode, final_codes
+*CHI:	hello . [+ bch] [+ foo]
+*CHI:	[^ freecode 1] this is child speaking .
+*CHI:	[^ freecode 1] [^ freecode 2] this is child speaking .
+*MOT:	this is [^ huh] mother [^ right] speaking .
+*CHI:	this is child@x speaking . [+ post1 arg] [+ post2 arg]
+*CHI:	I believe that it [^ my car] is stupid .
+*CHI:	what [^c] why now ?
+@End

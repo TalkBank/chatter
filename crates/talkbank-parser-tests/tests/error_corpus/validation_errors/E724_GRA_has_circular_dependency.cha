@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello there .
+%mor:	co|hello adv|there .
+%gra:	1|2|DISCOURSE 2|1|ADVMOD 3|1|PUNCT
+@End

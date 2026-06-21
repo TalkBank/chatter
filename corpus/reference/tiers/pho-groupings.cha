@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	fra
+@Participants:	CHI Child, MOT Mother
+@ID:	fra|corpus|CHI|2;06.||||Child|||
+@ID:	fra|corpus|MOT|||||Mother|||
+@Comment:	Phonological tier with pho group delimiters and complex groupings
+@Comment:	Constructs: pho_groups with grouping brackets
+*CHI:	A B C D E .
+%pho:	‹a b› c ‹d e› f g
+@End

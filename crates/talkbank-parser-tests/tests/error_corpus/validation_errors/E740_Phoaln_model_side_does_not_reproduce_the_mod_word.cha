@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat .
+%mod:	kæt
+%pho:	kæ
+%xphoaln:	k↔k,æ↔æ
+@Comment:	ERROR: the %xphoaln model side concatenates to 'kæ', which does not match %mod 'kæt'
+@End

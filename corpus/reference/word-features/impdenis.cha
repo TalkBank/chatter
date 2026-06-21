@@ -1,0 +1,116 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother, CHI Target_Child
+@ID:	eng|corpus|MOT||female|||Mother|||
+@ID:	eng|corpus|CHI|4;06.|female|||Target_Child|||
+@Comment:	Constructs: English conversational coverage with compound words, for parse-bench and roundtrip
+*MOT:	what do you want to play with today ?
+%mor:	pron|what-Int-S1 aux|do-Fin-Ind-Pres-S2 pron|you-Prs-Nom-S2 verb|want-Inf-S part|to verb|play-Inf-S adp|with noun|today ?
+%gra:	1|6|OBL 2|4|AUX 3|4|NSUBJ 4|0|ROOT 5|6|MARK 6|4|XCOMP 7|1|CASE 8|6|OBL 9|4|PUNCT
+*CHI:	I want the choo_choo train .
+%mor:	pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 det|the-Def-Art noun|choochoo noun|train-Acc .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|5|DET 4|5|COMPOUND 5|2|OBJ 6|2|PUNCT
+*MOT:	okay let's get the train set out of the box .
+%mor:	intj|okay verb|let-Fin-Imp-S~pron|we-Prs-Acc-P1 verb|get-Inf-S det|the-Def-Art noun|train-Acc verb|set-Part-Past-S-irr adp|out adp|of det|the-Def-Art noun|box .
+%gra:	1|2|DISCOURSE 2|0|ROOT 3|2|OBJ 4|2|XCOMP 5|6|DET 6|4|OBJ 7|4|XCOMP 8|11|CASE 9|11|CASE 10|11|DET 11|7|OBL 12|2|PUNCT
+*CHI:	it goes around the racetrack really fast .
+%mor:	pron|it-Prs-Nom-S3 verb|go-Fin-Ind-Pres-S3 adp|around det|the-Def-Art noun|racetrack adv|really adj|fast-S1 .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|5|CASE 4|5|DET 5|2|OBL 6|7|ADVMOD 7|2|ADVMOD 8|2|PUNCT
+*MOT:	where is the train going now ?
+%mor:	adv|where aux|be-Fin-Ind-Pres-S3 det|the-Def-Art noun|train verb|go-Part-Pres-S adv|now ?
+%gra:	1|5|ADVMOD 2|5|AUX 3|4|DET 4|5|NSUBJ 5|0|ROOT 6|5|ADVMOD 7|5|PUNCT
+*CHI:	it is going to the train_station .
+%mor:	pron|it-Prs-Nom-S3 aux|be-Fin-Ind-Pres-S3 verb|go-Part-Pres-S adp|to det|the-Def-Art noun|trainstation .
+%gra:	1|3|NSUBJ 2|3|AUX 3|0|ROOT 4|6|CASE 5|6|DET 6|3|OBL 7|3|PUNCT
+*CHI:	the people get off and walk away .
+%mor:	det|the-Def-Art noun|person-Plur verb|get-Fin-Ind-Pres-P3 adp|off cconj|and verb|walk-Fin-Ind-Pres-P3 adv|away .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|COMPOUND-PRT 5|6|CC 6|3|CONJ 7|6|ADVMOD 8|3|PUNCT
+*MOT:	who is waiting at the station ?
+%mor:	pron|who-Rel aux|be-Fin-Ind-Pres-S3 verb|wait-Part-Pres-S adp|at det|the-Def-Art noun|station ?
+%gra:	1|3|NSUBJ 2|3|AUX 3|0|ROOT 4|6|CASE 5|6|DET 6|3|OBL 7|3|PUNCT
+*CHI:	a little boy with his teddy_bear .
+%mor:	det|a-Ind-Art adj|little-S1 noun|boy adp|with pron|his-Prs-Gen-S3 noun|teddybear .
+%gra:	1|3|DET 2|3|AMOD 3|0|ROOT 4|6|CASE 5|6|NMOD-POSS 6|3|NMOD 7|3|PUNCT
+*MOT:	does the boy want to ride the train too ?
+%mor:	aux|do-Fin-Ind-Pres-S3 det|the-Def-Art noun|boy verb|want-Inf-S part|to verb|ride-Inf-S det|the-Def-Art noun|train-Acc adv|too ?
+%gra:	1|4|AUX 2|3|DET 3|4|NSUBJ 4|0|ROOT 5|6|MARK 6|4|XCOMP 7|8|DET 8|6|OBJ 9|6|ADVMOD 10|4|PUNCT
+*CHI:	yes but he has to buy a ticket first .
+%mor:	intj|yes cconj|but pron|he-Prs-Nom-S3 verb|have-Fin-Ind-Pres-S3 part|to verb|buy-Inf-S det|a-Ind-Art noun|ticket-Acc adv|first .
+%gra:	1|4|DISCOURSE 2|4|CC 3|4|NSUBJ 4|0|ROOT 5|6|MARK 6|4|XCOMP 7|8|DET 8|6|OBJ 9|6|ADVMOD 10|4|PUNCT
+*MOT:	how much does the ticket cost ?
+%mor:	adv|how adj|much-S1 aux|do-Fin-Ind-Pres-S3 det|the-Def-Art noun|ticket verb|cost-Inf-S ?
+%gra:	1|2|ADVMOD 2|6|OBJ 3|6|AUX 4|5|DET 5|6|NSUBJ 6|0|ROOT 7|6|PUNCT
+*CHI:	it costs two dollars and a button .
+%mor:	pron|it-Prs-Nom-S3 verb|cost-Fin-Ind-Pres-S3 num|two noun|dollar-Plur-Acc cconj|and det|a-Ind-Art noun|button .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|NUMMOD 4|2|OBJ 5|7|CC 6|7|DET 7|4|CONJ 8|2|PUNCT
+*MOT:	that is a funny price for a ticket .
+%mor:	pron|that-Dem aux|be-Fin-Ind-Pres-S3 det|a-Ind-Art adj|funny-S1 noun|price adp|for det|a-Ind-Art noun|ticket .
+%gra:	1|5|NSUBJ 2|5|COP 3|5|DET 4|5|AMOD 5|0|ROOT 6|8|CASE 7|8|DET 8|5|NMOD 9|5|PUNCT
+*CHI:	the conductor likes buttons more than money .
+%mor:	det|the-Def-Art noun|conductor verb|like-Fin-Ind-Pres-S3 noun|button-Plur-Acc adj|more-Cmp-S1 adp|than noun|money .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|OBJ 5|3|ADVMOD 6|7|CASE 7|5|OBL 8|3|PUNCT
+*MOT:	what happens when the train leaves ?
+%mor:	pron|what-Int-S1 verb|happen-Fin-Ind-Pres-S3 adv|when det|the-Def-Art noun|train verb|leave-Fin-Ind-Pres-S3 ?
+%gra:	1|2|NSUBJ 2|0|ROOT 3|6|ADVMOD 4|5|DET 5|6|NSUBJ 6|2|ADVCL 7|2|PUNCT
+*CHI:	everybody waves goodbye out the window .
+%mor:	pron|everybody-Tot-S1 verb|wave-Fin-Ind-Pres-S3 verb|goodbye-Fin-S adp|out det|the-Def-Art noun|window-Acc .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|XCOMP 4|3|COMPOUND-PRT 5|6|DET 6|3|OBJ 7|2|PUNCT
+*CHI:	the cat jumps onto the last car .
+%mor:	det|the-Def-Art noun|cat verb|jump-Fin-Ind-Pres-S3 adp|onto det|the-Def-Art adj|last-S1 noun|car .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|7|CASE 5|7|DET 6|7|AMOD 7|3|OBL 8|3|PUNCT
+*MOT:	oh no the cat is not allowed on the train .
+%mor:	intj|oh intj|no det|the-Def-Art noun|cat aux|be-Fin-Ind-Pres-S3 part|not verb|allow-Part-Past-S adp|on det|the-Def-Art noun|train .
+%gra:	1|7|DISCOURSE 2|7|DISCOURSE 3|4|DET 4|7|NSUBJ-PASS 5|7|AUX-PASS 6|7|ADVMOD 7|0|ROOT 8|10|CASE 9|10|DET 10|7|OBL 11|7|PUNCT
+*CHI:	the conductor gives the cat a tiny hat .
+%mor:	det|the-Def-Art noun|conductor verb|give-Fin-Ind-Pres-S3 det|the-Def-Art noun|cat det|a-Ind-Art adj|tiny-S1 noun|hat-Acc .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|5|DET 5|3|IOBJ 6|8|DET 7|8|AMOD 8|3|OBJ 9|3|PUNCT
+*MOT:	now the cat is a helper on the train .
+%mor:	adv|now det|the-Def-Art noun|cat aux|be-Fin-Ind-Pres-S3 det|a-Ind-Art noun|helper adp|on det|the-Def-Art noun|train .
+%gra:	1|6|ADVMOD 2|3|DET 3|6|NSUBJ 4|6|COP 5|6|DET 6|0|ROOT 7|9|CASE 8|9|DET 9|6|NMOD 10|6|PUNCT
+*CHI:	she checks the tickets with her paw .
+%mor:	pron|she-Prs-Nom-S3 verb|check-Fin-Ind-Pres-S3 det|the-Def-Art noun|ticket-Plur-Acc adp|with pron|her-Prs-Gen-S3 noun|paw .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|7|CASE 6|7|NMOD-POSS 7|2|OBL 8|2|PUNCT
+*MOT:	shall we build a tunnel for the train ?
+%mor:	aux|shall-Fin-S pron|we-Prs-Nom-P1 verb|build-Inf-S det|a-Ind-Art noun|tunnel-Acc adp|for det|the-Def-Art noun|train ?
+%gra:	1|3|AUX 2|3|NSUBJ 3|0|ROOT 4|5|DET 5|3|OBJ 6|8|CASE 7|8|DET 8|5|NMOD 9|3|PUNCT
+*CHI:	yes we can use the wooden blocks .
+%mor:	intj|yes pron|we-Prs-Nom-P1 aux|can-Fin-S verb|use-Inf-S det|the-Def-Art adj|wooden-S1 noun|block-Plur-Acc .
+%gra:	1|4|DISCOURSE 2|4|NSUBJ 3|4|AUX 4|0|ROOT 5|7|DET 6|7|AMOD 7|4|OBJ 8|4|PUNCT
+*CHI:	the tunnel needs to be very long .
+%mor:	det|the-Def-Art noun|tunnel verb|need-Fin-Ind-Pres-S3 part|to aux|be-Inf-S adv|very adj|long-S1 .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|7|MARK 5|7|COP 6|7|ADVMOD 7|3|XCOMP 8|3|PUNCT
+*MOT:	put the green block on top of the red one .
+%mor:	verb|put-Fin-Imp-S det|the-Def-Art adj|green-S1 noun|block-Acc adp|on noun|top adp|of det|the-Def-Art adj|red-S1 noun|one .
+%gra:	1|0|ROOT 2|4|DET 3|4|AMOD 4|1|OBJ 5|6|CASE 6|1|OBL 7|10|CASE 8|10|DET 9|10|AMOD 10|6|NMOD 11|1|PUNCT
+*CHI:	it keeps falling down when I push it .
+%mor:	pron|it-Prs-Nom-S3 verb|keep-Fin-Ind-Pres-S3 verb|fall-Ger-S adp|down adv|when pron|I-Prs-Nom-S1 verb|push-Fin-Ind-Pres-S1 pron|it-Prs-Acc-S3 .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|XCOMP 4|3|ADVMOD 5|7|ADVMOD 6|7|NSUBJ 7|3|ADVCL 8|7|OBJ 9|2|PUNCT
+*MOT:	try to balance it more slowly this time .
+%mor:	verb|try-Fin-Imp-S part|to verb|balance-Inf-S pron|it-Prs-Acc-S3 adv|more adv|slowly det|this-Def-Dem-Sing noun|time .
+%gra:	1|0|ROOT 2|3|MARK 3|1|XCOMP 4|3|OBJ 5|6|ADVMOD 6|3|ADVMOD 7|8|DET 8|3|OBL-UNMARKED 9|1|PUNCT
+*CHI:	there it stayed up all by itself .
+%mor:	pron|there-Dem-S1 pron|it-Prs-Nom-S3 verb|stay-Fin-Ind-Past-S3 adp|up det|all-Def-Tot adp|by pron|itself-Prs-Acc-reflx-S3 .
+%gra:	1|3|EXPL 2|3|NSUBJ 3|0|ROOT 4|3|ADVMOD 5|3|ADVMOD 6|7|CASE 7|3|OBL 8|3|PUNCT
+*MOT:	you built a wonderful tunnel for the train .
+%mor:	pron|you-Prs-Nom-S2 verb|build-Fin-Ind-Past-S2-irr det|a-Ind-Art adj|wonderful-S1 noun|tunnel-Acc adp|for det|the-Def-Art noun|train .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|5|DET 4|5|AMOD 5|2|OBJ 6|8|CASE 7|8|DET 8|2|OBL 9|2|PUNCT
+*CHI:	the train can go through it now .
+%mor:	det|the-Def-Art noun|train aux|can-Fin-S verb|go-Inf-S adp|through pron|it-Prs-Acc-S3 adv|now .
+%gra:	1|2|DET 2|4|NSUBJ 3|4|AUX 4|0|ROOT 5|6|CASE 6|4|OBL 7|4|ADVMOD 8|4|PUNCT
+*MOT:	what sound does the train make ?
+%mor:	det|what-Def-Int noun|sound-Acc aux|do-Fin-Ind-Pres-S3 det|the-Def-Art noun|train verb|make-Inf-S ?
+%gra:	1|2|DET 2|6|OBJ 3|6|AUX 4|5|DET 5|6|NSUBJ 6|0|ROOT 7|6|PUNCT
+*CHI:	it goes choo_choo when it comes out .
+%mor:	pron|it-Prs-Nom-S3 verb|go-Fin-Ind-Pres-S3 noun|choochoo-Acc adv|when pron|it-Prs-Nom-S3 verb|come-Fin-Ind-Pres-S3 adp|out .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|6|ADVMOD 5|6|NSUBJ 6|2|ADVCL 7|6|COMPOUND-PRT 8|2|PUNCT
+*MOT:	it is almost time to clean up .
+%mor:	pron|it-Prs-Nom-S3 aux|be-Fin-Ind-Pres-S3 adv|almost noun|time part|to verb|clean-Inf-S adp|up .
+%gra:	1|4|NSUBJ 2|4|COP 3|4|ADVMOD 4|0|ROOT 5|6|MARK 6|4|ACL 7|6|COMPOUND-PRT 8|4|PUNCT
+*CHI:	can we play one more time please ?
+%mor:	aux|can-Fin-S pron|we-Prs-Nom-P1 verb|play-Inf-S num|one adj|more-Cmp-S1 noun|time-Acc intj|please ?
+%gra:	1|3|AUX 2|3|NSUBJ 3|0|ROOT 4|6|NUMMOD 5|6|AMOD 6|3|OBJ 7|3|DISCOURSE 8|3|PUNCT
+*MOT:	one more time and then we put it away .
+%mor:	num|one adj|more-Cmp-S1 noun|time cconj|and adv|then pron|we-Prs-Nom-P1 verb|put-Fin-Ind-Past-P1-irr pron|it-Prs-Acc-S3 adv|away .
+%gra:	1|3|NUMMOD 2|3|AMOD 3|0|ROOT 4|7|CC 5|7|ADVMOD 6|7|NSUBJ 7|3|CONJ 8|7|OBJ 9|7|ADVMOD 10|3|PUNCT
+@End

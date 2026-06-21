@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="fra"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="fra"
+      age="P2Y06M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="fra"
+
+    />
+  </Participants>
+  <comment type="Generic">Phonological groups on main tier using angle brackets</comment>
+  <comment type="Generic">Constructs: main_pho_group, pho_begin_group, pho_end_group</comment>
+  <u who="CHI" uID="u0">
+    <w>non</w>
+    <pg><w>il</w>
+    <w>y</w>
+    <w>a</w></pg>
+    <w>pas</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <pg><w>A</w><mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>d</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>a</base></ph></pw></pho></pg>
+    <w>B<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>e</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>b</base></ph></pw></pho></w>
+    <w>C<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>f</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>c</base></ph></pw></pho></w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

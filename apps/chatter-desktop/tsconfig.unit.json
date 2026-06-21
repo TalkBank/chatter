@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "target": "ES2021",
+    "lib": ["ES2021"],
+    "module": "CommonJS",
+    // The app source uses extensionless (bundler-style) imports; this test build
+    // compiles it to CommonJS for `node --test`, which needs classic Node
+    // resolution. node16/bundler would force rewriting every relative import.
+    // `ignoreDeprecations` acknowledges the node10 name-deprecation until a TS7
+    // toolchain migration.
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": [
+    "src/protocol/**/*.ts",
+    "src/runtime/capabilities/**/*.ts",
+    "src/hooks/validationState.ts"
+  ]
+}

@@ -1,0 +1,20 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Coding and analysis tiers: %cod, %spa, %int, %eng, %err, %fac, %flo, %ort
+@Comment:	Constructs: cod_dependent_tier, spa_dependent_tier, int_dependent_tier,
+	eng_dependent_tier, err_dependent_tier, fac_dependent_tier, flo_dependent_tier,
+	ort_dependent_tier
+*CHI:	elefanto grande .
+%cod:	$NOM $ADJ
+%spa:	$ADES
+%int:	rising
+%eng:	big elephant
+%err:	elefanto=elefante $LEX
+%fac:	smiling
+%flo:	fluent .
+%ort:	elefanto grande
+@End

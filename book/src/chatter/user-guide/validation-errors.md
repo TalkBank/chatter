@@ -1,0 +1,162 @@
+# Validation Errors
+
+**Status:** Current
+**Last modified:** 2026-06-17 11:29 EDT
+
+The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
+
+`chatter validate` is the binding judgment on whether a byte sequence is valid CHAT. When it reports an **error**, the file is invalid CHAT: clean the data rather than working around the check. A **warning** flags a questionable but parseable construct you should review. Where `chatter` and an older tool such as CLAN's `check` disagree on whether a file is valid, `chatter validate` is authoritative (see [CHECK Parity Audit](../../architecture/errors-and-validation/check-parity-audit.md) for how the two are reconciled).
+
+## Reading Error Output
+
+The validator emits rich diagnostics that include the error code, a
+source-pointed snippet, and a suggested fix:
+
+```text
+  × error[E304]: Missing speaker in main tier (line 15, column 3)
+
+15 │ *	hello world .
+   ·  ╰── here
+   ╰────
+  help: Add a speaker code between * and : (e.g., *CHI:)
+```
+
+Each diagnostic contains:
+- **File path** and **location** (line:column)
+- **Severity**: `error` or `warning`
+- **Error code**: `E` prefix for errors, `W` prefix for warnings, with
+  a URL pointing at the per-code documentation page
+- **Message**: human-readable description
+- **Suggestion**: actionable fix guidance where available
+
+## Error Code Ranges
+
+| Range | Category | Examples |
+|-------|----------|----------|
+| E1xx | UTF-8 and encoding | E101: Invalid line format |
+| E2xx | Word-level content | E202: Missing form type after `@`, E203: Invalid form type marker, E207: Unknown annotation |
+| E3xx | Main tier (speakers, terminators, content) | E301: Empty/missing main tier, E304: Missing speaker, E305: Missing terminator, E306: Empty utterance, E307: Invalid speaker, E308: Undeclared speaker |
+| E4xx | Dependent tier structure | E401: Duplicate dependent tier |
+| E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
+| E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
+| E7xx | Alignment (`%mor`, `%gra`, `%pho`, `%wor`) | E705: Main/%mor count mismatch, E721: %gra index error |
+| W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
+
+## Common Errors and Fixes
+
+### E256: Curly single quote used as a word character
+
+A curly single quotation mark (`U+2018` or `U+2019`), commonly introduced by
+autocorrect or speech-to-text, is not a legal CHAT word character. CHAT words
+use the ASCII apostrophe (`U+0027`, the plain `'`). For example, a contraction
+typed as `don` + `U+2019` + `t` is rejected; write `don't` with the ASCII
+apostrophe instead. `chatter` flags the curly form wherever it appears in word
+content and points the diagnostic at the exact character. This mirrors CLAN
+CHECK errors 138 and 139.
+
+### E304: Missing speaker code
+
+A main tier line must have a speaker code after the `*`:
+
+```text
+*CHI:	hello world .
+```
+
+An empty speaker code (`*:	hello .`) triggers E304.
+
+### E308: Undeclared speaker
+
+Every `*SPEAKER:` code must be listed in `@Participants`. Add the missing speaker to the header:
+
+```text
+@Participants:	CHI Target_Child, MOT Mother
+```
+
+### E370: Retrace marker with nothing to retrace
+
+A retrace or repetition marker (`[/]`, `[//]`, `[///]`) must be followed by the
+repeated or corrected material; per the CHAT manual the marker always refers to
+the text that follows it. A marker followed only by a terminator has nothing to
+retrace:
+
+```text
+*CHI:	<the> [/] .          ← invalid: [/] is not followed by repeated material
+*CHI:	<the> [/] the cat .  ← valid: the repeated material follows the marker
+```
+
+This mirrors CLAN CHECK error 119 (and the related retrace checks 151 and 159).
+
+### E505: Invalid @ID format
+
+Check that pipe-separated fields are correct and the speaker code matches `@Participants`:
+
+```text
+@ID:	eng|corpus|CHI|2;6.||||Target_Child|||
+```
+
+### E705: Main/%mor alignment mismatch
+
+The number of `%mor` items must match the number of alignable words on the main tier. Retraces, pauses, and events are not counted. The validator shows a columnar diff:
+
+```text
+  Main tier       %mor tier
+  ──────────────  ──────────────
+  I               pro|I
+  want            v|want
+  to              inf|to
+  go              v|go
+  home, ⊖
+```
+
+### E714 / E715: `%pho`, `%mod`, or `%wor` count mismatch
+
+The same two codes are reused for "too few" / "too many" count mismatches on
+`%pho`, `%mod`, and `%wor`.
+
+For `%wor`, the main-tier side is a spoken-token inventory:
+
+- regular words and fillers count
+- fragments, nonwords, and `xxx`/`yyy`/`www` count
+- retrace does not change `%wor` membership
+- replacements keep the original spoken surface word for `%wor`
+
+That context-sensitivity decides **membership**, not leniency. Once an item is
+in the `%wor` set, alignment is still **strict 1:1**. So if a filler like
+`&-mm` counts on the main tier and `%wor` omits it, E714 is the correct result.
+
+So this is valid:
+
+```chat
+*CHI:	<one &+ss> [/] one play ground .
+%wor:	one •321008_321148• ss •321148_321368• one •321809_321969• play •322049_322310• ground •322390_322890• .
+```
+
+But this is also valid:
+
+```chat
+*EXP:	&+ih <the what> [/] what's letter &+th is this ?
+%wor:	ih •49063_49103• the •49103_49163• what •49183_50205• what's •50205_50405• letter •50405_50685• th •50886_50946• is •50946_51046• this •51086_51586• ?
+```
+
+And this is valid too:
+
+```chat
+*EXP:	what's is dis [: this] ?
+%wor:	what's •37050_37471• is •37491_37631• dis •37631_38131• ?
+```
+
+### E721: %gra sequential index error
+
+`%gra` entries must have sequential 1-based indices: `1|...|... 2|...|... 3|...|...`
+
+## Generated Error Documentation
+
+The source of truth for error-code details is `spec/errors/`. Maintainers can
+also regenerate a local error-reference set from those specs when working on
+diagnostics:
+
+```bash
+cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
+```
+
+That generated reference includes the error description, example inputs, suggested fixes, and the layer that catches the diagnostic.

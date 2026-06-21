@@ -1,0 +1,66 @@
+name: Crates.io foundations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'justfile'
+      - 'grammar/**'
+      - 'crates/talkbank-derive/**'
+      - 'crates/talkbank-model/**'
+      - 'crates/talkbank-cache/**'
+      - 'crates/talkbank-parser/**'
+      - 'crates/talkbank-parser-re2c/**'
+      - 'crates/talkbank-transform/**'
+      - 'scripts/release/**'
+      - '.github/workflows/crates-io-foundation.yml'
+      - 'book/src/SUMMARY.md'
+      - 'book/src/contributing/ci-and-release.md'
+      - 'book/src/contributing/crates-io-publication.md'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'justfile'
+      - 'grammar/**'
+      - 'crates/talkbank-derive/**'
+      - 'crates/talkbank-model/**'
+      - 'crates/talkbank-cache/**'
+      - 'crates/talkbank-parser/**'
+      - 'crates/talkbank-parser-re2c/**'
+      - 'crates/talkbank-transform/**'
+      - 'scripts/release/**'
+      - '.github/workflows/crates-io-foundation.yml'
+      - 'book/src/SUMMARY.md'
+      - 'book/src/contributing/ci-and-release.md'
+      - 'book/src/contributing/crates-io-publication.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  readiness:
+    name: Foundation publication readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: crates-io-foundation
+
+      - name: Check first-wave publication readiness
+        run: bash scripts/release/check-foundation-publication-readiness.sh

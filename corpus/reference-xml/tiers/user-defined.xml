@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">User-defined dependent tiers: %xtra, %xcod, %xpho, %xmod (x-prefix tiers)</comment>
+  <comment type="Generic">Constructs: x_dependent_tier, x_tier_prefix, media bullets in user-defined tiers, NAK-delimited timing in opaque tier content, multi-field user-defined tiers</comment>
+  <u who="CHI" uID="u0">
+    <w>hello</w>
+    <w>there</w>
+    <t type="p"></t>
+
+    <a type="extension" flavor="tra">extra annotation</a>
+    <a type="extension" flavor="cod">extra coding</a>
+    <a type="extension" flavor="pho">extra phonological</a>
+    <a type="extension" flavor="mod">extra model</a>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>zero</w>
+    <t type="p"></t>
+
+    <a type="extension" flavor="p">LAT</a>
+    <a type="extension" flavor="cod">$5ml $0 tsp $na</a>
+    <a type="extension" flavor="s1">swallow 3093_4877</a>
+    <a type="extension" flavor="s2">multiple swallow 46639_50559</a>
+    <a type="extension" flavor="db">average_dB="-29.52" peak_dB="-18.64"</a>
+  </u>
+</CHAT>

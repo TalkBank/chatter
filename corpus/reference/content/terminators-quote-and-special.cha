@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Quote terminators and special terminators:
+	quoted next (+"/.), quoted follows (+".),
+	quoted period simple (+".)
+@Comment:	Constructs: quoted_new_line, quoted_period_simple
+*CHI:	and then the little bear said +"/.
+*CHI:	+" please give me all of your honey .
+*CHI:	the little bear said +".
+@End

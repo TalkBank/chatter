@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Scope markers: [!] stressing, [!!] contrastive, [?] uncertain
+@Comment:	Constructs: scoped_stressing, scoped_contrastive_stressing, scoped_uncertain
+*MOT:	you [!] did that .
+*CHI:	this is child [?] speaking .
+*MOT:	you [!!] said that .
+@End

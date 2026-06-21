@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="zho" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="zho" age="P5Y01M"/>
+    <participant id="FAT" role="Father" language="zho" age="P35Y00M"/>
+  </Participants>
+  <comment type="Generic">Mandarin Chinese father-child toy play interaction</comment>
+  <comment type="Generic">Constructs: Chinese character script, Traditional Chinese</comment>
+  <u who="CHI" uID="u0">
+    <w>这<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>这</stem>
+          <mk type="sfx">Def</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="DET"/>
+      </mor>
+    </w>
+    <w>一<mor type="mor">
+        <mw>
+          <pos>
+            <c>num</c>
+          </pos>
+          <stem>一</stem>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="NUMMOD"/>
+      </mor>
+    </w>
+    <w>个<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>个</stem>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>这<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>这</stem>
+          <mk type="sfx">Def</mk>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="DET"/>
+      </mor>
+    </w>
+    <w>礼拜<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>礼拜</stem>
+        </mw>
+        <gra type="gra" index="5" head="7" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>不是<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>是</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Neg</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="COP"/>
+      </mor>
+    </w>
+    <g>
+      <w>动</w>
+      <k type="retracing"/>
+    </g>
+    <w>动物<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>动物</stem>
+        </mw>
+        <gra type="gra" index="7" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="8" head="7" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="FAT" uID="u1">
+    <w>动物<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>动物</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>课<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>课</stem>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>吗<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>吗</stem>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <t type="q">
+      <mor type="mor">
+        <mt type="q"/>
+        <gra type="gra" index="4" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>对<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>对</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>怎么<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>怎么</stem>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>今天<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>今天</stem>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="NMOD-TMOD"/>
+      </mor>
+    </w>
+    <w>变成<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>变成</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>动物<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>动物</stem>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>课<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>课</stem>
+        </mw>
+        <gra type="gra" index="5" head="3" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="q">
+      <mor type="mor">
+        <mt type="q"/>
+        <gra type="gra" index="6" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="FAT" uID="u4">
+    <w>今天<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>今天</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NMOD-TMOD"/>
+      </mor>
+    </w>
+    <w>变<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>变</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>动物<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>动物</stem>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>课<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>课</stem>
+        </mw>
+        <gra type="gra" index="4" head="2" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>啊<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>啊</stem>
+        </mw>
+        <gra type="gra" index="5" head="2" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="6" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

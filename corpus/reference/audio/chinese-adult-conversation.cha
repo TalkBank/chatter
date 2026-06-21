@@ -1,0 +1,17 @@
+@UTF8
+@Begin
+@Languages:	zho
+@Participants:	PAR0 Participant
+@ID:	zho|corpus|PAR0|||||Participant|||
+@Media:	chinese-adult-conversation, audio
+@Comment:	Chinese (Mandarin) adult conversation with audio, %mor, %gra, %wor tiers
+@Comment:	Constructs: audio-linked CJK file with word-level timing
+*PAR0:	好 请 中 二 班 的 阿 尔 法 来 用 维 语 来 给 我们 讲 一下 这个 故 事 开始 吧 . 1070_6270
+%mor:	adv|好 verb|请-Inf-S propn|中 num|二 noun|班 part|的 propn|阿 propn|尔 part|法 sconj|来 verb|用-Inf-S propn|维 part|语 sconj|来 verb|给-Inf-S pron|我-Int-P1 verb|讲-Inf-S aux|一下-Inf-Perf-S det|这个-Def sconj|故 noun|事 verb|开始-Inf-S part|吧 .
+%gra:	1|2|ADVMOD 2|15|ADVCL 3|5|NMOD 4|5|NUMMOD 5|9|NMOD 6|5|CASE 7|9|NMOD 8|7|FLAT-NAME 9|15|NSUBJ 10|15|MARK 11|15|ADVCL 12|13|COMPOUND 13|11|OBJ 14|15|MARK 15|0|ROOT 16|17|NSUBJ 17|15|CCOMP 18|17|AUX 19|21|DET 20|22|MARK 21|22|NSUBJ 22|17|CCOMP 23|22|DISCOURSE 24|15|PUNCT
+%wor:	好 1070_1610 请 1610_2290 中 2290_2550 二 2550_2650 班 2650_2790 的 2790_3030 阿 3030_3390 尔 法 3390_3630 来 3630_3830 用 3830_4310 维 语 来 4310_4390 给 4390_4490 我们 4490_4710 讲 4710_4990 一下 4990_5090 这个 5090_5290 故 5290_5570 事 5570_5950 开始 5950_6270 吧 .
+*PAR0:	用 维 语 哦 你 让 他 说 维 语 . 6470_10290
+%mor:	verb|用-Inf-S propn|维 part|语 verb|哦-Inf-S pron|你-Int-S2 verb|让-Inf-S pron|他-Int-S3 verb|说-Inf-S propn|维 part|语 .
+%gra:	1|4|ADVCL 2|3|COMPOUND 3|1|OBJ 4|0|ROOT 5|6|NSUBJ 6|4|CCOMP 7|8|NSUBJ 8|6|CCOMP 9|10|COMPOUND 10|8|OBJ 11|4|PUNCT
+%wor:	用 6470_7030 维 语 哦 7030_7310 你 7310_9410 让 9410_9510 他 9510_9710 说 9710_10290 维 语 .
+@End

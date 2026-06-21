@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="tur" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="tur" age="P9Y11M" name="ME"/>
+  </Participants>
+  <comment type="Generic">Turkish child frog story narrative</comment>
+  <comment type="Generic">Constructs: Turkish language coverage, Latin script</comment>
+  <u who="CHI" uID="u0">
+    <w>cocuk<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>cocuk</stem>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>bir<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>bir</stem>
+          <mk type="sfx">Def</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="DET"/>
+      </mor>
+    </w>
+    <w>kurbaga<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>kurbaga</stem>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>yakaliyor<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>yakal</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Prog</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">Pos</mk>
+          <mk type="sfx">Infm</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="5" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>kurbaga<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>kurbaga</stem>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>kaciyor<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>kac</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Prog</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">Pos</mk>
+          <mk type="sfx">Infm</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="3" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>cocuk<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>cocuk</stem>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>sabah<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>sabah</stem>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>kalkinca<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>kalkinca</stem>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="4" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>cesitli<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>cesitli</stem>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="AMOD"/>
+      </mor>
+    </w>
+    <w>hayvanlari<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>hayvan</stem>
+          <mk type="sfx">Plur</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>kurbaga<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>kurbaga</stem>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>zannediyor<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>zannet</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Prog</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">Pos</mk>
+          <mk type="sfx">Infm</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="5" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u4">
+    <w>suda<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>su</stem>
+          <mk type="sfx">Loc</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="OBL"/>
+      </mor>
+    </w>
+    <w>kurbagayi<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>kurbaga</stem>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>buluyor<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>bul</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Prog</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">Pos</mk>
+          <mk type="sfx">Infm</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="4" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

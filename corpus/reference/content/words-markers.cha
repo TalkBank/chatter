@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Reference corpus file for word-internal structural markers
+@Comment:	Compound (+), syllable pause (^), clitic (~), lengthening (:), stress (ˈ)
+*CHI:	ice+cream .
+*CHI:	twenty+five .
+*CHI:	o^kay .
+*CHI:	ja^ja^ja .
+*CHI:	de^finitely .
+*CHI:	no:: .
+*CHI:	ˈhello .
+*MOT:	le~ha .
+*MOT:	af~gedroog .
+@End

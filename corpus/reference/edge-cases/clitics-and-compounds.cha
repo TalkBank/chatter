@@ -1,0 +1,22 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|4;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	%mor tier with clitics (tilde-separated: pos|stem~pos|stem),
+	compound words on main tier (A+B), hyphen-separated UD features
+@Comment:	Constructs: mor_post_clitic, mor_feature, compound words
+*CHI:	it's a cookie .
+%mor:	pron|it~aux|be-Pres-S3 det|a noun|cookie .
+%gra:	1|4|SUBJ 2|1|AUX 3|4|DET 4|0|ROOT 5|4|PUNCT
+*MOT:	he cannot do it .
+%mor:	pron|he mod|can~neg|not verb|do pron|it .
+%gra:	1|4|SUBJ 2|4|AUX 3|2|NEG 4|0|ROOT 5|4|OBJ 6|4|PUNCT
+*CHI:	the teacup broke .
+%mor:	det|the noun|teacup verb|break-Past .
+%gra:	1|2|DET 2|3|SUBJ 3|0|ROOT 4|3|PUNCT
+*MOT:	there's a butterfly .
+%mor:	pron|there~verb|be-Pres-S3 det|a noun|butterfly .
+%gra:	1|2|SUBJ 2|0|ROOT 3|4|DET 4|2|PRED 5|2|PUNCT
+@End

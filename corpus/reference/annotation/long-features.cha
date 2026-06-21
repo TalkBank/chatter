@@ -1,0 +1,17 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@Options:	CA
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	long-features, audio, unlinked
+@Comment:	Long feature spans and nonvocal begin/end markers
+@Comment:	Constructs: long_feature, long_feature_begin, long_feature_begin_marker,
+	long_feature_end, long_feature_end_marker, long_feature_label,
+	nonvocal, nonvocal_begin, nonvocal_begin_marker, nonvocal_end,
+	nonvocal_end_marker, nonvocal_simple
+*CHI:	&{l=X deal with &}l=X the slightest pressure .
+*MOT:	&{l=PAR is &{n=THUMP &=nonvocal this &=nonvocal &{l=X one &}l=X working &}n=THUMP &}l=PAR ?
+*CHI:	&{n=BANG} what was that .
+@End

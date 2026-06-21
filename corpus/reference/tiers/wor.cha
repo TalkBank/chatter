@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@Media:	wor, audio
+@Comment:	Word-level timing tier (%wor) with per-word timestamps
+@Comment:	Constructs: wor_dependent_tier, wor_tier_prefix, wor_tier_body, wor_word_item
+*CHI:	hello world . 100_600
+%wor:	hello 100_300 world 300_600 .
+*MOT:	how are you ? 700_1200
+%wor:	how 700_800 are 800_1000 you 1000_1200 .
+@End

@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	zho
+@Participants:	CHI Target_Child, FAT Father
+@ID:	zho|corpus|CHI|5;01.||||Target_Child|||
+@ID:	zho|corpus|FAT|35;00.||||Father|||
+@Comment:	Mandarin Chinese father-child toy play interaction
+@Comment:	Constructs: Chinese character script, Traditional Chinese
+*CHI:	这 一 个 这 礼拜 不是 <动> [/] 动物 .
+%mor:	det|这-Def num|一 noun|个 det|这-Def noun|礼拜 aux|是-Inf-Neg-S noun|动物 .
+%gra:	1|3|DET 2|3|NUMMOD 3|5|NMOD 4|5|DET 5|7|NSUBJ 6|7|COP 7|0|ROOT 8|7|PUNCT
+*FAT:	动物 课 吗 ?
+%mor:	noun|动物 part|课 part|吗 ?
+%gra:	1|2|COMPOUND 2|0|ROOT 3|2|DISCOURSE 4|2|PUNCT
+*CHI:	对 .
+%mor:	noun|对 .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	怎么 今天 变成 动物 课 ?
+%mor:	adv|怎么 noun|今天 verb|变成-Inf-S noun|动物 part|课 ?
+%gra:	1|3|ADVMOD 2|3|NMOD-TMOD 3|0|ROOT 4|5|COMPOUND 5|3|OBJ 6|3|PUNCT
+*FAT:	今天 变 动物 课 啊 .
+%mor:	noun|今天 verb|变-Inf-S noun|动物 part|课 part|啊 .
+%gra:	1|2|NMOD-TMOD 2|0|ROOT 3|4|COMPOUND 4|2|OBJ 5|2|DISCOURSE 6|2|PUNCT
+@End

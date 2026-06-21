@@ -1,0 +1,67 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|5;00.||||Target_Child|||
+@Comment:	Constructs: omitted-material parens, within-word lengthening, vocative satellite, and xxx utterance-length restore cases for FREQ +r/+r7/+x tests
+*CHI:	look at the big red truck .
+%mor:	verb|look-Fin-Imp-S adp|at det|the-Def-Art adj|big-S1 adj|red-S1 noun|truck .
+%gra:	1|0|ROOT 2|6|CASE 3|6|DET 4|6|AMOD 5|6|AMOD 6|1|OBL 7|1|PUNCT
+*CHI:	hm: .
+%mor:	intj|hm .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	the truck is big .
+%mor:	det|the-Def-Art noun|truck aux|be-Fin-Ind-Pres-S3 adj|big-S1 .
+%gra:	1|2|DET 2|4|NSUBJ 3|4|COP 4|0|ROOT 5|4|PUNCT
+*CHI:	xxx fell off it .
+%mor:	verb|fall-Fin-Ind-Past-S1-irr adp|off pron|it-Prs-Acc-S3 .
+%gra:	1|0|ROOT 2|3|CASE 3|1|OBL 4|1|PUNCT
+*CHI:	he gettin(g) the toy now .
+%mor:	pron|he-Prs-Nom-S3 verb|get-Part-Pres-S det|the-Def-Art noun|toy-Acc adv|now .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|2|ADVMOD 6|2|PUNCT
+*CHI:	I like that one .
+%mor:	pron|I-Prs-Nom-S1 verb|like-Fin-Ind-Pres-S1 det|that-Def-Dem-Sing num|one .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|2|PUNCT
+*CHI:	no ‡ it's ripped .
+%mor:	intj|no punct|‡ pron|it-Prs-Nom-S3~aux|be-Fin-Ind-Pres-S3 verb|rip-Part-Past-S .
+%gra:	1|5|DISCOURSE 2|1|PUNCT 3|5|NSUBJ-PASS 4|5|AUX-PASS 5|0|ROOT 6|5|PUNCT
+*CHI:	the kitten sat down .
+%mor:	det|the-Def-Art noun|kitten verb|sit-Fin-Ind-Past-S3-irr adp|down .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|ADVMOD 5|3|PUNCT
+*CHI:	well , little xxx house .
+%mor:	intj|well cm|cm adj|little-S1 noun|house .
+%gra:	1|4|DISCOURSE 2|1|PUNCT 3|4|AMOD 4|0|ROOT 5|4|PUNCT
+*CHI:	put the blocks away .
+%mor:	verb|put-Fin-Imp-S det|the-Def-Art noun|block-Plur-Acc adv|away .
+%gra:	1|0|ROOT 2|3|DET 3|1|OBJ 4|1|ADVMOD 5|1|PUNCT
+*CHI:	<we xxx bein(g) in Rochester> [?] .
+%mor:	pron|we-Prs-Nom-P1 aux|be-Part-Pres-S adp|in propn|Rochester .
+%gra:	1|4|NSUBJ 2|4|COP 3|4|CASE 4|0|ROOT 5|4|PUNCT
+*CHI:	that one is mine .
+%mor:	sconj|that noun|one aux|be-Fin-Ind-Pres-S3 pron|my-Prs-S1 .
+%gra:	1|4|MARK 2|4|NSUBJ 3|4|COP 4|0|ROOT 5|4|PUNCT
+*CHI:	the baby is crying .
+%mor:	det|the-Def-Art noun|baby aux|be-Fin-Ind-Pres-S3 verb|cry-Part-Pres-S .
+%gra:	1|2|DET 2|4|NSUBJ 3|4|COP 4|0|ROOT 5|4|PUNCT
+*CHI:	I want some juice .
+%mor:	pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 det|some-Def-Ind noun|juice-Acc .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|2|PUNCT
+*CHI:	the ball rolled away .
+%mor:	det|the-Def-Art noun|ball verb|roll-Fin-Ind-Past-S3 adv|away .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|ADVMOD 5|3|PUNCT
+*CHI:	she has a dress .
+%mor:	pron|she-Prs-Nom-S3 verb|have-Fin-Ind-Pres-S3 det|a-Ind-Art noun|dress-Acc .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|2|PUNCT
+*CHI:	the cookies are gone .
+%mor:	det|the-Def-Art noun|cookie-Plur aux|be-Fin-Ind-Pres-P3 adj|gone-S1 .
+%gra:	1|2|DET 2|4|NSUBJ 3|4|COP 4|0|ROOT 5|4|PUNCT
+*CHI:	open this jar please .
+%mor:	verb|open-Fin-Imp-S det|this-Def-Dem-Sing noun|jar-Acc intj|please .
+%gra:	1|0|ROOT 2|3|DET 3|1|OBJ 4|1|DISCOURSE 5|1|PUNCT
+*CHI:	the bird flew away .
+%mor:	det|the-Def-Art noun|bird verb|fly-Fin-Ind-Past-S3-irr adv|away .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|ADVMOD 5|3|PUNCT
+*CHI:	my shoes are tight .
+%mor:	pron|my-Prs-Gen-S1 noun|shoe-Plur aux|be-Fin-Ind-Pres-P3 adj|tight-S1 .
+%gra:	1|2|NMOD-POSS 2|4|NSUBJ 3|4|COP 4|0|ROOT 5|4|PUNCT
+@End

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Quoted speech with Unicode double-quote delimiters</comment>
+  <comment type="Generic">Constructs: quotation, double_quote, left_double_quote, right_double_quote</comment>
+  <u who="CHI" uID="u0">
+    <quotation type="begin"></quotation>
+    <w>hello</w>
+    <w>and</w>
+    <w>more</w>
+    <quotation type="end"></quotation>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>she</w>
+    <w>said</w>
+    <quotation type="begin"></quotation>
+    <w>I</w>
+    <w>want</w>
+    <w>cookies</w>
+    <quotation type="end"></quotation>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

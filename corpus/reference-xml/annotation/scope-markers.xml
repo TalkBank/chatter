@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Scope markers: [!] stressing, [!!] contrastive, [?] uncertain</comment>
+  <comment type="Generic">Constructs: scoped_stressing, scoped_contrastive_stressing, scoped_uncertain</comment>
+  <u who="MOT" uID="u0">
+    <g><w>you</w><k type="stressing"/></g>
+    <w>did</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <w>this</w>
+    <w>is</w>
+    <g><w>child</w><k type="best guess"/></g>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u2">
+    <g><w>you</w><k type="contrastive stressing"/></g>
+    <w>said</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

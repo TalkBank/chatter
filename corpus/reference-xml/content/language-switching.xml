@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng zho"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng zho"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng zho"
+
+    />
+  </Participants>
+  <comment type="Generic">Language switching: [- lang] utterance-level, @s word-level, multi-language codes with + and &amp;</comment>
+  <comment type="Generic">Constructs: language_code in inline context, @s form markers</comment>
+  <u xml:lang="zho" who="CHI" uID="u0">
+    <w>我</w>
+    <w>要</w>
+    <w>吃</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <w>hey</w>
+    <w>there</w>
+    <w>what</w>
+    <w>is</w>
+    <w><langs><single>zho</single></langs>hao3</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>hey</w>
+    <w>there</w>
+    <w>what</w>
+    <w>is</w>
+    <w><langs><single>zho</single></langs>hao3</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <w>hey</w>
+    <w>there</w>
+    <w>what</w>
+    <w>is</w>
+    <w><langs><multiple>eng zho fra</multiple></langs>hao3</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <w><langs><single>spa</single></langs>hey</w>
+    <w>there</w>
+    <w>what</w>
+    <w>is</w>
+    <w><langs><ambiguous>eng zho fra</ambiguous></langs>hao3</w>
+    <t type="q"></t>
+
+  </u>
+</CHAT>

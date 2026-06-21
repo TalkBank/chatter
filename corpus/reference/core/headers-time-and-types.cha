@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@Options:	CA
+@ID:	eng|corpus|CHI|2;06.|male|TD|UC|Child|graduate|custom field|
+@ID:	eng|corpus|MOT||female||White,MC|Mother|||
+@Time Start:	8:30:31
+@Time Duration:	17:30-18:00
+@Types:	long, toyplay, TD
+@Comment:	Time, type, and option headers
+@Comment:	Constructs: time_start_header, time_duration_header, time_duration_contents,
+	types_header, types_design, types_activity, types_group,
+	options_header, options_contents, option_name,
+	id_corpus, id_age, id_sex, id_group, id_ses, id_education, id_custom_field
+*CHI:	look at the doggy .
+*MOT:	yes he is a nice doggy .
+@End

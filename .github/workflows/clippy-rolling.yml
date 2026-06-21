@@ -1,0 +1,101 @@
+name: Clippy (rolling stable)
+
+# Hygiene canary: runs the same two-pass clippy as ci.yml, but against
+# the **latest** Rust stable rather than the pinned version. New clippy
+# lints ship with every Rust stable release (~every 6 weeks). The
+# pinned per-push CI is reproducible by design, so it cannot tell us
+# when a fresh stable would introduce warnings; this workflow exists
+# precisely for that.
+#
+# When this job goes red:
+# 1. The cause is almost always one of:
+#    a. New clippy lints in the new stable Rust release, or
+#    b. A new clippy version tightening an existing lint's heuristic.
+# 2. The fix is a focused commit that:
+#    - Bumps `rust-toolchain.toml` `channel` to match the new stable
+#    - Runs `just rust-sync` to propagate that version to every CI workflow
+#      pin (scripts/sync-rust-versions.py; the rust-version-sync CI job
+#      enforces that no pin was missed)
+#    - Fixes whatever new warnings the bump surfaced
+#    Then per-push CI catches up and stays clean again.
+#
+# Schedule: weekly Mondays 12:00 UTC (~07:00 EST / 08:00 EDT). Earlier
+# than the typical Rust stable release timing on Thursdays, so by the
+# following Monday the new stable's lints will have been published
+# long enough to be worth running against. `workflow_dispatch` is
+# enabled so the job can be re-run on demand after a bump commit.
+
+on:
+  schedule:
+    # Mondays at 12:00 UTC.
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+# Don't pile up runs if a cron fires while a previous run is still
+# in flight; the rolling check just needs one fresh result per cycle.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  clippy-rolling:
+    name: Clippy against rolling stable
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # `@stable` here: explicitly NOT pinned. This is the entire
+      # point of this workflow: catch drift between our pinned
+      # toolchain and whatever the current stable is.
+      - name: Set up latest stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Same Tauri Linux dependencies as ci.yml's rust job.
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            pkg-config
+
+      # Distinct cache key from ci.yml's job so the pinned-CI cache
+      # isn't invalidated by rolling-stable runs and vice versa.
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy-rolling
+
+      - name: Report Rust version under test
+        run: |
+          rustc --version
+          cargo --version
+          cargo clippy --version
+
+      - name: cargo clippy (lib + bins, strict, -D warnings)
+        run: cargo clippy --workspace --lib --bins --locked -- -D warnings
+
+      - name: cargo clippy (tests, relaxed panic lints, -D warnings)
+        run: |
+          cargo clippy --workspace --tests --locked -- \
+            -A clippy::unwrap_used \
+            -A clippy::expect_used \
+            -A clippy::panic \
+            -A clippy::unreachable \
+            -A clippy::todo \
+            -A clippy::unimplemented \
+            -D warnings

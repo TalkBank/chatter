@@ -1,0 +1,184 @@
+[workspace]
+resolver = "2"
+members = [
+    "apps/chatter-desktop/src-tauri",
+    "crates/send2clan",
+    "crates/talkbank-cache",
+    "crates/talkbank-cli",
+    "crates/talkbank-derive",
+    "crates/talkbank-llm",
+    "crates/talkbank-lsp",
+    "crates/talkbank-model",
+    "crates/talkbank-parser",
+    "crates/talkbank-parser-re2c",
+    "crates/talkbank-parser-tests",
+    "crates/talkbank-transform",
+    "grammar",
+    "xtask",
+]
+exclude = [
+    "spec/tools",  # Independent workspace
+    "fuzz",        # cargo-fuzz uses its own nightly toolchain with sanitizer flags
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Franklin Chen <franklinchen@franklinchen.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/TalkBank/chatter"
+homepage = "https://talkbank.org/"
+keywords = ["talkbank", "chat-format", "linguistics", "nlp", "parsing"]
+categories = ["parser-implementations", "text-processing"]
+# No MSRV declared: crates.io publication is deferred, so an arbitrary
+# minimum-supported-Rust promise (and the cost of holding the foundation
+# crates back to it while developing on the pinned toolchain) buys nothing
+# yet. Set a deliberate `rust-version` when publication is actually pursued.
+
+# Workspace-level lint policy.
+#
+# Panic-as-control-flow is the dominant footgun in long-lived Rust code
+# (LSP, server, async workers). The standard is "no panics in
+# long-lived logic, recoverable conditions go through Result with thiserror
+# domain types." These warn-level lints make every new panic site visible
+# without one-shot breaking the existing tree; per-crate `[lints]` promote
+# to `deny` as each crate finishes its audit.
+#
+# Test code keeps panic discipline relaxed, assertion macros panic by
+# design, and `unwrap()` on a fixture that's known to parse is the standard
+# Rust testing idiom.
+[workspace.lints.clippy]
+unwrap_used   = "warn"
+expect_used   = "warn"
+panic         = "warn"
+todo          = "warn"
+unimplemented = "warn"
+
+[workspace.dependencies]
+# Foundational utilities and concurrency
+aho-corasick = "1.1"
+blake3 = "1.8"
+chrono = "0.4"
+crossbeam-channel = "0.5"
+dashmap = "6.2"
+dirs = "6.0"
+indexmap = { version = "2.14", features = ["serde"] }
+parking_lot = "0.12"
+
+# Serialization, schema, error reporting
+csv = "1"
+jsonschema = { version = "0.46", default-features = false, features = ["resolve-file"] }
+miette = { version = "7.6.0", features = ["derive"] }
+quick-xml = "0.40"
+schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+smallvec = { version = "1.15", features = ["serde", "union", "const_generics"] }
+smol_str = { version = "0.3", features = ["serde"] }
+text-size = "1.1"
+thiserror = "^2.0.18"
+toml = "^1.1.2"
+
+# Proc-macro infrastructure
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+
+# Async runtime + SQLite cache
+sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate"] }
+tokio = { version = "1.52", features = ["full"] }
+
+# Tree-sitter parsing
+tree-sitter = "0.26"
+tree-sitter-talkbank = { path = "grammar", version = "0.1.0" }
+
+# Re2c parser deps
+chumsky = "0.13"
+phf = { version = "0.14", features = ["macros"] }
+phf_codegen = "0.14"
+strum = { version = "0.28", features = ["derive"] }
+
+# CLI surface
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive", "env"] }
+ctrlc = "3.5"
+
+# Terminal UI
+crossterm = "0.29"
+indicatif = "0.18"
+ratatui = { version = "0.30", features = ["serde"] }
+unicode-width = "0.2"
+
+# Filesystem watching
+notify = "8.2"
+
+# Doc / formatting helpers
+comrak = "0.52.0"
+
+# String matching / NLP utilities
+ferrous-opencc = "0.4.0"
+num_cpus = "1.17"
+rand = "0.10"
+regex = "1.12"
+shellexpand = "3.1"
+strsim = "0.11.1"
+walkdir = "^2.5"
+whatlang = "0.18"
+
+# LSP infrastructure
+tower-lsp = "0.20"
+tree-sitter-highlight = "0.26"
+
+# C compiler driver for send2clan
+cc = "1.2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# TalkBank crates, path for local dev, version for crates.io publishing
+send2clan = { path = "crates/send2clan", version = "0.1.0" }
+talkbank-cache = { path = "crates/talkbank-cache", version = "0.1.0" }
+talkbank-cli = { path = "crates/talkbank-cli", version = "0.1.0" }
+talkbank-derive = { path = "crates/talkbank-derive", version = "0.1.0" }
+talkbank-llm = { path = "crates/talkbank-llm", version = "0.1.0" }
+talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.1.0" }
+talkbank-model = { path = "crates/talkbank-model", version = "0.1.0" }
+talkbank-parser = { path = "crates/talkbank-parser", version = "0.1.0" }
+talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.1.0" }
+talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.1.0" }
+talkbank-transform = { path = "crates/talkbank-transform", version = "0.1.0" }
+
+# Testing
+assert_cmd = "2.2"
+divan = "0.1"
+insta = { version = "1.48", features = ["json", "yaml"] }
+predicates = "3.1"
+proptest = "1.11.0"
+rstest = "0.26.1"
+tempfile = "3.27"
+trybuild = "1.0"
+
+[profile.dev]
+split-debuginfo = "unpacked"
+debug = "line-tables-only"
+
+[profile.dev.build-override]
+opt-level = 3                       # Optimize proc macros and build scripts
+
+[profile.release]
+# Deliberately lean. Most chatter workloads are I/O- or parser-bound;
+# `lto = true` and `codegen-units = 1` were tried in the source workspace
+# and the build-time cost (single-threaded codegen on the largest crates)
+# was disproportionate to the runtime gain. If profiling ever identifies
+# a Rust hot path where LTO meaningfully moves the needle, re-add the
+# settings then, with evidence.
+
+[profile.test]
+split-debuginfo = "unpacked"
+debug = "line-tables-only"
+
+# The profile that 'cargo dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

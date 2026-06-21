@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker, LSN Adult
+@Options:	CA
+@ID:	eng|corpus|SPK|||||Speaker|||
+@ID:	eng|corpus|LSN|||||Adult|||
+@Comment:	CA diacritics: blocking, pitch, inhalation, constriction, laugh in word,
+	segment repetition, quality delimiters (faster, slower, creaky, soft, etc.)
+@Comment:	Constructs: nonvocal_simple, CA inline diacritics,
+	quality delimiter pairs (all 12)
+*SPK:	rub-b-b≠bber is blocked .
+*SPK:	p↑itch up and p↓itch down .
+*SPK:	in∙halation and constriction∾ and lauἩgh .
+*SPK:	↻pitch reset here .
+*SPK:	↫s-s-s↫segment repetition .
+*SPK:	∆faster∆ and ∇slower∇ and ⁎creaky⁎ and °softer° .
+*LSN:	▁lowpitch▁ and ▔highpitch▔ and ☺smilevoice☺ .
+*LSN:	♋breathyvoice♋ and ⁇unsure⁇ and ∬whisper∬ .
+*LSN:	ΫyawnΫ and ∮singing∮ .
+*SPK:	⤇quick start and then a sudden cutoff⤆ .
+*SPK:	also hard⁑ening inside a word .
+*LSN:	CA uses (parens) for uncertain words .
+@End

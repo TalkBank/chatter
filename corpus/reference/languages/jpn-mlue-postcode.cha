@@ -1,0 +1,13 @@
+@UTF8
+@PID:	11312/a-00013825-1
+@Begin
+@Languages:	jpn
+@Participants:	CHI Taachan Target_Child
+@ID:	jpn|corpus|CHI|3;07.|male|||Target_Child|||
+*CHI:	shi@k u@k .
+%mor:	n:let|shi n:let|u .
+%gra:	1|2|DEP 2|0|ROOT 3|2|PUNCT
+*CHI:	yo@k u@k bu@k shi@k yo@k u@k . [+ mlue]
+%mor:	n:let|yo n:let|u n:let|bu n:let|shi n:let|yo n:let|u .
+%gra:	1|6|DEP 2|6|DEP 3|6|DEP 4|6|DEP 5|6|DEP 6|0|ROOT 7|6|PUNCT
+@End

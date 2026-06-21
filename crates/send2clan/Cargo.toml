@@ -1,0 +1,31 @@
+[package]
+name = "send2clan"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Rust bindings for opening files in the CLAN application"
+readme = "README.md"
+build = "build.rs"
+# Hold back crates.io publication until the Wave 1B support contract lands.
+publish = false
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[build-dependencies]
+cc = { workspace = true }
+
+[dependencies]
+# No runtime dependencies - pure FFI
+
+[lib]
+name = "send2clan"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

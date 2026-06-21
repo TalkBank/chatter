@@ -1,0 +1,1814 @@
+{
+  "source": "OSX-CLAN/src/clan/check.cpp",
+  "summary": {
+    "codes_defined_in_switch": 161,
+    "codes_emitted_via_call_sites": 153,
+    "defined_but_never_emitted": [
+      16,
+      39,
+      40,
+      41,
+      58,
+      74,
+      122,
+      152
+    ],
+    "emitted_but_no_message": []
+  },
+  "codes": [
+    {
+      "code": 1,
+      "messages": [
+        "Expected characters are: @ or %% or *."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2206
+      ]
+    },
+    {
+      "code": 2,
+      "messages": [
+        "Missing ':' character and argument."
+      ],
+      "n_call_sites": 12,
+      "call_site_lines": [
+        1718,
+        1721,
+        1724,
+        1733,
+        1735,
+        3743,
+        3758,
+        3783,
+        3796,
+        3802,
+        3815,
+        3830
+      ]
+    },
+    {
+      "code": 3,
+      "messages": [
+        "Missing either TAB or SPACE character."
+      ],
+      "n_call_sites": 5,
+      "call_site_lines": [
+        1756,
+        3735,
+        3748,
+        3807,
+        3820
+      ]
+    },
+    {
+      "code": 4,
+      "messages": [
+        "Found a space character instead of TAB character after Tier name",
+        "Found a space character......",
+        "Please run \"chstring +q +1\" command on this file to fix this error."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        1682,
+        1760,
+        3790
+      ]
+    },
+    {
+      "code": 5,
+      "messages": [
+        "Colon (:) character is illegal."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        1744,
+        3794
+      ]
+    },
+    {
+      "code": 6,
+      "messages": [
+        "\"@Begin\" is missing at the beginning of the file."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        2341,
+        3731,
+        3771
+      ]
+    },
+    {
+      "code": 7,
+      "messages": [
+        "\"@End\" is missing at the end of the file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2349
+      ]
+    },
+    {
+      "code": 8,
+      "messages": [
+        "Expected characters are: @ %% * TAB."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1619
+      ]
+    },
+    {
+      "code": 9,
+      "messages": [
+        "Tier name is longer than %d."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2395
+      ]
+    },
+    {
+      "code": 10,
+      "messages": [
+        "Tier text is longer than %ld."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2403
+      ]
+    },
+    {
+      "code": 11,
+      "messages": [
+        "Symbol is not declared in the depfile."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1549
+      ]
+    },
+    {
+      "code": 12,
+      "messages": [
+        "Missing speaker name and/or role."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        5060,
+        5084
+      ]
+    },
+    {
+      "code": 13,
+      "messages": [
+        "Duplicate speaker declaration."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5064
+      ]
+    },
+    {
+      "code": 14,
+      "messages": [
+        "Spaces before tier code."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1780
+      ]
+    },
+    {
+      "code": 15,
+      "messages": [
+        "Illegal role. Please see \"depfile.cut\" for list of roles."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5087
+      ]
+    },
+    {
+      "code": 16,
+      "messages": [
+        "Illegal use of extended characters in speaker names."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 17,
+      "messages": [
+        "Tier is not declared in depfile file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1737
+      ]
+    },
+    {
+      "code": 18,
+      "messages": [
+        "Speaker",
+        "is not specified in a participants list."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5062
+      ]
+    },
+    {
+      "code": 19,
+      "messages": [
+        "Illegal use of delimiter in a word.",
+        "Or a SPACE should be added after it."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4590,
+        4592
+      ]
+    },
+    {
+      "code": 20,
+      "messages": [
+        "Undeclared suffix in depfile."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2560
+      ]
+    },
+    {
+      "code": 21,
+      "messages": [
+        "Utterance delimiter expected."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4921
+      ]
+    },
+    {
+      "code": 22,
+      "messages": [
+        "Unmatched [ found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4985
+      ]
+    },
+    {
+      "code": 23,
+      "messages": [
+        "Unmatched ] found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2860
+      ]
+    },
+    {
+      "code": 24,
+      "messages": [
+        "Unmatched < found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4987
+      ]
+    },
+    {
+      "code": 25,
+      "messages": [
+        "Unmatched > found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2874
+      ]
+    },
+    {
+      "code": 26,
+      "messages": [
+        "Unmatched { found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4989
+      ]
+    },
+    {
+      "code": 27,
+      "messages": [
+        "Unmatched } found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2865
+      ]
+    },
+    {
+      "code": 28,
+      "messages": [
+        "Unmatched ( found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4992
+      ]
+    },
+    {
+      "code": 29,
+      "messages": [
+        "Unmatched ) found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4993
+      ]
+    },
+    {
+      "code": 30,
+      "messages": [
+        "Text is illegal."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1728
+      ]
+    },
+    {
+      "code": 31,
+      "messages": [
+        "Missing text after the colon."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1748
+      ]
+    },
+    {
+      "code": 32,
+      "messages": [
+        "Code is not declared in depfile."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1547
+      ]
+    },
+    {
+      "code": 33,
+      "messages": [
+        "Either illegal date or time or symbol is not declared in depfile."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1543
+      ]
+    },
+    {
+      "code": 34,
+      "messages": [
+        "Illegal date representation."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1514
+      ]
+    },
+    {
+      "code": 35,
+      "messages": [
+        "Illegal time representation."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1516
+      ]
+    },
+    {
+      "code": 36,
+      "messages": [
+        "Utterance delimiter must be at the end of the utterance.",
+        "Use \"fixit\" program to break up this tier."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4394,
+        4396
+      ]
+    },
+    {
+      "code": 37,
+      "messages": [
+        "Undeclared prefix."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2556
+      ]
+    },
+    {
+      "code": 38,
+      "messages": [
+        "Numbers should be written out in words."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4811
+      ]
+    },
+    {
+      "code": 39,
+      "messages": [
+        "Code tier must NOT follow header tier."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 40,
+      "messages": [
+        "Duplicate code tiers per one main tier are NOT allowed."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 41,
+      "messages": [
+        "Parentheses around words are illegal."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 42,
+      "messages": [
+        "Use either \"&\" or \"()\", but not both."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4824
+      ]
+    },
+    {
+      "code": 43,
+      "messages": [
+        "The file must start with \"@Begin\" tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2290
+      ]
+    },
+    {
+      "code": 44,
+      "messages": [
+        "The file must end with \"@End\" tier.",
+        "Possibly there are some blank lines at the end of the file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2242
+      ]
+    },
+    {
+      "code": 45,
+      "messages": [
+        "There were more @Bg than @Eg tiers found."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5758
+      ]
+    },
+    {
+      "code": 46,
+      "messages": [
+        "This @Eg does not have matching @Bg."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        5391,
+        5400
+      ]
+    },
+    {
+      "code": 47,
+      "messages": [
+        "Numbers are not allowed inside words."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        3158,
+        3162,
+        3167
+      ]
+    },
+    {
+      "code": 48,
+      "messages": [
+        "Illegal character(s) found.",
+        "Illegal character(s) '%s' found."
+      ],
+      "n_call_sites": 22,
+      "call_site_lines": [
+        2995,
+        3095,
+        3101,
+        3121,
+        3124,
+        3128,
+        3131,
+        3152,
+        3209,
+        3212,
+        3219,
+        3256,
+        3343,
+        3431,
+        3486,
+        3584,
+        3703,
+        4294,
+        4297,
+        4348,
+        4551,
+        4723
+      ]
+    },
+    {
+      "code": 49,
+      "messages": [
+        "Upper case letters are not allowed inside a word."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3447
+      ]
+    },
+    {
+      "code": 50,
+      "messages": [
+        "Redundant utterance delimiter."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        4351,
+        4354,
+        4554
+      ]
+    },
+    {
+      "code": 51,
+      "messages": [
+        "expected [ ]; < > should be followed by [ ]"
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4376,
+        4568
+      ]
+    },
+    {
+      "code": 52,
+      "messages": [
+        "This item must be preceded by text.",
+        "Item '%s' must be preceded by text."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4859
+      ]
+    },
+    {
+      "code": 53,
+      "messages": [
+        "Only one \"@Begin\" can be in a file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2267
+      ]
+    },
+    {
+      "code": 54,
+      "messages": [
+        "Only one \"@End\" can be in a file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2274
+      ]
+    },
+    {
+      "code": 55,
+      "messages": [
+        "Unmatched ( found in the word."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4571
+      ]
+    },
+    {
+      "code": 56,
+      "messages": [
+        "Unmatched ) found in the word."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4572
+      ]
+    },
+    {
+      "code": 57,
+      "messages": [
+        "Please add space between word and pause symbol.",
+        "Please add space between word and pause symbol: '%s'."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4437
+      ]
+    },
+    {
+      "code": 58,
+      "messages": [
+        "Tier name is longer than 8 characters."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 59,
+      "messages": [
+        "Expected second %c character.",
+        "Expected second %s character."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4049,
+        4797
+      ]
+    },
+    {
+      "code": 60,
+      "messages": [
+        "\"@ID:\" tier is missing in the file. Please run \"insert\" in Commands window on this data file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2345
+      ]
+    },
+    {
+      "code": 61,
+      "messages": [
+        "\"@Participants:\" tier is expected here."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2297
+      ]
+    },
+    {
+      "code": 62,
+      "messages": [
+        "Missing language information."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        2536,
+        5023,
+        5054
+      ]
+    },
+    {
+      "code": 63,
+      "messages": [
+        "Missing Corpus name."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5057
+      ]
+    },
+    {
+      "code": 64,
+      "messages": [
+        "Wrong gender information (Choose: female or male)."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        1861,
+        5075
+      ]
+    },
+    {
+      "code": 65,
+      "messages": [
+        "This item can not be followed by the next symbol.",
+        "Item '%s' can not be followed by the next symbol."
+      ],
+      "n_call_sites": 31,
+      "call_site_lines": [
+        3016,
+        3083,
+        3107,
+        3204,
+        3230,
+        3241,
+        3248,
+        3266,
+        3276,
+        3285,
+        3294,
+        3355,
+        3380,
+        3402,
+        3419,
+        3426,
+        3482,
+        3499,
+        3511,
+        3526,
+        3545,
+        3556,
+        3565,
+        3573,
+        3578,
+        3622,
+        3629,
+        3639,
+        3662,
+        3682,
+        3701
+      ]
+    },
+    {
+      "code": 66,
+      "messages": [
+        "Illegal character in a word.",
+        "Illegal character '%s' in a word.",
+        "Or a SPACE should be added before it."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        3232,
+        3311,
+        3329
+      ]
+    },
+    {
+      "code": 67,
+      "messages": [
+        "This item must be followed by text,",
+        "Item '%s' must be followed by text,",
+        "preceded by SPACE or be removed."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        3025,
+        3319,
+        3338
+      ]
+    },
+    {
+      "code": 68,
+      "messages": [
+        "PARTICIPANTS TIER IS MISSING \"CHI Target_Child\"."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2144
+      ]
+    },
+    {
+      "code": 69,
+      "messages": [
+        "The UTF8 header is missing. If you edit and save the file, it will be inserted."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2353
+      ]
+    },
+    {
+      "code": 70,
+      "messages": [
+        "Expected either text or \"0\" on this tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4984
+      ]
+    },
+    {
+      "code": 71,
+      "messages": [
+        "This item must be before pause (#).",
+        "Item '%s' must be before pause (#)."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4735
+      ]
+    },
+    {
+      "code": 72,
+      "messages": [
+        "This item must precede the utterance delimiter or CA delimiter.",
+        "Item '%s' must precede the utterance delimiter or CA delimiter."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4740,
+        4744
+      ]
+    },
+    {
+      "code": 73,
+      "messages": [
+        "This item must be preceded by text or '0'.",
+        "Item '%s' must be preceded by text or '0'."
+      ],
+      "n_call_sites": 5,
+      "call_site_lines": [
+        3030,
+        3033,
+        4045,
+        4781,
+        4861
+      ]
+    },
+    {
+      "code": 74,
+      "messages": [
+        "Only one tab after ':' is allowed."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 75,
+      "messages": [
+        "This item must follow after utterance delimiter.",
+        "Item '%s' must follow after utterance delimiter."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4747
+      ]
+    },
+    {
+      "code": 76,
+      "messages": [
+        "Only one letter is allowed with '@l'."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2532
+      ]
+    },
+    {
+      "code": 77,
+      "messages": [
+        "\"@Languages:\" tier is expected here."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2294
+      ]
+    },
+    {
+      "code": 78,
+      "messages": [
+        "This item must be used at the beginning of tier.",
+        "Item '%s' must be used at the beginning of tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4769
+      ]
+    },
+    {
+      "code": 79,
+      "messages": [
+        "Only one occurrence of | symbol per word is allowed."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3549
+      ]
+    },
+    {
+      "code": 80,
+      "messages": [
+        "There must be at least one occurrence of '|'."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3518,
+        3590
+      ]
+    },
+    {
+      "code": 81,
+      "messages": [
+        "Bullet must follow utterance delimiter or be followed by end-of-line."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4791
+      ]
+    },
+    {
+      "code": 82,
+      "messages": [
+        "BEG mark of bullet must be smaller than END mark."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3879,
+        3936
+      ]
+    },
+    {
+      "code": 83,
+      "messages": [
+        "Current BEG time is smaller than previous' tier BEG time"
+      ],
+      "n_call_sites": 4,
+      "call_site_lines": [
+        3885,
+        3890,
+        3941,
+        3946
+      ]
+    },
+    {
+      "code": 84,
+      "messages": [
+        "Current BEG time is smaller than previous' tier END time by %ld msec."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3901,
+        3957
+      ]
+    },
+    {
+      "code": 85,
+      "messages": [
+        "Gap found between current BEG time and previous' tier END time."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3905,
+        3961
+      ]
+    },
+    {
+      "code": 86,
+      "messages": [
+        "Illegal character. Please re-enter it using Unicode standard."
+      ],
+      "n_call_sites": 5,
+      "call_site_lines": [
+        3198,
+        3497,
+        3620,
+        3660,
+        3699
+      ]
+    },
+    {
+      "code": 87,
+      "messages": [
+        "Malformed structure."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3592,
+        3646
+      ]
+    },
+    {
+      "code": 88,
+      "messages": [
+        "Illegal use of compounds and special form markers."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3414
+      ]
+    },
+    {
+      "code": 89,
+      "messages": [
+        "Missing or extra or wrong characters found in bullet."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3863,
+        3919
+      ]
+    },
+    {
+      "code": 90,
+      "messages": [
+        "Illegal time representation inside a bullet."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3865,
+        3921
+      ]
+    },
+    {
+      "code": 91,
+      "messages": [
+        "Blank lines are not allowed."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4331
+      ]
+    },
+    {
+      "code": 92,
+      "messages": [
+        "This item must be followed by space or end-of-line.",
+        "Item '%s' must be followed by space or end-of-line."
+      ],
+      "n_call_sites": 6,
+      "call_site_lines": [
+        2999,
+        3021,
+        3028,
+        3184,
+        4317,
+        4320
+      ]
+    },
+    {
+      "code": 93,
+      "messages": [
+        "This item must be preceded by SPACE.",
+        "Item '%s' must be preceded by SPACE."
+      ],
+      "n_call_sites": 4,
+      "call_site_lines": [
+        3179,
+        3187,
+        4469,
+        4472
+      ]
+    },
+    {
+      "code": 94,
+      "messages": [
+        "Mismatch of speaker and %%mor: utterance delimiters."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4338,
+        4522
+      ]
+    },
+    {
+      "code": 95,
+      "messages": [
+        "Illegal use of capitalized words in compounds."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3300
+      ]
+    },
+    {
+      "code": 96,
+      "messages": [
+        "Word color is now illegal."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3462
+      ]
+    },
+    {
+      "code": 97,
+      "messages": [
+        "Illegal character inside parentheses."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3360
+      ]
+    },
+    {
+      "code": 98,
+      "messages": [
+        "Space is not allow in media file name inside bullets."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3867,
+        3923
+      ]
+    },
+    {
+      "code": 99,
+      "messages": [
+        "Extension is not allow at the end of media file name."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        3869,
+        3925,
+        5589
+      ]
+    },
+    {
+      "code": 100,
+      "messages": [
+        "Commas at the end of PARTICIPANTS tier are not allowed."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2141
+      ]
+    },
+    {
+      "code": 101,
+      "messages": [
+        "This item must be followed or preceded by text.",
+        "Item '%s' must be followed or preceded by text."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3013
+      ]
+    },
+    {
+      "code": 102,
+      "messages": [
+        "Italic markers are no longer legal in CHAT."
+      ],
+      "n_call_sites": 6,
+      "call_site_lines": [
+        4289,
+        4415,
+        4433,
+        4484,
+        4498,
+        4514
+      ]
+    },
+    {
+      "code": 103,
+      "messages": [
+        "Illegal use of both CA and IPA on \"@Options:\" tier."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        5478,
+        5537
+      ]
+    },
+    {
+      "code": 104,
+      "messages": [
+        "Please select \"CAfont\" or \"Ascender Uni Duo\" font for CA file as per \"@Options:\" tier."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        5483,
+        5542
+      ]
+    },
+    {
+      "code": 105,
+      "messages": [
+        "Please select \"Charis SIL\" font for IPA file as per \"@Options:\" tier."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        5487,
+        5546
+      ]
+    },
+    {
+      "code": 106,
+      "messages": [
+        "The whole code must be on one line. Please run chstring +q on this file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4835
+      ]
+    },
+    {
+      "code": 107,
+      "messages": [
+        "Only single commas are allowed in tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4322
+      ]
+    },
+    {
+      "code": 108,
+      "messages": [
+        "All postcodes must precede final bullet."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4750
+      ]
+    },
+    {
+      "code": 109,
+      "messages": [
+        "Postcodes are not allowed on dependent tiers."
+      ],
+      "n_call_sites": 6,
+      "call_site_lines": [
+        3471,
+        3598,
+        3651,
+        3670,
+        3676,
+        3690
+      ]
+    },
+    {
+      "code": 110,
+      "messages": [
+        "No bullet found on this tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4916
+      ]
+    },
+    {
+      "code": 111,
+      "messages": [
+        "Illegal pause format. Pause has to have '.'",
+        "Pause needs '.' in '%s' or this item is in wrong location."
+      ],
+      "n_call_sites": 5,
+      "call_site_lines": [
+        3061,
+        3066,
+        3071,
+        3075,
+        3079
+      ]
+    },
+    {
+      "code": 112,
+      "messages": [
+        "Missing %s tier with media file name in headers section at the top of the file."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3927
+      ]
+    },
+    {
+      "code": 113,
+      "messages": [
+        "Illegal keyword, use \"audio\", \"video\" or look in depfile.cut."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5592
+      ]
+    },
+    {
+      "code": 114,
+      "messages": [
+        "Add \"audio\", \"video\" or look in depfile.cut for more keywords after the media file name on %s tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5620
+      ]
+    },
+    {
+      "code": 115,
+      "messages": [
+        "Old bullets format found. Please run \"fixbullets\" program to fix this data."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        3871
+      ]
+    },
+    {
+      "code": 116,
+      "messages": [
+        "Specifying Font for individual lines is illegal. Please open this file and save it again."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4879
+      ]
+    },
+    {
+      "code": 117,
+      "messages": [
+        "This character must be used in pairs. See if any are unmatched.",
+        "Character %s must be used in pairs. See if any are unmatched."
+      ],
+      "n_call_sites": 15,
+      "call_site_lines": [
+        4925,
+        4929,
+        4933,
+        4937,
+        4941,
+        4945,
+        4949,
+        4953,
+        4957,
+        4961,
+        4965,
+        4969,
+        4973,
+        4977,
+        4981
+      ]
+    },
+    {
+      "code": 118,
+      "messages": [
+        "Utterance delimiter must precede final bullet."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4618
+      ]
+    },
+    {
+      "code": 119,
+      "messages": [
+        "Missing word after code",
+        "Missing word after code \"%s\""
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5218
+      ]
+    },
+    {
+      "code": 120,
+      "messages": [
+        "Please use three letter language code.",
+        "Please use \"%s\" language code instead.",
+        "Or see if \"fixlang\" CLAN command in commands window can fix codes automaticaly."
+      ],
+      "n_call_sites": 4,
+      "call_site_lines": [
+        4165,
+        4176,
+        5454,
+        5467
+      ]
+    },
+    {
+      "code": 121,
+      "messages": [
+        "Language code not found in CLAN/lib/fixes/ISO-639.cut file.",
+        "Language code \"%s\" not found in \"CLAN/lib/fixes/ISO-639.cut\" file.",
+        "If it is a legal code, then please add it to \"CLAN/lib/fixes/ISO-639.cut\" file."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4172,
+        5462
+      ]
+    },
+    {
+      "code": 122,
+      "messages": [
+        "Language on @ID tier is not defined on \"@Languages:\" header tier."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 123,
+      "messages": [
+        "Illegal character found in tier text. If it CA, then add \"@Options: CA\"",
+        "Illegal character '%s' found in tier text. If it CA, then add \"@Options: CA\""
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        1669,
+        1673
+      ]
+    },
+    {
+      "code": 124,
+      "messages": [
+        "Please remove \"unlinked\" from @Media header."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3875,
+        3931
+      ]
+    },
+    {
+      "code": 125,
+      "messages": [
+        "\"@Options\" header must immediately follow \"@Participants:\" header."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2306
+      ]
+    },
+    {
+      "code": 126,
+      "messages": [
+        "\"@ID\" header must immediately follow \"@Participants:\" or \"@Options\" header."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2312
+      ]
+    },
+    {
+      "code": 127,
+      "messages": [
+        "Header must follow \"@ID:\" or \"@Birth of\" or \"@Birthplace of\" or \"@L1 of\" header."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2319
+      ]
+    },
+    {
+      "code": 128,
+      "messages": [
+        "Unmatched ‹ found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4995
+      ]
+    },
+    {
+      "code": 129,
+      "messages": [
+        "Unmatched › found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4695
+      ]
+    },
+    {
+      "code": 130,
+      "messages": [
+        "Unmatched 〔 found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4997
+      ]
+    },
+    {
+      "code": 131,
+      "messages": [
+        "Unmatched 〕 found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4700
+      ]
+    },
+    {
+      "code": 132,
+      "messages": [
+        "Tabs should only be used to mark the beginning of lines."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        1665,
+        1677
+      ]
+    },
+    {
+      "code": 133,
+      "messages": [
+        "BEG time is smaller than same speaker's previous END time by %ld msec."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3895,
+        3951
+      ]
+    },
+    {
+      "code": 134,
+      "messages": [
+        "This item is illegal. Please run \"mor\" command on this data.",
+        "Item '%s' is illegal. Please run \"mor\" command on this data."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        3476,
+        3603
+      ]
+    },
+    {
+      "code": 135,
+      "messages": [
+        "This item is illegal.",
+        "Item '%s' is illegal."
+      ],
+      "n_call_sites": 3,
+      "call_site_lines": [
+        3138,
+        3613,
+        3632
+      ]
+    },
+    {
+      "code": 136,
+      "messages": [
+        "Unmatched “ found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4999
+      ]
+    },
+    {
+      "code": 137,
+      "messages": [
+        "Unmatched ” found on the tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4705
+      ]
+    },
+    {
+      "code": 138,
+      "messages": [
+        "Special quote U2019 must be replaced by single quote (')."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2908
+      ]
+    },
+    {
+      "code": 139,
+      "messages": [
+        "Special quote U2018 must be replaced by single quote (')."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2906
+      ]
+    },
+    {
+      "code": 140,
+      "messages": [
+        "Tier \"%%MOR:\" does not link in size to its speaker tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5706
+      ]
+    },
+    {
+      "code": 141,
+      "messages": [
+        "[: ...] has to be preceded by only one word and nothing else.",
+        "'%s' must be preceded by only one word and nothing else."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4865
+      ]
+    },
+    {
+      "code": 142,
+      "messages": [
+        "Speaker's role on @ID tier does not match role on @Participants: tier."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5090
+      ]
+    },
+    {
+      "code": 143,
+      "messages": [
+        "The @ID line needs 10 fields."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5100
+      ]
+    },
+    {
+      "code": 144,
+      "messages": [
+        "Either illegal SES field value or symbol is not declared in depfile."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        1545
+      ]
+    },
+    {
+      "code": 145,
+      "messages": [
+        "This intonational marker should be outside paired markers."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4609
+      ]
+    },
+    {
+      "code": 146,
+      "messages": [
+        "The &= symbol must include some code after '=' character."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4827
+      ]
+    },
+    {
+      "code": 147,
+      "messages": [
+        "Undeclared special form marker in depfile."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2558
+      ]
+    },
+    {
+      "code": 148,
+      "messages": [
+        "Space character is not allowed before comma(,) character on \"@Media:\" header."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5567
+      ]
+    },
+    {
+      "code": 149,
+      "messages": [
+        "Illegal character located between a word and [...] code.",
+        "Illegal character '%s' located between a word and [...] code."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4853
+      ]
+    },
+    {
+      "code": 150,
+      "messages": [
+        "Illegal item located between a word and [...] code."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4845
+      ]
+    },
+    {
+      "code": 151,
+      "messages": [
+        "This word has only repetition segments."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2977
+      ]
+    },
+    {
+      "code": 152,
+      "messages": [
+        "Language is not defined on \"@Languages:\" header tier."
+      ],
+      "n_call_sites": 0,
+      "call_site_lines": []
+    },
+    {
+      "code": 153,
+      "messages": [
+        "Age's month or day are missing initial zero. Please run \"chstring +q +1\" command on this file to fix this error."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        1791,
+        1794
+      ]
+    },
+    {
+      "code": 154,
+      "messages": [
+        "Please add \"unlinked\" to @Media header."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5754
+      ]
+    },
+    {
+      "code": 155,
+      "messages": [
+        "Please use \"0word\" instead of \"(word)\".",
+        "Please use \"0%s\" instead of \"(%s)\"."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4729
+      ]
+    },
+    {
+      "code": 156,
+      "messages": [
+        "Please replace ,, with F2-t („) character."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4324
+      ]
+    },
+    {
+      "code": 157,
+      "messages": [
+        "Media file name has to match datafile name."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        5610,
+        5613
+      ]
+    },
+    {
+      "code": 158,
+      "messages": [
+        "[: ...] has to have real word, not 0... or &... or xxx."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4873
+      ]
+    },
+    {
+      "code": 159,
+      "messages": [
+        "Pause markers should appear after retrace markers."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4533
+      ]
+    },
+    {
+      "code": 160,
+      "messages": [
+        "Space character is not allowed after '<' or before '>' character."
+      ],
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4300,
+        4306
+      ]
+    },
+    {
+      "code": 161,
+      "messages": [
+        "Space character is required before '[' code item."
+      ],
+      "n_call_sites": 1,
+      "call_site_lines": [
+        4370
+      ]
+    }
+  ]
+}

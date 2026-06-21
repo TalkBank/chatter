@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Postcodes [+ code] and freecodes [^ text]: pre-utterance, inline, and post-terminator positions</comment>
+  <comment type="Generic">Constructs: postcode, freecode, final_codes</comment>
+  <u who="CHI" uID="u0">
+    <w>hello</w>
+    <t type="p"></t>
+    <postcode>bch</postcode><postcode>foo</postcode>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <freecode>freecode 1</freecode>
+    <w>this</w>
+    <w>is</w>
+    <w>child</w>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <freecode>freecode 1</freecode>
+    <freecode>freecode 2</freecode>
+    <w>this</w>
+    <w>is</w>
+    <w>child</w>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>this</w>
+    <w>is</w>
+    <freecode>huh</freecode>
+    <w>mother</w>
+    <freecode>right</freecode>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u4">
+    <w>this</w>
+    <w>is</w>
+    <w formType="words to be excluded">child</w>
+    <w>speaking</w>
+    <t type="p"></t>
+    <postcode>post1 arg</postcode><postcode>post2 arg</postcode>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <w>I</w>
+    <w>believe</w>
+    <w>that</w>
+    <w>it</w>
+    <freecode>my car</freecode>
+    <w>is</w>
+    <w>stupid</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u6">
+    <w>what</w>
+    <s type="clause delimiter"/>
+    <w>why</w>
+    <w>now</w>
+    <t type="q"></t>
+
+  </u>
+</CHAT>

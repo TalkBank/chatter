@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Minimal valid file: one speaker, one utterance, no dependent tiers
+*CHI:	hello .
+@End

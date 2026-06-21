@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Media="https://media.talkbank.org/example/sample.mp3" Mediatypes="audio missing"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="sample"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P2Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Media header with remote URL filename, audio type, and missing status</comment>
+  <comment type="Generic">Constructs: media_header, media_contents, media_filename, media_type, media_status, audio_value, missing_value</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>can</w>
+    <w>hear</w>
+    <w>the</w>
+    <w>music</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>yes</w>
+    <w>that</w>
+    <w>is</w>
+    <w>a</w>
+    <w>nice</w>
+    <w>song</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

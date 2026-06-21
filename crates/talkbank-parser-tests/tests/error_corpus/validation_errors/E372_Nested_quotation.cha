@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+@ID:	eng|corpus|MOT|30;00.|female|||Mother|||
+*MOT:	she said “I told him “go away” yesterday” .
+@Comment:	ERROR: Nested quotations - "go away" is inside "I told him..."
+@Comment:	A state stack detects this; Rust only counts balance
+*CHI:	okay mommy .
+*MOT:	he said “hello” and “goodbye” .
+@Comment:	VALID: Two separate quotations, not nested
+@End

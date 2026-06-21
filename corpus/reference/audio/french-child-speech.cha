@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	fra
+@Participants:	SOF Teacher, CHI Target_Child
+@ID:	fra|corpus|SOF|||||Teacher|||
+@ID:	fra|corpus|CHI|2;08.18|male|||Target_Child|||
+@Media:	french-child-speech, audio
+@Date:	10-NOV-2006
+@Comment:	French child speech with audio, %mor, %gra, %wor tiers
+@Comment:	Constructs: audio-linked file with word-level timing
+*SOF:	l'escargot dort parc(e) qu'il fait beau dehors . 2930_7293
+%mor:	propn|lescargot verb|dormir-Fin-Ind-Pres-S3 adv|parce sconj|quil verb|faire-Fin-Ind-Pres-S3 adj|beau-S1 adv|dehors .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|5|MARK 4|3|FIXED 5|2|ADVCL 6|5|XCOMP 7|5|ADVMOD 8|2|PUNCT
+%wor:	l'escargot 2930_3570 dort 3570_4290 parce 4290_5710 qu'il 5710_6130 fait 6130_6330 beau 6330_6770 dehors 6770_7293 .
+*SOF:	un nuage arrive et fait tomber la pluie ! 9996_14239
+%mor:	det|un-Masc-Ind-Art-Sing noun|nuage-Masc verb|arriver-Fin-Ind-Pres-S3 cconj|et aux|faire-Fin-Ind-Pres-S3 verb|tomber-Inf-S det|le-Fem-Def-Art-Sing noun|pluie-Fem-Acc !
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|6|CC 5|6|AUX-CAUS 6|3|CONJ 7|8|DET 8|6|OBJ 9|3|PUNCT
+%wor:	un 9996_10190 nuage 10190_11030 arrive 11030_11610 et 11610_13010 fait 13010_13170 tomber 13170_13710 la 13710_13990 pluie 13990_14239 !
+@End

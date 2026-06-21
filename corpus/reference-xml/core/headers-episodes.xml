@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Episode and inline headers: @New Episode, @G, @Bg, @Eg, @Bck, @Blank, @Number, @Page, @T</comment>
+  <comment type="Generic">Constructs: new_episode_header, g_header, bg_header, eg_header, bck_header, blank_header, number_header, page_header, t_header</comment>
+  <comment type="Bck">background noise from traffic outside</comment>
+  <lazy-gem label="morning routine"/>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>want</w>
+    <w>cereal</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>okay</w>
+    <w>let</w>
+    <w>me</w>
+    <w>get</w>
+    <w>a</w>
+    <w>bowl</w>
+    <t type="p"></t>
+
+  </u>
+  <comment type="T">cereal preparation</comment>
+  <comment type="New Episode"></comment>
+  <comment type="Number">2</comment>
+  <comment type="Page">42</comment>
+  <begin-gem label="afternoon play"/>
+  <u who="CHI" uID="u2">
+    <w>can</w>
+    <w>we</w>
+    <w>go</w>
+    <w>outside</w>
+    <t type="q"></t>
+
+  </u>
+  <comment type="Blank"></comment>
+  <u who="MOT" uID="u3">
+    <w>sure</w>
+    <w>let</w>
+    <w>us</w>
+    <w>get</w>
+    <w>your</w>
+    <w>shoes</w>
+    <t type="p"></t>
+
+  </u>
+  <end-gem label="afternoon play"/>
+  <begin-gem label=""/>
+  <u who="CHI" uID="u4">
+    <w>look</w>
+    <w>a</w>
+    <w>butterfly</w>
+    <t type="e"></t>
+
+  </u>
+  <end-gem label=""/>
+</CHAT>

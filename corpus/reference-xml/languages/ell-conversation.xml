@@ -1,0 +1,729 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="ell" Corpus="corpus">
+  <Participants>
+    <participant id="PAR1" role="Participant" language="ell"/>
+    <participant id="PAR0" role="Participant" language="ell"/>
+  </Participants>
+  <comment type="Generic">Modern Greek conversation describing a picture</comment>
+  <comment type="Generic">Constructs: Greek script, Modern Greek language coverage</comment>
+  <u who="PAR1" uID="u0">
+    <w>Ναι<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>ναι</stem>
+        </mw>
+        <gra type="gra" index="1" head="5" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>να<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>να</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="5" relation="AUX"/>
+      </mor>
+    </w>
+    <w>σας<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>μου</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Gen</mk>
+          <mk type="sfx">P2</mk>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>τα<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>εγώ</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Acc</mk>
+          <mk type="sfx">P3</mk>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>πω<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>λέγω</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="5" head="9" relation="ADVCL"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="6" head="5" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>είναι<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>είμαι</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="COP"/>
+      </mor>
+    </w>
+    <w>ένα<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ένας</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="DET"/>
+      </mor>
+    </w>
+    <w>παιδάκι<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>παιδάκι</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="9" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="10" head="11" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>ταχτοποιεί<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>ταχτοποιώ</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="11" head="9" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>κάτι<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>κάτι</stem>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="12" head="11" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>στο<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>στο</stem>
+        </mw>
+        <gra type="gra" index="13" head="14" relation="CASE"/>
+      </mor>
+    </w>
+    <w>ντουλάπι<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ντουλάπι</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="14" head="12" relation="NMOD"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="15" head="16" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>ζάχαρη<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ζάχαρη</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="16" head="14" relation="CONJ"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="17" head="18" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>καφέ<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>καφέ</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="18" head="14" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>τι<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>τι</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="19" head="18" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>είναι<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>είμαι</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="20" head="18" relation="COP"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="21" head="9" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="PAR0" uID="u1">
+    <w>Καφέ<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>καφέ</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="PAR1" uID="u2">
+    <w>Ζάχαρη<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ζάχαρη</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>τι<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>τι</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="10" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>είναι<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>είμαι</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="4" head="10" relation="COP"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="5" head="10" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>στο<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>στο</stem>
+        </mw>
+        <gra type="gra" index="6" head="9" relation="CASE"/>
+      </mor>
+    </w>
+    <w>άλλο<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>άλλος</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="DET"/>
+      </mor>
+    </w>
+    <w>η<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ο</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="DET"/>
+      </mor>
+    </w>
+    <w>κυρία<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>κυρία</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="9" head="10" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>πλένει<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>πλένω</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="10" head="1" relation="PARATAXIS"/>
+      </mor>
+    </w>
+    <w>τα<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ο</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Plur</mk>
+        </mw>
+        <gra type="gra" index="11" head="12" relation="DET"/>
+      </mor>
+    </w>
+    <w>πιάτα<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>πιάτα</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Plur</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="12" head="10" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="13" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="PAR1" uID="u3">
+    <w>Είναι<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>είμαι</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="COP"/>
+      </mor>
+    </w>
+    <w>μια<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ένας</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="DET"/>
+      </mor>
+    </w>
+    <g>
+      <w>κουζίνα</w>
+      <k type="retracing"/>
+    </g>
+    <w>κουζίνα<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>κουζίνα</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>ηλεκτρική<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>ηλεκτρικός</stem>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="4" head="3" relation="AMOD"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="5" head="7" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>με<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>με</stem>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="CASE"/>
+      </mor>
+    </w>
+    <w>ροχή<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ροχή</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="7" head="3" relation="OBL"/>
+      </mor>
+    </w>
+    <w>της<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>μου</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Gen</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="8" head="7" relation="NMOD"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="9" head="10" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>ντουλάπια<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ντουλάπιο</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Plur</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="10" head="7" relation="CONJ"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="11" head="12" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>παράθυρο<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>παράθυρο</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="12" head="3" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>με<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>με</stem>
+        </mw>
+        <gra type="gra" index="13" head="14" relation="CASE"/>
+      </mor>
+    </w>
+    <w>κουρτίνα<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>κουρτίνα</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="14" head="12" relation="NMOD"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="15" head="16" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>πάτομα<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>πάτομο</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="16" head="4" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>και<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>και</stem>
+        </mw>
+        <gra type="gra" index="17" head="20" relation="CC"/>
+      </mor>
+    </w>
+    <w>η<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ο</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="18" head="19" relation="DET"/>
+      </mor>
+    </w>
+    <w>κυρία<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>κυρία</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="19" head="20" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>σκουπίζει<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>σκουπίζω</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="20" head="3" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>τα<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>ο</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Plur</mk>
+        </mw>
+        <gra type="gra" index="21" head="22" relation="DET"/>
+      </mor>
+    </w>
+    <w>πιάτα<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>πιάτα</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Plur</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="22" head="20" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="23" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

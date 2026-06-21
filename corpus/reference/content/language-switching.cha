@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng, zho
+@Participants:	CHI Child, MOT Mother
+@ID:	eng, zho|corpus|CHI|3;00.||||Child|||
+@ID:	eng, zho|corpus|MOT|||||Mother|||
+@Comment:	Language switching: [- lang] utterance-level, @s word-level,
+	multi-language codes with + and &
+@Comment:	Constructs: language_code in inline context, @s form markers
+*CHI:	[- zho] 我 要 吃 .
+*CHI:	hey there what is hao3@s ?
+*CHI:	hey there what is hao3@s:zho ?
+*CHI:	hey there what is hao3@s:eng+zho+fra ?
+*MOT:	hey@s:spa there what is hao3@s:eng&zho&fra ?
+@End

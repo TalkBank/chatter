@@ -1,0 +1,17 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Pauses and events: (.) (..) (...) timed pauses; &=action events;
+	&*SPEAKER:word other-spoken-events
+@Comment:	Constructs: pause_token (all durations), event, event_marker, event_segment,
+	other_spoken_event, nonword_with_optional_annotations
+*CHI:	I (.) want (3.) a cookie (..) please (...) .
+*MOT:	&=yawn who are you &=cough ?
+*CHI:	he said &*MOT:yeah and left .
+*MOT:	&=laughs that is funny .
+*CHI:	foo &=head:no bar .
+*CHI:	a (2:3.) b (3.4) c (2:3.4) d .
+@End

@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Media="chinese-adult-conversation" Mediatypes="audio" Version="3.2.3" Lang="zho" Corpus="corpus">
+  <Participants>
+    <participant id="PAR0" role="Participant" language="zho"/>
+  </Participants>
+  <comment type="Generic">Chinese (Mandarin) adult conversation with audio, %mor, %gra, %wor tiers</comment>
+  <comment type="Generic">Constructs: audio-linked CJK file with word-level timing</comment>
+  <u who="PAR0" uID="u0">
+    <w>好<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>好</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>请<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>请</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="15" relation="ADVCL"/>
+      </mor>
+    </w>
+    <w>中<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>中</stem>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>二<mor type="mor">
+        <mw>
+          <pos>
+            <c>num</c>
+          </pos>
+          <stem>二</stem>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="NUMMOD"/>
+      </mor>
+    </w>
+    <w>班<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>班</stem>
+        </mw>
+        <gra type="gra" index="5" head="9" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>的<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>的</stem>
+        </mw>
+        <gra type="gra" index="6" head="5" relation="CASE"/>
+      </mor>
+    </w>
+    <w>阿<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>阿</stem>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="NMOD"/>
+      </mor>
+    </w>
+    <w>尔<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>尔</stem>
+        </mw>
+        <gra type="gra" index="8" head="7" relation="FLAT-NAME"/>
+      </mor>
+    </w>
+    <w>法<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>法</stem>
+        </mw>
+        <gra type="gra" index="9" head="15" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>来<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>来</stem>
+        </mw>
+        <gra type="gra" index="10" head="15" relation="MARK"/>
+      </mor>
+    </w>
+    <w>用<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>用</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="11" head="15" relation="ADVCL"/>
+      </mor>
+    </w>
+    <w>维<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>维</stem>
+        </mw>
+        <gra type="gra" index="12" head="13" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>语<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>语</stem>
+        </mw>
+        <gra type="gra" index="13" head="11" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>来<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>来</stem>
+        </mw>
+        <gra type="gra" index="14" head="15" relation="MARK"/>
+      </mor>
+    </w>
+    <w>给<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>给</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="15" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>我们<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>我</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">P1</mk>
+        </mw>
+        <gra type="gra" index="16" head="17" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>讲<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>讲</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="17" head="15" relation="CCOMP"/>
+      </mor>
+    </w>
+    <w>一下<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>一下</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="18" head="17" relation="AUX"/>
+      </mor>
+    </w>
+    <w>这个<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>这个</stem>
+          <mk type="sfx">Def</mk>
+        </mw>
+        <gra type="gra" index="19" head="21" relation="DET"/>
+      </mor>
+    </w>
+    <w>故<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>故</stem>
+        </mw>
+        <gra type="gra" index="20" head="22" relation="MARK"/>
+      </mor>
+    </w>
+    <w>事<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>事</stem>
+        </mw>
+        <gra type="gra" index="21" head="22" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>开始<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>开始</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="22" head="17" relation="CCOMP"/>
+      </mor>
+    </w>
+    <w>吧<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>吧</stem>
+        </mw>
+        <gra type="gra" index="23" head="22" relation="DISCOURSE"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="24" head="15" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="1.070" end="6.270" unit="s"/>
+    <wor>
+      <w>好</w>
+      <internal-media start="1.070" end="1.610" unit="s"/>
+      <w>请</w>
+      <internal-media start="1.610" end="2.290" unit="s"/>
+      <w>中</w>
+      <internal-media start="2.290" end="2.550" unit="s"/>
+      <w>二</w>
+      <internal-media start="2.550" end="2.650" unit="s"/>
+      <w>班</w>
+      <internal-media start="2.650" end="2.790" unit="s"/>
+      <w>的</w>
+      <internal-media start="2.790" end="3.030" unit="s"/>
+      <w>阿</w>
+      <internal-media start="3.030" end="3.390" unit="s"/>
+      <w>尔</w>
+      <w>法</w>
+      <internal-media start="3.390" end="3.630" unit="s"/>
+      <w>来</w>
+      <internal-media start="3.630" end="3.830" unit="s"/>
+      <w>用</w>
+      <internal-media start="3.830" end="4.310" unit="s"/>
+      <w>维</w>
+      <w>语</w>
+      <w>来</w>
+      <internal-media start="4.310" end="4.390" unit="s"/>
+      <w>给</w>
+      <internal-media start="4.390" end="4.490" unit="s"/>
+      <w>我们</w>
+      <internal-media start="4.490" end="4.710" unit="s"/>
+      <w>讲</w>
+      <internal-media start="4.710" end="4.990" unit="s"/>
+      <w>一下</w>
+      <internal-media start="4.990" end="5.090" unit="s"/>
+      <w>这个</w>
+      <internal-media start="5.090" end="5.290" unit="s"/>
+      <w>故</w>
+      <internal-media start="5.290" end="5.570" unit="s"/>
+      <w>事</w>
+      <internal-media start="5.570" end="5.950" unit="s"/>
+      <w>开始</w>
+      <internal-media start="5.950" end="6.270" unit="s"/>
+      <w>吧</w>
+      <t type="p"/>
+    </wor>
+  </u>
+  <u who="PAR0" uID="u1">
+    <w>用<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>用</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="1" head="4" relation="ADVCL"/>
+      </mor>
+    </w>
+    <w>维<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>维</stem>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>语<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>语</stem>
+        </mw>
+        <gra type="gra" index="3" head="1" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>哦<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>哦</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>你<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>你</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S2</mk>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>让<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>让</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="6" head="4" relation="CCOMP"/>
+      </mor>
+    </w>
+    <w>他<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>他</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="7" head="8" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>说<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>说</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="8" head="6" relation="CCOMP"/>
+      </mor>
+    </w>
+    <w>维<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>维</stem>
+        </mw>
+        <gra type="gra" index="9" head="10" relation="COMPOUND"/>
+      </mor>
+    </w>
+    <w>语<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>语</stem>
+        </mw>
+        <gra type="gra" index="10" head="8" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="11" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="6.470" end="10.290" unit="s"/>
+    <wor>
+      <w>用</w>
+      <internal-media start="6.470" end="7.030" unit="s"/>
+      <w>维</w>
+      <w>语</w>
+      <w>哦</w>
+      <internal-media start="7.030" end="7.310" unit="s"/>
+      <w>你</w>
+      <internal-media start="7.310" end="9.410" unit="s"/>
+      <w>让</w>
+      <internal-media start="9.410" end="9.510" unit="s"/>
+      <w>他</w>
+      <internal-media start="9.510" end="9.710" unit="s"/>
+      <w>说</w>
+      <internal-media start="9.710" end="10.290" unit="s"/>
+      <w>维</w>
+      <w>语</w>
+      <t type="p"/>
+    </wor>
+  </u>
+</CHAT>

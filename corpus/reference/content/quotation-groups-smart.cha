@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng, heb, spa
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Smart-quote quotation groups (Unicode left/right double quotes)
+@Comment:	Constructs: quotation groups with U+201C/U+201D delimiters,
+	including pauses inside quotes
+@Comment:	Source: Hebrew-Berman Frogs and CallFriend Spanish examples
+*CHI:	amar lekalbo , “shhh (..) shhh (..)” .
+*MOT:	she said “hello” .
+@End

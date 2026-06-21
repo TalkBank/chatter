@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat .
+%mod:	kæt
+%pho:	kæt
+%xphoaln:	∅↔∅,k↔k,æ↔æ,t↔t
+@Comment:	ERROR: the '∅↔∅' pair is never legal (both sides null)
+@End

@@ -1,0 +1,61 @@
+[workspace]
+members = ["cargo:."]
+
+# Config for `cargo dist`, see
+# `docs/strategy/distribution-and-signing.md` for the broader plan.
+[dist]
+# Pin so CI builds are reproducible. Bump deliberately together with
+# any per-crate config that depends on newer dist features.
+cargo-dist-version = "0.32.0"
+
+# Codesign the macOS CLI binaries with the Developer ID Application
+# certificate. The CODESIGN_* secrets (CODESIGN_CERTIFICATE,
+# CODESIGN_CERTIFICATE_PASSWORD, CODESIGN_IDENTITY) are supplied to the
+# release workflow at tag time. cargo-dist 0.32.0 signs but does not
+# notarize: the curl|sh installer avoids the Gatekeeper quarantine, and
+# browser-downloaded tarballs get a documented right-click-Open note.
+macos-sign = true
+
+# GitHub Actions runs the release workflow on `git tag v*` push.
+ci = "github"
+
+# Ship a self-updater alongside the binary. The shell + PowerShell
+# installers also install a standalone `chatter-update` program; running
+# it (or the discoverable `chatter update` subcommand) polls GitHub
+# Releases and installs the newest release in place. No new signing key:
+# the updater downloads the same codesigned release artifacts the
+# installer uses. The cargo-dist self-updater is experimental upstream;
+# see docs/strategy/distribution-and-signing.md "Auto-update".
+install-updater = true
+
+# Auto-generated install scripts shipped alongside the binaries:
+#  - shell:      curl … installer.sh   | sh   (macOS + Linux)
+#  - powershell: irm  … installer.ps1  | iex  (Windows)
+# These rewrite the download URLs to point at the GitHub Release
+# assets for the matching tag, so they'll fail when the release is
+# private. Once Phase II of the publishing plan lands a public flip
+# or a talkbank.org mirror, the installers become user-facing.
+installers = ["shell", "powershell"]
+
+# Target platforms, covers macOS (both architectures), Linux (musl
+# for maximum portability across distros and kernel versions), and
+# Windows x64.
+#
+# Skipped for now:
+#  - aarch64-pc-windows-msvc, small user base; can add later.
+#  - *-linux-gnu, glibc-linked binaries are less portable
+#                              than musl; for a CLI we'd rather ship
+#                              one binary per Linux architecture and
+#                              have it run anywhere.
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "x86_64-pc-windows-msvc",
+]
+
+# Don't run the heavy multi-target release workflow on every PR; only
+# fire on actual `git tag v*` pushes. PR sanity is already covered by
+# ci.yml's cargo build/test/clippy.
+pr-run-mode = "skip"

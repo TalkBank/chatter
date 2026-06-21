@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Single utterance with many dependent tiers stacked together
+@Comment:	Constructs: multiple dependent tiers on one utterance
+*CHI:	Mommy look at me .
+%mor:	propn|Mommy verb|look prep|at pron|me .
+%gra:	1|2|VOC 2|0|ROOT 3|2|JCT 4|3|POBJ 5|2|PUNCT
+%com:	CHI is standing on the couch
+%act:	jumping up and down
+%gpx:	waving both arms
+%add:	MOT
+@End

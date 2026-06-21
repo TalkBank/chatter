@@ -1,0 +1,75 @@
+[package]
+name = "talkbank-parser-re2c"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "re2c-based TalkBank CHAT parser used for equivalence testing"
+readme = "README.md"
+
+[dependencies]
+# Workspace crates
+talkbank-model = { workspace = true }
+
+# Error handling and diagnostics
+thiserror = { workspace = true }
+miette = { workspace = true }
+
+# Parsing and Lexing
+chumsky = "=1.0.0-alpha.8"
+strum = { version = "0.28", features = ["derive"] }
+
+# Logging
+tracing = { workspace = true }
+
+# Domain types
+indexmap = { workspace = true }
+serde = { workspace = true }
+smallvec = { workspace = true }
+
+[dev-dependencies]
+divan = { workspace = true }
+insta = { workspace = true }
+proptest = { workspace = true }
+serde_json = { workspace = true }
+talkbank-parser = { workspace = true }
+walkdir = { workspace = true }
+
+[features]
+# Opt-in suite of trait-implementation tests for the ChatParser trait
+# surface. Off by default; enable with
+# `cargo test -p talkbank-parser-re2c --features trait_tests`.
+# Tests live in `tests/parser_fixtures.rs` under `#[cfg(feature = "trait_tests")]`.
+trait_tests = []
+
+[[bench]]
+name = "parse_comparison"
+harness = false
+
+[build-dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+# Panic-site audit completed 2026-04-29 (see
+# `docs/panic-audit/talkbank-parser-re2c.md`).
+[lints.clippy]
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+unreachable   = "deny"
+todo          = "deny"
+unimplemented = "deny"
+
+[package.metadata.dist]
+# Library crate, no end-user binary. Opt out so cargo-dist does
+# not generate a phantom source-only release artifact. (When this
+# crate gets published to crates.io as a foundational library, the
+# publish step lives in a separate workflow, not in release.yml.)
+dist = false

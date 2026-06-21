@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: head index 9 is out of range for 3 mor chunks
+*CHI:	I want .
+%mor:	pro|I v|want .
+%gra:	1|2|SUBJ 2|0|ROOT 3|9|PUNCT
+@End

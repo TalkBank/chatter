@@ -1,0 +1,15 @@
+---
+source: talkbank-tree-sitter-parser/tests/header_parsing_tests.rs
+expression: result
+---
+Ok(
+    Media(
+        MediaHeader {
+            filename: MediaFilename(
+                "media-file",
+            ),
+            media_type: Video,
+            status: None,
+        },
+    ),
+)

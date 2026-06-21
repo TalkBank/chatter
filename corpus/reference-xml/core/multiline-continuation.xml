@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+    <participant
+      id="FAT"
+      role="Father"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Multi-line continuation across headers and tiers</comment>
+  <comment type="Generic">Constructs: continuation, newline, line, header_gap, tab-prefixed continuation on @Participants and dependent tiers</comment>
+  <comment type="Situation">Free play session in the lab playroom with a variety of toys available on the floor and table</comment>
+  <u who="CHI" uID="u0">
+    <w>mama</w>
+    <w>I</w>
+    <w>want</w>
+    <w>to</w>
+    <w>go</w>
+    <w>to</w>
+    <w>the</w>
+    <w>park</w>
+    <w>and</w>
+    <w>play</w>
+    <w>on</w>
+    <w>the</w>
+    <w>swings</w>
+    <w>and</w>
+    <w>the</w>
+    <w>slide</w>
+    <w>and</w>
+    <w>the</w>
+    <w>monkey</w>
+    <w>bars</w>
+    <t type="p"></t>
+
+    <a type="comments">CHI is pulling on MOT's hand while speaking, gesturing toward the door</a>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>maybe</w>
+    <w>after</w>
+    <w>lunch</w>
+    <w>we</w>
+    <w>can</w>
+    <w>go</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

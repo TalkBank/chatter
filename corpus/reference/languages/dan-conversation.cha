@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	dan, tur
+@Participants:	LAR Teacher, STU Student
+@ID:	dan|corpus|LAR|||||Teacher|||
+@ID:	dan|corpus|STU|||||Student|||
+@Comment:	Danish teacher-student interview in school setting
+@Comment:	Constructs: Danish language coverage, Latin script
+*LAR:	så kan vi sidde her og snakke lidt (.) se det er Buster han er i skole (.) men nu har vi jo ikke øh [//] men nu har vi ikke haft båndoptageren tændt mens vi så filmen .
+%mor:	adv|så aux|kunne-Fin-Ind-Pres-S pron|vi-Prs-Nom-P1 verb|sidde-Inf-S adv|her cconj|og verb|snakke-Inf-S adv|lidt verb|se-Inf-S pron|det-Prs-Acc-S3 aux|være-Fin-Ind-Pres-S propn|Buster-Acc pron|han-Prs-Nom-S3 verb|være-Fin-Ind-Pres-S adp|i noun|skole cconj|men adv|nu verb|have-Fin-Ind-Pres-S pron|vi-Prs-Nom-P1 adv|jo adv|ikke cconj|men adv|nu aux|have-Fin-Ind-Pres-S pron|vi-Prs-Nom-P1 adv|ikke verb|have-Part-Past-S noun|båndoptager-Acc verb|tænde-Part-Past-S sconj|mens pron|vi-Prs-Nom-P1 verb|se-Fin-Ind-Past-S noun|film-Acc .
+%gra:	1|4|ADVMOD 2|4|AUX 3|4|NSUBJ 4|0|ROOT 5|4|ADVMOD-LMOD 6|7|CC 7|4|CONJ 8|7|ADVMOD 9|7|XCOMP 10|7|OBJ 11|12|COP 12|9|OBJ 13|14|NSUBJ 14|12|ACL-RELCL 15|16|CASE 16|14|OBL 17|19|CC 18|19|ADVMOD 19|4|CONJ 20|19|NSUBJ 21|19|ADVMOD 22|19|ADVMOD 23|28|CC 24|28|ADVMOD 25|28|AUX 26|28|NSUBJ 27|28|ADVMOD 28|19|CONJ 29|28|OBJ 30|28|XCOMP 31|33|MARK 32|33|NSUBJ 33|30|ADVCL 34|33|OBJ 35|4|PUNCT
+*STU:	ja .
+%mor:	intj|ja .
+%gra:	1|0|ROOT 2|1|PUNCT
+*LAR:	nej var det en god film (.) hvad <kan du> [>] huske hvad drengen han hed hvad hed drengen i filmen (.) kan du ikke huske det .
+%mor:	intj|nej aux|være-Fin-Ind-Past-S pron|det-Prs-Acc-S3 det|en-Def-Ind-Sing adj|god-S1 noun|film pron|hvad-Int,Rel-S1 aux|kunne-Fin-Ind-Pres-S pron|du-Prs-Nom-S2 verb|huske-Inf-S pron|hvad-Int,Rel-S1 noun|dreng-Acc pron|han-Prs-Nom-S3 verb|hedde-Fin-Ind-Past-S pron|hvad-Int,Rel-S1 verb|hedde-Fin-Ind-Past-S noun|dreng adp|i noun|film aux|kunne-Fin-Ind-Pres-S pron|du-Prs-Nom-S2 adv|ikke verb|huske-Inf-S pron|det-Prs-Acc-S3 .
+%gra:	1|0|ROOT 2|6|COP 3|6|NSUBJ 4|6|DET 5|6|AMOD 6|1|DEP 7|10|OBJ 8|10|AUX 9|10|NSUBJ 10|6|ACL-RELCL 11|14|OBJ 12|14|OBJ 13|14|NSUBJ 14|10|OBJ 15|16|OBJ 16|14|CCOMP 17|16|NSUBJ 18|19|CASE 19|17|NMOD 20|23|AUX 21|23|NSUBJ 22|23|ADVMOD 23|16|XCOMP 24|23|OBJ 25|1|PUNCT
+*STU:	<ja> [<] mm <Buster> [<] .
+%mor:	intj|ja noun|millimeter-Plur propn|Buster .
+%gra:	1|0|ROOT 2|1|LIST 3|2|NMOD 4|1|PUNCT
+*LAR:	jeg kan ikke høre hvad du siger næsten .
+%mor:	pron|jeg-Prs-Nom-S1 aux|kunne-Fin-Ind-Pres-S adv|ikke verb|høre-Inf-S pron|hvad-Int,Rel-S1 pron|du-Prs-Nom-S2 verb|sige-Fin-Ind-Pres-S adv|næsten .
+%gra:	1|4|NSUBJ 2|4|AUX 3|4|ADVMOD 4|0|ROOT 5|7|OBJ 6|7|NSUBJ 7|4|OBJ 8|7|ADVMOD 9|4|PUNCT
+@End

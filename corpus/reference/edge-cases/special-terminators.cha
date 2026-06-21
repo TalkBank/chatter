@@ -1,0 +1,27 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	All special terminator types: trailing off (+...),
+	interruption (+/.), self-interruption (+//.), interrupted question (+/?),
+	trailing off question (+..?), broken question (+!?),
+	quoted period (+".),  quoted new line (+"/.),
+	self-interrupted question (+//?)
+@Comment:	Constructs: trailing_off, interruption, self_interruption,
+	interrupted_question, trailing_off_question, broken_question,
+	quoted_period_simple, quoted_new_line, self_interrupted_question
+*CHI:	I was going to the +...
+*MOT:	what do they do with +/.
+*CHI:	they play with the toys .
+*MOT:	and then she wouldn't +//.
+*MOT:	what were you going to +/?
+*CHI:	oh I don't know .
+*MOT:	anything you have to do or +..?
+*CHI:	but what if they +!?
+*CHI:	and the bear said +"/.
+*CHI:	+" give me your honey .
+*CHI:	the bear said +".
+*MOT:	what was she going to +//?
+@End

@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	ERROR: Replacement not allowed on nonword (&~ prefix means not a real word)
+*CHI:	&~um [: um] .
+@End

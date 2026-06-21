@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+    <participant
+      id="EXP"
+      role="Investigator"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Continuation terminators: trailing off (+...), interruption (+/.), self-interruption (+//.), break for coding (+.)</comment>
+  <comment type="Generic">Constructs: trailing_off, interruption, self_interruption, break_for_coding</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>was</w>
+    <w>going</w>
+    <w>to</w>
+    <w>the</w>
+    <t type="trail off"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>what</w>
+    <w>do</w>
+    <w>they</w>
+    <w>do</w>
+    <w>with</w>
+    <t type="interruption"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>they</w>
+    <w>play</w>
+    <w>with</w>
+    <w>the</w>
+    <w>toys</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>and</w>
+    <w>then</w>
+    <w>she</w>
+    <w>wouldn't</w>
+    <t type="self interruption"></t>
+
+  </u>
+  <u who="EXP" uID="u4">
+    <w>foo</w>
+    <w>bar</w>
+    <t type="broken for coding"></t>
+
+  </u>
+</CHAT>

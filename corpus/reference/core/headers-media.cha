@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@Media:	headers-media, video, unlinked
+@Videos:	1a, 1b, 1c
+@Comment:	Media headers: @Media with video type and unlinked status, @Videos
+@Comment:	Constructs: media_header, media_contents, media_filename, media_type,
+	media_status, video_value, unlinked_value, videos_header
+*CHI:	I can hear the music .
+*MOT:	yes that is a nice song .
+@End

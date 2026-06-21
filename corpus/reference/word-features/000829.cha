@@ -1,0 +1,73 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother
+@ID:	eng|corpus|MOT|35;09.||||Mother|||
+@Comment:	Constructs: single-speaker narration with onomatopoeia word-form compounds for FREQ +p word-delimiter and MLU word-mode tests
+*MOT:	let me show you the picture book .
+%mor:	verb|let-Fin-Imp-S pron|I-Prs-Acc-S1 verb|show-Inf-S pron|you-Prs-Acc-S2 det|the-Def-Art noun|picture noun|book-Acc .
+%gra:	1|0|ROOT 2|1|OBJ 3|1|XCOMP 4|3|IOBJ 5|7|DET 6|7|COMPOUND 7|3|OBJ 8|1|PUNCT
+*MOT:	here comes the little red train .
+%mor:	adv|here verb|come-Fin-Ind-Pres-S3 det|the-Def-Art adj|little-S1 adj|red-S1 noun|train .
+%gra:	1|2|ADVMOD 2|0|ROOT 3|6|DET 4|6|AMOD 5|6|AMOD 6|2|NSUBJ 7|2|PUNCT
+*MOT:	the train goes choo_choo down the track .
+%mor:	det|the-Def-Art noun|train verb|go-Fin-Ind-Pres-S3 noun|choochoo-Acc adp|down det|the-Def-Art noun|track .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|OBJ 5|7|CASE 6|7|DET 7|3|OBL 8|3|PUNCT
+*MOT:	look at the brown cow in the field .
+%mor:	verb|look-Fin-Imp-S adp|at det|the-Def-Art adj|brown-S1 noun|cow adp|in det|the-Def-Art noun|field .
+%gra:	1|0|ROOT 2|5|CASE 3|5|DET 4|5|AMOD 5|1|OBL 6|8|CASE 7|8|DET 8|1|OBL 9|1|PUNCT
+*MOT:	the baby eats her cereal chup_chup_chup_chup@o .
+%mor:	det|the-Def-Art noun|baby verb|eat-Fin-Ind-Pres-S3 pron|her-Prs-Gen-S3 noun|cereal on|chupchupchupchup .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|6|NMOD-POSS 5|6|COMPOUND 6|3|DEP 7|3|PUNCT
+*MOT:	now the train is coming back again .
+%mor:	adv|now det|the-Def-Art noun|train aux|be-Fin-Ind-Pres-S3 verb|come-Part-Pres-S adv|back adv|again .
+%gra:	1|5|ADVMOD 2|3|DET 3|5|NSUBJ 4|5|AUX 5|0|ROOT 6|5|ADVMOD 7|5|ADVMOD 8|5|PUNCT
+*MOT:	it goes choo_choo right past the farm .
+%mor:	pron|it-Prs-Nom-S3 verb|go-Fin-Ind-Pres-S3 noun|choochoo-Acc adv|right adp|past det|the-Def-Art noun|farm .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|7|ADVMOD 5|7|CASE 6|7|DET 7|2|OBL 8|2|PUNCT
+*MOT:	the puppy drinks water from the bowl .
+%mor:	det|the-Def-Art noun|puppy verb|drink-Fin-Ind-Pres-S3 noun|water-Acc adp|from det|the-Def-Art noun|bowl .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|OBJ 5|7|CASE 6|7|DET 7|3|OBL 8|3|PUNCT
+*MOT:	the kitten laps the warm milk chup_chup_chup_chup@o .
+%mor:	det|the-Def-Art noun|kitten verb|lap-Fin-Ind-Pres-S3 det|the-Def-Art adj|warm-S1 noun|milk on|chupchupchupchup .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|7|DET 5|7|AMOD 6|7|COMPOUND 7|3|DEP 8|3|PUNCT
+*MOT:	the train climbs up the big hill .
+%mor:	det|the-Def-Art noun|train verb|climb-Fin-Ind-Pres-S3 adp|up det|the-Def-Art adj|big-S1 noun|hill .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|7|CASE 5|7|DET 6|7|AMOD 7|3|OBL 8|3|PUNCT
+*MOT:	then it rolls back down going choo_choo .
+%mor:	adv|then pron|it-Prs-Nom-S3 verb|roll-Fin-Ind-Pres-S3 adv|back adp|down verb|go-Part-Pres-S noun|choochoo-Acc .
+%gra:	1|3|ADVMOD 2|3|NSUBJ 3|0|ROOT 4|3|ADVMOD 5|3|ADVMOD 6|3|ADVCL 7|6|OBJ 8|3|PUNCT
+*MOT:	can you see the yellow duck swimming .
+%mor:	aux|can-Fin-S pron|you-Prs-Nom-S2 verb|see-Inf-S det|the-Def-Art adj|yellow-S1 noun|duck noun|swim-Acc-Ger .
+%gra:	1|3|AUX 2|3|NSUBJ 3|0|ROOT 4|7|DET 5|7|AMOD 6|7|COMPOUND 7|3|OBJ 8|3|PUNCT
+*MOT:	the farmer waves from his old tractor .
+%mor:	det|the-Def-Art noun|farmer noun|wave-Plur adp|from pron|his-Prs-Gen-S3 adj|old-S1 noun|tractor .
+%gra:	1|3|DET 2|3|COMPOUND 3|0|ROOT 4|7|CASE 5|7|NMOD-POSS 6|7|AMOD 7|3|NMOD 8|3|PUNCT
+*MOT:	the sheep are sleeping under the tree .
+%mor:	det|the-Def-Art noun|sheep-Plur aux|be-Fin-Ind-Pres-P3 verb|sleep-Part-Pres-S adp|under det|the-Def-Art noun|tree .
+%gra:	1|2|DET 2|4|NSUBJ 3|4|AUX 4|0|ROOT 5|7|CASE 6|7|DET 7|4|OBL 8|4|PUNCT
+*MOT:	the sun is shining on the green hills .
+%mor:	det|the-Def-Art noun|sun aux|be-Fin-Ind-Pres-S3 verb|shine-Part-Pres-S adp|on det|the-Def-Art adj|green-S1 noun|hill-Plur .
+%gra:	1|2|DET 2|4|NSUBJ 3|4|AUX 4|0|ROOT 5|8|CASE 6|8|DET 7|8|AMOD 8|4|OBL 9|4|PUNCT
+*MOT:	we turn the page to the next picture .
+%mor:	pron|we-Prs-Nom-P1 verb|turn-Fin-Ind-Pres-P1 det|the-Def-Art noun|page-Acc adp|to det|the-Def-Art adj|next-S1 noun|picture .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|8|CASE 6|8|DET 7|8|AMOD 8|2|OBL 9|2|PUNCT
+*MOT:	there is a horse standing by the gate .
+%mor:	pron|there-Int-S1 verb|be-Fin-Ind-Pres-S3 det|a-Ind-Art noun|horse noun|standing-Ger adp|by det|the-Def-Art noun|gate .
+%gra:	1|2|EXPL 2|0|ROOT 3|4|DET 4|2|NSUBJ 5|4|ACL 6|8|CASE 7|8|DET 8|5|OBL-AGENT 9|2|PUNCT
+*MOT:	the little girl feeds the hungry hens .
+%mor:	det|the-Def-Art adj|little-S1 noun|girl verb|feed-Fin-Ind-Pres-S3 det|the-Def-Art adj|hungry-S1 noun|hen-Plur-Acc .
+%gra:	1|3|DET 2|3|AMOD 3|4|NSUBJ 4|0|ROOT 5|7|DET 6|7|AMOD 7|4|OBJ 8|4|PUNCT
+*MOT:	the bird builds a nest in the tall branches .
+%mor:	det|the-Def-Art noun|bird verb|build-Fin-Ind-Pres-S3 det|a-Ind-Art noun|nest-Acc adp|in det|the-Def-Art adj|tall-S1 noun|branch-Plur .
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT 4|5|DET 5|3|OBJ 6|9|CASE 7|9|DET 8|9|AMOD 9|3|OBL 10|3|PUNCT
+*MOT:	it is almost time to close the book .
+%mor:	pron|it-Prs-Nom-S3 aux|be-Fin-Ind-Pres-S3 adv|almost noun|time part|to verb|close-Inf-S det|the-Def-Art noun|book-Acc .
+%gra:	1|4|NSUBJ 2|4|COP 3|4|ADVMOD 4|0|ROOT 5|6|MARK 6|4|ACL 7|8|DET 8|6|OBJ 9|4|PUNCT
+*MOT:	did you like the story about the train .
+%mor:	aux|do-Fin-Ind-Past-S2-irr pron|you-Prs-Nom-S2 verb|like-Inf-S det|the-Def-Art noun|story-Acc adp|about det|the-Def-Art noun|train .
+%gra:	1|3|AUX 2|3|NSUBJ 3|0|ROOT 4|5|DET 5|3|OBJ 6|8|CASE 7|8|DET 8|5|NMOD 9|3|PUNCT
+*MOT:	tomorrow we can read it all again .
+%mor:	noun|tomorrow pron|we-Prs-Nom-P1 aux|can-Fin-S verb|read-Inf-S pron|it-Prs-Acc-S3 det|all-Def-Tot adv|again .
+%gra:	1|4|OBL-UNMARKED 2|4|NSUBJ 3|4|AUX 4|0|ROOT 5|4|OBJ 6|7|ADVMOD 7|4|ADVMOD 8|4|PUNCT
+@End

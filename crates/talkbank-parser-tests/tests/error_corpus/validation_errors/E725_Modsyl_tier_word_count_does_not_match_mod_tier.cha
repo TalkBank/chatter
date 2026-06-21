@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	nld
+@Participants:	CHI Child, MOT Mother
+@ID:	nld|corpus|CHI|2;00.||||Child|||
+@ID:	nld|corpus|MOT|||||Mother|||
+*MOT:	muts ja .
+%mod:	ˈmœts ˈja
+%xmodsyl:	ˈm:Oœ:Nt:Cs:R
+@Comment:	ERROR: %mod has 2 words but %xmodsyl has only 1
+@End

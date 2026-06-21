@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	fra, eng
+@Participants:	CHI Child, MOT Mother
+@ID:	fra|corpus|CHI|3;00.||||Child|||
+@ID:	fra|corpus|MOT|||||Mother|||
+@Comment:	Words with shortenings (parenthesized content within words)
+@Comment:	Constructs: shortening inside word body, e.g., parc(e), parcequ(e)
+@Comment:	Source: French child speech corpora
+*CHI:	parc(e) qu'il veut .
+*MOT:	parcequ(e) tu veux .
+*CHI:	I do(n't) know .
+@End

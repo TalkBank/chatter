@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Quote terminators and special terminators: quoted next (+"/.), quoted follows (+".), quoted period simple (+".)</comment>
+  <comment type="Generic">Constructs: quoted_new_line, quoted_period_simple</comment>
+  <u who="CHI" uID="u0">
+    <w>and</w>
+    <w>then</w>
+    <w>the</w>
+    <w>little</w>
+    <w>bear</w>
+    <w>said</w>
+    <t type="quotation next line"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <linker type="quoted utterance next"/>
+    <w>please</w>
+    <w>give</w>
+    <w>me</w>
+    <w>all</w>
+    <w>of</w>
+    <w>your</w>
+    <w>honey</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>the</w>
+    <w>little</w>
+    <w>bear</w>
+    <w>said</w>
+    <t type="quotation precedes"></t>
+
+  </u>
+</CHAT>

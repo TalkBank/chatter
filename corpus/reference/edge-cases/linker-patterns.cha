@@ -1,0 +1,29 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, EXP Investigator
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|EXP|||||Investigator|||
+@Comment:	All linker types: self-completion (+,), other-completion (++),
+	quick uptake (+^), lazy overlap (+<), quotation precedes (+"),
+	quotation follows (+"/)
+@Comment:	Constructs: linker_self_completion, linker_other_completion,
+	linker_quick_uptake, linker_lazy_overlap, linker_quotation_precedes,
+	linker_quotation_follows
+*CHI:	so after the tower +/.
+*EXP:	yes .
+*CHI:	+, I go straight ahead .
+*CHI:	and then she +...
+*MOT:	++ went to the store .
+*CHI:	the dog ran away .
+*MOT:	+^ yes he did .
+*CHI:	so I went home .
+*MOT:	+< and then what ?
+*CHI:	+" please give me your honey .
+*CHI:	the little bear said +".
+*CHI:	and then the bear said +"/.
+*CHI:	+" please give me all of it .
+*CHI:	I was going to +//.
+*CHI:	+, say something else .
+@End

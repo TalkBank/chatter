@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng spa"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng spa"
+      age="P3Y06M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng spa"
+
+    />
+  </Participants>
+  <comment type="Generic">Multi-language file with utterance-level [- lang] switching and word-level @s markers</comment>
+  <comment type="Generic">Constructs: language_code, language_switching, @s markers</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>want</w>
+    <w><langs><single>spa</single></langs>agua</w>
+    <w>please</w>
+    <t type="p"></t>
+
+  </u>
+  <u xml:lang="spa" who="MOT" uID="u1">
+    <w>dame</w>
+    <w>la</w>
+    <w>leche</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w><langs><single>spa</single></langs>mira</w>
+    <w>the</w>
+    <w><langs><single>spa</single></langs>perro</w>
+    <w>is</w>
+    <w>running</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>yes</w>
+    <w>the</w>
+    <w>dog</w>
+    <w>is</w>
+    <w>running</w>
+    <t type="p"></t>
+
+  </u>
+  <u xml:lang="spa" who="CHI" uID="u4">
+    <w>quiero</w>
+    <w>galletas</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u5">
+    <w>you</w>
+    <w>want</w>
+    <w><langs><single>eng</single></langs>cookies</w>
+    <t type="q"></t>
+
+  </u>
+</CHAT>

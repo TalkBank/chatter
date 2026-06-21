@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother, CHI Target_Child
+@ID:	eng|sample|MOT|||||Mother|||
+@ID:	eng|sample|CHI|1;10.04||||Target_Child|||
+@Media:	headers-media-notrans, video, notrans
+@Comment:	Media header with notrans (not yet transcribed) status
+@Comment:	Constructs: notrans_value — file has no utterances, media awaits transcription
+@End

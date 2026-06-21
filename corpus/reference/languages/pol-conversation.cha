@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	pol
+@Participants:	CHI Target_Child, MAM Mother
+@ID:	pol|corpus|CHI|3;03.00||||Target_Child|||
+@ID:	pol|corpus|MAM|||||Mother|||
+@Comment:	Polish mother-child conversation about time and family
+@Comment:	Constructs: Polish language coverage, Latin script with diacritics
+*CHI:	mamo , jak ty byłaś malutka i ja , to nas tata woził w wózeczku ?
+%mor:	noun|mamo-Fem-Voc cm|cm sconj|jak pron|ty-Prs-Nom-S2 aux|być-Fin-Imp-Ind-Pres-S1 adj|malutki-Nom-S1 cconj|i pron|ja-Prs-Nom-S1 cm|cm sconj|to pron|my-Prs-Acc-P1 noun|tata-Masc-Nom verb|wozić-Fin-Imp-Ind-Past-S adp|w noun|wózeczek-Masc-Loc ?
+%gra:	1|13|VOCATIVE 2|1|PUNCT 3|6|MARK 4|6|NSUBJ 5|6|COP 6|13|ADVCL 7|8|CC 8|6|CONJ 9|6|PUNCT 10|13|MARK 11|13|OBJ 12|13|NSUBJ 13|0|ROOT 14|15|CASE 15|13|OBL 16|13|PUNCT
+*MAM:	nie , Basiu , jak mama była malutka to ciebie jeszcze nie było , a jak ty byłaś to mama już była duża .
+%mor:	intj|nie cm|cm propn|Basia-Fem-Voc cm|cm sconj|jak noun|mama-Fem-Nom aux|być-Fin-Imp-Ind-Past-S adj|malutki-Nom-S1 sconj|to pron|ty-Prs-Gen-S2 part|jeszcze part|nie verb|być-Fin-Imp-Ind-Past-S cm|cm cconj|a sconj|jak pron|ty-Prs-Nom-S2 verb|byłać-Fin-Imp-Ind-Pres-S1 sconj|to noun|mama-Fem-Nom part|już aux|być-Fin-Imp-Ind-Past-S adj|duży-Nom-S1 .
+%gra:	1|13|DISCOURSE-INTJ 2|3|PUNCT 3|13|VOCATIVE 4|3|PUNCT 5|8|MARK 6|8|NSUBJ 7|8|COP 8|13|ADVCL 9|13|MARK 10|13|NSUBJ 11|13|ADVMOD-EMPH 12|13|ADVMOD-NEG 13|0|ROOT 14|23|PUNCT 15|23|CC 16|18|MARK 17|18|NSUBJ 18|23|PARATAXIS-INSERT 19|23|MARK 20|23|NSUBJ 21|23|ADVMOD-EMPH 22|23|COP 23|13|CONJ 24|13|PUNCT
+*CHI:	a kiedy byłaś malutka ?
+%mor:	cconj|a adv|kiedy aux|być-Fin-Imp-Ind-Pres-S3 adj|malutki-Nom-S1 ?
+%gra:	1|4|CC 2|4|ADVMOD 3|4|COP 4|0|ROOT 5|4|PUNCT
+*CHI:	muszę zobaczyć , czy zimno , Halinka czy [*] może iść na spacer .
+%mor:	verb|musieć-Fin-Imp-Ind-Pres-S1 verb|zobaczyć-Inf-Perf-S cm|cm part|czy noun|zimno-Neut-Nom cm|cm propn|Halinka-Fem-Nom cconj|czy verb|móc-Fin-Imp-Ind-Pres-S3 verb|iść-Inf-Imp-S adp|na noun|spacer-Masc-Acc .
+%gra:	1|0|ROOT 2|1|XCOMP 3|5|PUNCT 4|9|ADVMOD 5|2|OBJ 6|7|PUNCT 7|5|CONJ 8|9|CC 9|1|CONJ 10|9|XCOMP 11|12|CASE 12|10|OBL 13|1|PUNCT
+*MAM:	nie , mama była już duża , taka jak teraz , jak ty się urodziłaś .
+%mor:	intj|nie cm|cm noun|mama-Fem-Nom aux|być-Fin-Imp-Ind-Past-S part|już adj|duży-Nom-S1 cm|cm det|taki-Fem-Def-Dem-Sing sconj|jak adv|teraz cm|cm sconj|jak pron|ty-Prs-Nom-S2 pron|się-Prs-reflx-S1 verb|urodziłać-Fin-Perf-Ind-Past-S .
+%gra:	1|6|DISCOURSE-INTJ 2|1|PUNCT 3|6|NSUBJ 4|6|COP 5|6|ADVMOD-EMPH 6|0|ROOT 7|8|PUNCT 8|6|CONJ 9|10|MARK 10|8|OBL-CMPR 11|15|PUNCT 12|15|MARK 13|15|NSUBJ 14|15|EXPL-PV 15|8|ADVCL-CMPR 16|6|PUNCT
+@End

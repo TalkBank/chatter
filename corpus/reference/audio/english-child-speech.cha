@@ -1,0 +1,23 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother, CHI Target_Child
+@ID:	eng|corpus|MOT||female|||Mother|||
+@ID:	eng|corpus|CHI|3;00.07|female|||Target_Child|||
+@Media:	english-child-speech, audio
+@Date:	27-FEB-1974
+@Comment:	English mother-child speech with audio, %mor, %gra, %wor tiers
+@Comment:	Constructs: audio-linked file with word-level timing
+*MOT:	let's see if we clean this if it works any better . 0_3042
+%mor:	adv|let verb|see-Fin-Imp-S sconj|if pron|we-Prs-Nom-P1 verb|clean-Fin-Ind-Pres-P1 pron|this-Dem-S1 sconj|if pron|it-Prs-Nom-S3 verb|work-Fin-Ind-Pres-S3 adv|any adj|good-Cmp-S1 .
+%gra:	1|2|ADVMOD 2|0|ROOT 3|5|MARK 4|5|NSUBJ 5|2|CCOMP 6|5|OBJ 7|9|MARK 8|9|NSUBJ 9|5|ADVCL 10|11|ADVMOD 11|9|XCOMP 12|2|PUNCT
+%wor:	let's 0_240 see 240_380 if 380_500 we 500_620 clean 620_980 this 980_1260 if 1260_1440 it 1440_1560 works 1560_1860 any 1860_2140 better 2140_3042 .
+*MOT:	just say something . 3117_4092
+%mor:	adv|just verb|say-Fin-Imp-S pron|something-Ind-S1 .
+%gra:	1|2|ADVMOD 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%wor:	just 3117_3360 say 3360_3600 something 3600_4092 .
+*MOT:	anything . 4092_4533
+%mor:	pron|anything-Ind-S1 .
+%gra:	1|0|ROOT 2|1|PUNCT
+%wor:	anything 4092_4533 .
+@End

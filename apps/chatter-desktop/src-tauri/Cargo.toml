@@ -1,0 +1,56 @@
+[package]
+name = "chatter-desktop"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Desktop validation app for CHAT files"
+publish = false
+
+[lib]
+name = "chatter_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "chatter-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+# Auto-update: the updater plugin checks the GitHub Releases latest.json and
+# installs signed update bundles; the process plugin's relaunch() restarts the
+# app into the new version after install. See
+# docs/strategy/distribution-and-signing.md "Auto-update".
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+crossbeam-channel = "0.5"
+arc-swap = "1.9"
+ansi-to-html = "0.2"
+
+# Used by commands.rs for the cache path. On macOS/Linux this happens
+# to resolve through Tauri's transitive dep tree, but on Windows the
+# tree differs and the compile fails (E0433 'cannot find crate dirs').
+# Declared explicitly so the build works on every target.
+dirs = { workspace = true }
+
+# Workspace crates (relative paths to sibling crates)
+talkbank-transform = { workspace = true }
+talkbank-model = { workspace = true }
+send2clan = { workspace = true }
+
+[dev-dependencies]
+# Recursive walk of corpus/reference/ in validation_bridge.rs, so the
+# reference-corpus integration test derives its expected file count from
+# disk instead of hardcoding a literal that breaks on every fixture add.
+walkdir = { workspace = true }
+
+[lints]
+workspace = true

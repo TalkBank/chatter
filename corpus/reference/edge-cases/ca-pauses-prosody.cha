@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker, LSN Adult
+@Options:	CA
+@ID:	eng|corpus|SPK|||||Speaker|||
+@ID:	eng|corpus|LSN|||||Adult|||
+@Comment:	Pauses: short (.), long (..), very long (...), timed (0.5);
+	prosodic markers; trailing off (+...), interruption (+/.)
+@Comment:	Constructs: short_pause, long_pause, very_long_pause, timed_pause,
+	trailing_off, interruption
+*SPK:	well (.) I think so .
+*SPK:	and then (..) she left .
+*SPK:	he said (...) nothing .
+*SPK:	I was (0.5) wondering about that .
+*SPK:	so I went to the +...
+*LSN:	what did you +/.
+*SPK:	I went to the store .
+*SPK:	and then (2.3) I came back .
+*LSN:	that is (1:02.5) a long pause .
+@End

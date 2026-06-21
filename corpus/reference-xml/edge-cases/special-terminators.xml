@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">All special terminator types: trailing off (+...), interruption (+/.), self-interruption (+//.), interrupted question (+/?), trailing off question (+..?), broken question (+!?), quoted period (+".), quoted new line (+"/.), self-interrupted question (+//?)</comment>
+  <comment type="Generic">Constructs: trailing_off, interruption, self_interruption, interrupted_question, trailing_off_question, broken_question, quoted_period_simple, quoted_new_line, self_interrupted_question</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>was</w>
+    <w>going</w>
+    <w>to</w>
+    <w>the</w>
+    <t type="trail off"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>what</w>
+    <w>do</w>
+    <w>they</w>
+    <w>do</w>
+    <w>with</w>
+    <t type="interruption"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>they</w>
+    <w>play</w>
+    <w>with</w>
+    <w>the</w>
+    <w>toys</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>and</w>
+    <w>then</w>
+    <w>she</w>
+    <w>wouldn't</w>
+    <t type="self interruption"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <w>what</w>
+    <w>were</w>
+    <w>you</w>
+    <w>going</w>
+    <w>to</w>
+    <t type="interruption question"></t>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <w>oh</w>
+    <w>I</w>
+    <w>don't</w>
+    <w>know</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u6">
+    <w>anything</w>
+    <w>you</w>
+    <w>have</w>
+    <w>to</w>
+    <w>do</w>
+    <w>or</w>
+    <t type="trail off question"></t>
+
+  </u>
+  <u who="CHI" uID="u7">
+    <w>but</w>
+    <w>what</w>
+    <w>if</w>
+    <w>they</w>
+    <t type="question exclamation"></t>
+
+  </u>
+  <u who="CHI" uID="u8">
+    <w>and</w>
+    <w>the</w>
+    <w>bear</w>
+    <w>said</w>
+    <t type="quotation next line"></t>
+
+  </u>
+  <u who="CHI" uID="u9">
+    <linker type="quoted utterance next"/>
+    <w>give</w>
+    <w>me</w>
+    <w>your</w>
+    <w>honey</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u10">
+    <w>the</w>
+    <w>bear</w>
+    <w>said</w>
+    <t type="quotation precedes"></t>
+
+  </u>
+  <u who="MOT" uID="u11">
+    <w>what</w>
+    <w>was</w>
+    <w>she</w>
+    <w>going</w>
+    <w>to</w>
+    <t type="self interruption question"></t>
+
+  </u>
+</CHAT>

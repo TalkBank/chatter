@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Media="french-child-speech" Mediatypes="audio" Version="3.2.3" Lang="fra" Corpus="corpus" Date="2006-11-10">
+  <Participants>
+    <participant id="SOF" role="Teacher" language="fra"/>
+    <participant id="CHI" role="Target_Child" language="fra" age="P2Y08M18D" sex="male"/>
+  </Participants>
+  <comment type="Date">10-NOV-2006</comment>
+  <comment type="Generic">French child speech with audio, %mor, %gra, %wor tiers</comment>
+  <comment type="Generic">Constructs: audio-linked file with word-level timing</comment>
+  <u who="SOF" uID="u0">
+    <w>l'escargot<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>lescargot</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>dort<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>dormir</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>parc<shortening>e</shortening>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>parce</stem>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="MARK"/>
+      </mor>
+    </w>
+    <w>qu'il<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>quil</stem>
+        </mw>
+        <gra type="gra" index="4" head="3" relation="FIXED"/>
+      </mor>
+    </w>
+    <w>fait<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>faire</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="5" head="2" relation="ADVCL"/>
+      </mor>
+    </w>
+    <w>beau<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>beau</stem>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="6" head="5" relation="XCOMP"/>
+      </mor>
+    </w>
+    <w>dehors<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>dehors</stem>
+        </mw>
+        <gra type="gra" index="7" head="5" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="8" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="2.930" end="7.293" unit="s"/>
+    <wor>
+      <w>l'escargot</w>
+      <internal-media start="2.930" end="3.570" unit="s"/>
+      <w>dort</w>
+      <internal-media start="3.570" end="4.290" unit="s"/>
+      <w>parce</w>
+      <internal-media start="4.290" end="5.710" unit="s"/>
+      <w>qu'il</w>
+      <internal-media start="5.710" end="6.130" unit="s"/>
+      <w>fait</w>
+      <internal-media start="6.130" end="6.330" unit="s"/>
+      <w>beau</w>
+      <internal-media start="6.330" end="6.770" unit="s"/>
+      <w>dehors</w>
+      <internal-media start="6.770" end="7.293" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+  <u who="SOF" uID="u1">
+    <w>un<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>un</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="DET"/>
+      </mor>
+    </w>
+    <w>nuage<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>nuage</stem>
+          <mk type="sfx">Masc</mk>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>arrive<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>arriver</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>et<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>et</stem>
+        </mw>
+        <gra type="gra" index="4" head="6" relation="CC"/>
+      </mor>
+    </w>
+    <w>fait<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>faire</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="AUX-CAUS"/>
+      </mor>
+    </w>
+    <w>tomber<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>tomber</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="6" head="3" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>la<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>le</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Art</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="7" head="8" relation="DET"/>
+      </mor>
+    </w>
+    <w>pluie<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>pluie</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="8" head="6" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="e">
+      <mor type="mor">
+        <mt type="e"/>
+        <gra type="gra" index="9" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="9.996" end="14.239" unit="s"/>
+    <wor>
+      <w>un</w>
+      <internal-media start="9.996" end="10.190" unit="s"/>
+      <w>nuage</w>
+      <internal-media start="10.190" end="11.030" unit="s"/>
+      <w>arrive</w>
+      <internal-media start="11.030" end="11.610" unit="s"/>
+      <w>et</w>
+      <internal-media start="11.610" end="13.010" unit="s"/>
+      <w>fait</w>
+      <internal-media start="13.010" end="13.170" unit="s"/>
+      <w>tomber</w>
+      <internal-media start="13.170" end="13.710" unit="s"/>
+      <w>la</w>
+      <internal-media start="13.710" end="13.990" unit="s"/>
+      <w>pluie</w>
+      <internal-media start="13.990" end="14.239" unit="s"/>
+      <t type="e"/>
+    </wor>
+  </u>
+</CHAT>

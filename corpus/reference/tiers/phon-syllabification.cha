@@ -1,0 +1,34 @@
+@UTF8
+@Begin
+@Languages:	nld
+@Participants:	CHI Child, MOT Mother
+@ID:	nld|corpus|CHI|2;00.||||Child|||
+@ID:	nld|corpus|MOT|||||Mother|||
+@Comment:	Phon project phonological syllabification and alignment tiers
+@Comment:	Constructs: x_dependent_tier (Phon %xmodsyl, %xphosyl, %xphoaln)
+@Comment:	Synthesized from phon-data Dutch/CLPF corpus examples
+*CHI:	aap .
+%mod:	ˈap
+%pho:	ˈɑp
+%xmodsyl:	ˈa:Np:C
+%xphosyl:	ˈɑ:Np:C
+%xphoaln:	a↔ɑ,p↔p
+*CHI:	appel .
+%mod:	ˈɑpəl
+%pho:	ˈɑpow
+%xmodsyl:	ˈɑ:Np:Oə:Nl:C
+%xphosyl:	ˈɑ:Np:Oo:Nw:C
+%xphoaln:	ɑ↔ɑ,p↔p,ə↔o,l↔w
+*CHI:	ballon .
+%mod:	bɑˈlɔn
+%pho:	ˈplɔm
+%xmodsyl:	b:Oɑ:Nˈl:Oɔ:Nn:C
+%xphosyl:	ˈp:Ol:Oɔ:Nm:C
+%xphoaln:	b↔p,ɑ↔∅,l↔l,ɔ↔ɔ,n↔m
+*MOT:	muts ja .
+%mod:	ˈmœts ˈja
+%pho:	ˈmʉst ˈjɛ
+%xmodsyl:	ˈm:Oœ:Nt:Cs:R ˈj:Oa:N
+%xphosyl:	ˈm:Oʉ:Ns:Ct:C ˈj:Oɛ:N
+%xphoaln:	m↔m,œ↔ʉ,t↔s,s↔t j↔j,a↔ɛ
+@End

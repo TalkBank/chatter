@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Morphology and grammatical relations tiers</comment>
+  <comment type="Generic">Constructs: mor_dependent_tier, mor_tier_prefix, mor_contents, mor_content, mor_word, mor_pos, mor_lemma, mor_feature, mor_feature_value, mor_post_clitic, gra_dependent_tier, gra_tier_prefix, gra_contents, gra_relation, gra_index, gra_head, gra_relation_name, pipe</comment>
+  <u who="CHI" uID="u0">
+    <w>it's<mor type="mor"><mw><pos><c>pron</c></pos><stem>it</stem></mw><gra type="gra" index="1" head="4" relation="NSUBJ"/><mor-post><mw><pos><c>aux</c></pos><stem>be</stem><mk type="sfx">Fin</mk><mk type="sfx">Ind</mk><mk type="sfx">Pres</mk><mk type="sfx">S3</mk></mw><gra type="gra" index="2" head="1" relation="AUX"/></mor-post></mor></w>
+    <w>I<mor type="mor"><mw><pos><c>pron</c></pos><stem>I</stem><mk type="sfx">Prs</mk><mk type="sfx">Nom</mk><mk type="sfx">S1</mk></mw><gra type="gra" index="3" head="4" relation="NSUBJ"/></mor></w>
+    <w>want<mor type="mor"><mw><pos><c>verb</c></pos><stem>want</stem><mk type="sfx">Fin</mk><mk type="sfx">Ind</mk><mk type="sfx">Pres</mk></mw><gra type="gra" index="4" head="0" relation="ROOT"/></mor></w>
+    <w>cookies<mor type="mor"><mw><pos><c>noun</c></pos><stem>cookie</stem><mk type="sfx">Plur</mk></mw><gra type="gra" index="5" head="4" relation="OBJ"/></mor></w>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="6" head="4" relation="PUNCT"/></mor></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>Mommy<mor type="mor"><mw><pos><c>propn</c></pos><stem>Mommy</stem></mw><gra type="gra" index="1" head="3" relation="SUBJ"/></mor></w>
+    <w>will<mor type="mor"><mw><pos><c>aux</c></pos><stem>will</stem></mw><gra type="gra" index="2" head="3" relation="AUX"/></mor></w>
+    <w>get<mor type="mor"><mw><pos><c>verb</c></pos><stem>get</stem><mk type="sfx">Inf</mk></mw><gra type="gra" index="3" head="0" relation="ROOT"/></mor></w>
+    <w>them<mor type="mor"><mw><pos><c>pron</c></pos><stem>they</stem><mk type="sfx">Prs</mk><mk type="sfx">Acc</mk><mk type="sfx">Plur</mk></mw><gra type="gra" index="4" head="3" relation="OBJ"/></mor></w>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="5" head="3" relation="PUNCT"/></mor></t>
+
+  </u>
+</CHAT>

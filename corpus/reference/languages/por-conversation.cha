@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	por
+@Participants:	CHI Denise Target_Child, INV Conceição Investigator
+@ID:	por|corpus|CHI|5;10.||MC||Target_Child|||
+@ID:	por|corpus|INV|||||Investigator|||
+@Comment:	Brazilian Portuguese child narrative interview
+@Comment:	Constructs: Portuguese language coverage, Latin script with diacritics
+*INV:	uma coisa Denise que aconteceu contigo , qualquer coisa (.) uma historinha .
+%mor:	det|um-Fem-Ind-Art-Sing noun|coisa-Fem propn|Denise-Fem pron|que-Rel-S1 verb|acontecer-Fin-Ind-Past-S3 intj|contigo cm|cm det|qualquer-Fem-Def-Ind-Sing noun|coisa-Fem det|um-Fem-Ind-Art-Sing noun|historinha-Fem .
+%gra:	1|2|DET 2|0|ROOT 3|2|APPOS 4|5|NSUBJ 5|2|ACL-RELCL 6|5|ADVMOD 7|5|PUNCT 8|9|DET 9|2|PARATAXIS 10|11|DET 11|2|APPOS 12|2|PUNCT
+*CHI:	eu (es)tou doente [!] a mãe vai me levar hoje no médico (...) e eu vomitei no ônibus .
+%mor:	pron|eu-Prs-Nom-S1 aux|estar-Fin-Ind-Pres-S1 adj|doente-S1 det|o-Fem-Def-Art-Sing noun|mãe-Fem aux|ir-Fin-Ind-Pres-S3 pron|eu-Prs-Acc-S1 verb|levar-Inf-S adv|hoje det|ele-Masc-Def-Art-Sing noun|médico-Masc-Acc cconj|e pron|eu-Prs-Nom-S1 verb|vomitar-Fin-Ind-Past-S1 det|ele-Masc-Def-Art-Sing noun|ônibus-Masc-Acc .
+%gra:	1|3|NSUBJ 2|3|COP 3|0|ROOT 4|5|DET 5|8|NSUBJ 6|8|AUX 7|8|OBJ 8|3|CSUBJ 9|8|ADVMOD 10|11|DET 11|8|OBJ 12|14|CC 13|14|NSUBJ 14|3|CONJ 15|16|DET 16|14|OBJ 17|3|PUNCT
+*CHI:	eu cai um tombão <lá em casa> [!] <aqui ó> [/] aqui ó [= indica a parte machucada do corpo] .
+%mor:	pron|eu-Prs-Nom-S1 verb|cair-Fin-Ind-Pres-S3 det|um-Masc-Ind-Art-Sing noun|tombão-Masc-Acc adv|lá adp|em noun|casa-Fem adv|aqui pron|ó-Prs-Nom-S1 .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|4|DET 4|2|OBJ 5|2|ADVMOD 6|7|CASE 7|5|OBL 8|2|ADVMOD 9|2|OBJ 10|2|PUNCT
+*INV:	conta pra mim como é que foi o tombo que tu caiu [: caiste] .
+%mor:	noun|conta-Fem adp|pra pron|eu-Prs-S1 adv|como aux|ser-Inf-S sconj|que aux|ser-Fin-Ind-Past-S3 det|o-Masc-Def-Art-Sing noun|tombo-Masc pron|que-Rel-S1 pron|tu-Prs-Nom-S1 verb|caistar-Fin-Ind-Pres-S1 .
+%gra:	1|0|ROOT 2|3|CASE 3|1|NMOD 4|9|ADVMOD 5|9|DISCOURSE 6|5|FIXED 7|9|COP 8|9|DET 9|1|NSUBJ 10|12|OBJ 11|12|NSUBJ 12|9|ACL-RELCL 13|1|PUNCT
+*CHI:	eu (es)tava brincando com o meu primo Leonardo eu e ele caimos <um tombo> [!] <lá em casa> [!] .
+%mor:	pron|eu-Prs-Nom-S1 aux|estar-Fin-Ind-Imp-S1 verb|brincar-Ger-S adp|com det|o-Masc-Def-Art-Sing det|meu-Masc-Def-Prs-Sing noun|primo-Masc-Acc propn|Leonardo-Masc pron|eu-Prs-Nom-S1 cconj|e pron|ele-Prs-Nom-S3 verb|cair-Fin-Ind-Pres-P1 det|um-Masc-Ind-Art-Sing noun|tombo-Masc-Acc adv|lá adp|em noun|casa-Fem .
+%gra:	1|3|NSUBJ 2|3|AUX 3|0|ROOT 4|7|CASE 5|7|DET 6|7|DET 7|3|OBJ 8|7|APPOS 9|12|NSUBJ 10|12|CC 11|12|NSUBJ 12|3|CONJ 13|14|DET 14|12|OBJ 15|12|ADVMOD 16|17|CASE 17|15|OBL 18|3|PUNCT
+@End

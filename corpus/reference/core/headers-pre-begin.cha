@@ -1,0 +1,16 @@
+@UTF8
+@PID:	11312/c-00016447-1
+@Color words:	*CHI 1 32768 0 656 *MOT 1 656 33423 1311
+@Window:	247_181_683_700_-1_-1_348_0_348_0
+@Font:	Win:Courier New:14:25
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Pre-@Begin headers: @PID, @Color words, @Window, @Font
+@Comment:	Constructs: pid_header, color_words_header, window_header, font_header,
+	pid_prefix, color_words_prefix, window_prefix, font_prefix
+*CHI:	hello there .
+*MOT:	hello sweetie .
+@End

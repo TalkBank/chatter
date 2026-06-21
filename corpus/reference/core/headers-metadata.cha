@@ -1,0 +1,20 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|2;06.15|male|TD||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Date:	28-JUL-2001
+@Location:	Pittsburgh, PA
+@Situation:	Free play in the living room with blocks and dolls
+@Activities:	block play, doll play
+@Transcriber:	chris harris, mike jackson
+@Transcription:	eye_dialect
+@Comment:	Metadata headers: @Date, @Location, @Situation, @Activities,
+	@Transcriber, @Transcription
+@Comment:	Constructs: date_header, location_header, situation_header,
+	activities_header, transcriber_header, transcription_header
+*CHI:	look at my tower .
+*MOT:	that is a big tower .
+*CHI:	it is going to fall down !
+@End

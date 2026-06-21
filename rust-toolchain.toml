@@ -1,0 +1,9 @@
+[toolchain]
+# Pin to a specific stable release rather than "stable" so per-push
+# CI is reproducible, when Rust ships a new stable (every ~6 weeks),
+# new clippy lints would otherwise turn every open PR red overnight.
+# Drift against the latest stable is caught by the weekly
+# clippy-rolling.yml workflow against `@stable`; when that goes red,
+# bump this pin in a focused commit that also fixes the new lints.
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

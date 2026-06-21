@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="PAR"
+      role="Participant"
+      language="eng"
+      age="P43Y"
+      sex="male"
+      group="Broca"
+      custom-field="73.9"
+    />
+    <participant
+      id="INV"
+      role="Investigator"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">@ID header with trailing whitespace in custom field.</comment>
+  <comment type="Generic">Constructs: id_header with trailing space in 10th field, field whitespace trimming</comment>
+  <u who="PAR" uID="u0">
+    <w>hello</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="INV" uID="u1">
+    <w>hello</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

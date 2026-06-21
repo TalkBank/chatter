@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+    <participant
+      id="INV"
+      role="Investigator"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Events inside angle bracket groups with overlap annotations.</comment>
+  <comment type="Generic">Constructs: event inside group, event_segment boundary at &gt;, compound event with colon, event adjacent to overlap markers</comment>
+  <u who="CHI" uID="u0">
+    <g><e><happening>laughs</happening></e><overlap type="overlap follows"/></g>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <g><w>hello</w>
+    <e><happening>laughs</happening></e><overlap type="overlap precedes"/></g>
+    <t type="p"></t>
+
+  </u>
+  <u who="INV" uID="u2">
+    <g><e><happening>clears:throat</happening></e><overlap type="overlap follows"/></g>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <g><w>go</w>
+    <e><happening>cries</happening></e>
+    <w>there</w><k type="retracing with correction"/></g>
+    <w>go</w>
+    <e><happening>laughs</happening></e>
+    <w>here</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <g><e><happening>vocalizes</happening></e><overlap type="overlap precedes"/></g>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <e><happening>gasps</happening></e>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u6">
+    <e><happening>head:yes</happening></e>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u7">
+    <e><happening>clears:throat</happening></e>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

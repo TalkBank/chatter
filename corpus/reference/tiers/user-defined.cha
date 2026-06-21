@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	User-defined dependent tiers: %xtra, %xcod, %xpho, %xmod (x-prefix tiers)
+@Comment:	Constructs: x_dependent_tier, x_tier_prefix, media bullets in user-defined tiers,
+	NAK-delimited timing in opaque tier content, multi-field user-defined tiers
+*CHI:	hello there .
+%xtra:	extra annotation
+%xcod:	extra coding
+%xpho:	extra phonological
+%xmod:	extra model
+*MOT:	zero .
+%xp:	LAT
+%xcod:	$5ml $0 tsp $na
+%xs1:	swallow 3093_4877
+%xs2:	multiple swallow 46639_50559
+%xdb:	average_dB="-29.52" peak_dB="-18.64"
+@End

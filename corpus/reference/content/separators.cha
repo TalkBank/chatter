@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Separators: comma (,), tag-question („), vocative (‡)
+@Comment:	Constructs: separator, comma, non_colon_separator,
+	tag_marker (‡ „)
+*CHI:	well , I think so .
+*CHI:	it was lowering concrete girders off a lorry „ wasn't it ?
+*MOT:	it was lowering concrete girders off a lorry ‡ wasn't it ?
+@End

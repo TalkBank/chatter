@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="SPK"
+      role="Speaker"
+      language="eng"
+
+    />
+    <participant
+      id="LSN"
+      role="Adult"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">CA intonation contour markers and CA terminators</comment>
+  <comment type="Generic">Constructs: rising_to_high, rising_to_mid, level_pitch, falling_to_mid, falling_to_low, ca_no_break, ca_technical_break, ca_no_break_linker, ca_technical_break_linker, unmarked_ending</comment>
+  <u who="SPK" uID="u0">
+    <w>rising</w>
+    <w>to</w>
+    <w>high</w>
+    <s type="rising to high"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="SPK" uID="u1">
+    <w>rising</w>
+    <w>to</w>
+    <w>mid</w>
+    <s type="rising to mid"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="SPK" uID="u2">
+    <w>level</w>
+    <w>pitch</w>
+    <s type="level"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="SPK" uID="u3">
+    <w>falling</w>
+    <w>to</w>
+    <w>mid</w>
+    <s type="falling to mid"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="SPK" uID="u4">
+    <w>falling</w>
+    <w>to</w>
+    <w>low</w>
+    <s type="falling to low"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+  <u who="SPK" uID="u5">
+    <w>no</w>
+    <w>break</w>
+    <w>continuation</w>
+    <s type="falling to low"/>
+    <t type="no break TCU continuation"></t>
+
+  </u>
+  <u who="LSN" uID="u6">
+    <linker type="no break TCU completion"/>
+    <w>continuing</w>
+    <w>here</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u7">
+    <w>technical</w>
+    <w>break</w>
+    <w>continuation</w>
+    <s type="rising to high"/>
+    <t type="technical break TCU continuation"></t>
+
+  </u>
+  <u who="LSN" uID="u8">
+    <linker type="technical break TCU completion"/>
+    <w>continuing</w>
+    <w>here</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u9">
+    <w>unmarked</w>
+    <w>ending</w>
+    <s type="unmarked ending"/>
+    <t type="missing CA terminator"></t>
+
+  </u>
+</CHAT>

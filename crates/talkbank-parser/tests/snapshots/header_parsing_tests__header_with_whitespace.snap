@@ -1,0 +1,8 @@
+---
+source: talkbank-tree-sitter-parser/tests/header_parsing_tests.rs
+assertion_line: 120
+expression: result
+---
+Ok(
+    Utf8,
+)

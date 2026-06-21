@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:	I want cookie .
+%mor:	pro|I v|want .
+@Comment:	ERROR: Main tier has 3 words but %mor only has 2 items (missing n|cookie)
+@End

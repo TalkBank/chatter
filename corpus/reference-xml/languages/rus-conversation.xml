@@ -1,0 +1,608 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="rus" Corpus="corpus">
+  <Participants>
+    <participant id="EX1" role="Investigator" language="rus"/>
+    <participant id="CHI" role="Target_Child" language="rus" age="P5Y10M19D" sex="male"/>
+  </Participants>
+  <comment type="Generic">Russian child picture story narration</comment>
+  <comment type="Generic">Constructs: Russian Cyrillic script, language coverage</comment>
+  <u who="EX1" uID="u0">
+    <w>теперь<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>теперь</stem>
+        </mw>
+        <gra type="gra" index="1" head="4" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>я<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>я</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>тебе<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>ты</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Dat</mk>
+          <mk type="sfx">S2</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="IOBJ"/>
+      </mor>
+    </w>
+    <w>покажу<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>показать</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Fut</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>по<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>по</stem>
+        </mw>
+        <gra type="gra" index="5" head="7" relation="CASE"/>
+      </mor>
+    </w>
+    <w>одной<mor type="mor">
+        <mw>
+          <pos>
+            <c>num</c>
+          </pos>
+          <stem>один</stem>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="NUMMOD"/>
+      </mor>
+    </w>
+    <w>картиночке<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>картиночка</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Dat</mk>
+        </mw>
+        <gra type="gra" index="7" head="4" relation="OBL"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="8" head="12" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>а<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>а</stem>
+        </mw>
+        <gra type="gra" index="9" head="12" relation="CC"/>
+      </mor>
+    </w>
+    <w>ты<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>ты</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S2</mk>
+        </mw>
+        <gra type="gra" index="10" head="12" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>мне<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>я</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Dat</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="11" head="12" relation="IOBJ"/>
+      </mor>
+    </w>
+    <w>расскажешь<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>расскизать</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Fut</mk>
+          <mk type="sfx">S2</mk>
+        </mw>
+        <gra type="gra" index="12" head="4" relation="CONJ"/>
+      </mor>
+    </w>
+    <pause symbolic-length="simple"/>
+    <w>эту<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>этот</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="13" head="14" relation="DET"/>
+      </mor>
+    </w>
+    <w>сказку<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>сказка</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="14" head="12" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="15" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>птичка<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>птичка</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>летит<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>лететь</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="3" head="6" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>чтоб<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>чтобы</stem>
+        </mw>
+        <gra type="gra" index="4" head="6" relation="MARK"/>
+      </mor>
+    </w>
+    <w>рыбу<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>рыба</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>сйесть<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>сйесть</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">S2</mk>
+        </mw>
+        <gra type="gra" index="6" head="2" relation="ADVCL"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="7" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>и<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>и</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="CC"/>
+      </mor>
+    </w>
+    <w type="omission">она</w>
+    <g>
+      <w>полетел<replacement>
+          <w>полетела<mor type="mor">
+              <mw>
+                <pos>
+                  <c>verb</c>
+                </pos>
+                <stem>полететь</stem>
+                <mk type="sfx">Fin</mk>
+                <mk type="sfx">Perf</mk>
+                <mk type="sfx">Ind</mk>
+                <mk type="sfx">Past</mk>
+                <mk type="sfx">S</mk>
+              </mw>
+              <gra type="gra" index="2" head="0" relation="ROOT"/>
+            </mor>
+          </w>
+        </replacement>
+      </w>
+      <error/>
+    </g>
+    <w>на<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>на</stem>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="CASE"/>
+      </mor>
+    </w>
+    <w>дерево<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>дерево</stem>
+          <mk type="sfx">Neut</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="4" head="2" relation="OBL"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="5" head="7" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>лиса<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>лисо</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>хотела<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>хотеть</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="7" head="2" relation="CONJ"/>
+      </mor>
+    </w>
+    <w>тоже<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>тоже</stem>
+        </mw>
+        <gra type="gra" index="8" head="11" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>эту<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>этот</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="9" head="10" relation="DET"/>
+      </mor>
+    </w>
+    <w>рыбу<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>рыба</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="10" head="11" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>взять<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>брать</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="11" head="7" relation="XCOMP"/>
+      </mor>
+    </w>
+    <tagMarker type="comma">
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cm</c>
+          </pos>
+          <stem>cm</stem>
+        </mw>
+        <gra type="gra" index="12" head="15" relation="PUNCT"/>
+      </mor>
+    </tagMarker>
+    <w>но<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>но</stem>
+        </mw>
+        <gra type="gra" index="13" head="15" relation="CC"/>
+      </mor>
+    </w>
+    <w>не<mor type="mor">
+        <mw>
+          <pos>
+            <c>part</c>
+          </pos>
+          <stem>не</stem>
+        </mw>
+        <gra type="gra" index="14" head="15" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>могла<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>мочь</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="15" head="2" relation="CONJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="16" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>лиса<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>лисо</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>хотела<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>хотеть</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>у<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>у</stem>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="CASE"/>
+      </mor>
+    </w>
+    <w>птицы<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>птица</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Gen</mk>
+        </mw>
+        <gra type="gra" index="4" head="2" relation="OBL"/>
+      </mor>
+    </w>
+    <w>забрать<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>забрать</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="5" head="2" relation="XCOMP"/>
+      </mor>
+    </w>
+    <w>эту<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>этот</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Def</mk>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">Sing</mk>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="DET"/>
+      </mor>
+    </w>
+    <w>рыбу<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>рыба</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="7" head="5" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="8" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u4">
+    <w>она<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>она</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>тогда<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>тогда</stem>
+        </mw>
+        <gra type="gra" index="2" head="3" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>убежала<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>убежать</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Perf</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="3" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="4" head="3" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

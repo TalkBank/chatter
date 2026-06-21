@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="jpn" Corpus="corpus" PID="11312/a-00013825-1">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="jpn" age="P3Y07M" sex="male" name="Taachan"/>
+  </Participants>
+  <u who="CHI" uID="u0">
+    <w formType="kana">shi<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>shi</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="DEP"/>
+      </mor>
+    </w>
+    <w formType="kana">u<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>u</stem>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="3" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w formType="kana">yo<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>yo</stem>
+        </mw>
+        <gra type="gra" index="1" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <w formType="kana">u<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>u</stem>
+        </mw>
+        <gra type="gra" index="2" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <w formType="kana">bu<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>bu</stem>
+        </mw>
+        <gra type="gra" index="3" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <w formType="kana">shi<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>shi</stem>
+        </mw>
+        <gra type="gra" index="4" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <w formType="kana">yo<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>yo</stem>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="DEP"/>
+      </mor>
+    </w>
+    <w formType="kana">u<mor type="mor">
+        <mw>
+          <pos>
+            <c>n</c>
+            <s>let</s>
+          </pos>
+          <stem>u</stem>
+        </mw>
+        <gra type="gra" index="6" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="7" head="6" relation="PUNCT"/>
+      </mor>
+    </t>
+    <postcode>mlue</postcode>
+  </u>
+</CHAT>

@@ -1,0 +1,14 @@
+# header_types — 5 samples extracted from ~/talkbank/data/*-data
+# Each entry is separated by a blank line.
+# Lines may include tab-continuations (multi-physical-line entries).
+
+@Types:	cross, narrative, ASD
+
+@Types:	long, toyplay, TD
+
+@Types:	cross, narrative, TD
+
+@Types:	cross, narrative, CWS
+
+@Types:	observ, classroom, TD
+

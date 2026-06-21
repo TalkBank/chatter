@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="nld"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="nld"
+      age="P2Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="nld"
+
+    />
+  </Participants>
+  <comment type="Generic">Phon project phonological syllabification and alignment tiers</comment>
+  <comment type="Generic">Constructs: x_dependent_tier (Phon %xmodsyl, %xphosyl, %xphoaln)</comment>
+  <comment type="Generic">Synthesized from phon-data Dutch/CLPF corpus examples</comment>
+  <u who="CHI" uID="u0">
+    <w>aap<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>a</base></ph><ph><base>p</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>ɑ</base></ph><ph><base>p</base></ph></pw></pho></w>
+    <t type="p"></t>
+
+    <a type="extension" flavor="modsyl">ˈa:Np:C</a>
+    <a type="extension" flavor="phosyl">ˈɑ:Np:C</a>
+    <a type="extension" flavor="phoaln">a↔ɑ,p↔p</a>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>appel<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>ɑ</base></ph><ph><base>p</base></ph><ph><base>ə</base></ph><ph><base>l</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>ɑ</base></ph><ph><base>p</base></ph><ph><base>o</base></ph><ph><base>w</base></ph></pw></pho></w>
+    <t type="p"></t>
+
+    <a type="extension" flavor="modsyl">ˈɑ:Np:Oə:Nl:C</a>
+    <a type="extension" flavor="phosyl">ˈɑ:Np:Oo:Nw:C</a>
+    <a type="extension" flavor="phoaln">ɑ↔ɑ,p↔p,ə↔o,l↔w</a>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>ballon<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>b</base></ph><ph><base>ɑ</base></ph><stress type="primary"/><ph><base>l</base></ph><ph><base>ɔ</base></ph><ph><base>n</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>p</base></ph><ph><base>l</base></ph><ph><base>ɔ</base></ph><ph><base>m</base></ph></pw></pho></w>
+    <t type="p"></t>
+
+    <a type="extension" flavor="modsyl">b:Oɑ:Nˈl:Oɔ:Nn:C</a>
+    <a type="extension" flavor="phosyl">ˈp:Ol:Oɔ:Nm:C</a>
+    <a type="extension" flavor="phoaln">b↔p,ɑ↔∅,l↔l,ɔ↔ɔ,n↔m</a>
+  </u>
+  <u who="MOT" uID="u3">
+    <w>muts<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>m</base></ph><ph><base>œ</base></ph><ph><base>t</base></ph><ph><base>s</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>m</base></ph><ph><base>ʉ</base></ph><ph><base>s</base></ph><ph><base>t</base></ph></pw></pho></w>
+    <w>ja<mod xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>j</base></ph><ph><base>a</base></ph></pw></mod><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><stress type="primary"/><ph><base>j</base></ph><ph><base>ɛ</base></ph></pw></pho></w>
+    <t type="p"></t>
+
+    <a type="extension" flavor="modsyl">ˈm:Oœ:Nt:Cs:R ˈj:Oa:N</a>
+    <a type="extension" flavor="phosyl">ˈm:Oʉ:Ns:Ct:C ˈj:Oɛ:N</a>
+    <a type="extension" flavor="phoaln">m↔m,œ↔ʉ,t↔s,s↔t j↔j,a↔ɛ</a>
+  </u>
+</CHAT>

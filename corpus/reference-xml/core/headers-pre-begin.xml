@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      PID="11312/c-00016447-1"
+      Font="Win:Courier New:14:25"
+      Colorwords="*CHI 1 32768 0 656 *MOT 1 656 33423 1311"
+      Window="247_181_683_700_-1_-1_348_0_348_0"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Pre-@Begin headers: @PID, @Color words, @Window, @Font</comment>
+  <comment type="Generic">Constructs: pid_header, color_words_header, window_header, font_header, pid_prefix, color_words_prefix, window_prefix, font_prefix</comment>
+  <u who="CHI" uID="u0">
+    <w>hello</w>
+    <w>there</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>hello</w>
+    <w>sweetie</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

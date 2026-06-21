@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Media="groups-sign" Mediatypes="video unlinked"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P2Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Sign language groups on main tier using CJK brackets</comment>
+  <comment type="Generic">Constructs: main_sin_group, sin_begin_group, sin_end_group</comment>
+  <u who="CHI" uID="u0">
+    <sg><e><action/></e><sw>g:toy:dpoint</sw></sg>
+    <sg><w>foo</w><sw>b</sw></sg>
+    <sg><e><action/></e><sw>c</sw><sw>d</sw></sg>
+    <sg><w>bar</w>
+    <w>baz</w><sw>e</sw></sg>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

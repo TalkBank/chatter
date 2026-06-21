@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Descriptive text tiers: %com, %act, %gpx, %sit, %exp</comment>
+  <comment type="Generic">Constructs: com_dependent_tier, act_dependent_tier, gpx_dependent_tier, sit_dependent_tier, exp_dependent_tier</comment>
+  <u who="CHI" uID="u0">
+    <w>look</w>
+    <w>at</w>
+    <w>that</w>
+    <t type="e"></t>
+
+    <a type="comments">CHI is pointing at the bird in the tree</a>
+    <a type="actions">pointing with right hand toward window</a>
+    <a type="gesture">extends arm, opens hand</a>
+    <a type="situation">seated at table with toys</a>
+    <a type="explanation">CHI appears excited</a>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>yes</w>
+    <w>I</w>
+    <w>see</w>
+    <w>it</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

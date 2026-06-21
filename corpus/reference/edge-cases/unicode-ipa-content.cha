@@ -1,0 +1,22 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|2;06.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	IPA transcription in %pho tiers with Unicode diacritics:
+	tone marks, length marks, stress marks, IPA vowels
+@Comment:	Constructs: pho_dependent_tier, IPA content, Unicode diacritics
+*CHI:	Mommy .
+%pho:	ˈmɑmiː
+%mor:	propn|Mommy .
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	baby sleeping .
+%pho:	ˈbeɪbi ˈsliːpɪŋ
+%mor:	noun|baby part|sleep-PROG .
+%gra:	1|2|SUBJ 2|0|ROOT 3|2|PUNCT
+*MOT:	beautiful butterfly .
+%pho:	ˈbjuːtɪfəl ˈbʌtɚflaɪ
+%mor:	adj|beautiful noun|butterfly .
+%gra:	1|2|MOD 2|0|ROOT 3|2|PUNCT
+@End

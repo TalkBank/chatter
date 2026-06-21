@@ -1,0 +1,17 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	headers-comments, video, unlinked
+@Comment:	Comment and warning headers with multi-line continuation
+@Comment:	Constructs: comment_header, warning_header, anything,
+	text_with_bullets_and_pics, continuation, rest_of_line
+@Comment:	CHI points to the shelf 1234_1567
+@Warning:	audio quality degrades after minute 15
+*CHI:	tell me a story .
+@Comment:	CHI is pointing at the bookshelf while asking
+	this question, looking at MOT
+*MOT:	once upon a time there was a little bear .
+@End

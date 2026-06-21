@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat . 0_300
+%pho:	kæt
+%xphoint:	k 0_100 æ 200_300 t 50_150
+@Comment:	ERROR: the third interval start 50 is before the previous start 200
+@End

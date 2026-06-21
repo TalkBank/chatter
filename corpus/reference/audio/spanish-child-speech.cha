@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	spa
+@Participants:	PAR1 Participant, PAR0 Participant
+@ID:	spa|corpus|PAR1|||||Participant|||
+@ID:	spa|corpus|PAR0|||||Participant|||
+@Media:	spanish-child-speech, audio
+@Comment:	Spanish child speech with audio, %mor, %gra, %wor tiers
+@Comment:	Constructs: audio-linked file with word-level timing
+*PAR1:	hola qué es este . 3990_7734
+%mor:	verb|holar-Fin-Ind-Pres-S pron|qué-Int-S1 aux|ser-Fin-Ind-Pres-S3 pron|este-Dem-S1 .
+%gra:	1|0|ROOT 2|4|NSUBJ 3|4|COP 4|1|CCOMP 5|1|PUNCT
+%wor:	hola 3990_6810 qué es 6810_7250 este 7250_7734 .
+*PAR1:	qué es eso Lucía ah . 9257_11539
+%mor:	pron|qué-Int-S1 aux|ser-Fin-Ind-Pres-S3 pron|ese-Dem-S1 propn|lucía propn|ah .
+%gra:	1|3|NSUBJ 2|4|COP 3|4|NSUBJ 4|0|ROOT 5|4|FLAT 6|4|PUNCT
+%wor:	qué 9257_10390 es 10390_10570 eso 10570_10790 Lucía 10790_11150 ah 11150_11539 .
+@End

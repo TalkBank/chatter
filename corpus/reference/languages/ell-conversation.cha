@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	ell
+@Participants:	PAR1 Participant, PAR0 Participant
+@ID:	ell|corpus|PAR1|||||Participant|||
+@ID:	ell|corpus|PAR0|||||Participant|||
+@Comment:	Modern Greek conversation describing a picture
+@Comment:	Constructs: Greek script, Modern Greek language coverage
+*PAR1:	Ναι να σας τα πω , είναι ένα παιδάκι , ταχτοποιεί κάτι στο ντουλάπι , ζάχαρη , καφέ τι είναι .
+%mor:	adv|ναι aux|να-Inf-S pron|μου-Prs-Gen-P2 pron|εγώ-Prs-Acc-P3 verb|λέγω-Fin-Perf-Ind-S1 cm|cm aux|είμαι-Fin-Imp-Ind-Pres-S3 det|ένας-Neut-Ind-Art-Sing noun|παιδάκι-Neut-Nom cm|cm verb|ταχτοποιώ-Fin-Perf-Ind-Pres-S3 pron|κάτι-Ind-Nom-S3 adp|στο noun|ντουλάπι-Neut-Acc cm|cm noun|ζάχαρη-Fem-Nom cm|cm noun|καφέ-Neut-Acc pron|τι-Int-Nom-S3 aux|είμαι-Fin-Imp-Ind-Pres-S3 .
+%gra:	1|5|ADVMOD 2|5|AUX 3|5|OBJ 4|5|OBJ 5|9|ADVCL 6|5|PUNCT 7|9|COP 8|9|DET 9|0|ROOT 10|11|PUNCT 11|9|CONJ 12|11|OBJ 13|14|CASE 14|12|NMOD 15|16|PUNCT 16|14|CONJ 17|18|PUNCT 18|14|CONJ 19|18|NMOD 20|18|COP 21|9|PUNCT
+*PAR0:	Καφέ .
+%mor:	noun|καφέ-Neut-Acc .
+%gra:	1|0|ROOT 2|1|PUNCT
+*PAR1:	Ζάχαρη , τι είναι , στο άλλο η κυρία πλένει τα πιάτα .
+%mor:	noun|ζάχαρη-Fem-Nom cm|cm pron|τι-Int-Nom-S3 aux|είμαι-Fin-Imp-Ind-Pres-S3 cm|cm adp|στο det|άλλος-Neut-Def-Ind-Sing det|ο-Fem-Def-Art-Sing noun|κυρία-Fem-Nom verb|πλένω-Fin-Imp-Ind-Pres-S3 det|ο-Neut-Def-Art-Plur noun|πιάτα-Neut-Plur-Acc .
+%gra:	1|0|ROOT 2|1|PUNCT 3|10|NSUBJ 4|10|COP 5|10|PUNCT 6|9|CASE 7|9|DET 8|9|DET 9|10|NSUBJ 10|1|PARATAXIS 11|12|DET 12|10|OBJ 13|1|PUNCT
+*PAR1:	Είναι μια κουζίνα [/] κουζίνα ηλεκτρική , με ροχή της , ντουλάπια , παράθυρο με κουρτίνα , πάτομα και η κυρία σκουπίζει τα πιάτα .
+%mor:	aux|είμαι-Fin-Imp-Ind-Pres-S3 det|ένας-Fem-Ind-Art-Sing noun|κουζίνα-Fem-Nom adj|ηλεκτρικός-Nom-S1 cm|cm adp|με noun|ροχή-Fem-Acc pron|μου-Prs-Gen-S3 cm|cm noun|ντουλάπιο-Neut-Plur-Acc cm|cm noun|παράθυρο-Neut-Acc adp|με noun|κουρτίνα-Fem-Acc cm|cm noun|πάτομο-Neut-Nom cconj|και det|ο-Fem-Def-Art-Sing noun|κυρία-Fem-Nom verb|σκουπίζω-Fin-Imp-Ind-Pres-S3 det|ο-Neut-Def-Art-Plur noun|πιάτα-Neut-Plur-Acc .
+%gra:	1|3|COP 2|3|DET 3|0|ROOT 4|3|AMOD 5|7|PUNCT 6|7|CASE 7|3|OBL 8|7|NMOD 9|10|PUNCT 10|7|CONJ 11|12|PUNCT 12|3|CONJ 13|14|CASE 14|12|NMOD 15|16|PUNCT 16|4|CONJ 17|20|CC 18|19|DET 19|20|NSUBJ 20|3|CONJ 21|22|DET 22|20|OBJ 23|3|PUNCT
+@End

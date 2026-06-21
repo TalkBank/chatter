@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat .
+%pho:	kæt
+%xphosyl:	k:Oæ:Nt:Z
+@Comment:	ERROR: 'Z' is not a legal constituent code (legal: O N C L R E A D)
+@End

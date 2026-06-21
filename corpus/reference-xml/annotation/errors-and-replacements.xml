@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Error markers, replacements, and explanations</comment>
+  <comment type="Generic">Constructs: error_marker_annotation, replacement, explanation_annotation, alt_annotation, para_annotation, percent_annotation, exclude_marker, duration_annotation</comment>
+  <u who="CHI" uID="u0">
+    <g><w>whenn</w><error/></g>
+    <w>is</w>
+    <w>it</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <g><w>rocking<wk type="cmp"/>house<replacement><w>rocking<wk type="cmp"/>horse</w></replacement></w><error/></g>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <g><w>when<wk type="cmp"/>ever</w><ga type="paralinguistics">foo bar</ga><ga type="alternative">ah+er</ga></g>
+    <w>will</w>
+    <w>you</w>
+    <w>go</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <w>this</w>
+    <w>is</w>
+    <g><w>child</w><ga type="paralinguistics">a+er b</ga></g>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u4">
+    <w>this</w>
+    <w>is</w>
+    <g><w>child</w><ga type="explanation">a+er b</ga></g>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <w>this</w>
+    <w>is</w>
+    <w>child<replacement><w>a<wk type="cmp"/>er</w><w>b</w></replacement></w>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u6">
+    <w>this</w>
+    <w>is</w>
+    <g><w>child</w><ga type="comments">a+er b</ga></g>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u7">
+    <w>this</w>
+    <g><w>is</w><k type="mor exclude"/></g>
+    <w>child</w>
+    <w>speaking</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

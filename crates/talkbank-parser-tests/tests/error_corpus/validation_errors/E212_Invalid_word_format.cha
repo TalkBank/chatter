@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Note: This is a parser error, hard to trigger with valid grammar
+*CHI:	hello world .
+@End

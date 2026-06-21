@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|2;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	sin, video, unlinked
+@Comment:	Sign language tier with gesture entries and groupings
+@Comment:	Constructs: sin_dependent_tier, sin_tier_prefix, sin_word,
+	sin_group, sin_grouped_content, sin_groups
+*MOT:	what shall we get ?
+%sin:	0 0 0 0
+*CHI:	junk here .
+%sin:	g:toy:dpoint gg:toyy:dpointt
+@End

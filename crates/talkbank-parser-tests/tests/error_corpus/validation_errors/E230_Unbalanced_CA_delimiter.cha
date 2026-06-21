@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: Compound delimiter (∆) must be balanced
+@Comment:	Invalid: 'hello∆world' - Missing closing ∆
+*CHI:	hello∆world .
+@End

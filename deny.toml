@@ -1,0 +1,62 @@
+# cargo-deny configuration for the chatter workspace.
+# Docs: https://embarkstudios.github.io/cargo-deny/
+# Run:  cargo deny check
+#
+# chatter ships under "MIT OR Apache-2.0"; every dependency must be
+# license-compatible. This file is the license + advisory policy gate
+# (Track C Pass 0 of the v0.1.0 release plan).
+
+[licenses]
+# Permissive licenses actually present in the dependency tree. The lone
+# copyleft hit, LGPL-2.1-or-later via r-efi (a UEFI-target transitive
+# crate), is triple-licensed "MIT OR Apache-2.0 OR LGPL-2.1-or-later", so
+# it resolves under MIT/Apache and LGPL is deliberately NOT allowed here.
+# MPL-2.0 is file-level copyleft; using an MPL dependency unmodified in a
+# larger work is permitted, so it is allowed for dependencies only.
+allow = [
+    "MIT",
+    "MIT-0",
+    "MITNFA",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "ISC",
+    "BSL-1.0",
+    "Zlib",
+    "Unlicense",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+confidence-threshold = 0.93
+
+[advisories]
+# cargo-deny 0.19 treats unmaintained crates as errors. We only fail on an
+# unmaintained crate that a workspace member depends on DIRECTLY; transitive
+# unmaintained crates we cannot control stay informational. The ones in the
+# current tree are all transitive: the Tauri Linux GTK3 stack
+# (atk/gdk/gtk-sys, RUSTSEC-2024-04xx) and bincode (via comrak -> syntect,
+# RUSTSEC-2025-0141).
+unmaintained = "workspace"
+# RUSTSEC advisories with no fixed upstream release, ignored with a documented
+# reason and revisited periodically.
+ignore = [
+    # rsa: "Marvin Attack" potential key recovery via timing sidechannels
+    # (RUSTSEC-2023-0071). No patched upstream release exists; the crate is a
+    # transitive dependency and is not on a latency-sensitive chatter path.
+    "RUSTSEC-2023-0071",
+]
+
+[bans]
+# The dependency tree legitimately carries multiple major versions of some
+# common crates (bitflags, base64, etc.); that is not a release blocker.
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

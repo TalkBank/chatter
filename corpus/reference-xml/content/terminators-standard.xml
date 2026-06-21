@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Standard terminators: period (.), question (?), exclamation (!)</comment>
+  <comment type="Generic">Constructs: period, question, exclamation</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>see</w>
+    <w>a</w>
+    <w>cat</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>where</w>
+    <w>is</w>
+    <w>the</w>
+    <w>cat</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>wow</w>
+    <w>it</w>
+    <w>is</w>
+    <w>so</w>
+    <w>big</w>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <w>yes</w>
+    <w>it</w>
+    <w>is</w>
+    <w>a</w>
+    <w>big</w>
+    <w>cat</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

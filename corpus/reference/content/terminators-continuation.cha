@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, EXP Investigator
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|EXP|||||Investigator|||
+@Comment:	Continuation terminators: trailing off (+...), interruption (+/.),
+	self-interruption (+//.), break for coding (+.)
+@Comment:	Constructs: trailing_off, interruption, self_interruption, break_for_coding
+*CHI:	I was going to the +...
+*MOT:	what do they do with +/.
+*CHI:	they play with the toys .
+*MOT:	and then she wouldn't +//.
+*EXP:	foo bar +.
+@End

@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	por
+@Participants:	CHI Child, MOT Mother
+@ID:	por|corpus|CHI|2;00.||||Child|||
+@ID:	por|corpus|MOT|||||Mother|||
+@Comment:	Phonological tier with syllable boundary dots in pho words
+@Comment:	Constructs: pho_word with internal dots (syllable boundaries)
+@Comment:	Source: phon-other-data Biling/Almeida Portuguese examples
+@Comment:	The dot (.) inside a pho word marks a syllable boundary.
+@Comment:	It must NOT be interpreted as a terminator.
+*CHI:	boneca .
+%pho:	bu.nɛ.kɐ
+*MOT:	agua .
+%pho:	a.ɡwɐ
+*CHI:	mane .
+%pho:	mɐ.nɛ
+@End

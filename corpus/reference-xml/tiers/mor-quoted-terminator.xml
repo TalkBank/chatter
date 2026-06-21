@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Morphology tier with quoted terminators (+"/. and +".)</comment>
+  <comment type="Generic">Constructs: quoted new line terminator in %mor tier</comment>
+  <comment type="Generic">Source: word-features/1082.cha</comment>
+  <u who="CHI" uID="u0">
+    <w>see<mor type="mor"><mw><pos><c>verb</c></pos><stem>see</stem></mw><gra type="gra" index="1" head="0" relation="ROOT"/></mor></w>
+    <w>it<mor type="mor"><mw><pos><c>pron</c></pos><stem>it</stem></mw><gra type="gra" index="2" head="1" relation="OBJ"/></mor></w>
+    <w>say<mor type="mor"><mw><pos><c>verb</c></pos><stem>say</stem></mw><gra type="gra" index="3" head="1" relation="COMP"/></mor></w>
+    <t type="quotation precedes"><mor type="mor"><mt type="quotation precedes"/><gra type="gra" index="4" head="3" relation="PUNCT"/></mor></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>the<mor type="mor"><mw><pos><c>det</c></pos><stem>the</stem></mw><gra type="gra" index="1" head="2" relation="DET"/></mor></w>
+    <w>bear<mor type="mor"><mw><pos><c>noun</c></pos><stem>bear</stem></mw><gra type="gra" index="2" head="0" relation="ROOT"/></mor></w>
+    <w>said<mor type="mor"><mw><pos><c>verb</c></pos><stem>say</stem><mk type="sfx">Past</mk></mw><gra type="gra" index="3" head="2" relation="COMP"/></mor></w>
+    <t type="quotation next line"><mor type="mor"><mt type="quotation next line"/><gra type="gra" index="4" head="3" relation="PUNCT"/></mor></t>
+
+  </u>
+</CHAT>

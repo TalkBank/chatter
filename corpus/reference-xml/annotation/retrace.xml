@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Retrace annotations: partial [/], complete [//], multiple [///], reformulation [/-]</comment>
+  <comment type="Generic">Constructs: retrace_partial, retrace_complete, retrace_multiple, retrace_reformulation</comment>
+  <comment type="Generic">--- Single-word retraces (no angle brackets) ---</comment>
+  <u who="CHI" uID="u0">
+    <g><w>I</w><k type="retracing"/></g>
+    <w>I</w>
+    <w>want</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>the</w>
+    <g><w>dog</w><k type="retracing with correction"/></g>
+    <w>the</w>
+    <w>cat</w>
+    <w>ran</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>I</w>
+    <w>want</w>
+    <g><w>the</w><k type="retracing reformulation"/></g>
+    <w>give</w>
+    <w>me</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <g><w>ana</w><k type="retracing with correction"/></g>
+    <w>an</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <w>the</w>
+    <g><w>book</w><k type="false start"/></g>
+    <w>the</w>
+    <w>magazine</w>
+    <w>is</w>
+    <w>here</w>
+    <t type="p"></t>
+
+  </u>
+  <comment type="Generic">--- Single-word retraces WITH replacement [: ] ---</comment>
+  <comment type="Generic">These are the critical case: word [: replacement] [* error] [//] correction</comment>
+  <comment type="Generic">The retrace must wrap the replaced word; the replacement must NOT</comment>
+  <comment type="Generic">be counted for %mor alignment.</comment>
+  <u who="CHI" uID="u5">
+    <g><w formType="UNIBET">tika<replacement><w>kitty</w></replacement></w><error>p:n</error><k type="retracing with correction"/></g>
+    <w>kitty<mor type="mor"><mw><pos><c>noun</c></pos><stem>kitty</stem></mw><gra type="gra" index="1" head="3" relation="NSUBJ"/></mor></w>
+    <w>is<mor type="mor"><mw><pos><c>aux</c></pos><stem>be</stem><mk type="sfx">Fin</mk><mk type="sfx">Ind</mk><mk type="sfx">Pres</mk><mk type="sfx">S3</mk></mw><gra type="gra" index="2" head="3" relation="COP"/></mor></w>
+    <w>nice<mor type="mor"><mw><pos><c>adj</c></pos><stem>nice</stem><mk type="sfx">S1</mk></mw><gra type="gra" index="3" head="0" relation="ROOT"/></mor></w>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="4" head="3" relation="PUNCT"/></mor></t>
+
+  </u>
+  <u who="MOT" uID="u6">
+    <g><w formType="UNIBET">lɛɾɪ<replacement><w>later</w></replacement></w><error>p:n</error><k type="retracing with correction"/></g>
+    <w>later<mor type="mor"><mw><pos><c>adv</c></pos><stem>late</stem></mw><gra type="gra" index="1" head="4" relation="ADVMOD"/></mor></w>
+    <w>in<mor type="mor"><mw><pos><c>adp</c></pos><stem>in</stem></mw><gra type="gra" index="2" head="4" relation="CASE"/></mor></w>
+    <w>the<mor type="mor"><mw><pos><c>det</c></pos><stem>the</stem><mk type="sfx">Def</mk><mk type="sfx">Art</mk></mw><gra type="gra" index="3" head="4" relation="DET"/></mor></w>
+    <w>day<mor type="mor"><mw><pos><c>noun</c></pos><stem>day</stem></mw><gra type="gra" index="4" head="0" relation="ROOT"/></mor></w>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="5" head="4" relation="PUNCT"/></mor></t>
+
+  </u>
+  <u who="CHI" uID="u7">
+    <g><w>male<replacement><w>female</w></replacement></w><error>s:r</error><k type="retracing"/></g>
+    <g><w>male<replacement><w>female<mor type="mor"><mw><pos><c>adj</c></pos><stem>female</stem><mk type="sfx">S1</mk></mw><gra type="gra" index="1" head="0" relation="ROOT"/></mor></w></replacement></w><error>s:r</error></g>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="2" head="1" relation="PUNCT"/></mor></t>
+
+  </u>
+</CHAT>

@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	est
+@Participants:	CHI Child, OBS Investigator
+@ID:	est|corpus|CHI||male|||Child||körg linn Tallinn|
+@ID:	est|corpus|OBS||female|||Investigator|||
+@Comment:	Estonian child narrative retelling from pictures
+@Comment:	Constructs: Estonian language coverage, Latin script
+*CHI:	elas kord üks talumees tal olid kitsed .
+%mor:	verb|elama-Fin-Ind-Past-S3 adv|kord det|üks-Def-Ind-Sing noun|talumees-Nom pron|tema-Prs-Ade-S3 aux|olema-Fin-Ind-Past-P3 noun|kits-Plur-Nom .
+%gra:	1|0|ROOT 2|1|ADVMOD 3|4|NUMMOD 4|1|NSUBJ 5|1|OBL 6|1|AUX 7|1|NSUBJ 8|1|PUNCT
+*CHI:	aga neid luuras üks hunt ta kodu oli kitseste [: kitsetest] kaugemal .
+%mor:	cconj|aga pron|see-Dem-Par-P1 verb|luurama-Fin-Ind-Past-S3 det|üks-Def-Ind-Sing noun|hunt-Nom pron|tema-Prs-Gen-S3 noun|kodu-Nom aux|olema-Fin-Ind-Past-S3 noun|kitse-Plur-Ela adv|kaugemal .
+%gra:	1|3|CC 2|3|OBJ 3|0|ROOT 4|5|DET 5|3|NSUBJ 6|7|NMOD 7|10|NSUBJ-COP 8|10|COP 9|10|OBL 10|3|CONJ 11|3|PUNCT
+*CHI:	ja siis tahtis kitsepoeg tahtis ee nagu niimoodi juua vett aga ta kukkus vette .
+%mor:	cconj|ja adv|siis verb|tahtma-Fin-Ind-Past-S3 noun|kitsepoeg-Nom verb|tahtma-Fin-Ind-Past-S3 noun|ee-Nom sconj|nagu adv|niimoodi verb|jooma-Inf-S noun|vesi-Par adv|aga pron|tema-Prs-Nom-S3 verb|kukkuma-Fin-Ind-Past-S3 noun|vesi-Add .
+%gra:	1|3|CC 2|3|ADVMOD 3|0|ROOT 4|5|NSUBJ 5|3|CONJ 6|5|OBJ 7|9|MARK 8|9|ADVMOD 9|5|ADVCL 10|9|OBJ 11|13|ADVMOD 12|13|NSUBJ 13|5|CONJ 14|13|OBL 15|3|PUNCT
+*CHI:	siis tuli kitseema .
+%mor:	adv|siis verb|tulema-Fin-Ind-Past-S3 noun|kitseema-Nom .
+%gra:	1|2|ADVMOD 2|0|ROOT 3|2|NSUBJ 4|2|PUNCT
+*CHI:	siis hunt luuras ja siis jooksis ja siis ja siis .
+%mor:	adv|siis noun|hunt-Nom verb|luurama-Fin-Ind-Past-S3 cconj|ja adv|siis verb|jooksma-Fin-Ind-Past-S3 cconj|ja adv|siis cconj|ja adv|siis .
+%gra:	1|3|ADVMOD 2|3|NSUBJ 3|0|ROOT 4|6|CC 5|6|ADVMOD 6|3|CONJ 7|8|CC 8|6|ADVMOD 9|10|CC 10|8|CONJ 11|3|PUNCT
+@End

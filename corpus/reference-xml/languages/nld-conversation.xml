@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="nld" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="nld" age="P1Y00M24D" sex="male" name="Tom"/>
+  </Participants>
+  <comment type="Generic">Dutch child vocalizations with phonological annotation</comment>
+  <comment type="Generic">Constructs: Dutch language coverage, early vocalization</comment>
+  <u who="CHI" uID="u0">
+    <w>aai<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>aanaaien</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>aai<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>aanaaien</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>aai<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>aanaaien</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

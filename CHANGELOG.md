@@ -1,0 +1,59 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Before 1.0, breaking changes to the CLI or library APIs bump the minor
+version and are listed under "Changed" / "Removed".
+
+## [Unreleased]
+
+## [0.1.0] - 2026-06-15
+
+First public release.
+
+### Added
+
+- **CHAT-format core.** A strict, incremental tree-sitter parser
+  (`talkbank-parser`) with an independent re2c oracle parser
+  (`talkbank-parser-re2c`) that cross-checks it on every file; a typed
+  CHAT data model with structured validation, error codes, and tier
+  alignment (`talkbank-model`); and CHAT-to-JSON / JSON-to-CHAT / XML
+  conversion, normalization, transcript-merge, and redaction pipelines
+  (`talkbank-transform`).
+- **Phon extension tiers.** The four Phon `%x` dependent tiers
+  (`%xmodsyl`, `%xphosyl`, `%xphoaln`, `%xphoint`) are parsed and
+  validated as first-class CHAT tiers, on by default (pass
+  `--suppress xphon` to opt out): syllabification constituent codes and
+  phone-vs-source reconstruction, model-to-actual phone alignment, and
+  per-phone time intervals, with dedicated error codes.
+- **`chatter` CLI.** `validate`, `normalize`, `to-json` / `from-json` /
+  `to-xml`, `merge`, `speaker-id`, `batch`, `pipeline`, `adjudicate`,
+  `sanity-scan`, `lint`, `clean`, `watch`, `new-file`, `show-alignment`,
+  `validate-utseg`, `schema`, `update`, and a content cache.
+- **Language server** (`talkbank-lsp`): real-time validation, hover,
+  go-to-definition, and cross-tier alignment for any LSP-aware editor.
+- **Desktop app** (`Chatter`): a Tauri-based CHAT validation app, shipping
+  in the coordinated release alongside the CLI.
+- **Auto-update.** The `chatter` CLI self-updates with `chatter update`
+  (the bundled cargo-dist / axoupdater self-updater), and the desktop app
+  checks for and installs new releases on launch (Tauri updater). Both pull
+  from GitHub Releases. The CLI self-updater is experimental.
+- **Prebuilt binaries** for macOS (Apple Silicon and Intel), Linux, and
+  Windows, plus desktop installers, attached to the GitHub Release. The
+  macOS desktop `.dmg` is signed and notarized.
+
+### Known limitations
+
+- **The merge and adjudication surface is experimental.** `merge`,
+  `adjudicate`, `speaker-id`, and `sanity-scan` work, but their
+  interfaces and heuristics may change before 1.0.
+- **Windows binaries are not code-signed yet**, so Windows SmartScreen
+  warns on first run (choose "More info" then "Run anyway"). macOS CLI
+  binaries are codesigned but not notarized; install via the release
+  installer script to avoid the Gatekeeper quarantine prompt.
+- **Not on crates.io yet.** crates.io publication is deferred.
+
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/TalkBank/chatter/releases/tag/v0.1.0

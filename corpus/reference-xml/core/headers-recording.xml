@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Recording Quality">4</comment>
+  <comment type="Room Layout">mother and child seated at table, toys on floor</comment>
+  <comment type="Tape Location">tape 3, side A, counter 145</comment>
+  <comment type="Generic">Recording environment headers</comment>
+  <comment type="Generic">Constructs: recording_quality_header, recording_quality_option, room_layout_header, tape_location_header</comment>
+  <u who="CHI" uID="u0">
+    <w>where</w>
+    <w>did</w>
+    <w>the</w>
+    <w>ball</w>
+    <w>go</w>
+    <t type="q"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>it</w>
+    <w>rolled</w>
+    <w>under</w>
+    <w>the</w>
+    <w>table</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

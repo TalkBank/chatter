@@ -1,0 +1,26 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant, INV Investigator
+@ID:	eng|corpus|PAR|||||Participant|||
+@ID:	eng|corpus|INV|||||Investigator|||
+@Comment:	Other spoken event (&*SPK:word) variants the re2c parser must
+@Comment:	tokenize the same way TreeSitter does:
+@Comment:	  1. word followed by terminator with NO space (oh_hm. ah! mhm?) —
+@Comment:	     terminator stays separate, not absorbed into OSE text;
+@Comment:	  2. word with lengthening colons (ah: a:h u:hhum) — colons stay
+@Comment:	     INSIDE the OSE word body since they mark vowel lengthening.
+@Comment:	Both variants are real wild-corpus shapes flagged by the re2c parity
+@Comment:	oracle on 2026-04-30. The narrow w_text fix regressed (1) without
+@Comment:	(2) so the right body production is `w_body` (the same one
+@Comment:	standalone_word uses), which stops at terminators but admits
+@Comment:	lengthening colons and CA word-internal markers.
+*PAR:	easy &-you_know &*INV:oh_hm.
+*PAR:	yeah sure &*INV:ah.
+*PAR:	correct &*INV:yeah_mhm.
+*PAR:	ok &*INV:mhm ?
+*PAR:	wow &*INV:oh!
+*PAR:	what &*INV:ah: I see .
+*PAR:	the &*INV:a:h yeah .
+*PAR:	right &*INV:hm: indeed .
+@End

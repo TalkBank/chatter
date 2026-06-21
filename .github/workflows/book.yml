@@ -1,0 +1,69 @@
+name: Book (GitHub Pages)
+
+# Build the chatter mdBook and, once GitHub Pages is enabled, publish it to
+# https://talkbank.github.io/chatter/.
+#
+# The build job validates the book on every push. The artifact upload and the
+# deploy are gated behind the `PAGES_LIVE` repository variable, so this workflow
+# is inert until Pages is configured: there are no failing runs while it is unset.
+# To turn it on: enable Pages (Settings -> Pages -> Source = "GitHub Actions"),
+# set the `PAGES_LIVE` repository variable to `true`, and the next run publishes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'book/**'
+      - '.github/workflows/book.yml'
+  workflow_dispatch:
+
+# Least privilege at the top; the deploy job widens its own scope below.
+permissions:
+  contents: read
+
+# mdBook + mdbook-mermaid pinned to match ci.yml's book job exactly (the mermaid
+# preprocessor is protocol-sensitive to mdBook's wire format; keep them in lockstep).
+env:
+  MDBOOK_VERSION: '0.4.52'
+  MDBOOK_MERMAID_VERSION: '0.16.2'
+
+# One Pages deployment at a time; never cancel an in-progress publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: book-job
+      - name: Install mdbook + mdbook-mermaid
+        run: cargo install mdbook@"${MDBOOK_VERSION}" mdbook-mermaid@"${MDBOOK_MERMAID_VERSION}"
+      - name: mdbook build
+        run: cd book && mdbook build
+      # Only stage the Pages artifact when Pages is live (the cutover). Pre-flip
+      # the steps above still run as book-build validation.
+      - name: Upload Pages artifact
+        if: vars.PAGES_LIVE == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: book/build
+
+  deploy:
+    needs: build
+    if: vars.PAGES_LIVE == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

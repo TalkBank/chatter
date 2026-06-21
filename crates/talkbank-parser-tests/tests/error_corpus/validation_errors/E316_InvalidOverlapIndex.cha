@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother, CHI Target_Child
+@ID:	eng|test|MOT||female|||Mother|||
+@ID:	eng|test|CHI||male|||Target_Child|||
+*MOT:	I think [<0] so .
+*CHI:	yeah [>0] .
+@End

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="SPK"
+      role="Speaker"
+      language="eng"
+
+    />
+    <participant
+      id="LSN"
+      role="Adult"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Pauses: short (.), long (..), very long (...), timed (0.5); prosodic markers; trailing off (+...), interruption (+/.)</comment>
+  <comment type="Generic">Constructs: short_pause, long_pause, very_long_pause, timed_pause, trailing_off, interruption</comment>
+  <u who="SPK" uID="u0">
+    <w>well</w>
+    <pause symbolic-length="simple"></pause>
+    <w>I</w>
+    <w>think</w>
+    <w>so</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u1">
+    <w>and</w>
+    <w>then</w>
+    <pause symbolic-length="long"></pause>
+    <w>she</w>
+    <w>left</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u2">
+    <w>he</w>
+    <w>said</w>
+    <pause symbolic-length="very long"></pause>
+    <w>nothing</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u3">
+    <w>I</w>
+    <w>was</w>
+    <pause symbolic-length="simple" length="0.5"></pause>
+    <w>wondering</w>
+    <w>about</w>
+    <w>that</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u4">
+    <w>so</w>
+    <w>I</w>
+    <w>went</w>
+    <w>to</w>
+    <w>the</w>
+    <t type="trail off"></t>
+
+  </u>
+  <u who="LSN" uID="u5">
+    <w>what</w>
+    <w>did</w>
+    <w>you</w>
+    <t type="interruption"></t>
+
+  </u>
+  <u who="SPK" uID="u6">
+    <w>I</w>
+    <w>went</w>
+    <w>to</w>
+    <w>the</w>
+    <w>store</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="SPK" uID="u7">
+    <w>and</w>
+    <w>then</w>
+    <pause symbolic-length="simple" length="2.3"></pause>
+    <w>I</w>
+    <w>came</w>
+    <w>back</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="LSN" uID="u8">
+    <w>that</w>
+    <w>is</w>
+    <pause symbolic-length="simple" length="62.5"></pause>
+    <w>a</w>
+    <w>long</w>
+    <w>pause</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

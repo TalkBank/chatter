@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Recording Quality:	4
+@Room Layout:	mother and child seated at table, toys on floor
+@Tape Location:	tape 3, side A, counter 145
+@Comment:	Recording environment headers
+@Comment:	Constructs: recording_quality_header, recording_quality_option,
+	room_layout_header, tape_location_header
+*CHI:	where did the ball go ?
+*MOT:	it rolled under the table .
+@End

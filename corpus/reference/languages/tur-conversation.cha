@@ -1,0 +1,23 @@
+@UTF8
+@Begin
+@Languages:	tur
+@Participants:	CHI ME Target_Child
+@ID:	tur|corpus|CHI|9;11.||||Target_Child|||
+@Comment:	Turkish child frog story narrative
+@Comment:	Constructs: Turkish language coverage, Latin script
+*CHI:	cocuk bir kurbaga yakaliyor .
+%mor:	noun|cocuk-Nom det|bir-Def noun|kurbaga-Nom verb|yakal-Inf-Prog-Ind-Pres-Pos-Infm-S3 .
+%gra:	1|4|NSUBJ 2|3|DET 3|4|OBJ 4|0|ROOT 5|4|PUNCT
+*CHI:	kurbaga kaciyor .
+%mor:	noun|kurbaga-Nom verb|kac-Inf-Prog-Ind-Pres-Pos-Infm-S3 .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|PUNCT
+*CHI:	cocuk sabah kalkinca .
+%mor:	noun|cocuk-Nom noun|sabah-Nom adv|kalkinca .
+%gra:	1|3|NSUBJ 2|3|NMOD 3|0|ROOT 4|3|PUNCT
+*CHI:	cesitli hayvanlari kurbaga zannediyor .
+%mor:	adj|cesitli-S1 noun|hayvan-Plur-Acc noun|kurbaga-Nom verb|zannet-Inf-Prog-Ind-Pres-Pos-Infm-S3 .
+%gra:	1|2|AMOD 2|4|OBJ 3|4|OBJ 4|0|ROOT 5|4|PUNCT
+*CHI:	suda kurbagayi buluyor .
+%mor:	noun|su-Loc noun|kurbaga-Acc verb|bul-Inf-Prog-Ind-Pres-Pos-Infm-S3 .
+%gra:	1|3|OBL 2|3|OBJ 3|0|ROOT 4|3|PUNCT
+@End

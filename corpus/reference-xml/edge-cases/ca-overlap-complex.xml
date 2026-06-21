@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Options="CA"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+    <participant
+      id="FAT"
+      role="Father"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Complex overlap markers: indexed overlaps, multiple overlap pairs, three-speaker overlaps</comment>
+  <comment type="Generic">Constructs: overlap_point, indexed overlaps, multi-speaker overlap</comment>
+  <u who="CHI" uID="u0">
+    <w>I</w>
+    <w>want</w>
+    <overlap-point start-end="start" top-bottom="top"/>
+    <w>cookie</w>
+    <overlap-point start-end="end" top-bottom="top"/>
+    <w>please</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <overlap-point start-end="start" top-bottom="bottom"/>
+    <w>no</w>
+    <overlap-point start-end="end" top-bottom="bottom"/>
+    <w>you</w>
+    <w>cannot</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>but</w>
+    <overlap-point start-end="start" top-bottom="top" index="2"/>
+    <w>I</w>
+    <overlap-point start-end="end" top-bottom="top" index="2"/>
+    <w>really</w>
+    <w>want</w>
+    <w>one</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u3">
+    <overlap-point start-end="start" top-bottom="bottom" index="2"/>
+    <w>no</w>
+    <overlap-point start-end="end" top-bottom="bottom" index="2"/>
+    <t type="p"></t>
+
+  </u>
+  <u who="FAT" uID="u4">
+    <w>let</w>
+    <w>him</w>
+    <overlap-point start-end="start" top-bottom="top"/>
+    <w>have</w>
+    <overlap-point start-end="end" top-bottom="top"/>
+    <w>just</w>
+    <w>one</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u5">
+    <overlap-point start-end="start" top-bottom="bottom"/>
+    <w>no</w>
+    <overlap-point start-end="end" top-bottom="bottom"/>
+    <w>way</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u6">
+    <overlap-point start-end="start" top-bottom="top"/>
+    <w>plea<p type="drawl"/>se</w>
+    <overlap-point start-end="end" top-bottom="top"/>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u7">
+    <overlap-point start-end="start" top-bottom="bottom"/>
+    <w>no</w>
+    <overlap-point start-end="end" top-bottom="bottom"/>
+    <t type="p"></t>
+
+  </u>
+  <u who="FAT" uID="u8">
+    <overlap-point start-end="start" top-bottom="top"/>
+    <w>come</w>
+    <overlap-point start-end="end" top-bottom="top"/>
+    <w>on</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u9">
+    <overlap-point start-end="start" top-bottom="bottom"/>
+    <w>fine</w>
+    <overlap-point start-end="end" top-bottom="bottom"/>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

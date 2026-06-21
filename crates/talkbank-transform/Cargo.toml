@@ -1,0 +1,54 @@
+[package]
+name = "talkbank-transform"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "TalkBank CHAT transform and conversion pipelines"
+readme = "README.md"
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+crossbeam-channel = { workspace = true }
+jsonschema = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+num_cpus = { workspace = true }
+quick-xml = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smallvec = { workspace = true }
+smol_str = { workspace = true }
+talkbank-cache = { workspace = true }
+talkbank-model = { workspace = true }
+talkbank-parser = { workspace = true }
+talkbank-parser-re2c = { workspace = true }
+thiserror = { workspace = true } #unified
+toml = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
+insta = { workspace = true }
+# Enables `ChatCleanedText::test_unchecked` for test fixture
+# construction. Production builds of this crate cannot reach the
+# escape hatch.
+talkbank-model = { workspace = true, features = ["test-utils"] }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+# Panic-site audit completed 2026-04-29 (see
+# `docs/panic-audit/talkbank-transform.md`).
+[lints.clippy]
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+unreachable   = "deny"
+todo          = "deny"
+unimplemented = "deny"

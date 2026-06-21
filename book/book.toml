@@ -1,0 +1,21 @@
+[book]
+title = "Chatter: TalkBank CHAT Toolchain"
+authors = ["TalkBank Contributors"]
+description = "User, developer, and architecture documentation for chatter: the CHAT format authority, validator, transformer, and LSP."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "build"
+create-missing = false
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+
+[output.html]
+git-repository-url = "https://github.com/TalkBank/chatter"
+edit-url-template = "https://github.com/TalkBank/chatter/edit/main/book/{path}"
+# Served from https://talkbank.github.io/chatter/ once Pages is enabled at the
+# public cutover; site-url makes absolute in-book links resolve under the subpath.
+site-url = "/chatter/"

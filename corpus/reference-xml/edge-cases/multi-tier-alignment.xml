@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Utterance with many dependent tiers: %mor, %gra, %pho, %com, %act, %cod, %gpx, %add</comment>
+  <comment type="Generic">Constructs: multi-tier alignment across all tier types</comment>
+  <u who="CHI" uID="u0">
+    <w>Mommy<mor type="mor"><mw><pos><c>propn</c></pos><stem>Mommy</stem></mw><gra type="gra" index="1" head="2" relation="VOC"/></mor><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>m</base></ph><ph><base>ɑ</base></ph><ph><base>m</base></ph><ph><base>i</base></ph></pw></pho></w>
+    <w>look<mor type="mor"><mw><pos><c>verb</c></pos><stem>look</stem></mw><gra type="gra" index="2" head="0" relation="ROOT"/></mor><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>l</base></ph><ph><base>ʊ</base></ph><ph><base>k</base></ph></pw></pho></w>
+    <w>at<mor type="mor"><mw><pos><c>prep</c></pos><stem>at</stem></mw><gra type="gra" index="3" head="2" relation="JCT"/></mor><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>ʌ</base></ph><ph><base>t</base></ph></pw></pho></w>
+    <w>me<mor type="mor"><mw><pos><c>pron</c></pos><stem>me</stem></mw><gra type="gra" index="4" head="3" relation="POBJ"/></mor><pho xmlns="http://www.talkbank.org/ns/talkbank"><pw><ph><base>m</base></ph><ph><base>i</base></ph></pw></pho></w>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="5" head="2" relation="PUNCT"/></mor></t>
+
+    <a type="comments">CHI is excited and jumping</a>
+    <a type="actions">jumping up and down</a>
+    <a type="gesture">waving arms wildly</a>
+    <a type="addressee">MOT</a>
+    <a type="coding">$IMP $V</a>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>okay<mor type="mor"><mw><pos><c>co</c></pos><stem>okay</stem></mw><gra type="gra" index="1" head="3" relation="COM"/></mor></w>
+    <w>I<mor type="mor"><mw><pos><c>pron</c></pos><stem>I</stem></mw><gra type="gra" index="2" head="3" relation="SUBJ"/></mor></w>
+    <w>see<mor type="mor"><mw><pos><c>verb</c></pos><stem>see</stem></mw><gra type="gra" index="3" head="0" relation="ROOT"/></mor></w>
+    <w>you<mor type="mor"><mw><pos><c>pron</c></pos><stem>you</stem></mw><gra type="gra" index="4" head="3" relation="OBJ"/></mor></w>
+    <t type="p"><mor type="mor"><mt type="p"/><gra type="gra" index="5" head="3" relation="PUNCT"/></mor></t>
+
+    <a type="comments">MOT is smiling</a>
+  </u>
+</CHAT>

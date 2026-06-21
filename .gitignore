@@ -1,0 +1,46 @@
+# Rust build artifacts
+/target/
+**/target/
+**/*.rs.bk
+
+# Cargo lockfile is committed for reproducible builds (this is a workspace
+# with binary targets in later sessions).
+
+# Editor / IDE state
+/.idea/
+/.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Tree-sitter / grammar dev artifacts that regenerate
+/grammar/node_modules/
+/grammar/build/
+/grammar/.venv/
+/grammar/__pycache__/
+/grammar/*.so
+
+# Test snapshots that should not be committed
+**/*.snap.new
+**/*.pending-snap
+
+# CLAN / analysis-program side-effect output files. These programs write a
+# fixed-name report or spreadsheet into whatever directory they run in (CLAN's
+# CHECK drops `00errors.cex`; EVAL and friends drop `*.evald.xls`; FREQ
+# `+d2`/`+d3`/`+d20` drop `stat.frq*.xls`, and `+dCN` (percent-of-speakers)
+# drops `words.frq*.xls`). They are regenerated artifacts,
+# never source, and must never be committed (four were accidentally swept into
+# corpus/reference/ by the foundational import). The committed spreadsheet
+# parity goldens are `.clan.txt`, so this pattern never matches them.
+**/00errors.cex
+**/*.evald.xls
+**/stat.frq*.xls
+**/words.frq*.xls
+
+# Logs and temporary scratch
+*.log
+/scratch/
+/.tooling/
+
+# mdBook build output
+/book/build/

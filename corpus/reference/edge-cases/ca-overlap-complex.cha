@@ -1,0 +1,22 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, FAT Father
+@Options:	CA
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|FAT|||||Father|||
+@Comment:	Complex overlap markers: indexed overlaps, multiple overlap pairs,
+	three-speaker overlaps
+@Comment:	Constructs: overlap_point, indexed overlaps, multi-speaker overlap
+*CHI:	I want ⌈ cookie ⌉ please .
+*MOT:	⌊ no ⌋ you cannot .
+*CHI:	but ⌈2 I ⌉2 really want one .
+*MOT:	⌊2 no ⌋2 .
+*FAT:	let him ⌈ have ⌉ just one .
+*MOT:	⌊ no ⌋ way .
+*CHI:	⌈ plea:se ⌉ .
+*MOT:	⌊ no ⌋ .
+*FAT:	⌈ come ⌉ on .
+*MOT:	⌊ fine ⌋ .
+@End

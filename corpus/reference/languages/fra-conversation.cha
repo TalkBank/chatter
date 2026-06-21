@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	fra
+@Participants:	CHI Target_Child, CHR Investigator
+@ID:	fra|corpus|CHI|1;09.06||||Target_Child|||
+@ID:	fra|corpus|CHR|||||Investigator|||
+@Comment:	French early child language acquisition data
+@Comment:	Constructs: French language coverage, Latin script
+*CHI:	merci !
+%mor:	intj|merci !
+%gra:	1|0|ROOT 2|1|PUNCT
+*CHI:	s'il te plaît .
+%mor:	intj|sil pron|toi-Prs-S2 verb|plaire-Fin-Ind-Pres-S2 .
+%gra:	1|3|DISCOURSE 2|3|OBJ 3|0|ROOT 4|3|PUNCT
+*CHI:	la soupe manger veut pas Grégoire .
+%mor:	det|le-Fem-Def-Art-Sing noun|soupe-Fem verb|manger-Inf-S verb|vouloir-Fin-Ind-Pres-S3 adv|pas propn|Grégoire-Acc .
+%gra:	1|2|DET 2|4|NSUBJ 3|2|ACL 4|0|ROOT 5|4|ADVMOD 6|4|OBJ 7|4|PUNCT
+*CHI:	chaussures Victor .
+%mor:	noun|chaussure-Fem-Plur propn|Victor .
+%gra:	1|0|ROOT 2|1|APPOS 3|1|PUNCT
+*CHR:	grégoire , ou est le jouet ?
+%mor:	noun|grégoire-Masc cm|cm cconj|ou aux|être-Fin-Ind-Pres-S3 det|le-Masc-Def-Art-Sing noun|jouet-Masc ?
+%gra:	1|6|DISLOCATED 2|6|PUNCT 3|6|CC 4|6|COP 5|6|DET 6|0|ROOT 7|6|PUNCT
+@End

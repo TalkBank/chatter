@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	deu
+@Participants:	CHI Caroline Target_Child, MOT Katharina Mother
+@ID:	deu|corpus|CHI|1;03.01||||Target_Child|||
+@ID:	deu|corpus|MOT||female|||Mother|||
+@Comment:	German mother-child interaction with picture book
+@Comment:	Constructs: German language coverage, Latin script with umlauts
+*MOT:	was isn da Caroline (.) .
+%mor:	pron|was-Int,Rel-Nom-S1 verb|isnen-Fin-Ind-Pres-S2 adv|da propn|Caroline-Fem-Nom .
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|ADVMOD 4|2|OBJ 5|2|PUNCT
+*CHI:	öh .
+%mor:	x|öh .
+%gra:	1|0|ROOT 2|1|PUNCT
+*MOT:	ja das ist die Eisenbahn (.) und da (.) bimmel limmel lim (1.) .
+%mor:	adv|ja pron|der-Dem,Rel-Nom-S1 aux|sein-Fin-Ind-Pres-S3 det|der-Fem-Def-Art-Sing noun|Eisenbahn-Fem-Nom cconj|und adv|da adj|bimmeln-S1 adj|limmel-S1 propn|lim-Masc-Nom .
+%gra:	1|2|ADVMOD 2|5|NSUBJ 3|5|COP 4|5|DET 5|0|ROOT 6|9|CC 7|9|ADVMOD 8|9|ADVMOD 9|5|CONJ 10|9|COP 11|5|PUNCT
+*CHI:	äh ja (.) ba ma (.) ja (2.) sa (1.) .
+%mor:	x|äh x|ja x|ba x|ma x|ja x|sa .
+%gra:	1|0|ROOT 2|6|DEP 3|6|COMPOUND 4|6|COMPOUND 5|6|DEP 6|1|DEP 7|1|PUNCT
+*MOT:	und wer ist da (.) gleich danach hört man ein Rufen aus dem Brommelbärenschlag (.) vierzehn Hasen rufen heiter (.) Caroline guten Tag (15.) .
+%mor:	cconj|und pron|wer-Int,Rel-Nom-S1 aux|sein-Fin-Ind-Pres-S3 adv|da adv|gleich adv|danach verb|hören-Fin-Ind-Pres-S3 pron|man-Ind-Nom-S1 det|ein-Neut-Ind-Art-Sing noun|Ruf-Neut-Acc adp|aus det|der-Masc-Def-Art-Sing noun|Brommelbärenschlag-Masc-Dat num|vierzehn noun|Hase-Fem-Plur-Acc verb|rufen-Fin-Ind-Pres-P3 adj|heiter-S1 propn|Caroline-Fem-Acc adj|gut-Acc-S1 noun|Tag-Masc-Acc .
+%gra:	1|7|CC 2|7|NSUBJ 3|7|PARATAXIS 4|7|ADVMOD 5|6|ADVMOD 6|7|ADVMOD 7|0|ROOT 8|7|NSUBJ 9|10|DET 10|7|OBJ 11|13|CASE 12|13|DET 13|10|NMOD 14|15|NUMMOD 15|16|NSUBJ 16|7|CONJ 17|19|ADVMOD 18|19|NMOD 19|20|AMOD 20|16|OBJ 21|7|PUNCT
+@End

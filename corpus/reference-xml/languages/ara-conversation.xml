@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="ara" Corpus="corpus">
+  <Participants>
+    <participant id="MOT" role="Mother" language="ara" sex="female" name="mother"/>
+    <participant id="CHI" role="Target_Child" language="ara" age="P1Y10M" sex="male" name="Khaled"/>
+  </Participants>
+  <comment type="Generic">Kuwaiti Arabic mother-child interaction</comment>
+  <comment type="Generic">Constructs: Arabic language coverage, Arabic script</comment>
+  <u who="CHI" uID="u0">
+    <w>Qay<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>Qay</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>this<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>this</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>Qay<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>Qay</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>dada<mor type="mor">
+        <mw>
+          <pos>
+            <c>x</c>
+          </pos>
+          <stem>dada</stem>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>

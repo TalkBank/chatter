@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Prosodic features: lengthening (a:b), underline markers
+@Comment:	Constructs: lengthening colons, underline_begin, underline_end
+*CHI:	no:: I do:n't wa:nt to .
+*MOT:	ple:ase eat your dinner .
+*CHI:	we need  to do  something .
+@End

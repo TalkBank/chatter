@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Media="english-child-speech" Mediatypes="audio" Version="3.2.3" Lang="eng" Corpus="corpus" Date="1974-02-27">
+  <Participants>
+    <participant id="MOT" role="Mother" language="eng" sex="female"/>
+    <participant id="CHI" role="Target_Child" language="eng" age="P3Y00M07D" sex="female"/>
+  </Participants>
+  <comment type="Date">27-FEB-1974</comment>
+  <comment type="Generic">English mother-child speech with audio, %mor, %gra, %wor tiers</comment>
+  <comment type="Generic">Constructs: audio-linked file with word-level timing</comment>
+  <u who="MOT" uID="u0">
+    <w>let's<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>let</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>see<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>see</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>if<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>if</stem>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="MARK"/>
+      </mor>
+    </w>
+    <w>we<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>we</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">P1</mk>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>clean<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>clean</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">P1</mk>
+        </mw>
+        <gra type="gra" index="5" head="2" relation="CCOMP"/>
+      </mor>
+    </w>
+    <w>this<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>this</stem>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="6" head="5" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>if<mor type="mor">
+        <mw>
+          <pos>
+            <c>sconj</c>
+          </pos>
+          <stem>if</stem>
+        </mw>
+        <gra type="gra" index="7" head="9" relation="MARK"/>
+      </mor>
+    </w>
+    <w>it<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>it</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Nom</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>works<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>work</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="9" head="5" relation="ADVCL"/>
+      </mor>
+    </w>
+    <w>any<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>any</stem>
+        </mw>
+        <gra type="gra" index="10" head="11" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>better<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>good</stem>
+          <mk type="sfx">Cmp</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="11" head="9" relation="XCOMP"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="12" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="0.000" end="3.042" unit="s"/>
+    <wor>
+      <w>let's</w>
+      <internal-media start="0.000" end="0.240" unit="s"/>
+      <w>see</w>
+      <internal-media start="0.240" end="0.380" unit="s"/>
+      <w>if</w>
+      <internal-media start="0.380" end="0.500" unit="s"/>
+      <w>we</w>
+      <internal-media start="0.500" end="0.620" unit="s"/>
+      <w>clean</w>
+      <internal-media start="0.620" end="0.980" unit="s"/>
+      <w>this</w>
+      <internal-media start="0.980" end="1.260" unit="s"/>
+      <w>if</w>
+      <internal-media start="1.260" end="1.440" unit="s"/>
+      <w>it</w>
+      <internal-media start="1.440" end="1.560" unit="s"/>
+      <w>works</w>
+      <internal-media start="1.560" end="1.860" unit="s"/>
+      <w>any</w>
+      <internal-media start="1.860" end="2.140" unit="s"/>
+      <w>better</w>
+      <internal-media start="2.140" end="3.042" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+  <u who="MOT" uID="u1">
+    <w>just<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>just</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>say<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>say</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Imp</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>something<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>something</stem>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="4" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="3.117" end="4.092" unit="s"/>
+    <wor>
+      <w>just</w>
+      <internal-media start="3.117" end="3.360" unit="s"/>
+      <w>say</w>
+      <internal-media start="3.360" end="3.600" unit="s"/>
+      <w>something</w>
+      <internal-media start="3.600" end="4.092" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+  <u who="MOT" uID="u2">
+    <w>anything<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>anything</stem>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="2" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="4.092" end="4.533" unit="s"/>
+    <wor>
+      <w>anything</w>
+      <internal-media start="4.092" end="4.533" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+</CHAT>

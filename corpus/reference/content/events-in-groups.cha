@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, INV Investigator
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|INV|||||Investigator|||
+@Comment:	Events inside angle bracket groups with overlap annotations.
+@Comment:	Constructs: event inside group, event_segment boundary at >,
+	compound event with colon, event adjacent to overlap markers
+*CHI:	<&=laughs> [>] .
+*MOT:	<hello &=laughs> [<] .
+*INV:	<&=clears:throat> [>] .
+*CHI:	<go &=cries there> [//] go &=laughs here .
+*MOT:	<&=vocalizes> [<] .
+*CHI:	&=gasps .
+*CHI:	&=head:yes .
+*CHI:	&=clears:throat .
+@End

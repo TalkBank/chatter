@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Error markers, replacements, and explanations
+@Comment:	Constructs: error_marker_annotation, replacement, explanation_annotation,
+	alt_annotation, para_annotation, percent_annotation, exclude_marker, duration_annotation
+*CHI:	whenn [*] is it ?
+*MOT:	rocking+house [: rocking+horse] [*] ?
+*CHI:	when+ever [=! foo bar] [=? ah+er] will you go ?
+*CHI:	this is child [=! a+er b] speaking .
+*CHI:	this is child [= a+er b] speaking .
+*CHI:	this is child [: a+er b] speaking .
+*CHI:	this is child [% a+er b] speaking .
+*CHI:	this is [e] child speaking .
+@End

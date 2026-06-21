@@ -1,0 +1,24 @@
+@UTF8
+@Begin
+@Languages:	hrv
+@Participants:	CHI Target_Child, INV Investigator
+@ID:	hrv|corpus|CHI|9;06.|female|||Target_Child|||
+@ID:	hrv|corpus|INV|22;|female|||Investigator|||
+@Comment:	Croatian child story retelling
+@Comment:	Constructs: Croatian language coverage, Latin script with diacritics
+*CHI:	jedan pas je vidio miša .
+%mor:	num|jedan noun|pas-Masc-Nom aux|biti-Fin-Ind-Pres-S3 verb|vidjeti-Part-Past-S noun|miš-Masc-Acc .
+%gra:	1|2|NUMMOD 2|4|NSUBJ 3|4|AUX 4|0|ROOT 5|4|OBJ 6|4|PUNCT
+*CHI:	i: počeo ga je lovit(i) .
+%mor:	cconj|i verb|početi-Part-Past-S pron|on-Prs-Acc-S3 aux|biti-Fin-Ind-Pres-S3 verb|loviti-Inf-S .
+%gra:	1|2|CC 2|0|ROOT 3|2|OBJ 4|2|AUX 5|2|XCOMP 6|2|PUNCT
+*CHI:	i: onda je doš(a)o dječak iz dućana .
+%mor:	cconj|i adv|onda aux|biti-Fin-Ind-Pres-S3 verb|doći-Part-Past-S noun|dječak-Masc-Nom adp|iz noun|dućan-Masc-Gen .
+%gra:	1|4|CC 2|4|ADVMOD 3|4|AUX 4|0|ROOT 5|4|NSUBJ 6|7|CASE 7|5|NMOD 8|4|PUNCT
+*CHI:	a u drugoj ruci je imao kobasice u vreći .
+%mor:	cconj|a adp|u adj|drugi-Loc-S1 noun|ruka-Fem-Loc aux|biti-Fin-Ind-Pres-S3 verb|imati-Part-Past-S noun|kobasica-Fem-Plur-Acc adp|u noun|vreća-Fem-Loc .
+%gra:	1|6|CC 2|4|CASE 3|4|AMOD 4|6|OBL 5|6|AUX 6|0|ROOT 7|6|OBJ 8|9|CASE 9|7|NMOD 10|6|PUNCT
+*CHI:	i: pas je već pojeo pola kobasice .
+%mor:	cconj|i noun|pas-Masc-Nom aux|biti-Fin-Ind-Pres-S3 adv|već verb|pojeti-Part-Past-S det|pola-Def noun|kobasica-Fem-Gen .
+%gra:	1|5|CC 2|5|NSUBJ 3|5|AUX 4|5|ADVMOD 5|0|ROOT 6|7|DET-NUMGOV 7|5|OBJ 8|5|PUNCT
+@End

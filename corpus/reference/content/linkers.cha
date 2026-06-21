@@ -1,0 +1,31 @@
+@UTF8
+@Window:	258_1349_692_702_-1_-1_97_0_97_0
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, EXP Investigator
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|EXP|||||Investigator|||
+@Comment:	Utterance linkers: self-completion (+,), other-completion (++),
+	quick uptake (+^), lazy overlap (+<),
+	quotation precedes (+"), quotation follows (+"/)
+@Comment:	Constructs: linker_self_completion, linker_quick_uptake,
+	linker_quick_uptake_overlap, linker_lazy_overlap,
+	linker_quotation_follows, linkers
+*CHI:	so after the tower +/.
+*EXP:	yeah .
+*CHI:	+, I go straight ahead .
+*CHI:	and then she +...
+*MOT:	++ went to the store .
+*CHI:	the dog ran .
+*MOT:	+^ yes he did .
+*CHI:	so I went home .
+*MOT:	+< and then what .
+@Comment:	quotation precedes
+*CHI:	+" please give me all of your honey .
+*CHI:	the little bear said +".
+@Comment:	quotation follows
+*CHI:	and then the little bear said +"/.
+*CHI:	+" please give me all of your honey .
+*CHI:	+" if you do I will carry you on my back .
+@End

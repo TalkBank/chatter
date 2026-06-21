@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Prosodic features: lengthening (a:b), underline markers</comment>
+  <comment type="Generic">Constructs: lengthening colons, underline_begin, underline_end</comment>
+  <u who="CHI" uID="u0">
+    <w>no<p type="drawl"/><p type="drawl"/></w>
+    <w>I</w>
+    <w>do<p type="drawl"/>n't</w>
+    <w>wa<p type="drawl"/>nt</w>
+    <w>to</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u1">
+    <w>ple<p type="drawl"/>ase</w>
+    <w>eat</w>
+    <w>your</w>
+    <w>dinner</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <w>we</w>
+    <w>need</w>
+    <underline type="begin"/>
+    <w>to</w>
+    <w>do</w>
+    <underline type="end"/>
+    <w>something</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

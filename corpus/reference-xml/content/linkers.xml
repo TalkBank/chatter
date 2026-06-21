@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Window="258_1349_692_702_-1_-1_97_0_97_0"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+    <participant
+      id="EXP"
+      role="Investigator"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Utterance linkers: self-completion (+,), other-completion (++), quick uptake (+^), lazy overlap (+&lt;), quotation precedes (+"), quotation follows (+"/)</comment>
+  <comment type="Generic">Constructs: linker_self_completion, linker_quick_uptake, linker_quick_uptake_overlap, linker_lazy_overlap, linker_quotation_follows, linkers</comment>
+  <u who="CHI" uID="u0">
+    <w>so</w>
+    <w>after</w>
+    <w>the</w>
+    <w>tower</w>
+    <t type="interruption"></t>
+
+  </u>
+  <u who="EXP" uID="u1">
+    <w>yeah</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u2">
+    <linker type="self completion"/>
+    <w>I</w>
+    <w>go</w>
+    <w>straight</w>
+    <w>ahead</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <w>and</w>
+    <w>then</w>
+    <w>she</w>
+    <t type="trail off"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <linker type="other completion"/>
+    <w>went</w>
+    <w>to</w>
+    <w>the</w>
+    <w>store</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <w>the</w>
+    <w>dog</w>
+    <w>ran</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u6">
+    <linker type="quick uptake"/>
+    <w>yes</w>
+    <w>he</w>
+    <w>did</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u7">
+    <w>so</w>
+    <w>I</w>
+    <w>went</w>
+    <w>home</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u8">
+    <linker type="lazy overlap mark"/>
+    <w>and</w>
+    <w>then</w>
+    <w>what</w>
+    <t type="p"></t>
+
+  </u>
+  <comment type="Generic">quotation precedes</comment>
+  <u who="CHI" uID="u9">
+    <linker type="quoted utterance next"/>
+    <w>please</w>
+    <w>give</w>
+    <w>me</w>
+    <w>all</w>
+    <w>of</w>
+    <w>your</w>
+    <w>honey</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u10">
+    <w>the</w>
+    <w>little</w>
+    <w>bear</w>
+    <w>said</w>
+    <t type="quotation precedes"></t>
+
+  </u>
+  <comment type="Generic">quotation follows</comment>
+  <u who="CHI" uID="u11">
+    <w>and</w>
+    <w>then</w>
+    <w>the</w>
+    <w>little</w>
+    <w>bear</w>
+    <w>said</w>
+    <t type="quotation next line"></t>
+
+  </u>
+  <u who="CHI" uID="u12">
+    <linker type="quoted utterance next"/>
+    <w>please</w>
+    <w>give</w>
+    <w>me</w>
+    <w>all</w>
+    <w>of</w>
+    <w>your</w>
+    <w>honey</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="CHI" uID="u13">
+    <linker type="quoted utterance next"/>
+    <w>if</w>
+    <w>you</w>
+    <w>do</w>
+    <w>I</w>
+    <w>will</w>
+    <w>carry</w>
+    <w>you</w>
+    <w>on</w>
+    <w>my</w>
+    <w>back</w>
+    <t type="p"></t>
+
+  </u>
+</CHAT>

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns="http://www.talkbank.org/ns/talkbank"
+      xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd"
+      Version="3.2.3"
+      Lang="eng"
+      Corpus="corpus"
+      >
+  <Participants>
+    <participant
+      id="CHI"
+      role="Child"
+      language="eng"
+      age="P3Y00M"
+
+    />
+    <participant
+      id="MOT"
+      role="Mother"
+      language="eng"
+
+    />
+  </Participants>
+  <comment type="Generic">Question-variant terminators: interrupted question (+/?), self-interrupted question (+//?), trailing off question (+..?), broken question (+!?)</comment>
+  <comment type="Generic">Constructs: interrupted_question, self_interrupted_question, trailing_off_question, broken_question</comment>
+  <u who="MOT" uID="u0">
+    <w>what</w>
+    <w>kind</w>
+    <w>of</w>
+    <w>things</w>
+    <w>would</w>
+    <w>they</w>
+    <w>have</w>
+    <w>in</w>
+    <w>a</w>
+    <t type="interruption question"></t>
+
+  </u>
+  <u who="CHI" uID="u1">
+    <w>maybe</w>
+    <w>blocks</w>
+    <w>and</w>
+    <w>stuff</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u2">
+    <w>what</w>
+    <w>were</w>
+    <w>you</w>
+    <w>going</w>
+    <w>to</w>
+    <w>say</w>
+    <w>about</w>
+    <t type="self interruption question"></t>
+
+  </u>
+  <u who="CHI" uID="u3">
+    <w>I</w>
+    <w>forgot</w>
+    <t type="p"></t>
+
+  </u>
+  <u who="MOT" uID="u4">
+    <w>anything</w>
+    <w>you</w>
+    <w>have</w>
+    <w>to</w>
+    <w>do</w>
+    <w>to</w>
+    <w>belong</w>
+    <w>to</w>
+    <w>the</w>
+    <w>club</w>
+    <w>or</w>
+    <t type="trail off question"></t>
+
+  </u>
+  <u who="CHI" uID="u5">
+    <w>no</w>
+    <w>you</w>
+    <w>just</w>
+    <w>go</w>
+    <t type="e"></t>
+
+  </u>
+  <u who="MOT" uID="u6">
+    <w>but</w>
+    <w>what</w>
+    <w>if</w>
+    <w>they</w>
+    <t type="question exclamation"></t>
+
+  </u>
+</CHAT>

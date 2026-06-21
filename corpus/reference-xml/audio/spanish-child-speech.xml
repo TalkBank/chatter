@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Media="spanish-child-speech" Mediatypes="audio" Version="3.2.3" Lang="spa" Corpus="corpus">
+  <Participants>
+    <participant id="PAR1" role="Participant" language="spa"/>
+    <participant id="PAR0" role="Participant" language="spa"/>
+  </Participants>
+  <comment type="Generic">Spanish child speech with audio, %mor, %gra, %wor tiers</comment>
+  <comment type="Generic">Constructs: audio-linked file with word-level timing</comment>
+  <u who="PAR1" uID="u0">
+    <w>hola<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>holar</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="1" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>qué<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>qué</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>es<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>ser</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="COP"/>
+      </mor>
+    </w>
+    <w>este<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>este</stem>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="4" head="1" relation="CCOMP"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="5" head="1" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="3.990" end="7.734" unit="s"/>
+    <wor>
+      <w>hola</w>
+      <internal-media start="3.990" end="6.810" unit="s"/>
+      <w>qué</w>
+      <w>es</w>
+      <internal-media start="6.810" end="7.250" unit="s"/>
+      <w>este</w>
+      <internal-media start="7.250" end="7.734" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+  <u who="PAR1" uID="u1">
+    <w>qué<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>qué</stem>
+          <mk type="sfx">Int</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="1" head="3" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>es<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>ser</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="COP"/>
+      </mor>
+    </w>
+    <w>eso<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>ese</stem>
+          <mk type="sfx">Dem</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>Lucía<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>lucía</stem>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>ah<mor type="mor">
+        <mw>
+          <pos>
+            <c>propn</c>
+          </pos>
+          <stem>ah</stem>
+        </mw>
+        <gra type="gra" index="5" head="4" relation="FLAT"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="6" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+    <media start="9.257" end="11.539" unit="s"/>
+    <wor>
+      <w>qué</w>
+      <internal-media start="9.257" end="10.390" unit="s"/>
+      <w>es</w>
+      <internal-media start="10.390" end="10.570" unit="s"/>
+      <w>eso</w>
+      <internal-media start="10.570" end="10.790" unit="s"/>
+      <w>Lucía</w>
+      <internal-media start="10.790" end="11.150" unit="s"/>
+      <w>ah</w>
+      <internal-media start="11.150" end="11.539" unit="s"/>
+      <t type="p"/>
+    </wor>
+  </u>
+</CHAT>

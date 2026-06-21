@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CHAT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.talkbank.org/ns/talkbank" xsi:schemaLocation="http://www.talkbank.org/ns/talkbank https://talkbank.org/software/talkbank.xsd" Version="3.2.3" Lang="hrv" Corpus="corpus">
+  <Participants>
+    <participant id="CHI" role="Target_Child" language="hrv" age="P9Y06M" sex="female"/>
+    <participant id="INV" role="Investigator" language="hrv" age="P22Y" sex="female"/>
+  </Participants>
+  <comment type="Generic">Croatian child story retelling</comment>
+  <comment type="Generic">Constructs: Croatian language coverage, Latin script with diacritics</comment>
+  <u who="CHI" uID="u0">
+    <w>jedan<mor type="mor">
+        <mw>
+          <pos>
+            <c>num</c>
+          </pos>
+          <stem>jedan</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="NUMMOD"/>
+      </mor>
+    </w>
+    <w>pas<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>pas</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>je<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>biti</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="AUX"/>
+      </mor>
+    </w>
+    <w>vidio<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>vidjeti</stem>
+          <mk type="sfx">Part</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>miša<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>miš</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="5" head="4" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="6" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u1">
+    <w>i<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>i</stem>
+        </mw>
+        <gra type="gra" index="1" head="2" relation="CC"/>
+      </mor>
+    </w>
+    <w>počeo<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>početi</stem>
+          <mk type="sfx">Part</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="2" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>ga<mor type="mor">
+        <mw>
+          <pos>
+            <c>pron</c>
+          </pos>
+          <stem>on</stem>
+          <mk type="sfx">Prs</mk>
+          <mk type="sfx">Acc</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="2" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>je<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>biti</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="4" head="2" relation="AUX"/>
+      </mor>
+    </w>
+    <w>lovit<shortening>i</shortening>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>loviti</stem>
+          <mk type="sfx">Inf</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="5" head="2" relation="XCOMP"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="6" head="2" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u2">
+    <w>i<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>i</stem>
+        </mw>
+        <gra type="gra" index="1" head="4" relation="CC"/>
+      </mor>
+    </w>
+    <w>onda<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>onda</stem>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>je<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>biti</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="AUX"/>
+      </mor>
+    </w>
+    <w>doš<shortening>a</shortening>o<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>doći</stem>
+          <mk type="sfx">Part</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="4" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>dječak<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>dječak</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="5" head="4" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>iz<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>iz</stem>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="CASE"/>
+      </mor>
+    </w>
+    <w>dućana<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>dućan</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Gen</mk>
+        </mw>
+        <gra type="gra" index="7" head="5" relation="NMOD"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="8" head="4" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u3">
+    <w>a<mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>a</stem>
+        </mw>
+        <gra type="gra" index="1" head="6" relation="CC"/>
+      </mor>
+    </w>
+    <w>u<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>u</stem>
+        </mw>
+        <gra type="gra" index="2" head="4" relation="CASE"/>
+      </mor>
+    </w>
+    <w>drugoj<mor type="mor">
+        <mw>
+          <pos>
+            <c>adj</c>
+          </pos>
+          <stem>drugi</stem>
+          <mk type="sfx">Loc</mk>
+          <mk type="sfx">S1</mk>
+        </mw>
+        <gra type="gra" index="3" head="4" relation="AMOD"/>
+      </mor>
+    </w>
+    <w>ruci<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>ruka</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Loc</mk>
+        </mw>
+        <gra type="gra" index="4" head="6" relation="OBL"/>
+      </mor>
+    </w>
+    <w>je<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>biti</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="5" head="6" relation="AUX"/>
+      </mor>
+    </w>
+    <w>imao<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>imati</stem>
+          <mk type="sfx">Part</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="6" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>kobasice<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>kobasica</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Plur</mk>
+          <mk type="sfx">Acc</mk>
+        </mw>
+        <gra type="gra" index="7" head="6" relation="OBJ"/>
+      </mor>
+    </w>
+    <w>u<mor type="mor">
+        <mw>
+          <pos>
+            <c>adp</c>
+          </pos>
+          <stem>u</stem>
+        </mw>
+        <gra type="gra" index="8" head="9" relation="CASE"/>
+      </mor>
+    </w>
+    <w>vreći<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>vreća</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Loc</mk>
+        </mw>
+        <gra type="gra" index="9" head="7" relation="NMOD"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="10" head="6" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+  <u who="CHI" uID="u4">
+    <w>i<p type="drawl"/>
+      <mor type="mor">
+        <mw>
+          <pos>
+            <c>cconj</c>
+          </pos>
+          <stem>i</stem>
+        </mw>
+        <gra type="gra" index="1" head="5" relation="CC"/>
+      </mor>
+    </w>
+    <w>pas<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>pas</stem>
+          <mk type="sfx">Masc</mk>
+          <mk type="sfx">Nom</mk>
+        </mw>
+        <gra type="gra" index="2" head="5" relation="NSUBJ"/>
+      </mor>
+    </w>
+    <w>je<mor type="mor">
+        <mw>
+          <pos>
+            <c>aux</c>
+          </pos>
+          <stem>biti</stem>
+          <mk type="sfx">Fin</mk>
+          <mk type="sfx">Ind</mk>
+          <mk type="sfx">Pres</mk>
+          <mk type="sfx">S3</mk>
+        </mw>
+        <gra type="gra" index="3" head="5" relation="AUX"/>
+      </mor>
+    </w>
+    <w>već<mor type="mor">
+        <mw>
+          <pos>
+            <c>adv</c>
+          </pos>
+          <stem>već</stem>
+        </mw>
+        <gra type="gra" index="4" head="5" relation="ADVMOD"/>
+      </mor>
+    </w>
+    <w>pojeo<mor type="mor">
+        <mw>
+          <pos>
+            <c>verb</c>
+          </pos>
+          <stem>pojeti</stem>
+          <mk type="sfx">Part</mk>
+          <mk type="sfx">Past</mk>
+          <mk type="sfx">S</mk>
+        </mw>
+        <gra type="gra" index="5" head="0" relation="ROOT"/>
+      </mor>
+    </w>
+    <w>pola<mor type="mor">
+        <mw>
+          <pos>
+            <c>det</c>
+          </pos>
+          <stem>pola</stem>
+          <mk type="sfx">Def</mk>
+        </mw>
+        <gra type="gra" index="6" head="7" relation="DET-NUMGOV"/>
+      </mor>
+    </w>
+    <w>kobasice<mor type="mor">
+        <mw>
+          <pos>
+            <c>noun</c>
+          </pos>
+          <stem>kobasica</stem>
+          <mk type="sfx">Fem</mk>
+          <mk type="sfx">Gen</mk>
+        </mw>
+        <gra type="gra" index="7" head="5" relation="OBJ"/>
+      </mor>
+    </w>
+    <t type="p">
+      <mor type="mor">
+        <mt type="p"/>
+        <gra type="gra" index="8" head="5" relation="PUNCT"/>
+      </mor>
+    </t>
+  </u>
+</CHAT>
