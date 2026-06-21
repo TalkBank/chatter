@@ -246,10 +246,11 @@ jobs:
           exes=(target/release/bundle/nsis/*-setup.exe)
           EXE="${exes[0]}"
           echo "INSTALLER=$EXE" >> "$GITHUB_ENV"
-          # The NSIS updater bundle is a zip of the installer plus its signature.
-          zips=(target/release/bundle/nsis/*-setup.nsis.zip)
-          BUNDLE="${zips[0]}"
-          SIG="${BUNDLE}.sig"
+          # Tauri's NSIS updater artifact is the signed -setup.exe itself (with a
+          # .sig sidecar); this Tauri version produces no separate .nsis.zip, so
+          # the updater bundle is the installer .exe.
+          BUNDLE="$EXE"
+          SIG="${EXE}.sig"
           node apps/chatter-desktop/scripts/write-sidecar.mjs \
             "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "$RUNNER_TEMP/sidecar"
           echo "UPDATER_BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
@@ -286,7 +287,9 @@ jobs:
             fi
             sleep 30
           done
-          gh release upload "$GITHUB_REF_NAME" "$INSTALLER" "$UPDATER_BUNDLE" "$UPDATER_SIG" \
+          # UPDATER_BUNDLE is the same -setup.exe as INSTALLER, so upload the
+          # installer once plus its updater .sig.
+          gh release upload "$GITHUB_REF_NAME" "$INSTALLER" "$UPDATER_SIG" \
             --repo "$GITHUB_REPOSITORY" --clobber
 
   linux:
