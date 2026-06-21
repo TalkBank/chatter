@@ -251,12 +251,15 @@ jobs:
           # the updater bundle is the installer .exe.
           BUNDLE="$EXE"
           SIG="${EXE}.sig"
-          # Write the sidecar to a workspace-relative, forward-slash dir. On
-          # Windows $RUNNER_TEMP is a backslash path (D:\a\_temp), and a
-          # backslash glob in upload-artifact is read as escape sequences, so the
-          # upload finds no files. A relative "sidecar" dir avoids that.
+          # $RUNNER_TEMP is a backslash path on Windows (D:\a\_temp). Forward-
+          # slash it and use that absolute dir for both the write and the upload
+          # glob: a backslash in an upload-artifact glob is read as an escape, and
+          # a relative dir did not resolve against the workspace as expected.
+          SIDECAR_DIR="${RUNNER_TEMP//\\//}/sidecar"
           node apps/chatter-desktop/scripts/write-sidecar.mjs \
-            "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "sidecar"
+            "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "$SIDECAR_DIR"
+          echo "sidecar dir after write:"; ls -la "$SIDECAR_DIR" || echo "MISSING $SIDECAR_DIR"
+          echo "SIDECAR_GLOB=${SIDECAR_DIR}/*.json" >> "$GITHUB_ENV"
           echo "UPDATER_BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
           echo "UPDATER_SIG=$SIG" >> "$GITHUB_ENV"
 
@@ -271,7 +274,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: updater-sidecar-windows-x86_64
-          path: sidecar/*.json
+          path: ${{ env.SIDECAR_GLOB }}
           if-no-files-found: error
 
       - name: Upload installer and updater bundle to the GitHub Release
