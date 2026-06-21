@@ -8,6 +8,12 @@ members = ["cargo:."]
 # any per-crate config that depends on newer dist features.
 cargo-dist-version = "0.32.0"
 
+# Build each dist-able package on its own (cargo build -p talkbank-cli), not the
+# whole workspace. Without this, cargo-dist's default workspace build also
+# compiles the chatter-desktop (Tauri) crate, which pulls glib-sys on Linux and
+# fails the static musl builds; the CLI itself has no GTK/glib dependency.
+precise-builds = true
+
 # Codesign the macOS CLI binaries with the Developer ID Application
 # certificate. The CODESIGN_* secrets (CODESIGN_CERTIFICATE,
 # CODESIGN_CERTIFICATE_PASSWORD, CODESIGN_IDENTITY) are supplied to the
