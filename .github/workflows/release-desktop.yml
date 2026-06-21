@@ -245,7 +245,6 @@ jobs:
           set -euo pipefail
           exes=(target/release/bundle/nsis/*-setup.exe)
           EXE="${exes[0]}"
-          echo "INSTALLER=$EXE" >> "$GITHUB_ENV"
           # Tauri's NSIS updater artifact is the signed -setup.exe itself (with a
           # .sig sidecar); this Tauri version produces no separate .nsis.zip, so
           # the updater bundle is the installer .exe.
@@ -259,9 +258,13 @@ jobs:
           node apps/chatter-desktop/scripts/write-sidecar.mjs \
             "x86_64-pc-windows-msvc" "$BUNDLE" "$SIG" "$SIDECAR_DIR"
           echo "sidecar dir after write:"; ls -la "$SIDECAR_DIR" || echo "MISSING $SIDECAR_DIR"
-          echo "SIDECAR_GLOB=${SIDECAR_DIR}/*.json" >> "$GITHUB_ENV"
-          echo "UPDATER_BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
-          echo "UPDATER_SIG=$SIG" >> "$GITHUB_ENV"
+          # Grouped redirect (shellcheck SC2129).
+          {
+            echo "INSTALLER=$EXE"
+            echo "SIDECAR_GLOB=${SIDECAR_DIR}/*.json"
+            echo "UPDATER_BUNDLE=$BUNDLE"
+            echo "UPDATER_SIG=$SIG"
+          } >> "$GITHUB_ENV"
 
       - name: Attach installer to the workflow run
         uses: actions/upload-artifact@v7
