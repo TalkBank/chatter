@@ -5,10 +5,10 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 ## Executive Summary
 
 - CHECK rules parsed: `153`
-- Overlap with TalkBank codes: `87`
-- CHECK rules missing direct TalkBank mapping: `66`
-- Semantic parity `full`: `87`
-- Behavioral parity `full`: `76`
+- Overlap with TalkBank codes: `88`
+- CHECK rules missing direct TalkBank mapping: `65`
+- Semantic parity `full`: `88`
+- Behavioral parity `full`: `77`
 - Intentional divergence (semantic full + behavioral partial due to CHECK anomalies): `11`
 - TalkBank enhancements beyond CHECK (no mapped CHECK rule): `106`
 
@@ -37,7 +37,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 10 | Tier text is longer than %ld. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 11 | Symbol is not declared in the depfile. | check.cpp (generated reference) | `E534` | full | full | equal | none | no action | P3 |
 | 12 | Missing speaker name and/or role. | check.cpp (generated reference) | `E304`, `E506`, `E513` | full | full | equal | none | no action | P3 |
-| 13 | Duplicate speaker declaration. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
+| 13 | Duplicate speaker declaration. | check.cpp (generated reference) | `E549` | full | full | equal | none | no action | P3 |
 | 14 | Spaces before tier code. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 15 | Illegal role. Please see "depfile.cut" for list of roles. | check.cpp (generated reference) | `E532` | full | full | equal | none | no action | P3 |
 | 17 | Tier is not declared in depfile file. | check.cpp (generated reference) | `E525`, `E605` | full | full | equal | none | no action | P3 |
@@ -186,7 +186,6 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `5`: Colon (:) character is illegal. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `9`: Tier name is longer than %d. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `10`: Tier text is longer than %ld. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `13`: Duplicate speaker declaration. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `14`: Spaces before tier code. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `19`: Illegal use of delimiter in a word. / Or a SPACE should be added after it. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `20`: Undeclared suffix in depfile. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
@@ -522,6 +521,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E546` | `UnsupportedSesValue` | 144 |
 | `E547` | `ConstantHeaderOutOfOrder` | 127 |
 | `E548` | `IdHeaderOutOfOrder` | 126 |
+| `E549` | `DuplicateSpeakerDeclaration` | 13 |
 | `E600` | `TierValidationError` | 87 |
 | `E601` | `InvalidDependentTier` | None |
 | `E602` | `MalformedTierHeader` | None |
@@ -595,7 +595,6 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `5` `Colon (:) character is illegal.` -> add rule (TalkBank looser; none parity)
 - CHECK `9` `Tier name is longer than %d.` -> add rule (TalkBank looser; none parity)
 - CHECK `10` `Tier text is longer than %ld.` -> add rule (TalkBank looser; none parity)
-- CHECK `13` `Duplicate speaker declaration.` -> add rule (TalkBank looser; none parity)
 - CHECK `14` `Spaces before tier code.` -> add rule (TalkBank looser; none parity)
 - CHECK `19` `Illegal use of delimiter in a word. / Or a SPACE should be added after it.` -> add rule (TalkBank looser; none parity)
 - CHECK `20` `Undeclared suffix in depfile.` -> add rule (TalkBank looser; none parity)

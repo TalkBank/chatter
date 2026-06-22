@@ -135,6 +135,9 @@ pub(crate) fn check_headers(
     // with no changeable header (e.g. @Comment) intervening.
     check_id_header_order(headers, errors);
 
+    // E549: No speaker code may be declared more than once in @Participants.
+    check_duplicate_participants(headers, errors);
+
     for (speaker, span) in &id_speakers {
         if !speaker.as_str().is_empty() && !declared_participants.contains(speaker) {
             let speaker_str = speaker.as_str();
@@ -304,6 +307,34 @@ fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
             }
         }
         prev = Some(header);
+    }
+}
+
+/// Check that no speaker code is declared more than once in `@Participants`
+/// (E549).
+///
+/// Corresponds to CLAN CHECK error 13 ("Duplicate speaker declaration").
+fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+    use std::collections::HashSet;
+    for (header, span) in headers {
+        if let Header::Participants { entries } = header {
+            let mut seen: HashSet<&str> = HashSet::new();
+            for entry in &entries.0 {
+                let code = entry.speaker_code.as_str();
+                if !seen.insert(code) {
+                    let mut err = ParseError::new(
+                        ErrorCode::DuplicateSpeakerDeclaration,
+                        Severity::Error,
+                        SourceLocation::at_offset(span.start as usize),
+                        ErrorContext::new(code, 0..code.len(), code),
+                        format!("Speaker '{code}' is declared more than once in @Participants"),
+                    )
+                    .with_suggestion("Declare each participant exactly once in @Participants");
+                    err.location.span = *span;
+                    errors.report(err);
+                }
+            }
+        }
     }
 }
 

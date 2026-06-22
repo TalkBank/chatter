@@ -139,6 +139,7 @@ pub fn check_error_number(code: &ErrorCode) -> u16 {
         ErrorCode::InvalidPostcode => 108, // Postcodes before bullet
         ErrorCode::SpeakerNotDefined => 18, // Speaker not in participants
         ErrorCode::UndeclaredSpeaker => 18,
+        ErrorCode::DuplicateSpeakerDeclaration => 13, // Speaker declared twice in @Participants
 
         // -- No direct mapping --
         _ => 0,

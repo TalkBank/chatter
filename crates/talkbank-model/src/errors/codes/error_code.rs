@@ -495,6 +495,11 @@ pub enum ErrorCode {
     /// CHECK error 126.
     #[code("E548")]
     IdHeaderOutOfOrder,
+    /// The same speaker code is declared more than once in the `@Participants`
+    /// header. Each participant must be declared exactly once. Corresponds to
+    /// CLAN CHECK error 13.
+    #[code("E549")]
+    DuplicateSpeakerDeclaration,
 
     // =========================================================================
     // Tier Errors (E6xx)

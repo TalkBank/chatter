@@ -43,9 +43,9 @@
       "check_code": 13,
       "check_message": "Duplicate speaker declaration.",
       "fixture": "CHECK_013_duplicate_speaker.cha",
-      "status": "gap",
-      "expected_chatter_codes": [],
-      "note": "Same speaker declared twice in @Participants. chatter currently accepts it; real validity gap to close (E-code TBD, then flip to parity)."
+      "status": "parity",
+      "expected_chatter_codes": ["E549"],
+      "note": "Same speaker declared twice in @Participants. chatter E549 DuplicateSpeakerDeclaration."
     },
     {
       "check_code": 100,

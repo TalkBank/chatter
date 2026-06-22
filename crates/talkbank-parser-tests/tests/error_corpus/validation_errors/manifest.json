@@ -1123,6 +1123,14 @@
       "source_spec": "spec/errors/E548_id_header_out_of_order.md"
     },
     {
+      "fixture": "E549_Duplicate_speaker_declaration.cha",
+      "expected_codes": [
+        "E549"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E549_duplicate_speaker_declaration.md"
+    },
+    {
       "fixture": "E600_Tier_alignment_skipped_due_to_parse_errors.cha",
       "expected_codes": [
         "E600"
