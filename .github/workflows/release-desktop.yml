@@ -51,8 +51,32 @@ env:
   DESKTOP_DIR: apps/chatter-desktop
 
 jobs:
+  # Fail closed BEFORE any expensive build if the desktop versions are not in
+  # sync. On a tag push the bundle version (tauri.conf.json) MUST equal the tag,
+  # because latest.json takes its version from the tag (UPDATER_VERSION, see the
+  # generate-latest-json step) while the bundle takes its from tauri.conf.json; a
+  # mismatch makes the updater advertise a version the installed app never
+  # reaches, i.e. a perpetual update loop. The first v0.1.1 desktop release
+  # shipped exactly that (bundle 0.1.0, manifest 0.1.1). On workflow_dispatch
+  # (build-only, no tag) just assert the committed files agree.
+  version-guard:
+    name: Versions in sync (and tag match)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert app versions are in sync (and match the tag on a tag push)
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            python3 scripts/sync-app-version.py --release-tag "$GITHUB_REF_NAME"
+          else
+            python3 scripts/sync-app-version.py --check
+          fi
+
   macos:
     name: macOS (${{ matrix.target }})
+    needs: version-guard
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -204,6 +228,7 @@ jobs:
 
   windows:
     name: Windows (x86_64, unsigned)
+    needs: version-guard
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -303,6 +328,7 @@ jobs:
 
   linux:
     name: Linux (x86_64)
+    needs: version-guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

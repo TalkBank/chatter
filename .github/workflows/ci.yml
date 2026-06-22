@@ -153,6 +153,22 @@ jobs:
       - name: Check Rust version pins
         run: python3 scripts/sync-rust-versions.py --check
 
+  app-version-sync:
+    name: App version in sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      # Cheap guard (pure Python, no build): the app version must match across the
+      # canonical [workspace.package] version, tauri.conf.json, package.json, and a
+      # CHANGELOG entry. Bumping the version is then: edit Cargo.toml, run
+      # `just app-sync`, add a CHANGELOG entry; this job enforces no file was
+      # missed. Prevents the desktop bundle-vs-updater version drift that broke the
+      # first v0.1.1 desktop release.
+      - name: Check app version sync
+        run: python3 scripts/sync-app-version.py --check
+
   shellcheck:
     name: Shell scripts (shellcheck, strictest)
     runs-on: ubuntu-latest
