@@ -44,3 +44,6 @@
 
 # mdBook build output
 /book/build/
+
+# Python bytecode cache
+__pycache__/

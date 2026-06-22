@@ -96,6 +96,15 @@ rust-sync:
 rust-sync-check:
     python3 scripts/sync-rust-versions.py --check
 
+# Sync the app version (tauri.conf.json, package.json) to the canonical
+# [workspace.package] version in Cargo.toml. Run after bumping the version.
+app-sync:
+    python3 scripts/sync-app-version.py --fix
+
+# Verify the app version is in sync everywhere (CI-style; non-mutating).
+app-sync-check:
+    python3 scripts/sync-app-version.py --check
+
 # Lint GitHub Actions workflows locally (catches expression/action-input/shell
 # errors WITHOUT pushing). Config in .github/actionlint.yaml. The default run
 # is clean; if it reports something, fix it (do not suppress).
@@ -111,6 +120,7 @@ push *ARGS:
     just fmt-check
     just actionlint
     just rust-sync-check
+    just app-sync-check
     just clippy
     git push {{ARGS}}
 
