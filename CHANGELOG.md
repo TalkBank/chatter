@@ -24,6 +24,12 @@ version and are listed under "Changed" / "Removed".
 - CLI usage lines pin the binary name to `chatter` regardless of the invoked
   path (clap `bin_name`).
 - The book renders Mermaid diagrams again (restored mdbook-mermaid assets).
+- **Desktop app version is now locked to the release version.** The desktop
+  bundle (`.dmg` / `.exe` / `.deb`) and the Tauri auto-updater manifest now report
+  the same version as the CLI. A version-sync gate (`scripts/sync-app-version.py`,
+  enforced in CI and at release time) keeps `tauri.conf.json`, `package.json`, the
+  workspace version, and this changelog from drifting, so the updater can never
+  again advertise a version the installed bundle does not match.
 
 ### Changed
 
