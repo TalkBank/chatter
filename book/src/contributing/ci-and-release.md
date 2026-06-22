@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-06-15 15:10 EDT
+**Last updated:** 2026-06-21 21:33 EDT
 
 ## Pre-Merge Verification
 
@@ -32,9 +32,9 @@ source-of-truth guidance.
 
 ## Release Process
 
-This repository already contains release-oriented automation, but it is still a
-**staging repo**. Do not describe `TalkBank/chatter` as the live public release
-source of truth until the cutover from the predecessor repo actually happens.
+`TalkBank/chatter` is the public release source of truth: `release.yml`
+(cargo-dist) publishes the signed GitHub Releases for the CLI and the desktop
+app.
 
 ### Workflows that actually exist in this repo
 
@@ -55,8 +55,6 @@ source of truth until the cutover from the predecessor repo actually happens.
   [Crates.io Publication](crates-io-publication.md) and is checked by
   `just crates-io-foundation-check` plus
   `.github/workflows/crates-io-foundation.yml`.
-- Release docs must stay honest about this repo's staging status until the
-  release-source cutover is complete.
 
 ### Desktop release workflow: how the two tag workflows compose
 

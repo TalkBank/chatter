@@ -1,7 +1,7 @@
 # GitHub Readiness and Open Source Governance
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 ## Objective
 Prepare `TalkBank/chatter` to operate as a healthy public project with clear legal, security,
@@ -33,9 +33,8 @@ contribution, and release processes.
 
 ## Release Governance
 
-- Support/stability contract: documented in
-  [Support and Stability Tiers](support-tiers.md). No surface in this repo is
-  currently stable; the repo is still in the staging phase.
+- Releases: the CLI and desktop app are published as signed GitHub Releases
+  (cargo-dist); the Rust crates are source-available (not yet on crates.io).
 - Cargo publication governance: first-wave crates.io foundations are documented
   in [Crates.io Publication](crates-io-publication.md) and checked by
   `.github/workflows/crates-io-foundation.yml`.
@@ -45,7 +44,7 @@ contribution, and release processes.
 - Tagging rule: do not treat version tags as authorization to publish new
   surfaces. A surface becomes stable only when its release notes explicitly say
   so and its public distribution channel is live.
-- Release-note rule: every public release note must state the surface's tier,
+- Release-note rule: every public release note must state the surface's
   distribution channel, support boundary, and any closely related surfaces that
   remain held back.
 

@@ -1,27 +1,28 @@
 # Introduction
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 [TalkBank](https://talkbank.org/) is the world's largest open repository of spoken language data. This repository (`TalkBank/chatter`) is the standalone home of the CHAT format authority and the `chatter` tool family: the `chatter` CLI, the Rust crates for parsing/validation/transformation, the `tree-sitter-talkbank` grammar, the `talkbank-lsp` language server, and the desktop validation app.
 
-**Current repo status:** private pre-release staging repo. This repository is not yet the public source of truth for GitHub Releases or crates.io. Until the cutover is complete, treat this book as describing the architecture and intended public surfaces of `chatter`, while the artifacts in this repo remain source-build/pre-release only.
+`chatter` is publicly released. To get it right away:
 
-The authoritative support-tier policy lives in
-[Support and Stability Tiers](contributing/support-tiers.md). Right now, **no
-surface is stable** from this repo yet.
+- **Command-line tool** (macOS / Linux): `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/talkbank-cli-installer.sh | sh` (Windows and other options: [Install](install/index.md)).
+- **Desktop app**: download for your platform from the [latest release](https://github.com/TalkBank/chatter/releases/latest).
+- **Full installation guide** (all platforms, package details): [Install](install/index.md).
+
+The Rust crates are source-available from this repository (not yet published to
+crates.io). As a 0.x release, APIs and flags may change before 1.0.
 
 ## Choose the right surface
 
-| Task | Recommended Surface | Support Status |
-|---|---|---|
-| **CHAT validation, normalization, or conversion** | `chatter` CLI | 🔷 Preview target; still source-built / held back in this repo |
-| **LSP integration in editors** | `talkbank-lsp` standalone | 🔷 Preview target; install/distribution story still incomplete |
-| **Build CHAT tooling in Rust** | Rust crates (`talkbank-model`, `talkbank-parser`, etc.) | 🔷 Preview targets; first-wave foundations not yet published from this repo |
-| **Reuse grammar in other tools** | `tree-sitter-talkbank` | 🔷 Preview target; first-wave crates.io foundation candidate |
-| **Standalone desktop GUI for CHAT validation** | Chatter Desktop (`apps/chatter-desktop/`) | 🔷 Preview target; ships in the coordinated release with the CLI |
-
-**Legend:** 🔷 = Pre-release / preview candidate
+| Task | Recommended Surface |
+|---|---|
+| **CHAT validation, normalization, or conversion** | `chatter` CLI |
+| **LSP integration in editors** | `talkbank-lsp` standalone |
+| **Build CHAT tooling in Rust** | Rust crates (`talkbank-model`, `talkbank-parser`, etc.) |
+| **Reuse grammar in other tools** | `tree-sitter-talkbank` |
+| **Standalone desktop GUI for CHAT validation** | Chatter Desktop (`apps/chatter-desktop/`) |
 
 ## What's In This Repo
 
@@ -37,7 +38,7 @@ surface is stable** from this repo yet.
 | **CLI users** validating, normalizing, or converting CHAT | [Install](install/index.md) | [chatter Quick Start](chatter/user-guide/quick-start.md), [CLI Reference](chatter/user-guide/cli-reference.md) |
 | **Rust library consumers** parsing or transforming CHAT | [Library Usage](chatter/integrating/library-usage.md) | crate-root rustdoc for `talkbank-model`, `talkbank-parser`, and `talkbank-transform` |
 | **Grammar / format consumers** embedding CHAT parsing in other tools | [CHAT Format Overview](chat-format/overview.md) | `tree-sitter-talkbank` docs and the grammar/reference chapters |
-| **Contributors / maintainers** working in this staging repo | [Contributing setup](contributing/setup.md) | [Support tiers](contributing/support-tiers.md), [CI and release](contributing/ci-and-release.md) |
+| **Contributors / maintainers** working in this repo | [Contributing setup](contributing/setup.md) | [CI and release](contributing/ci-and-release.md) |
 
 ## Repository Layout
 

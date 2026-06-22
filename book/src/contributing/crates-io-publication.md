@@ -1,13 +1,13 @@
 # Crates.io Publication
 
 **Status:** Current
-**Last updated:** 2026-06-15 15:00 EDT
+**Last updated:** 2026-06-21 21:33 EDT
 
 ## Scope
 
 The crates.io automation in this repo currently targets the **Wave 1A foundation
-crates only**. This repo is still a staging repo, so crates.io publication is a
-deliberate maintainer action, not a tag-triggered release path.
+crates only**. crates.io publication is a deliberate maintainer action, not a
+tag-triggered release path.
 
 Wave 1A is:
 
@@ -102,5 +102,5 @@ cargo publish -p tree-sitter-talkbank --locked
 
 Do **not** use version tags to drive crates.io publication from this repo.
 `.github/workflows/release.yml` is reserved for cargo-dist GitHub Releases of
-dist-enabled artifacts. Crates.io publication remains a manual maintainer flow
-until the repo cutover and the broader release program are ready.
+dist-enabled artifacts. Crates.io publication remains a deliberate manual
+maintainer flow.

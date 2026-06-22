@@ -83,7 +83,6 @@
 - [Testing](contributing/testing.md)
 - [Coding Standards](contributing/coding-standards.md)
 - [Coding Standards (Extended)](contributing/coding-standards-extended.md)
-- [Support and Stability Tiers](contributing/support-tiers.md)
 - [CI and Release](contributing/ci-and-release.md)
 - [Crates.io Publication](contributing/crates-io-publication.md)
 - [Quality Gates](contributing/quality-gates.md)

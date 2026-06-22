@@ -1,7 +1,7 @@
 # Library Usage
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 The TalkBank Rust crates can be used as dependencies in your own Rust
 projects for parsing, validating, and manipulating CHAT files. This page
@@ -27,9 +27,10 @@ synthetic wrappers as the oracle.
 
 ## Adding Dependencies
 
-The TalkBank library crates are currently a **source-first pre-release**
-surface in this repository. They are not yet published on crates.io, so
-use local path dependencies from a `TalkBank/chatter` checkout today:
+The TalkBank library crates are source-available from this repository. They are
+not yet published on crates.io, so depend on them from the public repo via git
+(pinned to a release tag), or via local path dependencies from a
+`TalkBank/chatter` checkout for local development:
 
 ```toml
 [dependencies]

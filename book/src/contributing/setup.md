@@ -1,7 +1,7 @@
 # Setup
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 Development is supported on **Windows, macOS, and Linux**. The instructions below use Unix shell syntax; on Windows, use PowerShell or Git Bash equivalently.
 
@@ -94,7 +94,7 @@ cargo build --manifest-path spec/runtime-tools/Cargo.toml
 ```
 
 CI green on the pushed commit remains the authoritative pre-push gate for this
-staging repo.
+repo.
 
 ## Editor Setup
 

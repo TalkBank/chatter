@@ -1,7 +1,7 @@
 # Install
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 Installation paths for each surface of chatter. Pick the row that
 matches what you want to do and the audience you belong to.
@@ -12,9 +12,10 @@ matches what you want to do and the audience you belong to.
 | Embed the Rust crates in another program | Rust libraries | [Library usage](../chatter/integrating/library-usage.md) |
 | Reuse the grammar in editor or parser tooling | `tree-sitter-talkbank` | crate docs plus the [CHAT format overview](../chat-format/overview.md) |
 
-All of those surfaces are still pre-release from this repo today. The
-current support posture for each one lives in
-[Support and Stability Tiers](../contributing/support-tiers.md).
+`chatter` is publicly released: the CLI and desktop app are available from the
+[latest GitHub release](https://github.com/TalkBank/chatter/releases/latest).
+The Rust crates and grammar are source-available from this repository (not yet
+published to crates.io). As a 0.x release, APIs and flags may change before 1.0.
 
 For audio + ML pipelines (transcribe, force-align, morphotag,
 benchmark), see the upstream `batchalign3` project, that lives

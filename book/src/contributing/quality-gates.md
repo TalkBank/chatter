@@ -1,7 +1,7 @@
 # Testing and Quality Gates
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 This page summarizes the **current** relationship between local verification and
 the repository CI workflows.
@@ -36,7 +36,7 @@ quietly update.
 ## Root CI contract
 
 The main CI workflow (`.github/workflows/ci.yml`) is the authoritative shared
-signal for this staging repo. Today it covers:
+signal for this repo. Today it covers:
 
 - Rust build, test, and clippy
 - mdBook build

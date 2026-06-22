@@ -1,7 +1,7 @@
 # Parser, Model, and API Contracts
 
 **Status:** Current
-**Last updated:** 2026-05-19 16:54 EDT
+**Last updated:** 2026-06-21 21:33 EDT
 
 ## Single-handle parser API
 `talkbank-parser` provides `TreeSitterParser` as the canonical API
@@ -63,7 +63,7 @@ their own validity decisions.
 4. Roundtrip behavior must be testable per parser implementation.
 5. Parser functions that accept `ErrorSink` should not return `Option<T>` for fallible parse state.
 
-## API Versioning Policy (Pre-Release but Strict)
+## API Versioning Policy (Pre-1.0, Strict)
 - Three intended contract levels:
   - Stable-for-integrators
   - Stable-internal

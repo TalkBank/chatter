@@ -1,7 +1,7 @@
 # Chatter Desktop
 
 **Status:** Current
-**Last modified:** 2026-06-16 08:30 EDT
+**Last modified:** 2026-06-21 21:33 EDT
 
 Chatter Desktop is a native graphical validation app for CHAT files, released
 alongside the `chatter` CLI. Prefer the `chatter` CLI for scripted or batch
@@ -24,7 +24,7 @@ This page documents the desktop surface:
 
 ## Current status
 
-- **Release contract:** Supported (see [Support and Stability Tiers](../../contributing/support-tiers.md))
+- **Release contract:** released alongside the CLI in the public chatter release
 - **Distribution:** ships in the coordinated chatter release alongside the CLI; also buildable from source (below)
 - **Platforms:** macOS, Windows, and Linux
 
