@@ -1115,6 +1115,14 @@
       "source_spec": "spec/errors/E547_constant_header_out_of_order.md"
     },
     {
+      "fixture": "E548_ID_header_out_of_order.cha",
+      "expected_codes": [
+        "E548"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E548_id_header_out_of_order.md"
+    },
+    {
       "fixture": "E600_Tier_alignment_skipped_due_to_parse_errors.cha",
       "expected_codes": [
         "E600"

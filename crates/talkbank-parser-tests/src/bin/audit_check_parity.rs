@@ -185,15 +185,41 @@ fn parse_talkbank_codes(path: &Path) -> Result<Vec<ErrorCodeInfo>, TestError> {
     Ok(out)
 }
 
+/// How a CHECK rule acquired its TalkBank mapping. This drives the verdict:
+/// a keyword-only mapping is an UNVERIFIED coincidence, not evidence of parity,
+/// and must never be reported as "no action". CHECK 127 was certified complete
+/// purely on a keyword match yet had no implementation at all.
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum MappingBasis {
+    /// No mapping at all: a genuine gap (honestly "add rule").
+    None,
+    /// Curated explicit `map_by_id` mapping (a human asserted the parity).
+    Curated,
+    /// Only the message-keyword fallback matched: coincidental and unverified.
+    Keyword,
+}
+
 /// Maps rule.
 fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult {
-    let mut mapped = map_by_id(rule.id);
-    if mapped.is_empty() {
-        mapped = map_by_message(&rule.message);
-    }
+    // Distinguish a curated id mapping from a mere keyword-fallback match: only
+    // the former represents a deliberate parity assertion.
+    let curated = map_by_id(rule.id);
+    let mut basis = if curated.is_empty() {
+        MappingBasis::Keyword
+    } else {
+        MappingBasis::Curated
+    };
+    let mut mapped = if curated.is_empty() {
+        map_by_message(&rule.message)
+    } else {
+        curated
+    };
     mapped.retain(|c| talkbank_codes.contains(c));
     mapped.sort();
     mapped.dedup();
+    if mapped.is_empty() {
+        basis = MappingBasis::None;
+    }
 
     let anomaly = is_behavioral_anomaly(rule.id, &rule.message);
     let (
@@ -204,7 +230,7 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
         action,
         priority,
         rationale,
-    ) = if mapped.is_empty() {
+    ) = if basis == MappingBasis::None {
         (
             "none",
             "none",
@@ -225,6 +251,17 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
                 "CHECK rule is known to have counter/toggle anomaly; TalkBank should match semantic intent, not flawed literal behavior."
                     .to_string(),
             )
+    } else if basis == MappingBasis::Keyword {
+        (
+            "unverified",
+            "unverified",
+            "unknown",
+            "keyword-only",
+            "verify",
+            "P1",
+            "Mapped ONLY by message-keyword coincidence: no curated id mapping and no behavioral test, so the listed codes may not implement this CHECK rule. Verify against real CLAN CHECK before trusting. CHECK 127 was a confirmed false positive of exactly this kind."
+                .to_string(),
+        )
     } else {
         (
             "full",
@@ -233,7 +270,7 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
             "none",
             "no action",
             "P3",
-            "TalkBank has overlapping validation code(s) for this CHECK rule family.".to_string(),
+            "TalkBank has a curated mapping to overlapping validation code(s) for this CHECK rule family (mapping-asserted, not behaviorally tested).".to_string(),
         )
     };
 
@@ -309,6 +346,12 @@ fn map_by_id(id: u16) -> Vec<String> {
         120 => &["E248"],
         121 => &["E519"],
         122 => &["E519"],
+        // 126 "@ID must immediately follow @Participants: or @Options": a
+        // changeable header (e.g. @Comment) sits between @Participants/@Options
+        // and the @ID block. chatter flags this via E548 (found by the
+        // behavioral parity method, not the keyword heuristic that mis-certified
+        // it as complete).
+        126 => &["E548"],
         // 127 "Header must follow @ID: or @Birth of / @Birthplace of / @L1 of":
         // a changeable header (e.g. @Comment) sits between the @ID block and a
         // constant participant header, displacing it. chatter flags this via
@@ -396,6 +439,7 @@ fn render_report(mappings: &[MappingResult], talkbank_codes: &[ErrorCodeInfo]) -
         .iter()
         .filter(|m| m.behavioral_parity == "full")
         .count();
+    let keyword_unverified = mappings.iter().filter(|m| m.action == "verify").count();
     let intentional = mappings
         .iter()
         .filter(|m| m.divergence_type == "intentional")
@@ -426,6 +470,10 @@ fn render_report(mappings: &[MappingResult], talkbank_codes: &[ErrorCodeInfo]) -
     md.push_str(&format!(
         "- Behavioral parity `full`: `{}`\n",
         behavioral_full
+    ));
+    md.push_str(&format!(
+        "- Keyword-only matches (UNVERIFIED, NOT certified parity; action `verify`): `{}`\n",
+        keyword_unverified
     ));
     md.push_str(&format!(
         "- Intentional divergence (semantic full + behavioral partial due to CHECK anomalies): `{}`\n",

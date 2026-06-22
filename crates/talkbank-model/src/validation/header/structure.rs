@@ -131,6 +131,10 @@ pub(crate) fn check_headers(
     // must immediately follow the @ID block, before any changeable header.
     check_constant_participant_header_order(headers, errors);
 
+    // E548: The @ID block must immediately follow @Participants / @Options,
+    // with no changeable header (e.g. @Comment) intervening.
+    check_id_header_order(headers, errors);
+
     for (speaker, span) in &id_speakers {
         if !speaker.as_str().is_empty() && !declared_participants.contains(speaker) {
             let speaker_str = speaker.as_str();
@@ -252,6 +256,53 @@ fn check_constant_participant_header_order(headers: &[(&Header, Span)], errors: 
             errors.report(err);
         }
 
+        prev = Some(header);
+    }
+}
+
+/// Check that the `@ID` block immediately follows `@Participants` / `@Options`.
+///
+/// Per the CHAT spec the `@ID` headers come directly after `@Participants` (and
+/// the optional `@Options`), with no other header in between; subsequent `@ID`
+/// headers follow one another. An `@ID` whose immediately-preceding header is
+/// something else (e.g. `@Comment`), once `@Participants` has been seen, is an
+/// ordering violation. The distinct case of an `@ID` appearing *before*
+/// `@Participants` is handled by [`check_header_order`] (E543), so this check is
+/// gated on `@Participants` already having been seen to avoid double-reporting.
+///
+/// This corresponds to CLAN CHECK error 126 ("@ID header must immediately
+/// follow @Participants: or @Options header").
+fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+    let mut saw_participants = false;
+    let mut prev: Option<&Header> = None;
+    for (header, span) in headers {
+        if matches!(header, Header::Participants { .. }) {
+            saw_participants = true;
+        }
+        if matches!(header, Header::ID(_)) {
+            // Valid immediate predecessors of an @ID: @Participants, @Options,
+            // or another @ID.
+            let preceded_validly = prev.is_some_and(|p| {
+                matches!(
+                    p,
+                    Header::Participants { .. } | Header::Options { .. } | Header::ID(_)
+                )
+            });
+            if saw_participants && !preceded_validly {
+                let mut err = ParseError::new(
+                    ErrorCode::IdHeaderOutOfOrder,
+                    Severity::Error,
+                    SourceLocation::at_offset(span.start as usize),
+                    ErrorContext::new("@ID", 0.."@ID".len(), "@ID"),
+                    "@ID must immediately follow @Participants / @Options (or another @ID), with no changeable header in between",
+                )
+                .with_suggestion(
+                    "Move this @ID up to directly follow @Participants / @Options, before any @Comment or other changeable header",
+                );
+                err.location.span = *span;
+                errors.report(err);
+            }
+        }
         prev = Some(header);
     }
 }
@@ -609,6 +660,52 @@ mod tests {
 
         let errors = ErrorCollector::new();
         check_constant_participant_header_order(&headers, &errors);
+
+        assert!(errors.into_vec().is_empty());
+    }
+
+    // ── @ID header ordering tests (E548) ──────────────────────────
+
+    /// A changeable header (`@Comment`) between `@Participants` and the `@ID`
+    /// block emits `E548`.
+    #[test]
+    fn test_e548_comment_between_participants_and_id() {
+        use crate::model::{BulletContent, IDHeader};
+
+        let participants = Header::Participants {
+            entries: vec![].into(),
+        };
+        let comment = Header::Comment {
+            content: BulletContent::from_text("intervening changeable header"),
+        };
+        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let headers = vec![
+            (&participants, Span::DUMMY),
+            (&comment, Span::DUMMY),
+            (&id, Span::DUMMY),
+        ];
+
+        let errors = ErrorCollector::new();
+        check_id_header_order(&headers, &errors);
+
+        let error_vec = errors.into_vec();
+        assert_eq!(error_vec.len(), 1);
+        assert_eq!(error_vec[0].code, ErrorCode::IdHeaderOutOfOrder);
+    }
+
+    /// `@ID` immediately following `@Participants` is valid, no error.
+    #[test]
+    fn test_id_immediately_after_participants_ok() {
+        use crate::model::IDHeader;
+
+        let participants = Header::Participants {
+            entries: vec![].into(),
+        };
+        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let headers = vec![(&participants, Span::DUMMY), (&id, Span::DUMMY)];
+
+        let errors = ErrorCollector::new();
+        check_id_header_order(&headers, &errors);
 
         assert!(errors.into_vec().is_empty());
     }

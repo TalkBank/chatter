@@ -487,6 +487,14 @@ pub enum ErrorCode {
     /// directly follow `@ID`. Corresponds to CLAN CHECK error 127.
     #[code("E547")]
     ConstantHeaderOutOfOrder,
+    /// An `@ID` header does not immediately follow the `@Participants` /
+    /// `@Options` headers (or another `@ID`): a changeable header such as
+    /// `@Comment` appears between `@Participants`/`@Options` and the `@ID`
+    /// block. Per the CHAT manual the `@ID` block directly follows
+    /// `@Participants` (and the optional `@Options`). Corresponds to CLAN
+    /// CHECK error 126.
+    #[code("E548")]
+    IdHeaderOutOfOrder,
 
     // =========================================================================
     // Tier Errors (E6xx)
