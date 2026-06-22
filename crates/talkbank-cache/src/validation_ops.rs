@@ -11,12 +11,23 @@ use std::path::Path;
 
 use super::cache_utils::{get_cache_key_with_suffix, get_content_hash, now_secs};
 use super::error::CacheError;
+use super::rules_version::RulesVersion;
 
-const CACHE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Suffix that distinguishes a validation cache key from a roundtrip one for
+/// the same path. Validation rows always carry `parser_kind IS NULL`.
+const VALIDATION_KEY_SUFFIX: &str = "validation";
 
 /// Get cached validation result: `Some(true)` = valid, `Some(false)` = invalid, `None` = not cached.
-pub async fn get_validation(pool: &SqlitePool, path: &Path, check_alignment: bool) -> Option<bool> {
-    let key = get_cache_key_with_suffix(path, "validation");
+///
+/// `rules_version` is bound into the `version` column so a verdict produced
+/// under a different validation rule set is a cache MISS, not a stale hit.
+pub async fn get_validation(
+    pool: &SqlitePool,
+    rules_version: &RulesVersion,
+    path: &Path,
+    check_alignment: bool,
+) -> Option<bool> {
+    let key = get_cache_key_with_suffix(path, VALIDATION_KEY_SUFFIX);
     let current_hash = get_content_hash(path).ok()?;
     let alignment_val: i32 = if check_alignment { 1 } else { 0 };
 
@@ -27,7 +38,7 @@ pub async fn get_validation(pool: &SqlitePool, path: &Path, check_alignment: boo
          WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind IS NULL",
     )
     .bind(&key)
-    .bind(CACHE_VERSION)
+    .bind(rules_version.as_str())
     .bind(alignment_val)
     .fetch_optional(pool)
     .await
@@ -44,13 +55,17 @@ pub async fn get_validation(pool: &SqlitePool, path: &Path, check_alignment: boo
 }
 
 /// Store validation result as pass/fail.
+///
+/// The row is tagged with `rules_version`, so it is only ever served back to a
+/// query carrying the same validation rule set.
 pub async fn set_validation(
     pool: &SqlitePool,
+    rules_version: &RulesVersion,
     path: &Path,
     check_alignment: bool,
     valid: bool,
 ) -> Result<(), CacheError> {
-    let key = get_cache_key_with_suffix(path, "validation");
+    let key = get_cache_key_with_suffix(path, VALIDATION_KEY_SUFFIX);
     let content_hash = get_content_hash(path)?;
     let path_str = path.to_string_lossy().to_string();
     let alignment_val: i32 = if check_alignment { 1 } else { 0 };
@@ -66,7 +81,7 @@ pub async fn set_validation(
     .bind(&key)
     .bind(&path_str)
     .bind(&content_hash)
-    .bind(CACHE_VERSION)
+    .bind(rules_version.as_str())
     .bind(now)
     .bind(alignment_val)
     .bind(valid_val)
@@ -105,16 +120,18 @@ mod tests {
         )
         .expect("write test chat file");
 
+        let rules = RulesVersion::for_testing("test-rules");
+
         // Cache contradictory outcomes for the same file but different alignment modes.
-        set_validation(&pool, &file_path, false, false)
+        set_validation(&pool, &rules, &file_path, false, false)
             .await
             .expect("cache unaligned result");
-        set_validation(&pool, &file_path, true, true)
+        set_validation(&pool, &rules, &file_path, true, true)
             .await
             .expect("cache aligned result");
 
-        let aligned = get_validation(&pool, &file_path, true).await;
-        let unaligned = get_validation(&pool, &file_path, false).await;
+        let aligned = get_validation(&pool, &rules, &file_path, true).await;
+        let unaligned = get_validation(&pool, &rules, &file_path, false).await;
 
         assert_eq!(
             aligned,
@@ -140,20 +157,22 @@ mod tests {
         )
         .expect("write test chat file");
 
-        set_validation(&pool, &file_path, false, false)
+        let rules = RulesVersion::for_testing("test-rules");
+
+        set_validation(&pool, &rules, &file_path, false, false)
             .await
             .expect("cache first result");
-        set_validation(&pool, &file_path, false, true)
+        set_validation(&pool, &rules, &file_path, false, true)
             .await
             .expect("replace cached result");
 
-        let key = get_cache_key_with_suffix(&file_path, "validation");
+        let key = get_cache_key_with_suffix(&file_path, VALIDATION_KEY_SUFFIX);
         let row_count: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM file_cache
              WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind IS NULL",
         )
         .bind(&key)
-        .bind(CACHE_VERSION)
+        .bind(rules.as_str())
         .bind(0_i32)
         .fetch_one(&pool)
         .await
@@ -164,7 +183,7 @@ mod tests {
             "cache should keep exactly one row per validation key"
         );
         assert_eq!(
-            get_validation(&pool, &file_path, false).await,
+            get_validation(&pool, &rules, &file_path, false).await,
             Some(true),
             "latest validation result should win"
         );

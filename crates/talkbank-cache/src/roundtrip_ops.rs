@@ -11,12 +11,15 @@ use std::path::Path;
 
 use super::cache_utils::{get_cache_key_with_suffix, get_content_hash, now_secs};
 use super::error::CacheError;
-
-const CACHE_VERSION: &str = env!("CARGO_PKG_VERSION");
+use super::rules_version::RulesVersion;
 
 /// Get cached roundtrip result: `Some(true)` = passed, `Some(false)` = failed, `None` = not cached.
+///
+/// `rules_version` is bound into the `version` column so a roundtrip outcome
+/// produced under a different validation rule set is a cache MISS.
 pub async fn get_roundtrip(
     pool: &SqlitePool,
+    rules_version: &RulesVersion,
     path: &Path,
     check_alignment: bool,
     parser_kind: &str,
@@ -31,7 +34,7 @@ pub async fn get_roundtrip(
          WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind = ?4",
     )
     .bind(&key)
-    .bind(CACHE_VERSION)
+    .bind(rules_version.as_str())
     .bind(alignment_val)
     .bind(parser_kind)
     .fetch_optional(pool)
@@ -54,8 +57,12 @@ pub async fn get_roundtrip(
 }
 
 /// Store roundtrip result as pass/fail.
+///
+/// The row is tagged with `rules_version`, so it is only ever served back to a
+/// query carrying the same validation rule set.
 pub async fn set_roundtrip(
     pool: &SqlitePool,
+    rules_version: &RulesVersion,
     path: &Path,
     check_alignment: bool,
     parser_kind: &str,
@@ -77,7 +84,7 @@ pub async fn set_roundtrip(
     .bind(&key)
     .bind(&path_str)
     .bind(&content_hash)
-    .bind(CACHE_VERSION)
+    .bind(rules_version.as_str())
     .bind(now)
     .bind(alignment_val)
     .bind(passed_val) // is_valid mirrors roundtrip result
@@ -118,10 +125,12 @@ mod tests {
         )
         .expect("write test chat file");
 
-        set_roundtrip(&pool, &file_path, false, "tree-sitter", false)
+        let rules = RulesVersion::for_testing("test-rules");
+
+        set_roundtrip(&pool, &rules, &file_path, false, "tree-sitter", false)
             .await
             .expect("cache first roundtrip result");
-        set_roundtrip(&pool, &file_path, false, "tree-sitter", true)
+        set_roundtrip(&pool, &rules, &file_path, false, "tree-sitter", true)
             .await
             .expect("replace roundtrip result");
 
@@ -131,7 +140,7 @@ mod tests {
              WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind = ?4",
         )
         .bind(&key)
-        .bind(CACHE_VERSION)
+        .bind(rules.as_str())
         .bind(0_i32)
         .bind("tree-sitter")
         .fetch_one(&pool)
@@ -143,7 +152,7 @@ mod tests {
             "cache should keep exactly one row per roundtrip key"
         );
         assert_eq!(
-            get_roundtrip(&pool, &file_path, false, "tree-sitter").await,
+            get_roundtrip(&pool, &rules, &file_path, false, "tree-sitter").await,
             Some(true),
             "latest roundtrip result should win"
         );

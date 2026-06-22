@@ -15,6 +15,10 @@ readme = "README.md"
 blake3 = { workspace = true }
 dirs = { workspace = true }
 sqlx = { workspace = true }
+# The cache key folds in a fingerprint of the active validation rule set so that
+# changing the rules (e.g. adding error code E370) invalidates stale entries.
+# That fingerprint is owned by talkbank-model (the codes ARE the rule set).
+talkbank-model = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

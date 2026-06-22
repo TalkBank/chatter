@@ -3,8 +3,17 @@
 //! SQLite-backed validation and roundtrip cache for CHAT workflows.
 //!
 //! The cache answers one question: "Has this file already been
-//! validated/roundtrip-tested at this mtime and tool version?" It stores only
-//! the pass/fail outcome, not the full diagnostics payload.
+//! validated/roundtrip-tested at this content hash AND under the current
+//! validation rule set?" It stores only the pass/fail outcome, not the full
+//! diagnostics payload.
+//!
+//! The "rule set" dimension is captured by [`RulesVersion`], which folds the
+//! cache crate version together with a fingerprint of every validation
+//! [`ErrorCode`](talkbank_model::ErrorCode) the validator can emit. Adding,
+//! removing, or renaming a rule changes the `RulesVersion`, so verdicts cached
+//! under the old rule set become a cache MISS instead of being served stale.
+//! This is what keeps `chatter validate` honest after a rule like E370 is
+//! added.
 //!
 //! # Start here
 //!
@@ -43,6 +52,7 @@ mod types;
 
 // Utility and infrastructure modules
 mod cache_utils;
+mod rules_version;
 mod schema_init;
 
 // Operation modules
@@ -56,6 +66,7 @@ mod cache_impl;
 // Re-export public API
 pub use cache_impl::CachePool;
 pub use error::CacheError;
+pub use rules_version::RulesVersion;
 pub use trait_def::{CacheOutcome, ValidationCache};
 pub use types::CacheStats;
 

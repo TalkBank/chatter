@@ -18,6 +18,7 @@ use std::str::FromStr;
 
 use super::cache_utils;
 use super::error::CacheError;
+use super::rules_version::RulesVersion;
 use super::types::CacheStats;
 use super::{maintenance_ops, roundtrip_ops, validation_ops};
 use crate::{CacheOutcome, ValidationCache};
@@ -27,22 +28,45 @@ use crate::{CacheOutcome, ValidationCache};
 /// The `ValidationCache` trait is sync (required by crossbeam worker threads),
 /// so `CachePool` holds a dedicated single-threaded tokio runtime and calls
 /// `rt.block_on()` internally to bridge sync ↔ async.
+///
+/// Every read and write binds `rules_version` into the `version` column, so a
+/// pool only ever sees rows produced under the same validation rule set it was
+/// opened with. Rows from other rule versions stay on disk (useful for
+/// selective re-testing) but are invisible to this pool's queries.
 pub struct CachePool {
     pool: SqlitePool,
     rt: tokio::runtime::Runtime,
+    /// Cache-compatibility version bound into every row this pool reads/writes.
+    rules_version: RulesVersion,
 }
 
 // -- CachePool constructors --------------------------------------------------
 
 impl CachePool {
     /// Create pool at default location (~/.cache/talkbank-chat).
+    ///
+    /// Keyed to the validation rule set compiled into this binary
+    /// ([`RulesVersion::current`]).
     pub fn new() -> Result<Self, CacheError> {
         let cache_dir = cache_utils::default_cache_dir()?;
         Self::with_directory(cache_dir)
     }
 
-    /// Create pool at specified directory.
+    /// Create pool at specified directory, keyed to the current rule set.
     pub fn with_directory(cache_dir: PathBuf) -> Result<Self, CacheError> {
+        Self::with_directory_and_rules_version(cache_dir, RulesVersion::current())
+    }
+
+    /// Create pool at a directory keyed to an explicit [`RulesVersion`].
+    ///
+    /// Production callers use [`Self::with_directory`] (which derives the
+    /// version from the active rule set). This variant exists so tests can
+    /// stand up two caches over the same directory under different rule
+    /// versions to exercise rule-change invalidation.
+    pub fn with_directory_and_rules_version(
+        cache_dir: PathBuf,
+        rules_version: RulesVersion,
+    ) -> Result<Self, CacheError> {
         std::fs::create_dir_all(&cache_dir).map_err(|source| CacheError::Io {
             path: cache_dir.display().to_string(),
             source,
@@ -60,14 +84,28 @@ impl CachePool {
         // Run expired entry cleanup eagerly so DB is ready before worker threads start.
         rt.block_on(Self::clean_expired(&pool))?;
 
-        Ok(Self { pool, rt })
+        Ok(Self {
+            pool,
+            rt,
+            rules_version,
+        })
     }
 
     /// Create in-memory pool for testing or disabled mode.
     ///
     /// Uses `max_connections(1)` because sqlx in-memory SQLite creates a
     /// separate database per connection, pool of 1 ensures a shared database.
+    /// Keyed to the current rule set.
     pub fn in_memory() -> Result<Self, CacheError> {
+        Self::in_memory_with_rules_version(RulesVersion::current())
+    }
+
+    /// Create an in-memory pool keyed to an explicit [`RulesVersion`].
+    ///
+    /// Test-support counterpart of [`Self::in_memory`]; see
+    /// [`Self::with_directory_and_rules_version`] for why an injected version
+    /// matters.
+    pub fn in_memory_with_rules_version(rules_version: RulesVersion) -> Result<Self, CacheError> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -91,7 +129,11 @@ impl CachePool {
             Ok::<_, CacheError>(pool)
         })?;
 
-        Ok(Self { pool, rt })
+        Ok(Self {
+            pool,
+            rt,
+            rules_version,
+        })
     }
 
     /// Open a file-backed pool with WAL mode and performance PRAGMAs.
@@ -143,6 +185,7 @@ impl CachePool {
     pub fn get_validation(&self, path: &Path, check_alignment: bool) -> Option<bool> {
         self.rt.block_on(validation_ops::get_validation(
             &self.pool,
+            &self.rules_version,
             path,
             check_alignment,
         ))
@@ -157,6 +200,7 @@ impl CachePool {
     ) -> Result<(), CacheError> {
         self.rt.block_on(validation_ops::set_validation(
             &self.pool,
+            &self.rules_version,
             path,
             check_alignment,
             valid,
@@ -174,6 +218,7 @@ impl CachePool {
     ) -> Option<bool> {
         self.rt.block_on(roundtrip_ops::get_roundtrip(
             &self.pool,
+            &self.rules_version,
             path,
             check_alignment,
             parser_kind,
@@ -190,6 +235,7 @@ impl CachePool {
     ) -> Result<(), CacheError> {
         self.rt.block_on(roundtrip_ops::set_roundtrip(
             &self.pool,
+            &self.rules_version,
             path,
             check_alignment,
             parser_kind,
