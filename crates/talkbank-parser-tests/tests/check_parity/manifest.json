@@ -1,0 +1,59 @@
+{
+  "doc": [
+    "CHECK-validity parity ledger. One entry per CLAN CHECK error number we have",
+    "grounded against a real fixture. Both sides evolve independently (Leonid on",
+    "CLAN CHECK, us on chatter), so two tests guard it:",
+    "  - chatter_matches_check (CI, no CLAN needed): asserts chatter's validation",
+    "    behaviour on each fixture matches `status`. Catches OUR drift.",
+    "  - clan_check_grounding (#[ignore], CLAN-gated): runs real CLAN CHECK on each",
+    "    fixture and asserts it still emits `check_code`. Catches LEONID's drift;",
+    "    re-run it when a new CLAN bundle lands.",
+    "status values:",
+    "  parity     = chatter flags an equivalent error; assert `expected_chatter_codes` present.",
+    "  gap        = CLAN flags it but chatter does NOT yet; assert chatter validates the",
+    "               fixture as VALID. Flip to parity (with the new code) when implemented.",
+    "  divergence = intentional: chatter handles it differently; assert `expected_chatter_codes`."
+  ],
+  "entries": [
+    {
+      "check_code": 119,
+      "check_message": "Missing word after code.",
+      "fixture": "CHECK_119_dangling_retrace.cha",
+      "status": "parity",
+      "expected_chatter_codes": ["E370"],
+      "note": "Retrace marker [/] with nothing after it. chatter E370 StructuralOrderError."
+    },
+    {
+      "check_code": 126,
+      "check_message": "\"@ID\" header must immediately follow \"@Participants:\" or \"@Options\" header.",
+      "fixture": "CHECK_126_id_header_out_of_order.cha",
+      "status": "parity",
+      "expected_chatter_codes": ["E548"],
+      "note": "A changeable header (@Comment) sits between @Participants and the @ID block."
+    },
+    {
+      "check_code": 127,
+      "check_message": "Header must follow \"@ID:\" or \"@Birth of\" or \"@Birthplace of\" or \"@L1 of\" header.",
+      "fixture": "CHECK_127_constant_header_out_of_order.cha",
+      "status": "parity",
+      "expected_chatter_codes": ["E547"],
+      "note": "A changeable header sits between the @ID block and @Birth of."
+    },
+    {
+      "check_code": 13,
+      "check_message": "Duplicate speaker declaration.",
+      "fixture": "CHECK_013_duplicate_speaker.cha",
+      "status": "gap",
+      "expected_chatter_codes": [],
+      "note": "Same speaker declared twice in @Participants. chatter currently accepts it; real validity gap to close (E-code TBD, then flip to parity)."
+    },
+    {
+      "check_code": 100,
+      "check_message": "Commas at the end of PARTICIPANTS tier are not allowed.",
+      "fixture": "CHECK_100_trailing_comma_participants.cha",
+      "status": "gap",
+      "expected_chatter_codes": [],
+      "note": "Trailing comma at end of @Participants. chatter currently accepts it; real validity gap to close."
+    }
+  ]
+}
