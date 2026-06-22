@@ -5,15 +5,13 @@
 
 set shell := ["bash", "-c"]
 
-# Book toolchain. mdBook + mdbook-mermaid are pinned to the 0.4.x era:
-# mermaid must be a preprocessor (it rewrites ```mermaid blocks), and no
-# released mdbook-mermaid parses mdBook 0.5's renamed preprocessor wire
-# format. 0.17.0 is broken against both 0.4.x and 0.5.x. Link-checking is
-# decoupled onto lychee (runs on the built HTML, independent of mdBook's
-# version) instead of the mdbook-linkcheck2 renderer, which only accepts
-# mdBook 0.5's `items` RenderContext that 0.4.x does not emit.
-mdbook_version := "0.4.52"
-mdbook_mermaid_version := "0.16.2"
+# Book toolchain. mdBook + mdbook-mermaid are pinned to current and kept in
+# lockstep across the justfile, ci.yml, and book.yml. mdbook-mermaid is a
+# preprocessor (it rewrites fenced mermaid blocks) plus the mermaid.min.js and
+# mermaid-init.js assets that book.toml loads via additional-js. Link-checking
+# is decoupled onto lychee (runs on the built HTML, independent of mdBook).
+mdbook_version := "0.5.3"
+mdbook_mermaid_version := "0.17.0"
 lychee_version := "0.24.2"
 book_tools_root := justfile_directory() + "/.tooling/book-tools"
 book_tools_bin := book_tools_root + "/bin"

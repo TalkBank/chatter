@@ -21,11 +21,12 @@ on:
 permissions:
   contents: read
 
-# mdBook + mdbook-mermaid pinned to match ci.yml's book job exactly (the mermaid
-# preprocessor is protocol-sensitive to mdBook's wire format; keep them in lockstep).
+# mdBook + mdbook-mermaid pinned to current, kept in lockstep with ci.yml and the
+# justfile. The mermaid preprocessor rewrites fenced blocks; the mermaid assets
+# render them via book.toml additional-js.
 env:
-  MDBOOK_VERSION: '0.4.52'
-  MDBOOK_MERMAID_VERSION: '0.16.2'
+  MDBOOK_VERSION: '0.5.3'
+  MDBOOK_MERMAID_VERSION: '0.17.0'
 
 # One Pages deployment at a time; never cancel an in-progress publish.
 concurrency:

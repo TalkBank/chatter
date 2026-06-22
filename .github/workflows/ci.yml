@@ -22,12 +22,12 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: short
-  # Book toolchain. mdBook + mdbook-mermaid are pinned to the 0.4.x era: the
-  # mermaid preprocessor is protocol-sensitive to mdBook's wire format and no
-  # released mdbook-mermaid supports mdBook 0.5. Link-checking is decoupled
-  # onto lychee, which runs on the built HTML and is independent of mdBook.
-  MDBOOK_VERSION: '0.4.52'
-  MDBOOK_MERMAID_VERSION: '0.16.2'
+  # Book toolchain. mdBook + mdbook-mermaid are pinned to current, kept in
+  # lockstep with book.yml and the justfile. The mermaid preprocessor rewrites
+  # fenced blocks; the mermaid assets render them via book.toml additional-js.
+  # Link-checking is decoupled onto lychee (runs on the built HTML).
+  MDBOOK_VERSION: '0.5.3'
+  MDBOOK_MERMAID_VERSION: '0.17.0'
   LYCHEE_VERSION: '0.24.2'
 
 jobs:
