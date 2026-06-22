@@ -19,3 +19,4 @@ edit-url-template = "https://github.com/TalkBank/chatter/edit/main/book/{path}"
 # Served from https://talkbank.github.io/chatter/ once Pages is enabled at the
 # public cutover; site-url makes absolute in-book links resolve under the subpath.
 site-url = "/chatter/"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
