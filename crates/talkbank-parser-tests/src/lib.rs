@@ -107,6 +107,7 @@
 
 pub mod bug_annotations;
 
+pub mod check_error_map;
 pub mod error_corpus_gen;
 pub mod feature_signature;
 /// Auto-generated grammar-aware CST traversal (from grammar.json).

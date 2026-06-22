@@ -19,6 +19,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
+use talkbank_model::errors::ErrorCode;
+use talkbank_parser_tests::check_error_map::check_error_number;
 use talkbank_parser_tests::test_error::TestError;
 
 static CODE_ATTR_RE: LazyLock<Regex> =
@@ -185,41 +187,30 @@ fn parse_talkbank_codes(path: &Path) -> Result<Vec<ErrorCodeInfo>, TestError> {
     Ok(out)
 }
 
-/// How a CHECK rule acquired its TalkBank mapping. This drives the verdict:
-/// a keyword-only mapping is an UNVERIFIED coincidence, not evidence of parity,
-/// and must never be reported as "no action". CHECK 127 was certified complete
-/// purely on a keyword match yet had no implementation at all.
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum MappingBasis {
-    /// No mapping at all: a genuine gap (honestly "add rule").
-    None,
-    /// Curated explicit `map_by_id` mapping (a human asserted the parity).
-    Curated,
-    /// Only the message-keyword fallback matched: coincidental and unverified.
-    Keyword,
-}
-
-/// Maps rule.
+/// Map a CHECK rule to the chatter codes that cover it, using ONLY curated
+/// sources: the explicit `map_by_id` table (one CHECK# to several codes) plus
+/// the recovered, compiler-checked `error_map` (`check_error_number`, inverted).
+///
+/// There is NO message-keyword fallback. A keyword coincidence is not evidence
+/// of parity; the former fallback manufactured false "complete" verdicts (CHECK
+/// 126/127 were certified done with zero implementation). A CHECK code with no
+/// curated mapping is reported as an honest gap. Behavioral parity (does chatter
+/// actually flag what CHECK flags on the same input) is verified separately by
+/// the CHECK-validity harness, not asserted here.
 fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult {
-    // Distinguish a curated id mapping from a mere keyword-fallback match: only
-    // the former represents a deliberate parity assertion.
-    let curated = map_by_id(rule.id);
-    let mut basis = if curated.is_empty() {
-        MappingBasis::Keyword
-    } else {
-        MappingBasis::Curated
-    };
-    let mut mapped = if curated.is_empty() {
-        map_by_message(&rule.message)
-    } else {
-        curated
-    };
+    let mut mapped = map_by_id(rule.id);
+    // Union the recovered curated ErrorCode -> CHECK# mapping (the single source
+    // of truth recovered from chatter-clan into `check_error_map`, kept in sync
+    // with the ErrorCode enum by the compiler): any code whose canonical CHECK
+    // number is this rule's id covers it.
+    for code in talkbank_codes {
+        if check_error_number(&ErrorCode::new(code)) == rule.id {
+            mapped.push(code.clone());
+        }
+    }
     mapped.retain(|c| talkbank_codes.contains(c));
     mapped.sort();
     mapped.dedup();
-    if mapped.is_empty() {
-        basis = MappingBasis::None;
-    }
 
     let anomaly = is_behavioral_anomaly(rule.id, &rule.message);
     let (
@@ -230,7 +221,7 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
         action,
         priority,
         rationale,
-    ) = if basis == MappingBasis::None {
+    ) = if mapped.is_empty() {
         (
             "none",
             "none",
@@ -238,28 +229,17 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
             "bug-risk",
             "add rule",
             "P1",
-            "No direct TalkBank error code mapping found for this CHECK rule.".to_string(),
+            "No curated TalkBank mapping for this CHECK rule (no keyword guessing).".to_string(),
         )
     } else if anomaly {
         (
-                "full",
-                "partial",
-                "TalkBank stricter",
-                "intentional",
-                "no action",
-                "P2",
-                "CHECK rule is known to have counter/toggle anomaly; TalkBank should match semantic intent, not flawed literal behavior."
-                    .to_string(),
-            )
-    } else if basis == MappingBasis::Keyword {
-        (
-            "unverified",
-            "unverified",
-            "unknown",
-            "keyword-only",
-            "verify",
-            "P1",
-            "Mapped ONLY by message-keyword coincidence: no curated id mapping and no behavioral test, so the listed codes may not implement this CHECK rule. Verify against real CLAN CHECK before trusting. CHECK 127 was a confirmed false positive of exactly this kind."
+            "full",
+            "partial",
+            "TalkBank stricter",
+            "intentional",
+            "no action",
+            "P2",
+            "CHECK rule is known to have a counter/toggle anomaly; TalkBank matches semantic intent, not flawed literal behavior."
                 .to_string(),
         )
     } else {
@@ -270,7 +250,7 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
             "none",
             "no action",
             "P3",
-            "TalkBank has a curated mapping to overlapping validation code(s) for this CHECK rule family (mapping-asserted, not behaviorally tested).".to_string(),
+            "TalkBank has a curated mapping to overlapping validation code(s) (mapping-asserted; behavioral parity is verified separately by the CHECK-validity harness).".to_string(),
         )
     };
 
@@ -387,42 +367,6 @@ fn map_by_id(id: u16) -> Vec<String> {
     codes.iter().map(|s| (*s).to_string()).collect()
 }
 
-/// Maps by message.
-fn map_by_message(message: &str) -> Vec<String> {
-    let m = message.to_lowercase();
-    let mut out = Vec::new();
-    let rules = [
-        (
-            "unmatched",
-            &["E230", "E231", "E242", "E345", "E346", "E356", "E357"][..],
-        ),
-        ("delimiter", &["E304", "E305", "E360"][..]),
-        ("speaker", &["E308", "E522", "E532"][..]),
-        ("participants", &["E522", "E523", "E524"][..]),
-        ("@id", &["E505", "E517", "E519", "E522", "E523", "E524"][..]),
-        ("language", &["E248", "E249", "E519"][..]),
-        ("numbers", &["E220"][..]),
-        ("bullet", &["E360", "E361", "E362", "E701", "E704"][..]),
-        ("mor", &["E702", "E705", "E706", "E720"][..]),
-        ("gra", &["E708", "E709", "E710", "E712", "E713", "E720"][..]),
-        (
-            "replacement",
-            &["E208", "E387", "E388", "E389", "E390", "E391"][..],
-        ),
-        ("quotation", &["E242", "E341", "E372"][..]),
-        ("parentheses", &["E212", "E231"][..]),
-        ("space", &["W210", "W211", "E243"][..]),
-    ];
-    for (kw, codes) in rules {
-        if m.contains(kw) {
-            out.extend(codes.iter().map(|c| (*c).to_string()));
-        }
-    }
-    out.sort();
-    out.dedup();
-    out
-}
-
 /// Renders report.
 fn render_report(mappings: &[MappingResult], talkbank_codes: &[ErrorCodeInfo]) -> String {
     let total_check = mappings.len();
@@ -439,7 +383,6 @@ fn render_report(mappings: &[MappingResult], talkbank_codes: &[ErrorCodeInfo]) -
         .iter()
         .filter(|m| m.behavioral_parity == "full")
         .count();
-    let keyword_unverified = mappings.iter().filter(|m| m.action == "verify").count();
     let intentional = mappings
         .iter()
         .filter(|m| m.divergence_type == "intentional")
@@ -472,10 +415,6 @@ fn render_report(mappings: &[MappingResult], talkbank_codes: &[ErrorCodeInfo]) -
         behavioral_full
     ));
     md.push_str(&format!(
-        "- Keyword-only matches (UNVERIFIED, NOT certified parity; action `verify`): `{}`\n",
-        keyword_unverified
-    ));
-    md.push_str(&format!(
         "- Intentional divergence (semantic full + behavioral partial due to CHECK anomalies): `{}`\n",
         intentional
     ));
@@ -487,7 +426,7 @@ fn render_report(mappings: &[MappingResult], talkbank_codes: &[ErrorCodeInfo]) -
     md.push_str("## Method\n\n");
     md.push_str("- Loaded every emitted CHECK code (n_call_sites > 0) from the generated `check-error-codes.json`.\n");
     md.push_str(
-        "- Mapped CHECK rules to TalkBank codes via explicit ID mapping plus keyword fallback.\n",
+        "- Mapped CHECK rules to TalkBank codes via a curated ID mapping plus the recovered error_map; NO keyword fallback.\n",
     );
     md.push_str("- Reported two parity dimensions:\n");
     md.push_str("  - `semantic`: intended rule meaning parity.\n");
