@@ -13,7 +13,16 @@ pub use crate::ui::ThemePreset;
 
 /// TalkBank utilities for CHAT format validation and transformation
 #[derive(Parser)]
-#[command(name = "chatter", version, long_version = concat!(env!("CARGO_PKG_VERSION"), " (build ", env!("BUILD_HASH"), ")"))]
+// `bin_name` pins the program name shown in usage/help/error output.
+// Without it, clap derives the displayed name from `argv[0]`'s file name,
+// which is `chatter.exe` on Windows: every usage line then read
+// `Usage: chatter.exe ...`, diverging from the documented `chatter ...`
+// invocation and failing the help-contract tests on windows-latest.
+// Pinning it makes the name identical on every platform and independent
+// of how the binary was invoked. Regression gate:
+// `program_name_is_pinned_regardless_of_argv0` in
+// `tests/command_execution_tests.rs`.
+#[command(name = "chatter", bin_name = "chatter", version, long_version = concat!(env!("CARGO_PKG_VERSION"), " (build ", env!("BUILD_HASH"), ")"))]
 #[command(
     about = "Tools for validating and transforming TalkBank CHAT files",
     long_about = None,

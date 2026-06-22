@@ -347,3 +347,52 @@ fn watch_requires_path_argument() -> Result<(), TestError> {
     harness.chatter_cmd().arg("watch").assert().code(2);
     Ok(())
 }
+
+// ============================================================================
+// program name (cross-platform identity)
+// ============================================================================
+
+/// The program name shown in usage/help/error output must be the pinned
+/// brand name `chatter`, identical on every platform and independent of
+/// how the binary was invoked.
+///
+/// clap otherwise derives the displayed name from `argv[0]`'s file name.
+/// On Windows the binary is `chatter.exe`, so every usage line read
+/// `Usage: chatter.exe ...`, diverging from the `chatter ...` invocation
+/// documented throughout the book and breaking the help-contract tests
+/// (`watch_help_documents_command` on windows-latest, cross-platform CI).
+///
+/// This reproduces the mechanism on ANY OS by running the real binary
+/// under a deliberately different `argv[0]`: copy it to a renamed file
+/// and invoke that. Without a pinned `bin_name` the usage line leaks the
+/// renamed file; with it pinned the line is always `Usage: chatter ...`.
+/// It would have caught the Windows regression on Ubuntu CI.
+#[test]
+fn program_name_is_pinned_regardless_of_argv0() -> Result<(), TestError> {
+    let scratch = tempdir()?;
+    // Keep the platform's executable suffix so the copy stays runnable;
+    // `fs::copy` preserves the source's permission bits (the exec bit on
+    // Unix). The stem is deliberately NOT `chatter`.
+    let renamed = scratch
+        .path()
+        .join(format!("renamed-probe{}", std::env::consts::EXE_SUFFIX));
+    fs::copy(env!("CARGO_BIN_EXE_chatter"), &renamed)?;
+
+    // The top-level command and a subcommand both build their usage line
+    // from the program name; pin must hold for both.
+    for args in [["--help"].as_slice(), ["watch", "--help"].as_slice()] {
+        let output = std::process::Command::new(&renamed).args(args).output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("Usage: chatter"),
+            "usage line must use the pinned program name `chatter`, not the \
+             executable file name; args={args:?}\nstdout:\n{stdout}"
+        );
+        assert!(
+            !stdout.contains("renamed-probe"),
+            "usage line leaked the executable file name instead of the pinned \
+             program name; args={args:?}\nstdout:\n{stdout}"
+        );
+    }
+    Ok(())
+}
