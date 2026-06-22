@@ -280,7 +280,19 @@ fn is_behavioral_anomaly(id: u16, message: &str) -> bool {
         || lower.contains("must be used in pairs")
 }
 
-/// Maps by id.
+/// Supplementary CHECK# -> chatter-code table, layered ON TOP OF the recovered
+/// `check_error_map::check_error_number` (the single source of truth). `map_rule`
+/// UNIONS this with the inverted `check_error_number`, so:
+/// - Do NOT add an entry already produced by `check_error_number` (e.g. the
+///   header-order codes 126/127); the union supplies those, and a duplicate here
+///   is a drift hazard.
+/// - This table is only for CHECK#s `check_error_number` cannot express: chiefly
+///   one CHECK# covered by several codes that each map to a different (or no)
+///   CHECK# of their own.
+///
+/// Follow-up: a few bullet-timing arms here disagree with `check_error_number`
+/// (E361/E362 spread across CHECK 82/83/89/90); those need a per-code
+/// reconciliation so the two sources can never contradict.
 fn map_by_id(id: u16) -> Vec<String> {
     let codes: &[&str] = match id {
         6 => &["E501"],
@@ -326,19 +338,9 @@ fn map_by_id(id: u16) -> Vec<String> {
         120 => &["E248"],
         121 => &["E519"],
         122 => &["E519"],
-        // 126 "@ID must immediately follow @Participants: or @Options": a
-        // changeable header (e.g. @Comment) sits between @Participants/@Options
-        // and the @ID block. chatter flags this via E548 (found by the
-        // behavioral parity method, not the keyword heuristic that mis-certified
-        // it as complete).
-        126 => &["E548"],
-        // 127 "Header must follow @ID: or @Birth of / @Birthplace of / @L1 of":
-        // a changeable header (e.g. @Comment) sits between the @ID block and a
-        // constant participant header, displacing it. chatter flags this via
-        // E547. Mapped explicitly so it does not fall through to the message
-        // keyword heuristic, which matched "@ID" and spuriously reported full
-        // parity against unrelated @ID-format codes.
-        127 => &["E547"],
+        // 126 (E548) and 127 (E547) are supplied by check_error_map's
+        // check_error_number (the single source of truth) via the union in
+        // map_rule; not duplicated here.
         // 128/130 = unmatched ‹ / 〔 (non-standard CHAT brackets). chatter does
         // not model these as annotation openers; it rejects them as unparsable
         // content (E316), which still satisfies the "at least as strict" policy.
