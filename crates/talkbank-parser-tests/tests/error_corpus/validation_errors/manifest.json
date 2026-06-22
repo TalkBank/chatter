@@ -1107,6 +1107,14 @@
       "source_spec": "spec/errors/E546_unsupported_ses.md"
     },
     {
+      "fixture": "E547_Constant_participant_header_out_of_order.cha",
+      "expected_codes": [
+        "E547"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E547_constant_header_out_of_order.md"
+    },
+    {
       "fixture": "E600_Tier_alignment_skipped_due_to_parse_errors.cha",
       "expected_codes": [
         "E600"

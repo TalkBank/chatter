@@ -127,6 +127,10 @@ pub(crate) fn check_headers(
     // E543: Check header ordering, @Participants must precede @Options and @ID
     check_header_order(headers, errors);
 
+    // E547: Constant participant headers (@Birth of / @Birthplace of / @L1 of)
+    // must immediately follow the @ID block, before any changeable header.
+    check_constant_participant_header_order(headers, errors);
+
     for (speaker, span) in &id_speakers {
         if !speaker.as_str().is_empty() && !declared_participants.contains(speaker) {
             let speaker_str = speaker.as_str();
@@ -194,6 +198,61 @@ fn check_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
             }
             _ => {}
         }
+    }
+}
+
+/// Check that constant participant-specific headers immediately follow the
+/// `@ID` block.
+///
+/// The CHAT spec requires `@Birth of`, `@Birthplace of`, and `@L1 of` to appear
+/// directly after the `@ID` headers, before any changeable header such as
+/// `@Comment`, `@Date`, or `@Situation`. A changeable header between the `@ID`
+/// block and a constant participant header is an ordering violation: the
+/// constant header no longer "immediately follows" `@ID`.
+///
+/// This corresponds to CLAN CHECK error 127 ("Header must follow @ID: or
+/// @Birth of or @Birthplace of or @L1 of header").
+fn check_constant_participant_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+    // The only headers that may legally precede a constant participant header:
+    // an `@ID` header, or another constant participant header.
+    fn is_allowed_predecessor(header: &Header) -> bool {
+        matches!(
+            header,
+            Header::ID(_) | Header::Birth { .. } | Header::Birthplace { .. } | Header::L1Of { .. }
+        )
+    }
+
+    let mut prev: Option<&Header> = None;
+    for (header, span) in headers {
+        // Identify the constant participant header (and its keyword for the
+        // diagnostic); `None` for every other header.
+        let keyword = match header {
+            Header::Birth { .. } => Some("@Birth of"),
+            Header::Birthplace { .. } => Some("@Birthplace of"),
+            Header::L1Of { .. } => Some("@L1 of"),
+            _ => None,
+        };
+
+        if let Some(keyword) = keyword
+            && !prev.is_some_and(is_allowed_predecessor)
+        {
+            let mut err = ParseError::new(
+                ErrorCode::ConstantHeaderOutOfOrder,
+                Severity::Error,
+                SourceLocation::at_offset(span.start as usize),
+                ErrorContext::new(keyword, 0..keyword.len(), keyword),
+                format!(
+                    "{keyword} must immediately follow the @ID block, before any changeable header"
+                ),
+            )
+            .with_suggestion(
+                "Move this header to directly after the @ID headers, before any @Comment, @Date, or other changeable header",
+            );
+            err.location.span = *span;
+            errors.report(err);
+        }
+
+        prev = Some(header);
     }
 }
 
@@ -476,6 +535,82 @@ mod tests {
         assert_eq!(error_vec.len(), 1);
         assert_eq!(error_vec[0].code, ErrorCode::HeaderOutOfOrder);
         assert!(error_vec[0].message.contains("@ID"));
+    }
+
+    // ── Constant participant header ordering tests (E547) ──────────
+
+    /// A changeable header (`@Comment`) between the `@ID` block and `@Birth of`
+    /// emits `E547`.
+    #[test]
+    fn test_e547_comment_between_id_and_birth() {
+        use crate::model::{BulletContent, ChatDate, IDHeader, SpeakerCode};
+
+        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let comment = Header::Comment {
+            content: BulletContent::from_text("a changeable header"),
+        };
+        let birth = Header::Birth {
+            participant: SpeakerCode::new("CHI"),
+            date: ChatDate::new("15-DEC-1970"),
+        };
+        let headers = vec![
+            (&id, Span::DUMMY),
+            (&comment, Span::DUMMY),
+            (&birth, Span::DUMMY),
+        ];
+
+        let errors = ErrorCollector::new();
+        check_constant_participant_header_order(&headers, &errors);
+
+        let error_vec = errors.into_vec();
+        assert_eq!(error_vec.len(), 1);
+        assert_eq!(error_vec[0].code, ErrorCode::ConstantHeaderOutOfOrder);
+        assert!(error_vec[0].message.contains("@Birth of"));
+    }
+
+    /// `@Birth of` immediately after the `@ID` block is valid, no error.
+    #[test]
+    fn test_birth_immediately_after_id_ok() {
+        use crate::model::{ChatDate, IDHeader, SpeakerCode};
+
+        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let birth = Header::Birth {
+            participant: SpeakerCode::new("CHI"),
+            date: ChatDate::new("15-DEC-1970"),
+        };
+        let headers = vec![(&id, Span::DUMMY), (&birth, Span::DUMMY)];
+
+        let errors = ErrorCollector::new();
+        check_constant_participant_header_order(&headers, &errors);
+
+        assert!(errors.into_vec().is_empty());
+    }
+
+    /// Consecutive constant headers are valid: a later `@Birth of` may follow an
+    /// earlier `@Birth of`, no error.
+    #[test]
+    fn test_consecutive_constant_headers_ok() {
+        use crate::model::{ChatDate, IDHeader, SpeakerCode};
+
+        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let birth_chi = Header::Birth {
+            participant: SpeakerCode::new("CHI"),
+            date: ChatDate::new("15-DEC-1970"),
+        };
+        let birth_mot = Header::Birth {
+            participant: SpeakerCode::new("MOT"),
+            date: ChatDate::new("01-JAN-1945"),
+        };
+        let headers = vec![
+            (&id, Span::DUMMY),
+            (&birth_chi, Span::DUMMY),
+            (&birth_mot, Span::DUMMY),
+        ];
+
+        let errors = ErrorCollector::new();
+        check_constant_participant_header_order(&headers, &errors);
+
+        assert!(errors.into_vec().is_empty());
     }
 
     // ── Gem balance tests ──────────────────────────────────────────

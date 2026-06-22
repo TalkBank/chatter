@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|3;06.|male|||Target_Child|||
+@Comment:	a changeable header before the constant headers
+@Birth of CHI:	15-DEC-1970
+*CHI:	hello world .
+@End

@@ -10,7 +10,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - Semantic parity `full`: `90`
 - Behavioral parity `full`: `77`
 - Intentional divergence (semantic full + behavioral partial due to CHECK anomalies): `13`
-- TalkBank enhancements beyond CHECK (no mapped CHECK rule): `133`
+- TalkBank enhancements beyond CHECK (no mapped CHECK rule): `145`
 
 ## Method
 
@@ -144,7 +144,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 124 | Please remove "unlinked" from @Media header. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 125 | "@Options" header must immediately follow "@Participants:" header. | check.cpp (generated reference) | `E522`, `E523`, `E524` | full | full | equal | none | no action | P3 |
 | 126 | "@ID" header must immediately follow "@Participants:" or "@Options" header. | check.cpp (generated reference) | `E505`, `E517`, `E519`, `E522`, `E523`, `E524` | full | full | equal | none | no action | P3 |
-| 127 | Header must follow "@ID:" or "@Birth of" or "@Birthplace of" or "@L1 of" header. | check.cpp (generated reference) | `E505`, `E517`, `E519`, `E522`, `E523`, `E524` | full | full | equal | none | no action | P3 |
+| 127 | Header must follow "@ID:" or "@Birth of" or "@Birthplace of" or "@L1 of" header. | check.cpp (generated reference) | `E547` | full | full | equal | none | no action | P3 |
 | 128 | Unmatched ‹ found on the tier. | check.cpp (generated reference) | `E316` | full | partial | TalkBank stricter | intentional | no action | P2 |
 | 129 | Unmatched › found on the tier. | check.cpp (generated reference) | `E346` | full | partial | TalkBank stricter | intentional | no action | P2 |
 | 130 | Unmatched 〔 found on the tier. | check.cpp (generated reference) | `E316` | full | partial | TalkBank stricter | intentional | no action | P2 |
@@ -391,6 +391,18 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - `E732` `MissingBullet`
 - `E733` `ModCountMismatchTooFew`
 - `E734` `ModCountMismatchTooMany`
+- `E735` `SylUnitMalformed`
+- `E736` `SylIllegalConstituentCode`
+- `E737` `ModsylReconstructionMismatch`
+- `E738` `PhosylReconstructionMismatch`
+- `E739` `PhoalnPairMalformed`
+- `E740` `PhoalnModReconstructionMismatch`
+- `E741` `PhoalnPhoReconstructionMismatch`
+- `E742` `XphointBulletInvalid`
+- `E743` `XphointIntervalNotMonotonic`
+- `E744` `XphointMediaBoundsViolation`
+- `E745` `XphointPhoneReconstructionMismatch`
+- `E746` `XphointGroupCountMismatch`
 - `W108` `SpeakerNotFoundInParticipants`
 - `W601` `EmptyUserDefinedTier`
 - `W602` `UnknownUserDefinedTier`
@@ -507,7 +519,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E502` | `MissingEndHeader` | 7 |
 | `E503` | `MissingUTF8Header` | None |
 | `E504` | `MissingRequiredHeader` | None |
-| `E505` | `InvalidIDFormat` | 126, 127, 143 |
+| `E505` | `InvalidIDFormat` | 126, 143 |
 | `E506` | `EmptyParticipantsHeader` | None |
 | `E507` | `EmptyLanguagesHeader` | 69 |
 | `E508` | `EmptyDateHeader` | None |
@@ -518,12 +530,12 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E513` | `EmptyParticipantRole` | None |
 | `E515` | `EmptyIDRole` | None |
 | `E516` | `EmptyDate` | None |
-| `E517` | `InvalidAgeFormat` | 126, 127, 153 |
+| `E517` | `InvalidAgeFormat` | 126, 153 |
 | `E518` | `InvalidDateFormat` | None |
-| `E519` | `InvalidLanguageCode` | 62, 77, 121, 126, 127 |
-| `E522` | `SpeakerNotDefined` | 12, 13, 18, 60, 61, 68, 100, 125, 126, 127, 133 |
-| `E523` | `OrphanIDHeader` | 61, 68, 100, 125, 126, 127 |
-| `E524` | `BirthUnknownParticipant` | 61, 68, 100, 125, 126, 127 |
+| `E519` | `InvalidLanguageCode` | 62, 77, 121, 126 |
+| `E522` | `SpeakerNotDefined` | 12, 13, 18, 60, 61, 68, 100, 125, 126, 133 |
+| `E523` | `OrphanIDHeader` | 61, 68, 100, 125, 126 |
+| `E524` | `BirthUnknownParticipant` | 61, 68, 100, 125, 126 |
 | `E525` | `UnknownHeader` | None |
 | `E526` | `UnmatchedBeginGem` | None |
 | `E527` | `UnmatchedEndGem` | None |
@@ -546,6 +558,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E544` | `MediaLinkageWithoutTiming` | None |
 | `E545` | `InvalidBirthDateFormat` | None |
 | `E546` | `UnsupportedSesValue` | None |
+| `E547` | `ConstantHeaderOutOfOrder` | 127 |
 | `E600` | `TierValidationError` | None |
 | `E601` | `InvalidDependentTier` | None |
 | `E602` | `MalformedTierHeader` | None |
@@ -586,6 +599,18 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E732` | `MissingBullet` | None |
 | `E733` | `ModCountMismatchTooFew` | None |
 | `E734` | `ModCountMismatchTooMany` | None |
+| `E735` | `SylUnitMalformed` | None |
+| `E736` | `SylIllegalConstituentCode` | None |
+| `E737` | `ModsylReconstructionMismatch` | None |
+| `E738` | `PhosylReconstructionMismatch` | None |
+| `E739` | `PhoalnPairMalformed` | None |
+| `E740` | `PhoalnModReconstructionMismatch` | None |
+| `E741` | `PhoalnPhoReconstructionMismatch` | None |
+| `E742` | `XphointBulletInvalid` | None |
+| `E743` | `XphointIntervalNotMonotonic` | None |
+| `E744` | `XphointMediaBoundsViolation` | None |
+| `E745` | `XphointPhoneReconstructionMismatch` | None |
+| `E746` | `XphointGroupCountMismatch` | None |
 | `W108` | `SpeakerNotFoundInParticipants` | None |
 | `W210` | `MissingWhitespaceBeforeContent` | 3, 4, 14, 19, 66, 67, 92, 93, 98, 148, 160, 161 |
 | `W211` | `MissingWhitespaceAfterOverlap` | 3, 4, 14, 19, 66, 67, 92, 93, 98, 148, 160, 161 |

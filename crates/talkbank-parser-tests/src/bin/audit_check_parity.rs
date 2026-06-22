@@ -309,6 +309,13 @@ fn map_by_id(id: u16) -> Vec<String> {
         120 => &["E248"],
         121 => &["E519"],
         122 => &["E519"],
+        // 127 "Header must follow @ID: or @Birth of / @Birthplace of / @L1 of":
+        // a changeable header (e.g. @Comment) sits between the @ID block and a
+        // constant participant header, displacing it. chatter flags this via
+        // E547. Mapped explicitly so it does not fall through to the message
+        // keyword heuristic, which matched "@ID" and spuriously reported full
+        // parity against unrelated @ID-format codes.
+        127 => &["E547"],
         // 128/130 = unmatched ‹ / 〔 (non-standard CHAT brackets). chatter does
         // not model these as annotation openers; it rejects them as unparsable
         // content (E316), which still satisfies the "at least as strict" policy.

@@ -480,6 +480,13 @@ pub enum ErrorCode {
     /// Unsupported `@ID` SES value.
     #[code("E546")]
     UnsupportedSesValue,
+    /// A constant participant-specific header (`@Birth of`, `@Birthplace of`,
+    /// or `@L1 of`) does not immediately follow the `@ID` block: a changeable
+    /// header (e.g. `@Comment`, `@Date`) appears between the `@ID` headers and
+    /// the constant header. Per the CHAT manual these constant headers must
+    /// directly follow `@ID`. Corresponds to CLAN CHECK error 127.
+    #[code("E547")]
+    ConstantHeaderOutOfOrder,
 
     // =========================================================================
     // Tier Errors (E6xx)
