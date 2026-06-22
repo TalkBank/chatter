@@ -9,6 +9,29 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-22
+
+### Fixed
+
+- **Validation cache could serve a stale verdict across rule-set changes.**
+  `chatter validate` keyed its result cache on the cache crate's package
+  version, which does not change when validation rules change, so a "Valid"
+  result cached before a new rule (such as a retrace-marker check) existed kept
+  being served, while a fresh conversion of the same bytes correctly rejected
+  them. The cache key now folds in a fingerprint over every error-code rule, so
+  adding, removing, or renaming any rule invalidates stale entries; the cache
+  is kept and still functions, only keyed correctly.
+- CLI usage lines pin the binary name to `chatter` regardless of the invoked
+  path (clap `bin_name`).
+- The book renders Mermaid diagrams again (restored mdbook-mermaid assets).
+
+### Changed
+
+- CI book toolchain bumped to mdBook 0.5.3 and mdbook-mermaid 0.17.0.
+- Build: force `serialize-javascript >= 7.0.5` to clear advisories, and bump
+  `rand` in the spec crate.
+- Docs: the book intro is de-staged for the public release (download-first).
+
 ## [0.1.0] - 2026-06-15
 
 First public release.
@@ -55,5 +78,6 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/TalkBank/chatter/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TalkBank/chatter/releases/tag/v0.1.0
