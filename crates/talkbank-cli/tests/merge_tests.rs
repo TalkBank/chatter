@@ -31,7 +31,7 @@ const FIX_REF_TWO_UTT_NO_MARKUP: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tsmoke, audio
 *CHI:\thello world . \u{15}0_1000\u{15}
 *CHI:\tgoodbye now . \u{15}3000_4000\u{15}
@@ -217,7 +217,7 @@ const FIX_REF_CHI_NO_BULLETS: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tprecond, audio
 *CHI:\thello there .
 *CHI:\tgoodbye .
@@ -272,7 +272,7 @@ const FIX_REF_CHI_PLUS_INV: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child, INV Investigator
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @ID:\teng|corpus|INV|||||Investigator|||
 @Media:\tambig, audio
 *CHI:\thello there . \u{15}0_1000\u{15}
@@ -336,7 +336,7 @@ const FIX_REF_CHI_ENG: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tprecond_lang, audio
 *CHI:\thello there . \u{15}0_1000\u{15}
 @End

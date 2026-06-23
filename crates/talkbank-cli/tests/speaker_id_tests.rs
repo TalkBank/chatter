@@ -169,7 +169,7 @@ const FIX_REF_CHI_POND: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|frogstory|CHI|3;06.|||Target_Child|||
+@ID:\teng|frogstory|CHI|3;06.||||Target_Child|||
 @Media:\tcli_borderline, audio
 *CHI:\tthe frog jumped in the pond . \u{15}0_2000\u{15}
 *CHI:\tthe frog is in the pond . \u{15}2000_4000\u{15}
@@ -322,7 +322,7 @@ const FIX_REF_CHI_FROG: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|frogstory|CHI|3;06.|||Target_Child|||
+@ID:\teng|frogstory|CHI|3;06.||||Target_Child|||
 @Media:\tcli_write_override, audio
 *CHI:\twhere did the frog go . \u{15}0_2000\u{15}
 *CHI:\tthe frog fell in the jar . \u{15}2500_4500\u{15}

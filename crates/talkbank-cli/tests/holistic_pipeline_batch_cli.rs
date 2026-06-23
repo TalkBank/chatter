@@ -22,7 +22,7 @@ const HOLISTIC_JSON: &str = r#"{
 /// Minimal two-speaker donor (anonymous PAR0/PAR1) + a CHI reference, written
 /// to temp files. Valid CHAT (4-pipe @ID role field).
 const DONOR: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR0 Participant, PAR1 Participant\n@ID:\teng|frog|PAR0|||||Participant|||\n@ID:\teng|frog|PAR1|||||Participant|||\n@Media:\tsmoke, audio\n*PAR0:\twhere did the frog go . \u{15}0_2000\u{15}\n*PAR1:\ttell me about the picture . \u{15}2000_2500\u{15}\n*PAR0:\tthe frog fell in the jar . \u{15}2500_4500\u{15}\n@End\n";
-const REFERENCE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|frog|CHI|3;06.||||Target_Child||\n@Media:\tsmoke, audio\n*CHI:\twhere did the frog go . \u{15}0_2000\u{15}\n*CHI:\tthe frog fell in the jar . \u{15}2500_4500\u{15}\n@End\n";
+const REFERENCE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|frog|CHI|3;06.||||Target_Child|||\n@Media:\tsmoke, audio\n*CHI:\twhere did the frog go . \u{15}0_2000\u{15}\n*CHI:\tthe frog fell in the jar . \u{15}2500_4500\u{15}\n@End\n";
 
 /// Same donor but PAR0's `@ID` carries an age (`3;06.` = 42 months), so the
 /// `@ID`-age fallback path has something to find when the session-context

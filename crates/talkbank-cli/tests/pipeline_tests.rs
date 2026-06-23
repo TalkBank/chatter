@@ -18,7 +18,7 @@ const FIX_REF_CHI_FROG: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|frogstory|CHI|3;06.||||Target_Child||
+@ID:\teng|frogstory|CHI|3;06.||||Target_Child|||
 @Media:\tpipeline_smoke, audio
 *CHI:\twhere did the frog go . \u{15}0_2000\u{15}
 *CHI:\tthe frog fell in the jar . \u{15}2500_4500\u{15}
@@ -113,17 +113,22 @@ fn pipeline_clean_winner_end_to_end() -> Result<(), TestError> {
     Ok(())
 }
 
-/// Reference that PARSES but fails `chatter validate` (malformed
-/// `@ID`: `Target_Child` lands in the SES field via three pipes
-/// after the age, triggering E515/E546). The pre-merge path is
-/// lenient enough to merge this, so it is the right fixture to prove
-/// the gate catches validation-only invalidity, not just hard parse
-/// errors.
+/// Reference that PARSES cleanly but fails `chatter validate`: a
+/// well-formed-but-wrong `@ID` where `Target_Child` lands in the SES
+/// field (3 pipes after the age, role field left empty), triggering
+/// E515/E546. This is validation-only invalidity, NOT a parse error,
+/// so it proves the pre-flight gate runs full validation, not just a
+/// parse-success check. NOTE: kept deliberately invalid via field
+/// POSITION (a clean 10-field parse), so the recovery-node backstop
+/// does not turn it into a parse error (E342). Do NOT run
+/// `scripts/cleanup/fix_malformed_chi_id_fixtures.py` over this fixture:
+/// it would normalize the `@ID` and silently make the reference valid,
+/// breaking this refusal test (the test is the guard if that happens).
 const FIX_REF_INVALID_ID: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|frogstory|CHI|3;06.|||Target_Child|||
+@ID:\teng|frogstory|CHI|3;06.|||Target_Child||||
 @Media:\tpipeline_smoke, audio
 *CHI:\twhere did the frog go . \u{15}0_2000\u{15}
 @End

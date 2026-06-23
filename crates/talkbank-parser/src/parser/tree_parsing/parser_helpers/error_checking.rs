@@ -6,7 +6,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
-use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER};
+use crate::node_types::{
+    FULL_DOCUMENT, GRA_DEPENDENT_TIER, LINE, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER,
+};
 use tree_sitter::Node;
 
 use super::error_analysis::analyze_dependent_tier_error_with_context;
@@ -90,6 +92,23 @@ pub(crate) fn check_for_errors_recursive_with_context(
 /// it can dedup against already-reported spans before emitting.
 pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<ParseError>) {
     if node.is_error() {
+        // A structural-incompleteness ERROR wraps the recovered document: when a
+        // top-level element is missing (no @End, or a malformed @Begin), the whole
+        // `document` rule fails to complete and tree-sitter returns an ERROR node
+        // AROUND the recovered headers/lines. The validation layer reports that
+        // precisely (E502 missing @End, E504 missing @Begin), so reporting the
+        // wrapper too would be a misleading, redundant whole-file E316. Recurse
+        // into it to surface only LOCALIZED recovery nodes; do not report the
+        // wrapper itself. A leaf/content ERROR (a stray token, a malformed code)
+        // wraps no document structure and is reported normally below.
+        if wraps_document_structure(node) {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                collect_recovery_nodes(child, source, out);
+            }
+            return;
+        }
+
         let start = node.start_byte();
         let end = node.end_byte();
         let text = node.utf8_text(source.as_bytes()).unwrap_or("");
@@ -143,4 +162,20 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
     for child in node.children(&mut cursor) {
         collect_recovery_nodes(child, source, out);
     }
+}
+
+/// Whether an `ERROR` node is a structural-incompleteness WRAPPER, i.e. it
+/// directly contains recovered document-structure children (`line`, a
+/// `*_header`, or `full_document`). Such an ERROR appears when a top-level
+/// element is missing (no `@End`/`@Begin`) and tree-sitter wraps the whole
+/// recovered document in one ERROR node; the validation layer reports that
+/// precisely, so the backstop recurses into it rather than reporting the wrapper.
+/// A content/leaf ERROR (a stray token, a malformed inline code) wraps no such
+/// structure and returns false.
+fn wraps_document_structure(node: Node) -> bool {
+    let mut cursor = node.walk();
+    node.children(&mut cursor).any(|child| {
+        let kind = child.kind();
+        kind == LINE || kind == FULL_DOCUMENT || kind.ends_with("_header")
+    })
 }

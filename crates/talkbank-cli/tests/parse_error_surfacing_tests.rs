@@ -75,6 +75,35 @@ fn postcode_after_final_bullet_is_rejected_via_cli() -> Result<(), TestError> {
     assert_parity_fixture_rejected("CHECK_108_postcode_after_bullet.cha", "E316")
 }
 
+/// A missing `@End` makes tree-sitter wrap the WHOLE document in one ERROR node
+/// around the recovered headers/lines. The validation layer already reports that
+/// precisely (E502, "Missing @End header"); the recovery-node backstop must NOT
+/// also emit a misleading whole-file E316 over `@UTF8`. So a missing-`@End` file
+/// must surface E502 and NOT E316. (Regression: the backstop reported the
+/// structural wrapper, double-flagging the file and breaking audit-record counts.)
+#[test]
+fn missing_end_reports_e502_not_a_whole_file_e316() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    // A valid preamble + utterance, but no `@End` line.
+    let content = "@UTF8\n@Begin\n@Languages:\teng\n\
+        @Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n\
+        *CHI:\thello world .\n";
+    let path = write_fixture(dir.path(), "session.cha", content)?;
+    let output = harness.run_validate(&path, &["--force"])?;
+    let text = combined_output(&output);
+    assert!(
+        text.contains("E502"),
+        "expected E502 (missing @End) for a file with no @End, got:\n{text}"
+    );
+    assert!(
+        !text.contains("E316"),
+        "the recovery-node backstop must not report the whole-document ERROR wrapper as E316; \
+         the validation layer owns the missing-@End diagnostic (E502), got:\n{text}"
+    );
+    Ok(())
+}
+
 /// A `<...>` group on the main tier with no following annotation. Both parsers
 /// only parse it via a synthetic MISSING recovery (`retrace_complete`), but CLAN
 /// rejects it ("< > should be followed by [ ]") and recovery is not validity.

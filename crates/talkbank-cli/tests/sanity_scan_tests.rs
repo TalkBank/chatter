@@ -26,7 +26,7 @@ const FIX_MERGED_INVERTED_MLU: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child, INV Investigator
-@ID:\teng|fakecorpus|CHI|3;06.|||Target_Child|||
+@ID:\teng|fakecorpus|CHI|3;06.||||Target_Child|||
 @ID:\teng|fakecorpus|INV|||||Investigator|||
 *CHI:\tthe dog ran across the field very quickly today .
 *CHI:\tI went to school yesterday and then I had a nice lunch with my best friend .
