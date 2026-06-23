@@ -87,3 +87,61 @@ fn update_without_updater_fails_with_actionable_message() {
         "error message is not actionable (no reinstall pointer):\n{stderr}"
     );
 }
+
+/// Regression for the 2026-06-22 install/update mismatch (operator report):
+/// cargo-dist names the bundled self-updater after the *package*
+/// (`talkbank-cli-update`), but `chatter update` only looks for
+/// `chatter-update`. So the updater the official installer actually drops next
+/// to `chatter` is never found, and `chatter update` reports it "not installed"
+/// even on a correct, complete install.
+///
+/// Top-down: drives the real `chatter update` against an install layout whose
+/// updater is named the way cargo-dist names it (`<package>-update`), staged as
+/// a sibling of a copied `chatter`. The invariant is rename-agnostic: whatever
+/// the package is called, `chatter update` must launch `<package>-update`.
+#[cfg(unix)]
+#[test]
+fn update_runs_the_updater_named_the_way_cargo_dist_installs_it() {
+    use std::os::unix::fs::PermissionsExt;
+
+    // cargo-dist derives the standalone updater's name from the package name and
+    // appends `-update` (+ platform exe suffix); this is what the real installer
+    // places beside `chatter`.
+    let updater_stem = concat!(env!("CARGO_PKG_NAME"), "-update");
+    let updater_file = format!("{updater_stem}{}", std::env::consts::EXE_SUFFIX);
+
+    let dir = std::env::temp_dir().join(format!("chatter-update-cargodist-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create temp install dir");
+
+    // Run a COPY of chatter from the temp dir so current_exe().parent() is the
+    // directory we control, the location the launcher checks first.
+    let chatter_copy = dir.join(format!("chatter{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(env!("CARGO_BIN_EXE_chatter"), &chatter_copy).expect("copy chatter");
+    std::fs::set_permissions(&chatter_copy, std::fs::Permissions::from_mode(0o755))
+        .expect("chmod chatter copy");
+
+    // Fake updater under cargo-dist's real name: prints a marker and exits 0.
+    let updater_path = dir.join(&updater_file);
+    std::fs::write(&updater_path, b"#!/bin/sh\necho CHATTER_UPDATER_RAN\n")
+        .expect("write fake updater");
+    std::fs::set_permissions(&updater_path, std::fs::Permissions::from_mode(0o755))
+        .expect("chmod fake updater");
+
+    let out = Command::new(&chatter_copy)
+        .arg("update")
+        .env("PATH", &dir) // only the staged sibling is discoverable
+        .output()
+        .expect("failed to run chatter update");
+
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success() && stdout.contains("CHATTER_UPDATER_RAN"),
+        "`chatter update` did not launch the updater cargo-dist installs \
+         (`{updater_file}`); the launcher only looks for `chatter-update`.\n\
+         status: {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+}
