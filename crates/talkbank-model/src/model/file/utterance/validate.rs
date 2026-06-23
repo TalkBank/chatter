@@ -159,13 +159,23 @@ impl Validate for Utterance {
             }
         }
 
-        // E605: Warn on unsupported (non-standard, non-%x) dependent tiers.
+        // E605: Reject unsupported (non-standard, non-%x) dependent tiers.
+        //
+        // chatter's supported dependent-tier set is closed: a tier is valid only
+        // if it is one of the supported standard tiers OR a `%x`-prefixed
+        // user-defined tier. Anything else is invalid CHAT, so this is an ERROR,
+        // not a warning (CLAN CHECK error 17, "Tier is not declared in depfile").
+        // The supported set deliberately excludes the legacy `%grt`/`%tra`/`%trn`
+        // (and `%umor`) tiers retired when morphology was standardized on a single
+        // UD `%mor` tier; CLAN still accepts `%grt`/`%tra`/`%trn`, so chatter is
+        // intentionally stricter there (a documented divergence, see the book's
+        // "Dependent Tiers" page). `%x*` user-defined tiers never reach here.
         for tier in &self.dependent_tiers {
             if let DependentTier::Unsupported(t) = tier {
                 errors.report(
                     crate::ParseError::new(
                         crate::ErrorCode::UnsupportedDependentTier,
-                        crate::Severity::Warning,
+                        crate::Severity::Error,
                         crate::SourceLocation::new(t.span),
                         crate::ErrorContext::new(
                             t.label.as_str(),

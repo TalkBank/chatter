@@ -1,7 +1,7 @@
 # Dependent Tiers
 
 **Status:** Reference
-**Last updated:** 2026-06-19 18:06 EDT
+**Last updated:** 2026-06-22 23:33 EDT
 
 Dependent tiers appear on lines beginning with `%` immediately after an utterance. They provide annotations linked to the main tier content.
 
@@ -285,4 +285,23 @@ These tiers contain plain text with no bullets, timing, or structural alignment:
 
 ## User-Defined Tiers
 
-Tiers prefixed with `%x` (e.g., `%xcod`, `%xact`) are user-defined dependent tiers. They are preserved during parsing and roundtrip but receive no structural validation beyond basic format checks.
+Tiers prefixed with `%x` (e.g., `%xcod`, `%xact`) are user-defined dependent tiers. They are preserved during parsing and roundtrip but receive no structural validation beyond basic format checks. **Any `%x`-prefixed tier is always accepted**, this is the open extension point for project-specific annotation.
+
+## The Supported Set Is Closed
+
+A dependent tier is valid in chatter **only if** it is one of the standard tiers documented above (the structured, Phon, bullet-content, and text tiers) **or** a `%x`-prefixed user-defined tier. Any other `%`-tier is invalid CHAT, and chatter rejects the file with error **E605** (`UnsupportedDependentTier`). This is a closed set by design: `chatter validate` is the binding judgment on CHAT validity, so an unrecognized dependent tier is an error, not a warning.
+
+### Deliberate Divergence from CLAN: Retired Legacy Tiers
+
+When TalkBank standardized morphology on a single Universal Dependencies `%mor` tier (plus `%gra` for relations), several legacy dependent tiers were retired. CLAN's `check` still accepts three of them, so on these chatter is **intentionally stricter**, a deliberate, documented divergence:
+
+| Retired tier | CLAN `check` | chatter |
+|--------------|--------------|---------|
+| `%trn` | accepts | rejects (E605) |
+| `%tra` | accepts | rejects (E605) |
+| `%grt` | accepts | rejects (E605) |
+| `%umor` | rejects | rejects (E605) |
+
+The modern UD-`%mor` workflow has one morphology tier (`%mor`) plus `%gra`; the older training/translation/variant tiers are no longer part of the format chatter validates. `%umor` is rejected by both validators and is listed only for completeness. Note that `%xtra` (with the `%x` prefix) is a perfectly valid user-defined tier; only the bare `%tra` is retired.
+
+This is one instance of a general principle: where chatter intentionally departs from CLAN/CHECK behavior, the divergence is documented rather than left implicit. See [CHECK Parity Audit](../architecture/errors-and-validation/check-parity-audit.md).

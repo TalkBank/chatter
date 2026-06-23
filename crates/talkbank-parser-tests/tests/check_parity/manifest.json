@@ -144,6 +144,16 @@
         "E549"
       ],
       "note": "Two @ID lines naming the same speaker (CHI). Distinct from the @Participants-duplicate variant (CHECK_013_duplicate_speaker.cha): CLAN 13 fires for duplicate @ID lines too, which chatter previously missed. Now E549 via check_duplicate_id_headers. CLAN CHECK 13."
+    },
+    {
+      "check_code": 17,
+      "check_message": "Tier is not declared in depfile file.",
+      "fixture": "CHECK_017_undeclared_dep_tier.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E605"
+      ],
+      "note": "Undeclared dependent tier %zzz: (neither %x* nor a chatter-supported standard tier). chatter rejects it via E605 UnsupportedDependentTier (Error severity). The supported set deliberately excludes the legacy %grt/%tra/%trn/%umor tiers retired with the UD-%mor consolidation, so chatter is intentionally stricter than CLAN there (documented divergence). %x* is always valid. CLAN CHECK 17."
     }
   ]
 }

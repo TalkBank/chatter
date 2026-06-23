@@ -27,6 +27,7 @@ use std::process::Command;
 use serde::Deserialize;
 use talkbank_model::ErrorCollector;
 use talkbank_model::ParseOutcome;
+use talkbank_model::Severity;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
 
@@ -73,6 +74,24 @@ fn load_manifest() -> Result<ParityManifest, TestError> {
         .map_err(|e| TestError::Failure(format!("parse {}: {e}", path.display())))
 }
 
+/// Collect the error-severity diagnostic codes from a collector.
+///
+/// Parity is about VALIDITY: does chatter reject the file? Only error-severity
+/// diagnostics invalidate a file (a `chatter validate` run reports `Valid: 0`
+/// iff at least one Error is present). Warnings do NOT make a file invalid, so
+/// they must NOT count as "chatter flags this CLAN rule": collecting warnings
+/// would let a warning-only diagnostic masquerade as parity (e.g. E605 was a
+/// Warning, so an undeclared dependent tier looked matched while the file still
+/// validated clean).
+fn error_severity_codes(collector: &ErrorCollector) -> Vec<String> {
+    collector
+        .to_vec()
+        .iter()
+        .filter(|e| e.severity == Severity::Error)
+        .map(|e| e.code.to_string())
+        .collect()
+}
+
 /// Run chatter's parser + validator on a fixture and return the diagnostic codes.
 fn chatter_codes(parser: &TreeSitterParser, fixture: &str) -> Result<Vec<String>, TestError> {
     let path = parity_dir().join("fixtures").join(fixture);
@@ -80,21 +99,12 @@ fn chatter_codes(parser: &TreeSitterParser, fixture: &str) -> Result<Vec<String>
         .map_err(|e| TestError::Failure(format!("read fixture {fixture}: {e}")))?;
     let parse_errors = ErrorCollector::new();
     let outcome = parser.parse_chat_file_fragment(&content, 0, &parse_errors);
-    let mut codes: Vec<String> = parse_errors
-        .to_vec()
-        .iter()
-        .map(|e| e.code.to_string())
-        .collect();
+    let mut codes = error_severity_codes(&parse_errors);
     if let ParseOutcome::Parsed(mut chat_file) = outcome {
         let validation_errors = ErrorCollector::new();
         let stem = path.file_stem().and_then(|s| s.to_str());
         chat_file.validate_with_alignment(&validation_errors, stem);
-        codes.extend(
-            validation_errors
-                .to_vec()
-                .iter()
-                .map(|e| e.code.to_string()),
-        );
+        codes.extend(error_severity_codes(&validation_errors));
     }
     Ok(codes)
 }

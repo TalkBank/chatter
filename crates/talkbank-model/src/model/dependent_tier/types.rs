@@ -188,7 +188,9 @@ pub enum DependentTier {
     ///
     /// Distinct from `UserDefined` which is intentional (`%xLABEL`). This variant
     /// captures tiers that the grammar's catch-all matched but that are not
-    /// recognized CHAT tiers. Validators emit a warning (E605) for these.
+    /// recognized CHAT tiers. Validators reject these as an error (E605): the
+    /// supported dependent-tier set is closed, so an unrecognized non-`%x` tier
+    /// makes the file invalid.
     Unsupported(UserDefinedDependentTier),
 }
 

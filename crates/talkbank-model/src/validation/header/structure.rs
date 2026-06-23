@@ -124,6 +124,14 @@ pub(crate) fn check_headers(
         );
     }
 
+    // Header ordering checks. NOTE: the immediate-follows family below
+    // (E547/E548/E551) all share one shape, a single pass tracking `prev` plus a
+    // per-rule allowed-predecessor set. They are kept as explicit sibling
+    // functions for readability; if a 4th immediate-follows rule appears,
+    // collapse them into one table-driven `check_immediate_follows` helper.
+    // (E543 is a precedence rule, "X before @Participants", not an
+    // immediate-follows rule, so it stays separate.)
+    //
     // E543: Check header ordering, @Participants must precede @Options and @ID
     check_header_order(headers, errors);
 
@@ -328,7 +336,6 @@ fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
 /// declaration. Empty speaker codes are skipped (an absent code is a different
 /// error, not a duplicate).
 fn check_duplicate_id_headers(id_speakers: &[(SpeakerCode, Span)], errors: &impl ErrorSink) {
-    use std::collections::HashSet;
     let mut seen: HashSet<&str> = HashSet::new();
     for (speaker, span) in id_speakers {
         let code = speaker.as_str();
