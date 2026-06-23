@@ -148,6 +148,22 @@ pub fn parse_file_with_errors<'a>(
                     .into_result()
                 {
                     Ok(main_tier) => {
+                        // Recovery is not validity: a `<...>` group with no
+                        // following annotation only parses via a synthesized
+                        // retrace (Retrace::synthesized_missing_annotation). CLAN
+                        // rejects it ("< > should be followed by [ ]"), so surface
+                        // the matching MISSING diagnostic (E342) here, where the
+                        // ErrorSink is available, mirroring the tree-sitter
+                        // backstop. The AST (and SemanticEq) is unchanged.
+                        if has_synthesized_missing_annotation(&main_tier.tier_body.contents) {
+                            report_error(
+                                errors,
+                                talkbank_model::errors::codes::ErrorCode::MissingRequiredElement,
+                                talkbank_model::Severity::Error,
+                                main_tier_tokens,
+                                "angle-bracket group must be followed by an annotation ([ ])",
+                            );
+                        }
                         let dep_tiers = parse_dependent_tiers(tokens, &mut pos, errors);
                         lines.push(Line::Utterance(Box::new(Utterance {
                             main_tier,
@@ -382,6 +398,21 @@ fn parse_dependent_tiers<'a>(
     }
 
     dep_tiers
+}
+
+/// Whether any content item is a synthesized recovery from a `<...>` group that
+/// lacked a following annotation, recursing into nested groups, quotations, and
+/// retraces. Used to surface the MISSING-annotation diagnostic (E342) that the
+/// chumsky combinators cannot emit themselves (no ErrorSink access).
+fn has_synthesized_missing_annotation(items: &[ContentItem<'_>]) -> bool {
+    items.iter().any(|item| match item {
+        ContentItem::Retrace(r) => {
+            r.synthesized_missing_annotation || has_synthesized_missing_annotation(&r.content)
+        }
+        ContentItem::Group(g) => has_synthesized_missing_annotation(&g.contents),
+        ContentItem::Quotation(q) => has_synthesized_missing_annotation(&q.contents),
+        _ => false,
+    })
 }
 
 /// Report a parse error with a specific error code.

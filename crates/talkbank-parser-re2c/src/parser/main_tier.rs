@@ -395,6 +395,7 @@ pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>
                         content: contents,
                         kind,
                         is_group: true,
+                        synthesized_missing_annotation: false,
                         annotations,
                     })
                 } else if annotations.is_empty() {
@@ -404,15 +405,15 @@ pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>
                     // `retrace_complete`, producing
                     // `Retrace { kind: Full, is_group: true }` in the model.
                     // Mirror that recovery here so SemanticEq holds on
-                    // malformed input. The diagnostic emission for this
-                    // recovery path is tracked separately, the chumsky
-                    // combinator does not currently have ErrorSink access;
-                    // see `docs/parity-report.md` § MISSING-Token Recovery
-                    // Policy.
+                    // malformed input, and flag it so the file-level parser
+                    // emits the matching MISSING diagnostic (E342); the chumsky
+                    // combinator itself has no ErrorSink access. See this
+                    // crate's MISSING-Token Recovery Policy.
                     ContentItem::Retrace(Retrace {
                         content: contents,
                         kind: RetraceKindParsed::Complete,
                         is_group: true,
+                        synthesized_missing_annotation: true,
                         annotations,
                     })
                 } else {

@@ -198,6 +198,21 @@ impl Span {
     pub fn contains_offset(&self, offset: u32) -> bool {
         self.start <= offset && offset < self.end
     }
+
+    /// Whether this span intersects `other` (half-open byte ranges).
+    ///
+    /// Two half-open ranges `[a.start, a.end)` and `[b.start, b.end)` overlap
+    /// iff `a.start < b.end && b.start < a.end`. Unlike [`contains_span`], this
+    /// is symmetric and detects partial overlap, not just containment. A
+    /// zero-width span never overlaps anything (it covers no bytes); widen it to
+    /// at least one byte at the call site if a point should match a containing
+    /// span.
+    ///
+    /// [`contains_span`]: Span::contains_span
+    #[inline]
+    pub fn overlaps(&self, other: Span) -> bool {
+        self.start < other.end && other.start < self.end
+    }
 }
 
 impl From<Range<usize>> for Span {

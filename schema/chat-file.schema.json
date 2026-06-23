@@ -4848,7 +4848,7 @@
       "type": "integer"
     },
     "MediaFilename": {
-      "description": "Media filename recorded in `@Media` (without extension).\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>",
+      "description": "Media filename recorded in `@Media` (a local datafile basename, or a\nremote URL).\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>",
       "type": "string"
     },
     "MediaHeader": {

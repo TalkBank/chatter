@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-06-22 19:33 EDT
+**Last modified:** 2026-06-23 13:31 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -493,14 +493,26 @@ recursive traversal**, NOT adjacent indices in the flat
 etc.) are part of the sequence. Always use `walk_words` or
 equivalent in-order walker, never raw index adjacency.
 
-### Reference Corpus (100% Required)
+### Reference Corpus (a regression signal, NOT a validity authority)
 
-`corpus/reference/` is the sacred reference corpus. Every file MUST
-be valid CHAT. All files must pass:
+`corpus/reference/` is a **synthesized** set of fixtures built to
+exercise CHAT constructs. It is NOT real data and NOT an authority on
+what is valid CHAT: any fixture in it can be wrong, including being
+invalid CHAT mistakenly committed as valid. So when a parser/validation
+change causes a reference file to be rejected, do NOT reflexively treat
+that as a regression to suppress. Adjudicate the file against the real
+authorities (CLAN `check` as a strict lower bound, and the CHAT manual);
+if the file is in fact invalid, FIX THE DATA (correct it, or move it to
+`spec/errors/` as an invalid example), do not weaken the parser to keep
+it passing. The intent is still that every file currently in
+`corpus/reference/` be valid CHAT, so the roundtrip gate stays green:
 
 ```bash
 cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
 ```
+
+but "the gate went red" is a prompt to check the data, not proof the
+change is wrong.
 
 ### Mandatory Regression Gate (Parser/Model/Alignment)
 
@@ -524,6 +536,17 @@ until both workflows have completed.
 - Do not fabricate dummy model values during parser recovery.
 - On malformed input, report diagnostics and mark parse-taint
   (`ParseHealth`).
+- **Recovery is not validity.** The tree-sitter parser recovers from
+  malformed input by inserting `ERROR` / `MISSING` CST nodes and
+  continuing, so the LSP and downstream repair always get an AST. But a
+  document that NEEDED a recovery node did not conform to the grammar
+  and is invalid: a whole-tree backstop in `parse_lines_with_old_tree`
+  surfaces every surviving recovery node not already covered by a
+  per-region diagnostic (`ERROR` -> `UnparsableContent`/E316, `MISSING`
+  -> `MissingRequiredElement`/E342). Never silently drop a recovery
+  node; the AST is still produced (recovery preserved), only the
+  diagnostic is added. The re2c oracle must mirror this (emit a matching
+  diagnostic on the same input), per its MISSING-Token Recovery Policy.
 - Lenient recovery must not fail fast on malformed existing `%mor`
   / `%gra` tiers. If the source contains a `%mor` or `%gra` line,
   the recovered AST must preserve that tier slot in place even when

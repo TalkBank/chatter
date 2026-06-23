@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
-use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, PHO_DEPENDENT_TIER};
+use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER};
 use tree_sitter::Node;
 
 use super::error_analysis::analyze_dependent_tier_error_with_context;
@@ -64,5 +64,83 @@ pub(crate) fn check_for_errors_recursive_with_context(
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         check_for_errors_recursive_with_context(child, source, errors, new_tier_type);
+    }
+}
+
+/// Walk the entire CST and COLLECT a diagnostic for every surviving
+/// tree-sitter recovery node (`ERROR` and `MISSING`).
+///
+/// The parser deliberately recovers from malformed input by inserting these
+/// nodes and continuing, so the LSP and downstream repair always get an AST.
+/// But recovery is not validity: a document that needed a synthetic recovery
+/// node did not conform to the grammar, so each such node is a
+/// `Severity::Error`. `ERROR` -> [`ErrorCode::UnparsableContent`] (E316);
+/// `MISSING` -> [`ErrorCode::MissingRequiredElement`] (E342).
+///
+/// This is the whole-tree BACKSTOP for the streaming lowering, which only
+/// inspects recovery nodes in the specific regions its per-region handlers
+/// descend into (top-level children, one level into `LINE`, dependent-tier
+/// children). Recovery nodes nested elsewhere (a stray token after a matched
+/// header, mid-utterance content) were silently dropped; this catch-all
+/// surfaces them. It COLLECTS rather than reports so the caller can suppress
+/// any node already covered by a (richer) region diagnostic before emitting.
+///
+/// Recursion stops at a recovery node: its subtree is accounted for by the node
+/// itself. The caller owns `out` (mirroring [`check_for_errors_recursive`]) so
+/// it can dedup against already-reported spans before emitting.
+pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<ParseError>) {
+    if node.is_error() {
+        let start = node.start_byte();
+        let end = node.end_byte();
+        let text = node.utf8_text(source.as_bytes()).unwrap_or("");
+        let first_line = text.lines().next().unwrap_or(text).trim();
+        out.push(
+            ParseError::new(
+                ErrorCode::UnparsableContent,
+                Severity::Error,
+                SourceLocation::from_offsets(start, end),
+                ErrorContext::new(source, start..end, text),
+                format!("Unparsable content: tree-sitter could not parse '{first_line}'"),
+            )
+            .with_suggestion(
+                "Check the CHAT format specification for valid syntax at this position",
+            ),
+        );
+        return;
+    }
+
+    if node.is_missing() {
+        // A MISSING `newline` is a LAYOUT omission, not a content invalidity:
+        // the grammar requires a newline after `@End` (and other lines), but a
+        // CHAT file legitimately omits the final trailing newline at EOF, and
+        // CLAN `check` accepts that. Flagging it would wrongly reject every
+        // newline-less file. Only content recovery nodes (ERROR, and MISSING
+        // content tokens like `retrace_complete`) are invalidity here.
+        if node.kind() == NEWLINE {
+            return;
+        }
+
+        let start = node.start_byte();
+        let end = node.end_byte();
+        out.push(
+            ParseError::new(
+                ErrorCode::MissingRequiredElement,
+                Severity::Error,
+                SourceLocation::from_offsets(start, end),
+                ErrorContext::new(source, start..end, ""),
+                format!(
+                    "Missing required '{}': the document is incomplete here and was only \
+                     parsed via tree-sitter recovery (recovery is not validity)",
+                    node.kind()
+                ),
+            )
+            .with_suggestion("Supply the element required by the CHAT grammar at this position"),
+        );
+        return;
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_recovery_nodes(child, source, out);
     }
 }

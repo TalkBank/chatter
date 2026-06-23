@@ -273,6 +273,15 @@ pub struct Retrace<'a> {
     pub kind: RetraceKindParsed,
     /// Whether this retrace originated from a `<group> [/]` (angle brackets).
     pub is_group: bool,
+    /// True iff this retrace is a RECOVERY from a `<...>` group that had no
+    /// following annotation. `group_with_annotations` requires one; on its
+    /// absence both parsers recover to `Retrace { kind: Complete, is_group:
+    /// true, annotations: [] }`, model-indistinguishable from a real
+    /// `<...> [//]`. This flag is the only thing that distinguishes the
+    /// synthesized case, so the file-level parser can emit a matching MISSING
+    /// diagnostic (E342) on it (recovery is not validity; see this crate's
+    /// MISSING-Token Recovery Policy). It does NOT affect model conversion.
+    pub synthesized_missing_annotation: bool,
     /// Non-retrace annotations that followed the retrace marker (e.g., `[?]` after `[/]`).
     /// In grammar.js, annotations attach to `word_with_optional_annotations`, so
     /// they belong to the retrace, not the word inside it.

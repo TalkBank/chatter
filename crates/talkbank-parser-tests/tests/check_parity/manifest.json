@@ -194,6 +194,46 @@
         "E531"
       ],
       "note": "@Media filename ('differentname') does not match the datafile basename. chatter HAS E531 MediaFilenameMismatch, but the check was DEAD via the CLI: the validation_runner passed `None` for the filename so it never ran (it only fired in the parity harness, which passes the stem, masking the gap). Fixed by threading the file stem through validate_single_file_streaming. CLAN exempts remote URL @Media (verified: `@Media: \"https://...\"` -> no 157), so E531 now exempts URLs too. CLAN CHECK 157."
+    },
+    {
+      "check_code": 5,
+      "check_message": "Illegal colon on a header that takes no colon (@Begin).",
+      "fixture": "CHECK_005_begin_illegal_colon.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "`@Begin:` (a stray colon on the no-colon @Begin header) parses as a valid @Begin followed by a stray `:` ERROR node. The streaming lowering silently dropped that nested ERROR node, so chatter accepted the file (Valid:1) while CLAN rejects it (codes 5 and 6). A whole-tree recovery-node backstop in parse_lines_with_old_tree now surfaces any surviving ERROR node as E316 UnparsableContent (recovery is not validity); the AST is still produced. CLAN CHECK 5 (co-emitted with 6)."
+    },
+    {
+      "check_code": 6,
+      "check_message": "@Begin header missing or malformed.",
+      "fixture": "CHECK_006_begin_malformed.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "`@Begins` (a misspelled @Begin) parses as @Begin plus a trailing `s` ERROR node that the streaming lowering silently dropped. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 6 and 17). CLAN CHECK 6 (co-emitted with 17)."
+    },
+    {
+      "check_code": 106,
+      "check_message": "A code must be entirely on one line.",
+      "fixture": "CHECK_106_code_spans_newline.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A scoped code split across a newline (`[% comment` then a continuation line `continued]`) leaves an ERROR node in the main-tier content that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN CHECK 106."
+    },
+    {
+      "check_code": 108,
+      "check_message": "Postcodes must precede the final bullet.",
+      "fixture": "CHECK_108_postcode_after_bullet.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A postcode `[+ trn]` placed after the final time bullet leaves an ERROR node in the utterance that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 108 and 112). CLAN CHECK 108 (co-emitted with 112)."
     }
   ]
 }

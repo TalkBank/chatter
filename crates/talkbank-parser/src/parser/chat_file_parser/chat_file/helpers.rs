@@ -9,7 +9,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+    ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+    TeeErrorSink,
 };
 use crate::model::{ChatDate, Header, Line, WarningText};
 use crate::node_types::*;
@@ -19,7 +20,7 @@ use crate::parser::chat_file_parser::utterance_parser::{
     classify_percent_error_text, parse_utterance_node,
 };
 use crate::parser::tree_parsing::parser_helpers::{
-    analyze_error_node, analyze_line_error, is_header, is_pre_begin_header,
+    analyze_error_node, analyze_line_error, collect_recovery_nodes, is_header, is_pre_begin_header,
 };
 use talkbank_model::ParseOutcome;
 use tracing::{debug, info, trace, warn};
@@ -305,6 +306,19 @@ pub(super) fn parse_lines_with_old_tree(
 
     let mut lines = Vec::with_capacity(root_node.child_count());
 
+    // Tee the sink into a collector so the streaming loop's per-region
+    // diagnostics are recorded as well as forwarded. The loop only inspects
+    // recovery (ERROR/MISSING) nodes in the regions its handlers descend into;
+    // recovery nodes nested elsewhere were silently dropped, so a file that
+    // tree-sitter flagged as malformed could still validate clean. After the
+    // loop, a whole-tree backstop surfaces any recovery node the handlers missed
+    // (recovery is not validity), using the collected spans to avoid
+    // double-reporting a node a richer region diagnostic already covered.
+    // `ErrorCollector` allocates lazily, so a clean file pays nothing.
+    let collector = ErrorCollector::new();
+    let recording = TeeErrorSink::new(errors, &collector);
+    let errors = &recording;
+
     let mut cursor = root_node.walk();
     for child in root_node.children(&mut cursor) {
         if child.is_error() {
@@ -442,6 +456,27 @@ pub(super) fn parse_lines_with_old_tree(
             )
             .with_suggestion("CHAT files must contain @UTF8, @Begin, @Participants, @Languages, and @End headers"),
         );
+    }
+
+    // Whole-tree recovery-node backstop. Gated on `has_error()` so valid files
+    // (the overwhelming majority) pay nothing. Every surviving ERROR/MISSING node
+    // not already covered by a region diagnostic above is surfaced as invalidity
+    // (ERROR -> E316, MISSING -> E342). The parser still produced an AST; this only
+    // reports, honoring lenient recovery while enforcing "recovery is not validity".
+    if root_node.has_error() {
+        let reported = collector.to_vec();
+        let mut candidates = Vec::new();
+        collect_recovery_nodes(root_node, input, &mut candidates);
+        for candidate in candidates {
+            // Widen a zero-width MISSING span to one byte so it can intersect a
+            // reported span that merely touches its point. A candidate already
+            // covered by a (richer) region diagnostic is suppressed.
+            let span = candidate.location.span;
+            let probe = Span::new(span.start, span.end.max(span.start.saturating_add(1)));
+            if !reported.iter().any(|e| e.location.span.overlaps(probe)) {
+                errors.report(candidate);
+            }
+        }
     }
 
     info!("Parsed {} lines", lines.len());

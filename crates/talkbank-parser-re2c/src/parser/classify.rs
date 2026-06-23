@@ -51,6 +51,7 @@ pub fn word_to_content_item<'a>(word: WordWithAnnotations<'a>) -> ContentItem<'a
             content: vec![ContentItem::Word(word)],
             kind,
             is_group: false,
+            synthesized_missing_annotation: false,
             annotations: retrace_annotations,
         };
         ContentItem::Retrace(retrace)

@@ -57,6 +57,7 @@ tier_body:
               raw_text: 这个
         kind: Complete
         is_group: true
+        synthesized_missing_annotation: false
         annotations: []
     - Word:
         category: Nonword
@@ -89,6 +90,7 @@ tier_body:
               raw_text: 个
         kind: Partial
         is_group: true
+        synthesized_missing_annotation: false
         annotations: []
     - Word:
         category: ~

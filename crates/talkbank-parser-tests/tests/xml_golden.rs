@@ -41,7 +41,6 @@ use xml_support::{XmlStructuralDiff, assert_xml_structurally_equal};
 const EXPECTED_MISSING_XML_GOLDENS: &[&str] = &[
     "core/headers-comments",
     "edge-cases/event-segment-with-caret",
-    "edge-cases/group-without-retrace-marker-recovers",
     "edge-cases/other-spoken-event-no-terminator-space",
     "edge-cases/unicode-ipa-content",
     // Real-corpus fixtures added for the FREQ +d2/+d3 spreadsheet tests, not for
