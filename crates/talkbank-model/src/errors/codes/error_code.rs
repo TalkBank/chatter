@@ -521,6 +521,16 @@ pub enum ErrorCode {
     /// ("\"@Options\" header must immediately follow \"@Participants:\" header").
     #[code("E551")]
     OptionsHeaderOutOfOrder,
+    /// The `@Media` header declares `unlinked` status, yet the transcript
+    /// contains timing bullets. `unlinked` means the media file exists but its
+    /// utterances have not been aligned to timestamps; the presence of timing
+    /// bullets contradicts that, so the `unlinked` qualifier must be removed
+    /// (the media is in fact linked). This is the inverse of
+    /// [`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming) (E544) and
+    /// corresponds to CLAN CHECK error 124 ("remove \"unlinked\" from @Media
+    /// header").
+    #[code("E552")]
+    MediaUnlinkedWithTiming,
 
     // =========================================================================
     // Tier Errors (E6xx)

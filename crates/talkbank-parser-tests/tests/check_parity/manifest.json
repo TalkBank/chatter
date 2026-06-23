@@ -164,6 +164,16 @@
         "E540"
       ],
       "note": "@Time Duration 99:99:99 is shape-valid (HH:MM:SS) but out of clock range. chatter previously validated the shape only; now TimeDurationValue::has_out_of_range_component flags components outside hours 0-23 / minutes,seconds 0-59 and emits E540. CLAN range rule grounded empirically: 25:00:00, 99:30:00, 12:60:00, 12:00:60 all CLAN 35; 23:59:59 OK. CLAN CHECK 35."
+    },
+    {
+      "check_code": 124,
+      "check_message": "Please remove \"unlinked\" from @Media header.",
+      "fixture": "CHECK_124_media_unlinked_with_bullet.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E552"
+      ],
+      "note": "@Media declares `unlinked` but the main tier has a time bullet, so the media is in fact linked. chatter now emits E552 MediaUnlinkedWithTiming via check_media_unlinked_has_no_timing, the inverse of the existing E544 (linkage without timing). Grounded empirically: unlinked+bullet -> CLAN 124; unlinked+no-bullet and linked+bullet -> no 124. CLAN CHECK 124."
     }
   ]
 }

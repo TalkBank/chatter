@@ -3001,6 +3001,11 @@
           "type": "string"
         },
         {
+          "const": "E552",
+          "description": "The `@Media` header declares `unlinked` status, yet the transcript\ncontains timing bullets. `unlinked` means the media file exists but its\nutterances have not been aligned to timestamps; the presence of timing\nbullets contradicts that, so the `unlinked` qualifier must be removed\n(the media is in fact linked). This is the inverse of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming) (E544) and\ncorresponds to CLAN CHECK error 124 (\"remove \\\"unlinked\\\" from @Media\nheader\").",
+          "type": "string"
+        },
+        {
           "const": "E600",
           "description": "Generic tier validation error.",
           "type": "string"

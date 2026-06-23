@@ -85,6 +85,58 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
     ));
 }
 
+/// E552: the `@Media` header declares `unlinked`, yet the transcript has timing
+/// bullets, so the media is in fact linked and the `unlinked` qualifier must be
+/// removed. This is the inverse of [`check_media_linkage_has_timing`] (E544):
+/// there, declared linkage lacks timing; here, declared `unlinked` has timing.
+///
+/// The caller passes the already-collected main-tier bullets to avoid a
+/// duplicate walk; any positional `%wor` timing sidecar is the other timing
+/// surface checked here. Corresponds to CLAN CHECK error 124 ("remove
+/// \"unlinked\" from @Media header").
+pub(super) fn check_media_unlinked_has_no_timing<S: ValidationState>(
+    headers: &[(&Header, crate::Span)],
+    file: &ChatFile<S>,
+    main_bullets: &[&crate::model::Bullet],
+    errors: &impl crate::ErrorSink,
+) {
+    use crate::model::MediaStatus;
+    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+
+    // Find the first @Media header whose status is `unlinked`. A file has at
+    // most one @Media in practice; if any is `unlinked`, the check fires at
+    // that header's span.
+    let unlinked_span = headers.iter().find_map(|(header, span)| match header {
+        Header::Media(m) if matches!(m.status, Some(MediaStatus::Unlinked)) => Some(*span),
+        _ => None,
+    });
+    let Some(span) = unlinked_span else {
+        // No @Media, or its status is not `unlinked`: check does not apply.
+        return;
+    };
+
+    // Any timing surface (main-tier bullets, or a positional %wor sidecar)
+    // contradicts the `unlinked` declaration.
+    let has_wor_timing = file.utterances().any(|utt| {
+        utt.alignments
+            .as_ref()
+            .and_then(|a| a.wor_timings.as_ref())
+            .is_some_and(|w| w.is_positional())
+    });
+    if main_bullets.is_empty() && !has_wor_timing {
+        // `unlinked` with no timing is the correct, expected state.
+        return;
+    }
+
+    errors.report(ParseError::new(
+        ErrorCode::MediaUnlinkedWithTiming,
+        Severity::Error,
+        SourceLocation::at_offset(span.start as usize),
+        ErrorContext::new("", 0..0, "media_linkage"),
+        "@Media header declares `unlinked`, but the transcript has timing bullets; remove `unlinked` from the @Media header (the media is in fact linked)",
+    ));
+}
+
 /// E531: validate `@Media` filename against the caller-provided file basename.
 pub(super) fn check_media_filename_match(
     headers: &[(&Header, crate::Span)],

@@ -19,7 +19,7 @@ use crate::{Header, Line};
 mod checks;
 use checks::{
     check_cross_header_consistency, check_media_filename_match, check_media_linkage_has_timing,
-    file_uses_ca_mode,
+    check_media_unlinked_has_no_timing, file_uses_ca_mode,
 };
 
 fn unknown_alignment_warning(
@@ -327,6 +327,10 @@ impl<S: ValidationState> ChatFile<S> {
         // evidence. Rule and scope documented in `ErrorCode::
         // MediaLinkageWithoutTiming` and the E544 spec.
         check_media_linkage_has_timing(&headers_with_spans, self, &bullets, errors);
+
+        // E552: the inverse, @Media declares `unlinked` but the transcript has
+        // timing bullets, so the media is in fact linked (CLAN CHECK 124).
+        check_media_unlinked_has_no_timing(&headers_with_spans, self, &bullets, errors);
 
         // E701, E704: Validate temporal constraints on media bullets
         // - E701 (CLAN Error 83): Global timeline monotonicity
