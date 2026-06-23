@@ -20,7 +20,9 @@
       "check_message": "Missing word after code.",
       "fixture": "CHECK_119_dangling_retrace.cha",
       "status": "parity",
-      "expected_chatter_codes": ["E370"],
+      "expected_chatter_codes": [
+        "E370"
+      ],
       "note": "Retrace marker [/] with nothing after it. chatter E370 StructuralOrderError."
     },
     {
@@ -28,7 +30,9 @@
       "check_message": "\"@ID\" header must immediately follow \"@Participants:\" or \"@Options\" header.",
       "fixture": "CHECK_126_id_header_out_of_order.cha",
       "status": "parity",
-      "expected_chatter_codes": ["E548"],
+      "expected_chatter_codes": [
+        "E548"
+      ],
       "note": "A changeable header (@Comment) sits between @Participants and the @ID block."
     },
     {
@@ -36,7 +40,9 @@
       "check_message": "Header must follow \"@ID:\" or \"@Birth of\" or \"@Birthplace of\" or \"@L1 of\" header.",
       "fixture": "CHECK_127_constant_header_out_of_order.cha",
       "status": "parity",
-      "expected_chatter_codes": ["E547"],
+      "expected_chatter_codes": [
+        "E547"
+      ],
       "note": "A changeable header sits between the @ID block and @Birth of."
     },
     {
@@ -44,7 +50,9 @@
       "check_message": "Duplicate speaker declaration.",
       "fixture": "CHECK_013_duplicate_speaker.cha",
       "status": "parity",
-      "expected_chatter_codes": ["E549"],
+      "expected_chatter_codes": [
+        "E549"
+      ],
       "note": "Same speaker declared twice in @Participants. chatter E549 DuplicateSpeakerDeclaration."
     },
     {
@@ -52,8 +60,30 @@
       "check_message": "Commas at the end of PARTICIPANTS tier are not allowed.",
       "fixture": "CHECK_100_trailing_comma_participants.cha",
       "status": "parity",
-      "expected_chatter_codes": ["E550"],
+      "expected_chatter_codes": [
+        "E550"
+      ],
       "note": "Trailing comma at end of @Participants. The grammar already surfaces the dangling comma as a tree-sitter ERROR node inside the participants header; the parser reports it as E550 TrailingCommaInParticipants (parse-stage diagnostic). CLAN CHECK 100."
+    },
+    {
+      "check_code": 53,
+      "check_message": "Only one \"@Begin\" can be in a file.",
+      "fixture": "CHECK_053_duplicate_begin.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E501"
+      ],
+      "note": "Two @Begin headers. chatter rejects with E501 (Duplicate @Begin header). Behavioral grounding overturns the name-matcher audit, which marked this a gap."
+    },
+    {
+      "check_code": 148,
+      "check_message": "Space character is not allowed before comma(,) character on \"@Media:\" header.",
+      "fixture": "CHECK_148_media_space_before_comma.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E525"
+      ],
+      "note": "Space before the comma in @Media makes the header malformed; chatter rejects it (E525 malformed header, plus E330). Both validators reject; the precise space-before-comma message is a CLAN nicety chatter does not replicate."
     }
   ]
 }
