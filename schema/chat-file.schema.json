@@ -2217,7 +2217,7 @@
           "type": "object"
         },
         {
-          "description": "Unsupported/unknown tier (e.g. %foo, not a standard tier, not %x-prefixed)\n\nDistinct from `UserDefined` which is intentional (`%xLABEL`). This variant\ncaptures tiers that the grammar's catch-all matched but that are not\nrecognized CHAT tiers. Validators emit a warning (E605) for these.",
+          "description": "Unsupported/unknown tier (e.g. %foo, not a standard tier, not %x-prefixed)\n\nDistinct from `UserDefined` which is intentional (`%xLABEL`). This variant\ncaptures tiers that the grammar's catch-all matched but that are not\nrecognized CHAT tiers. Validators reject these as an error (E605): the\nsupported dependent-tier set is closed, so an unrecognized non-`%x` tier\nmakes the file invalid.",
           "properties": {
             "data": {
               "$ref": "#/$defs/UserDefinedDependentTier"
@@ -2996,6 +2996,11 @@
           "type": "string"
         },
         {
+          "const": "E551",
+          "description": "The `@Options` header does not immediately follow the `@Participants`\nheader. Per the CHAT spec the optional `@Options` line, when present,\nmust sit directly after `@Participants`, before the `@ID` block or any\nother header. An `@Options` whose immediately-preceding header is\nsomething else (e.g. an `@ID` or `@Comment`), once `@Participants` has\nbeen seen, is an ordering violation. Corresponds to CLAN CHECK error 125\n(\"\\\"@Options\\\" header must immediately follow \\\"@Participants:\\\" header\").",
+          "type": "string"
+        },
+        {
           "const": "E600",
           "description": "Generic tier validation error.",
           "type": "string"
@@ -3202,7 +3207,7 @@
         },
         {
           "const": "E736",
-          "description": "A `%xmodsyl` / `%xphosyl` constituent code is not one of `O N C L R E A D`.\n\nBoundary (`B`), stress (`S`), word (`W`), tone (`T`) and unknown (`U`)\nare never emitted on the syllabification tiers.",
+          "description": "A `%xmodsyl` / `%xphosyl` constituent code is not one of `O N C L R E A D U`.\n\n`U` (unknown) is legal: Phon emits it when a phone has no concrete\nsyllable constituent. Boundary (`B`), stress (`S`), word (`W`) and tone\n(`T`) are never emitted on the syllabification tiers.",
           "type": "string"
         },
         {
@@ -6230,7 +6235,7 @@
       "type": "string"
     },
     "SylTier": {
-      "description": "A syllabified phonology tier (`%modsyl` or `%phosyl`).\n\nContent is organized as space-separated **words**, each containing\nIPA phonemes annotated with syllable position codes\n(`phoneme:Position` pairs, e.g. `b:Oɛ:Nt:C`).\n\nEach unit is `phone:CODE`; the legal constituent codes are\n`O N C L R E A D` (see [`PositionCode`]). Stress markers (`ˈ` primary,\n`ˌ` secondary) may precede a segment.\n\n# Alignment\n\nEach word aligns 1-to-1 with a word in the corresponding phonological\ntier (`%mod` for modsyl, `%pho` for phosyl). Stripping position codes\nand stress markers yields the raw phonemes which must match the\ncorresponding tier's content.",
+      "description": "A syllabified phonology tier (`%modsyl` or `%phosyl`).\n\nContent is organized as space-separated **words**, each containing\nIPA phonemes annotated with syllable position codes\n(`phoneme:Position` pairs, e.g. `b:Oɛ:Nt:C`).\n\nEach unit is `phone:CODE`; the legal constituent codes are\n`O N C L R E A D U` (see [`PositionCode`]). Stress markers (`ˈ` primary,\n`ˌ` secondary) may precede a segment.\n\n# Alignment\n\nEach word aligns 1-to-1 with a word in the corresponding phonological\ntier (`%mod` for modsyl, `%pho` for phosyl). Stripping position codes\nand stress markers yields the raw phonemes which must match the\ncorresponding tier's content.",
       "properties": {
         "tier_type": {
           "$ref": "#/$defs/SylTierType",

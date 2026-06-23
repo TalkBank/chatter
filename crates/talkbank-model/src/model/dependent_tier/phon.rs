@@ -71,7 +71,7 @@ pub enum SylTierType {
 /// (`phoneme:Position` pairs, e.g. `b:Oɛ:Nt:C`).
 ///
 /// Each unit is `phone:CODE`; the legal constituent codes are
-/// `O N C L R E A D` (see [`PositionCode`]). Stress markers (`ˈ` primary,
+/// `O N C L R E A D U` (see [`PositionCode`]). Stress markers (`ˈ` primary,
 /// `ˌ` secondary) may precede a segment.
 ///
 /// # Alignment
@@ -159,14 +159,17 @@ impl super::WriteChat for SylTier {
 /// The syllable-constituent code following the `:` in a `phone:CODE` unit on
 /// `%xmodsyl` / `%xphosyl`.
 ///
-/// These are exactly the Phon `SyllableConstituentType` mnemonics that appear on
-/// the syllabification tiers. IPA length is written `ː` (U+02D0), so the ASCII
-/// `:` (U+003A) separating phone from code is unambiguous. The remaining
-/// mnemonics, `U` (Unknown), `B` (boundary), `S` (stress), `W` (word boundary)
-/// and `T` (tone), are never emitted on these tiers: every phone is assigned a
-/// concrete constituent, and boundary/stress/tone need no marker.
+/// These are the Phon `SyllableConstituentType` mnemonics that appear on the
+/// syllabification tiers. IPA length is written `ː` (U+02D0), so the ASCII `:`
+/// (U+003A) separating phone from code is unambiguous. A phone may carry `U`
+/// (Unknown) when Phon could not assign it a concrete constituent; this is
+/// common on `%xphosyl` (the actual production) even when the model `%xmodsyl`
+/// is fully syllabified. The remaining mnemonics, `B` (boundary), `S` (stress),
+/// `W` (word boundary) and `T` (tone), are never emitted on these tiers:
+/// boundary, stress, and tone need no per-phone marker.
 ///
-/// Reference: Greg Hedlund, "Phon `%x` Dependent Tiers, Format & Validation".
+/// Reference: Greg Hedlund, "Phon `%x` Dependent Tiers, Format & Validation"
+/// (the published spec mistakenly omitted `U`; corrected by Greg 2026-06-23).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PositionCode {
     /// `O`, syllable onset.
@@ -185,6 +188,10 @@ pub enum PositionCode {
     Ambisyllabic,
     /// `D`, nucleus member of a diphthong/triphthong (treated as a nucleus).
     Diphthong,
+    /// `U`, unknown: Phon could not assign a concrete syllable constituent to
+    /// this phone. Common on `%xphosyl` (the actual production) where the model
+    /// `%xmodsyl` is fully syllabified but a produced segment is unsyllabifiable.
+    Unknown,
 }
 
 impl PositionCode {
@@ -199,6 +206,7 @@ impl PositionCode {
             PositionCode::Oehs => 'E',
             PositionCode::Ambisyllabic => 'A',
             PositionCode::Diphthong => 'D',
+            PositionCode::Unknown => 'U',
         }
     }
 }
@@ -217,6 +225,7 @@ impl TryFrom<char> for PositionCode {
             'E' => Ok(PositionCode::Oehs),
             'A' => Ok(PositionCode::Ambisyllabic),
             'D' => Ok(PositionCode::Diphthong),
+            'U' => Ok(PositionCode::Unknown),
             other => Err(other),
         }
     }
@@ -257,8 +266,8 @@ pub enum SylWordError {
     /// A unit ended at `:` with no constituent code character.
     #[error("syllabification unit is missing its constituent code after ':'")]
     EmptyCode,
-    /// The character after `:` is not one of the legal codes `O N C L R E A D`.
-    #[error("'{0}' is not a legal syllable-constituent code (expected one of O N C L R E A D)")]
+    /// The character after `:` is not one of the legal codes `O N C L R E A D U`.
+    #[error("'{0}' is not a legal syllable-constituent code (expected one of O N C L R E A D U)")]
     IllegalCode(char),
 }
 
@@ -777,7 +786,7 @@ mod tests {
 
     #[test]
     fn position_code_roundtrips_all_legal_chars() {
-        for c in ['O', 'N', 'C', 'L', 'R', 'E', 'A', 'D'] {
+        for c in ['O', 'N', 'C', 'L', 'R', 'E', 'A', 'D', 'U'] {
             let code = PositionCode::try_from(c).expect("legal code");
             assert_eq!(code.as_char(), c);
         }

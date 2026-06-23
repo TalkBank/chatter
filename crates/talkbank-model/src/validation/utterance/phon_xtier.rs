@@ -139,7 +139,7 @@ fn validate_syl_tier(
                         syl.span,
                         format!("{prefix} word {} ('{}'): {err}", i + 1, word.as_str()),
                     )
-                    .with_suggestion("Use one of the legal constituent codes: O N C L R E A D"),
+                    .with_suggestion("Use one of the legal constituent codes: O N C L R E A D U"),
                 );
             }
             Err(err) => {

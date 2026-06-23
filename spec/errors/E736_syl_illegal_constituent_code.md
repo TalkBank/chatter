@@ -2,7 +2,7 @@
 
 ## Description
 
-Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D.
+Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D U.
 
 ## Metadata
 
@@ -25,7 +25,7 @@ Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D.
 *CHI:	cat .
 %pho:	kæt
 %xphosyl:	k:Oæ:Nt:Z
-@Comment:	ERROR: 'Z' is not a legal constituent code (legal: O N C L R E A D)
+@Comment:	ERROR: 'Z' is not a legal constituent code (legal: O N C L R E A D U)
 @End
 ```
 
@@ -36,4 +36,4 @@ Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D.
 
 ## CHAT Rule
 
-Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D.
+Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D U.

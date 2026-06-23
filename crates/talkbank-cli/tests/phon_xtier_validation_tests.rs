@@ -40,7 +40,7 @@ const PHON_CLEAN: &str = "@UTF8
 @End
 ";
 
-/// `%xphosyl` uses `Z`, which is not one of the legal codes O N C L R E A D.
+/// `%xphosyl` uses `Z`, which is not one of the legal codes O N C L R E A D U.
 const PHON_ILLEGAL_CODE: &str = "@UTF8
 @Begin
 @Languages:\teng
@@ -51,6 +51,26 @@ const PHON_ILLEGAL_CODE: &str = "@UTF8
 %pho:\tkæt dɒɡ
 %xmodsyl:\tk:Oæ:Nt:C d:Oɒ:Nɡ:C
 %xphosyl:\tk:Oæ:Nt:Z d:Oɒ:Nɡ:C
+%xphoaln:\tk↔k,æ↔æ,t↔t d↔d,ɒ↔ɒ,ɡ↔ɡ
+@End
+";
+
+/// `U` (Unknown) is a legal syllable-constituent code: a phone may have
+/// unidentified syllabification status (Greg Hedlund, 2026-06-23; the spec's
+/// "every phone gets a concrete constituent" claim was wrong). Here the actual
+/// production marks `/k/` as `U` while the model keeps the concrete onset,
+/// exactly the model-vs-actual asymmetry Phon emits. The only difference from
+/// `PHON_CLEAN` is the one `:O` that is now `:U`; reconstruction still holds.
+const PHON_UNKNOWN_CODE: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|||||Target_Child|||
+*CHI:\tcat dog .
+%mod:\tkæt dɒɡ
+%pho:\tkæt dɒɡ
+%xmodsyl:\tk:Oæ:Nt:C d:Oɒ:Nɡ:C
+%xphosyl:\tk:Uæ:Nt:C d:Oɒ:Nɡ:C
 %xphoaln:\tk↔k,æ↔æ,t↔t d↔d,ɒ↔ɒ,ɡ↔ɡ
 @End
 ";
@@ -129,6 +149,23 @@ fn phon_xphosyl_illegal_code_emits_e736() -> Result<(), TestError> {
         .assert()
         .failure()
         .stdout(predicate::str::contains("E736"));
+    Ok(())
+}
+
+/// `U` (Unknown) is a legal syllable-constituent code (Greg Hedlund,
+/// 2026-06-23): the spec's "every phone gets a concrete constituent" claim was
+/// wrong. A `:U` on `%xphosyl` must validate cleanly, NOT trip E736.
+#[test]
+fn phon_xphosyl_unknown_code_validates() -> Result<(), TestError> {
+    let (_dir, path) = write_fixture("unknown.cha", PHON_UNKNOWN_CODE)?;
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg("--format")
+        .arg("json")
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("E736").not());
     Ok(())
 }
 

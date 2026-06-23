@@ -1,7 +1,7 @@
 # Phon Tiers (%xmodsyl, %xphosyl, %xphoaln, %xphoint)
 
 **Status:** Reference
-**Last updated:** 2026-06-19 18:06 EDT
+**Last updated:** 2026-06-23 07:28 EDT
 
 The Phon extension tiers provide syllable-level phonological annotation,
 segmental alignment between target and actual IPA, and per-phone time
@@ -42,7 +42,7 @@ whitespace; words are separated by single spaces. The phone is one IPA phone
 colon, so the `:` separator is unambiguous). A leading stress marker (`ˈ`
 primary, `ˌ` secondary) is part of the phone it precedes.
 
-The constituent code is one character. The legal codes are `O N C L R E A D`:
+The constituent code is one character. The legal codes are `O N C L R E A D U`:
 
 | Code | Constituent | Notes |
 |------|-------------|-------|
@@ -54,11 +54,11 @@ The constituent code is one character. The legal codes are `O N C L R E A D`:
 | `E`  | OEHS (onset of empty-headed syllable) | e.g. the stop element of an affricate |
 | `A`  | Ambisyllabic | |
 | `D`  | Diphthong | a nucleus member of a diphthong/triphthong; treated as a nucleus |
+| `U`  | Unknown | Phon could not assign a concrete constituent; common on `%xphosyl` when the model `%xmodsyl` is fully syllabified |
 
-The remaining Phon `SyllableConstituentType` mnemonics, `U` (Unknown),
-`B` (boundary), `S` (stress), `W` (word boundary), `T` (tone), are **not**
-emitted on these tiers: every phone is assigned a concrete constituent, and
-boundary/stress/tone need no marker.
+The remaining Phon `SyllableConstituentType` mnemonics, `B` (boundary),
+`S` (stress), `W` (word boundary), `T` (tone), are **not** emitted on these
+tiers: boundary, stress, and tone need no per-phone marker.
 
 ```chat
 *CHI:	I want three .
@@ -121,7 +121,7 @@ tier(s) it depends on):
 | Code | Tier | Rule |
 |------|------|------|
 | E735 | xmodsyl/xphosyl | a unit is not a well-formed `phone:CODE` (no `:`, empty phone, or empty code) |
-| E736 | xmodsyl/xphosyl | a constituent code is not one of `O N C L R E A D` |
+| E736 | xmodsyl/xphosyl | a constituent code is not one of `O N C L R E A D U` |
 | E737 | xmodsyl | stripping codes and concatenating phones does not reproduce the `%mod` word |
 | E738 | xphosyl | stripping codes and concatenating phones does not reproduce the `%pho` word |
 | E739 | xphoaln | a pair is malformed (not exactly one `↔`, an empty side, or `∅↔∅`) |

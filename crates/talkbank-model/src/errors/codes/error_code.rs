@@ -678,10 +678,11 @@ pub enum ErrorCode {
     /// code. A unit with no `:`, an empty phone, or an empty code is invalid.
     #[code("E735")]
     SylUnitMalformed,
-    /// A `%xmodsyl` / `%xphosyl` constituent code is not one of `O N C L R E A D`.
+    /// A `%xmodsyl` / `%xphosyl` constituent code is not one of `O N C L R E A D U`.
     ///
-    /// Boundary (`B`), stress (`S`), word (`W`), tone (`T`) and unknown (`U`)
-    /// are never emitted on the syllabification tiers.
+    /// `U` (unknown) is legal: Phon emits it when a phone has no concrete
+    /// syllable constituent. Boundary (`B`), stress (`S`), word (`W`) and tone
+    /// (`T`) are never emitted on the syllabification tiers.
     #[code("E736")]
     SylIllegalConstituentCode,
     /// `%xmodsyl` does not reproduce its `%mod` word.
