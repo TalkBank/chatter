@@ -184,6 +184,16 @@
         "E375"
       ],
       "note": "A replacement `[: foo]` glued to a word with no preceding space (`word[: foo]`). Fixed at the GRAMMAR level: word_with_optional_annotations now REQUIRES `$.whitespaces` before the replacement (matching base_annotations, which already required it for scope codes like [?]/[/]), so the glued form is an ERROR node and the parser rejects it (E375 ContentAnnotationParseError). The spaced `word [: foo]` still validates clean. CLAN CHECK 161."
+    },
+    {
+      "check_code": 157,
+      "check_message": "Media file name has to match datafile name.",
+      "fixture": "CHECK_157_media_name_mismatch.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E531"
+      ],
+      "note": "@Media filename ('differentname') does not match the datafile basename. chatter HAS E531 MediaFilenameMismatch, but the check was DEAD via the CLI: the validation_runner passed `None` for the filename so it never ran (it only fired in the parity harness, which passes the stem, masking the gap). Fixed by threading the file stem through validate_single_file_streaming. CLAN exempts remote URL @Media (verified: `@Media: \"https://...\"` -> no 157), so E531 now exempts URLs too. CLAN CHECK 157."
     }
   ]
 }

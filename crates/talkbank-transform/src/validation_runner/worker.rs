@@ -409,14 +409,20 @@ fn validate_single_file_streaming(
     // Parse with error collection
     let mut chat_file = parser.parse_chat_file_streaming(content.as_ref(), &collector);
 
+    // The datafile basename (stem, no extension) is what `@Media`'s filename
+    // must match; pass it so `check_media_filename_match` (E531) can run. The
+    // file is being validated from disk, so the stem is always available here.
+    // (Passing `None` silently disabled E531 for the whole CLI, CLAN CHECK 157.)
+    let file_stem = file_path.file_stem().and_then(|s| s.to_str());
+
     // Validate with error collection, optionally enabling strict linker checks.
     if strict_linkers {
         let config = talkbank_model::ValidationConfig::new().with_strict_linkers();
-        chat_file.validate_with_config(config, &collector, None);
+        chat_file.validate_with_config(config, &collector, file_stem);
     } else if check_alignment {
-        chat_file.validate_with_alignment(&collector, None);
+        chat_file.validate_with_alignment(&collector, file_stem);
     } else {
-        chat_file.validate(&collector, None);
+        chat_file.validate(&collector, file_stem);
     }
 
     let errors = collector.into_vec();
