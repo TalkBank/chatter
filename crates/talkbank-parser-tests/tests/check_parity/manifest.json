@@ -114,6 +114,16 @@
         "E514"
       ],
       "note": "Empty corpus field (2nd) in @ID. chatter E514 EmptyIDCorpus. Root-caused: corpus was wrongly Option<CorpusName>; made it a required CorpusName like its siblings, the Validate trait flags empty. CLAN CHECK 63."
+    },
+    {
+      "check_code": 132,
+      "check_message": "Tabs should only be used to mark the beginning of lines.",
+      "fixture": "CHECK_132_tab_midline.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E370"
+      ],
+      "note": "A tab in the middle of a main tier. chatter rejects it (E370, unexpected tab). Grounded vs real CLAN CHECK 132."
     }
   ]
 }
