@@ -174,6 +174,16 @@
         "E552"
       ],
       "note": "@Media declares `unlinked` but the main tier has a time bullet, so the media is in fact linked. chatter now emits E552 MediaUnlinkedWithTiming via check_media_unlinked_has_no_timing, the inverse of the existing E544 (linkage without timing). Grounded empirically: unlinked+bullet -> CLAN 124; unlinked+no-bullet and linked+bullet -> no 124. CLAN CHECK 124."
+    },
+    {
+      "check_code": 161,
+      "check_message": "Space character is required before \"[\" code item.",
+      "fixture": "CHECK_161_no_space_before_replacement.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E375"
+      ],
+      "note": "A replacement `[: foo]` glued to a word with no preceding space (`word[: foo]`). Fixed at the GRAMMAR level: word_with_optional_annotations now REQUIRES `$.whitespaces` before the replacement (matching base_annotations, which already required it for scope codes like [?]/[/]), so the glued form is an ERROR node and the parser rejects it (E375 ContentAnnotationParseError). The spaced `word [: foo]` still validates clean. CLAN CHECK 161."
     }
   ]
 }

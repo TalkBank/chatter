@@ -1058,7 +1058,13 @@ export default grammar({
     word_with_optional_annotations: $ => seq(
       field('word', $.standalone_word),
       optional(seq(
-        optional($.whitespaces),
+        // A replacement `[: ...]` is a separate token and MUST be preceded by
+        // whitespace, exactly like every `base_annotation` (see `base_annotations`
+        // below, which already requires `$.whitespaces`). A glued `word[: foo]`
+        // is invalid CHAT (CLAN CHECK error 161, "space required before [ code");
+        // requiring the space here makes the glued form an ERROR node so the
+        // parser rejects it, instead of silently accepting it.
+        $.whitespaces,
         field('replacement', $.replacement)
       )),
       field('annotations', optional($.base_annotations))

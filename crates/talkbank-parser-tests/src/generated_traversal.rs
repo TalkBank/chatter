@@ -15,7 +15,7 @@
 //! DO NOT EDIT BY HAND. This file is generated; regenerate it via
 //! the consuming repo's grammar-change workflow instead of editing it.
 //! Generator: tree-sitter-node-types 0.1.0 (generate_traversal)
-//! Source grammar digest (sha256): grammar.json=ab7a27a217dc5ff371df4078a7943e8ab87e89eb15adf661ff8938f0f9c2e29a node-types.json=4a469b5291ab65c61d7433d44eae5c6eee0575ef4839d05f8a121547400f319c
+//! Source grammar digest (sha256): grammar.json=92f64c3f617839d50a18a515fdbdee56a951bb3d539fc3efd4501bc707bb2571 node-types.json=4a469b5291ab65c61d7433d44eae5c6eee0575ef4839d05f8a121547400f319c
 //! Skipped kinds: whitespaces
 #![allow(
     clippy::cast_possible_truncation,
