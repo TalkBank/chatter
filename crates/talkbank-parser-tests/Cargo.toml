@@ -29,6 +29,7 @@ insta = { workspace = true, features = ["json"] }
 proptest = { workspace = true }
 quick-xml = { workspace = true }
 rstest = { workspace = true }
+sha2 = "0.10"
 talkbank-transform = { workspace = true }
 
 [lints]

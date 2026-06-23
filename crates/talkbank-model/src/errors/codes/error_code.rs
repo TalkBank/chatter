@@ -500,6 +500,13 @@ pub enum ErrorCode {
     /// CLAN CHECK error 13.
     #[code("E549")]
     DuplicateSpeakerDeclaration,
+    /// The `@Participants` header ends with a trailing comma (a stray comma
+    /// after the last participant, with no participant following it). The
+    /// participant list is comma-separated, so a trailing comma is a dangling
+    /// separator rather than an empty header. Corresponds to CLAN CHECK error
+    /// 100 ("Commas at the end of PARTICIPANTS tier are not allowed").
+    #[code("E550")]
+    TrailingCommaInParticipants,
 
     // =========================================================================
     // Tier Errors (E6xx)

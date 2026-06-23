@@ -54,8 +54,8 @@ pub fn check_error_number(code: &ErrorCode) -> u16 {
         ErrorCode::EmptyOptionsHeader => 103,  // Approximate: options issue
         ErrorCode::UnsupportedMediaType => 113, // Illegal media keyword
         // -- Header ordering (added since extraction; CLAN CHECK 125/126/127) --
-        ErrorCode::HeaderOutOfOrder => 125,    // @Options must follow @Participants
-        ErrorCode::IdHeaderOutOfOrder => 126,  // @ID must immediately follow @Participants/@Options
+        ErrorCode::HeaderOutOfOrder => 125, // @Options must follow @Participants
+        ErrorCode::IdHeaderOutOfOrder => 126, // @ID must immediately follow @Participants/@Options
         ErrorCode::ConstantHeaderOutOfOrder => 127, // @Birth of/@Birthplace of/@L1 of must follow @ID
 
         // -- Bracket/delimiter matching --
@@ -140,6 +140,7 @@ pub fn check_error_number(code: &ErrorCode) -> u16 {
         ErrorCode::SpeakerNotDefined => 18, // Speaker not in participants
         ErrorCode::UndeclaredSpeaker => 18,
         ErrorCode::DuplicateSpeakerDeclaration => 13, // Speaker declared twice in @Participants
+        ErrorCode::TrailingCommaInParticipants => 100, // Trailing comma at end of @Participants
 
         // -- No direct mapping --
         _ => 0,
@@ -329,7 +330,10 @@ mod tests {
         assert_eq!(check_error_number(&ErrorCode::MorCountMismatchTooFew), 140);
         // Header-order rules added since extraction:
         assert_eq!(check_error_number(&ErrorCode::IdHeaderOutOfOrder), 126);
-        assert_eq!(check_error_number(&ErrorCode::ConstantHeaderOutOfOrder), 127);
+        assert_eq!(
+            check_error_number(&ErrorCode::ConstantHeaderOutOfOrder),
+            127
+        );
         assert_eq!(check_error_number(&ErrorCode::StructuralOrderError), 119);
     }
 

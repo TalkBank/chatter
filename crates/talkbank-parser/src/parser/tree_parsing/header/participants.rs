@@ -69,6 +69,12 @@ pub fn parse_participants_header(node: Node, source: &str, errors: &impl ErrorSi
         );
     }
 
+    // The participant-list parsing below only descends into
+    // `participants_contents`; the shared header scan reports any structural
+    // ERROR/MISSING node tree-sitter parked elsewhere under the header (e.g. a
+    // trailing comma) so it is never silently swallowed.
+    super::report_header_structural_errors(node, PARTICIPANTS_HEADER, source, errors);
+
     // Find participants_contents child (prefix + header_sep + contents + newline)
     let contents = match find_child_by_kind(node, PARTICIPANTS_CONTENTS) {
         Some(child) => child,

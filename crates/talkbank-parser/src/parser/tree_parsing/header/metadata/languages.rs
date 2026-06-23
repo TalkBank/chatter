@@ -58,6 +58,14 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
         );
     }
 
+    // The language-list parsing below only descends into `languages_contents`;
+    // the shared header scan reports any structural ERROR/MISSING node
+    // tree-sitter parked elsewhere under the header (e.g. a trailing comma) so
+    // it is never silently swallowed. Like `@Participants`, `@Languages` is a
+    // comma-separated list, so a dangling comma becomes an `(ERROR (comma))`
+    // sibling of `languages_contents`.
+    super::super::report_header_structural_errors(node, LANGUAGES_HEADER, source, errors);
+
     // Find languages_contents child (prefix + header_sep + contents + newline)
     let contents = match find_child_by_kind(node, LANGUAGES_CONTENTS) {
         Some(child) => child,

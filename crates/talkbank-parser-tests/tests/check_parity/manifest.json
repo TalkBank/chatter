@@ -51,9 +51,9 @@
       "check_code": 100,
       "check_message": "Commas at the end of PARTICIPANTS tier are not allowed.",
       "fixture": "CHECK_100_trailing_comma_participants.cha",
-      "status": "gap",
-      "expected_chatter_codes": [],
-      "note": "Trailing comma at end of @Participants. chatter currently accepts it; real validity gap to close."
+      "status": "parity",
+      "expected_chatter_codes": ["E550"],
+      "note": "Trailing comma at end of @Participants. The grammar already surfaces the dangling comma as a tree-sitter ERROR node inside the participants header; the parser reports it as E550 TrailingCommaInParticipants (parse-stage diagnostic). CLAN CHECK 100."
     }
   ]
 }

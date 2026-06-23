@@ -5,10 +5,10 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 ## Executive Summary
 
 - CHECK rules parsed: `153`
-- Overlap with TalkBank codes: `88`
-- CHECK rules missing direct TalkBank mapping: `65`
-- Semantic parity `full`: `88`
-- Behavioral parity `full`: `77`
+- Overlap with TalkBank codes: `89`
+- CHECK rules missing direct TalkBank mapping: `64`
+- Semantic parity `full`: `89`
+- Behavioral parity `full`: `78`
 - Intentional divergence (semantic full + behavioral partial due to CHECK anomalies): `11`
 - TalkBank enhancements beyond CHECK (no mapped CHECK rule): `106`
 
@@ -118,7 +118,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 97 | Illegal character inside parentheses. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 98 | Space is not allow in media file name inside bullets. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 99 | Extension is not allow at the end of media file name. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
-| 100 | Commas at the end of PARTICIPANTS tier are not allowed. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
+| 100 | Commas at the end of PARTICIPANTS tier are not allowed. | check.cpp (generated reference) | `E550` | full | full | equal | none | no action | P3 |
 | 101 | This item must be followed or preceded by text. / Item '%s' must be followed or preceded by text. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 102 | Italic markers are no longer legal in CHAT. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 103 | Illegal use of both CA and IPA on "@Options:" tier. | check.cpp (generated reference) | `E533` | full | full | equal | none | no action | P3 |
@@ -225,7 +225,6 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `97`: Illegal character inside parentheses. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `98`: Space is not allow in media file name inside bullets. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `99`: Extension is not allow at the end of media file name. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `100`: Commas at the end of PARTICIPANTS tier are not allowed. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `101`: This item must be followed or preceded by text. / Item '%s' must be followed or preceded by text. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `102`: Italic markers are no longer legal in CHAT. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `104`: Please select "CAfont" or "Ascender Uni Duo" font for CA file as per "@Options:" tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
@@ -522,6 +521,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E547` | `ConstantHeaderOutOfOrder` | 127 |
 | `E548` | `IdHeaderOutOfOrder` | 126 |
 | `E549` | `DuplicateSpeakerDeclaration` | 13 |
+| `E550` | `TrailingCommaInParticipants` | 100 |
 | `E600` | `TierValidationError` | 87 |
 | `E601` | `InvalidDependentTier` | None |
 | `E602` | `MalformedTierHeader` | None |
@@ -634,7 +634,6 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `97` `Illegal character inside parentheses.` -> add rule (TalkBank looser; none parity)
 - CHECK `98` `Space is not allow in media file name inside bullets.` -> add rule (TalkBank looser; none parity)
 - CHECK `99` `Extension is not allow at the end of media file name.` -> add rule (TalkBank looser; none parity)
-- CHECK `100` `Commas at the end of PARTICIPANTS tier are not allowed.` -> add rule (TalkBank looser; none parity)
 - CHECK `101` `This item must be followed or preceded by text. / Item '%s' must be followed or preceded by text.` -> add rule (TalkBank looser; none parity)
 - CHECK `102` `Italic markers are no longer legal in CHAT.` -> add rule (TalkBank looser; none parity)
 - CHECK `104` `Please select "CAfont" or "Ascender Uni Duo" font for CA file as per "@Options:" tier.` -> add rule (TalkBank looser; none parity)

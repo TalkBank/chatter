@@ -89,7 +89,12 @@ fn chatter_codes(parser: &TreeSitterParser, fixture: &str) -> Result<Vec<String>
         let validation_errors = ErrorCollector::new();
         let stem = path.file_stem().and_then(|s| s.to_str());
         chat_file.validate_with_alignment(&validation_errors, stem);
-        codes.extend(validation_errors.to_vec().iter().map(|e| e.code.to_string()));
+        codes.extend(
+            validation_errors
+                .to_vec()
+                .iter()
+                .map(|e| e.code.to_string()),
+        );
     }
     Ok(codes)
 }

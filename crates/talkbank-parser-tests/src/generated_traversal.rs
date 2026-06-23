@@ -4,13 +4,19 @@
 //! representation of Present / Missing / Error / Unexpected / Absent.
 //!
 //! **Payload structs** contain only the semantically meaningful
-//! children, structural delimiters are stripped. Use these for
+//! children, with structural delimiters stripped. Use these for
 //! semantic processing.
 //!
 //! Implement `GrammarTraversal` and override extraction methods
 //! where you need custom recovery.
 //!
 //! This file is standalone; it has no dependencies beyond `tree_sitter`.
+//!
+//! DO NOT EDIT BY HAND. This file is generated; regenerate it via
+//! the consuming repo's grammar-change workflow instead of editing it.
+//! Generator: tree-sitter-node-types 0.1.0 (generate_traversal)
+//! Source grammar digest (sha256): grammar.json=ab7a27a217dc5ff371df4078a7943e8ab87e89eb15adf661ff8938f0f9c2e29a node-types.json=4a469b5291ab65c61d7433d44eae5c6eee0575ef4839d05f8a121547400f319c
+//! Skipped kinds: whitespaces
 #![allow(
     clippy::cast_possible_truncation,
     clippy::collapsible_if,
@@ -5930,7 +5936,7 @@ pub struct XphointDependentTierChildren<'tree> {
     ///`newline`, required
     pub child_3: NodeSlot<'tree, NewlineNode<'tree>>,
 }
-///Semantic payload for `_id_demographic_fields`, 4 payload field(s), structural children stripped.
+///Semantic payload for `_id_demographic_fields`: 4 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct IdDemographicFieldsPayload<'tree> {
     ///`id_age`, nested rule `id_age`
@@ -5942,7 +5948,7 @@ pub struct IdDemographicFieldsPayload<'tree> {
     ///`id_ses`, nested rule `id_ses`
     pub child_13: Option<IdSesNode<'tree>>,
 }
-///Semantic payload for `_id_identity_fields`, 3 payload field(s), structural children stripped.
+///Semantic payload for `_id_identity_fields`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct IdIdentityFieldsPayload<'tree> {
     ///`id_languages`, nested rule `id_languages`
@@ -5952,7 +5958,7 @@ pub struct IdIdentityFieldsPayload<'tree> {
     ///`id_speaker`, free text
     pub child_6: Option<IdSpeakerNode<'tree>>,
 }
-///Semantic payload for `_id_role_fields`, 3 payload field(s), structural children stripped.
+///Semantic payload for `_id_role_fields`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct IdRoleFieldsPayload<'tree> {
     ///`id_role`, free text
@@ -5962,25 +5968,25 @@ pub struct IdRoleFieldsPayload<'tree> {
     ///`id_custom_field`, free text
     pub child_7: Option<IdCustomFieldNode<'tree>>,
 }
-///Semantic payload for `activities_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `activities_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ActivitiesHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `alt_annotation`, 1 payload field(s), structural children stripped.
+///Semantic payload for `alt_annotation`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct AltAnnotationPayload<'tree> {
     ///`annotation_content`, free text
     pub text: Option<AnnotationContentNode<'tree>>,
 }
-///Semantic payload for `bck_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `bck_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct BckHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `birth_of_header`, 3 payload field(s), structural children stripped.
+///Semantic payload for `birth_of_header`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct BirthOfHeaderPayload<'tree> {
     ///`header_gap`, nested rule `header_gap`
@@ -5990,7 +5996,7 @@ pub struct BirthOfHeaderPayload<'tree> {
     ///`date_contents`, nested rule `date_contents`
     pub child_4: Option<DateContentsNode<'tree>>,
 }
-///Semantic payload for `birthplace_of_header`, 3 payload field(s), structural children stripped.
+///Semantic payload for `birthplace_of_header`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct BirthplaceOfHeaderPayload<'tree> {
     ///`header_gap`, nested rule `header_gap`
@@ -6000,7 +6006,7 @@ pub struct BirthplaceOfHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_4: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `bullet`, 2 payload field(s), structural children stripped.
+///Semantic payload for `bullet`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct BulletPayload<'tree> {
     ///`bullet_timestamp`, integer
@@ -6008,31 +6014,31 @@ pub struct BulletPayload<'tree> {
     ///`bullet_timestamp`, integer
     pub end_time: Option<BulletTimestampNode<'tree>>,
 }
-///Semantic payload for `color_words_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `color_words_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ColorWordsHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `com_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `com_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ComDependentTierPayload<'tree> {
     ///`text_with_bullets_and_pics`, nested rule `text_with_bullets_and_pics`
     pub child_2: Option<TextWithBulletsAndPicsNode<'tree>>,
 }
-///Semantic payload for `comment_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `comment_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct CommentHeaderPayload<'tree> {
     ///`text_with_bullets_and_pics`, nested rule `text_with_bullets_and_pics`
     pub child_2: Option<TextWithBulletsAndPicsNode<'tree>>,
 }
-///Semantic payload for `date_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `date_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct DateHeaderPayload<'tree> {
     ///`date_contents`, nested rule `date_contents`
     pub child_2: Option<DateContentsNode<'tree>>,
 }
-///Semantic payload for `event`, 2 payload field(s), structural children stripped.
+///Semantic payload for `event`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct EventPayload<'tree> {
     ///`event_marker`, opaque token (parse separately)
@@ -6040,19 +6046,19 @@ pub struct EventPayload<'tree> {
     ///`event_segment`, opaque token (parse separately)
     pub description: Option<EventSegmentNode<'tree>>,
 }
-///Semantic payload for `explanation_annotation`, 1 payload field(s), structural children stripped.
+///Semantic payload for `explanation_annotation`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ExplanationAnnotationPayload<'tree> {
     ///`annotation_content`, free text
     pub text: Option<AnnotationContentNode<'tree>>,
 }
-///Semantic payload for `font_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `font_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct FontHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `full_document`, 3 payload field(s), structural children stripped.
+///Semantic payload for `full_document`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct FullDocumentPayload<'tree> {
     ///`utf8_header`, nested rule `utf8_header`
@@ -6062,25 +6068,25 @@ pub struct FullDocumentPayload<'tree> {
     ///`end_header`, nested rule `end_header`
     pub child_2: Option<EndHeaderNode<'tree>>,
 }
-///Semantic payload for `g_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `g_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct GHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `gra_contents`, 1 payload field(s), structural children stripped.
+///Semantic payload for `gra_contents`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct GraContentsPayload<'tree> {
     ///`gra_relation`, nested rule `gra_relation`
     pub child_0: Option<GraRelationNode<'tree>>,
 }
-///Semantic payload for `gra_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `gra_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct GraDependentTierPayload<'tree> {
     ///`gra_contents`, nested rule `gra_contents`
     pub child_2: Option<GraContentsNode<'tree>>,
 }
-///Semantic payload for `gra_relation`, 3 payload field(s), structural children stripped.
+///Semantic payload for `gra_relation`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct GraRelationPayload<'tree> {
     ///`gra_index`, integer
@@ -6090,7 +6096,7 @@ pub struct GraRelationPayload<'tree> {
     ///`gra_relation_name`, free text
     pub relation: Option<GraRelationNameNode<'tree>>,
 }
-///Semantic payload for `group_with_annotations`, 2 payload field(s), structural children stripped.
+///Semantic payload for `group_with_annotations`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct GroupWithAnnotationsPayload<'tree> {
     ///`contents`, nested rule `contents`
@@ -6098,7 +6104,7 @@ pub struct GroupWithAnnotationsPayload<'tree> {
     ///`base_annotations`, nested rule `base_annotations`
     pub annotations: Option<BaseAnnotationsNode<'tree>>,
 }
-///Semantic payload for `id_contents`, 3 payload field(s), structural children stripped.
+///Semantic payload for `id_contents`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct IdContentsPayload<'tree> {
     ///`_id_identity_fields`, nested rule `_id_identity_fields`
@@ -6108,13 +6114,13 @@ pub struct IdContentsPayload<'tree> {
     ///`_id_role_fields`, nested rule `_id_role_fields`
     pub child_2: Option<IdRoleFieldsNode<'tree>>,
 }
-///Semantic payload for `id_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `id_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct IdHeaderPayload<'tree> {
     ///`id_contents`, nested rule `id_contents`
     pub child_2: Option<IdContentsNode<'tree>>,
 }
-///Semantic payload for `l1_of_header`, 3 payload field(s), structural children stripped.
+///Semantic payload for `l1_of_header`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct L1OfHeaderPayload<'tree> {
     ///`header_gap`, nested rule `header_gap`
@@ -6124,43 +6130,43 @@ pub struct L1OfHeaderPayload<'tree> {
     ///`language_code`, free text
     pub child_4: Option<LanguageCodeNode<'tree>>,
 }
-///Semantic payload for `langcode`, 1 payload field(s), structural children stripped.
+///Semantic payload for `langcode`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct LangcodePayload<'tree> {
     ///`language_code`, free text
     pub code: Option<LanguageCodeNode<'tree>>,
 }
-///Semantic payload for `languages_contents`, 1 payload field(s), structural children stripped.
+///Semantic payload for `languages_contents`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct LanguagesContentsPayload<'tree> {
     ///`language_code`, free text
     pub child_0: Option<LanguageCodeNode<'tree>>,
 }
-///Semantic payload for `languages_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `languages_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct LanguagesHeaderPayload<'tree> {
     ///`languages_contents`, nested rule `languages_contents`
     pub child_2: Option<LanguagesContentsNode<'tree>>,
 }
-///Semantic payload for `location_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `location_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct LocationHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `long_feature_begin`, 1 payload field(s), structural children stripped.
+///Semantic payload for `long_feature_begin`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct LongFeatureBeginPayload<'tree> {
     ///`long_feature_label`, free text
     pub child_2: Option<LongFeatureLabelNode<'tree>>,
 }
-///Semantic payload for `long_feature_end`, 1 payload field(s), structural children stripped.
+///Semantic payload for `long_feature_end`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct LongFeatureEndPayload<'tree> {
     ///`long_feature_label`, free text
     pub child_2: Option<LongFeatureLabelNode<'tree>>,
 }
-///Semantic payload for `main_pho_group`, 3 payload field(s), structural children stripped.
+///Semantic payload for `main_pho_group`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MainPhoGroupPayload<'tree> {
     ///`pho_begin_group`, opaque token (parse separately)
@@ -6170,7 +6176,7 @@ pub struct MainPhoGroupPayload<'tree> {
     ///`pho_end_group`, opaque token (parse separately)
     pub child_2: Option<PhoEndGroupNode<'tree>>,
 }
-///Semantic payload for `main_sin_group`, 3 payload field(s), structural children stripped.
+///Semantic payload for `main_sin_group`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MainSinGroupPayload<'tree> {
     ///`sin_begin_group`, opaque token (parse separately)
@@ -6180,7 +6186,7 @@ pub struct MainSinGroupPayload<'tree> {
     ///`sin_end_group`, opaque token (parse separately)
     pub child_2: Option<SinEndGroupNode<'tree>>,
 }
-///Semantic payload for `main_tier`, 2 payload field(s), structural children stripped.
+///Semantic payload for `main_tier`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MainTierPayload<'tree> {
     ///`speaker`, free text
@@ -6188,7 +6194,7 @@ pub struct MainTierPayload<'tree> {
     ///`tier_body`, nested rule `tier_body`
     pub child_4: Option<TierBodyNode<'tree>>,
 }
-///Semantic payload for `media_contents`, 2 payload field(s), structural children stripped.
+///Semantic payload for `media_contents`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MediaContentsPayload<'tree> {
     ///`media_filename`, nested rule `media_filename`
@@ -6196,43 +6202,43 @@ pub struct MediaContentsPayload<'tree> {
     ///`media_type`, enum: video | audio | missing
     pub child_3: Option<MediaTypeNode<'tree>>,
 }
-///Semantic payload for `media_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `media_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MediaHeaderPayload<'tree> {
     ///`media_contents`, nested rule `media_contents`
     pub child_2: Option<MediaContentsNode<'tree>>,
 }
-///Semantic payload for `mod_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `mod_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ModDependentTierPayload<'tree> {
     ///`pho_groups`, nested rule `pho_groups`
     pub child_2: Option<PhoGroupsNode<'tree>>,
 }
-///Semantic payload for `mor_content`, 1 payload field(s), structural children stripped.
+///Semantic payload for `mor_content`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MorContentPayload<'tree> {
     ///`mor_word`, nested rule `mor_word`
     pub main: Option<MorWordNode<'tree>>,
 }
-///Semantic payload for `mor_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `mor_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MorDependentTierPayload<'tree> {
     ///`mor_contents`, nested rule `mor_contents`
     pub child_2: Option<MorContentsNode<'tree>>,
 }
-///Semantic payload for `mor_feature`, 1 payload field(s), structural children stripped.
+///Semantic payload for `mor_feature`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MorFeaturePayload<'tree> {
     ///`mor_feature_value`, free text
     pub child_1: Option<MorFeatureValueNode<'tree>>,
 }
-///Semantic payload for `mor_post_clitic`, 1 payload field(s), structural children stripped.
+///Semantic payload for `mor_post_clitic`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MorPostCliticPayload<'tree> {
     ///`mor_word`, nested rule `mor_word`
     pub child_1: Option<MorWordNode<'tree>>,
 }
-///Semantic payload for `mor_word`, 2 payload field(s), structural children stripped.
+///Semantic payload for `mor_word`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct MorWordPayload<'tree> {
     ///`mor_pos`, free text
@@ -6240,25 +6246,25 @@ pub struct MorWordPayload<'tree> {
     ///`mor_lemma`, free text
     pub child_2: Option<MorLemmaNode<'tree>>,
 }
-///Semantic payload for `nonvocal_begin`, 1 payload field(s), structural children stripped.
+///Semantic payload for `nonvocal_begin`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct NonvocalBeginPayload<'tree> {
     ///`long_feature_label`, free text
     pub child_2: Option<LongFeatureLabelNode<'tree>>,
 }
-///Semantic payload for `nonvocal_end`, 1 payload field(s), structural children stripped.
+///Semantic payload for `nonvocal_end`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct NonvocalEndPayload<'tree> {
     ///`long_feature_label`, free text
     pub child_2: Option<LongFeatureLabelNode<'tree>>,
 }
-///Semantic payload for `nonvocal_simple`, 1 payload field(s), structural children stripped.
+///Semantic payload for `nonvocal_simple`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct NonvocalSimplePayload<'tree> {
     ///`long_feature_label`, free text
     pub child_2: Option<LongFeatureLabelNode<'tree>>,
 }
-///Semantic payload for `nonword_with_optional_annotations`, 2 payload field(s), structural children stripped.
+///Semantic payload for `nonword_with_optional_annotations`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct NonwordWithOptionalAnnotationsPayload<'tree> {
     ///`nonword`, nested rule `nonword`
@@ -6266,25 +6272,25 @@ pub struct NonwordWithOptionalAnnotationsPayload<'tree> {
     ///`base_annotations`, nested rule `base_annotations`
     pub annotations: Option<BaseAnnotationsNode<'tree>>,
 }
-///Semantic payload for `number_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `number_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct NumberHeaderPayload<'tree> {
     ///`number_option`, enum: 1 | 2 | 3 | 4 | 5 | more | audience
     pub child_2: Option<NumberOptionNode<'tree>>,
 }
-///Semantic payload for `options_contents`, 1 payload field(s), structural children stripped.
+///Semantic payload for `options_contents`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct OptionsContentsPayload<'tree> {
     ///`option_name`, enum: CA | NoAlign
     pub child_0: Option<OptionNameNode<'tree>>,
 }
-///Semantic payload for `options_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `options_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct OptionsHeaderPayload<'tree> {
     ///`options_contents`, nested rule `options_contents`
     pub child_2: Option<OptionsContentsNode<'tree>>,
 }
-///Semantic payload for `other_spoken_event`, 2 payload field(s), structural children stripped.
+///Semantic payload for `other_spoken_event`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct OtherSpokenEventPayload<'tree> {
     ///`speaker`, free text
@@ -6292,79 +6298,79 @@ pub struct OtherSpokenEventPayload<'tree> {
     ///`standalone_word`, nested rule `standalone_word`
     pub child_4: Option<StandaloneWordNode<'tree>>,
 }
-///Semantic payload for `page_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `page_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PageHeaderPayload<'tree> {
     ///`page_number`, integer
     pub child_2: Option<PageNumberNode<'tree>>,
 }
-///Semantic payload for `para_annotation`, 1 payload field(s), structural children stripped.
+///Semantic payload for `para_annotation`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ParaAnnotationPayload<'tree> {
     ///`annotation_content`, free text
     pub text: Option<AnnotationContentNode<'tree>>,
 }
-///Semantic payload for `participant`, 1 payload field(s), structural children stripped.
+///Semantic payload for `participant`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ParticipantPayload<'tree> {
     ///`speaker`, free text
     pub code: Option<SpeakerNode<'tree>>,
 }
-///Semantic payload for `participants_contents`, 1 payload field(s), structural children stripped.
+///Semantic payload for `participants_contents`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ParticipantsContentsPayload<'tree> {
     ///`participant`, nested rule `participant`
     pub child_0: Option<ParticipantNode<'tree>>,
 }
-///Semantic payload for `participants_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `participants_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ParticipantsHeaderPayload<'tree> {
     ///`participants_contents`, nested rule `participants_contents`
     pub child_2: Option<ParticipantsContentsNode<'tree>>,
 }
-///Semantic payload for `percent_annotation`, 1 payload field(s), structural children stripped.
+///Semantic payload for `percent_annotation`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PercentAnnotationPayload<'tree> {
     ///`annotation_content`, free text
     pub text: Option<AnnotationContentNode<'tree>>,
 }
-///Semantic payload for `pho_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `pho_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PhoDependentTierPayload<'tree> {
     ///`pho_groups`, nested rule `pho_groups`
     pub child_2: Option<PhoGroupsNode<'tree>>,
 }
-///Semantic payload for `pho_grouped_content`, 1 payload field(s), structural children stripped.
+///Semantic payload for `pho_grouped_content`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PhoGroupedContentPayload<'tree> {
     ///`pho_words`, nested rule `pho_words`
     pub child_0: Option<PhoWordsNode<'tree>>,
 }
-///Semantic payload for `pho_groups`, 1 payload field(s), structural children stripped.
+///Semantic payload for `pho_groups`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PhoGroupsPayload<'tree> {
     ///`pho_group`, nested rule `pho_group`
     pub child_0: Option<PhoGroupNode<'tree>>,
 }
-///Semantic payload for `pho_words`, 1 payload field(s), structural children stripped.
+///Semantic payload for `pho_words`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PhoWordsPayload<'tree> {
     ///`pho_word`, free text
     pub child_0: Option<PhoWordNode<'tree>>,
 }
-///Semantic payload for `pid_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `pid_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PidHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `postcode`, 1 payload field(s), structural children stripped.
+///Semantic payload for `postcode`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct PostcodePayload<'tree> {
     ///`annotation_content`, free text
     pub code: Option<AnnotationContentNode<'tree>>,
 }
-///Semantic payload for `quotation`, 3 payload field(s), structural children stripped.
+///Semantic payload for `quotation`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct QuotationPayload<'tree> {
     ///`left_double_quote`, opaque token (parse separately)
@@ -6374,49 +6380,49 @@ pub struct QuotationPayload<'tree> {
     ///`right_double_quote`, opaque token (parse separately)
     pub child_2: Option<RightDoubleQuoteNode<'tree>>,
 }
-///Semantic payload for `recording_quality_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `recording_quality_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct RecordingQualityHeaderPayload<'tree> {
     ///`recording_quality_option`, enum: 1 | 2 | 3 | 4 | 5
     pub child_2: Option<RecordingQualityOptionNode<'tree>>,
 }
-///Semantic payload for `room_layout_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `room_layout_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct RoomLayoutHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `shortening`, 1 payload field(s), structural children stripped.
+///Semantic payload for `shortening`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ShorteningPayload<'tree> {
     ///`word_segment`, opaque token (parse separately)
     pub child_0: Option<WordSegmentNode<'tree>>,
 }
-///Semantic payload for `sin_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `sin_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct SinDependentTierPayload<'tree> {
     ///`sin_groups`, nested rule `sin_groups`
     pub child_2: Option<SinGroupsNode<'tree>>,
 }
-///Semantic payload for `sin_grouped_content`, 1 payload field(s), structural children stripped.
+///Semantic payload for `sin_grouped_content`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct SinGroupedContentPayload<'tree> {
     ///`sin_word`, nested rule `sin_word`
     pub child_0: Option<SinWordNode<'tree>>,
 }
-///Semantic payload for `sin_groups`, 1 payload field(s), structural children stripped.
+///Semantic payload for `sin_groups`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct SinGroupsPayload<'tree> {
     ///`sin_group`, nested rule `sin_group`
     pub child_0: Option<SinGroupNode<'tree>>,
 }
-///Semantic payload for `situation_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `situation_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct SituationHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `standalone_word`, 4 payload field(s), structural children stripped.
+///Semantic payload for `standalone_word`: 4 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct StandaloneWordPayload<'tree> {
     ///`word_body`, nested rule `word_body`
@@ -6428,25 +6434,25 @@ pub struct StandaloneWordPayload<'tree> {
     ///`pos_tag`, nested rule `pos_tag`
     pub child_3: Option<PosTagNode<'tree>>,
 }
-///Semantic payload for `t_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `t_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct THeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `tape_location_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `tape_location_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TapeLocationHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `thumbnail_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `thumbnail_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct ThumbnailHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `tier_body`, 3 payload field(s), structural children stripped.
+///Semantic payload for `tier_body`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TierBodyPayload<'tree> {
     ///`linkers`, nested rule `linkers`
@@ -6456,31 +6462,31 @@ pub struct TierBodyPayload<'tree> {
     ///`utterance_end`, nested rule `utterance_end`
     pub ending: Option<UtteranceEndNode<'tree>>,
 }
-///Semantic payload for `time_duration_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `time_duration_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TimeDurationHeaderPayload<'tree> {
     ///`time_duration_contents`, nested rule `time_duration_contents`
     pub child_2: Option<TimeDurationContentsNode<'tree>>,
 }
-///Semantic payload for `time_start_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `time_start_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TimeStartHeaderPayload<'tree> {
     ///`time_duration_contents`, nested rule `time_duration_contents`
     pub child_2: Option<TimeDurationContentsNode<'tree>>,
 }
-///Semantic payload for `transcriber_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `transcriber_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TranscriberHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `transcription_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `transcription_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TranscriptionHeaderPayload<'tree> {
     ///`transcription_option`, enum: eye_dialect | partial | full | detailed | coarse | checked | anonymized
     pub child_2: Option<TranscriptionOptionNode<'tree>>,
 }
-///Semantic payload for `types_header`, 3 payload field(s), structural children stripped.
+///Semantic payload for `types_header`: 3 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct TypesHeaderPayload<'tree> {
     ///`types_design`, free text
@@ -6490,19 +6496,19 @@ pub struct TypesHeaderPayload<'tree> {
     ///`types_group`, free text
     pub child_10: Option<TypesGroupNode<'tree>>,
 }
-///Semantic payload for `unsupported_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `unsupported_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct UnsupportedHeaderPayload<'tree> {
     ///`rest_of_line`, free text
     pub child_1: Option<RestOfLineNode<'tree>>,
 }
-///Semantic payload for `utterance`, 1 payload field(s), structural children stripped.
+///Semantic payload for `utterance`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct UtterancePayload<'tree> {
     ///`main_tier`, nested rule `main_tier`
     pub child_0: Option<MainTierNode<'tree>>,
 }
-///Semantic payload for `utterance_end`, 2 payload field(s), structural children stripped.
+///Semantic payload for `utterance_end`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct UtteranceEndPayload<'tree> {
     ///`terminator`, enum: . | ? | !
@@ -6510,37 +6516,37 @@ pub struct UtteranceEndPayload<'tree> {
     ///`final_codes`, nested rule `final_codes`
     pub child_1: Option<FinalCodesNode<'tree>>,
 }
-///Semantic payload for `videos_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `videos_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct VideosHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `warning_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `warning_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct WarningHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `window_header`, 1 payload field(s), structural children stripped.
+///Semantic payload for `window_header`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct WindowHeaderPayload<'tree> {
     ///`free_text`, nested rule `free_text`
     pub child_2: Option<FreeTextNode<'tree>>,
 }
-///Semantic payload for `wor_dependent_tier`, 1 payload field(s), structural children stripped.
+///Semantic payload for `wor_dependent_tier`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct WorDependentTierPayload<'tree> {
     ///`wor_tier_body`, nested rule `wor_tier_body`
     pub child_2: Option<WorTierBodyNode<'tree>>,
 }
-///Semantic payload for `wor_tier_body`, 1 payload field(s), structural children stripped.
+///Semantic payload for `wor_tier_body`: 1 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct WorTierBodyPayload<'tree> {
     ///`terminator`, enum: . | ? | !
     pub child_0: Option<TerminatorNode<'tree>>,
 }
-///Semantic payload for `word_with_optional_annotations`, 2 payload field(s), structural children stripped.
+///Semantic payload for `word_with_optional_annotations`: 2 payload field(s), structural children stripped.
 #[derive(Debug)]
 pub struct WordWithOptionalAnnotationsPayload<'tree> {
     ///`standalone_word`, nested rule `standalone_word`
@@ -6548,7 +6554,7 @@ pub struct WordWithOptionalAnnotationsPayload<'tree> {
     ///`base_annotations`, nested rule `base_annotations`
     pub annotations: Option<BaseAnnotationsNode<'tree>>,
 }
-///Validated values for `id_sex`, 2 known + catch-all.
+///Validated values for `id_sex`: 2 known + catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdSexValue {
     Male,
@@ -6572,7 +6578,7 @@ impl IdSexValue {
         !matches!(self, Self::Other(_))
     }
 }
-///Validated values for `media_type`, 3 known + catch-all.
+///Validated values for `media_type`: 3 known + catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MediaTypeValue {
     Video,
@@ -6598,7 +6604,7 @@ impl MediaTypeValue {
         !matches!(self, Self::Other(_))
     }
 }
-///Validated values for `number_option`, 7 known + catch-all.
+///Validated values for `number_option`: 7 known + catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NumberOptionValue {
     V1,
@@ -6632,7 +6638,7 @@ impl NumberOptionValue {
         !matches!(self, Self::Other(_))
     }
 }
-///Validated values for `option_name`, 2 known + catch-all.
+///Validated values for `option_name`: 2 known + catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OptionNameValue {
     CA,
@@ -6656,7 +6662,7 @@ impl OptionNameValue {
         !matches!(self, Self::Other(_))
     }
 }
-///Validated values for `recording_quality_option`, 5 known + catch-all.
+///Validated values for `recording_quality_option`: 5 known + catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordingQualityOptionValue {
     V1,
@@ -6686,7 +6692,7 @@ impl RecordingQualityOptionValue {
         !matches!(self, Self::Other(_))
     }
 }
-///Validated values for `transcription_option`, 7 known + catch-all.
+///Validated values for `transcription_option`: 7 known + catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscriptionOptionValue {
     EyeDialect,
