@@ -148,17 +148,16 @@ pub(super) fn check_media_filename_match(
     // Find @Media header
     for (header, span) in headers {
         if let Header::Media(media_header) = header {
-            let media_filename = media_header.filename.as_str();
-
             // CLAN exempts remote URL media references from the filename-match
             // rule (verified against real CLAN: `@Media: "https://..."` yields no
-            // CHECK 157). Strip the optional surrounding quotes before testing the
-            // scheme. A URL points at remote media, so a local-basename match is
-            // meaningless.
-            let unquoted = media_filename.trim_matches('"');
-            if unquoted.starts_with("http://") || unquoted.starts_with("https://") {
+            // CHECK 157), so a URL points at remote media and a local-basename
+            // match is meaningless. The "is this a URL" decision lives on the
+            // MediaFilename newtype, not inline here.
+            if media_header.filename.is_remote_url() {
                 break;
             }
+
+            let media_filename = media_header.filename.as_str();
 
             // Compare media filename with provided filename (case-insensitive)
             if !media_filename.eq_ignore_ascii_case(file_name) {

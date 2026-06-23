@@ -113,6 +113,13 @@ pub fn stderr_string(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+/// Decode stdout and stderr together, for assertions that must match a
+/// diagnostic regardless of which stream it lands on (the target stream varies
+/// with `--format` / `--quiet`).
+pub fn combined_output(output: &Output) -> String {
+    format!("{}{}", stdout_string(output), stderr_string(output))
+}
+
 /// Assert a CLI subprocess succeeded and print captured output on failure.
 pub fn assert_success(output: &Output, context: &str) {
     assert!(

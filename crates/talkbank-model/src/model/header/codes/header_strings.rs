@@ -171,8 +171,25 @@ string_newtype!(
 );
 
 string_newtype!(
-    /// Media filename recorded in `@Media` (without extension).
+    /// Media filename recorded in `@Media` (a local datafile basename, or a
+    /// remote URL).
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
     pub struct MediaFilename;
 );
+
+impl MediaFilename {
+    /// Returns true if this `@Media` filename is a remote URL (`http://` or
+    /// `https://`) rather than a local datafile basename.
+    ///
+    /// A URL points at remote media, so the local-filename-match rule (CLAN
+    /// CHECK 157, surfaced as E531) does not apply: CLAN itself accepts
+    /// `@Media: "https://..."` with no error. The recorded value may be wrapped
+    /// in quotes, so they are stripped before testing the scheme. The predicate
+    /// lives on the newtype so callers (validation, and any future media
+    /// resolution / forced alignment) do not re-derive it by string-hacking.
+    pub fn is_remote_url(&self) -> bool {
+        let unquoted = self.as_str().trim_matches('"');
+        unquoted.starts_with("http://") || unquoted.starts_with("https://")
+    }
+}

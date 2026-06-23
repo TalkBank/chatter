@@ -8,20 +8,12 @@
 //! manifest entry alone would have masked the gap; only a subprocess test pins
 //! the plumbing.
 
-use std::process::Output;
-
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
 
 mod common;
 
-use common::{CliHarness, stderr_string, stdout_string, write_fixture};
-
-/// Combined stdout + stderr of a subprocess run (the diagnostic may land on
-/// either stream depending on format/quiet flags).
-fn combined(output: &Output) -> String {
-    format!("{}{}", stdout_string(output), stderr_string(output))
-}
+use common::{CliHarness, combined_output, write_fixture};
 
 /// A minimal valid preamble plus a `@Media` line and one timing bullet (so the
 /// linkage checks E544/E552 do not also fire and the only `@Media`-related
@@ -47,7 +39,7 @@ fn media_filename_mismatch_is_rejected_via_cli() -> Result<(), TestError> {
         &fixture_with_media("differentname"),
     )?;
     let output = harness.run_validate(&path, &["--force"])?;
-    let text = combined(&output);
+    let text = combined_output(&output);
     assert!(
         text.contains("E531"),
         "expected E531 for an @Media filename that does not match the datafile basename, got:\n{text}"
@@ -67,7 +59,7 @@ fn media_url_is_exempt_from_filename_match() -> Result<(), TestError> {
         &fixture_with_media("\"https://media.talkbank.org/x.mp3\""),
     )?;
     let output = harness.run_validate(&path, &["--force"])?;
-    let text = combined(&output);
+    let text = combined_output(&output);
     assert!(
         !text.contains("E531"),
         "a URL @Media must be exempt from the filename-match rule (E531), got:\n{text}"
@@ -82,7 +74,7 @@ fn matching_media_filename_is_accepted() -> Result<(), TestError> {
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", &fixture_with_media("session"))?;
     let output = harness.run_validate(&path, &["--force"])?;
-    let text = combined(&output);
+    let text = combined_output(&output);
     assert!(
         !text.contains("E531"),
         "a matching @Media filename must not emit E531, got:\n{text}"

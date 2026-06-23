@@ -104,6 +104,13 @@ pub fn parse_and_validate_with_parser(
             None
         };
 
+        // NOTE: the filename is passed as `None` here, so the @Media filename
+        // match (E531, CLAN CHECK 157) does NOT run on this path. This function
+        // takes content, not a path, so it has no datafile basename to compare
+        // against. The CLI `validate` path runs E531 via the validation_runner
+        // worker (which does have the path). FOLLOW-UP: thread an
+        // `Option<&str>` filename through `parse_and_validate_with_parser` so
+        // `to-json` and other pipeline consumers also run E531.
         if options.alignment {
             // validate_with_alignment does not accept a config; it calls
             // validate() internally. For strict-linkers support we fall back
