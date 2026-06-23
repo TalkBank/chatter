@@ -104,6 +104,16 @@
         "E504"
       ],
       "note": "No @Participants header. chatter rejects with E504 (Missing required @Participants header), plus E543/E522. Grounded vs real CLAN CHECK 61."
+    },
+    {
+      "check_code": 63,
+      "check_message": "Missing Corpus name.",
+      "fixture": "CHECK_063_empty_corpus.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E514"
+      ],
+      "note": "Empty corpus field (2nd) in @ID. chatter E514 EmptyIDCorpus. Root-caused: corpus was wrongly Option<CorpusName>; made it a required CorpusName like its siblings, the Validate trait flags empty. CLAN CHECK 63."
     }
   ]
 }

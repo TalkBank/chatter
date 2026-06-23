@@ -58,6 +58,11 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
         "Missing id_languages field in @ID header",
     );
 
+    // Corpus is a REQUIRED field, but parse it leniently (optional) so the
+    // positional field walk stays aligned when the corpus slot is blank; an
+    // absent/empty corpus becomes the model's empty `CorpusName`, which the
+    // Validate trait flags as E514. (Using the required-field parser here would
+    // misalign the remaining positional fields.)
     let corpus = parse_optional_text_field(
         id_contents,
         &mut idx,
@@ -174,6 +179,8 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
     let languages = talkbank_model::model::LanguageCodes::new(language_codes);
 
     let mut id_header = talkbank_model::model::IDHeader::from_languages(languages, speaker, role);
+    // Absent/empty corpus leaves the constructor's empty `CorpusName`, which the
+    // Validate trait reports as E514 (corpus is required).
     if let Some(c) = corpus {
         id_header = id_header.with_corpus(c);
     }

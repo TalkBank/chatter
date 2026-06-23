@@ -261,7 +261,7 @@ mod tests {
             Line::Header { header, .. } => match header.as_ref() {
                 Header::ID(id) => {
                     id.language.contains(&expected_language)
-                        && id.corpus.as_ref() == Some(&expected_corpus)
+                        && id.corpus == expected_corpus
                         && id.speaker == expected_speaker
                         && id.role == expected_role
                 }

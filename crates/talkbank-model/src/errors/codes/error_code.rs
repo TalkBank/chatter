@@ -386,6 +386,11 @@ pub enum ErrorCode {
     /// Empty participant role in `@Participants`.
     #[code("E513")]
     EmptyParticipantRole,
+    /// Empty corpus field (2nd field) in `@ID` header. The corpus name is
+    /// required: `@ID:` is `lang|corpus|code|...`, and a blank corpus is
+    /// invalid. Corresponds to CLAN CHECK error 63 ("Missing Corpus name").
+    #[code("E514")]
+    EmptyIDCorpus,
     /// Empty role field in `@ID` header.
     #[code("E515")]
     EmptyIDRole,

@@ -12,10 +12,8 @@ Ok(
                     ),
                 ],
             ),
-            corpus: Some(
-                CorpusName(
-                    "bates",
-                ),
+            corpus: CorpusName(
+                "bates",
             ),
             speaker: SpeakerCode(
                 "CHI",

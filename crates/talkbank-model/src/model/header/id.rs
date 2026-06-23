@@ -25,9 +25,12 @@ pub struct IDHeader {
     /// May contain multiple comma-separated codes for multilingual speakers.
     pub language: LanguageCodes,
 
-    /// Optional corpus label.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub corpus: Option<CorpusName>,
+    /// Corpus name (2nd `@ID` field). Required: every `@ID` names its corpus
+    /// (`lang|corpus|code|...`). Modeled as a non-optional newtype like its
+    /// required siblings `language`, `speaker`, and `role`; emptiness is a
+    /// validation error (E514), reported by the Validate trait, not prevented at
+    /// construction (so the parser can recover and surface the diagnostic).
+    pub corpus: CorpusName,
 
     /// Required speaker code used by main-tier lines.
     pub speaker: SpeakerCode,
@@ -72,7 +75,7 @@ impl IDHeader {
     ) -> Self {
         Self {
             language: LanguageCodes::new(vec![language.into()]),
-            corpus: None,
+            corpus: CorpusName::new(""),
             speaker: speaker.into(),
             age: None,
             sex: None,
@@ -92,7 +95,7 @@ impl IDHeader {
     ) -> Self {
         Self {
             language: languages,
-            corpus: None,
+            corpus: CorpusName::new(""),
             speaker: speaker.into(),
             age: None,
             sex: None,
@@ -104,9 +107,9 @@ impl IDHeader {
         }
     }
 
-    /// Sets the optional corpus field.
+    /// Sets the required corpus field.
     pub fn with_corpus(mut self, corpus: impl Into<CorpusName>) -> Self {
-        self.corpus = Some(corpus.into());
+        self.corpus = corpus.into();
         self
     }
 
@@ -157,9 +160,7 @@ impl WriteChat for IDHeader {
         self.language.write_chat(w)?;
         w.write_char('|')?;
 
-        if let Some(ref corpus) = self.corpus {
-            w.write_str(corpus.as_str())?;
-        }
+        w.write_str(self.corpus.as_str())?;
         w.write_char('|')?;
 
         write!(w, "{}", self.speaker)?;

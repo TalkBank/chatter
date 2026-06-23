@@ -191,10 +191,7 @@ fn id_header_to_fields(id: &IDHeader) -> ParticipantFields {
             .map(|c| c.as_str())
             .collect::<Vec<_>>()
             .join(", "),
-        corpus: id
-            .corpus
-            .as_ref()
-            .map_or(String::new(), |c| c.as_str().to_string()),
+        corpus: id.corpus.as_str().to_string(),
         speaker: id.speaker.as_str().to_string(),
         age: id
             .age

@@ -444,9 +444,9 @@ fn find_corpus<S: ValidationState>(file: &ChatFile<S>) -> Result<String, XmlWrit
     for line in file.lines.iter() {
         if let Line::Header { header, .. } = line
             && let Header::ID(id) = header.as_ref()
-            && let Some(corpus) = &id.corpus
+            && !id.corpus.is_empty()
         {
-            return Ok(corpus.as_ref().to_owned());
+            return Ok(id.corpus.as_str().to_owned());
         }
     }
     Err(XmlWriteError::MissingMetadata {

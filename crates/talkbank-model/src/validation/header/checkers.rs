@@ -26,6 +26,18 @@ pub(super) fn check_id_header(id_header: &IDHeader, span: Span, errors: &impl Er
         errors.report(err);
     }
 
+    if id_header.corpus.is_empty() {
+        let mut err = ParseError::new(
+            ErrorCode::EmptyIDCorpus,
+            Severity::Error,
+            SourceLocation::at_offset(span.start as usize),
+            ErrorContext::new("", 0..0, "id_corpus"),
+            "ID header corpus field (2nd field) cannot be empty: every @ID names its corpus",
+        );
+        err.location.span = span;
+        errors.report(err);
+    }
+
     if id_header.speaker.is_empty() {
         let mut err = ParseError::new(
             ErrorCode::EmptyIDSpeaker,

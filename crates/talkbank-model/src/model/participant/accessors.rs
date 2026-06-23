@@ -46,10 +46,14 @@ impl Participant {
         &self.id.language
     }
 
-    /// Returns the optional `@ID` corpus field.
+    /// Returns the `@ID` corpus field if it is non-empty.
     ///
-    /// This is useful for dataset-level routing or corpus-specific policy toggles.
+    /// The corpus field is required (validated as E514 when empty), but the
+    /// model can still hold an empty value during lenient recovery; this
+    /// accessor reports `None` for an empty corpus, so dataset-level routing and
+    /// corpus-specific policy toggles see a present-or-absent corpus name.
     pub fn corpus(&self) -> Option<&str> {
-        self.id.corpus.as_deref()
+        let corpus = self.id.corpus.as_str();
+        (!corpus.is_empty()).then_some(corpus)
     }
 }

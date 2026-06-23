@@ -2821,6 +2821,11 @@
           "type": "string"
         },
         {
+          "const": "E514",
+          "description": "Empty corpus field (2nd field) in `@ID` header. The corpus name is\nrequired: `@ID:` is `lang|corpus|code|...`, and a blank corpus is\ninvalid. Corresponds to CLAN CHECK error 63 (\"Missing Corpus name\").",
+          "type": "string"
+        },
+        {
           "const": "E515",
           "description": "Empty role field in `@ID` header.",
           "type": "string"
@@ -2968,6 +2973,26 @@
         {
           "const": "E546",
           "description": "Unsupported `@ID` SES value.",
+          "type": "string"
+        },
+        {
+          "const": "E547",
+          "description": "A constant participant-specific header (`@Birth of`, `@Birthplace of`,\nor `@L1 of`) does not immediately follow the `@ID` block: a changeable\nheader (e.g. `@Comment`, `@Date`) appears between the `@ID` headers and\nthe constant header. Per the CHAT manual these constant headers must\ndirectly follow `@ID`. Corresponds to CLAN CHECK error 127.",
+          "type": "string"
+        },
+        {
+          "const": "E548",
+          "description": "An `@ID` header does not immediately follow the `@Participants` /\n`@Options` headers (or another `@ID`): a changeable header such as\n`@Comment` appears between `@Participants`/`@Options` and the `@ID`\nblock. Per the CHAT manual the `@ID` block directly follows\n`@Participants` (and the optional `@Options`). Corresponds to CLAN\nCHECK error 126.",
+          "type": "string"
+        },
+        {
+          "const": "E549",
+          "description": "The same speaker code is declared more than once in the `@Participants`\nheader. Each participant must be declared exactly once. Corresponds to\nCLAN CHECK error 13.",
+          "type": "string"
+        },
+        {
+          "const": "E550",
+          "description": "The `@Participants` header ends with a trailing comma (a stray comma\nafter the last participant, with no participant following it). The\nparticipant list is comma-separated, so a trailing comma is a dangling\nseparator rather than an empty header. Corresponds to CLAN CHECK error\n100 (\"Commas at the end of PARTICIPANTS tier are not allowed\").",
           "type": "string"
         },
         {
@@ -4454,15 +4479,8 @@
           "description": "Optional age (`years;months.days` in CHAT form)."
         },
         "corpus": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CorpusName"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Optional corpus label."
+          "$ref": "#/$defs/CorpusName",
+          "description": "Corpus name (2nd `@ID` field). Required: every `@ID` names its corpus\n(`lang|corpus|code|...`). Modeled as a non-optional newtype like its\nrequired siblings `language`, `speaker`, and `role`; emptiness is a\nvalidation error (E514), reported by the Validate trait, not prevented at\nconstruction (so the parser can recover and surface the diagnostic)."
         },
         "custom_field": {
           "anyOf": [
@@ -4534,6 +4552,7 @@
       },
       "required": [
         "language",
+        "corpus",
         "speaker",
         "role"
       ],

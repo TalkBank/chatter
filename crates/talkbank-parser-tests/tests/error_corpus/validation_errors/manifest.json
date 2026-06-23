@@ -666,6 +666,14 @@
       "source_spec": "spec/errors/E513_auto.md"
     },
     {
+      "fixture": "E514_Empty_corpus_field_in_ID.cha",
+      "expected_codes": [
+        "E514"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E514_empty_id_corpus.md"
+    },
+    {
       "fixture": "E515_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "E515"
