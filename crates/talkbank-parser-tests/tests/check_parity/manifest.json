@@ -84,6 +84,26 @@
         "E525"
       ],
       "note": "Space before the comma in @Media makes the header malformed; chatter rejects it (E525 malformed header, plus E330). Both validators reject; the precise space-before-comma message is a CLAN nicety chatter does not replicate."
+    },
+    {
+      "check_code": 43,
+      "check_message": "The file must start with \"@Begin\" tier.",
+      "fixture": "CHECK_043_missing_begin.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E504"
+      ],
+      "note": "No @Begin header. chatter rejects with E504 (Missing required @Begin header in file preamble). Grounded vs real CLAN CHECK 43; audit name-matcher had marked it a gap."
+    },
+    {
+      "check_code": 61,
+      "check_message": "\"@Participants:\" tier is expected here.",
+      "fixture": "CHECK_061_missing_participants.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E504"
+      ],
+      "note": "No @Participants header. chatter rejects with E504 (Missing required @Participants header), plus E543/E522. Grounded vs real CLAN CHECK 61."
     }
   ]
 }
