@@ -1,20 +1,29 @@
-//! `chatter update` is the discoverable front door to the self-updater that
-//! the official cargo-dist installers ship alongside the binary as
-//! `chatter-update`. Clinicians should be able to type `chatter update` (a
-//! command they can find in `chatter --help`) rather than having to know the
-//! separate `chatter-update` program exists.
+//! `chatter update` self-updates IN-PROCESS via the axoupdater library (the
+//! cargo-dist self-updater used as a library, not a separate `chatter-update`
+//! binary). This matches how mainstream CLIs self-update and removes the
+//! standalone-binary name-coupling that previously made `chatter update` report
+//! "not installed" on a correct install (operator report, 2026-06-22): cargo-dist
+//! named the bundled updater after the package (`talkbank-cli-update`) while the
+//! launcher only looked for `chatter-update`.
 //!
-//! Top-down integration test: it drives the real binary at its user seam, so
-//! it cannot pass unless the subcommand is actually wired into clap and the
-//! dispatch path locates (or gracefully fails to locate) the updater.
-//!
-//! The genuine update behavior (download + install a newer release) is
-//! exercised by `chatter-update` itself and first end-to-end at the next
-//! release; here we pin the front-door contract: the command exists, is
-//! documented as experimental, and fails gracefully with an actionable
-//! message when the updater is not installed.
+//! Top-down integration tests drive the real binary at its user seam. The genuine
+//! download+install path needs a cargo-dist install receipt and network access,
+//! so it is exercised first end-to-end at the next release; here we pin the
+//! front-door contract: the command exists, is documented experimental, does NOT
+//! shell out to a separate updater program, and fails gracefully when there is no
+//! install receipt to update from.
 
 use std::process::Command;
+
+/// An isolated home/config root so a test never reads a real cargo-dist install
+/// receipt from the developer's machine. axoupdater reads the receipt from
+/// `$XDG_CONFIG_HOME/<app>/` or `~/.config/<app>/`, so pointing both `HOME` and
+/// `XDG_CONFIG_HOME` at an empty dir guarantees the no-receipt path.
+fn isolated_home(tag: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("chatter-update-{tag}-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join(".config")).expect("create isolated home dir");
+    dir
+}
 
 /// `chatter --help` must list `update` so a non-technical user can discover it.
 #[test]
@@ -30,118 +39,115 @@ fn top_level_help_lists_update_command() {
     );
 }
 
-/// `chatter update --help` must explain it runs the bundled self-updater and
-/// flag the facility as experimental (the cargo-dist updater is experimental
-/// upstream).
+/// `chatter update --help` must describe in-process self-update and flag the
+/// facility experimental (the cargo-dist updater is experimental upstream). It
+/// must NOT instruct the user about a separate `chatter-update` program, which no
+/// longer exists.
 #[test]
-fn update_help_describes_self_updater_and_experimental() {
+fn update_help_describes_in_process_self_update() {
     let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
         .args(["update", "--help"])
         .output()
         .expect("failed to run chatter update --help");
     let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
     assert!(
-        text.contains("chatter-update"),
-        "`chatter update --help` does not mention the chatter-update program:\n{text}"
-    );
-    assert!(
         text.contains("experimental"),
         "`chatter update --help` does not mark the facility experimental:\n{text}"
     );
+    assert!(
+        !text.contains("chatter-update"),
+        "`chatter update --help` still references a separate `chatter-update` program; \
+         self-update is now in-process:\n{text}"
+    );
 }
 
-/// When the `chatter-update` program cannot be found (not next to the running
-/// binary and not on PATH), `chatter update` must exit non-zero with an
-/// actionable message that points the user at reinstalling, never panic and
-/// never silently succeed. We run with an emptied PATH so the only place the
-/// dispatcher can look is next to the test binary, where no `chatter-update`
-/// exists.
+/// With no cargo-dist install receipt (build-from-source, package-manager, or any
+/// non-installer layout), `chatter update` cannot determine the installed version,
+/// so it must exit non-zero with an actionable message pointing at reinstalling,
+/// never panic and never silently succeed.
 #[test]
-fn update_without_updater_fails_with_actionable_message() {
-    // An empty directory to use as PATH so a developer machine that happens to
-    // have a real `chatter-update` installed cannot mask the absent-updater
-    // path this test is asserting.
-    let empty_dir =
-        std::env::temp_dir().join(format!("chatter-update-test-empty-{}", std::process::id()));
-    std::fs::create_dir_all(&empty_dir).expect("create empty PATH dir");
-
+fn update_without_install_receipt_fails_gracefully() {
+    let home = isolated_home("noreceipt");
     let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
         .arg("update")
-        .env("PATH", &empty_dir)
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
         .output()
         .expect("failed to run chatter update");
-
-    let _ = std::fs::remove_dir(&empty_dir);
+    let _ = std::fs::remove_dir_all(&home);
 
     assert!(
         !out.status.success(),
-        "`chatter update` unexpectedly succeeded with no updater installed"
+        "`chatter update` unexpectedly succeeded with no install receipt"
     );
-    let stderr = String::from_utf8_lossy(&out.stderr).to_lowercase();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+    .to_lowercase();
     assert!(
-        stderr.contains("chatter-update"),
-        "error message does not name the missing updater program:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("install") || stderr.contains("releases"),
-        "error message is not actionable (no reinstall pointer):\n{stderr}"
+        text.contains("install") || text.contains("releases") || text.contains("receipt"),
+        "error message is not actionable (no reinstall pointer):\n{text}"
     );
 }
 
-/// Regression for the 2026-06-22 install/update mismatch (operator report):
-/// cargo-dist names the bundled self-updater after the *package*
-/// (`talkbank-cli-update`), but `chatter update` only looks for
-/// `chatter-update`. So the updater the official installer actually drops next
-/// to `chatter` is never found, and `chatter update` reports it "not installed"
-/// even on a correct, complete install.
-///
-/// Top-down: drives the real `chatter update` against an install layout whose
-/// updater is named the way cargo-dist names it (`<package>-update`), staged as
-/// a sibling of a copied `chatter`. The invariant is rename-agnostic: whatever
-/// the package is called, `chatter update` must launch `<package>-update`.
+/// `chatter update` self-updates IN-PROCESS and must NOT delegate to a separate
+/// `<package>-update` sibling binary, even when one is present beside it and on
+/// PATH. This is the inverse of the old launcher contract; a fake sibling that
+/// writes a sentinel when run lets us assert it is never invoked. (Regression for
+/// the 2026-06-22 name-coupling bug, now fixed by going in-process rather than by
+/// matching the sibling's name.)
 #[cfg(unix)]
 #[test]
-fn update_runs_the_updater_named_the_way_cargo_dist_installs_it() {
+fn update_does_not_delegate_to_a_sibling_updater_binary() {
     use std::os::unix::fs::PermissionsExt;
 
-    // cargo-dist derives the standalone updater's name from the package name and
-    // appends `-update` (+ platform exe suffix); this is what the real installer
-    // places beside `chatter`.
-    let updater_stem = concat!(env!("CARGO_PKG_NAME"), "-update");
-    let updater_file = format!("{updater_stem}{}", std::env::consts::EXE_SUFFIX);
-
-    let dir = std::env::temp_dir().join(format!("chatter-update-cargodist-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("create temp install dir");
+    let dir = isolated_home("nodelegate");
 
     // Run a COPY of chatter from the temp dir so current_exe().parent() is the
-    // directory we control, the location the launcher checks first.
-    let chatter_copy = dir.join(format!("chatter{}", std::env::consts::EXE_SUFFIX));
+    // directory we control (where the old launcher checked first).
+    let chatter_copy = dir.join("chatter");
     std::fs::copy(env!("CARGO_BIN_EXE_chatter"), &chatter_copy).expect("copy chatter");
     std::fs::set_permissions(&chatter_copy, std::fs::Permissions::from_mode(0o755))
         .expect("chmod chatter copy");
 
-    // Fake updater under cargo-dist's real name: prints a marker and exits 0.
-    let updater_path = dir.join(&updater_file);
-    std::fs::write(&updater_path, b"#!/bin/sh\necho CHATTER_UPDATER_RAN\n")
-        .expect("write fake updater");
-    std::fs::set_permissions(&updater_path, std::fs::Permissions::from_mode(0o755))
-        .expect("chmod fake updater");
+    // Fake updater siblings that record their own invocation via a sentinel
+    // file. Stage BOTH the cargo-dist standalone-updater name (`<package>-update`)
+    // AND the name the old launcher hardcoded (`chatter-update`), so the test
+    // fails if `chatter update` delegates under either name. The old launcher
+    // shells out to `chatter-update`, so it trips this; the in-process version
+    // never looks for a sibling at all.
+    let sentinel = dir.join("sibling-ran.sentinel");
+    for name in [concat!(env!("CARGO_PKG_NAME"), "-update"), "chatter-update"] {
+        let updater = dir.join(name);
+        // `: > file` uses only shell builtins (redirection), so it records the
+        // invocation even though the test restricts PATH to `dir` (no external
+        // `touch` would be resolvable there).
+        std::fs::write(
+            &updater,
+            format!("#!/bin/sh\n: > '{}'\n", sentinel.display()),
+        )
+        .expect("write fake sibling updater");
+        std::fs::set_permissions(&updater, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod fake sibling updater");
+    }
 
-    let out = Command::new(&chatter_copy)
+    let _ = Command::new(&chatter_copy)
         .arg("update")
-        .env("PATH", &dir) // only the staged sibling is discoverable
+        .env("PATH", &dir) // the only place a sibling could be discovered
+        .env("HOME", &dir) // no install receipt -> in-process update no-ops gracefully
+        .env("XDG_CONFIG_HOME", dir.join(".config"))
         .output()
         .expect("failed to run chatter update");
 
+    let delegated = sentinel.exists();
     let _ = std::fs::remove_dir_all(&dir);
 
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        out.status.success() && stdout.contains("CHATTER_UPDATER_RAN"),
-        "`chatter update` did not launch the updater cargo-dist installs \
-         (`{updater_file}`); the launcher only looks for `chatter-update`.\n\
-         status: {:?}\nstdout: {stdout}\nstderr: {stderr}",
-        out.status.code()
+        !delegated,
+        "`chatter update` delegated to the sibling `{}-update` instead of self-updating \
+         in-process",
+        env!("CARGO_PKG_NAME")
     );
 }

@@ -57,6 +57,9 @@ unimplemented = "warn"
 [workspace.dependencies]
 # Foundational utilities and concurrency
 aho-corasick = "1.1"
+# In-process self-updater for `chatter update` (cargo-dist's updater, as a
+# library). `blocking` provides the sync run; default `github_releases` backend.
+axoupdater = { version = "0.10", features = ["blocking"] }
 blake3 = "1.8"
 chrono = "0.4"
 crossbeam-channel = "0.5"

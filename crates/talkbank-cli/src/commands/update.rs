@@ -1,113 +1,72 @@
-//! `chatter update`: the discoverable front door to the bundled self-updater.
+//! `chatter update`: in-process self-update via the axoupdater library.
 //!
-//! The official cargo-dist installers (shell + PowerShell) install a standalone
-//! program named `chatter-update` next to the `chatter` binary. This subcommand
-//! locates that program (preferring the directory the running `chatter` lives
-//! in, since cargo-dist installs the pair side by side, then falling back to
-//! `PATH`), runs it, and propagates its exit code. When the updater is not
-//! present (for example a build-from-source or package-manager install), it
-//! explains how to obtain it rather than failing opaquely.
+//! Most CLIs self-update in place rather than shelling out to a separate updater
+//! binary; chatter does the same. It embeds axoupdater (the cargo-dist
+//! self-updater, used as a library) and, on `chatter update`, checks the latest
+//! GitHub release and replaces the running binary in place. This removes the
+//! standalone `chatter-update` program and the name-coupling that previously made
+//! `chatter update` report "not installed" on a correct install: the cargo-dist
+//! installer named the updater after the package (`talkbank-cli-update`) while the
+//! launcher only looked for `chatter-update`.
 //!
-//! The self-updater itself is experimental (the cargo-dist updater is marked
-//! experimental upstream). The genuine cross-version update logic lives in
-//! `chatter-update`; this command is only the launcher.
+//! axoupdater identifies the installed app from the cargo-dist install receipt
+//! (`$XDG_CONFIG_HOME/<app>/` or `~/.config/<app>/`), keyed by the cargo PACKAGE
+//! name. We therefore pass `CARGO_PKG_NAME`, which always matches the receipt and
+//! survives a future package rename. With no receipt (build-from-source or a
+//! package manager) self-update is unavailable and we say so rather than failing
+//! opaquely. The facility is experimental (the cargo-dist updater is experimental
+//! upstream).
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use axoupdater::AxoUpdater;
 
 use crate::exit_codes::EXIT_INPUT_ERROR;
 
-/// Base name (without executable suffix) of the standalone updater program that
-/// cargo-dist installs alongside `chatter`.
-const UPDATER_PROGRAM: &str = "chatter-update";
-
-/// Where a user reinstalls to obtain the updater when it is missing.
+/// Where a user reinstalls when in-place self-update is unavailable.
 const RELEASES_URL: &str = "https://github.com/TalkBank/chatter/releases/latest";
 
-/// Platform-correct file name of the updater (`chatter-update` on Unix,
-/// `chatter-update.exe` on Windows).
-fn updater_file_name() -> String {
-    format!("{UPDATER_PROGRAM}{}", std::env::consts::EXE_SUFFIX)
-}
+/// Optional environment variable carrying a GitHub token to lift the
+/// unauthenticated GitHub API rate limit (mainly relevant in CI). axoupdater
+/// recommends an app-specific name so a stale ambient `GITHUB_TOKEN` cannot
+/// interfere.
+const GITHUB_TOKEN_ENV: &str = "CHATTER_GITHUB_TOKEN";
 
-/// Return the updater path sitting beside the running executable, if it exists.
-///
-/// cargo-dist installs `chatter` and `chatter-update` into the same directory,
-/// so the sibling of the current executable is the most reliable location and
-/// is checked before falling back to a `PATH` lookup. `exe_dir` is the
-/// directory of the running `chatter` binary.
-fn sibling_updater(exe_dir: &Path) -> Option<PathBuf> {
-    let candidate = exe_dir.join(updater_file_name());
-    candidate.is_file().then_some(candidate)
-}
-
-/// Resolve the command to invoke for the updater: the sibling next to the
-/// running `chatter` if present, otherwise the bare platform file name so the
-/// OS resolves it on `PATH`.
-fn resolve_updater_command() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(Path::to_path_buf))
-        .and_then(|dir| sibling_updater(&dir))
-        .unwrap_or_else(|| PathBuf::from(updater_file_name()))
-}
-
-/// Run `chatter update`: launch the bundled `chatter-update` and exit with its
-/// status, or print an actionable message and exit non-zero when it cannot be
-/// found or run. This function always terminates the process; it never returns.
+/// Run `chatter update`: self-update the running binary in place to the latest
+/// release. Always terminates the process; never returns.
 pub fn run_update() {
-    let program = resolve_updater_command();
-    match Command::new(&program).status() {
-        Ok(status) => match status.code() {
-            Some(code) => std::process::exit(code),
-            None => {
-                // Terminated by a signal (Unix): no numeric code to propagate.
-                eprintln!("chatter update: `{UPDATER_PROGRAM}` was terminated by a signal");
-                std::process::exit(EXIT_INPUT_ERROR);
-            }
-        },
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!("chatter update: the self-updater `{UPDATER_PROGRAM}` is not installed.");
-            eprintln!("It ships with the official chatter installer. To enable `chatter update`,");
-            eprintln!("reinstall from the latest release:");
-            eprintln!("  {RELEASES_URL}");
-            eprintln!(
-                "If you installed via a package manager or from source, update the same way."
-            );
-            std::process::exit(EXIT_INPUT_ERROR);
-        }
-        Err(err) => {
-            eprintln!(
-                "chatter update: failed to run `{}`: {err}",
-                program.display()
-            );
-            std::process::exit(EXIT_INPUT_ERROR);
-        }
+    let mut updater = AxoUpdater::new_for(env!("CARGO_PKG_NAME"));
+
+    // The cargo-dist install receipt records what is installed; axoupdater needs
+    // it to know the current version and where to install. Without it we cannot
+    // self-update, so explain rather than fail opaquely.
+    if let Err(err) = updater.load_receipt() {
+        eprintln!(
+            "chatter update: no install receipt found, so in-place self-update is unavailable."
+        );
+        eprintln!(
+            "It works for installs from the official chatter installer. If you built from source"
+        );
+        eprintln!(
+            "or used a package manager, update the same way, or reinstall the latest release:"
+        );
+        eprintln!("  {RELEASES_URL}");
+        eprintln!("(details: {err})");
+        std::process::exit(EXIT_INPUT_ERROR);
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    if let Ok(token) = std::env::var(GITHUB_TOKEN_ENV) {
+        updater.set_github_token(&token);
+    }
 
-    /// `sibling_updater` finds a `chatter-update` placed next to the executable
-    /// and returns `None` when the directory has no such file. This pins the
-    /// "prefer the install directory" half of the resolver, which the
-    /// subprocess integration tests cannot exercise portably.
-    #[test]
-    fn sibling_updater_detects_presence_and_absence() {
-        let dir =
-            std::env::temp_dir().join(format!("chatter-update-sibling-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("create temp dir");
-
-        // Absent: nothing in the directory.
-        assert!(sibling_updater(&dir).is_none());
-
-        // Present: create the platform-named updater file.
-        let updater = dir.join(updater_file_name());
-        std::fs::write(&updater, b"#!/bin/sh\nexit 0\n").expect("write fake updater");
-        assert_eq!(sibling_updater(&dir).as_deref(), Some(updater.as_path()));
-
-        let _ = std::fs::remove_dir_all(&dir);
+    // `run_sync` returns `Some(result)` when an update was installed, `None` when
+    // already on the latest release.
+    match updater.run_sync() {
+        Ok(Some(_result)) => println!("chatter has been updated to the latest release."),
+        Ok(None) => println!("chatter is already up to date."),
+        Err(err) => {
+            eprintln!("chatter update: self-update failed: {err}");
+            eprintln!("You can reinstall the latest release from:");
+            eprintln!("  {RELEASES_URL}");
+            std::process::exit(EXIT_INPUT_ERROR);
+        }
     }
 }

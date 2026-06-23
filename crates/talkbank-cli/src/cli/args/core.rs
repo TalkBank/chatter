@@ -680,14 +680,13 @@ pub enum Commands {
     /// Update chatter to the latest release
     #[command(
         long_about = "Update chatter to the latest release (experimental).\n\n\
-        Runs the bundled self-updater `chatter-update`, which the official \
-        installers place next to the `chatter` binary; it checks GitHub Releases \
-        and installs the newest release in place. This command locates \
-        `chatter-update` (preferring the directory chatter is installed in, then \
-        PATH) and runs it.\n\n\
-        The self-updater ships only with the official shell/PowerShell installers. \
-        If you installed chatter via a package manager or from source, update the \
-        same way you installed it. The self-update facility is experimental."
+        Self-updates in place: checks GitHub Releases and replaces the running \
+        `chatter` binary with the newest release. The update happens in-process \
+        (no separate updater program).\n\n\
+        It works for installs from the official chatter installer, which records \
+        the metadata the updater needs. If you installed chatter via a package \
+        manager or from source, update the same way you installed it. The \
+        self-update facility is experimental."
     )]
     Update,
 
