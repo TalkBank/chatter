@@ -124,6 +124,26 @@
         "E370"
       ],
       "note": "A tab in the middle of a main tier. chatter rejects it (E370, unexpected tab). Grounded vs real CLAN CHECK 132."
+    },
+    {
+      "check_code": 125,
+      "check_message": "\"@Options\" header must immediately follow \"@Participants:\" header.",
+      "fixture": "CHECK_125_options_after_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E551"
+      ],
+      "note": "@Options placed after @ID instead of immediately after @Participants. chatter E551 OptionsHeaderOutOfOrder, mirroring the @ID rule (E548/CHECK 126). CLAN CHECK 125."
+    },
+    {
+      "check_code": 13,
+      "check_message": "Duplicate speaker declaration.",
+      "fixture": "CHECK_013_duplicate_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E549"
+      ],
+      "note": "Two @ID lines naming the same speaker (CHI). Distinct from the @Participants-duplicate variant (CHECK_013_duplicate_speaker.cha): CLAN 13 fires for duplicate @ID lines too, which chatter previously missed. Now E549 via check_duplicate_id_headers. CLAN CHECK 13."
     }
   ]
 }

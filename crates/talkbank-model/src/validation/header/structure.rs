@@ -135,8 +135,17 @@ pub(crate) fn check_headers(
     // with no changeable header (e.g. @Comment) intervening.
     check_id_header_order(headers, errors);
 
+    // E551: The @Options header, when present, must immediately follow
+    // @Participants (before the @ID block or any other header).
+    check_options_header_order(headers, errors);
+
     // E549: No speaker code may be declared more than once in @Participants.
     check_duplicate_participants(headers, errors);
+
+    // E549 (CLAN 13 again): the same speaker must not have more than one @ID
+    // header. CLAN flags duplicate speaker declarations whether they arise from
+    // a repeated @Participants entry or a repeated @ID line.
+    check_duplicate_id_headers(&id_speakers, errors);
 
     for (speaker, span) in &id_speakers {
         if !speaker.as_str().is_empty() && !declared_participants.contains(speaker) {
@@ -301,6 +310,78 @@ fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                 )
                 .with_suggestion(
                     "Move this @ID up to directly follow @Participants / @Options, before any @Comment or other changeable header",
+                );
+                err.location.span = *span;
+                errors.report(err);
+            }
+        }
+        prev = Some(header);
+    }
+}
+
+/// Check that no speaker has more than one `@ID` header.
+///
+/// CLAN CHECK error 13 ("Duplicate speaker declaration") fires both for a
+/// speaker code repeated in `@Participants` (see
+/// [`check_duplicate_participants`]) and for two `@ID` lines naming the same
+/// speaker. Each speaker has exactly one `@ID`, so a repeat is a duplicate
+/// declaration. Empty speaker codes are skipped (an absent code is a different
+/// error, not a duplicate).
+fn check_duplicate_id_headers(id_speakers: &[(SpeakerCode, Span)], errors: &impl ErrorSink) {
+    use std::collections::HashSet;
+    let mut seen: HashSet<&str> = HashSet::new();
+    for (speaker, span) in id_speakers {
+        let code = speaker.as_str();
+        if code.is_empty() {
+            continue;
+        }
+        if !seen.insert(code) {
+            let mut err = ParseError::new(
+                ErrorCode::DuplicateSpeakerDeclaration,
+                Severity::Error,
+                SourceLocation::at_offset(span.start as usize),
+                ErrorContext::new(code, 0..code.len(), code),
+                format!("Speaker '{code}' has more than one @ID header"),
+            )
+            .with_suggestion("Declare each speaker with exactly one @ID header");
+            err.location.span = *span;
+            errors.report(err);
+        }
+    }
+}
+
+/// Check that the `@Options` header immediately follows `@Participants`.
+///
+/// Per the CHAT spec the optional `@Options` line, when present, comes directly
+/// after `@Participants`, before the `@ID` block. An `@Options` whose
+/// immediately-preceding header is something else (e.g. an `@ID` or `@Comment`),
+/// once `@Participants` has been seen, is an ordering violation. The distinct
+/// case of `@Options` appearing *before* `@Participants` is handled by
+/// [`check_header_order`] (E543), so this check is gated on `@Participants`
+/// already having been seen to avoid double-reporting.
+///
+/// This corresponds to CLAN CHECK error 125 ("@Options header must immediately
+/// follow @Participants: header").
+fn check_options_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+    let mut saw_participants = false;
+    let mut prev: Option<&Header> = None;
+    for (header, span) in headers {
+        if matches!(header, Header::Participants { .. }) {
+            saw_participants = true;
+        }
+        if matches!(header, Header::Options { .. }) {
+            // The only valid immediate predecessor of @Options is @Participants.
+            let preceded_validly = matches!(prev, Some(Header::Participants { .. }));
+            if saw_participants && !preceded_validly {
+                let mut err = ParseError::new(
+                    ErrorCode::OptionsHeaderOutOfOrder,
+                    Severity::Error,
+                    SourceLocation::at_offset(span.start as usize),
+                    ErrorContext::new("@Options", 0.."@Options".len(), "@Options"),
+                    "@Options must immediately follow @Participants, before the @ID block or any other header",
+                )
+                .with_suggestion(
+                    "Move this @Options up to directly follow @Participants, before any @ID or @Comment header",
                 );
                 err.location.span = *span;
                 errors.report(err);
@@ -737,6 +818,75 @@ mod tests {
 
         let errors = ErrorCollector::new();
         check_id_header_order(&headers, &errors);
+
+        assert!(errors.into_vec().is_empty());
+    }
+
+    // ── @Options header ordering tests (E551) ─────────────────────
+
+    /// `@Options` placed after the `@ID` block (instead of immediately after
+    /// `@Participants`) emits `E551`.
+    #[test]
+    fn test_e551_options_after_id() {
+        use crate::model::{ChatOptionFlag, ChatOptionFlags, IDHeader};
+
+        let participants = Header::Participants {
+            entries: vec![].into(),
+        };
+        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let options = Header::Options {
+            options: ChatOptionFlags::new(vec![ChatOptionFlag::Ca]),
+        };
+        let headers = vec![
+            (&participants, Span::DUMMY),
+            (&id, Span::DUMMY),
+            (&options, Span::DUMMY),
+        ];
+
+        let errors = ErrorCollector::new();
+        check_options_header_order(&headers, &errors);
+
+        let error_vec = errors.into_vec();
+        assert_eq!(error_vec.len(), 1);
+        assert_eq!(error_vec[0].code, ErrorCode::OptionsHeaderOutOfOrder);
+        assert!(error_vec[0].message.contains("@Options"));
+    }
+
+    /// `@Options` immediately following `@Participants` is valid, no error.
+    #[test]
+    fn test_options_immediately_after_participants_ok() {
+        use crate::model::{ChatOptionFlag, ChatOptionFlags};
+
+        let participants = Header::Participants {
+            entries: vec![].into(),
+        };
+        let options = Header::Options {
+            options: ChatOptionFlags::new(vec![ChatOptionFlag::Ca]),
+        };
+        let headers = vec![(&participants, Span::DUMMY), (&options, Span::DUMMY)];
+
+        let errors = ErrorCollector::new();
+        check_options_header_order(&headers, &errors);
+
+        assert!(errors.into_vec().is_empty());
+    }
+
+    /// `@Options` appearing *before* `@Participants` is not double-reported by
+    /// the immediately-follows check (E543 owns that case).
+    #[test]
+    fn test_options_before_participants_not_double_reported() {
+        use crate::model::{ChatOptionFlag, ChatOptionFlags};
+
+        let options = Header::Options {
+            options: ChatOptionFlags::new(vec![ChatOptionFlag::Ca]),
+        };
+        let participants = Header::Participants {
+            entries: vec![].into(),
+        };
+        let headers = vec![(&options, Span::DUMMY), (&participants, Span::DUMMY)];
+
+        let errors = ErrorCollector::new();
+        check_options_header_order(&headers, &errors);
 
         assert!(errors.into_vec().is_empty());
     }

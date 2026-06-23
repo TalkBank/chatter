@@ -512,6 +512,15 @@ pub enum ErrorCode {
     /// 100 ("Commas at the end of PARTICIPANTS tier are not allowed").
     #[code("E550")]
     TrailingCommaInParticipants,
+    /// The `@Options` header does not immediately follow the `@Participants`
+    /// header. Per the CHAT spec the optional `@Options` line, when present,
+    /// must sit directly after `@Participants`, before the `@ID` block or any
+    /// other header. An `@Options` whose immediately-preceding header is
+    /// something else (e.g. an `@ID` or `@Comment`), once `@Participants` has
+    /// been seen, is an ordering violation. Corresponds to CLAN CHECK error 125
+    /// ("\"@Options\" header must immediately follow \"@Participants:\" header").
+    #[code("E551")]
+    OptionsHeaderOutOfOrder,
 
     // =========================================================================
     // Tier Errors (E6xx)
