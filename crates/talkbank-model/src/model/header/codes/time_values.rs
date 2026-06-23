@@ -514,18 +514,18 @@ mod tests {
 
     #[test]
     fn clock_range_accepts_valid_and_rejects_out_of_range() {
+        let out_of_range = |s: &str| TimeDurationValue::from_text(s).has_out_of_range_component();
         // Valid clock values (CLAN accepts these).
-        assert!(TimeDurationValue::from_text("23:59:59").has_out_of_range_component() == false);
-        assert!(TimeDurationValue::from_text("12:30:45").has_out_of_range_component() == false);
-        assert!(TimeDurationValue::from_text("00:00:00").has_out_of_range_component() == false);
+        assert!(!out_of_range("23:59:59"));
+        assert!(!out_of_range("12:30:45"));
+        assert!(!out_of_range("00:00:00"));
+        assert!(!out_of_range("00:00-23:59")); // HH:MM-HH:MM range, both endpoints valid
         // Out-of-range components (CLAN error 35), grounded empirically.
-        assert!(TimeDurationValue::from_text("99:99:99").has_out_of_range_component());
-        assert!(TimeDurationValue::from_text("25:00:00").has_out_of_range_component()); // hours > 23
-        assert!(TimeDurationValue::from_text("12:60:00").has_out_of_range_component()); // minutes > 59
-        assert!(TimeDurationValue::from_text("12:00:60").has_out_of_range_component()); // seconds > 59
-        // Ranges: either endpoint out of range trips the check.
-        assert!(TimeDurationValue::from_text("00:00:00-25:00:00").has_out_of_range_component());
-        assert!(TimeDurationValue::from_text("00:00-23:59").has_out_of_range_component() == false);
+        assert!(out_of_range("99:99:99"));
+        assert!(out_of_range("25:00:00")); // hours > 23
+        assert!(out_of_range("12:60:00")); // minutes > 59
+        assert!(out_of_range("12:00:60")); // seconds > 59
+        assert!(out_of_range("00:00:00-25:00:00")); // a range endpoint out of range
     }
 
     #[test]

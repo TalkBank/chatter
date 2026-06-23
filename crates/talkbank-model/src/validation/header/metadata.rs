@@ -166,7 +166,7 @@ pub(super) fn check_time_duration_format(duration: &str, span: Span, errors: &im
         SourceLocation::at_offset(span.start as usize),
         ErrorContext::new(duration, 0..duration.len(), "time_duration"),
         format!(
-            "Invalid @Time Duration value: '{}'. Each time must be a legal clock value (hours 00-23, minutes/seconds 00-59) in one of the depfile.cut forms: HH:MM-HH:MM, HH:MM:SS-HH:MM:SS, or HH:MM:SS",
+            "Invalid @Time Duration: '{}'. Must be one of the depfile.cut forms (HH:MM:SS, HH:MM-HH:MM, HH:MM:SS-HH:MM:SS) with legal clock values (hours 00-23, minutes/seconds 00-59)",
             duration
         ),
     )
