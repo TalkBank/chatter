@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Phon %x tiers: U (Unknown) constituent code with an untranscribed * word
+@Comment:	Trimmed from real data (Goad/Julia 30305.cha); main-tier media bullet removed
+*CHI:	yyy you 0don't 0want me 0to show you .
+%mod:	* juw mij ʃow juw
+%pho:	ə jɑ mij ʃɔ ij
+%com:	Not sure what the input is.
+%xmodsyl:	*:U j:Ou:Nw:C m:Oi:Nj:C ʃ:Oo:Nw:C j:Ou:Nw:C
+%xphosyl:	ə:N j:Oɑ:N m:Oi:Nj:C ʃ:Oɔ:N i:Nj:C
+%xphoaln:	*↔∅,∅↔ə j↔j,u↔ɑ,w↔∅ m↔m,i↔i,j↔j ʃ↔ʃ,o↔ɔ,w↔∅ j↔∅,u↔i,w↔j
+@End

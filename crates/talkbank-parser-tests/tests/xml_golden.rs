@@ -54,6 +54,11 @@ const EXPECTED_MISSING_XML_GOLDENS: &[&str] = &[
     // XML-emission-unsupported (see EXPECTED_PHONETIC_TIER_UNSUPPORTED), so it has
     // no reference XML golden. Adjudicated as intentionally missing here.
     "tiers/phon-intervals",
+    // Phon %x syllabification/alignment fixture exercising the `U` (Unknown)
+    // constituent code and an untranscribed `*` word. Phonetic tiers are
+    // XML-emission-unsupported (see EXPECTED_PHONETIC_TIER_UNSUPPORTED), so it
+    // has no reference XML golden. Adjudicated as intentionally missing here.
+    "tiers/phon-unknown-constituent",
 ];
 
 const EXPECTED_PHONETIC_TIER_UNSUPPORTED: &[&str] = &[
@@ -66,6 +71,7 @@ const EXPECTED_PHONETIC_TIER_UNSUPPORTED: &[&str] = &[
     "tiers/pho.cha",
     "tiers/phon-intervals.cha",
     "tiers/phon-syllabification.cha",
+    "tiers/phon-unknown-constituent.cha",
 ];
 
 fn repo_root() -> PathBuf {
