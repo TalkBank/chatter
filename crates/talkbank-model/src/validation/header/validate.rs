@@ -96,7 +96,9 @@ pub(crate) fn check_header(
             check_unsupported_transcription(transcription, span, errors);
         }
         Header::TimeDuration { duration }
-            if duration.has_validation_issue() || duration.violates_depfile_pattern() =>
+            if duration.has_validation_issue()
+                || duration.violates_depfile_pattern()
+                || duration.has_out_of_range_component() =>
         {
             check_time_duration_format(duration.as_str(), span, errors);
         }

@@ -154,6 +154,16 @@
         "E605"
       ],
       "note": "Undeclared dependent tier %zzz: (neither %x* nor a chatter-supported standard tier). chatter rejects it via E605 UnsupportedDependentTier (Error severity). The supported set deliberately excludes the legacy %grt/%tra/%trn/%umor tiers retired with the UD-%mor consolidation, so chatter is intentionally stricter than CLAN there (documented divergence). %x* is always valid. CLAN CHECK 17."
+    },
+    {
+      "check_code": 35,
+      "check_message": "Illegal time representation.",
+      "fixture": "CHECK_035_time_duration_out_of_range.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E540"
+      ],
+      "note": "@Time Duration 99:99:99 is shape-valid (HH:MM:SS) but out of clock range. chatter previously validated the shape only; now TimeDurationValue::has_out_of_range_component flags components outside hours 0-23 / minutes,seconds 0-59 and emits E540. CLAN range rule grounded empirically: 25:00:00, 99:30:00, 12:60:00, 12:00:60 all CLAN 35; 23:59:59 OK. CLAN CHECK 35."
     }
   ]
 }

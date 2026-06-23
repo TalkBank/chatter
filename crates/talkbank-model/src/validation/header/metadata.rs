@@ -166,12 +166,12 @@ pub(super) fn check_time_duration_format(duration: &str, span: Span, errors: &im
         SourceLocation::at_offset(span.start as usize),
         ErrorContext::new(duration, 0..duration.len(), "time_duration"),
         format!(
-            "Invalid @Time Duration format: '{}'. Legal forms per CLAN depfile.cut: HH:MM-HH:MM, HH:MM:SS-HH:MM:SS, or HH:MM:SS",
+            "Invalid @Time Duration value: '{}'. Each time must be a legal clock value (hours 00-23, minutes/seconds 00-59) in one of the depfile.cut forms: HH:MM-HH:MM, HH:MM:SS-HH:MM:SS, or HH:MM:SS",
             duration
         ),
     )
     .with_suggestion(
-        "Use one of: HH:MM:SS (single), HH:MM-HH:MM (range), HH:MM:SS-HH:MM:SS (range). No comma-joined segments, no semicolon separator.",
+        "Use one of: HH:MM:SS (single), HH:MM-HH:MM (range), HH:MM:SS-HH:MM:SS (range), with valid clock values (hours 00-23, minutes/seconds 00-59). No comma-joined segments, no semicolon separator.",
     );
     err.location.span = span;
     errors.report(err);

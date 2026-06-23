@@ -34,6 +34,24 @@ pub struct TimeValue {
     pub millis: Option<u32>,
 }
 
+impl TimeValue {
+    /// Returns true if every component is a legal clock value: hours 0-23,
+    /// minutes 0-59, seconds 0-59, milliseconds 0-999.
+    ///
+    /// CLAN's `@t<hh:mm:ss>` time template treats these fields as clock values,
+    /// not free integers: verified empirically, CLAN `check` reports error 35
+    /// ("illegal time representation") for `25:00:00`, `12:60:00`, `12:00:60`,
+    /// and `99:99:99`, while accepting `23:59:59`. A well-formed shape can still
+    /// carry an out-of-range component, so this is checked separately from the
+    /// depfile-pattern (shape) check.
+    pub fn is_in_clock_range(&self) -> bool {
+        self.hours <= 23
+            && self.minutes <= 59
+            && self.seconds <= 59
+            && self.millis.is_none_or(|m| m <= 999)
+    }
+}
+
 /// A time segment: either a single time or a range of two times.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
 pub enum TimeSegment {
@@ -109,6 +127,20 @@ impl TimeDurationValue {
             Self::Parsed { segments, .. } => segments,
             Self::Unsupported(_) => &[],
         }
+    }
+
+    /// Returns true if any parsed time component is outside clock range
+    /// (hours 0-23, minutes/seconds 0-59). The shape may be well-formed
+    /// (`HH:MM:SS`) yet carry impossible values like `99:99:99`; CLAN flags
+    /// these as error 35 ("illegal time representation"), so this is a separate
+    /// check from [`violates_depfile_pattern`](Self::violates_depfile_pattern).
+    pub fn has_out_of_range_component(&self) -> bool {
+        self.segments().iter().any(|segment| match segment {
+            TimeSegment::Single(time) => !time.is_in_clock_range(),
+            TimeSegment::Range { start, end } => {
+                !start.is_in_clock_range() || !end.is_in_clock_range()
+            }
+        })
     }
 
     /// Backward-compatible constructor.
@@ -479,6 +511,22 @@ impl From<&str> for TimeStartValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clock_range_accepts_valid_and_rejects_out_of_range() {
+        // Valid clock values (CLAN accepts these).
+        assert!(TimeDurationValue::from_text("23:59:59").has_out_of_range_component() == false);
+        assert!(TimeDurationValue::from_text("12:30:45").has_out_of_range_component() == false);
+        assert!(TimeDurationValue::from_text("00:00:00").has_out_of_range_component() == false);
+        // Out-of-range components (CLAN error 35), grounded empirically.
+        assert!(TimeDurationValue::from_text("99:99:99").has_out_of_range_component());
+        assert!(TimeDurationValue::from_text("25:00:00").has_out_of_range_component()); // hours > 23
+        assert!(TimeDurationValue::from_text("12:60:00").has_out_of_range_component()); // minutes > 59
+        assert!(TimeDurationValue::from_text("12:00:60").has_out_of_range_component()); // seconds > 59
+        // Ranges: either endpoint out of range trips the check.
+        assert!(TimeDurationValue::from_text("00:00:00-25:00:00").has_out_of_range_component());
+        assert!(TimeDurationValue::from_text("00:00-23:59").has_out_of_range_component() == false);
+    }
 
     #[test]
     fn time_value_parse_hms() {
