@@ -1,8 +1,9 @@
 //! Retrace validation for main-tier content streams.
 //!
 //! This pass enforces a structural invariant: retrace markers (`[/]`, `[//]`,
-//! `[///]`) must be followed by substantive content (the repeated or corrected
-//! material) in leaf traversal order; a bare terminator does not satisfy them.
+//! `[///]`, `[/-]`) must be followed by substantive content (the repeated or
+//! corrected material) in leaf traversal order; a bare terminator does not
+//! satisfy them.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
@@ -23,8 +24,8 @@ use types::LeafKind;
 
 /// Validate that retrace markers are followed by real content.
 ///
-/// Retrace markers (`[/]`, `[//]`, `[///]`) must be followed by real content in
-/// in-order leaf traversal. Annotations are ignored for traversal. A bare
+/// Retrace markers (`[/]`, `[//]`, `[///]`, `[/-]`) must be followed by real
+/// content in in-order leaf traversal. Annotations are ignored for traversal. A bare
 /// terminator does NOT satisfy a retrace marker: per the CHAT manual the marker
 /// is necessarily followed by the repeated or corrected material (this is also
 /// CLAN CHECK error 119).
@@ -75,7 +76,7 @@ pub(crate) fn check_retraces_have_content(main_tier: &MainTier, errors: &impl Er
             Severity::Error,
             SourceLocation::new(absolute_span),
             ErrorContext::new("", absolute_span, ""),
-            "Retrace marker ([/], [//], or [///]) must be followed by the repeated or corrected material",
+            "Retrace marker ([/], [//], [///], or [/-]) must be followed by the repeated or corrected material",
         )
         .with_suggestion(
             "Add content after the retrace marker, or remove the retrace if it's not needed",

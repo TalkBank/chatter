@@ -397,3 +397,71 @@ fn scope_all_does_not_join_different_speaker() -> Result<(), TestError> {
 
     Ok(())
 }
+
+// --- Review fixes (2026-06-24) ---
+
+/// A CHAIN of same-speaker dangling retraces collapses FULLY in one
+/// invocation, and the result validates. Before the fix, a single run left a
+/// residual dangling retrace (E370) while reporting success.
+#[test]
+fn chain_of_dangling_retraces_collapses_and_validates() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+
+    let input = doc("*CHI:\tthe [/] .\n*CHI:\tthe dog [/] .\n*CHI:\tthe dog runs .\n");
+    let fixture = write_fixture(harness.home_dir(), "chain.cha", &input)?;
+
+    let join = harness.run_output(&[
+        "debug",
+        "join-retrace",
+        "--scope",
+        "all",
+        fixture.to_str().unwrap(),
+    ])?;
+    assert!(join.status.success(), "{}", combined_output(&join));
+
+    let joined = std::fs::read_to_string(&fixture)?;
+    assert_eq!(
+        joined.matches("*CHI:").count(),
+        1,
+        "the whole chain must collapse to ONE utterance, got:\n{joined}"
+    );
+
+    // The joined file must be valid CHAT (no residual E370).
+    let validate = harness.run_validate(&fixture, &["--force"])?;
+    assert!(
+        validate.status.success(),
+        "collapsed chain must validate; output: {}",
+        combined_output(&validate)
+    );
+
+    Ok(())
+}
+
+/// A join is REFUSED across an intervening `@`-header (here a `@Comment`):
+/// both utterances must remain. Crossing a header would silently detach it
+/// from the content it scoped while still producing a "valid" file.
+#[test]
+fn does_not_join_across_intervening_header() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+
+    let input = doc("*CHI:\tthe dog [/] .\n@Comment:\tchild paused\n*CHI:\tthe dog runs .\n");
+    let fixture = write_fixture(harness.home_dir(), "header_between.cha", &input)?;
+
+    let join = harness.run_output(&[
+        "debug",
+        "join-retrace",
+        "--scope",
+        "all",
+        fixture.to_str().unwrap(),
+    ])?;
+    assert!(join.status.success(), "{}", combined_output(&join));
+
+    let after = std::fs::read_to_string(&fixture)?;
+    assert_eq!(
+        after.matches("*CHI:").count(),
+        2,
+        "must not join across a header; both utterances remain, got:\n{after}"
+    );
+
+    Ok(())
+}

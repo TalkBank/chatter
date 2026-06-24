@@ -13,12 +13,12 @@
 //!   material. Corrections (`[//]`), multiple retraces (`[///]`), reformulations
 //!   (`[/-]`), and non-repeating successors are deliberately left untouched.
 //!
-//! - [`RetraceJoinScope::RepetitionAndCorrections`] (Wave 3a, opt-in): also
-//!   joins correction retraces (`[//]` Full, `[///]` Multiple, `[/-]`
-//!   Reformulation). Corrections REPLACE rather than repeat the retraced
-//!   material, so there is NO leading-words repeat check; the gate is simply
-//!   that a same-speaker successor exists. The retraced material must still be
-//!   a pure plain-word sequence (conservative policy, same as for `[/]`).
+//! - [`RetraceJoinScope::RepetitionAndCorrections`] (Wave 3a, opt-in): joins
+//!   `[/]` under the SAME verified-repeat gate as `RepetitionOnly` (corrections
+//!   never loosens the `[/]` rule), AND additionally joins correction retraces
+//!   (`[//]` Full, `[///]` Multiple, `[/-]` Reformulation). Corrections REPLACE
+//!   rather than repeat, so for those kinds there is no leading-words repeat
+//!   check and no pure-word requirement; the gate is a same-speaker successor.
 //!
 //! - [`RetraceJoinScope::AllSameSpeakerSuccessor`] (Wave 3b, broadest scope,
 //!   opt-in): joins ANY dangling retrace kind, including `[/]` Partial where the
@@ -50,7 +50,7 @@
 
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::model::{
-    BracketedContent, BracketedItem, Bullet, ChatFile, Line, MainTier, RetraceKind,
+    BracketedContent, BracketedItem, Bullet, ChatFile, Line, MainTier, RetraceKind, TierContent,
     UtteranceContent,
 };
 use talkbank_model::validation::ValidationState;
@@ -123,10 +123,13 @@ pub fn join_dangling_retraces<S: ValidationState>(
         };
 
         perform_join(chat, i, j, &mut stats);
-        // Do not advance `i`: the joined utterance now ends in V's content, so
-        // it can no longer be a dangling retrace (its last node is V's last
-        // content), and re-examining it is cheap and safe.
-        i += 1;
+        // Do NOT advance `i`: re-examine the merged line. If the successor V
+        // was ITSELF a dangling retrace (a chain of same-speaker dangling
+        // retraces), the merged line is still dangling and must be joined
+        // again so the whole chain collapses in one pass. Each join removes
+        // exactly one line, so `i` only stays put while joins keep happening;
+        // the loop still terminates (a self-join is impossible because the
+        // successor is always a strictly later line).
     }
 
     stats
@@ -141,16 +144,17 @@ pub fn join_dangling_retraces<S: ValidationState>(
 /// - For [`RetraceJoinScope::RepetitionOnly`], only `[/]` qualifies, and only
 ///   when the retraced material is a pure plain-word sequence AND the
 ///   successor's leading words repeat it as a prefix.
-/// - For [`RetraceJoinScope::RepetitionAndCorrections`], `[//]`/`[///]`/`[/-]`
-///   also qualify; corrections replace rather than repeat, so no prefix check
-///   is needed. Crucially, a non-pure-word retraced material does NOT disqualify
-///   the join: the material is only needed for prefix-match in `RepetitionOnly`.
+/// - For [`RetraceJoinScope::RepetitionAndCorrections`], `[/]` keeps the SAME
+///   verified-repeat gate as `RepetitionOnly` (corrections does not loosen the
+///   `[/]` rule); additionally `[//]`/`[///]`/`[/-]` qualify, and those need no
+///   prefix check (corrections replace rather than repeat).
 /// - For [`RetraceJoinScope::AllSameSpeakerSuccessor`], any kind qualifies;
 ///   neither a material purity check nor a prefix match is required.
 ///
-/// Returns `None` when `start_index` is not a qualifying utterance, when there
-/// is no following utterance, when the speakers differ, or when the scope's
-/// specific gate fails.
+/// Independent of scope, the join is refused when the successor is not the
+/// immediately following line (crossing an interstitial `@`-header), when the
+/// speakers differ, or when the successor carries leading linkers or an
+/// utterance-scoped language code (which inlining would silently drop).
 fn obvious_join_target(
     lines: &[Line],
     start_index: usize,
@@ -164,8 +168,11 @@ fn obvious_join_target(
     // allowed by the current scope.
     let (kind, opt_material) = dangling_retrace_kind(&u.main, scope)?;
 
-    // Find the next utterance line (skip interstitial headers / comments).
-    let v_index = next_utterance_index(lines, start_index)?;
+    // The successor must be the IMMEDIATELY following line and an utterance.
+    // Refusing to cross an interstitial `@`-header keeps the repair from
+    // silently moving a gem/comment past the content it scoped (see
+    // [`immediate_successor_utterance`]).
+    let v_index = immediate_successor_utterance(lines, start_index)?;
     let Line::Utterance(v) = &lines[v_index] else {
         return None;
     };
@@ -175,55 +182,44 @@ fn obvious_join_target(
         return None;
     }
 
-    // Partial retrace (`[/]`): the prefix-match and purity rules depend on scope.
+    // Conservative successor-attribute gate: the join appends V's content
+    // INLINE after U's retrace marker. V's leading linkers (`++`, `+<`, ...)
+    // and utterance-scoped language code (`[- code]`) cannot be re-expressed
+    // mid-utterance, so a join would silently drop them (a `[- spa]`
+    // continuation would be relabeled to the default language). Refuse the
+    // join when V carries either; such cases are left for manual review.
+    if v.main.content.language_code.is_some() || !v.main.content.linkers.is_empty() {
+        return None;
+    }
+
+    // Partial retrace (`[/]`) is a REPETITION marker: it requires a verifiable
+    // pure-word repeat under BOTH `RepetitionOnly` and `RepetitionAndCorrections`.
+    // `corrections` ADDS the correction kinds; it never loosens the `[/]` rule
+    // (that would break the `repetition` ⊂ `corrections` ⊂ `all` ladder, letting
+    // `corrections` join a `[/]` that `repetition` refuses). A non-pure-word
+    // `[/]` (`opt_material` is None) cannot be verified, so it is deferred to
+    // `AllSameSpeakerSuccessor`. Under `all`, any same-speaker successor is
+    // accepted regardless of material purity.
     //
-    // - RepetitionOnly: require a pure-word material sequence that the successor
-    //   leads with. If the material is non-pure-word (opt_material is None),
-    //   bail: prefix-match is impossible.
-    // - RepetitionAndCorrections: perform the prefix-match when the retraced
-    //   material is pure-word (opt_material is Some). When the material is
-    //   non-pure-word (opt_material is None), the prefix-match cannot be run,
-    //   but we JOIN anyway: the pure-word requirement gates only RepetitionOnly.
-    //   (A pure-word material that fails the prefix-match still skips the join,
-    //   preserving the existing conservative behavior for repeating `[/]`.)
-    // - AllSameSpeakerSuccessor: no prefix check for any kind; same-speaker
-    //   presence alone is sufficient, regardless of material purity.
-    //
-    // Corrections (Full / Multiple / Reformulation): no prefix match required
-    // under any corrections-enabled scope; pure-word material is not required.
+    // Corrections (Full / Multiple / Reformulation) REPLACE rather than repeat,
+    // so they need neither a prefix match nor pure-word material under any
+    // corrections-enabled scope.
     match kind {
-        RetraceKind::Partial => {
-            match scope {
-                RetraceJoinScope::RepetitionOnly => {
-                    // Requires pure-word material and a passing prefix-match.
-                    let material = opt_material?;
-                    if material.is_empty() {
-                        return None;
-                    }
-                    if !leading_words_match_prefix(&v.main, &material) {
-                        return None;
-                    }
+        RetraceKind::Partial => match scope {
+            RetraceJoinScope::RepetitionOnly | RetraceJoinScope::RepetitionAndCorrections => {
+                let material = opt_material?;
+                if material.is_empty() {
+                    return None;
                 }
-                RetraceJoinScope::RepetitionAndCorrections => {
-                    // If material is pure-word, apply prefix-match. If it is
-                    // non-pure-word (None), join regardless: the purity
-                    // requirement does not apply to this scope.
-                    if let Some(material) = opt_material {
-                        if material.is_empty() {
-                            return None;
-                        }
-                        if !leading_words_match_prefix(&v.main, &material) {
-                            return None;
-                        }
-                    }
-                    // opt_material == None: non-pure-word material; join.
-                }
-                RetraceJoinScope::AllSameSpeakerSuccessor => {
-                    // No prefix check: any same-speaker successor is accepted,
-                    // even when the retraced material is non-pure-word.
+                if !leading_words_match_prefix(&v.main, &material) {
+                    return None;
                 }
             }
-        }
+            RetraceJoinScope::AllSameSpeakerSuccessor => {
+                // No prefix check: any same-speaker successor is accepted,
+                // even when the retraced material is non-pure-word.
+            }
+        },
         RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => {
             // Corrections: no prefix match required under any corrections-enabled
             // scope; pure-word material is not required either.
@@ -339,63 +335,96 @@ fn leading_words_match_prefix(main: &MainTier, prefix: &[String]) -> bool {
     !impure_before_prefix && leading.len() == prefix.len() && leading == prefix
 }
 
-/// Find the index of the next `Line::Utterance` strictly after `from_index`,
-/// skipping interstitial `Line::Header` (comment) lines.
-fn next_utterance_index(lines: &[Line], from_index: usize) -> Option<usize> {
-    lines
-        .iter()
-        .enumerate()
-        .skip(from_index + 1)
-        .find_map(|(idx, line)| match line {
-            Line::Utterance(_) => Some(idx),
-            Line::Header { .. } => None,
-        })
+/// Return the index of the utterance IMMEDIATELY following `from_index`.
+///
+/// The successor must be the very next line AND a `Line::Utterance`. If the
+/// next line is a `Line::Header` (any `@`-header: a gem marker `@Bg`/`@Eg`/`@G`,
+/// `@Situation`, `@Comment`, ...), the join is REFUSED by returning `None`.
+///
+/// Joining across a header would silently move that header past the content it
+/// scoped, or pull the successor out of a gem region (leaving an empty
+/// `@Bg`/`@Eg` pair). Both produce a structurally wrong file that still parses,
+/// so `validate`-after would not catch it. A conservative OBVIOUS-only repair
+/// never crosses a header boundary; such cases are left for manual review.
+///
+/// Dependent tiers (`%mor`, `%gra`, `%com`, ...) are NOT `Line`s (they live on
+/// `Utterance.dependent_tiers`), so the only thing that can sit between two
+/// utterance lines is an `@`-header; refusing to cross one is exactly right.
+fn immediate_successor_utterance(lines: &[Line], from_index: usize) -> Option<usize> {
+    match lines.get(from_index + 1)? {
+        Line::Utterance(_) => Some(from_index + 1),
+        Line::Header { .. } => None,
+    }
 }
 
 /// Perform the join of utterance at `u_index` with utterance at `v_index`.
 ///
 /// Preconditions (established by [`obvious_join_target`]): both indices are
-/// `Line::Utterance`, U's last content is a partial retrace, same speaker,
-/// V leads with the retraced material. `v_index > u_index`.
+/// `Line::Utterance`, V is the immediate successor of U, U's last content is a
+/// dangling retrace allowed by the scope, same speaker, and V carries no
+/// leading linkers or language code. `v_index > u_index`. The endpoint kinds
+/// are re-checked here so a violated precondition fails closed.
 fn perform_join<S: ValidationState>(
     chat: &mut ChatFile<S>,
     u_index: usize,
     v_index: usize,
     stats: &mut JoinRetraceStats,
 ) {
-    // Remove V first (higher index) so U's index stays valid.
+    // Validate BOTH endpoints are utterances BEFORE any mutation. The
+    // preconditions established by `obvious_join_target` make this guard
+    // unreachable today, but checking up front means a future refactor that
+    // violates them fails CLOSED (a clean no-op) rather than half-applying the
+    // join: removing V without merging it into U would be silent data loss.
+    let both_utterances = matches!(chat.lines.get(u_index), Some(Line::Utterance(_)))
+        && matches!(chat.lines.get(v_index), Some(Line::Utterance(_)));
+    if !both_utterances {
+        return;
+    }
+
+    // Remove V first (higher index) so U's index stays valid. The guard above
+    // guarantees this is an utterance.
     let Line::Utterance(v) = chat.lines.remove(v_index) else {
-        // Precondition guarantees an utterance; if not, restore nothing and
-        // leave the file unchanged. This branch is unreachable in practice.
         return;
     };
     let v = *v;
 
     let Some(Line::Utterance(u)) = chat.lines.get_mut(u_index) else {
-        // Unreachable given preconditions; bail without mutating further.
         return;
     };
 
     // Count dependent tiers that will be dropped (from BOTH sides). U's own
     // dependent tiers are dropped because the joined main tier no longer
-    // aligns with them; V's are dropped for the same reason.
+    // aligns with them; V's are dropped for the same reason. Read before we
+    // consume `v.main.content` below.
     let dropped = u.dependent_tiers.len() + v.dependent_tiers.len();
 
+    // Exhaustively destructure V's tier content so any FUTURE `TierContent`
+    // field becomes a compile error here instead of another silent drop.
+    // `obvious_join_target` guarantees V carries no leading linkers and no
+    // language code (a join cannot re-express either mid-utterance), so those
+    // are ignored rather than merged; `content_span` is a diagnostic-only span
+    // that does not survive serialization.
+    let TierContent {
+        linkers: _,
+        language_code: _,
+        content: mut v_items,
+        terminator: v_terminator,
+        postcodes: v_postcodes,
+        bullet: v_bullet,
+        content_span: _,
+    } = v.main.content;
+
     // Union the main-tier time bullets: start from U, end from V.
-    let unioned_bullet = union_bullets(
-        u.main.content.bullet.as_ref(),
-        v.main.content.bullet.as_ref(),
-    );
+    let unioned_bullet = union_bullets(u.main.content.bullet.as_ref(), v_bullet.as_ref());
 
     // Append V's content onto U's (U keeps its trailing retrace marker).
-    let mut v_content = v.main.content;
-    u.main.content.content.0.append(&mut v_content.content.0);
+    u.main.content.content.0.append(&mut v_items.0);
 
     // The joined utterance is terminated by V's terminator.
-    u.main.content.terminator = v_content.terminator;
+    u.main.content.terminator = v_terminator;
 
     // V's postcodes follow the joined content's terminator.
-    u.main.content.postcodes.0.extend(v_content.postcodes.0);
+    u.main.content.postcodes.0.extend(v_postcodes.0);
 
     // Apply the unioned bullet (or clear if neither side had one).
     u.main.content.bullet = unioned_bullet;
@@ -801,5 +830,113 @@ mod tests {
             "different speaker must never join: {stats:?}"
         );
         assert_eq!(out, input);
+    }
+
+    // --- Review fixes (2026-06-24): chain collapse, header boundary,
+    //     successor attributes, scope-ladder monotonicity ---
+
+    /// A CHAIN of same-speaker dangling retraces collapses FULLY in one pass.
+    /// `the [/]` -> `the dog [/]` -> `the dog runs`: joining the first two
+    /// yields `the [/] the dog [/]`, whose last node is STILL a dangling
+    /// retrace. The transform must re-examine the merged line and join the
+    /// third utterance too, leaving exactly one utterance (no residual E370).
+    #[test]
+    fn chain_of_dangling_retraces_collapses_in_one_pass() {
+        let input = doc("*CHI:\tthe [/] .\n*CHI:\tthe dog [/] .\n*CHI:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(
+            stats.joined_utterances, 2,
+            "both joins must happen in one pass: {stats:?}\n{out}"
+        );
+        assert_eq!(
+            out.matches("*CHI:").count(),
+            1,
+            "chain must collapse to ONE utterance, got:\n{out}"
+        );
+        assert!(
+            out.contains("*CHI:\tthe [/] the dog [/] the dog runs ."),
+            "got:\n{out}"
+        );
+    }
+
+    /// A repetition chain also collapses under the DEFAULT scope when each
+    /// level prefix-matches: `the [/]` -> `the [/]` -> `the dog`.
+    #[test]
+    fn repetition_chain_collapses_under_default_scope() {
+        let input = doc("*CHI:\tthe [/] .\n*CHI:\tthe [/] .\n*CHI:\tthe dog .\n");
+        let (out, stats) = join(&input);
+        assert_eq!(stats.joined_utterances, 2, "{stats:?}\n{out}");
+        assert_eq!(out.matches("*CHI:").count(), 1, "got:\n{out}");
+    }
+
+    /// A join is REFUSED across an intervening `@`-header (gem / comment):
+    /// the successor must be the IMMEDIATELY following line. Crossing a header
+    /// would silently move it past the content it scoped (or pull V out of a
+    /// gem), producing a structurally wrong file that still parses.
+    #[test]
+    fn does_not_join_across_intervening_header() {
+        let input = doc("*CHI:\tthe dog [/] .\n@Comment:\tchild paused\n*CHI:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert!(
+            stats.is_empty(),
+            "must not join across a header: {stats:?}\n{out}"
+        );
+        assert_eq!(
+            out.matches("*CHI:").count(),
+            2,
+            "both utterances must remain, got:\n{out}"
+        );
+    }
+
+    /// A join is REFUSED when the successor carries an utterance-scoped
+    /// language code (`[- code]`); inlining it after the retrace marker would
+    /// silently relabel the continuation's language. Verified under all-scope
+    /// so only the successor-attribute gate can block it.
+    #[test]
+    fn does_not_join_when_successor_has_language_code() {
+        let input = doc("*CHI:\tthe dog [/] .\n*CHI:\t[- spa] el perro corre .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert!(
+            stats.is_empty(),
+            "must not join a [- code] successor: {stats:?}\n{out}"
+        );
+        assert_eq!(out.matches("*CHI:").count(), 2, "got:\n{out}");
+    }
+
+    /// A join is REFUSED when the successor begins with a linker (`++`, `+<`,
+    /// ...); inlining it mid-utterance would silently drop the linker.
+    #[test]
+    fn does_not_join_when_successor_has_linker() {
+        let input = doc("*CHI:\tthe dog [/] .\n*CHI:\t++ the dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert!(
+            stats.is_empty(),
+            "must not join a ++ linker successor: {stats:?}\n{out}"
+        );
+        assert_eq!(out.matches("*CHI:").count(), 2, "got:\n{out}");
+    }
+
+    /// Scope-ladder monotonicity: a NON-pure-word `[/]` (material contains a
+    /// pause) with a NON-repeating successor is NOT joined under `corrections`
+    /// (corrections does not loosen the `[/]` repeat rule; it only adds the
+    /// correction kinds). It joins ONLY under `all`.
+    #[test]
+    fn nonpureword_partial_not_joined_under_corrections_scope() {
+        let input = doc("*CHI:\t<the (.) dog> [/] .\n*CHI:\twhat happened next .\n");
+
+        let (out_cor, stats_cor) =
+            join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert!(
+            stats_cor.is_empty(),
+            "corrections must NOT join a non-pure-word [/]: {stats_cor:?}\n{out_cor}"
+        );
+        assert_eq!(out_cor, input);
+
+        let (_out_all, stats_all) =
+            join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(
+            stats_all.joined_utterances, 1,
+            "all-scope must still join it: {stats_all:?}"
+        );
     }
 }
