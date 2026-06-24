@@ -8,7 +8,7 @@ members = ["cargo:."]
 # any per-crate config that depends on newer dist features.
 cargo-dist-version = "0.32.0"
 
-# Build each dist-able package on its own (cargo build -p talkbank-cli), not the
+# Build each dist-able package on its own (cargo build -p chatter), not the
 # whole workspace. Without this, cargo-dist's default workspace build also
 # compiles the chatter-desktop (Tauri) crate, which pulls glib-sys on Linux and
 # fails the static musl builds; the CLI itself has no GTK/glib dependency.
@@ -25,14 +25,15 @@ macos-sign = true
 # GitHub Actions runs the release workflow on `git tag v*` push.
 ci = "github"
 
-# Ship a self-updater alongside the binary. The shell + PowerShell
-# installers also install a standalone `chatter-update` program; running
-# it (or the discoverable `chatter update` subcommand) polls GitHub
-# Releases and installs the newest release in place. No new signing key:
-# the updater downloads the same codesigned release artifacts the
-# installer uses. The cargo-dist self-updater is experimental upstream;
-# see docs/strategy/distribution-and-signing.md "Auto-update".
-install-updater = true
+# Do NOT ship a standalone self-updater binary. `chatter update` self-updates
+# IN-PROCESS: it embeds axoupdater as a library, reads the cargo-dist install
+# receipt (keyed by the package name), and replaces the running binary in place
+# from GitHub Releases. That removed the separate `chatter-update` program and
+# the package-name coupling that made `chatter update` report "not installed"
+# on a correct install. No new signing key: the in-process updater downloads the
+# same codesigned release artifacts the installer uses. See
+# docs/strategy/distribution-and-signing.md "Auto-update".
+install-updater = false
 
 # Auto-generated install scripts shipped alongside the binaries:
 #  - shell:      curl … installer.sh   | sh   (macOS + Linux)

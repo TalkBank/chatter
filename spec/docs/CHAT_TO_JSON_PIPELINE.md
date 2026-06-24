@@ -651,7 +651,7 @@ DependentTier::Mor(marker) => match materialized.mor {
 ### `chatter to-json`
 
 ```
-talkbank-cli/src/commands/json.rs
+chatter/src/commands/json.rs
 ```
 
 ```rust
@@ -693,7 +693,7 @@ pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) {
 | `talkbank-parser` | CST parsing + CST→AST conversion |
 | `talkbank-model` | `ParseOutcome`, AST types, validation, alignment, `ErrorSink`, `ParseError`, error codes |
 | `talkbank-transform` | Pipeline orchestration (parse + validate + convert), JSON serialization + schema validation, `ParseValidateOptions` |
-| `talkbank-cli` | CLI commands invoking the pipeline |
+| `chatter` | CLI commands invoking the pipeline |
 
 ---
 

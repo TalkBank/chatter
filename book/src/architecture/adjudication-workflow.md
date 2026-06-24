@@ -213,7 +213,7 @@ kind = "parent-role-lookup"
 
 ## `chatter adjudicate`, CLI surface
 
-A new chatter subcommand in `talkbank-cli`. Its job is to walk
+A new chatter subcommand in `chatter`. Its job is to walk
 a pending-adjudications file and write decisions to an override
 file.
 

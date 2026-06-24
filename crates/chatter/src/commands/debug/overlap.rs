@@ -34,7 +34,7 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
     // The tree-sitter CHAT grammar is compiled into the binary and
     // structurally validated by CI, so construction is infallible
     // in practice (matches the pattern used in
-    // `crates/talkbank-cli/src/lib.rs` chat_parser()).
+    // `crates/chatter/src/lib.rs` chat_parser()).
     #[allow(clippy::expect_used)]
     let parser = talkbank_parser::TreeSitterParser::new().expect("grammar loads");
 

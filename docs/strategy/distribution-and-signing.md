@@ -95,7 +95,7 @@ compatible with publishing):**
 **Still open (separate from the publish-or-not question settled here):**
 
 - Exactly which crates are published (public-API crates such as
-  `talkbank-cli` and `talkbank-model` versus internal-only crates) and
+  `chatter` and `talkbank-model` versus internal-only crates) and
   under what names; resolve name availability before the first publish.
 - Whether to reserve the crate names ahead of the v0.1.0 tag.
 

@@ -13,7 +13,7 @@ const SCAN_PATHS: &[&str] = &[
     "book/src/install",
     "book/src/quickstart",
     "book/src/chatter",
-    "crates/talkbank-cli/README.md",
+    "crates/chatter/README.md",
 ];
 
 const SKIP_DIRS: &[&str] = &[".git", "target"];

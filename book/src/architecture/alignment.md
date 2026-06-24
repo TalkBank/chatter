@@ -233,5 +233,5 @@ speakers B, C, etc. Used by E347 and `chatter debug overlap-audit`.
 | Validation | `talkbank-model` | Cross-tier checks (E714/E715, E725-E728), overlap (E347/E348/E373/E704) |
 | LSP hover | `talkbank-lsp` | Show aligned tier items for word under cursor |
 | Word extraction | `talkbank-transform` | NLP-ready words from utterances |
-| Overlap audit | `talkbank-cli` | `chatter debug overlap-audit` |
+| Overlap audit | `chatter` | `chatter debug overlap-audit` |
 | `%wor` generation | `talkbank-model` | Build `%wor` tier from main tier |

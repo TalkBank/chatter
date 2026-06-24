@@ -26,7 +26,7 @@ build tools:
 
   ```sh
   # macOS / Linux (Windows: see Installation for the PowerShell one-liner)
-  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/talkbank-cli-installer.sh | sh
+  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.sh | sh
 
   chatter validate myfile.cha       # check one transcript
   chatter validate path/to/folder   # check an entire corpus
@@ -76,7 +76,7 @@ experimental or internal until their stability contracts are settled.
 
 | Component | What it is | Stability |
 |---|---|---|
-| [`talkbank-cli`](crates/talkbank-cli/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON / XML), lint, watch, and the experimental merge / speaker-id reconciliation commands | Preview |
+| [`chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON / XML), lint, watch, and the experimental merge / speaker-id reconciliation commands | Preview |
 | [`talkbank-lsp`](crates/talkbank-lsp/), the `talkbank-lsp` binary | Language Server Protocol implementation; powers real-time validation, hover, go-to-definition, cross-tier alignment in any LSP-aware editor | Preview |
 | [`apps/chatter-desktop/`](apps/chatter-desktop/) | Tauri-based desktop validation app, a TUI parity target for researchers who don't use a terminal | Preview |
 
@@ -174,7 +174,7 @@ setup and the coding conventions.
                                           ▼
               ┌────────────────┬───────────┴───────┐
               ▼                ▼                   ▼
-       talkbank-cli      talkbank-lsp       chatter-desktop
+       chatter      talkbank-lsp       chatter-desktop
          (chatter)       (lsp binary)         (Tauri app)
 ```
 

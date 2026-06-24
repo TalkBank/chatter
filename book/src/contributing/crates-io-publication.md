@@ -26,7 +26,7 @@ make `talkbank-transform` unpublishable.
 The current Wave 1B hold-backs are explicitly marked `publish = false`:
 
 - `send2clan`
-- `talkbank-cli`
+- `chatter`
 - `talkbank-lsp`
 
 They stay blocked until their support contract, install story, and user-facing

@@ -3,7 +3,7 @@
 **Status:** Current
 **Last modified:** 2026-06-12 19:01 EDT
 
-Why `main()` in `crates/talkbank-cli/src/main.rs` does not run the program
+Why `main()` in `crates/chatter/src/main.rs` does not run the program
 directly, and what every contributor adding CLI surface should know about
 stack budgets.
 
@@ -63,7 +63,7 @@ same pattern for the same reasons.
 
 ```mermaid
 flowchart TD
-    main["main()\n(crates/talkbank-cli/src/main.rs)"]
+    main["main()\n(crates/chatter/src/main.rs)"]
     spawn["thread::Builder::stack_size(PROGRAM_STACK_BYTES)\n.spawn(program_main)"]
     prog["program_main()\nclap tree build + parse + cli::run"]
     join{"join() result?"}
@@ -85,7 +85,7 @@ extra thread spawn at startup is microseconds.
 
 ## Regression gates
 
-- `crates/talkbank-cli/tests/stack_limit_tests.rs` runs the real binary
+- `crates/chatter/tests/stack_limit_tests.rs` runs the real binary
   under a Windows-sized 1 MiB stack (`sh -c 'ulimit -s 1024'`) on Unix,
   so macOS and Linux CI enforce the Windows constraint on every run.
   Without this, the constraint is tested only by the windows-latest job,

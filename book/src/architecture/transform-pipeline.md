@@ -47,7 +47,7 @@ let chat_text = chat_file.to_chat_string();
 ```
 
 The `chatter from-json` command wraps this path
-(`crates/talkbank-cli/src/commands/json.rs`, `json_to_chat`).
+(`crates/chatter/src/commands/json.rs`, `json_to_chat`).
 
 ### CHAT → CHAT (Normalize)
 

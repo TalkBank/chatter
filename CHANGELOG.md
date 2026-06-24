@@ -9,6 +9,65 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-23
+
+### Added
+
+- **More of CLAN CHECK's invalidity is now enforced.** A batch of CHECK-parity
+  rules was implemented so `chatter validate` rejects more invalid CHAT:
+  - `E514`: an `@ID` line's corpus field is required (CHECK 63).
+  - `E547`: a constant participant header must follow the `@ID` block.
+  - `E548`: closes the case CHECK 126 covers.
+  - `E549`: a speaker may not be declared twice (CHECK 13).
+  - Duplicate `@ID` lines and out-of-order `@Options` fields (CHECK 13, 125).
+  - A dependent tier used without being declared (CHECK 17).
+  - An out-of-range `@Time Duration` (CHECK 35).
+  - An `@Media` header marked unlinked while the transcript still carries timing
+    bullets (CHECK 124), and an `@Media` filename that does not match the data
+    file (CHECK 157).
+  - A replacement `[: ...]` now requires a preceding space (CHECK 161).
+  - Tree-sitter recovery nodes are surfaced as invalidity rather than silently
+    repaired: a surviving `ERROR` node maps to `E316` and a `MISSING` node to
+    `E342` (with the re2c oracle mirroring it), covering a group with no
+    annotation and swallowed recovery nodes inside comma-list headers
+    (CHECK 5/6/106/108).
+- **Phon:** `U` (unknown) is accepted as a legal syllable-constituent code on the
+  `%xmodsyl` and `%xphosyl` tiers.
+- A formal behavioral CHECK-validity parity test suite that runs real CLAN CHECK
+  and chatter on the same fixtures and fails if either side drifts.
+
+### Changed
+
+- **`chatter update` now self-updates in process.** It embeds the axoupdater
+  self-updater as a library, reads the cargo-dist install receipt (keyed by the
+  package name), and replaces the running binary from GitHub Releases. This
+  removes the package-name coupling that previously made `chatter update` report
+  "not installed" on a correctly installed binary.
+- **The CLI package is renamed `talkbank-cli` to `chatter`** (the crate now lives
+  at `crates/chatter/`). The generated install scripts are therefore
+  `chatter-installer.sh` and `chatter-installer.ps1` (previously
+  `talkbank-cli-installer.*`); update any pinned install URL accordingly. The
+  binary is still `chatter`, and the library/API crates keep their `talkbank-*`
+  names.
+- **Validation is stricter.** Because of the new CHECK-parity rules above, some
+  files that passed `chatter validate` under 0.1.1 may now report errors. This is
+  intended: chatter is the CHAT-validity authority and is at least as strict as
+  CLAN CHECK.
+
+### Removed
+
+- The standalone self-updater binary (cargo-dist `install-updater = false`). The
+  `chatter update` subcommand is unchanged for users; it now updates in process
+  instead of shelling out to a separate program.
+
+### Fixed
+
+- The recovery-node invalidity backstop is scoped to localized errors so it does
+  not over-flag, and several malformed `@ID` test fixtures were corrected.
+- Hardened the CHECK-parity audit and corrected a CHECK 126 verdict it had
+  falsely certified; the curated CHECK error-code map is restored in place of a
+  brittle keyword heuristic.
+
 ## [0.1.1] - 2026-06-22
 
 ### Fixed
@@ -84,6 +143,7 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/TalkBank/chatter/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/TalkBank/chatter/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TalkBank/chatter/releases/tag/v0.1.0

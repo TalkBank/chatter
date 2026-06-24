@@ -77,7 +77,7 @@ read docs.
     bare OS main thread, and size any recursion-heavy worker threads
     explicitly. Details: the "CLI Startup and the Program Stack"
     architecture page; regression gate:
-    `crates/talkbank-cli/tests/stack_limit_tests.rs`.
+    `crates/chatter/tests/stack_limit_tests.rs`.
 
 ## Overview
 
@@ -97,19 +97,19 @@ Data flows: **spec** (source of truth) → **grammar** (`grammar/`) →
 
 ## Running in Development
 
-The CLI binary is called `chatter` (package `talkbank-cli`).
+The CLI binary is called `chatter` (package `chatter`).
 
 ```bash
 # Run chatter directly (debug build, recompiles as needed)
-cargo run -p talkbank-cli -- validate path/to/file.cha
-cargo run -p talkbank-cli -- to-json path/to/file.cha
-cargo run -p talkbank-cli -- normalize path/to/file.cha
+cargo run -p chatter -- validate path/to/file.cha
+cargo run -p chatter -- to-json path/to/file.cha
+cargo run -p chatter -- normalize path/to/file.cha
 
 # Release build for large-scale work (much faster runtime)
-cargo run --release -p talkbank-cli -- validate path/to/corpus/ --force
+cargo run --release -p chatter -- validate path/to/corpus/ --force
 
 # Build the release binary once, then run it directly
-cargo build --release -p talkbank-cli
+cargo build --release -p chatter
 ./target/release/chatter validate path/to/file.cha
 ```
 
@@ -232,7 +232,7 @@ flowchart TD
     re2c["talkbank-parser-re2c\nAlternate parser (equivalence oracle)"]
     tests["talkbank-parser-tests\nEquivalence tests"]
     transform["talkbank-transform\nPipelines, CHAT↔JSON, normalize"]
-    cli["talkbank-cli (chatter)\nCLI: validate, normalize, convert"]
+    cli["chatter\nCLI: validate, normalize, convert"]
     lsp["talkbank-lsp\nLanguage Server Protocol"]
     s2c["send2clan\nCLAN app bindings"]
     desktop["chatter-desktop\nDesktop validation app (Tauri)"]
@@ -260,7 +260,7 @@ flowchart TD
 | `talkbank-parser-re2c` | `re2c/`, `lexer.rs`, `parser.rs` | Alternate parser using re2c lexer (equivalence oracle for tree-sitter parser) |
 | `talkbank-parser-tests` | golden word lists, `generated/` | Parser equivalence, roundtrip, property tests |
 | `talkbank-transform` | pipelines, serialization, JSON | Parse+validate pipeline, CHAT↔JSON roundtrip |
-| `talkbank-cli` | `cli/`, `commands/`, `ui/` | `chatter` binary: validate, normalize, to-json, merge |
+| `chatter` | `cli/`, `commands/`, `ui/` | `chatter` binary: validate, normalize, to-json, merge |
 | `talkbank-lsp` | `backend/`, `alignment/`, `graph/` | LSP server with tree-sitter incremental parsing |
 | `send2clan` | `ffi.rs`, `api/` | Rust bindings around the CLAN app bridge (macOS Apple Events, Windows WM_APP) |
 | `chatter-desktop` | `commands.rs`, `events.rs` | Native desktop validation app (Tauri v2, React) |
@@ -365,7 +365,7 @@ embedded schema) will reject perfectly valid files with a confusing
 
 ```bash
 cargo test -p talkbank-transform --test generate_schema   # rewrites schema/chat-file.schema.json
-cargo build -p talkbank-cli                                # REBUILD: the schema is include_str!-embedded
+cargo build -p chatter                                # REBUILD: the schema is include_str!-embedded
 ```
 
 The rebuild is not optional: because the schema is embedded at compile

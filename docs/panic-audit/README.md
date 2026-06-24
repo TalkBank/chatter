@@ -69,7 +69,7 @@ repo.
 | [talkbank-parser-re2c](talkbank-parser-re2c.md) | 1 module-level + 4 inline | generated-lexer panic + retrace/internal-invariant |
 | [talkbank-model](talkbank-model.md) | 2 inline | index unwrap after `is_none` short-circuit |
 | [talkbank-transform](talkbank-transform.md) | inline (largest surface) | guarded slices, embedded-JSON statics, infallible writes |
-| [talkbank-cli](talkbank-cli.md) | inline | command-routing `unreachable!` catch-alls |
+| [chatter](chatter.md) | inline | command-routing `unreachable!` catch-alls |
 | [talkbank-lsp](talkbank-lsp.md) | 6 inline | request-routing `unreachable!` catch-alls |
 
 Counts drift as code moves; treat the source (the inline annotations) as

@@ -10,7 +10,7 @@ one workflow). Question answered per surface: does it stay in chatter,
 or does it belong in a downstream project?
 
 Surfaces reviewed: the CLI layer
-(`crates/talkbank-cli/src/commands/{adjudicate,batch,merge_preflight,
+(`crates/chatter/src/commands/{adjudicate,batch,merge_preflight,
 pipeline,sanity_scan,transcript_merge}.rs`, `speaker_id/`) AND the
 backing `talkbank-transform` modules (`adjudication.rs`,
 `sanity_scan.rs`, `speaker_id/`, `transcript_merge.rs`).

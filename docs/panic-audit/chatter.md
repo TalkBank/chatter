@@ -1,4 +1,4 @@
-# Panic audit: talkbank-cli
+# Panic audit: chatter
 
 **Status:** Reference
 **Last updated:** 2026-06-13 21:07 EDT
@@ -33,5 +33,5 @@ Test code is exempt via `#![cfg_attr(test, allow(...))]` in `src/main.rs`.
 ## Verification
 
 ```bash
-cargo clippy -p talkbank-cli --lib --bins --locked -- -D warnings
+cargo clippy -p chatter --lib --bins --locked -- -D warnings
 ```

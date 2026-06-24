@@ -394,7 +394,7 @@ is the trustworthy alternative there.
 
 - Source: `crates/talkbank-transform/src/transcript_merge/` (proposed
   layout, see the design plan).
-- CLI surface: `crates/talkbank-cli/src/commands/transcript_merge/`.
+- CLI surface: `crates/chatter/src/commands/transcript_merge/`.
 - Domain types (`SpeakerCode`, `RetainSet`, `MergeOverride`,
   `SpeakerMapping`) live in `talkbank-model` so the override-file
   format is sharable across the speaker-id stage, the orchestrator,

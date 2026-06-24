@@ -226,7 +226,7 @@ cargo nextest run --no-capture
 | Grammar (`grammar.js`) | `cd grammar && tree-sitter generate && tree-sitter test`, then the relevant parser/spec-generator commands |
 | Parser (CST-to-model) | `cargo nextest run -p talkbank-parser` |
 | Model (types, validation, alignment) | `cargo nextest run -p talkbank-model` |
-| CLI (chatter args, dispatch) | `cargo nextest run -p talkbank-cli` |
+| CLI (chatter args, dispatch) | `cargo nextest run -p chatter` |
 | LSP | `cargo nextest run -p talkbank-lsp` |
 | Spec files | Run the relevant `gen_*` commands from `spec/tools`, then the local verification sweep from `dev-checks.md` |
 | Pre-merge (any change) | The local verification sweep from `dev-checks.md` plus surface-specific additions |

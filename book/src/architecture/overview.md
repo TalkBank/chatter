@@ -47,7 +47,7 @@ flowchart TD
     parser["talkbank-parser\nCanonical parser (tree-sitter)"]
     re2c["talkbank-parser-re2c\nAlternate parser (equivalence oracle)"]
     transform["talkbank-transform\nPipelines, CHAT↔JSON, caching"]
-    cli["talkbank-cli (chatter)\nCLI: validate, normalize, convert"]
+    cli["chatter\nCLI: validate, normalize, convert"]
     lsp["talkbank-lsp\nLanguage Server Protocol"]
     s2c["send2clan\nCLAN app bindings"]
     desktop["chatter-desktop\nDesktop validation app (Tauri)"]

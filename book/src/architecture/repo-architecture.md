@@ -16,7 +16,7 @@ crates/                   all Rust crates (root Cargo workspace)
   talkbank-parser-re2c/   alternate parser (specification oracle, opt-in batch parser)
   talkbank-parser-tests/  parser equivalence and roundtrip tests
   talkbank-transform/     pipelines, CHAT↔JSON, caching, parallel validation
-  talkbank-cli/           the `chatter` CLI binary
+  chatter/           the `chatter` CLI binary
   talkbank-lsp/           LSP server
   send2clan/              Rust bindings to the legacy CLAN app bridge
  talkbank-cache/         validation + roundtrip cache

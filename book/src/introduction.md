@@ -7,7 +7,7 @@
 
 `chatter` is publicly released. To get it right away:
 
-- **Command-line tool** (macOS / Linux): `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/talkbank-cli-installer.sh | sh` (Windows and other options: [Install](install/index.md)).
+- **Command-line tool** (macOS / Linux): `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.sh | sh` (Windows and other options: [Install](install/index.md)).
 - **Desktop app**: download for your platform from the [latest release](https://github.com/TalkBank/chatter/releases/latest).
 - **Full installation guide** (all platforms, package details): [Install](install/index.md).
 

@@ -22,13 +22,13 @@ it on your PATH, and also install the `chatter-update` self-updater):
 - **macOS and Linux:**
 
   ```sh
-  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/talkbank-cli-installer.sh | sh
+  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.sh | sh
   ```
 
 - **Windows (PowerShell):**
 
   ```powershell
-  powershell -ExecutionPolicy Bypass -c "irm https://github.com/TalkBank/chatter/releases/latest/download/talkbank-cli-installer.ps1 | iex"
+  powershell -ExecutionPolicy Bypass -c "irm https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.ps1 | iex"
   ```
 
 On Windows the binary is not yet code-signed, so SmartScreen may warn on
@@ -92,7 +92,7 @@ Clone and install the CLI:
 ```bash
 git clone https://github.com/TalkBank/chatter.git
 cd chatter
-cargo install --path crates/talkbank-cli --locked
+cargo install --path crates/chatter --locked
 ```
 
 This installs the `chatter` binary to `~/.cargo/bin/` (macOS/Linux) or

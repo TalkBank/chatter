@@ -12,15 +12,15 @@ top-level command dispatches to a handler in the corresponding crate.
 flowchart TD
     chatter(["chatter"])
 
-    chatter --> validate["validate\n(talkbank-cli)"]
-    chatter --> normalize["normalize\n(talkbank-cli)"]
+    chatter --> validate["validate\n(chatter)"]
+    chatter --> normalize["normalize\n(chatter)"]
     chatter --> tojson["to-json\n(talkbank-transform)"]
     chatter --> fromjson["from-json\n(talkbank-transform)"]
-    chatter --> showalign["show-alignment\n(talkbank-cli)"]
-    chatter --> watch["watch\n(talkbank-cli)"]
-    chatter --> lint["lint\n(talkbank-cli)"]
-    chatter --> clean["clean\n(talkbank-cli)"]
-    chatter --> newfile["new-file\n(talkbank-cli)"]
+    chatter --> showalign["show-alignment\n(chatter)"]
+    chatter --> watch["watch\n(chatter)"]
+    chatter --> lint["lint\n(chatter)"]
+    chatter --> clean["clean\n(chatter)"]
+    chatter --> newfile["new-file\n(chatter)"]
     chatter --> cache["cache\n(stats, clear)"]
     chatter --> schema["schema\n(JSON Schema output)"]
     chatter --> debug["debug\n(overlap-audit, linker-audit,\nfind, sanitize, fix-s)"]

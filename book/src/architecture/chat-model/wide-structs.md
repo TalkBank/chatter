@@ -66,7 +66,7 @@ know the whole subsystem to use a subset of fields.
 
 ## Refactor Examples
 
-### `ValidateDirectoryOptions` (talkbank-cli), was a flat bag
+### `ValidateDirectoryOptions` (chatter), was a flat bag
 
 Used to be a flat bag of format, cache, traversal, roundtrip, parser, audit,
 and TUI flags. Now grouped by concern:
@@ -97,7 +97,7 @@ flowchart LR
 Real state owners that still want grouping by concern (selection vs. progress
 vs. render flags vs. status):
 
-- `crates/talkbank-cli/src/ui/validation_tui/state.rs` `TuiState`
+- `crates/chatter/src/ui/validation_tui/state.rs` `TuiState`
 
 ### `Backend` (talkbank-lsp)
 

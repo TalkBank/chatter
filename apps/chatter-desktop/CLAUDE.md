@@ -15,11 +15,11 @@ Native desktop validation app for CHAT files, built with Tauri v2 (Rust backend,
 
 ### Error Display Parity (mandatory)
 
-The TUI source is at `crates/talkbank-cli/src/ui/validation_tui/`. Every rendering behavior listed below must be matched:
+The TUI source is at `crates/chatter/src/ui/validation_tui/`. Every rendering behavior listed below must be matched:
 
 All error rendering is handled by **miette on the Rust side**, through the
 **single shared orchestration** `talkbank_transform::render_diagnostics()`. The
-CLI (`talkbank-cli/src/output.rs`) and this desktop bridge
+CLI (`chatter/src/output.rs`) and this desktop bridge
 (`src-tauri/src/events.rs`) both call it: it enhances each error once
 (`enhance_errors_with_source`) and renders the plain text (the "Copy" form) and,
 under `RenderMode::Ansi`, the colored form. The desktop converts that ANSI to
@@ -132,7 +132,7 @@ npm run test:e2e
 ## App Identity
 
 The official name is **Chatter**, not "chatter-desktop". The Cargo package name
-is `chatter-desktop` to avoid conflicts with the CLI package (`talkbank-cli`
+is `chatter-desktop` to avoid conflicts with the CLI package (`chatter`
 produces the `chatter` binary), but the user-visible name everywhere must be
 "Chatter":
 
@@ -149,7 +149,7 @@ the `code` command).
 
 **Approach (VS Code-style):**
 
-1. Build `chatter` alongside the desktop app (`cargo build --release -p talkbank-cli`)
+1. Build `chatter` alongside the desktop app (`cargo build --release -p chatter`)
 2. Include it as a Tauri `resources` entry, bundled inside the `.app`
 3. Add a menu item "Install CLI command" that symlinks the bundled binary
    to `/usr/local/bin/chatter` (macOS/Linux) or adds to PATH (Windows)
@@ -214,4 +214,4 @@ Follow the root `CLAUDE.md` for all Rust code. Additional rules for the desktop 
 - **No mutex**: use `ArcSwapOption`, atomics, or channels. See the mutex policy.
 - **serde field names**: every enum variant with fields needs `#[serde(rename_all = "camelCase")]`. The enum-level `rename_all` only affects tag names, not field names.
 - **TypeScript types must mirror Rust types**: when changing `events.rs`, update `types.ts` and run the integration tests to verify.
-- **Reference the TUI source** when implementing display features, `crates/talkbank-cli/src/ui/validation_tui/` is the reference implementation for error rendering, file list behavior, and navigation.
+- **Reference the TUI source** when implementing display features, `crates/chatter/src/ui/validation_tui/` is the reference implementation for error rendering, file list behavior, and navigation.

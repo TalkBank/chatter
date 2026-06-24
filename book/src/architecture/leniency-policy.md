@@ -272,7 +272,7 @@ let sink = ConfigurableErrorSink::new(&inner, config);
 // severity overrides are applied.
 ```
 
-#### Runner-Level Flags (`talkbank-transform`, `talkbank-cli`)
+#### Runner-Level Flags (`talkbank-transform`, `chatter`)
 
 | Flag | Effect |
 |------|--------|

@@ -434,7 +434,7 @@ remains intact.
 
 - Source: `crates/talkbank-transform/src/speaker_id/` (proposed
   layout).
-- CLI surface: `crates/talkbank-cli/src/commands/speaker_id/`.
+- CLI surface: `crates/chatter/src/commands/speaker_id/`.
 - Domain types (`SpeakerCode`, `RoleTag`, `SpeakerMapping`,
   `MergeOverride`, `JaccardScore`, `ConfidenceThreshold`,
   `Margin`) live in `talkbank-model` and are shared with

@@ -3,7 +3,7 @@
  *
  * Only shows files with errors (valid files are hidden). Sorted alphabetically.
  * Mirrors the TUI's file list behavior in
- * `crates/talkbank-cli/src/ui/validation_tui/render.rs`.
+ * `crates/chatter/src/ui/validation_tui/render.rs`.
  */
 
 import { useMemo, useState, useCallback } from "react";

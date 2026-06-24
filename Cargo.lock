@@ -794,8 +794,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "chatter"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "axoupdater",
+ "chrono",
+ "clap",
+ "crossbeam-channel",
+ "crossterm 0.29.0",
+ "ctrlc",
+ "dirs",
+ "httpmock",
+ "indicatif",
+ "notify",
+ "predicates",
+ "ratatui",
+ "send2clan",
+ "serde",
+ "serde_json",
+ "talkbank-llm",
+ "talkbank-model",
+ "talkbank-parser",
+ "talkbank-parser-tests",
+ "talkbank-transform",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml 1.1.2+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width 0.2.2",
+ "walkdir",
+]
+
+[[package]]
 name = "chatter-desktop"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ansi-to-html",
  "arc-swap",
@@ -5399,7 +5434,7 @@ dependencies = [
 
 [[package]]
 name = "send2clan"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "cc",
 ]
@@ -6200,7 +6235,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-cache"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "dirs",
@@ -6213,43 +6248,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "talkbank-cli"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "axoupdater",
- "chrono",
- "clap",
- "crossbeam-channel",
- "crossterm 0.29.0",
- "ctrlc",
- "dirs",
- "httpmock",
- "indicatif",
- "notify",
- "predicates",
- "ratatui",
- "send2clan",
- "serde",
- "serde_json",
- "talkbank-llm",
- "talkbank-model",
- "talkbank-parser",
- "talkbank-parser-tests",
- "talkbank-transform",
- "tempfile",
- "thiserror 2.0.18",
- "toml 1.1.2+spec-1.1.0",
- "tracing",
- "tracing-subscriber",
- "unicode-width 0.2.2",
- "walkdir",
-]
-
-[[package]]
 name = "talkbank-derive"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6262,7 +6262,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-llm"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "httpmock",
  "serde",
@@ -6274,7 +6274,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-lsp"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "dashmap 6.2.1",
  "insta",
@@ -6294,7 +6294,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-model"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "dashmap 6.2.1",
@@ -6320,7 +6320,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "divan",
  "indexmap 2.14.0",
@@ -6339,7 +6339,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser-re2c"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "chumsky",
  "divan",
@@ -6362,7 +6362,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser-tests"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "clap",
  "comrak",
@@ -6387,7 +6387,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-transform"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -8693,7 +8693,7 @@ checksum = "2fb433233f2df9344722454bc7e96465c9d03bff9d77c248f9e7523fe79585b5"
 
 [[package]]
 name = "xtask"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "yaml-rust"

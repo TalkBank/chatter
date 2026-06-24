@@ -45,7 +45,7 @@ High-level pipelines: parse+validate, CHAT-to-JSON, JSON-to-CHAT, normalization.
 
 ## Application and integration surfaces
 
-### talkbank-cli
+### chatter
 
 The `chatter` CLI binary: validate, normalize, to-json, and corpus management.
 

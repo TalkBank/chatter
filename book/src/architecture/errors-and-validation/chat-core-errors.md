@@ -5,7 +5,7 @@
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
-`talkbank-cli`, `talkbank-lsp`). Defined in the
+`chatter`, `talkbank-lsp`). Defined in the
 `errors` module of `talkbank-model`.
 
 External runtime/application errors that live outside this repo's CHAT core are

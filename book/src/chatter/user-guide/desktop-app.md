@@ -200,7 +200,7 @@ directory (Windows).
 To build with the bundled CLI:
 
 ```bash
-cargo build --release -p talkbank-cli
+cargo build --release -p chatter
 mkdir -p apps/chatter-desktop/src-tauri/resources
 cp target/release/chatter apps/chatter-desktop/src-tauri/resources/
 cargo tauri build

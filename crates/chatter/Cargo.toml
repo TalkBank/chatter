@@ -1,5 +1,5 @@
 [package]
-name = "talkbank-cli"
+name = "chatter"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -59,7 +59,7 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 # Panic-site audit completed 2026-04-29 (see
-# `docs/panic-audit/talkbank-cli.md`). 14 non-test sites annotated.
+# `docs/panic-audit/chatter.md`). 14 non-test sites annotated.
 [lints.clippy]
 unwrap_used   = "deny"
 expect_used   = "deny"

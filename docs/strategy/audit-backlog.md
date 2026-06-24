@@ -18,7 +18,7 @@ and the chatter-desktop installers.
 ### Fixed (reached a shipped artifact)
 
 - **`atty` (RUSTSEC-2024-0375, unmaintained / potential unaligned
-  read), direct dependency of `talkbank-cli`, shipped in the CLI.**
+  read), direct dependency of `chatter`, shipped in the CLI.**
   Replaced its single use (`atty::is(Stream::Stdout)` for color
   autodetection) with `std::io::IsTerminal` (std since Rust 1.70,
   identical semantics) and dropped the dependency. The CLI dependency
@@ -32,7 +32,7 @@ and the chatter-desktop installers.
 
 - **`rsa` 0.9.x (RUSTSEC-2023-0071, Marvin timing attack, medium
   5.9).** Transitive under the Tauri desktop build only; absent from
-  the `talkbank-cli` dependency tree. No patched release exists
+  the `chatter` dependency tree. No patched release exists
   upstream (the advisory is unresolved across the ecosystem). Accept
   for v0.1.0; re-check when upstream ships a fix.
 - **GTK/GLib stack unmaintained warnings (`atk`, `gdk`, `gdk-sys`,

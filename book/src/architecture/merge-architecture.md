@@ -51,7 +51,7 @@ transcribe` (ASR), `batchalign3 align` (forced alignment), and
 `batchalign3 morphotag` (Stanza-based morphological tagging),
 the ML-bearing stages that surround the merge in the pipeline.
 
-### Decision 2: types in `talkbank-model`, algorithms in `talkbank-transform`, CLI in `talkbank-cli`
+### Decision 2: types in `talkbank-model`, algorithms in `talkbank-transform`, CLI in `chatter`
 
 The merge pipeline's code splits across exactly the same three
 talkbank-* crates that already host the parse/validate/normalize/
@@ -62,7 +62,7 @@ JSON pipelines:
 - **`talkbank-transform`** owns the algorithms (token cleaning,
   Jaccard scoring, mapping application, structural merge). No
   CLI parsing, no clap.
-- **`talkbank-cli`** owns the subcommands (`chatter speaker-id`,
+- **`chatter`** owns the subcommands (`chatter speaker-id`,
   `chatter merge`). Thin shim layer that parses arguments and
   drives the transform layer.
 
@@ -87,8 +87,8 @@ flowchart TD
     model["talkbank-model\n(+ merge module)"]
     parser["talkbank-parser\n(unchanged)"]
     transform["talkbank-transform\n(+ transcript_merge, speaker_id modules)"]
-    cli["talkbank-cli (chatter)\n(+ merge, speaker-id subcommands)"]
-    cli_tests["talkbank-cli/tests/\n(+ merge_tests.rs)"]
+    cli["chatter\n(+ merge, speaker-id subcommands)"]
+    cli_tests["chatter/tests/\n(+ merge_tests.rs)"]
     transform_tests["talkbank-transform/tests/\n(+ transcript_merge_tests, speaker_id_tests, override_file_tests)"]
     spec["spec/constructs/speaker-id/\n(token cleaner + Jaccard specs)"]
     parser_tests["talkbank-parser-tests\n(consumes regenerated specs)"]
@@ -193,7 +193,7 @@ pub mod speaker_id;
 pub mod transcript_merge;
 ```
 
-### `talkbank-cli`, new `speaker_id/` and `transcript_merge/` command directories
+### `chatter`, new `speaker_id/` and `transcript_merge/` command directories
 
 The CLI dispatch pattern in this crate uses one directory per
 multi-file command (e.g. `commands/validate/`, `commands/find/`,
@@ -205,7 +205,7 @@ modes; merge has the main merge path plus probably a future
 `merge --check` mode).
 
 ```text
-crates/talkbank-cli/src/commands/speaker_id/
+crates/chatter/src/commands/speaker_id/
     mod.rs, clap subcommand dispatch
     args.rs, flag parsing, mode disambiguation
     reference_mode.rs, drives identify_mapping + apply_mapping
@@ -214,7 +214,7 @@ crates/talkbank-cli/src/commands/speaker_id/
     output.rs, formats per-speaker scores to stderr,
                              writes override file via --write-override
 
-crates/talkbank-cli/src/commands/transcript_merge/
+crates/chatter/src/commands/transcript_merge/
     mod.rs, clap subcommand dispatch
     args.rs, --retain, --strip-tiers parsing
     runner.rs, drives the merge pipeline
@@ -222,11 +222,11 @@ crates/talkbank-cli/src/commands/transcript_merge/
 ```
 
 The CLI argument enums extend
-`crates/talkbank-cli/src/cli/args.rs`'s top-level `Commands`
+`crates/chatter/src/cli/args.rs`'s top-level `Commands`
 enum:
 
 ```rust,ignore
-// in crates/talkbank-cli/src/cli/args.rs
+// in crates/chatter/src/cli/args.rs
 pub enum Commands {
     Validate(/* ... */),
     Normalize(/* ... */),
@@ -236,7 +236,7 @@ pub enum Commands {
 }
 ```
 
-Subcommand dispatch in `crates/talkbank-cli/src/main.rs` already
+Subcommand dispatch in `crates/chatter/src/main.rs` already
 matches on the `Commands` enum; the new arms wire to the
 respective `commands::*::run` entry points.
 
@@ -250,7 +250,7 @@ crates/talkbank-transform/tests/
     transcript_merge_tests.rs, L2 tests for merge invariants
     override_file_tests.rs, L2 tests for round-trip / refusal
 
-crates/talkbank-cli/tests/
+crates/chatter/tests/
     merge_tests.rs, L3 subprocess tests for both new commands
 
 spec/constructs/speaker-id/
@@ -271,7 +271,7 @@ The full call graph when an operator runs
 ```mermaid
 sequenceDiagram
     actor Operator
-    participant CLI as talkbank-cli<br/>(chatter merge)
+    participant CLI as chatter<br/>(merge)
     participant Args as commands::transcript_merge::args
     participant Runner as commands::transcript_merge::runner
     participant Parser as talkbank-parser<br/>(TreeSitterParser)
@@ -309,7 +309,7 @@ The reference-mode call path:
 ```mermaid
 sequenceDiagram
     actor Operator
-    participant CLI as talkbank-cli<br/>(chatter speaker-id)
+    participant CLI as chatter<br/>(speaker-id)
     participant Runner as commands::speaker_id::reference_mode
     participant Parser as talkbank-parser
     participant SpkId as talkbank-transform::speaker_id
@@ -390,7 +390,7 @@ library consumer would see):
 |---|---|---|
 | `talkbank-model` | `merge::{SpeakerCode, ParticipantRole, ...}`, re-exports for ergonomics, the underlying types already exist; PLUS the new types in `merge::scoring/role/mapping/retain/override_file/errors` | Stable, versioned via the workspace's existing release process |
 | `talkbank-transform` | `speaker_id::{identify_mapping, apply_mapping, LowConfidenceError}`; `transcript_merge::{merge}` | Stable, algorithms behind these are pinned by the test plan's L2 tests |
-| `talkbank-cli` | Two new `Commands` enum variants and their argument structs | Internal to the binary, not a library surface |
+| `chatter` | Two new `Commands` enum variants and their argument structs | Internal to the binary, not a library surface |
 
 No existing public surface is modified or removed; this is a
 purely-additive change. Existing consumers (the VS Code
@@ -408,6 +408,6 @@ additions until a workflow uses them.
 | "What types are in `talkbank-model::merge`?" | [`book/src/architecture/merge-domain-types.md`](./merge-domain-types.md) |
 | "Where are the tests?" | [`book/src/architecture/merge-test-plan.md`](./merge-test-plan.md) |
 | "Which crate is this code in and why?" | This page |
-| "Where does the merge code live in source?" | `crates/talkbank-transform/src/speaker_id/` + `crates/talkbank-transform/src/transcript_merge/` + `crates/talkbank-cli/src/commands/speaker_id/` + `crates/talkbank-cli/src/commands/transcript_merge/` |
+| "Where does the merge code live in source?" | `crates/talkbank-transform/src/speaker_id/` + `crates/talkbank-transform/src/transcript_merge/` + `crates/chatter/src/commands/speaker_id/` + `crates/chatter/src/commands/transcript_merge/` |
 | "What's in an utterance / `ChatFile` / `%mor` tier?" | `talkbank-model` crate rustdoc; [`book/src/architecture/chat-model/chat-model.md`](./chat-model/chat-model.md) |
 | "What's the parser do?" | [`book/src/architecture/parsing.md`](./parsing.md); [`book/src/architecture/parser-model-contracts.md`](./parser-model-contracts.md) |

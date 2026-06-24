@@ -165,7 +165,7 @@ pub async fn install_cli(app: AppHandle) -> Result<String, String> {
 
     if !resource_path.exists() {
         return Err(format!(
-            "Bundled CLI not found at {}. Build with `cargo build --release -p talkbank-cli` first.",
+            "Bundled CLI not found at {}. Build with `cargo build --release -p chatter` first.",
             resource_path.display()
         ));
     }

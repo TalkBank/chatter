@@ -46,7 +46,7 @@ The live file counts and node-coverage status are recomputed on every
 ```bash
 make verify                    # All pre-merge gates
 make coverage                  # Node coverage check
-cargo run --release -p talkbank-cli -- validate corpus/reference/ --roundtrip --force
+cargo run --release -p chatter -- validate corpus/reference/ --roundtrip --force
 ```
 
 ## Key Policies

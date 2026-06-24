@@ -738,10 +738,10 @@ Why:
   CLI crate.
 - A future non-CLI consumer (HTTP API, library wrapper, scripting
   binding) wants the same parser without re-implementing or
-  depending on `talkbank-cli`.
+  depending on `chatter`.
 - The model crate has no CLI-framework dependency (no `clap`),
   but a free function returning `Result<SpeakerMapping, _>` doesn't
-  need one. The `clap` value-parser in `talkbank-cli` becomes a
+  need one. The `clap` value-parser in `chatter` becomes a
   thin shim: `fn clap_mapping_value(s: &str) -> Result<SpeakerMapping, String>
   { parse_mapping_spec(s).map_err(|e| e.to_string()) }`.
 

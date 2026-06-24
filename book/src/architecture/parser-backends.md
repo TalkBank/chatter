@@ -12,7 +12,7 @@ invisible past the dispatch point:
 
 ```mermaid
 flowchart TD
-    cli["chatter validate --parser &lt;backend&gt;\n(ParserBackend enum,\ntalkbank-cli cli_types.rs)"]
+    cli["chatter validate --parser &lt;backend&gt;\n(ParserBackend enum,\nchatter cli_types.rs)"]
     sel{"which backend?\n(ParserKind,\ntalkbank-transform\nvalidation_runner/config.rs)"}
     ts["TreeSitterParser\n(talkbank-parser:\nGLR, incremental)"]
     re2c["Re2cParser\n(talkbank-parser-re2c:\nre2c DFA + chumsky)"]

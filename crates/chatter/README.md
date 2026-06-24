@@ -1,4 +1,4 @@
-# talkbank-cli
+# chatter
 
 **Last modified:** 2026-06-15 20:38 EDT
 
@@ -34,9 +34,9 @@ scripts attached to each release handle macOS, Linux, and Windows).
 To build from a checkout of this repository instead:
 
 ```bash
-cargo install --path crates/talkbank-cli --locked
+cargo install --path crates/chatter --locked
 # or, for day-to-day development:
-cargo run -p talkbank-cli -- validate file.cha
+cargo run -p chatter -- validate file.cha
 ```
 
 ## License

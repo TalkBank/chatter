@@ -26,7 +26,7 @@ first_wave=(
 
 held_back=(
     send2clan
-    talkbank-cli
+    chatter
     talkbank-lsp
 )
 

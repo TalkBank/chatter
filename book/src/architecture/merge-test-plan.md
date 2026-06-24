@@ -59,7 +59,7 @@ different testing mechanisms.
 |---|---|---|
 | **L1, Spec / fragment** | `spec/constructs/speaker-id/` → current `spec/tools` generators | Token-cleaner behavior on CHAT *fragments* (markup strip for Jaccard scoring). Same mechanism that pins parser/grammar tests; regenerated regression. |
 | **L2, Transform / AST** | `crates/talkbank-transform/tests/` | Pure-Rust tests over parsed `ChatFile` values. `identify_mapping`, `apply_mapping`, `merge`, `run_adjudication` semantics on hand-built or parsed CHAT inputs. No process boundary. |
-| **L3, CLI / subprocess** | `crates/talkbank-cli/tests/merge_tests.rs` (new) | End-to-end behavior of `chatter speaker-id`, `chatter merge`, and `chatter adjudicate` invoked as subprocesses (`assert_cmd` + `predicates`). Exit codes, flag parsing, file I/O, stderr formats. |
+| **L3, CLI / subprocess** | `crates/chatter/tests/merge_tests.rs` (new) | End-to-end behavior of `chatter speaker-id`, `chatter merge`, and `chatter adjudicate` invoked as subprocesses (`assert_cmd` + `predicates`). Exit codes, flag parsing, file I/O, stderr formats. |
 | **L4, Scripted adjudication** | `crates/talkbank-transform/tests/adjudication_tests.rs` + scripted prompter | Operator-decision paths in `chatter adjudicate`. Uses `ScriptedPrompter` injecting synthetic operator choices. See [Adjudication Workflow](./adjudication-workflow.md) for the prompter abstraction. |
 
 L1 ⊂ L2 ⊂ L3 in terms of failure-mode coverage: a failing L1 test
@@ -248,7 +248,7 @@ tests` section.
 
 ## L3, CLI / subprocess tests
 
-Lives in `crates/talkbank-cli/tests/merge_tests.rs` (new file).
+Lives in `crates/chatter/tests/merge_tests.rs` (new file).
 Uses the same `assert_cmd` + `predicates` + `tempfile` pattern
 as the existing `integration_tests.rs`. Each test invokes
 `chatter speaker-id` or `chatter merge` as a subprocess against
@@ -391,7 +391,7 @@ invariant, and is fully fictional (no real corpus content).
 
 The fixtures live as inline `const FIX_*: &str` blocks in the
 respective test modules, following the precedent in
-`talkbank-cli/tests/integration_tests.rs` (which has
+`chatter/tests/integration_tests.rs` (which has
 `const VALID_CHAT: &str = r#"..."#` etc.).
 
 ### `FIX_REF_TWO_UTT_NO_MARKUP`

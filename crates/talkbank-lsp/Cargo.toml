@@ -59,7 +59,7 @@ todo          = "deny"
 unimplemented = "deny"
 
 [package.metadata.dist]
-# Opted out for the v0.1.0-pre.1 release, chatter (talkbank-cli)
+# Opted out for the v0.1.0-pre.1 release, chatter
 # ships alone for the first user-visible artifact. talkbank-lsp
 # will be re-enabled once VS Code marketplace publication is set up
 # and standalone LSP-for-other-editors becomes a real target.

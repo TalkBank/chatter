@@ -242,7 +242,7 @@ chatter validate --parser re2c --roundtrip corpus/reference/
 Key integration points:
 - `ParserKind::Re2c` in `talkbank-transform/src/validation_runner/config.rs`
 - `ParserDispatch` enum in `worker.rs` wraps both parser backends
-- `ParserBackend` CLI enum in `talkbank-cli/src/cli/args/core.rs`
+- `ParserBackend` CLI enum in `chatter/src/cli/args/core.rs`
 - Cache keys include the parser label (`"re2c"` vs `"tree-sitter"`)
 - TreeSitterParser remains the default; LSP always uses TreeSitterParser (needs incremental parsing)
 
