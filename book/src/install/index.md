@@ -20,12 +20,12 @@ it updates itself when a new version comes out.
 The Mac app is signed and notarized by Apple, so it opens normally (no security
 warnings).
 
-1. Open the [latest
-   release](https://github.com/TalkBank/chatter/releases/latest) and, under
-   **Assets**, download the Mac file for your computer:
-   - **Apple Silicon Mac** (M1/M2/M3/M4, essentially every Mac sold since late
-     2020): the file ending in **`aarch64.dmg`**.
-   - **Intel Mac** (older models): the file ending in **`x64.dmg`**.
+1. Download Chatter for your Mac:
+   - **Apple Silicon** (M1/M2/M3/M4, essentially every Mac sold since late
+     2020): **[Download Chatter for Apple
+     Silicon](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-macos-apple-silicon.dmg)**.
+   - **Intel** (older models): **[Download Chatter for Intel
+     Mac](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-macos-intel.dmg)**.
 
    Not sure which you have? Apple menu () then **About This Mac**: if it says
    "Apple M...", it is Apple Silicon.
@@ -35,16 +35,18 @@ warnings).
 
 ### Windows
 
-Download the file ending in **`x64-setup.exe`** from the [latest
-release](https://github.com/TalkBank/chatter/releases/latest) and run it.
-Windows binaries are not code-signed yet, so SmartScreen may warn on first run:
-choose **More info**, then **Run anyway**.
+**[Download Chatter for
+Windows](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-windows-setup.exe)**
+and run the installer. Windows binaries are not code-signed yet, so SmartScreen
+may warn on first run: choose **More info**, then **Run anyway**.
 
 ### Linux
 
-Download the **`.AppImage`** (make it executable, then run it) or the **`.deb`**
-(install with your package manager) from the [latest
-release](https://github.com/TalkBank/chatter/releases/latest).
+Download **[Chatter
+(AppImage)](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-linux-x86_64.AppImage)**
+(make it executable, then run it) or the **[`.deb`
+package](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-linux-x86_64.deb)**
+(install with your package manager).
 
 ## `chatter`, the command-line tool (for programmers and automation)
 

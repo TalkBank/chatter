@@ -209,6 +209,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           # release.yml (cargo-dist) creates the release at the end of its
@@ -225,6 +226,20 @@ jobs:
           done
           gh release upload "$GITHUB_REF_NAME" "$DMG" "$UPDATER_BUNDLE" "$UPDATER_SIG" \
             --repo "$GITHUB_REPOSITORY" --clobber
+          # Also upload a stable, version-less copy of the .dmg so
+          # releases/latest/download/<name> is a permanent "download latest" link
+          # the website and docs can hardcode (the versioned name above changes
+          # every release).
+          case "$TARGET" in
+            aarch64-apple-darwin) STABLE_DMG="Chatter-macos-apple-silicon.dmg" ;;
+            x86_64-apple-darwin)  STABLE_DMG="Chatter-macos-intel.dmg" ;;
+            *)                    STABLE_DMG="" ;;
+          esac
+          if [ -n "$STABLE_DMG" ]; then
+            cp "$DMG" "$RUNNER_TEMP/$STABLE_DMG"
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/$STABLE_DMG" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          fi
 
   windows:
     name: Windows (x86_64, unsigned)
@@ -325,6 +340,10 @@ jobs:
           # installer once plus its updater .sig.
           gh release upload "$GITHUB_REF_NAME" "$INSTALLER" "$UPDATER_SIG" \
             --repo "$GITHUB_REPOSITORY" --clobber
+          # Stable, version-less copy for a permanent releases/latest/download link.
+          cp "$INSTALLER" "$RUNNER_TEMP/Chatter-windows-setup.exe"
+          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/Chatter-windows-setup.exe" \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
   linux:
     name: Linux (x86_64)
@@ -422,6 +441,13 @@ jobs:
             sleep 30
           done
           gh release upload "$GITHUB_REF_NAME" "$DEB" "$APPIMAGE" "$UPDATER_SIG" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          # Stable, version-less copies for permanent releases/latest/download links.
+          cp "$DEB" "$RUNNER_TEMP/Chatter-linux-x86_64.deb"
+          cp "$APPIMAGE" "$RUNNER_TEMP/Chatter-linux-x86_64.AppImage"
+          gh release upload "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/Chatter-linux-x86_64.deb" \
+            "$RUNNER_TEMP/Chatter-linux-x86_64.AppImage" \
             --repo "$GITHUB_REPOSITORY" --clobber
 
   # Aggregate the per-platform sidecars into the static latest.json the Tauri
