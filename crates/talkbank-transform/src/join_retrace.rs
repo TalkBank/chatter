@@ -135,17 +135,22 @@ pub fn join_dangling_retraces<S: ValidationState>(
 /// If the utterance at `start_index` is a qualifying dangling retrace, return
 /// the successor's line index.
 ///
-/// The `scope` controls which retrace kinds are eligible:
+/// The `scope` controls which retrace kinds are eligible and what material
+/// check is required:
 ///
 /// - For [`RetraceJoinScope::RepetitionOnly`], only `[/]` qualifies, and only
-///   when the successor's leading words repeat the retraced material.
+///   when the retraced material is a pure plain-word sequence AND the
+///   successor's leading words repeat it as a prefix.
 /// - For [`RetraceJoinScope::RepetitionAndCorrections`], `[//]`/`[///]`/`[/-]`
-///   also qualify; for those, the prefix check is skipped (corrections replace,
-///   not repeat, the retraced material).
+///   also qualify; corrections replace rather than repeat, so no prefix check
+///   is needed. Crucially, a non-pure-word retraced material does NOT disqualify
+///   the join: the material is only needed for prefix-match in `RepetitionOnly`.
+/// - For [`RetraceJoinScope::AllSameSpeakerSuccessor`], any kind qualifies;
+///   neither a material purity check nor a prefix match is required.
 ///
 /// Returns `None` when `start_index` is not a qualifying utterance, when there
-/// is no following utterance, when the speakers differ, or (for `[/]` only)
-/// when the successor does not lead with exactly the retraced material.
+/// is no following utterance, when the speakers differ, or when the scope's
+/// specific gate fails.
 fn obvious_join_target(
     lines: &[Line],
     start_index: usize,
@@ -157,10 +162,7 @@ fn obvious_join_target(
 
     // U's last main-tier content node must be a dangling retrace of a kind
     // allowed by the current scope.
-    let (kind, retrace_material) = dangling_retrace_material(&u.main, scope)?;
-    if retrace_material.is_empty() {
-        return None;
-    }
+    let (kind, opt_material) = dangling_retrace_kind(&u.main, scope)?;
 
     // Find the next utterance line (skip interstitial headers / comments).
     let v_index = next_utterance_index(lines, start_index)?;
@@ -173,43 +175,81 @@ fn obvious_join_target(
         return None;
     }
 
-    // For partial repetition under RepetitionOnly or RepetitionAndCorrections:
-    // V's leading lexical words must repeat the retraced material as a prefix.
-    // Under AllSameSpeakerSuccessor, no prefix match is required for any kind.
-    // Corrections always skip the prefix check (they replace, not repeat).
+    // Partial retrace (`[/]`): the prefix-match and purity rules depend on scope.
+    //
+    // - RepetitionOnly: require a pure-word material sequence that the successor
+    //   leads with. If the material is non-pure-word (opt_material is None),
+    //   bail: prefix-match is impossible.
+    // - RepetitionAndCorrections: perform the prefix-match when the retraced
+    //   material is pure-word (opt_material is Some). When the material is
+    //   non-pure-word (opt_material is None), the prefix-match cannot be run,
+    //   but we JOIN anyway: the pure-word requirement gates only RepetitionOnly.
+    //   (A pure-word material that fails the prefix-match still skips the join,
+    //   preserving the existing conservative behavior for repeating `[/]`.)
+    // - AllSameSpeakerSuccessor: no prefix check for any kind; same-speaker
+    //   presence alone is sufficient, regardless of material purity.
+    //
+    // Corrections (Full / Multiple / Reformulation): no prefix match required
+    // under any corrections-enabled scope; pure-word material is not required.
     match kind {
         RetraceKind::Partial => {
             match scope {
-                RetraceJoinScope::RepetitionOnly | RetraceJoinScope::RepetitionAndCorrections => {
-                    if !leading_words_match_prefix(&v.main, &retrace_material) {
+                RetraceJoinScope::RepetitionOnly => {
+                    // Requires pure-word material and a passing prefix-match.
+                    let material = opt_material?;
+                    if material.is_empty() {
+                        return None;
+                    }
+                    if !leading_words_match_prefix(&v.main, &material) {
                         return None;
                     }
                 }
+                RetraceJoinScope::RepetitionAndCorrections => {
+                    // If material is pure-word, apply prefix-match. If it is
+                    // non-pure-word (None), join regardless: the purity
+                    // requirement does not apply to this scope.
+                    if let Some(material) = opt_material {
+                        if material.is_empty() {
+                            return None;
+                        }
+                        if !leading_words_match_prefix(&v.main, &material) {
+                            return None;
+                        }
+                    }
+                    // opt_material == None: non-pure-word material; join.
+                }
                 RetraceJoinScope::AllSameSpeakerSuccessor => {
-                    // No prefix check: any same-speaker successor is accepted.
+                    // No prefix check: any same-speaker successor is accepted,
+                    // even when the retraced material is non-pure-word.
                 }
             }
         }
         RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => {
-            // Corrections: no prefix match required under any corrections-enabled scope.
+            // Corrections: no prefix match required under any corrections-enabled
+            // scope; pure-word material is not required either.
         }
     }
 
     Some(v_index)
 }
 
-/// Returns the retrace kind and the retraced material's lexical-word
+/// Returns the retrace kind and optionally the retraced material's lexical-word
 /// `cleaned_text` sequence when the main tier's LAST content node is a
 /// dangling retrace of a kind allowed by `scope`; otherwise `None`.
 ///
-/// "Dangling" means the retrace marker is the last content node (nothing
-/// after it on the main tier). The case is only treated as OBVIOUS when
-/// the retrace material is a pure sequence of plain words (no replaced words,
-/// separators, or other markers), keeping both waves strictly conservative.
-fn dangling_retrace_material(
+/// "Dangling" means the retrace marker is the last content node (nothing after
+/// it on the main tier).
+///
+/// The material (`Vec<String>`) is extracted only when the retrace content is a
+/// PURE plain-word sequence. If the content contains non-word items (pauses,
+/// events, error markers, etc.), the material slot is `None`. The caller
+/// decides whether a `None` material disqualifies the join: for
+/// `RepetitionOnly` it does (prefix-match is impossible); for the broader
+/// scopes it does not (those never read the material).
+fn dangling_retrace_kind(
     main: &MainTier,
     scope: RetraceJoinScope,
-) -> Option<(RetraceKind, Vec<String>)> {
+) -> Option<(RetraceKind, Option<Vec<String>>)> {
     let last = main.content.content.last()?;
     let UtteranceContent::Retrace(retrace) = last else {
         return None;
@@ -229,8 +269,9 @@ fn dangling_retrace_material(
         }
     }
 
-    let words = pure_word_sequence_from_bracketed(&retrace.content)?;
-    Some((retrace.kind, words))
+    // Attempt pure-word extraction; a None result is not fatal here.
+    let opt_words = pure_word_sequence_from_bracketed(&retrace.content);
+    Some((retrace.kind, opt_words))
 }
 
 /// Extract a pure plain-word `cleaned_text` sequence from a retrace's bracketed
@@ -667,5 +708,98 @@ mod tests {
         assert_eq!(stats.needs_remorphotag, 1);
         assert_eq!(stats.dependent_tiers_dropped, 2);
         assert!(!out.contains("%mor:"), "tiers must be dropped, got:\n{out}");
+    }
+
+    // --- Wave 3c: relaxed pure-word material gate ---
+
+    /// A dangling `[/]` whose retraced material contains an embedded pause
+    /// (non-pure-word) JOINS under `AllSameSpeakerSuccessor` but is NOT
+    /// joined under `RepetitionOnly` (which needs pure words for prefix-match).
+    ///
+    /// Fixture: `<the (.) dog> [/]` with successor `the dog runs .`
+    /// The embedded `(.)` pause makes `pure_word_sequence_from_bracketed`
+    /// return `None`, so the current code skips this in ALL scopes.
+    /// After the fix, corrections/all scopes join it; repetition still skips.
+    #[test]
+    fn joins_partial_retrace_with_pause_material_under_all_scope() {
+        let input = doc("*CHI:\t<the (.) dog> [/] .\n*CHI:\tthe dog runs .\n");
+
+        // RepetitionOnly must NOT join: it needs pure-word material for prefix-match.
+        let (out_rep, stats_rep) = join_with_scope(&input, RetraceJoinScope::RepetitionOnly);
+        assert!(
+            stats_rep.is_empty(),
+            "RepetitionOnly must not join non-pure-word material: {stats_rep:?}"
+        );
+        assert_eq!(out_rep, input);
+
+        // AllSameSpeakerSuccessor MUST join: material is irrelevant for this scope.
+        let (out_all, stats_all) =
+            join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(
+            stats_all.joined_utterances, 1,
+            "AllSameSpeakerSuccessor must join [/] with non-pure-word material: {stats_all:?}"
+        );
+        assert!(
+            out_all.contains("*CHI:\t<the (.) dog> [/] the dog runs ."),
+            "expected joined output, got:\n{out_all}"
+        );
+        assert_eq!(out_all.matches("*CHI:").count(), 1, "got:\n{out_all}");
+    }
+
+    /// A dangling `[//]` whose retraced material contains an embedded pause
+    /// JOINS under `RepetitionAndCorrections` and `AllSameSpeakerSuccessor`,
+    /// but NOT under `RepetitionOnly`.
+    ///
+    /// Fixture: `<my (.) falled> [//]` with successor `I fell down .`
+    #[test]
+    fn joins_correction_retrace_with_pause_material_under_corrections_scope() {
+        let input = doc("*CHI:\t<my (.) falled> [//] .\n*CHI:\tI fell down .\n");
+
+        // RepetitionOnly must NOT join corrections at all.
+        let (out_rep, stats_rep) = join_with_scope(&input, RetraceJoinScope::RepetitionOnly);
+        assert!(
+            stats_rep.is_empty(),
+            "RepetitionOnly must not join [//]: {stats_rep:?}"
+        );
+        assert_eq!(out_rep, input);
+
+        // RepetitionAndCorrections MUST join: corrections skip the prefix-match
+        // and the material gate should not apply.
+        let (out_cor, stats_cor) =
+            join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert_eq!(
+            stats_cor.joined_utterances, 1,
+            "RepetitionAndCorrections must join [//] with non-pure-word material: {stats_cor:?}"
+        );
+        assert!(
+            out_cor.contains("*CHI:\t<my (.) falled> [//] I fell down ."),
+            "expected joined correction, got:\n{out_cor}"
+        );
+        assert_eq!(out_cor.matches("*CHI:").count(), 1, "got:\n{out_cor}");
+
+        // AllSameSpeakerSuccessor MUST also join.
+        let (out_all, stats_all) =
+            join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(
+            stats_all.joined_utterances, 1,
+            "AllSameSpeakerSuccessor must join [//] with non-pure-word material: {stats_all:?}"
+        );
+        assert!(
+            out_all.contains("*CHI:\t<my (.) falled> [//] I fell down ."),
+            "got:\n{out_all}"
+        );
+    }
+
+    /// A different-speaker successor with non-pure-word material is NEVER joined,
+    /// even under `AllSameSpeakerSuccessor`.
+    #[test]
+    fn does_not_join_pause_material_retrace_different_speaker() {
+        let input = doc("*CHI:\t<the (.) dog> [/] .\n*MOT:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert!(
+            stats.is_empty(),
+            "different speaker must never join: {stats:?}"
+        );
+        assert_eq!(out, input);
     }
 }
