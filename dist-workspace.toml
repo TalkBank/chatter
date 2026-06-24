@@ -49,7 +49,14 @@ installers = ["shell", "powershell"]
 # Windows x64.
 #
 # Skipped for now:
-#  - aarch64-pc-windows-msvc, small user base; can add later.
+#  - aarch64-pc-windows-msvc: blocked, not just deferred. The `chatter
+#    update` self-updater pulls rustls -> ring, and ring's C crypto will
+#    not cross-compile to Windows ARM without the ARM64 MSVC build tools,
+#    which the standard windows-latest runner lacks (verified 2026-06-24).
+#    cargo-dist fails the whole release if any target build fails, so this
+#    can only be added with either those tools wired into CI or a
+#    cross-compilable TLS backend, plus a release dry-run. Held: small
+#    user base, and Windows-on-ARM runs the x64 build via emulation.
 #  - *-linux-gnu, glibc-linked binaries are less portable
 #                              than musl; for a CLI we'd rather ship
 #                              one binary per Linux architecture and
