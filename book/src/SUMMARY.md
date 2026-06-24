@@ -6,6 +6,7 @@
 [Introduction](introduction.md)
 [Install](install/index.md)
 [Quickstart](quickstart/index.md)
+[Release Notes](release-notes.md)
 
 ---
 
