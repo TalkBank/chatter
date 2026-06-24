@@ -59,8 +59,10 @@ todo          = "deny"
 unimplemented = "deny"
 
 [package.metadata.dist]
-# Opted out for the v0.1.0-pre.1 release, chatter
-# ships alone for the first user-visible artifact. talkbank-lsp
-# will be re-enabled once VS Code marketplace publication is set up
-# and standalone LSP-for-other-editors becomes a real target.
-dist = false
+# Shipped as a standalone, first-class release artifact: the LSP server is
+# valuable to any LSP-aware editor (not only the VS Code extension, which bundles
+# it per platform). cargo-dist builds + code-signs `talkbank-lsp` for the same
+# five targets as the `chatter` CLI, so editors get a signed binary that passes
+# macOS Gatekeeper. Opted in for v0.2.1 (was held back through v0.2.0 while the
+# CLI shipped alone as the first user-visible artifact).
+dist = true
