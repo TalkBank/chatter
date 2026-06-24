@@ -33,20 +33,24 @@ warnings).
 3. Drag **Chatter** onto the **Applications** folder in the window that appears.
 4. Open **Chatter** from your Applications folder (or Launchpad).
 
-### Windows
+### Windows (Intel/AMD 64-bit, "x64")
 
 **[Download Chatter for
 Windows](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-windows-setup.exe)**
 and run the installer. Windows binaries are not code-signed yet, so SmartScreen
 may warn on first run: choose **More info**, then **Run anyway**.
 
-### Linux
+### Linux (Intel/AMD 64-bit, "x86_64")
 
 Download **[Chatter
 (AppImage)](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-linux-x86_64.AppImage)**
 (make it executable, then run it) or the **[`.deb`
 package](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-linux-x86_64.deb)**
 (install with your package manager).
+
+(The desktop app is x86_64-only on Windows and Linux today; macOS has both
+Apple Silicon and Intel builds. The `chatter` command-line tool below also ships
+a Linux ARM build.)
 
 ## `chatter`, the command-line tool (for programmers and automation)
 
