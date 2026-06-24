@@ -9,6 +9,18 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-24
+
+### Added
+
+- **The `talkbank-lsp` language server now ships as a standalone release
+  artifact.** Prebuilt, code-signed `talkbank-lsp` binaries for macOS (Apple
+  Silicon and Intel), Linux (x86_64 and aarch64, static musl), and Windows are
+  attached to the GitHub Release, each with its own `talkbank-lsp-installer.sh`
+  / `talkbank-lsp-installer.ps1`. Any LSP-aware editor can now install the server
+  without building it from source; it is a first-class artifact in its own right,
+  not only the binary the VS Code extension bundles per platform.
+
 ## [0.2.0] - 2026-06-23
 
 ### Added
@@ -143,7 +155,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/TalkBank/chatter/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/TalkBank/chatter/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/TalkBank/chatter/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TalkBank/chatter/releases/tag/v0.1.0
