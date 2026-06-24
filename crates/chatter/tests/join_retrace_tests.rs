@@ -272,7 +272,9 @@ fn scope_corrections_dry_run_reports_without_modifying() -> Result<(), TestError
     // The report must mention the proposed join.
     let report = stdout_string(&join);
     assert!(
-        report.contains("would join") || report.contains("Would join") || report.contains("[dry-run]"),
+        report.contains("would join")
+            || report.contains("Would join")
+            || report.contains("[dry-run]"),
         "dry-run output should report the proposed join, got:\n{report}"
     );
 
@@ -304,8 +306,7 @@ fn scope_all_joins_nonrepeat_partial_retrace() -> Result<(), TestError> {
     // Default scope: must NOT join.
     {
         let fixture = write_fixture(harness.home_dir(), "nonrepeat_default.cha", &input)?;
-        let join =
-            harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+        let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
         assert!(join.status.success(), "{}", combined_output(&join));
         let after = std::fs::read_to_string(&fixture)?;
         assert_eq!(
@@ -316,8 +317,7 @@ fn scope_all_joins_nonrepeat_partial_retrace() -> Result<(), TestError> {
 
     // --scope corrections: must NOT join a non-repeat [/].
     {
-        let fixture =
-            write_fixture(harness.home_dir(), "nonrepeat_corrections.cha", &input)?;
+        let fixture = write_fixture(harness.home_dir(), "nonrepeat_corrections.cha", &input)?;
         let join = harness.run_output(&[
             "debug",
             "join-retrace",
@@ -378,8 +378,7 @@ fn scope_all_does_not_join_different_speaker() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
 
     let input = doc("*CHI:\t要 去 [/] .\n*MOT:\t要 去 公 園 .\n");
-    let fixture =
-        write_fixture(harness.home_dir(), "diffspk_all.cha", &input)?;
+    let fixture = write_fixture(harness.home_dir(), "diffspk_all.cha", &input)?;
 
     let join = harness.run_output(&[
         "debug",

@@ -180,8 +180,7 @@ fn obvious_join_target(
     match kind {
         RetraceKind::Partial => {
             match scope {
-                RetraceJoinScope::RepetitionOnly
-                | RetraceJoinScope::RepetitionAndCorrections => {
+                RetraceJoinScope::RepetitionOnly | RetraceJoinScope::RepetitionAndCorrections => {
                     if !leading_words_match_prefix(&v.main, &retrace_material) {
                         return None;
                     }
@@ -604,7 +603,10 @@ mod tests {
     fn joins_nonrepeat_partial_retrace_under_all_scope() {
         let input = doc("*CHI:\t要 去 [/] .\n*CHI:\t我 要 去 公 園 .\n");
         let (out_rep, stats_rep) = join_with_scope(&input, RetraceJoinScope::RepetitionOnly);
-        assert!(stats_rep.is_empty(), "RepetitionOnly must not join: {stats_rep:?}");
+        assert!(
+            stats_rep.is_empty(),
+            "RepetitionOnly must not join: {stats_rep:?}"
+        );
         assert_eq!(out_rep, input);
 
         let (out_cor, stats_cor) =
@@ -646,7 +648,10 @@ mod tests {
     fn does_not_join_different_speaker_under_all_scope() {
         let input = doc("*CHI:\t要 去 [/] .\n*MOT:\t要 去 公 園 .\n");
         let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
-        assert!(stats.is_empty(), "different speaker must never join: {stats:?}");
+        assert!(
+            stats.is_empty(),
+            "different speaker must never join: {stats:?}"
+        );
         assert_eq!(out, input);
     }
 

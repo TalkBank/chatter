@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use talkbank_model::WriteChat;
-use talkbank_transform::join_retrace::{JoinRetraceStats, RetraceJoinScope, join_dangling_retraces};
+use talkbank_transform::join_retrace::{
+    JoinRetraceStats, RetraceJoinScope, join_dangling_retraces,
+};
 
 use super::*;
 
