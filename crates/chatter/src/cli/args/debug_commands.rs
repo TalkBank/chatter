@@ -20,6 +20,25 @@ pub enum DebugCommands {
         path: Vec<PathBuf>,
     },
 
+    /// Join OBVIOUS dangling-retrace utterances (E370) with their successor.
+    ///
+    /// Repairs the unambiguous subset of E370 ("dangling retrace"): an
+    /// utterance whose last main-tier content is a partial-repetition retrace
+    /// marker (`[/]`) with nothing after it, followed by a same-speaker
+    /// utterance whose leading words repeat the retraced material. The two are
+    /// joined into one utterance. Corrections (`[//]`/`[///]`/`[/-]`) and
+    /// non-repeating successors are left untouched. When either side carried
+    /// dependent tiers (`%mor`/`%gra`/...), those tiers are dropped on the
+    /// joined utterance and reported as needing re-morphotag.
+    JoinRetrace {
+        /// Path to CHAT file(s) or directory trees to repair in place.
+        path: Vec<PathBuf>,
+
+        /// Show what would be joined without modifying any files.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Analyze CA overlap markers (⌈⌉⌊⌋): pairing, temporal consistency, orphans
     OverlapAudit {
         /// Path to CHAT file(s) or directory

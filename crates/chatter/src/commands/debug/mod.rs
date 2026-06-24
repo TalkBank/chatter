@@ -1,11 +1,13 @@
 //! Debug subcommands for CHAT file inspection.
 
 mod fix_s;
+mod join_retrace;
 mod linker;
 mod overlap;
 mod sanitize;
 
 pub use fix_s::*;
+pub use join_retrace::*;
 pub use linker::*;
 pub use overlap::*;
 pub use sanitize::*;

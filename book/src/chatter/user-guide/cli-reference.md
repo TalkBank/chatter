@@ -306,6 +306,28 @@ subcommands include:
   - True no-op on already-correct files: a file is rewritten only when
     a `[- lang]` conversion or `@Languages` repair can be proved
     necessary.
+- `join-retrace`: auto-repair the OBVIOUS subset of E370 ("dangling
+  retrace"). An utterance whose last main-tier content is a
+  partial-repetition retrace marker (`[/]`) with nothing after it is
+  joined with the next same-speaker utterance when that successor's
+  leading words repeat the retraced material. Trigger conditions and
+  safety rules:
+
+  - Only partial repetition (`[/]`) qualifies. Corrections (`[//]`),
+    multiple retraces (`[///]`), and reformulations (`[/-]`) are left
+    untouched, as is any successor that does not repeat the retraced
+    material; those are out of scope for this conservative repair.
+  - The join produces one utterance: the first utterance's content
+    (keeping the trailing `[/]` marker) followed by the successor's
+    content, terminated by the successor's terminator. Main-tier time
+    bullets are unioned (start from the first, end from the successor).
+  - **Dependent tiers are dropped.** If either side carried `%mor`,
+    `%gra`, or any other dependent tier, the joined utterance drops all
+    of them (a naive `%gra` merge would yield two ROOT relations, which
+    `chatter validate` rejects as E723). Such joins are reported as
+    "needs re-morphotag" so the file can be re-run through morphotagging
+    afterwards; the main tier alone remains valid CHAT.
+  - `--dry-run` reports what would be joined without modifying files.
 
 ## Merge and Reconciliation Commands (experimental)
 

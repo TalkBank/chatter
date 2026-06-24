@@ -72,6 +72,7 @@
 pub mod dependent_tiers;
 pub mod extract;
 pub mod fix_s;
+pub mod join_retrace;
 pub mod parse;
 pub mod redact;
 pub mod serialize;

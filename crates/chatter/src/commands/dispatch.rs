@@ -455,6 +455,9 @@ fn run_debug(command: crate::cli::DebugCommands) {
         DebugCommands::FixS { path } => {
             super::debug::run_fix_s(&path);
         }
+        DebugCommands::JoinRetrace { path, dry_run } => {
+            super::debug::run_join_retrace(&path, dry_run);
+        }
         DebugCommands::OverlapAudit {
             path,
             format: _,
