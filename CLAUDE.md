@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-06-23 13:31 EDT
+**Last modified:** 2026-06-24 07:38 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -78,6 +78,13 @@ read docs.
     explicitly. Details: the "CLI Startup and the Program Stack"
     architecture page; regression gate:
     `crates/chatter/tests/stack_limit_tests.rs`.
+12. **Keep the book current with every change.** Updating `book/` is
+    part of the change, not a follow-up. Any change that alters
+    observable behavior (a CLI flag, a validation rule, an install
+    step, a shipped artifact, the architecture, a release) MUST update
+    the matching book page in the same commit; a book that has drifted
+    from the code is a defect. Full per-surface mapping and the
+    decision test: "The unified mdBook" section below.
 
 ## Overview
 
@@ -1016,6 +1023,30 @@ Keep only one top-level `README.md` per repo (for the marketplace /
 GitHub landing page); everything else lives in the book. Do not add
 parallel `GUIDE.md` / `DEVELOPER.md` / similar, if the book
 doesn't yet cover a topic, add a book chapter.
+
+**Keep the book current with every change (mandatory).** The book is
+not documentation to update "later"; updating it is part of the change,
+the same way regenerating `parser.c` is part of a `grammar.js` edit. Any
+change that alters observable behavior MUST update the book in the SAME
+commit. The book silently drifting from the code is treated as a defect,
+not a backlog item.
+
+Decision test: "Would a reader of the book now believe something untrue
+after this change?" If yes, the change is incomplete until the relevant
+page is updated. Concretely, update the book when you:
+
+- add / rename / remove a CLI subcommand or flag: `book/src/chatter/user-guide/cli-reference.md` plus the affected guide page.
+- add / change / remove a validation rule or error code: `book/src/chatter/user-guide/validation-errors.md`.
+- change how any tool is installed, or ship a new artifact (a new binary, the desktop app, the standalone `talkbank-lsp` server): `book/src/install/index.md` and the per-tool installation page.
+- cut a release: the running release notes live at `book/src/release-notes.md`, which is `{{#include ../../CHANGELOG.md}}` of the repo-root `CHANGELOG.md`. Edit `CHANGELOG.md` (Keep a Changelog + SemVer); never paste release notes into the book by hand, and never let the book carry a separate, drifting copy.
+- change the architecture, a data flow, or a crate boundary: the matching `book/src/architecture/` page, with its Mermaid diagram (see the Diagram Authoring Rules).
+- change a config default, the cache location, or the supported platforms: the page that documents it.
+
+Every touched book page updates its `Last modified` header (run
+`date '+%Y-%m-%d %H:%M %Z'`, per design rule 9). The book is gated in CI
+(the `book` job builds it and lychee link-checks the output), and a
+broken `{{#include}}` or internal link fails that job, so verify locally
+with `just book` before pushing.
 
 ## Relationship to batchalign3
 
