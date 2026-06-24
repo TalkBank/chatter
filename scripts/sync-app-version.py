@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""Keep the app version in sync across every file that carries it.
+"""Keep the app version in sync across every file that carries a LITERAL copy.
 
 ONE canonical source: the root `Cargo.toml` `[workspace.package] version`. Every
 crate inherits it via `version.workspace = true`, and `chatter --version` reports
-it. Three other files carry the SAME version and must never drift from it:
+it. The desktop BUNDLE version (the .dmg / .exe / .deb filenames and the installed
+app) ALSO inherits from that crate version: `tauri.conf.json` deliberately carries
+NO "version" field, so Tauri falls back to the crate's `Cargo.toml` version. That
+removal is what keeps the bundle from drifting, so this script does NOT read or
+write `tauri.conf.json`. Two files still carry a literal copy of the version and
+must never drift from it:
 
-  * apps/chatter-desktop/src-tauri/tauri.conf.json  "version"  (the desktop BUNDLE
-    version: what the .dmg / .exe / .deb filenames and the installed app report)
-  * apps/chatter-desktop/package.json               "version"  (the npm side)
-  * CHANGELOG.md                                    a `## [X.Y.Z]` section
+  * apps/chatter-desktop/package.json  "version"  (the npm side)
+  * CHANGELOG.md                       a `## [X.Y.Z]` section
 
 Why this matters: the desktop release's latest.json (the Tauri auto-updater
 manifest) takes its version from the git TAG, while the bundle takes its version
-from tauri.conf.json. If those drift, the updater advertises a version the
-installed app never reaches and desktop users get a perpetual update loop. The
-first v0.1.1 desktop release shipped exactly that (bundle 0.1.0, manifest 0.1.1).
-This gate makes the drift a hard failure instead of something a releaser has to
-remember.
+from the crate version. The first v0.1.1 desktop release shipped a bundle/manifest
+mismatch (bundle 0.1.0, manifest 0.1.1) back when `tauri.conf.json` carried its own
+version; removing that field fixed the bundle side. This gate guards the literal
+copies that remain (the npm `package.json` and the CHANGELOG section) so a missed
+edit is a hard failure instead of something a releaser has to remember.
 
 Usage:
   sync-app-version.py --check                 # CI: exit 1 if any file has drifted
@@ -39,13 +42,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CARGO = REPO / "Cargo.toml"
-TAURI_CONF = REPO / "apps" / "chatter-desktop" / "src-tauri" / "tauri.conf.json"
 PACKAGE_JSON = REPO / "apps" / "chatter-desktop" / "package.json"
 CHANGELOG = REPO / "CHANGELOG.md"
 
-# A 2-space-indented top-level `"version": "..."` line, the shape both
-# tauri.conf.json and package.json use. Anchoring to the indent avoids matching a
-# nested object's version.
+# A 2-space-indented top-level `"version": "..."` line, the shape package.json
+# uses. Anchoring to the indent avoids matching a nested object's version.
 JSON_VERSION_RE = re.compile(r'(?m)^(  "version"\s*:\s*")[^"]+(")')
 
 
@@ -84,7 +85,7 @@ def process(fix: bool, release_tag: str | None) -> int:
     want = canonical_version()
     drift: list[str] = []
 
-    for path in (TAURI_CONF, PACKAGE_JSON):
+    for path in (PACKAGE_JSON,):
         have = json_version(path)
         if have != want:
             drift.append(f"{path.relative_to(REPO)}  {have} -> {want}")

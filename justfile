@@ -96,8 +96,9 @@ rust-sync:
 rust-sync-check:
     python3 scripts/sync-rust-versions.py --check
 
-# Sync the app version (tauri.conf.json, package.json) to the canonical
-# [workspace.package] version in Cargo.toml. Run after bumping the version.
+# Sync the app version (package.json) to the canonical [workspace.package]
+# version in Cargo.toml. Run after bumping the version. (tauri.conf.json has no
+# version field by design; the desktop bundle inherits the crate version.)
 app-sync:
     python3 scripts/sync-app-version.py --fix
 
