@@ -1,17 +1,56 @@
 # Install
 
 **Status:** Current
-**Last modified:** 2026-06-24 07:38 EDT
+**Last modified:** 2026-06-24 09:54 EDT
 
-Everything in the chatter toolchain installs from the [latest GitHub
-release](https://github.com/TalkBank/chatter/releases/latest). Each tool is a
-single signed binary (or app bundle) with no runtime dependencies. Pick the tool
-you need.
+Everything here comes from the [latest
+release](https://github.com/TalkBank/chatter/releases/latest).
 
-## `chatter` CLI
+> **Just want to check CHAT files, and you are not a programmer?** Get the
+> **desktop app** below. You never need a terminal.
 
-Validate, normalize, convert (JSON / XML), lint, watch, and batch-process CHAT
-files.
+## Chatter desktop app (recommended for most people)
+
+The Chatter app checks CHAT transcripts in an ordinary window: open a file, see
+the problems highlighted, fix them, and re-check. No terminal and no setup, and
+it updates itself when a new version comes out.
+
+### macOS
+
+The Mac app is signed and notarized by Apple, so it opens normally (no security
+warnings).
+
+1. Open the [latest
+   release](https://github.com/TalkBank/chatter/releases/latest) and, under
+   **Assets**, download the Mac file for your computer:
+   - **Apple Silicon Mac** (M1/M2/M3/M4, essentially every Mac sold since late
+     2020): the file ending in **`aarch64.dmg`**.
+   - **Intel Mac** (older models): the file ending in **`x64.dmg`**.
+
+   Not sure which you have? Apple menu () then **About This Mac**: if it says
+   "Apple M...", it is Apple Silicon.
+2. Open the downloaded **`.dmg`** file.
+3. Drag **Chatter** onto the **Applications** folder in the window that appears.
+4. Open **Chatter** from your Applications folder (or Launchpad).
+
+### Windows
+
+Download the file ending in **`x64-setup.exe`** from the [latest
+release](https://github.com/TalkBank/chatter/releases/latest) and run it.
+Windows binaries are not code-signed yet, so SmartScreen may warn on first run:
+choose **More info**, then **Run anyway**.
+
+### Linux
+
+Download the **`.AppImage`** (make it executable, then run it) or the **`.deb`**
+(install with your package manager) from the [latest
+release](https://github.com/TalkBank/chatter/releases/latest).
+
+## `chatter`, the command-line tool (for programmers and automation)
+
+If you are comfortable in a terminal, the `chatter` CLI validates, normalizes,
+converts (JSON / XML), lints, watches, and batch-processes CHAT files, and is
+the right tool for scripting and CI.
 
 macOS / Linux:
 
@@ -25,16 +64,16 @@ Windows (PowerShell):
 irm https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.ps1 | iex
 ```
 
-Then `chatter --help`. Full reference: [CLI installation](../chatter/user-guide/installation.md)
-and [CLI Reference](../chatter/user-guide/cli-reference.md). `chatter` self-updates
-with `chatter update`.
+Then run `chatter --help`. Full reference: [CLI
+installation](../chatter/user-guide/installation.md) and [CLI
+Reference](../chatter/user-guide/cli-reference.md). `chatter` self-updates with
+`chatter update`.
 
-## `talkbank-lsp` language server
+## `talkbank-lsp` language server (editor integration)
 
-The Language Server Protocol server for CHAT: live validation, hover,
-go-to-definition, semantic highlighting, and cross-tier alignment in any
-LSP-aware editor (Neovim, Emacs, Helix, Zed, VS Code, and others). It ships as a
-standalone, code-signed binary.
+For live CHAT validation, hover, go-to-definition, and cross-tier alignment
+inside an LSP-aware editor (Neovim, Emacs, Helix, Zed, VS Code, and others),
+install the standalone, code-signed language server:
 
 macOS / Linux:
 
@@ -49,28 +88,21 @@ irm https://github.com/TalkBank/chatter/releases/latest/download/talkbank-lsp-in
 ```
 
 Or download the per-platform archive (`talkbank-lsp-<target>.tar.xz`, or `.zip`
-on Windows) directly from the release. Point your editor's LSP client at the
-`talkbank-lsp` binary and launch it on `.cha` files (language id `chat`); it
-speaks LSP over stdio.
+on Windows) from the release and point your editor's LSP client at the
+`talkbank-lsp` binary (it speaks LSP over stdio on `.cha` files, language id
+`chat`).
 
-## Chatter desktop app
-
-A graphical CHAT validation app. Download the installer for your platform
-(`.dmg` / `.exe` / `.deb` / AppImage) from the
-[latest release](https://github.com/TalkBank/chatter/releases/latest). The macOS
-`.dmg` is signed and notarized; the app self-updates on launch.
-
-## Rust crates and the grammar
+## Rust crates and the grammar (embed in your own program)
 
 To embed CHAT parsing / validation / transformation in your own program, depend
 on the `talkbank-*` crates and the `tree-sitter-talkbank` grammar. They are
 source-available from this repository (not yet published to crates.io). See
-[Library usage](../chatter/integrating/library-usage.md) and the
-[CHAT format overview](../chat-format/overview.md).
+[Library usage](../chatter/integrating/library-usage.md) and the [CHAT format
+overview](../chat-format/overview.md).
 
 ---
 
-As a 0.x release, APIs and flags may change before 1.0; see the
-[Release Notes](../release-notes.md). For audio + ML pipelines (transcribe,
-force-align, morphotag, benchmark), see the upstream `batchalign3` project, which
-lives outside the chatter repo and has its own installation flow.
+As a 0.x release, APIs and flags may change before 1.0; see the [Release
+Notes](../release-notes.md). For audio + ML pipelines (transcribe, force-align,
+morphotag), see the upstream `batchalign3` project, which has its own
+installation flow.
