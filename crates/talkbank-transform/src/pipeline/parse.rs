@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_span_preserved_through_pipeline() -> Result<(), PipelineError> {
-        let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||||Target_Child|||\n*CHI:\thello world\n@End\n";
+        let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello world\n@End\n";
 
         let options = ParseValidateOptions::default().with_validation();
 

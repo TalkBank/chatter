@@ -108,7 +108,7 @@ mod tests {
 
     fn chat_with_id_age(age_field: &str) -> talkbank_model::model::ChatFile {
         let src = format!(
-            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|c|CHI|{age_field}||||Target_Child||\n*CHI:\thi . \u{15}0_1\u{15}\n@End\n"
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|c|CHI|{age_field}||||Target_Child|||\n*CHI:\thi . \u{15}0_1\u{15}\n@End\n"
         );
         parse_and_validate(&src, ParseValidateOptions::default()).expect("parse")
     }

@@ -22,7 +22,7 @@ const FIX_REF_RICH_CHI: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tcycle2, audio
 *CHI:\t&-um my birthday was [*] yesterday . \u{15}500_3500\u{15}
 %com:\tnoted as fluency-relevant sample
@@ -118,7 +118,7 @@ const FIX_REF_CHI_WITH_COM: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tcycle3, audio
 @Comment:\tSession recorded 2024-09-15 for fluency study.
 *CHI:\thello there . \u{15}0_1000\u{15}
@@ -499,7 +499,7 @@ const FIX_REF_CYCLE8B: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tcycle8b, video
 *CHI:\thello . \u{15}0_1000\u{15}
 @End
@@ -653,7 +653,7 @@ const FIX_REF_CHI_NO_BULLETS_L2: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tprecond, audio
 *CHI:\thello there .
 *CHI:\tgoodbye .
@@ -705,7 +705,7 @@ const FIX_REF_CHI_ENG_L2: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @Media:\tprecond_lang, audio
 *CHI:\thello there . \u{15}0_1000\u{15}
 @End
@@ -774,7 +774,7 @@ const FIX_REF_CHI_PLUS_INV_L2: &str = "@UTF8
 @Begin
 @Languages:\teng
 @Participants:\tCHI Target_Child, INV Investigator
-@ID:\teng|corpus|CHI|2;06.|||Target_Child|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
 @ID:\teng|corpus|INV|||||Investigator|||
 @Media:\tambig, audio
 *CHI:\thello there . \u{15}0_1000\u{15}

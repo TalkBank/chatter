@@ -71,7 +71,7 @@ fn test_main_tier_hover_shows_mor_alignment() -> Result<(), String> {
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
+@ID:	eng|test|CHI|||||Target_Child|||
 *CHI:	more cookie .
 %mor:	qn|more n|cookie .
 @End
@@ -107,7 +107,7 @@ fn test_mor_tier_hover_shows_main_alignment() -> Result<(), String> {
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
+@ID:	eng|test|CHI|||||Target_Child|||
 *CHI:	more cookie .
 %mor:	qn|more n|cookie .
 @End
@@ -144,7 +144,7 @@ fn test_gra_tier_hover_shows_mor_and_main_alignment() -> Result<(), String> {
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
+@ID:	eng|test|CHI|||||Target_Child|||
 *CHI:	more cookie .
 %mor:	qn|more n|cookie .
 %gra:	1|2|DET 2|0|ROOT 3|2|OBJ 4|2|PUNCT
@@ -180,7 +180,7 @@ fn test_non_alignable_tier_returns_none() -> Result<(), String> {
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
+@ID:	eng|test|CHI|||||Target_Child|||
 *CHI:	more cookie .
 %com:	this is a comment
 @End
@@ -208,7 +208,7 @@ fn test_non_alignable_content_returns_none() -> Result<(), String> {
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
+@ID:	eng|test|CHI|||||Target_Child|||
 *CHI:	more (.) cookie .
 %mor:	qn|more n|cookie .
 @End
