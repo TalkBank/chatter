@@ -1,0 +1,34 @@
+name: Release app banner
+
+# Once "Release Desktop" has attached the .dmg / .exe to a release, prepend a
+# "Most people want the app" banner to that release's notes so the GitHub
+# release page leads non-programmers to the desktop app (not the curl command
+# and the command-line tarball table). Runs after the desktop assets exist so
+# the links resolve; the script is idempotent.
+
+on:
+  workflow_run:
+    workflows: ["Release Desktop"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  banner:
+    name: Prepend app banner to the release notes
+    # Only for a successful, tag-triggered desktop release.
+    if: >
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepend app banner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The tag name for a tag-triggered run; the `if` above checks it starts
+          # with "v", and the script re-validates the shape before using it.
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: bash scripts/release/add_app_banner.sh "$TAG"
