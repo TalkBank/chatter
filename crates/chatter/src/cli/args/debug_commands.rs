@@ -1,10 +1,32 @@
 //! `chatter debug` subcommands, internal debugging / audit /
 //! sanitization tools.
 
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 use super::cli_types::OutputFormat;
+
+/// Scope selector for `chatter debug join-retrace --scope`.
+///
+/// Selects which dangling-retrace kinds are eligible for the join transform.
+/// See [`talkbank_transform::join_retrace::RetraceJoinScope`] for the
+/// full semantics of each variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub enum JoinRetraceScope {
+    /// Join only `[/]` partial-repetition retraces where the successor's
+    /// leading words repeat the retraced material. This is the conservative
+    /// default (Wave 1, OBVIOUS-only repair).
+    #[default]
+    Repetition,
+    /// Also join `[//]`/`[///]`/`[/-]` correction retraces. Corrections
+    /// replace rather than repeat, so no prefix check is applied; same-speaker
+    /// presence alone is the gate (Wave 3a).
+    Corrections,
+    /// Join ANY dangling retrace kind (including `[/]` Partial) with the
+    /// immediately-following same-speaker utterance, with NO repeat-prefix
+    /// match required. Use `--dry-run` first to review proposed joins (Wave 3b).
+    All,
+}
 
 /// Internal debugging subcommands under `chatter debug`.
 #[derive(Subcommand)]
@@ -24,15 +46,22 @@ pub enum DebugCommands {
     ///
     /// Repairs the unambiguous subset of E370 ("dangling retrace"): an
     /// utterance whose last main-tier content is a retrace marker with nothing
-    /// after it, followed by a same-speaker utterance. By default only
-    /// partial-repetition retraces (`[/]`) are joined, and only when the
-    /// successor's leading words repeat the retraced material. Passing
-    /// `--include-corrections` additionally joins correction retraces
-    /// (`[//]`/`[///]`/`[/-]`) using same-speaker presence alone as the gate
-    /// (corrections replace rather than repeat the retraced material, so no
-    /// prefix check is applied). When either side carried dependent tiers
-    /// (`%mor`/`%gra`/...), those tiers are dropped on the joined utterance
-    /// and reported as needing re-morphotag.
+    /// after it, followed by a same-speaker utterance. The `--scope` flag
+    /// selects how broadly the join applies:
+    ///
+    /// - `repetition` (default, Wave 1): only `[/]` partial-repetition
+    ///   retraces are joined, and only when the successor's leading words
+    ///   repeat the retraced material.
+    /// - `corrections` (Wave 3a): also joins `[//]`/`[///]`/`[/-]`
+    ///   correction retraces using same-speaker presence alone as the gate.
+    /// - `all` (Wave 3b): joins ANY dangling retrace kind, including `[/]`
+    ///   where the successor does NOT repeat the retraced material. Covers
+    ///   genuine child-language disfluencies (false starts, partial words,
+    ///   fillers). Use `--dry-run` first to review proposed joins.
+    ///
+    /// When either side carried dependent tiers (`%mor`/`%gra`/...), those
+    /// tiers are dropped on the joined utterance and reported as needing
+    /// re-morphotag.
     JoinRetrace {
         /// Path to CHAT file(s) or directory trees to repair in place.
         path: Vec<PathBuf>,
@@ -41,14 +70,11 @@ pub enum DebugCommands {
         #[arg(long)]
         dry_run: bool,
 
-        /// Also join correction retraces (`[//]` Full, `[///]` Multiple,
-        /// `[/-]` Reformulation). By default only partial-repetition retraces
-        /// (`[/]`) are joined. With this flag, any dangling correction retrace
-        /// followed by a same-speaker utterance is joined regardless of whether
-        /// the successor repeats the retraced material. Use `--dry-run` first
-        /// to review every proposed correction-join before writing.
-        #[arg(long)]
-        include_corrections: bool,
+        /// Select which dangling-retrace kinds are eligible for joining.
+        /// `repetition` (default): `[/]` with prefix-match gate. `corrections`:
+        /// also `[//]`/`[///]`/`[/-]`. `all`: any kind, no prefix match.
+        #[arg(long, value_enum, default_value_t = JoinRetraceScope::Repetition)]
+        scope: JoinRetraceScope,
     },
 
     /// Analyze CA overlap markers (⌈⌉⌊⌋): pairing, temporal consistency, orphans

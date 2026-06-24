@@ -5,7 +5,7 @@
 //! same-speaker splits: the repeated material starts the NEXT same-speaker
 //! utterance. This transform joins the two utterances back into one.
 //!
-//! Two repair scopes are provided, selected via [`RetraceJoinScope`]:
+//! Three repair scopes are provided, selected via [`RetraceJoinScope`]:
 //!
 //! - [`RetraceJoinScope::RepetitionOnly`] (default, Wave 1): joins ONLY
 //!   partial-repetition retraces (`[/]`, [`RetraceKind::Partial`]) where the
@@ -19,6 +19,14 @@
 //!   material, so there is NO leading-words repeat check; the gate is simply
 //!   that a same-speaker successor exists. The retraced material must still be
 //!   a pure plain-word sequence (conservative policy, same as for `[/]`).
+//!
+//! - [`RetraceJoinScope::AllSameSpeakerSuccessor`] (Wave 3b, broadest scope,
+//!   opt-in): joins ANY dangling retrace kind, including `[/]` Partial where the
+//!   successor does NOT repeat the retraced material, with the immediately-
+//!   following same-speaker utterance. No repeat-prefix match is required for
+//!   any kind. This covers genuine child-language disfluencies (false starts,
+//!   partial words, expansions, fillers) where the transcriber correctly coded a
+//!   `[/]` but the successor cannot repeat the abandoned material.
 //!
 //! # The join
 //!
@@ -49,8 +57,8 @@ use talkbank_model::validation::ValidationState;
 
 /// Controls which dangling-retrace kinds the join transform handles.
 ///
-/// The default variant preserves the Wave-1 conservative behavior; the opt-in
-/// variant adds Wave-3a correction retraces.
+/// The default variant preserves the Wave-1 conservative behavior; each
+/// broader variant is an opt-in extension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RetraceJoinScope {
     /// Join only partial-repetition retraces (`[/]`). The successor must lead
@@ -63,6 +71,13 @@ pub enum RetraceJoinScope {
     /// repeat the retraced material, so the leading-words prefix check is
     /// skipped; the gate is same-speaker successor only.
     RepetitionAndCorrections,
+    /// Join ANY dangling retrace kind (including `[/]` Partial) with the
+    /// immediately-following same-speaker utterance, with NO repeat-prefix
+    /// match required (Wave 3b). This covers genuine child-language
+    /// disfluencies where the transcriber correctly coded a `[/]` but the
+    /// successor does NOT repeat the retraced material (false starts, partial
+    /// words, expansions, fillers). The gate is same-speaker successor only.
+    AllSameSpeakerSuccessor,
 }
 
 /// Repair summary for one CHAT file.
@@ -158,17 +173,26 @@ fn obvious_join_target(
         return None;
     }
 
-    // For partial repetition: V's leading lexical words must repeat the
-    // retraced material as a prefix. For corrections: same-speaker is
-    // sufficient (corrections replace, not repeat).
+    // For partial repetition under RepetitionOnly or RepetitionAndCorrections:
+    // V's leading lexical words must repeat the retraced material as a prefix.
+    // Under AllSameSpeakerSuccessor, no prefix match is required for any kind.
+    // Corrections always skip the prefix check (they replace, not repeat).
     match kind {
         RetraceKind::Partial => {
-            if !leading_words_match_prefix(&v.main, &retrace_material) {
-                return None;
+            match scope {
+                RetraceJoinScope::RepetitionOnly
+                | RetraceJoinScope::RepetitionAndCorrections => {
+                    if !leading_words_match_prefix(&v.main, &retrace_material) {
+                        return None;
+                    }
+                }
+                RetraceJoinScope::AllSameSpeakerSuccessor => {
+                    // No prefix check: any same-speaker successor is accepted.
+                }
             }
         }
         RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => {
-            // Corrections: no prefix match required.
+            // Corrections: no prefix match required under any corrections-enabled scope.
         }
     }
 
@@ -194,13 +218,14 @@ fn dangling_retrace_material(
     // Check whether this kind is enabled under the current scope.
     match retrace.kind {
         RetraceKind::Partial => {
-            // Always enabled.
+            // Enabled under all scopes.
         }
         RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => {
             // Only enabled when corrections are explicitly opted into.
             match scope {
                 RetraceJoinScope::RepetitionOnly => return None,
-                RetraceJoinScope::RepetitionAndCorrections => {}
+                RetraceJoinScope::RepetitionAndCorrections
+                | RetraceJoinScope::AllSameSpeakerSuccessor => {}
             }
         }
     }
@@ -564,5 +589,78 @@ mod tests {
             out.contains("*CHI:\tand then [/-] so we went ."),
             "got:\n{out}"
         );
+    }
+
+    // --- Wave 3b: AllSameSpeakerSuccessor scope ---
+
+    /// A non-repeating `[/]` successor (the successor does NOT begin with the
+    /// retraced material) JOINS under `AllSameSpeakerSuccessor` but NOT under
+    /// `RepetitionOnly` or `RepetitionAndCorrections`.
+    ///
+    /// The fixture uses "要 去 [/]" with successor "我 要 去 公 園": the
+    /// retraced material is "要 去" but the successor leads with "我" (not
+    /// "要"), so the prefix match fails, confirming a true non-repeat case.
+    #[test]
+    fn joins_nonrepeat_partial_retrace_under_all_scope() {
+        let input = doc("*CHI:\t要 去 [/] .\n*CHI:\t我 要 去 公 園 .\n");
+        let (out_rep, stats_rep) = join_with_scope(&input, RetraceJoinScope::RepetitionOnly);
+        assert!(stats_rep.is_empty(), "RepetitionOnly must not join: {stats_rep:?}");
+        assert_eq!(out_rep, input);
+
+        let (out_cor, stats_cor) =
+            join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert!(
+            stats_cor.is_empty(),
+            "RepetitionAndCorrections must not join a non-repeat [/]: {stats_cor:?}"
+        );
+        assert_eq!(out_cor, input);
+
+        let (out_all, stats_all) =
+            join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(
+            stats_all.joined_utterances, 1,
+            "AllSameSpeakerSuccessor must join: {stats_all:?}"
+        );
+        assert!(
+            out_all.contains("*CHI:\t要 去 [/] 我 要 去 公 園 ."),
+            "expected joined non-repeat [/], got:\n{out_all}"
+        );
+        assert_eq!(out_all.matches("*CHI:").count(), 1, "got:\n{out_all}");
+    }
+
+    /// A `[//]` correction still joins under `AllSameSpeakerSuccessor`.
+    #[test]
+    fn joins_full_correction_retrace_under_all_scope() {
+        let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(stats.joined_utterances, 1);
+        assert!(
+            out.contains("*CHI:\tthe cat [//] the dog runs ."),
+            "got:\n{out}"
+        );
+    }
+
+    /// A different-speaker successor is NEVER joined, even under
+    /// `AllSameSpeakerSuccessor`.
+    #[test]
+    fn does_not_join_different_speaker_under_all_scope() {
+        let input = doc("*CHI:\t要 去 [/] .\n*MOT:\t要 去 公 園 .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert!(stats.is_empty(), "different speaker must never join: {stats:?}");
+        assert_eq!(out, input);
+    }
+
+    /// Dependent tiers are dropped and flagged for re-morphotag under
+    /// `AllSameSpeakerSuccessor`.
+    #[test]
+    fn drops_dependent_tiers_under_all_scope() {
+        let input = doc(
+            "*CHI:\t要 去 [/] .\n%mor:\tverb|要 verb|去 .\n*CHI:\t我 要 去 公 園 .\n%mor:\tpro|我 verb|要 verb|去 noun|公園 .\n",
+        );
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(stats.joined_utterances, 1);
+        assert_eq!(stats.needs_remorphotag, 1);
+        assert_eq!(stats.dependent_tiers_dropped, 2);
+        assert!(!out.contains("%mor:"), "tiers must be dropped, got:\n{out}");
     }
 }

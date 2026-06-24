@@ -20,4 +20,4 @@ pub use cache_commands::CacheCommands;
 pub use cli_struct::Cli;
 pub use cli_types::{AlignmentTier, JudgmentMode, LogFormat, OutputFormat, ParserBackend};
 pub use core::Commands;
-pub use debug_commands::DebugCommands;
+pub use debug_commands::{DebugCommands, JoinRetraceScope};

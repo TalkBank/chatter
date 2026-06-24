@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-06-24 14:02 EDT
+**Last modified:** 2026-06-24 14:43 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -308,20 +308,28 @@ subcommands include:
     necessary.
 - `join-retrace`: auto-repair dangling-retrace (E370) utterances. An
   utterance whose last main-tier content is a retrace marker with nothing
-  after it is joined with the next same-speaker utterance. Two scopes are
-  available:
+  after it is joined with the next same-speaker utterance. The `--scope`
+  flag (value-enum, default `repetition`) selects which retrace kinds
+  qualify:
 
-  - **Default (partial repetition only):** only `[/]` partial-repetition
-    retraces qualify, and only when the successor's leading words repeat
-    the retraced material. This is the conservative, OBVIOUS-only repair
-    suitable for most automated use.
-  - **`--include-corrections` (Wave 3a, opt-in):** also joins correction
+  - **`--scope repetition` (default, Wave 1):** only `[/]`
+    partial-repetition retraces qualify, and only when the successor's
+    leading words repeat the retraced material. This is the conservative,
+    OBVIOUS-only repair suitable for most automated use.
+  - **`--scope corrections` (Wave 3a, opt-in):** also joins correction
     retraces: `[//]` (Full), `[///]` (Multiple), and `[/-]`
     (Reformulation). Corrections replace rather than repeat the retraced
     material, so the leading-words prefix check is skipped; same-speaker
     presence alone is the gate. Use `--dry-run` first to review every
-    proposed correction-join before writing, since corrections are less
-    structurally constrained than repetitions.
+    proposed correction-join before writing.
+  - **`--scope all` (Wave 3b, broadest, opt-in):** joins ANY dangling
+    retrace kind, including `[/]` Partial where the successor does NOT
+    repeat the retraced material. This covers genuine child-language
+    disfluencies: false starts, partial words, disfluent repetitions,
+    expansions, and fillers where the transcriber correctly coded a `[/]`
+    but the successor cannot repeat the abandoned material. Same-speaker
+    presence alone is the gate. Always use `--dry-run` first when running
+    this scope on new data.
 
   Shared behavior for all joined pairs:
 

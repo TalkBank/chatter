@@ -15,8 +15,8 @@ mod logging;
 mod run;
 
 pub use args::{
-    AlignmentTier, CacheCommands, Cli, Commands, DebugCommands, JudgmentMode, LogFormat,
-    OutputFormat, ParserBackend,
+    AlignmentTier, CacheCommands, Cli, Commands, DebugCommands, JoinRetraceScope, JudgmentMode,
+    LogFormat, OutputFormat, ParserBackend,
 };
 pub use logging::init_tracing;
 pub use run::run;
