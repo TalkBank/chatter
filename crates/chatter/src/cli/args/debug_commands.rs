@@ -20,16 +20,19 @@ pub enum DebugCommands {
         path: Vec<PathBuf>,
     },
 
-    /// Join OBVIOUS dangling-retrace utterances (E370) with their successor.
+    /// Join dangling-retrace utterances (E370) with their successor.
     ///
     /// Repairs the unambiguous subset of E370 ("dangling retrace"): an
-    /// utterance whose last main-tier content is a partial-repetition retrace
-    /// marker (`[/]`) with nothing after it, followed by a same-speaker
-    /// utterance whose leading words repeat the retraced material. The two are
-    /// joined into one utterance. Corrections (`[//]`/`[///]`/`[/-]`) and
-    /// non-repeating successors are left untouched. When either side carried
-    /// dependent tiers (`%mor`/`%gra`/...), those tiers are dropped on the
-    /// joined utterance and reported as needing re-morphotag.
+    /// utterance whose last main-tier content is a retrace marker with nothing
+    /// after it, followed by a same-speaker utterance. By default only
+    /// partial-repetition retraces (`[/]`) are joined, and only when the
+    /// successor's leading words repeat the retraced material. Passing
+    /// `--include-corrections` additionally joins correction retraces
+    /// (`[//]`/`[///]`/`[/-]`) using same-speaker presence alone as the gate
+    /// (corrections replace rather than repeat the retraced material, so no
+    /// prefix check is applied). When either side carried dependent tiers
+    /// (`%mor`/`%gra`/...), those tiers are dropped on the joined utterance
+    /// and reported as needing re-morphotag.
     JoinRetrace {
         /// Path to CHAT file(s) or directory trees to repair in place.
         path: Vec<PathBuf>,
@@ -37,6 +40,15 @@ pub enum DebugCommands {
         /// Show what would be joined without modifying any files.
         #[arg(long)]
         dry_run: bool,
+
+        /// Also join correction retraces (`[//]` Full, `[///]` Multiple,
+        /// `[/-]` Reformulation). By default only partial-repetition retraces
+        /// (`[/]`) are joined. With this flag, any dangling correction retrace
+        /// followed by a same-speaker utterance is joined regardless of whether
+        /// the successor repeats the retraced material. Use `--dry-run` first
+        /// to review every proposed correction-join before writing.
+        #[arg(long)]
+        include_corrections: bool,
     },
 
     /// Analyze CA overlap markers (⌈⌉⌊⌋): pairing, temporal consistency, orphans

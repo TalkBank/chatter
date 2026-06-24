@@ -3,12 +3,22 @@
 //! E370 fires when an utterance's last main-tier content is a retrace marker
 //! with nothing after it, e.g. `*CHI: the dog [/] .`. Empirically these are
 //! same-speaker splits: the repeated material starts the NEXT same-speaker
-//! utterance. This transform joins the two utterances back into one, but ONLY
-//! for the unambiguous repetition case (`[/]`, `RetraceKind::Partial`), where
-//! the next same-speaker utterance's leading lexical words repeat the retraced
-//! material. Corrections (`[//]`), multiple retraces (`[///]`), reformulations
-//! (`[/-]`), and non-repeating successors are deliberately left untouched
-//! (later waves).
+//! utterance. This transform joins the two utterances back into one.
+//!
+//! Two repair scopes are provided, selected via [`RetraceJoinScope`]:
+//!
+//! - [`RetraceJoinScope::RepetitionOnly`] (default, Wave 1): joins ONLY
+//!   partial-repetition retraces (`[/]`, [`RetraceKind::Partial`]) where the
+//!   next same-speaker utterance's leading lexical words repeat the retraced
+//!   material. Corrections (`[//]`), multiple retraces (`[///]`), reformulations
+//!   (`[/-]`), and non-repeating successors are deliberately left untouched.
+//!
+//! - [`RetraceJoinScope::RepetitionAndCorrections`] (Wave 3a, opt-in): also
+//!   joins correction retraces (`[//]` Full, `[///]` Multiple, `[/-]`
+//!   Reformulation). Corrections REPLACE rather than repeat the retraced
+//!   material, so there is NO leading-words repeat check; the gate is simply
+//!   that a same-speaker successor exists. The retraced material must still be
+//!   a pure plain-word sequence (conservative policy, same as for `[/]`).
 //!
 //! # The join
 //!
@@ -37,6 +47,24 @@ use talkbank_model::model::{
 };
 use talkbank_model::validation::ValidationState;
 
+/// Controls which dangling-retrace kinds the join transform handles.
+///
+/// The default variant preserves the Wave-1 conservative behavior; the opt-in
+/// variant adds Wave-3a correction retraces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RetraceJoinScope {
+    /// Join only partial-repetition retraces (`[/]`). The successor must lead
+    /// with the retraced material as a prefix (the "OBVIOUS" gate). This is the
+    /// conservative default and the only behavior prior to Wave 3a.
+    #[default]
+    RepetitionOnly,
+    /// Join partial-repetition retraces AND correction retraces (`[//]` Full,
+    /// `[///]` Multiple, `[/-]` Reformulation). Corrections replace rather than
+    /// repeat the retraced material, so the leading-words prefix check is
+    /// skipped; the gate is same-speaker successor only.
+    RepetitionAndCorrections,
+}
+
 /// Repair summary for one CHAT file.
 ///
 /// Counts are accumulated across every join performed in the file.
@@ -58,22 +86,23 @@ impl JoinRetraceStats {
     }
 }
 
-/// Join OBVIOUS dangling-retrace utterances with their same-speaker successor
-/// in place.
+/// Join dangling-retrace utterances with their same-speaker successor in place.
 ///
-/// Scans the file in document order. For each utterance whose last main-tier
-/// content node is a partial-repetition retrace (`[/]`) with nothing after it,
-/// and whose immediately following utterance (same speaker) leads with the
-/// retraced material, the two utterances are joined into one. See the module
-/// docs for the exact join, bullet-union, and dependent-tier rules.
-pub fn join_dangling_retraces<S: ValidationState>(chat: &mut ChatFile<S>) -> JoinRetraceStats {
+/// Scans the file in document order. The `scope` parameter selects which
+/// retrace kinds are eligible; see [`RetraceJoinScope`] for the exact gate
+/// applied per kind. See the module docs for the join, bullet-union, and
+/// dependent-tier rules.
+pub fn join_dangling_retraces<S: ValidationState>(
+    chat: &mut ChatFile<S>,
+    scope: RetraceJoinScope,
+) -> JoinRetraceStats {
     let mut stats = JoinRetraceStats::default();
 
     // Index-based scan: a join removes a later line, so we cannot hold a
     // borrow across the mutation. We re-derive indices each iteration.
     let mut i = 0usize;
     while i < chat.lines.len() {
-        let Some(j) = obvious_join_target(&chat.lines, i) else {
+        let Some(j) = obvious_join_target(&chat.lines, i, scope) else {
             i += 1;
             continue;
         };
@@ -88,19 +117,32 @@ pub fn join_dangling_retraces<S: ValidationState>(chat: &mut ChatFile<S>) -> Joi
     stats
 }
 
-/// If the utterance at `start_index` is an OBVIOUS dangling retrace whose
-/// successor repeats the retraced material, return the successor's line index.
+/// If the utterance at `start_index` is a qualifying dangling retrace, return
+/// the successor's line index.
+///
+/// The `scope` controls which retrace kinds are eligible:
+///
+/// - For [`RetraceJoinScope::RepetitionOnly`], only `[/]` qualifies, and only
+///   when the successor's leading words repeat the retraced material.
+/// - For [`RetraceJoinScope::RepetitionAndCorrections`], `[//]`/`[///]`/`[/-]`
+///   also qualify; for those, the prefix check is skipped (corrections replace,
+///   not repeat, the retraced material).
 ///
 /// Returns `None` when `start_index` is not a qualifying utterance, when there
-/// is no following utterance, when the speakers differ, or when the successor
-/// does not lead with exactly the retraced material.
-fn obvious_join_target(lines: &[Line], start_index: usize) -> Option<usize> {
+/// is no following utterance, when the speakers differ, or (for `[/]` only)
+/// when the successor does not lead with exactly the retraced material.
+fn obvious_join_target(
+    lines: &[Line],
+    start_index: usize,
+    scope: RetraceJoinScope,
+) -> Option<usize> {
     let Line::Utterance(u) = lines.get(start_index)? else {
         return None;
     };
 
-    // U's last main-tier content node must be a partial-repetition retrace.
-    let retrace_material = dangling_partial_retrace_material(&u.main)?;
+    // U's last main-tier content node must be a dangling retrace of a kind
+    // allowed by the current scope.
+    let (kind, retrace_material) = dangling_retrace_material(&u.main, scope)?;
     if retrace_material.is_empty() {
         return None;
     }
@@ -116,32 +158,55 @@ fn obvious_join_target(lines: &[Line], start_index: usize) -> Option<usize> {
         return None;
     }
 
-    // V's leading lexical words must repeat the retraced material as a prefix.
-    if !leading_words_match_prefix(&v.main, &retrace_material) {
-        return None;
+    // For partial repetition: V's leading lexical words must repeat the
+    // retraced material as a prefix. For corrections: same-speaker is
+    // sufficient (corrections replace, not repeat).
+    match kind {
+        RetraceKind::Partial => {
+            if !leading_words_match_prefix(&v.main, &retrace_material) {
+                return None;
+            }
+        }
+        RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => {
+            // Corrections: no prefix match required.
+        }
     }
 
     Some(v_index)
 }
 
-/// Returns the retraced material's lexical-word `cleaned_text` sequence when
-/// the main tier's LAST content node is a partial-repetition retrace (`[/]`)
-/// with nothing after it; otherwise `None`.
+/// Returns the retrace kind and the retraced material's lexical-word
+/// `cleaned_text` sequence when the main tier's LAST content node is a
+/// dangling retrace of a kind allowed by `scope`; otherwise `None`.
 ///
-/// The case is only treated as OBVIOUS when the retrace material is a pure
-/// sequence of plain words (no replaced words, separators, or other markers),
-/// keeping Wave 1 strictly conservative.
-fn dangling_partial_retrace_material(main: &MainTier) -> Option<Vec<String>> {
+/// "Dangling" means the retrace marker is the last content node (nothing
+/// after it on the main tier). The case is only treated as OBVIOUS when
+/// the retrace material is a pure sequence of plain words (no replaced words,
+/// separators, or other markers), keeping both waves strictly conservative.
+fn dangling_retrace_material(
+    main: &MainTier,
+    scope: RetraceJoinScope,
+) -> Option<(RetraceKind, Vec<String>)> {
     let last = main.content.content.last()?;
     let UtteranceContent::Retrace(retrace) = last else {
         return None;
     };
+    // Check whether this kind is enabled under the current scope.
     match retrace.kind {
-        RetraceKind::Partial => {}
-        RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => return None,
+        RetraceKind::Partial => {
+            // Always enabled.
+        }
+        RetraceKind::Full | RetraceKind::Multiple | RetraceKind::Reformulation => {
+            // Only enabled when corrections are explicitly opted into.
+            match scope {
+                RetraceJoinScope::RepetitionOnly => return None,
+                RetraceJoinScope::RepetitionAndCorrections => {}
+            }
+        }
     }
 
-    pure_word_sequence_from_bracketed(&retrace.content)
+    let words = pure_word_sequence_from_bracketed(&retrace.content)?;
+    Some((retrace.kind, words))
 }
 
 /// Extract a pure plain-word `cleaned_text` sequence from a retrace's bracketed
@@ -296,15 +361,22 @@ fn union_bullets(u_bullet: Option<&Bullet>, v_bullet: Option<&Bullet>) -> Option
 
 #[cfg(test)]
 mod tests {
-    use super::{JoinRetraceStats, join_dangling_retraces};
+    use super::{JoinRetraceStats, RetraceJoinScope, join_dangling_retraces};
     use talkbank_model::model::WriteChat;
     use talkbank_parser::TreeSitterParser;
 
-    /// Parse, run the join transform, and return the serialized result and stats.
+    /// Parse, run the join transform (repetition-only scope), and return the
+    /// serialized result and stats.
     fn join(chat: &str) -> (String, JoinRetraceStats) {
+        join_with_scope(chat, RetraceJoinScope::RepetitionOnly)
+    }
+
+    /// Parse, run the join transform with an explicit scope, and return the
+    /// serialized result and stats.
+    fn join_with_scope(chat: &str, scope: RetraceJoinScope) -> (String, JoinRetraceStats) {
         let parser = TreeSitterParser::new().expect("parser");
         let mut parsed = parser.parse_chat_file(chat).expect("parse chat");
-        let stats = join_dangling_retraces(&mut parsed);
+        let stats = join_dangling_retraces(&mut parsed, scope);
         (parsed.to_chat_string(), stats)
     }
 
@@ -380,9 +452,10 @@ mod tests {
         assert!(out.contains("\u{0015}0_1200\u{0015}"), "got:\n{out}");
     }
 
-    /// Negative: a `[//]` correction is left untouched.
+    /// Negative (RepetitionOnly): a `[//]` correction is left untouched under
+    /// the default scope.
     #[test]
-    fn leaves_correction_retrace_untouched() {
+    fn leaves_correction_retrace_untouched_under_repetition_only() {
         let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
         let (out, stats) = join(&input);
         assert!(stats.is_empty(), "stats: {stats:?}");
@@ -405,5 +478,91 @@ mod tests {
         let (out, stats) = join(&input);
         assert!(stats.is_empty(), "stats: {stats:?}");
         assert_eq!(out, input);
+    }
+
+    // --- Wave 3a: RepetitionAndCorrections scope ---
+
+    /// A dangling `[//]` full-correction retrace joins under
+    /// RepetitionAndCorrections, producing `the cat [//] the dog runs .` which
+    /// `chatter validate` would accept.
+    #[test]
+    fn joins_full_correction_retrace_under_corrections_scope() {
+        let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert_eq!(
+            stats,
+            JoinRetraceStats {
+                joined_utterances: 1,
+                needs_remorphotag: 0,
+                dependent_tiers_dropped: 0,
+            }
+        );
+        assert!(
+            out.contains("*CHI:\tthe cat [//] the dog runs ."),
+            "expected joined correction retrace, got:\n{out}"
+        );
+        assert_eq!(out.matches("*CHI:").count(), 1, "got:\n{out}");
+    }
+
+    /// The SAME `[//]` dangling case is NOT joined under RepetitionOnly (the
+    /// default), confirming the gate is scope-controlled.
+    #[test]
+    fn does_not_join_full_correction_under_repetition_only() {
+        let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::RepetitionOnly);
+        assert!(stats.is_empty(), "stats: {stats:?}");
+        assert_eq!(out, input);
+    }
+
+    /// A `[//]` dangling retrace with a DIFFERENT-speaker successor is NOT
+    /// joined even under RepetitionAndCorrections.
+    #[test]
+    fn does_not_join_correction_different_speaker() {
+        let input = doc("*CHI:\tthe cat [//] .\n*MOT:\tthe dog runs .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert!(stats.is_empty(), "stats: {stats:?}");
+        assert_eq!(out, input);
+    }
+
+    /// Dependent tiers on a `[//]` join are dropped and flagged as
+    /// needing re-morphotag.
+    #[test]
+    fn drops_dependent_tiers_on_correction_join() {
+        let input = doc(
+            "*CHI:\tthe cat [//] .\n%mor:\tdet:art|the noun|cat .\n*CHI:\tthe dog runs .\n%mor:\tdet:art|the noun|dog verb|run-3S .\n",
+        );
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert_eq!(stats.joined_utterances, 1);
+        assert_eq!(stats.needs_remorphotag, 1);
+        assert_eq!(stats.dependent_tiers_dropped, 2);
+        assert!(!out.contains("%mor:"), "tiers must be dropped, got:\n{out}");
+        assert!(
+            out.contains("*CHI:\tthe cat [//] the dog runs ."),
+            "got:\n{out}"
+        );
+    }
+
+    /// A dangling `[///]` multiple-retrace joins under RepetitionAndCorrections.
+    #[test]
+    fn joins_multiple_retrace_under_corrections_scope() {
+        let input = doc("*CHI:\tgoing [///] .\n*CHI:\tI want to go .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert_eq!(stats.joined_utterances, 1);
+        assert!(
+            out.contains("*CHI:\tgoing [///] I want to go ."),
+            "got:\n{out}"
+        );
+    }
+
+    /// A dangling `[/-]` reformulation retrace joins under RepetitionAndCorrections.
+    #[test]
+    fn joins_reformulation_retrace_under_corrections_scope() {
+        let input = doc("*CHI:\tand then [/-] .\n*CHI:\tso we went .\n");
+        let (out, stats) = join_with_scope(&input, RetraceJoinScope::RepetitionAndCorrections);
+        assert_eq!(stats.joined_utterances, 1);
+        assert!(
+            out.contains("*CHI:\tand then [/-] so we went ."),
+            "got:\n{out}"
+        );
     }
 }

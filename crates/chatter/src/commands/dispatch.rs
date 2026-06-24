@@ -455,8 +455,17 @@ fn run_debug(command: crate::cli::DebugCommands) {
         DebugCommands::FixS { path } => {
             super::debug::run_fix_s(&path);
         }
-        DebugCommands::JoinRetrace { path, dry_run } => {
-            super::debug::run_join_retrace(&path, dry_run);
+        DebugCommands::JoinRetrace {
+            path,
+            dry_run,
+            include_corrections,
+        } => {
+            let scope = if include_corrections {
+                talkbank_transform::join_retrace::RetraceJoinScope::RepetitionAndCorrections
+            } else {
+                talkbank_transform::join_retrace::RetraceJoinScope::RepetitionOnly
+            };
+            super::debug::run_join_retrace(&path, dry_run, scope);
         }
         DebugCommands::OverlapAudit {
             path,

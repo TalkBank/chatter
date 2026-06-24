@@ -3,22 +3,22 @@
 use std::path::PathBuf;
 
 use talkbank_model::WriteChat;
-use talkbank_transform::join_retrace::{JoinRetraceStats, join_dangling_retraces};
+use talkbank_transform::join_retrace::{JoinRetraceStats, RetraceJoinScope, join_dangling_retraces};
 
 use super::*;
 
-/// Join OBVIOUS dangling-retrace utterances with their same-speaker successor.
+/// Join dangling-retrace utterances with their same-speaker successor.
 ///
 /// Implements `chatter debug join-retrace`. For each qualifying file, the
-/// repair joins every OBVIOUS dangling `[/]` retrace with the following
-/// same-speaker utterance that repeats the retraced material (see
-/// [`join_dangling_retraces`] for the exact rule). With `dry_run`, files are
-/// parsed and analyzed but never written; the would-be changes are reported.
+/// repair joins dangling retrace utterances according to the provided `scope`
+/// (see [`join_dangling_retraces`] for the exact rules). With `dry_run`, files
+/// are parsed and analyzed but never written; the would-be changes are
+/// reported.
 ///
 /// When either joined side carried dependent tiers, those tiers are dropped on
 /// the joined utterance and counted as needing re-morphotag, so the operator
 /// knows which files must be re-run through morphotagging afterwards.
-pub fn run_join_retrace(paths: &[PathBuf], dry_run: bool) {
+pub fn run_join_retrace(paths: &[PathBuf], dry_run: bool, scope: RetraceJoinScope) {
     let files = collect_cha_files(paths);
     if files.is_empty() {
         die("no .cha files found in the provided paths");
@@ -37,7 +37,7 @@ pub fn run_join_retrace(paths: &[PathBuf], dry_run: bool) {
             .parse_chat_file(&source)
             .unwrap_or_else(|e| die(&format!("parse failed for {}: {e:?}", path.display())));
 
-        let stats = join_dangling_retraces(&mut parsed);
+        let stats = join_dangling_retraces(&mut parsed, scope);
         if stats.is_empty() {
             continue;
         }

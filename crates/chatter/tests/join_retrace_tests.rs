@@ -6,6 +6,10 @@
 //! utterance whose leading words repeat the retraced material. The repair
 //! joins the two utterances into one.
 //!
+//! Wave 3a extends this to correction retraces (`[//]`/`[///]`/`[/-]`) when
+//! `--include-corrections` is passed. These tests cover both the default
+//! (repetition-only) behavior and the opt-in corrections scope.
+//!
 //! These drive the real CLI subprocess seam (`chatter debug join-retrace`),
 //! the highest-level boundary the feature lives at, then assert that
 //! `chatter validate` accepts the joined output.
@@ -164,6 +168,115 @@ fn does_not_join_non_repeating_successor() -> Result<(), TestError> {
     assert_eq!(
         after, input,
         "a non-repeating successor must be left untouched, got:\n{after}"
+    );
+
+    Ok(())
+}
+
+// --- Wave 3a: --include-corrections ---
+
+/// With `--include-corrections`, a dangling `[//]` correction retrace is
+/// joined with its same-speaker successor, and the result validates.
+#[test]
+fn include_corrections_joins_full_correction_retrace() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+
+    let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
+    let fixture = write_fixture(harness.home_dir(), "correction_join.cha", &input)?;
+
+    let join = harness.run_output(&[
+        "debug",
+        "join-retrace",
+        "--include-corrections",
+        fixture.to_str().unwrap(),
+    ])?;
+    assert!(
+        join.status.success(),
+        "join-retrace --include-corrections should succeed; output: {}",
+        combined_output(&join)
+    );
+
+    let joined = std::fs::read_to_string(&fixture)?;
+    assert!(
+        joined.contains("*CHI:\tthe cat [//] the dog runs ."),
+        "expected joined correction utterance, got:\n{joined}"
+    );
+    assert_eq!(
+        joined.matches("*CHI:").count(),
+        1,
+        "expected exactly one *CHI line after join, got:\n{joined}"
+    );
+
+    // The joined file must be valid CHAT.
+    let validate = harness.run_validate(&fixture, &["--force"])?;
+    assert!(
+        validate.status.success(),
+        "joined correction file must validate; output: {}",
+        combined_output(&validate)
+    );
+
+    Ok(())
+}
+
+/// WITHOUT `--include-corrections`, the same `[//]` dangling case is NOT
+/// joined (the default RepetitionOnly scope preserves Wave-1 behavior).
+#[test]
+fn without_include_corrections_does_not_join_full_correction() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+
+    let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
+    let fixture = write_fixture(harness.home_dir(), "correction_nojoin.cha", &input)?;
+
+    let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+    assert!(
+        join.status.success(),
+        "join-retrace should run; output: {}",
+        combined_output(&join)
+    );
+
+    let after = std::fs::read_to_string(&fixture)?;
+    assert_eq!(
+        after, input,
+        "a [//] correction must be left untouched without --include-corrections, got:\n{after}"
+    );
+
+    Ok(())
+}
+
+/// With `--include-corrections --dry-run`, the proposed join is reported
+/// without modifying the file.
+#[test]
+fn include_corrections_dry_run_reports_without_modifying() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+
+    let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
+    let fixture = write_fixture(harness.home_dir(), "correction_dryrun.cha", &input)?;
+
+    let join = harness.run_output(&[
+        "debug",
+        "join-retrace",
+        "--include-corrections",
+        "--dry-run",
+        fixture.to_str().unwrap(),
+    ])?;
+    assert!(
+        join.status.success(),
+        "join-retrace --include-corrections --dry-run should succeed; output: {}",
+        combined_output(&join)
+    );
+
+    // The report must mention the proposed join.
+    let report = stdout_string(&join);
+    assert!(
+        report.contains("would join") || report.contains("Would join") || report.contains("[dry-run]"),
+        "dry-run output should report the proposed join, got:\n{report}"
+    );
+
+    // The file must be unchanged.
+    let after = std::fs::read_to_string(&fixture)?;
+    assert_eq!(
+        after, input,
+        "--dry-run must not modify the file, got:\n{after}"
     );
 
     Ok(())

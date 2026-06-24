@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-06-24 14:02 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -306,19 +306,27 @@ subcommands include:
   - True no-op on already-correct files: a file is rewritten only when
     a `[- lang]` conversion or `@Languages` repair can be proved
     necessary.
-- `join-retrace`: auto-repair the OBVIOUS subset of E370 ("dangling
-  retrace"). An utterance whose last main-tier content is a
-  partial-repetition retrace marker (`[/]`) with nothing after it is
-  joined with the next same-speaker utterance when that successor's
-  leading words repeat the retraced material. Trigger conditions and
-  safety rules:
+- `join-retrace`: auto-repair dangling-retrace (E370) utterances. An
+  utterance whose last main-tier content is a retrace marker with nothing
+  after it is joined with the next same-speaker utterance. Two scopes are
+  available:
 
-  - Only partial repetition (`[/]`) qualifies. Corrections (`[//]`),
-    multiple retraces (`[///]`), and reformulations (`[/-]`) are left
-    untouched, as is any successor that does not repeat the retraced
-    material; those are out of scope for this conservative repair.
+  - **Default (partial repetition only):** only `[/]` partial-repetition
+    retraces qualify, and only when the successor's leading words repeat
+    the retraced material. This is the conservative, OBVIOUS-only repair
+    suitable for most automated use.
+  - **`--include-corrections` (Wave 3a, opt-in):** also joins correction
+    retraces: `[//]` (Full), `[///]` (Multiple), and `[/-]`
+    (Reformulation). Corrections replace rather than repeat the retraced
+    material, so the leading-words prefix check is skipped; same-speaker
+    presence alone is the gate. Use `--dry-run` first to review every
+    proposed correction-join before writing, since corrections are less
+    structurally constrained than repetitions.
+
+  Shared behavior for all joined pairs:
+
   - The join produces one utterance: the first utterance's content
-    (keeping the trailing `[/]` marker) followed by the successor's
+    (keeping the trailing retrace marker) followed by the successor's
     content, terminated by the successor's terminator. Main-tier time
     bullets are unioned (start from the first, end from the successor).
   - **Dependent tiers are dropped.** If either side carried `%mor`,
