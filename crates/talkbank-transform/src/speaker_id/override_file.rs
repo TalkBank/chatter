@@ -22,14 +22,17 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use talkbank_model::{ParticipantRole, SpeakerCode};
 
+use super::error::SpeakerIdError;
 use super::identify::DonorMatchReport;
 use super::mapping::{MappingSpec, SpeakerAssignment};
 use super::provenance::{DecisionEngine, JudgmentProvenance};
 
 /// Current schema version supported by this binary. Readers refuse
 /// files with any other value; there is no implicit version, no
-/// fallback, no auto-migration. See the format spec §6.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+/// fallback, no auto-migration. See the format spec §6. Bumped from 1
+/// to 2 for the per-speaker `adult_roles` map (was `inserted_role`, a
+/// single shared field).
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// Errors arising from override-file I/O or parsing.
 #[derive(Debug, thiserror::Error)]
@@ -72,7 +75,7 @@ pub enum OverrideMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SpeakerAction {
-    /// Rename the speaker per `inserted_role`.
+    /// Rename the speaker per its own entry in `adult_roles`.
     Rename,
     /// Drop the speaker's utterances and header rows entirely.
     Drop,
@@ -82,18 +85,26 @@ pub enum SpeakerAction {
 /// override entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InsertedRoleSpec {
-    /// CHAT speaker code (e.g. `INV`).
+    /// CHAT speaker code (e.g. `INV`, or `INV1` when disambiguated from
+    /// a same-role collision).
     pub code: String,
-    /// CHAT role tag (e.g. `Investigator`).
+    /// CHAT standard role tag (e.g. `Investigator`).
     pub tag: String,
+    /// Specific-role label for `@Participants`' name/specific-role slot
+    /// (e.g. `First_Investigator`), set only when two adults in the same
+    /// judgment share `tag` and need the CHAT manual's `CHI1`/`CHI2`-style
+    /// disambiguation. `None` for the ordinary single-adult-per-role case.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub specific_role: Option<String>,
 }
 
 impl InsertedRoleSpec {
-    /// Build from the typed CHAT primitives.
+    /// Build from the typed CHAT primitives, with no specific-role label.
     pub fn new(code: &SpeakerCode, tag: &ParticipantRole) -> Self {
         Self {
             code: code.as_str().to_string(),
             tag: tag.as_str().to_string(),
+            specific_role: None,
         }
     }
 }
@@ -108,13 +119,13 @@ impl MergeOverride {
     pub fn auto_decision(
         mapping: &MappingSpec,
         report: &DonorMatchReport,
-        inserted_role: InsertedRoleSpec,
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         operator: String,
         decided_at: DateTime<Utc>,
     ) -> Self {
         Self {
             mode: OverrideMode::Auto,
-            inserted_role,
+            adult_roles,
             mapping: mapping_to_serializable(mapping),
             scores: report.scores_to_serializable(),
             margin: report.margin_to_serializable(),
@@ -133,7 +144,7 @@ impl MergeOverride {
     /// the adjudication core don't drift on the shared header.
     pub fn operator_decision(
         mapping: BTreeMap<String, SpeakerAction>,
-        inserted_role: InsertedRoleSpec,
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         scores: BTreeMap<String, f64>,
         margin: Option<f64>,
         operator: String,
@@ -142,7 +153,7 @@ impl MergeOverride {
     ) -> Self {
         Self {
             mode: OverrideMode::Explicit,
-            inserted_role,
+            adult_roles,
             mapping,
             scores,
             margin,
@@ -156,25 +167,41 @@ impl MergeOverride {
     }
 
     /// Translate this entry's recorded decision into the in-memory
-    /// [`MappingSpec`] consumed by `apply_mapping`. Used by the
-    /// override-file replay path: every recorded `Rename` action
-    /// becomes a `SpeakerAssignment::Rename` carrying the entry's
-    /// `inserted_role`; every `Drop` becomes `SpeakerAssignment::Drop`.
-    pub fn to_mapping_spec(&self) -> MappingSpec {
-        let inserted_code = SpeakerCode::new(&self.inserted_role.code);
-        let inserted_role = ParticipantRole::new(&self.inserted_role.tag);
+    /// [`MappingSpec`] consumed by `apply_mapping`. Every recorded
+    /// `Rename` action looks up its OWN entry in `adult_roles`; every
+    /// `Drop` becomes `SpeakerAssignment::Drop`.
+    ///
+    /// Returns [`SpeakerIdError::OverrideRenameMissingRole`] if a
+    /// `Rename` action has no matching `adult_roles` entry. The
+    /// sanctioned constructors (`auto_decision`, `operator_decision`)
+    /// and every writer path maintain that covering invariant, so this
+    /// only fires on a hand-corrupted override file; it is surfaced as a
+    /// typed error rather than a panic (this crate forbids production
+    /// panics).
+    pub fn to_mapping_spec(&self) -> Result<MappingSpec, SpeakerIdError> {
         self.mapping
             .iter()
             .map(|(spk, action)| {
                 let speaker = SpeakerCode::new(spk);
                 let assignment = match action {
                     SpeakerAction::Drop => SpeakerAssignment::Drop,
-                    SpeakerAction::Rename => SpeakerAssignment::Rename {
-                        code: inserted_code.clone(),
-                        role: inserted_role.clone(),
-                    },
+                    SpeakerAction::Rename => {
+                        let role_spec = self.adult_roles.get(spk).ok_or_else(|| {
+                            SpeakerIdError::OverrideRenameMissingRole {
+                                speaker: SpeakerCode::new(spk),
+                            }
+                        })?;
+                        SpeakerAssignment::Rename {
+                            code: SpeakerCode::new(&role_spec.code),
+                            role: ParticipantRole::new(&role_spec.tag),
+                            specific_role: role_spec
+                                .specific_role
+                                .as_deref()
+                                .map(talkbank_model::ParticipantName::new),
+                        }
+                    }
                 };
-                (speaker, assignment)
+                Ok((speaker, assignment))
             })
             .collect()
     }
@@ -183,7 +210,7 @@ impl MergeOverride {
 /// Convert a [`MappingSpec`] (in-memory typed) into the on-disk
 /// `BTreeMap<String, SpeakerAction>` shape recorded in override-file
 /// entries. The action's payload (rename target code/role) is
-/// captured separately in the entry's `inserted_role` field, here
+/// captured separately in the entry's `adult_roles` map, here
 /// we only need the action discriminant.
 fn mapping_to_serializable(mapping: &MappingSpec) -> BTreeMap<String, SpeakerAction> {
     mapping
@@ -205,9 +232,12 @@ pub struct MergeOverride {
     /// How the decision was made.
     pub mode: OverrideMode,
 
-    /// The CHAT identity assigned to every speaker whose `mapping`
-    /// action is `Rename`.
-    pub inserted_role: InsertedRoleSpec,
+    /// Per-donor-speaker-code role assignment, for every speaker whose
+    /// `mapping` action is `Rename`. Invariant: every `Rename` key in
+    /// `mapping` has a matching entry here (enforced by the sanctioned
+    /// constructors; [`Self::to_mapping_spec`] returns an error rather
+    /// than panicking if a hand-edited file violates it).
+    pub adult_roles: BTreeMap<String, InsertedRoleSpec>,
 
     /// Map from input speaker codes to actions. Every speaker that
     /// exists in the input must appear here.
@@ -361,5 +391,91 @@ impl OverrideFile {
             .iter()
             .filter(|(_, entry)| entry.engine == DecisionEngine::Llm)
             .map(|(session_id, entry)| (session_id.as_str(), entry))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `specific_role` must round-trip through TOML and default to `None`
+    /// when absent (so pre-existing on-disk entries with just `code`/`tag`
+    /// still parse once this field is added, since the schema bump in
+    /// Task 8 covers the `adult_roles` shape, not this field).
+    #[test]
+    fn inserted_role_spec_specific_role_defaults_to_none_and_round_trips() {
+        let without: InsertedRoleSpec = toml::from_str(
+            r#"code = "INV"
+tag = "Investigator""#,
+        )
+        .expect("must parse without specific_role");
+        assert_eq!(without.specific_role, None);
+
+        let with = InsertedRoleSpec {
+            code: "INV1".to_string(),
+            tag: "Investigator".to_string(),
+            specific_role: Some("First_Investigator".to_string()),
+        };
+        let toml_str = toml::to_string(&with).expect("must serialize");
+        let back: InsertedRoleSpec = toml::from_str(&toml_str).expect("must parse back");
+        assert_eq!(back, with);
+    }
+
+    /// A `MergeOverride` with two Rename actions, each looked up in its
+    /// own `adult_roles` entry, must produce a `MappingSpec` where each
+    /// speaker gets its OWN code/role/specific_role, not one shared value.
+    #[test]
+    fn to_mapping_spec_applies_distinct_roles_per_speaker() {
+        let mut mapping = BTreeMap::new();
+        mapping.insert("PAR0".to_string(), SpeakerAction::Rename);
+        mapping.insert("PAR1".to_string(), SpeakerAction::Rename);
+        let mut adult_roles = BTreeMap::new();
+        adult_roles.insert(
+            "PAR0".to_string(),
+            InsertedRoleSpec {
+                code: "INV".to_string(),
+                tag: "Investigator".to_string(),
+                specific_role: None,
+            },
+        );
+        adult_roles.insert(
+            "PAR1".to_string(),
+            InsertedRoleSpec {
+                code: "FAT".to_string(),
+                tag: "Father".to_string(),
+                specific_role: None,
+            },
+        );
+        let entry = MergeOverride {
+            mode: OverrideMode::Explicit,
+            adult_roles,
+            mapping,
+            scores: BTreeMap::new(),
+            margin: None,
+            operator: "test".to_string(),
+            decided_at: Utc::now(),
+            note: None,
+            flags: Vec::new(),
+            engine: DecisionEngine::Deterministic,
+            judgment: None,
+        };
+
+        let spec = entry
+            .to_mapping_spec()
+            .expect("well-formed entry (every Rename has a role) must build a MappingSpec");
+        match spec.get(&SpeakerCode::new("PAR0")) {
+            Some(SpeakerAssignment::Rename { code, role, .. }) => {
+                assert_eq!(code.as_str(), "INV");
+                assert_eq!(role.as_str(), "Investigator");
+            }
+            other => panic!("expected Rename for PAR0; got {other:?}"),
+        }
+        match spec.get(&SpeakerCode::new("PAR1")) {
+            Some(SpeakerAssignment::Rename { code, role, .. }) => {
+                assert_eq!(code.as_str(), "FAT");
+                assert_eq!(role.as_str(), "Father");
+            }
+            other => panic!("expected Rename for PAR1; got {other:?}"),
+        }
     }
 }

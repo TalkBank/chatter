@@ -94,6 +94,9 @@ pub struct SpeakerIdArgs<'a> {
     /// LLM retry budget for transport / 5xx failures. Defaults to the
     /// provider's built-in retry count when `None`.
     pub llm_max_retries: Option<u32>,
+    /// LLM response-cache file (flag value; falls back to
+    /// `CHATTER_LLM_CACHE`). Absent means uncached. Holistic mode only.
+    pub llm_cache_path: Option<&'a Path>,
     /// `--session-context` JSON path for holistic-mode context lookup
     /// (falls back to `CHATTER_SESSION_CONTEXT`). When neither names a
     /// file, context fields fall back to `@ID` age or unknown.
@@ -129,6 +132,7 @@ pub fn run_speaker_id(args: SpeakerIdArgs<'_>) {
         llm_api_key,
         llm_timeout_secs,
         llm_max_retries,
+        llm_cache_path,
         session_context_path,
     } = args;
     let _span = span!(
@@ -164,6 +168,7 @@ pub fn run_speaker_id(args: SpeakerIdArgs<'_>) {
             llm_api_key,
             llm_timeout_secs,
             llm_max_retries,
+            llm_cache_path,
             session_context_path,
         });
     }

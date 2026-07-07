@@ -134,11 +134,15 @@ impl Prompter for TerminalPrompter {
                 for (spk, action) in &suggested.mapping {
                     writeln!(out, "  {spk} = {action:?}")?;
                 }
-                writeln!(
-                    out,
-                    "Suggested inserted role: {} ({})",
-                    suggested.inserted_role.code, suggested.inserted_role.tag
-                )?;
+                writeln!(out, "Suggested roles:")?;
+                for (spk, role) in &suggested.adult_roles {
+                    match &role.specific_role {
+                        Some(label) => {
+                            writeln!(out, "  {spk} -> {} ({label}, {})", role.code, role.tag)?
+                        }
+                        None => writeln!(out, "  {spk} -> {} ({})", role.code, role.tag)?,
+                    }
+                }
             }
             PendingKindData::ParentRoleLookup {
                 donor_speaker,
@@ -160,11 +164,15 @@ impl Prompter for TerminalPrompter {
                 for (spk, action) in &suggested.mapping {
                     writeln!(out, "  {spk} = {action:?}")?;
                 }
-                writeln!(
-                    out,
-                    "Suggested inserted role: {} ({})",
-                    suggested.inserted_role.code, suggested.inserted_role.tag
-                )?;
+                writeln!(out, "Suggested roles:")?;
+                for (spk, role) in &suggested.adult_roles {
+                    match &role.specific_role {
+                        Some(label) => {
+                            writeln!(out, "  {spk} -> {} ({label}, {})", role.code, role.tag)?
+                        }
+                        None => writeln!(out, "  {spk} -> {} ({})", role.code, role.tag)?,
+                    }
+                }
             }
         }
         if let (Some(margin), Some(threshold)) = (entry.margin, entry.threshold_used) {
@@ -180,14 +188,16 @@ impl Prompter for TerminalPrompter {
         // for different kinds.
         let prompt_hint = match &entry.data {
             PendingKindData::SpeakerIdLowConfidence { .. } => {
-                "Decision [accept | override CODE TAG SPK=action [SPK=action ...] [note...]]: "
+                "Decision [accept | override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]]: "
             }
-            PendingKindData::ParentRoleLookup { .. } => "Decision [choose CODE TAG [note...]]: ",
+            PendingKindData::ParentRoleLookup { .. } => {
+                "Decision [choose SPK:CODE:TAG [SPK:CODE:TAG ...] [note...]]: "
+            }
             // Sanity-scan accepts the same decisions as
             // speaker-id-low-confidence: `accept` the scan's
             // suggested swap, or `override` with the operator's own.
             PendingKindData::SanityScanMisclassification { .. } => {
-                "Decision [accept | override CODE TAG SPK=action [SPK=action ...] [note...]]: "
+                "Decision [accept | override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]]: "
             }
         };
         write!(out, "{prompt_hint}")?;
@@ -218,61 +228,90 @@ fn parse_operator_response(
             Ok(OperatorDecision::AcceptSuggested { note: None })
         }
         Some("choose") => match tokens.as_slice() {
-            [_, code, tag, note_words @ ..] => {
-                let note = if note_words.is_empty() {
+            [_, rest @ ..] if !rest.is_empty() => {
+                let (adult_roles, note_start) = parse_role_groups(rest, entry)?;
+                let note = if note_start >= rest.len() {
                     None
                 } else {
-                    Some(note_words.join(" "))
+                    Some(rest[note_start..].join(" "))
                 };
-                Ok(OperatorDecision::ChooseRole {
-                    inserted_role: InsertedRoleSpec {
-                        code: (*code).to_string(),
-                        tag: (*tag).to_string(),
-                    },
-                    note,
-                })
+                Ok(OperatorDecision::ChooseRole { adult_roles, note })
             }
             _ => Err(AdjudicationError::PrompterFailed {
                 session_id: entry.session_id.clone(),
-                detail:
-                    "choose decision requires CODE and TAG tokens (e.g., \"choose MOT Mother\")"
-                        .to_string(),
+                detail: "choose decision requires at least one SPK:CODE:TAG group (e.g., \"choose PAR1:MOT:Mother\")".to_string(),
             }),
         },
         Some("override") => parse_override_mapping(&tokens, entry),
         Some(_) | None => Err(AdjudicationError::PrompterFailed {
             session_id: entry.session_id.clone(),
             detail: format!(
-                "unrecognized operator input {line:?}; supported: \"accept\" / \"a\" / \"choose CODE TAG [note...]\" / \"override CODE TAG SPK=action [SPK=action ...] [note...]\""
+                "unrecognized operator input {line:?}; supported: \"accept\" / \"a\" / \"choose SPK:CODE:TAG [SPK:CODE:TAG ...] [note...]\" / \"override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]\""
             ),
         }),
     }
 }
 
-/// Parse `override CODE TAG SPK=action [SPK=action ...] [note...]`
-/// into [`OperatorDecision::OverrideMapping`]. The assignment list
-/// is consumed greedily while tokens match the `SPK=action` shape;
-/// the first non-assignment token starts the optional trailing note.
+/// Parse a run of leading `SPK:CODE:TAG` tokens into an `adult_roles`
+/// map, stopping at the first token that doesn't match that shape (the
+/// caller treats everything from there on as the optional trailing
+/// note or the assignment list). Returns the map and the index into
+/// `tokens` where parsing stopped.
+fn parse_role_groups(
+    tokens: &[&str],
+    entry: &PendingEntry,
+) -> Result<(BTreeMap<String, InsertedRoleSpec>, usize), AdjudicationError> {
+    let mut adult_roles: BTreeMap<String, InsertedRoleSpec> = BTreeMap::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        let parts: Vec<&str> = tokens[i].splitn(3, ':').collect();
+        match parts.as_slice() {
+            [spk, code, tag] if !spk.is_empty() && !code.is_empty() && !tag.is_empty() => {
+                adult_roles.insert(
+                    (*spk).to_string(),
+                    InsertedRoleSpec {
+                        code: (*code).to_string(),
+                        tag: (*tag).to_string(),
+                        specific_role: None,
+                    },
+                );
+                i += 1;
+            }
+            _ => break,
+        }
+    }
+    if adult_roles.is_empty() {
+        return Err(AdjudicationError::PrompterFailed {
+            session_id: entry.session_id.clone(),
+            detail: "expected at least one SPK:CODE:TAG group (e.g., PAR1:INV:Investigator)"
+                .to_string(),
+        });
+    }
+    Ok((adult_roles, i))
+}
+
+/// Parse `override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action
+/// [SPK=action ...] [note...]` into [`OperatorDecision::OverrideMapping`].
+/// A run of leading `SPK:CODE:TAG` groups supplies the per-speaker
+/// roles; the `SPK=action` assignment list follows and is consumed
+/// greedily; the first non-assignment token starts the optional
+/// trailing note.
 fn parse_override_mapping(
     tokens: &[&str],
     entry: &PendingEntry,
 ) -> Result<OperatorDecision, AdjudicationError> {
-    // Expect: ["override", CODE, TAG, ...]
-    let (code, tag, rest) = match tokens {
-        [_, code, tag, rest @ ..] => (*code, *tag, rest),
-        _ => {
-            return Err(AdjudicationError::PrompterFailed {
-                session_id: entry.session_id.clone(),
-                detail:
-                    "override decision requires CODE and TAG (e.g., \"override INV Investigator PAR0=rename\")"
-                        .to_string(),
-            });
-        }
+    let [_, rest @ ..] = tokens else {
+        return Err(AdjudicationError::PrompterFailed {
+            session_id: entry.session_id.clone(),
+            detail: "override decision requires at least one SPK:CODE:TAG group (e.g., \"override PAR1:INV:Investigator PAR0=drop\")".to_string(),
+        });
     };
+    let (adult_roles, role_end) = parse_role_groups(rest, entry)?;
+    let assignment_and_note = &rest[role_end..];
 
     let mut mapping: BTreeMap<String, SpeakerAction> = BTreeMap::new();
-    let mut split_idx = rest.len();
-    for (i, token) in rest.iter().enumerate() {
+    let mut split_idx = assignment_and_note.len();
+    for (i, token) in assignment_and_note.iter().enumerate() {
         match parse_speaker_assignment(token) {
             AssignmentParse::Valid(spk, action) => {
                 mapping.insert(spk, action);
@@ -304,7 +343,7 @@ fn parse_override_mapping(
                     .to_string(),
         });
     }
-    let note_words = &rest[split_idx..];
+    let note_words = &assignment_and_note[split_idx..];
     let note = if note_words.is_empty() {
         None
     } else {
@@ -313,10 +352,7 @@ fn parse_override_mapping(
 
     Ok(OperatorDecision::OverrideMapping {
         mapping,
-        inserted_role: InsertedRoleSpec {
-            code: code.to_string(),
-            tag: tag.to_string(),
-        },
+        adult_roles,
         note,
     })
 }
@@ -362,7 +398,8 @@ fn exit_with_error(path: &Path, label: &str, e: AdjudicationError) -> ! {
     let code = match e {
         AdjudicationError::FileIo { .. }
         | AdjudicationError::TerminalIo(_)
-        | AdjudicationError::Toml(_) => EXIT_INPUT_ERROR,
+        | AdjudicationError::Toml(_)
+        | AdjudicationError::UnsupportedSchemaVersion { .. } => EXIT_INPUT_ERROR,
         AdjudicationError::PrompterFailed { .. }
         | AdjudicationError::DecisionKindMismatch { .. } => EXIT_PRECONDITION,
     };

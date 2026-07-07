@@ -73,6 +73,9 @@ pub struct PipelineArgs<'a> {
     pub llm_api_key: Option<&'a str>,
     pub llm_timeout_secs: Option<u64>,
     pub llm_max_retries: Option<u32>,
+    /// LLM response-cache file (falls back to `CHATTER_LLM_CACHE`). Absent
+    /// means uncached.
+    pub llm_cache_path: Option<&'a Path>,
     /// Optional session-context JSON path for holistic context
     /// (falls back to `CHATTER_SESSION_CONTEXT`).
     pub session_context: Option<&'a Path>,
@@ -116,6 +119,7 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
         llm_api_key,
         llm_timeout_secs,
         llm_max_retries,
+        llm_cache_path,
         session_context,
     } = args;
     let _span = span!(
@@ -178,6 +182,7 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
             llm_api_key,
             llm_timeout_secs,
             llm_max_retries,
+            llm_cache_path,
             session_context_path: session_context,
         });
         return;

@@ -85,6 +85,7 @@ impl AdultRole {
         crate::speaker_id::InsertedRoleSpec {
             code: self.as_code().to_string(),
             tag: tag.to_string(),
+            specific_role: None,
         }
     }
 }

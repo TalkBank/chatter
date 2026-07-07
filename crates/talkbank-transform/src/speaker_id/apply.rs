@@ -88,10 +88,14 @@ fn rewrite_header(header: &Header, mapping: &MappingSpec) -> HeaderRewrite {
             for entry in entries.iter() {
                 match mapping.get(&entry.speaker_code) {
                     Some(SpeakerAssignment::Drop) => { /* skip */ }
-                    Some(SpeakerAssignment::Rename { code, role }) => {
+                    Some(SpeakerAssignment::Rename {
+                        code,
+                        role,
+                        specific_role,
+                    }) => {
                         new_entries.push(ParticipantEntry {
                             speaker_code: code.clone(),
-                            name: entry.name.clone(),
+                            name: specific_role.clone().or_else(|| entry.name.clone()),
                             role: role.clone(),
                         });
                     }
@@ -104,7 +108,7 @@ fn rewrite_header(header: &Header, mapping: &MappingSpec) -> HeaderRewrite {
         }
         Header::ID(id) => match mapping.get(&id.speaker) {
             Some(SpeakerAssignment::Drop) => HeaderRewrite::Drop,
-            Some(SpeakerAssignment::Rename { code, role }) => {
+            Some(SpeakerAssignment::Rename { code, role, .. }) => {
                 let mut new_id = id.clone();
                 new_id.speaker = code.clone();
                 new_id.role = role.clone();
@@ -113,5 +117,91 @@ fn rewrite_header(header: &Header, mapping: &MappingSpec) -> HeaderRewrite {
             None => HeaderRewrite::Keep(Header::ID(id.clone())),
         },
         other => HeaderRewrite::Keep(other.clone()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use talkbank_model::{ParticipantName, ParticipantRole, SpeakerCode};
+
+    use super::*;
+
+    const FIX_TWO_DONOR_SPEAKERS: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tPAR0 Adult, PAR1 Adult
+@ID:\teng|corpus|PAR0|||||Adult|||
+@ID:\teng|corpus|PAR1|||||Adult|||
+@Media:\tspecific-role, audio
+*PAR0:\thello there . \u{15}0_1000\u{15}
+*PAR1:\thi yourself . \u{15}1000_2000\u{15}
+@End
+";
+
+    /// `Rename` with `specific_role: Some(...)` must use it as the
+    /// `@Participants` name/specific-role field, overriding whatever the
+    /// donor's original entry carried (nothing, here).
+    #[test]
+    fn rename_with_specific_role_sets_participant_name() {
+        let mut mapping = MappingSpec::new();
+        mapping.insert(
+            SpeakerCode::new("PAR0"),
+            SpeakerAssignment::Rename {
+                code: SpeakerCode::new("INV1"),
+                role: ParticipantRole::new("Investigator"),
+                specific_role: Some(ParticipantName::new("First_Investigator")),
+            },
+        );
+        mapping.insert(
+            SpeakerCode::new("PAR1"),
+            SpeakerAssignment::Rename {
+                code: SpeakerCode::new("INV2"),
+                role: ParticipantRole::new("Investigator"),
+                specific_role: Some(ParticipantName::new("Second_Investigator")),
+            },
+        );
+        let result = apply_mapping(
+            FIX_TWO_DONOR_SPEAKERS,
+            &mapping,
+            talkbank_model::ParseValidateOptions::default(),
+        )
+        .expect("apply_mapping should succeed");
+
+        assert!(
+            result.contains("INV1 First_Investigator Investigator"),
+            "expected INV1's @Participants entry to carry the specific-role label.\n{result}"
+        );
+        assert!(
+            result.contains("INV2 Second_Investigator Investigator"),
+            "expected INV2's @Participants entry to carry the specific-role label.\n{result}"
+        );
+    }
+
+    /// `Rename` with `specific_role: None` must fall back to the donor's
+    /// original `@Participants` name field (today, `None`), matching the
+    /// pre-existing single-role behavior exactly.
+    #[test]
+    fn rename_without_specific_role_preserves_donor_name() {
+        let mut mapping = MappingSpec::new();
+        mapping.insert(
+            SpeakerCode::new("PAR0"),
+            SpeakerAssignment::Rename {
+                code: SpeakerCode::new("INV"),
+                role: ParticipantRole::new("Investigator"),
+                specific_role: None,
+            },
+        );
+        mapping.insert(SpeakerCode::new("PAR1"), SpeakerAssignment::Drop);
+        let result = apply_mapping(
+            FIX_TWO_DONOR_SPEAKERS,
+            &mapping,
+            talkbank_model::ParseValidateOptions::default(),
+        )
+        .expect("apply_mapping should succeed");
+
+        assert!(
+            result.contains("INV Investigator") && !result.contains("INV_"),
+            "expected plain 'INV Investigator' with no specific-role label.\n{result}"
+        );
     }
 }

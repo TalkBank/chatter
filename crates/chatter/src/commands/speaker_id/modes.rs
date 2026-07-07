@@ -20,7 +20,10 @@ use talkbank_transform::speaker_id::{
     parse_mapping_spec, sample_session, session_context,
 };
 
-use talkbank_llm::{ApiKey, HttpJudgmentProvider, HttpProviderConfig, RetryCount, TimeoutSecs};
+use talkbank_llm::{
+    ApiKey, CachePath, HttpJudgmentProvider, HttpProviderConfig, ResponseCache, RetryCount,
+    TimeoutSecs,
+};
 
 use super::support::{
     derive_session_id, exit_with_override_file_error, exit_with_speaker_id_error,
@@ -136,7 +139,7 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
 
     // Parse `--inserted-role` upfront so it's available on both the
     // happy path AND the low-confidence path that writes the pending
-    // entry's `suggested.inserted_role`.
+    // entry's `suggested.adult_roles` map.
     let (inserted_code, inserted_role) = match parse_inserted_role(inserted_role_spec) {
         Ok(pair) => pair,
         Err(e) => {
@@ -174,6 +177,7 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                 SpeakerAssignment::Rename {
                     code: inserted_code.clone(),
                     role: inserted_role.clone(),
+                    specific_role: None,
                 },
             );
         }
@@ -226,7 +230,10 @@ pub(crate) fn apply_override_entry(
     entry: &MergeOverride,
     options: ParseValidateOptions,
 ) -> String {
-    let mapping = entry.to_mapping_spec();
+    let mapping = match entry.to_mapping_spec() {
+        Ok(m) => m,
+        Err(e) => exit_with_speaker_id_error(e),
+    };
     match apply_mapping(input_content, &mapping, options) {
         Ok(s) => s,
         Err(e) => exit_with_speaker_id_error(e),
@@ -336,6 +343,11 @@ const ENV_LLM_MODEL: &str = "CHATTER_LLM_MODEL";
 /// when `--llm-api-key` is absent. The key remains optional.
 const ENV_LLM_API_KEY: &str = "CHATTER_LLM_API_KEY";
 
+/// Environment-variable fallback for the LLM response-cache file path.
+/// Consulted only when `--llm-cache` is absent. Absent flag and env means
+/// uncached (today's behavior).
+const ENV_LLM_CACHE: &str = "CHATTER_LLM_CACHE";
+
 /// All inputs to one holistic-LLM `chatter speaker-id` invocation.
 ///
 /// Holistic mode produces a single LLM judgment per session and lands it in
@@ -366,6 +378,9 @@ pub(crate) struct HolisticModeArgs<'a> {
     pub(crate) llm_timeout_secs: Option<u64>,
     /// `--llm-max-retries` flag value; provider default when `None`.
     pub(crate) llm_max_retries: Option<u32>,
+    /// `--llm-cache` flag value (falls back to `CHATTER_LLM_CACHE`). Absent
+    /// means uncached: every call is a live HTTP request.
+    pub(crate) llm_cache_path: Option<&'a Path>,
     /// `--session-context` flag value (falls back to
     /// `CHATTER_SESSION_CONTEXT`). When neither names a file, context
     /// fields fall back to the donor's `@ID` age or unknown.
@@ -403,6 +418,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
         llm_api_key,
         llm_timeout_secs,
         llm_max_retries,
+        llm_cache_path,
         session_context_path,
     } = args;
 
@@ -493,7 +509,23 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
     if let Some(retries) = llm_max_retries {
         config.max_retries = RetryCount(retries);
     }
-    let provider = HttpJudgmentProvider::new(config);
+
+    // 7b. Optional response cache (flag, else CHATTER_LLM_CACHE env var).
+    //     A configured-but-corrupt cache file is a hard error: fail closed
+    //     rather than silently bypassing the cache the operator asked for.
+    let provider = match resolve_cache_path(llm_cache_path, ENV_LLM_CACHE) {
+        Some(cache_path) => match ResponseCache::open(CachePath(cache_path.clone())) {
+            Ok(cache) => HttpJudgmentProvider::with_cache(config, cache),
+            Err(e) => {
+                eprintln!(
+                    "Error: LLM response cache {} is unusable: {e}",
+                    cache_path.display()
+                );
+                std::process::exit(EXIT_INPUT_ERROR);
+            }
+        },
+        None => HttpJudgmentProvider::new(config),
+    };
 
     // 8. Ask the endpoint for one holistic judgment. Any provider/transport/
     //    parse failure is fatal in this cut (no silent swallow).
@@ -551,4 +583,44 @@ fn resolve_required(flag: Option<&str>, env_var: &str) -> Option<String> {
     flag.map(str::to_string)
         .or_else(|| std::env::var(env_var).ok())
         .filter(|s| !s.trim().is_empty())
+}
+
+/// Resolve the optional LLM response-cache path: the flag value if present,
+/// else the named environment variable. `None` when neither names a file
+/// (uncached, today's behavior unchanged). Empty-string env values are
+/// rejected as unset, mirroring [`resolve_required`].
+fn resolve_cache_path(flag: Option<&Path>, env_var: &str) -> Option<std::path::PathBuf> {
+    flag.map(Path::to_path_buf).or_else(|| {
+        std::env::var_os(env_var)
+            .filter(|v| !v.is_empty())
+            .map(std::path::PathBuf::from)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // These exercise `resolve_cache_path` directly against an environment
+    // variable name that is never set by this test suite, rather than
+    // mutating process-global env state (which is unsound to do from
+    // parallel unit tests); the flag-else-env fallback IS exercised
+    // end-to-end via subprocess env in
+    // `crates/chatter/tests/holistic_judgment_cli.rs`, which is the
+    // top-level seam for this feature.
+    const UNSET_ENV_VAR: &str = "CHATTER_LLM_CACHE_TEST_UNSET_SENTINEL";
+
+    #[test]
+    fn llm_cache_flag_wins_over_absent_env() {
+        let flag = Path::new("/tmp/from-flag.json");
+        assert_eq!(
+            resolve_cache_path(Some(flag), UNSET_ENV_VAR),
+            Some(flag.to_path_buf())
+        );
+    }
+
+    #[test]
+    fn llm_cache_absent_flag_and_env_resolves_to_none() {
+        assert_eq!(resolve_cache_path(None, UNSET_ENV_VAR), None);
+    }
 }

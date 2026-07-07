@@ -8,7 +8,8 @@ use chrono::{DateTime, Utc};
 
 use crate::adjudication::{PendingEntry, PendingKindData, SuggestedSpeakerIdMapping};
 use crate::speaker_id::{
-    DecisionEngine, EndpointUrl, JudgmentProvenance, ModelId, PromptVersion, SpeakerAction,
+    DecisionEngine, EndpointUrl, InsertedRoleSpec, JudgmentProvenance, ModelId, PromptVersion,
+    SpeakerAction,
 };
 
 use super::output::{AdultRole, HolisticJudgment, SpeakerVerdict};
@@ -28,12 +29,6 @@ pub struct ProvenanceMeta {
 /// Why a judgment could not be converted into a pending entry.
 #[derive(Debug, thiserror::Error)]
 pub enum ConsumeError {
-    /// More than one donor speaker was ruled an adult; the single-adult first
-    /// cut cannot pick one inserted role. Multi-adult handling is a future
-    /// extension.
-    #[error("multiple adult speakers in judgment; single-adult only for now")]
-    MultipleAdults,
-
     /// A speaker ruled `adult` had no corresponding entry in `adult_roles`.
     #[error("adult speaker {0} missing from adult_roles")]
     AdultRoleMissing(String),
@@ -62,8 +57,11 @@ pub fn judgment_to_pending(
     created_at: DateTime<Utc>,
 ) -> Result<PendingEntry, ConsumeError> {
     let mut mapping: BTreeMap<String, SpeakerAction> = BTreeMap::new();
-    // Track the single adult we find; a second adult is an error.
-    let mut adult: Option<AdultRole> = None;
+    // Collect every adult (donor code + assigned role), in the
+    // BTreeMap's alphabetical donor-code traversal order; multiple
+    // adults are supported (the LLM may assign distinct roles per
+    // adult speaker).
+    let mut adults: Vec<(String, AdultRole)> = Vec::new();
 
     for (code, verdict) in &judgment.speaker_mapping {
         let action = match verdict {
@@ -73,10 +71,7 @@ pub fn judgment_to_pending(
                     .adult_roles
                     .get(code)
                     .ok_or_else(|| ConsumeError::AdultRoleMissing(code.0.clone()))?;
-                if adult.is_some() {
-                    return Err(ConsumeError::MultipleAdults);
-                }
-                adult = Some(*role);
+                adults.push((code.0.clone(), *role));
                 SpeakerAction::Rename
             }
             // Both CHI and drop verdicts produce a Drop action: CHI utterances
@@ -89,17 +84,18 @@ pub fn judgment_to_pending(
 
     // Fail closed on a self-contradictory judgment: a merge is said to apply
     // but the model named no adult to merge in.
-    if judgment.merge_applicable && adult.is_none() {
+    if judgment.merge_applicable && adults.is_empty() {
         return Err(ConsumeError::NoAdultButMergeApplicable);
     }
-    // INV is a neutral placeholder ONLY for the legitimate no-adult case
-    // (merge_applicable == false): the suggested mapping is all-Drop, so the
-    // inserted role is never applied; the operator reviews it.
-    let inserted_role = adult.unwrap_or(AdultRole::Inv).inserted_role_spec();
+
+    // Empty when there is no adult (the legitimate merge_applicable == false
+    // case): the suggested mapping is all-Drop, so there is no adult to assign
+    // a role to and no placeholder is emitted.
+    let adult_roles = disambiguate_adult_roles(adults);
 
     let suggested = SuggestedSpeakerIdMapping {
         mapping,
-        inserted_role,
+        adult_roles,
     };
 
     let provenance = JudgmentProvenance {
@@ -121,6 +117,68 @@ pub fn judgment_to_pending(
         engine: DecisionEngine::Llm,
         judgment: Some(provenance),
     })
+}
+
+/// Build the on-disk `adult_roles` map from `(donor_code, AdultRole)`
+/// pairs, auto-disambiguating any `AdultRole` shared by 2+ donor codes
+/// per the CHAT manual's `CHI1`/`CHI2` convention (numbered speaker
+/// codes, a `First_`/`Second_`/... specific-role label, the shared
+/// standard role tag unchanged). Codes within a colliding group keep
+/// their existing (already-alphabetical, from the BTreeMap traversal in
+/// `judgment_to_pending`) input order, so the first donor code gets
+/// `First_`.
+///
+/// This function is total and never panics: a same-role group larger
+/// than the named ordinals falls back to a plain 1-based numeral label
+/// (`5_Investigator`) rather than failing, and the numbered code is
+/// always `<CODE><n>` regardless of group size.
+fn disambiguate_adult_roles(
+    adults: Vec<(String, AdultRole)>,
+) -> BTreeMap<String, InsertedRoleSpec> {
+    // Human-readable ordinal labels for the common small collisions;
+    // positions beyond this fall back to a bare numeral (see below).
+    const ORDINALS: &[&str] = &["First", "Second", "Third", "Fourth"];
+
+    // Group donor codes by their assigned role code, preserving the
+    // input (alphabetical) order within each group.
+    let mut by_role: BTreeMap<&'static str, Vec<(String, AdultRole)>> = BTreeMap::new();
+    for (code, role) in adults {
+        by_role
+            .entry(role.as_code())
+            .or_default()
+            .push((code, role));
+    }
+
+    let mut result: BTreeMap<String, InsertedRoleSpec> = BTreeMap::new();
+    for group in by_role.into_values() {
+        // A group of one is the ordinary single-adult-per-role case: no
+        // numbering, no disambiguation label. A group of 2+ collides and
+        // needs the CHI1/CHI2 treatment.
+        let shared = group.len() >= 2;
+        for (position, (donor_code, role)) in group.into_iter().enumerate() {
+            let tag = role.inserted_role_spec().tag;
+            let spec = if shared {
+                // `position` is 0-based; CHAT codes and ordinals are 1-based.
+                let ordinal_label = match ORDINALS.get(position) {
+                    Some(word) => format!("{word}_{tag}"),
+                    None => format!("{}_{tag}", position + 1),
+                };
+                InsertedRoleSpec {
+                    code: format!("{}{}", role.as_code(), position + 1),
+                    tag,
+                    specific_role: Some(ordinal_label),
+                }
+            } else {
+                InsertedRoleSpec {
+                    code: role.as_code().to_string(),
+                    tag,
+                    specific_role: None,
+                }
+            };
+            result.insert(donor_code, spec);
+        }
+    }
+    result
 }
 
 #[cfg(test)]
@@ -207,13 +265,18 @@ mod tests {
             "Drop verdict must map to Drop"
         );
 
+        let role = suggested
+            .adult_roles
+            .get("PAR1")
+            .expect("PAR1 (the sole adult) must have a role entry");
+        assert_eq!(role.code, "INV", "role code must be INV for AdultRole::Inv");
         assert_eq!(
-            suggested.inserted_role.code, "INV",
-            "inserted_role code must be INV for AdultRole::Inv"
+            role.tag, "Investigator",
+            "role tag must be Investigator for AdultRole::Inv"
         );
-        assert_eq!(
-            suggested.inserted_role.tag, "Investigator",
-            "inserted_role tag must be Investigator for AdultRole::Inv"
+        assert!(
+            role.specific_role.is_none(),
+            "a single adult needs no disambiguation label"
         );
     }
 
@@ -270,9 +333,11 @@ mod tests {
         );
     }
 
-    /// Two adult verdicts must return MultipleAdults.
+    /// Two adult verdicts with two DIFFERENT roles must both appear in
+    /// `adult_roles`, no error (this is the behavior change from the
+    /// prior `MultipleAdults` refusal).
     #[test]
-    fn multiple_adults_is_error() {
+    fn two_adults_with_different_roles_both_map_to_rename() {
         let judgment = HolisticJudgment {
             speaker_mapping: BTreeMap::from([
                 (DonorCode("PAR0".to_string()), SpeakerVerdict::Adult),
@@ -280,20 +345,96 @@ mod tests {
             ]),
             adult_roles: BTreeMap::from([
                 (DonorCode("PAR0".to_string()), AdultRole::Inv),
-                (DonorCode("PAR1".to_string()), AdultRole::Mot),
+                (DonorCode("PAR1".to_string()), AdultRole::Fat),
             ]),
             sample_type: SampleTypeVerdict::Confirmed,
             merge_applicable: true,
             confidence: BTreeMap::new(),
-            reasoning: "two adults".to_string(),
+            reasoning: "two adults, different roles".to_string(),
         };
 
-        let err = judgment_to_pending("sess-004", &judgment, &test_meta(), fixed_ts())
-            .expect_err("two adult verdicts must produce an error");
-        assert!(
-            matches!(err, ConsumeError::MultipleAdults),
-            "error must be MultipleAdults; got: {err}"
+        let entry = judgment_to_pending("sess-two-adults", &judgment, &test_meta(), fixed_ts())
+            .expect("two adults with distinct roles must succeed, not MultipleAdults");
+
+        let PendingKindData::SpeakerIdLowConfidence { suggested } = &entry.data else {
+            panic!(
+                "expected SpeakerIdLowConfidence; got: {:?}",
+                entry.data.kind()
+            );
+        };
+        assert_eq!(suggested.mapping.get("PAR0"), Some(&SpeakerAction::Rename));
+        assert_eq!(suggested.mapping.get("PAR1"), Some(&SpeakerAction::Rename));
+        assert_eq!(
+            suggested
+                .adult_roles
+                .get("PAR0")
+                .map(|r| (r.code.as_str(), r.tag.as_str())),
+            Some(("INV", "Investigator")),
         );
+        assert_eq!(
+            suggested
+                .adult_roles
+                .get("PAR1")
+                .map(|r| (r.code.as_str(), r.tag.as_str())),
+            Some(("FAT", "Father")),
+        );
+        assert!(
+            suggested
+                .adult_roles
+                .get("PAR0")
+                .unwrap()
+                .specific_role
+                .is_none(),
+            "distinct-role adults need no specific-role disambiguation label"
+        );
+    }
+
+    /// Two adult verdicts assigned the SAME role must auto-disambiguate:
+    /// numbered codes (INV1/INV2) and specific-role labels
+    /// (First_Investigator/Second_Investigator), per the CHAT manual's
+    /// CHI1/CHI2 convention. Disambiguation order follows BTreeMap
+    /// iteration order over the donor codes (alphabetical: PAR0 before
+    /// PAR1), so PAR0 becomes "First".
+    #[test]
+    fn two_adults_with_same_role_auto_disambiguate() {
+        let judgment = HolisticJudgment {
+            speaker_mapping: BTreeMap::from([
+                (DonorCode("PAR0".to_string()), SpeakerVerdict::Adult),
+                (DonorCode("PAR1".to_string()), SpeakerVerdict::Adult),
+            ]),
+            adult_roles: BTreeMap::from([
+                (DonorCode("PAR0".to_string()), AdultRole::Inv),
+                (DonorCode("PAR1".to_string()), AdultRole::Inv),
+            ]),
+            sample_type: SampleTypeVerdict::Confirmed,
+            merge_applicable: true,
+            confidence: BTreeMap::new(),
+            reasoning: "two adults, same role".to_string(),
+        };
+
+        let entry = judgment_to_pending("sess-same-role", &judgment, &test_meta(), fixed_ts())
+            .expect("two adults with the same role must succeed via auto-disambiguation");
+
+        let PendingKindData::SpeakerIdLowConfidence { suggested } = &entry.data else {
+            panic!(
+                "expected SpeakerIdLowConfidence; got: {:?}",
+                entry.data.kind()
+            );
+        };
+        let par0 = suggested
+            .adult_roles
+            .get("PAR0")
+            .expect("PAR0 must have a role");
+        let par1 = suggested
+            .adult_roles
+            .get("PAR1")
+            .expect("PAR1 must have a role");
+        assert_eq!(par0.code, "INV1");
+        assert_eq!(par1.code, "INV2");
+        assert_eq!(par0.tag, "Investigator");
+        assert_eq!(par1.tag, "Investigator");
+        assert_eq!(par0.specific_role.as_deref(), Some("First_Investigator"));
+        assert_eq!(par1.specific_role.as_deref(), Some("Second_Investigator"));
     }
 
     /// An adult verdict with no matching adult_roles entry must return
@@ -382,9 +523,10 @@ mod tests {
     }
 
     /// merge_applicable=false with no adult succeeds (not an error) and
-    /// produces an all-Drop mapping with INV as the inserted-role placeholder.
+    /// produces an all-Drop mapping with an empty `adult_roles` map (no
+    /// adult means nothing to assign a role to; there is no placeholder).
     #[test]
-    fn merge_not_applicable_with_no_adult_uses_placeholder_ok() {
+    fn merge_not_applicable_with_no_adult_yields_empty_adult_roles() {
         let judgment = HolisticJudgment {
             speaker_mapping: BTreeMap::from([
                 (DonorCode("PAR0".to_string()), SpeakerVerdict::Drop),
@@ -416,10 +558,12 @@ mod tests {
             );
         }
 
-        // The inserted_role placeholder must be INV.
-        assert_eq!(
-            suggested.inserted_role.code, "INV",
-            "inserted_role code must be INV (neutral placeholder) when no adult and merge_applicable=false"
+        // No adult was named, so adult_roles must be empty, not a
+        // placeholder entry (there is no speaker to assign a role to;
+        // mapping is all-Drop).
+        assert!(
+            suggested.adult_roles.is_empty(),
+            "adult_roles must be empty when there is no adult, not a placeholder entry"
         );
     }
 
@@ -446,7 +590,7 @@ mod tests {
             .expect("judgment_to_pending should succeed");
 
         let doc = PendingAdjudications {
-            schema_version: 1,
+            schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
             entries: vec![entry.clone()],
         };
 

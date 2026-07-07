@@ -50,7 +50,8 @@ pub(super) fn exit_with_speaker_id_error(e: SpeakerIdError) -> ! {
         SpeakerIdError::InvalidMappingSpec(_)
         | SpeakerIdError::ReferenceMissingAnchor { .. }
         | SpeakerIdError::DonorTooFewSpeakers { .. }
-        | SpeakerIdError::SessionIdNotFound { .. } => EXIT_PRECONDITION,
+        | SpeakerIdError::SessionIdNotFound { .. }
+        | SpeakerIdError::OverrideRenameMissingRole { .. } => EXIT_PRECONDITION,
         SpeakerIdError::LowConfidence { .. } => EXIT_LOW_CONFIDENCE,
         SpeakerIdError::Parse(_) => EXIT_INPUT_ERROR,
     };

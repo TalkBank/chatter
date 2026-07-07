@@ -35,10 +35,26 @@ pub(crate) fn write_override_entry(path: &Path, input: &Path, outcome: &Referenc
         );
         "unknown".to_string()
     });
+    // Reference mode assigns the single inserted role to every speaker
+    // it renames; build the per-speaker adult_roles map by mapping every
+    // Rename-action speaker to that one role. `outcome.mapping` is a
+    // MappingSpec (HashMap<SpeakerCode, SpeakerAssignment>).
+    let mut adult_roles = std::collections::BTreeMap::new();
+    for (spk, action) in outcome.mapping.iter() {
+        if matches!(
+            action,
+            talkbank_transform::speaker_id::SpeakerAssignment::Rename { .. }
+        ) {
+            adult_roles.insert(
+                spk.as_str().to_string(),
+                InsertedRoleSpec::new(&outcome.inserted_code, &outcome.inserted_role_tag),
+            );
+        }
+    }
     let entry = MergeOverride::auto_decision(
         &outcome.mapping,
         &outcome.report,
-        InsertedRoleSpec::new(&outcome.inserted_code, &outcome.inserted_role_tag),
+        adult_roles,
         operator,
         Utc::now(),
     );
@@ -73,9 +89,18 @@ pub(super) fn write_pending_entry(
     let mut suggested_mapping: std::collections::BTreeMap<String, SpeakerAction> =
         std::collections::BTreeMap::new();
     suggested_mapping.insert(report.winner.as_str().to_string(), SpeakerAction::Drop);
+    // Every non-winner speaker is a Rename candidate; give each the same
+    // inserted role (reference mode's single --inserted-role), keyed by
+    // its own donor code in the adult_roles map.
+    let mut adult_roles: std::collections::BTreeMap<String, InsertedRoleSpec> =
+        std::collections::BTreeMap::new();
     for spk in donor_chat.unique_utterance_speakers() {
         if spk != report.winner {
             suggested_mapping.insert(spk.as_str().to_string(), SpeakerAction::Rename);
+            adult_roles.insert(
+                spk.as_str().to_string(),
+                InsertedRoleSpec::new(inserted_code, inserted_role_tag),
+            );
         }
     }
     let entry = PendingEntry {
@@ -84,7 +109,7 @@ pub(super) fn write_pending_entry(
         data: PendingKindData::SpeakerIdLowConfidence {
             suggested: SuggestedSpeakerIdMapping {
                 mapping: suggested_mapping,
-                inserted_role: InsertedRoleSpec::new(inserted_code, inserted_role_tag),
+                adult_roles,
             },
         },
         scores: report.scores_to_serializable(),

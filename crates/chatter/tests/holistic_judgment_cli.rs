@@ -172,3 +172,117 @@ fn speaker_id_holistic_session_context_labels_reach_judgment_request() {
         "pending entry must be stamped engine=llm; got:\n{pending_text}"
     );
 }
+
+/// `--llm-cache FILE`: a second `chatter speaker-id --judgment holistic`
+/// invocation for the same donor is answered from the cache, so the mock
+/// endpoint sees exactly one request across both runs.
+#[test]
+fn speaker_id_holistic_llm_cache_flag_avoids_second_request() {
+    let server = MockServer::start();
+    let body = serde_json::json!({
+        "choices": [ { "message": { "role": "assistant", "content": HOLISTIC_JSON } } ]
+    });
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/v1/chat/completions");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(body);
+    });
+
+    let donor = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../corpus/reference/languages/ell-conversation.cha"
+    );
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let cache_path = tmp.path().join("llm-cache.json");
+
+    let run = |pending_name: &str| {
+        let pending = tmp.path().join(pending_name);
+        let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
+            .args([
+                "speaker-id",
+                "--judgment",
+                "holistic",
+                "--anchor",
+                "CHI",
+                "--llm-endpoint",
+                &format!("{}/v1", server.base_url()),
+                "--llm-model",
+                "deepseek-v4-flash",
+                "--llm-cache",
+                cache_path.to_str().expect("utf8 path"),
+                "--write-pending",
+                pending.to_str().expect("utf8 path"),
+                donor,
+            ])
+            .output()
+            .expect("run chatter");
+        assert!(
+            output.status.success(),
+            "chatter exited non-zero: stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    run("pending-1.toml");
+    run("pending-2.toml");
+
+    mock.assert_calls(1); // the second run's identical request was cache-served
+}
+
+/// `CHATTER_LLM_CACHE` env fallback: an env-configured cache (no `--llm-cache`
+/// flag) is honored the same way the flag is.
+#[test]
+fn speaker_id_holistic_llm_cache_env_fallback() {
+    let server = MockServer::start();
+    let body = serde_json::json!({
+        "choices": [ { "message": { "role": "assistant", "content": HOLISTIC_JSON } } ]
+    });
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/v1/chat/completions");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(body);
+    });
+
+    let donor = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../corpus/reference/languages/ell-conversation.cha"
+    );
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let cache_path = tmp.path().join("llm-cache.json");
+
+    let run = |pending_name: &str| {
+        let pending = tmp.path().join(pending_name);
+        let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
+            .env("CHATTER_LLM_CACHE", &cache_path)
+            .args([
+                "speaker-id",
+                "--judgment",
+                "holistic",
+                "--anchor",
+                "CHI",
+                "--llm-endpoint",
+                &format!("{}/v1", server.base_url()),
+                "--llm-model",
+                "deepseek-v4-flash",
+                "--write-pending",
+                pending.to_str().expect("utf8 path"),
+                donor,
+            ])
+            .output()
+            .expect("run chatter");
+        assert!(
+            output.status.success(),
+            "chatter exited non-zero: stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    run("pending-1.toml");
+    run("pending-2.toml");
+
+    mock.assert_calls(1); // CHATTER_LLM_CACHE alone was enough to cache the second run
+}

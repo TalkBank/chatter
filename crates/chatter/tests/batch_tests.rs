@@ -212,11 +212,11 @@ fn batch_mixed_outcomes() -> Result<(), TestError> {
 /// borderline session. Models the post-adjudication state: the
 /// operator ran `chatter adjudicate` on the pass-1 pending file
 /// and the decision was recorded here.
-const FIX_OVERRIDE_RESOLVED_SESSION_B: &str = r#"schema_version = 1
+const FIX_OVERRIDE_RESOLVED_SESSION_B: &str = r#"schema_version = 2
 
 [session-B]
 mode = "explicit"
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "drop", PAR1 = "rename" }
 operator = "fixture-operator"
 decided_at = "2026-05-28T11:00:00Z"

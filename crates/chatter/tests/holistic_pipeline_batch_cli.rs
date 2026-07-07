@@ -164,6 +164,28 @@ fn batch_holistic_writes_llm_pending_for_every_session_no_merge() {
         merged.is_empty(),
         "holistic is pending-only: no merged files"
     );
+
+    // The summary must tell the same story as the artifacts: nothing was
+    // merged; two suggestions await adjudication. (Field regression
+    // 2026-07-07: the summary claimed "2 merged, 0 pending adjudication"
+    // because exit code 0 was conflated with a merged file existing.)
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary_line = combined
+        .lines()
+        .find(|l| l.contains("batch summary:"))
+        .unwrap_or_else(|| panic!("no batch summary line in output:\n{combined}"));
+    assert!(
+        summary_line.contains("0 merged"),
+        "summary must report zero merged files, got: {summary_line}"
+    );
+    assert!(
+        summary_line.contains("2 suggestions awaiting adjudication"),
+        "summary must count the written suggestions, got: {summary_line}"
+    );
 }
 
 /// A mock that only matches when the judgment request body carries every

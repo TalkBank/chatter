@@ -80,6 +80,21 @@ pub enum SpeakerIdError {
         available: Vec<String>,
     },
 
+    /// Override-file replay: an entry recorded a `Rename` action for a
+    /// speaker with no matching `adult_roles` entry, so there is no CHAT
+    /// identity to rename it to. Only reachable via a hand-corrupted
+    /// override file; the sanctioned writer paths always cover every
+    /// `Rename`. Reported (rather than panicking) so a bad file fails
+    /// closed with a diagnostic instead of crashing.
+    #[error(
+        "override entry renames speaker {speaker} but has no adult_roles entry for it; \
+         the file is internally inconsistent (hand-edited?)"
+    )]
+    OverrideRenameMissingRole {
+        /// The speaker code whose `Rename` action had no role entry.
+        speaker: SpeakerCode,
+    },
+
     /// Underlying parse error from the input file.
     #[error("parse error: {0}")]
     Parse(#[from] PipelineError),

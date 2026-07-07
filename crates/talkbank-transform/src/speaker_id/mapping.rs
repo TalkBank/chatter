@@ -25,6 +25,13 @@ pub enum SpeakerAssignment {
         code: SpeakerCode,
         /// Replacement role tag (e.g. `Investigator`, `Target_Child`).
         role: ParticipantRole,
+        /// Specific-role label to use in `@Participants`' name/specific-role
+        /// slot (CHAT manual convention: `First_Investigator`, matching
+        /// `First_Sibling`/`Second_Sibling` for two people sharing a
+        /// standard role). `None` preserves the donor's original entry's
+        /// `name` field verbatim, matching pre-existing single-role
+        /// behavior.
+        specific_role: Option<talkbank_model::ParticipantName>,
     },
 }
 
@@ -73,6 +80,7 @@ pub fn parse_mapping_spec(spec: &str) -> Result<MappingSpec, SpeakerIdError> {
             SpeakerAssignment::Rename {
                 code: SpeakerCode::new(code.trim()),
                 role: ParticipantRole::new(role.trim()),
+                specific_role: None,
             }
         };
         out.insert(old_code, assignment);

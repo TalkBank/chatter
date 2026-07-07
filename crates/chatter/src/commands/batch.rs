@@ -76,6 +76,10 @@ pub struct BatchArgs<'a> {
     pub llm_api_key: Option<&'a str>,
     pub llm_timeout_secs: Option<u64>,
     pub llm_max_retries: Option<u32>,
+    /// LLM response-cache file (falls back to `CHATTER_LLM_CACHE`), threaded
+    /// to every per-session `chatter pipeline` subprocess. Absent means
+    /// uncached.
+    pub llm_cache_path: Option<&'a Path>,
     /// Optional session-context JSON path for holistic context,
     /// threaded to every per-session `chatter pipeline` subprocess.
     pub session_context: Option<&'a Path>,
@@ -122,6 +126,7 @@ pub fn run_batch(args: BatchArgs<'_>) {
         llm_api_key,
         llm_timeout_secs,
         llm_max_retries,
+        llm_cache_path,
         session_context,
     } = args;
 
@@ -203,6 +208,7 @@ pub fn run_batch(args: BatchArgs<'_>) {
     };
 
     let mut successes = 0usize;
+    let mut suggestions = 0usize;
     let mut refusals = 0usize;
     let mut errors = 0usize;
     let mut unmatched = 0usize;
@@ -255,13 +261,18 @@ pub fn run_batch(args: BatchArgs<'_>) {
             llm_api_key,
             llm_timeout_secs,
             llm_max_retries,
+            llm_cache_path,
             session_context,
         };
         let outcome = run_pipeline_subprocess(&self_exe, &pipeline_args);
         match outcome {
-            SessionOutcome::Success => {
+            SessionOutcome::Merged => {
                 info!("✓ {}", donor.display());
                 successes += 1;
+            }
+            SessionOutcome::SuggestionWritten => {
+                info!("→ suggestion written: {}", donor.display());
+                suggestions += 1;
             }
             SessionOutcome::LowConfidence => {
                 info!("⚠ low-confidence: {}", donor.display());
@@ -275,9 +286,9 @@ pub fn run_batch(args: BatchArgs<'_>) {
         }
     }
 
-    let total = successes + refusals + errors + unmatched + skipped;
+    let total = successes + suggestions + refusals + errors + unmatched + skipped;
     eprintln!(
-        "batch summary: {total} matched donor(s); {successes} merged, {refusals} pending adjudication, {errors} errored, {unmatched} unmatched (no reference), {skipped} skipped (output existed)"
+        "batch summary: {total} matched donor(s); {successes} merged, {suggestions} suggestions awaiting adjudication, {refusals} low-confidence refusals awaiting adjudication, {errors} errored, {unmatched} unmatched (no reference), {skipped} skipped (output existed)"
     );
 
     // Run the post-loop sanity-scan unconditionally on `--sanity-scan`
@@ -360,8 +371,16 @@ fn run_sanity_scan_subprocess(
 /// three exit-code paths from `chatter pipeline` that the batch
 /// summary cares about.
 enum SessionOutcome {
-    /// Pipeline exited 0, merged file produced.
-    Success,
+    /// Pipeline exited 0 AND the merged output file exists.
+    Merged,
+    /// Pipeline exited 0 but produced NO merged file: the holistic
+    /// judgment path wrote a *suggestion* to the pending file instead
+    /// of merging (pre-calibration trust posture: the LLM advises, the
+    /// operator decides via `chatter adjudicate`). Distinguished from
+    /// [`Self::Merged`] by ground truth (does the output exist), not by
+    /// exit code, which is 0 in both cases; conflating them made the
+    /// batch summary claim merges that never happened.
+    SuggestionWritten,
     /// Pipeline exited 4, speaker-id refused for low confidence.
     /// The pending entry was written (if `--write-pending` was
     /// supplied to the batch). The operator runs `chatter
@@ -418,6 +437,9 @@ fn run_pipeline_subprocess(self_exe: &Path, args: &PipelineArgs<'_>) -> SessionO
         if let Some(r) = args.llm_max_retries {
             cmd.arg("--llm-max-retries").arg(r.to_string());
         }
+        if let Some(cache_path) = args.llm_cache_path {
+            cmd.arg("--llm-cache").arg(cache_path);
+        }
         if let Some(ctx) = args.session_context {
             cmd.arg("--session-context").arg(ctx);
         }
@@ -432,7 +454,16 @@ fn run_pipeline_subprocess(self_exe: &Path, args: &PipelineArgs<'_>) -> SessionO
     }
     match cmd.status() {
         Ok(status) => match status.code() {
-            Some(code) if code == EXIT_SUCCESS => SessionOutcome::Success,
+            // Exit 0 covers two distinct outcomes; the merged file's
+            // existence is the ground truth that separates them (see
+            // `SessionOutcome::SuggestionWritten`).
+            Some(code) if code == EXIT_SUCCESS => {
+                if args.output.exists() {
+                    SessionOutcome::Merged
+                } else {
+                    SessionOutcome::SuggestionWritten
+                }
+            }
             Some(code) if code == EXIT_LOW_CONFIDENCE => SessionOutcome::LowConfidence,
             Some(code) => SessionOutcome::Error(code),
             // `None` means the subprocess was terminated by a signal

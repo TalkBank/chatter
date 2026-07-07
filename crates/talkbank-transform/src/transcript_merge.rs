@@ -15,6 +15,7 @@
 //! `RetainSet`, `MergeError`, `--strip-tiers`, etc.
 
 use talkbank_model::ParseValidateOptions;
+use talkbank_model::ParticipantRole;
 use talkbank_model::SpeakerCode;
 use talkbank_model::WriteChat;
 use talkbank_model::model::header::{Header, LanguageCodes, ParticipantEntries, ParticipantEntry};
@@ -56,14 +57,18 @@ pub enum MergeError {
     #[error("File 1 has no time-bulleted utterances; cannot merge against a shared timeline")]
     NoTimelineInFile1,
 
-    /// The two input files' `@Languages` headers disagree. Cross-language
-    /// merging would corrupt downstream language-aware stages (morphotag,
-    /// alignment, segmentation), so the merge refuses rather than emit a
-    /// mixed-language file. Both files' declared code lists are preserved
-    /// in the payload so the operator can diagnose the mismatch without
-    /// re-reading the inputs.
+    /// File 2 (the donor) declares an `@Languages` code not present in
+    /// File 1 (the reference)'s set. Reference is treated as authoritative
+    /// (typically hand-coded); donor under-claiming (e.g., ASR run in a
+    /// fixed language mode) is expected and fine, but donor over-claiming
+    /// is suspicious enough to refuse: it may signal a wrong-file pairing,
+    /// or a language the annotator missed, either way needs a human look
+    /// rather than a silent merge. Both files' declared code lists are
+    /// preserved in the payload so the operator can diagnose the mismatch
+    /// without re-reading the inputs.
     #[error(
-        "File 1 @Languages = {f1} ; File 2 @Languages = {f2} ; merge requires matching @Languages",
+        "File 2 declares language(s) not present in File 1's @Languages; \
+         File 1 = {f1} ; File 2 = {f2}",
         f1 = file1.to_chat_string(),
         f2 = file2.to_chat_string(),
     )]
@@ -90,6 +95,25 @@ pub enum MergeError {
         /// The conflicting speaker code, named so the operator does
         /// not have to diff participant lists to identify it.
         speaker: SpeakerCode,
+    },
+
+    /// A participant code the donor uses (outside `--retain`) is already
+    /// declared in File 1 with either real utterances or metadata that
+    /// disagrees with the donor's declaration for that code. Silently
+    /// keeping one side's declaration would either discard real content
+    /// or paper over a genuine identity mismatch, so the merge refuses.
+    #[error(
+        "speaker {speaker} is already declared in File 1 (role {file1_role}) and also appears \
+         in File 2's non-retained participants (role {donor_role}); this is ambiguous, resolve \
+         by adding {speaker} to --retain or renaming it in File 2"
+    )]
+    ParticipantAlreadyDeclared {
+        /// The colliding speaker code.
+        speaker: SpeakerCode,
+        /// File 1's declared role for this code.
+        file1_role: ParticipantRole,
+        /// The role the donor's entry for this code declares.
+        donor_role: ParticipantRole,
     },
 
     /// Underlying parse error from either input file.
@@ -146,13 +170,16 @@ pub fn merge_chats(
     let f1 = parse_and_validate(file1_content, options.clone())?;
     let f2 = parse_and_validate(file2_content, options)?;
 
-    // Precondition: both files' `@Languages` headers must agree. A
-    // language disagreement makes every later precondition moot, so
-    // it's checked first. Files without an explicit `@Languages` row
-    // both produce an empty `LanguageCodes`, which compare equal.
+    // Precondition: donor (File 2) must not declare a language reference
+    // (File 1) doesn't have. Donor under-claiming (ASR run in a fixed
+    // language mode) is expected and fine; donor over-claiming is
+    // suspicious enough to refuse (a wrong-file pairing, or a language
+    // the annotator missed either way needs a human look, not a silent
+    // merge). Exact-equality is the special case where both sets match.
     let f1_langs = extract_languages(&f1);
     let f2_langs = extract_languages(&f2);
-    if f1_langs != f2_langs {
+    let donor_over_claims = f2_langs.0.iter().any(|code| !f1_langs.0.contains(code));
+    if donor_over_claims {
         return Err(MergeError::LanguageMismatch {
             file1: f1_langs,
             file2: f2_langs,
@@ -213,6 +240,47 @@ pub fn merge_chats(
         }
     }
 
+    // Precondition: a donor participant code (outside `--retain`) that
+    // File 1 already declares must either be a safe silent dedupe
+    // (File 1's declaration is vestigial: zero utterances, matching
+    // role/name metadata) or a refusal (File 1 has real content under
+    // that code, or the two declarations disagree). Build the dedupe
+    // set up front so the insertion filters below can consult it.
+    let f1_declared = declared_participants(&f1);
+    let mut dedupe_codes: std::collections::HashSet<SpeakerCode> = std::collections::HashSet::new();
+    for line in f2.lines.0.iter() {
+        if let Line::Header { header, .. } = line
+            && let Header::Participants { entries } = header.as_ref()
+        {
+            for donor_entry in entries.iter() {
+                if in_retain(&donor_entry.speaker_code) {
+                    continue;
+                }
+                if let Some(f1_entry) = f1_declared.get(&donor_entry.speaker_code) {
+                    let vestigial = utterance_count_for(&f1, &donor_entry.speaker_code) == 0;
+                    let roles_match = f1_entry.role == donor_entry.role;
+                    // Name is part of the dedupe metadata only when BOTH
+                    // sides actually declare one; if either side has no
+                    // name there is nothing to compare on that dimension,
+                    // so it must not by itself force a refusal.
+                    let names_match = match (&f1_entry.name, &donor_entry.name) {
+                        (Some(f1_name), Some(donor_name)) => f1_name == donor_name,
+                        (None, _) | (_, None) => true,
+                    };
+                    let metadata_matches = roles_match && names_match;
+                    if !vestigial || !metadata_matches {
+                        return Err(MergeError::ParticipantAlreadyDeclared {
+                            speaker: donor_entry.speaker_code.clone(),
+                            file1_role: f1_entry.role.clone(),
+                            donor_role: donor_entry.role.clone(),
+                        });
+                    }
+                    dedupe_codes.insert(donor_entry.speaker_code.clone());
+                }
+            }
+        }
+    }
+
     // Collect File 2's participant entries for speakers NOT in
     // `retain`; these will extend File 1's @Participants header.
     let inserted_participants: Vec<ParticipantEntry> = f2
@@ -227,7 +295,9 @@ pub fn merge_chats(
             _ => None,
         })
         .flat_map(|entries| entries.iter().cloned())
-        .filter(|entry| !in_retain(&entry.speaker_code))
+        .filter(|entry| {
+            !in_retain(&entry.speaker_code) && !dedupe_codes.contains(&entry.speaker_code)
+        })
         .collect();
 
     // Collect File 2's @ID rows for speakers NOT in `retain`,
@@ -238,7 +308,7 @@ pub fn merge_chats(
         .iter()
         .filter(|line| match line {
             Line::Header { header, .. } => match header.as_ref() {
-                Header::ID(id) => !in_retain(&id.speaker),
+                Header::ID(id) => !in_retain(&id.speaker) && !dedupe_codes.contains(&id.speaker),
                 _ => false,
             },
             _ => false,
@@ -405,4 +475,37 @@ where
             Line::Header { header, .. } if predicate(header.as_ref()) => Some(i),
             _ => None,
         })
+}
+
+/// Speaker codes declared in `chat_file`'s `@Participants` header,
+/// mapped to their full entry. Empty if the file has no
+/// `@Participants` header line (CHAT expects exactly one; this stays
+/// defensive rather than assuming).
+fn declared_participants(
+    chat_file: &ChatFile,
+) -> std::collections::HashMap<SpeakerCode, ParticipantEntry> {
+    chat_file
+        .lines
+        .0
+        .iter()
+        .filter_map(|line| match line {
+            Line::Header { header, .. } => match header.as_ref() {
+                Header::Participants { entries } => Some(entries),
+                _ => None,
+            },
+            _ => None,
+        })
+        .flat_map(|entries| entries.iter().cloned())
+        .map(|entry| (entry.speaker_code.clone(), entry))
+        .collect()
+}
+
+/// Number of main-tier utterances in `chat_file` whose speaker is `code`.
+fn utterance_count_for(chat_file: &ChatFile, code: &SpeakerCode) -> usize {
+    chat_file
+        .lines
+        .0
+        .iter()
+        .filter(|line| matches!(line, Line::Utterance(u) if &u.main.speaker == code))
+        .count()
 }
