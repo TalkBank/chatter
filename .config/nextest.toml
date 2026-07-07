@@ -36,13 +36,15 @@ filter = 'test(full_corpus_parse)'
 slow-timeout = { period = "300s", terminate-after = 6 }
 
 
-# send2clan's availability probes talk to the real CLAN application over
-# Apple Events; a single probe legitimately takes tens of seconds even on
-# an idle machine (about 55s observed for the two-probe determinism test),
-# and can exceed the 120s default ceiling when the machine is loaded (it
-# timed out during the 2026-07-07 v0.3.0 release gate while a judgment
-# batch was running). Bound it generously rather than letting the hang
-# guard misclassify a slow external round-trip as a spin.
+# send2clan's tests talk to the real CLAN application over Apple Events;
+# a single probe legitimately takes tens of seconds even on an idle
+# machine (about 27s per probe observed), and exceeds the 120s default
+# ceiling when the machine is loaded (during the 2026-07-07 v0.3.0
+# release gate, run concurrently with a judgment batch, the availability
+# AND capabilities test families all timed out). The whole package is
+# external-round-trip bound, so the override is package-scoped: a
+# generous bound instead of the hang guard misclassifying slow Apple
+# Events as a spin.
 [[profile.default.overrides]]
-filter = 'package(send2clan) and test(is_clan_available)'
+filter = 'package(send2clan)'
 slow-timeout = { period = "150s", terminate-after = 2 }
