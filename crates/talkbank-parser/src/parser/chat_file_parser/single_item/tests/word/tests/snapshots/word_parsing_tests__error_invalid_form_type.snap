@@ -2,38 +2,41 @@
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
 expression: result
 ---
-Ok(
-    Word {
-        span: Span {
-            start: 0,
-            end: 7,
-        },
-        word_id: None,
-        raw_text: "hello@z",
-        content: WordContents(
-            [
-                Text(
-                    WordText(
-                        NonEmptyString(
-                            "hello",
-                        ),
-                    ),
+Err(
+    ParseErrors {
+        errors: [
+            ParseError {
+                code: InvalidFormType,
+                severity: Error,
+                location: SourceLocation {
+                    span: Span {
+                        start: 5,
+                        end: 7,
+                    },
+                    line: None,
+                    column: None,
+                },
+                context: Some(
+                    ErrorContext {
+                        source_text: "hello@z",
+                        span: Span {
+                            start: 5,
+                            end: 7,
+                        },
+                        expected: [],
+                        found: "",
+                        line_offset: None,
+                    },
                 ),
-            ],
-        ),
-        category: None,
-        form_type: Some(
-            UserDefined(
-                "",
-            ),
-        ),
-        lang: None,
-        part_of_speech: None,
-        inline_bullet: None,
-        cached_cleaned_text: CachedStr(
-            OnceLock(
-                <uninit>,
-            ),
-        ),
+                labels: [],
+                message: "Undeclared form marker '@z'",
+                suggestion: Some(
+                    "Valid form markers: @b @c @d @f @fp @g @i @k @l @ls @n @o @p @q @sas @si @sl @t @u @wp @x @z",
+                ),
+                help_url: Some(
+                    "https://talkbank.org/errors/E203",
+                ),
+            },
+        ],
     },
 )

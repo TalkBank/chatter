@@ -16,6 +16,11 @@ regex = { workspace = true } #unified
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 shellexpand = { workspace = true }
+# `syn` parses the generated typed CST traversal to derive the mechanical
+# conformance inventory (see `conformance_inventory`). This crate is
+# `publish = false` test infrastructure, so a normal (non-dev) dep is fine and
+# lets the guard test call the generator's core function directly.
+syn = { workspace = true }
 talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }
 thiserror = { workspace = true }

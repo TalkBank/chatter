@@ -133,31 +133,41 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
     if let Some(marker) = w.form_marker {
         if let Some(ft) = FormType::parse(marker) {
             word = word.with_form_type(ft);
-        } else if marker.starts_with("z") {
-            // User-defined form: z or z:label
-            let label = marker.strip_prefix("z").unwrap_or("");
-            let label = label.strip_prefix(':').unwrap_or(label);
+        } else if let Some(label) = marker.strip_prefix("z:") {
+            // User-defined form REQUIRES the colon and a label: `@z:label`.
+            // `@z` without a colon (e.g. `@zzz`) is left WITHOUT a form_type so the
+            // shared model validation (talkbank-model validation/word/structure.rs)
+            // rejects it with E203, matching CLAN CHECK 147 and the tree-sitter
+            // parser. Setting a form_type here would mask it from that validation.
             word = word.with_form_type(FormType::UserDefined(label.to_string()));
         }
     }
 
-    // Language suffix, typed enum, no string hacking
+    // Language suffix, typed enum, no string hacking. Each split piece is
+    // guaranteed non-empty by the lexer's `lang_suffix` regex
+    // (`[a-z]{2,3}` per `+`/`&`-separated segment, see the token catalog
+    // doc), so `.expect()` is defensive only.
     if let Some(ref lang) = w.lang {
         word = match lang {
             crate::ast::ParsedLangSuffix::Shortcut => word.with_language_shortcut(),
             crate::ast::ParsedLangSuffix::Explicit(codes) if codes.contains('+') => {
-                let lc: Vec<LanguageCode> = codes.split('+').map(LanguageCode::new).collect();
+                let lc: Vec<LanguageCode> = codes
+                    .split('+')
+                    .map(|c| LanguageCode::new(c).expect("lexer-guaranteed non-empty segment"))
+                    .collect();
                 word.lang = Some(WordLanguageMarker::Multiple(lc));
                 word
             }
             crate::ast::ParsedLangSuffix::Explicit(codes) if codes.contains('&') => {
-                let lc: Vec<LanguageCode> = codes.split('&').map(LanguageCode::new).collect();
+                let lc: Vec<LanguageCode> = codes
+                    .split('&')
+                    .map(|c| LanguageCode::new(c).expect("lexer-guaranteed non-empty segment"))
+                    .collect();
                 word.lang = Some(WordLanguageMarker::Ambiguous(lc));
                 word
             }
-            crate::ast::ParsedLangSuffix::Explicit(code) => {
-                word.with_lang(LanguageCode::new(*code))
-            }
+            crate::ast::ParsedLangSuffix::Explicit(code) => word
+                .with_lang(LanguageCode::new(*code).expect("lexer-guaranteed non-empty segment")),
         };
     }
 

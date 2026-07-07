@@ -267,7 +267,7 @@ fn require_header(chat_file: &ChatFile, required: RequiredHeader) -> Result<(), 
 
 /// Tests require language.
 fn require_language(chat_file: &ChatFile, language: &str) -> Result<(), TestError> {
-    let expected = LanguageCode::new(language);
+    let expected = LanguageCode::new(language).expect("test call sites pass non-empty literals");
     let found = chat_file.lines.iter().any(|line| match line.as_header() {
         Some(Header::Languages { codes }) => codes.contains(&expected),
         _ => false,
@@ -308,7 +308,8 @@ fn require_id_header(
     speaker: &str,
     role: &str,
 ) -> Result<(), TestError> {
-    let expected_language = LanguageCode::new(language);
+    let expected_language =
+        LanguageCode::new(language).expect("test call sites pass non-empty literals");
     let expected_corpus = CorpusName::new(corpus);
     let expected_speaker = SpeakerCode::new(speaker);
     let expected_role = ParticipantRole::new(role);

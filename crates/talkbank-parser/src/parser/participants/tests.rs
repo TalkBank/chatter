@@ -2,6 +2,7 @@
 //!
 
 use super::build_participants;
+use talkbank_model::model::LanguageCode;
 use talkbank_model::model::{
     ChatDate, Header, IDHeader, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
 };
@@ -18,7 +19,11 @@ fn test_build_participants_basic() -> Result<(), String> {
             }]
             .into(),
         },
-        Header::ID(IDHeader::new("eng", "CHI", "Target_Child")),
+        Header::ID(IDHeader::new(
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        )),
     ];
 
     let (participants, errors) = build_participants(&headers);
@@ -47,7 +52,11 @@ fn test_build_participants_with_birth() -> Result<(), String> {
             }]
             .into(),
         },
-        Header::ID(IDHeader::new("eng", "CHI", "Target_Child")),
+        Header::ID(IDHeader::new(
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        )),
         Header::Birth {
             participant: SpeakerCode::new("CHI"),
             date: ChatDate::new("28-JUN-2001"),
@@ -105,8 +114,16 @@ fn test_e523_orphan_id() {
             }]
             .into(),
         },
-        Header::ID(IDHeader::new("eng", "CHI", "Target_Child")),
-        Header::ID(IDHeader::new("eng", "MOT", "Mother")), // Orphan - not in @Participants
+        Header::ID(IDHeader::new(
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        )),
+        Header::ID(IDHeader::new(
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+            "MOT",
+            "Mother",
+        )), // Orphan - not in @Participants
     ];
 
     let (participants, errors) = build_participants(&headers);
@@ -130,7 +147,11 @@ fn test_e524_orphan_birth() {
             }]
             .into(),
         },
-        Header::ID(IDHeader::new("eng", "CHI", "Target_Child")),
+        Header::ID(IDHeader::new(
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        )),
         Header::Birth {
             participant: SpeakerCode::new("MOT"), // Orphan - MOT not a participant
             date: ChatDate::new("01-JAN-2000"),
@@ -165,8 +186,19 @@ fn test_multiple_participants() -> Result<(), String> {
             ]
             .into(),
         },
-        Header::ID(IDHeader::new("eng", "CHI", "Target_Child").with_age("10;03.")),
-        Header::ID(IDHeader::new("eng", "INV", "Investigator")),
+        Header::ID(
+            IDHeader::new(
+                LanguageCode::new("eng").expect("test literal is non-empty"),
+                "CHI",
+                "Target_Child",
+            )
+            .with_age("10;03."),
+        ),
+        Header::ID(IDHeader::new(
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+            "INV",
+            "Investigator",
+        )),
         Header::Birth {
             participant: SpeakerCode::new("CHI"),
             date: ChatDate::new("28-JUN-2001"),

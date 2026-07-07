@@ -73,15 +73,21 @@ pub fn check_error_number(code: &ErrorCode) -> u16 {
 
         // -- Word errors --
         ErrorCode::IllegalDigits => 47, // Numbers inside words
+        // Primary correspondence is CLAN 48 (illegal characters). This code
+        // ALSO surfaces CLAN 86's private-use / non-standard-Unicode word
+        // condition (`is_nonstandard_unicode_word_char` in word/structure.rs,
+        // grounded in the check_parity manifest as 86 -> E243); a generic
+        // chatter code can cover several CLAN numbers, and the behavioral
+        // manifest, not this name-level map, is authoritative on what fires.
         ErrorCode::IllegalCharactersInWord => 48, // Illegal characters
-        ErrorCode::InvalidWordFormat => 48, // Illegal word format
-        ErrorCode::MalformedWordContent => 48, // Malformed word
-        ErrorCode::MissingFormType => 48, // Missing special form marker
-        ErrorCode::InvalidFormType => 147, // Undeclared form marker in depfile
-        ErrorCode::EmptySpokenContent => 155, // "(word)" -> use "0word"
-        ErrorCode::IllegalUntranscribed => 135, // Illegal use of xxx/yyy/www
-        ErrorCode::IllegalCurlyQuote => 138, // Curly single quote -> ASCII apostrophe
-        ErrorCode::ConsecutiveCommas => 107, // Only single commas allowed
+        ErrorCode::InvalidWordFormat => 48,       // Illegal word format
+        ErrorCode::MalformedWordContent => 48,    // Malformed word
+        ErrorCode::MissingFormType => 48,         // Missing special form marker
+        ErrorCode::InvalidFormType => 147,        // Undeclared form marker in depfile
+        ErrorCode::EmptySpokenContent => 155,     // "(word)" -> use "0word"
+        ErrorCode::IllegalUntranscribed => 135,   // Illegal use of xxx/yyy/www
+        ErrorCode::IllegalCurlyQuote => 138,      // Curly single quote -> ASCII apostrophe
+        ErrorCode::ConsecutiveCommas => 107,      // Only single commas allowed
 
         // -- Tier errors --
         ErrorCode::DuplicateDependentTier => 40, // Duplicate code tiers
@@ -135,9 +141,12 @@ pub fn check_error_number(code: &ErrorCode) -> u16 {
         // -- Misc --
         ErrorCode::EmptyUtterance => 70,   // Expected text or "0"
         ErrorCode::EmptyWordContent => 70, // Word content is empty (subcase of 70)
+        // NOTE: CLAN 86's private-use / non-standard-Unicode word condition is
+        // surfaced at runtime as E243 IllegalCharactersInWord (see above), not
+        // this code; this entry records E315's own name-level correspondence.
         ErrorCode::InvalidControlCharacter => 86, // Re-enter using Unicode
-        ErrorCode::InvalidPostcode => 108, // Postcodes before bullet
-        ErrorCode::SpeakerNotDefined => 18, // Speaker not in participants
+        ErrorCode::InvalidPostcode => 108,        // Postcodes before bullet
+        ErrorCode::SpeakerNotDefined => 18,       // Speaker not in participants
         ErrorCode::UndeclaredSpeaker => 18,
         ErrorCode::DuplicateSpeakerDeclaration => 13, // Speaker declared twice in @Participants
         ErrorCode::TrailingCommaInParticipants => 100, // Trailing comma at end of @Participants

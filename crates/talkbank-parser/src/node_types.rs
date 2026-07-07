@@ -848,6 +848,8 @@ pub const STRICT_DATE: &str = "strict_date";
 pub const STRICT_TIME: &str = "strict_time";
 /// Unrecognized line in document.
 pub const UNSUPPORTED_LINE: &str = "unsupported_line";
+/// CST node type: `blank_line` (a line break with no content; invalid CHAT, CLAN 91).
+pub const BLANK_LINE: &str = "blank_line";
 /// CST node type: `word_body`.
 pub const WORD_BODY: &str = "word_body";
 /// CST node type: `word_lang_codes`.

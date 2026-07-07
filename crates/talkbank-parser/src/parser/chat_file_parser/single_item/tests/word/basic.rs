@@ -2,7 +2,7 @@
 //!
 //! These tests document expected behavior and regressions.
 
-use crate::model::{FormType, WordLanguageMarker};
+use crate::model::{FormType, LanguageCode, WordLanguageMarker};
 
 use super::helpers::{parse_word, snapshot};
 
@@ -115,8 +115,8 @@ fn word_with_multiple_language_marker_plus() {
             assert_eq!(
                 word.lang,
                 Some(WordLanguageMarker::multiple(vec![
-                    "eng".into(),
-                    "spa".into()
+                    LanguageCode::new("eng").expect("test literal is non-empty"),
+                    LanguageCode::new("spa").expect("test literal is non-empty")
                 ]))
             );
         }
@@ -138,8 +138,8 @@ fn word_with_ambiguous_language_marker_ampersand() {
             assert_eq!(
                 word.lang,
                 Some(WordLanguageMarker::ambiguous(vec![
-                    "eng".into(),
-                    "spa".into()
+                    LanguageCode::new("eng").expect("test literal is non-empty"),
+                    LanguageCode::new("spa").expect("test literal is non-empty")
                 ]))
             );
         }

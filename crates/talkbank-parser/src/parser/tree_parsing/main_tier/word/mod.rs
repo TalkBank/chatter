@@ -84,10 +84,11 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
                 // and the :suffix is a separate child. Let's check both patterns.
                 if let Some(ft) = FormType::parse(text) {
                     form_type = Some(ft);
-                } else if text.starts_with("@z") {
-                    // User-defined form: @z or @z:label
-                    let label = text.strip_prefix("@z").unwrap_or("");
-                    let label = label.strip_prefix(':').unwrap_or(label);
+                } else if let Some(label) = text.strip_prefix("@z:") {
+                    // User-defined form REQUIRES the colon and a label: `@z:label`.
+                    // `@z` without a colon (e.g. `@zzz`) is NOT a user-defined form;
+                    // it falls through to the InvalidFormType (E203) branch below,
+                    // matching CLAN CHECK 147 ("undeclared special form marker").
                     form_type = Some(FormType::UserDefined(label.to_string()));
                 } else {
                     // Unknown form marker, report error (CHECK 147)
@@ -377,15 +378,45 @@ fn build_lang_marker(node: Node, source: &str, errors: &impl ErrorSink) -> WordL
         return WordLanguageMarker::Shortcut;
     };
 
-    // Check for & separator (ambiguous) vs + separator (multiple)
+    // Check for & separator (ambiguous) vs + separator (multiple). Every
+    // split segment is guaranteed non-empty by the `word_lang_suffix` token
+    // regex (`[a-z]{2,3}` per `+`/`&`-separated segment, see the doc
+    // comment above); `LanguageCode::new` rejects an empty segment fallibly,
+    // and the (token-regex-impossible) `Err` arms below stay panic-free and
+    // non-silent per the no-panic / no-silent-drop policy: list forms skip
+    // the offending segment via `filter_map`, the single-code form reports a
+    // diagnostic and recovers with the documented `LanguageCode::empty()`
+    // ("und") parser-recovery sentinel.
     if codes_str.contains('&') {
-        let codes: Vec<LanguageCode> = codes_str.split('&').map(LanguageCode::new).collect();
+        let codes: Vec<LanguageCode> = codes_str
+            .split('&')
+            .filter_map(|c| LanguageCode::new(c).ok())
+            .collect();
         WordLanguageMarker::Ambiguous(codes)
     } else if codes_str.contains('+') {
-        let codes: Vec<LanguageCode> = codes_str.split('+').map(LanguageCode::new).collect();
+        let codes: Vec<LanguageCode> = codes_str
+            .split('+')
+            .filter_map(|c| LanguageCode::new(c).ok())
+            .collect();
         WordLanguageMarker::Multiple(codes)
     } else {
         // Single code
-        WordLanguageMarker::Explicit(LanguageCode::new(codes_str))
+        match LanguageCode::new(codes_str) {
+            Ok(code) => WordLanguageMarker::Explicit(code),
+            Err(error) => {
+                errors.report(ParseError::new(
+                    ErrorCode::TreeParsingError,
+                    Severity::Error,
+                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                    ErrorContext::new(
+                        source,
+                        node.start_byte()..node.end_byte(),
+                        "word_lang_suffix",
+                    ),
+                    format!("Invalid @s language code: {error}"),
+                ));
+                WordLanguageMarker::Explicit(LanguageCode::empty())
+            }
+        }
     }
 }

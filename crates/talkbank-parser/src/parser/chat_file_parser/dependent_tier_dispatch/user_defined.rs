@@ -4,6 +4,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#User_Defined_Tiers>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::generated_traversal::{
+    AsRawNode, NodeSlot, UnsupportedDependentTierNode, XDependentTierNode,
+    extract_unsupported_dependent_tier, extract_x_dependent_tier,
+};
 use crate::model::dependent_tier::DependentTier;
 use crate::model::{NonEmptyString, Utterance};
 use crate::node_types::{
@@ -14,6 +18,8 @@ use talkbank_model::model::dependent_tier::{
     PhoalnTier, SylTier, SylTierType, parse_phoaln_content, parse_syl_content,
 };
 use tree_sitter::Node;
+
+use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 
 /// Parse and attach user-defined/unsupported dependent tiers.
 pub(super) fn apply_user_defined_tier(
@@ -30,9 +36,37 @@ pub(super) fn apply_user_defined_tier(
     }
 }
 
+/// The node a positional slot resolves to, treating a `Present` node and a
+/// tree-sitter `Missing` placeholder as "found" and every other recovery state
+/// as "not found".
+///
+/// This reproduces the removed `find_child_by_kind` helper byte for byte: that
+/// helper located the FIRST direct child whose `kind()` equalled a target, and a
+/// MISSING node still carries its expected kind (so it was found and its empty
+/// text read), while an `ERROR` node (kind `ERROR`), an unexpected-kind node, or
+/// an absent child never satisfied the kind filter. Callers below then apply the
+/// same `utf8_text` decode and the same diagnostics the removed code did.
+fn found_node<'tree, T>(slot: &NodeSlot<'tree, T>) -> Option<Node<'tree>>
+where
+    T: AsRawNode<'tree>,
+{
+    match slot {
+        NodeSlot::Present(node) => Some(node.raw_node()),
+        NodeSlot::Missing(raw) => Some(*raw),
+        NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => None,
+    }
+}
+
 /// Handle user-defined %x* tiers (%xfoo, %xpho, %xmod, etc.).
-/// The grammar now uses a single greedy token for the full prefix (e.g. "%xfoo"),
+///
+/// The grammar uses a single greedy token for the full prefix (e.g. "%xfoo"),
 /// so the label is extracted by stripping the "%x" prefix from the token text.
+///
+/// Driven by the generated typed visitor: `extract_x_dependent_tier` yields the
+/// prefix (`child_0`, an `x_tier_prefix`) and the body (`child_2`, a
+/// `text_with_bullets`) as typed slots, replacing the removed
+/// `find_child_by_kind(tier_node, X_TIER_PREFIX)` / `..(tier_node,
+/// TEXT_WITH_BULLETS)` `match child.kind()` scans (see [`found_node`]).
 fn apply_x_tier(
     utterance: &mut Utterance,
     tier_node: Node,
@@ -41,7 +75,10 @@ fn apply_x_tier(
 ) -> bool {
     // Grammar: x_dependent_tier = x_tier_prefix, tier_sep, text_with_bullets, newline
     // x_tier_prefix is a single token matching /%x[a-zA-Z][a-zA-Z0-9]*/
-    let full_prefix = match find_child_by_kind(tier_node, X_TIER_PREFIX) {
+    let children = extract_x_dependent_tier(XDependentTierNode(tier_node));
+    surface_unexpected(&children.unexpected, input, errors);
+
+    let full_prefix = match found_node(&children.child_0.slot) {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => text,
             Err(_) => {
@@ -70,7 +107,7 @@ fn apply_x_tier(
     // Extract label by stripping "%x" prefix (e.g. "%xfoo" → "foo")
     let tier_label = full_prefix.strip_prefix("%x").unwrap_or(full_prefix);
 
-    let content_text = match find_child_by_kind(tier_node, TEXT_WITH_BULLETS) {
+    let content_text = match found_node(&children.child_2.slot) {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => text,
             Err(_) => {
@@ -174,14 +211,31 @@ fn apply_x_tier(
 
 /// Handle unsupported dependent tiers (%custom, %foo, etc.) caught by the grammar catch-all.
 /// These are stored as UserDefined tiers so the file can still be parsed.
+///
+/// The PREFIX is driven by the generated typed visitor:
+/// `extract_unsupported_dependent_tier`'s `child_0` (`unsupported_tier_prefix`, a
+/// real named node) replaces the removed
+/// `find_child_by_kind(tier_node, UNSUPPORTED_TIER_PREFIX)` scan.
+///
+/// The CONTENT canNOT be driven by the visitor: the `unsupported_dependent_tier`
+/// body is the ANONYMOUS regex `/[^\n\r]*/`, which tree-sitter does not surface
+/// as a named child (ground-truth verified via `tree-sitter parse`, see the
+/// inline comment on the content read below), so the generated `child_2` slot is
+/// never populated at runtime. The body is therefore read from the tier's source
+/// text exactly as the pre-migration code did, which is behavior-preserving. The
+/// generator-side gap (modeling a bare anonymous seq-token as a leaf) is flagged
+/// for 4a / conformance.
 fn apply_unsupported_tier(
     utterance: &mut Utterance,
     tier_node: Node,
     input: &str,
     errors: &impl ErrorSink,
 ) -> bool {
-    // Extract the tier prefix (e.g. "%custom") from unsupported_tier_prefix child
-    let label_text = match find_child_by_kind(tier_node, UNSUPPORTED_TIER_PREFIX) {
+    let children = extract_unsupported_dependent_tier(UnsupportedDependentTierNode(tier_node));
+    surface_unexpected(&children.unexpected, input, errors);
+
+    // Extract the tier prefix (e.g. "%custom") from the unsupported_tier_prefix child.
+    let label_text = match found_node(&children.child_0.slot) {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => {
                 // Strip the leading '%'
@@ -210,41 +264,21 @@ fn apply_unsupported_tier(
         }
     };
 
-    // Get the raw content (everything after colon+tab to newline)
-    let content_text = match tier_node.utf8_text(input.as_bytes()) {
-        Ok(text) => text.trim().to_string(),
-        Err(_) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
-                format!(
-                    "Unsupported tier %{} content is not valid UTF-8",
-                    label_text
-                ),
-            ));
-            return true;
-        }
-    };
-
-    // Extract just the content part after the ":\t"
-    let content_str = match content_text.split_once(":\t") {
-        Some((_, c)) => c.trim(),
-        None => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
-                format!(
-                    "Missing colon-tab separator in unsupported tier %{}",
-                    label_text
-                ),
-            ));
-            return true;
-        }
-    };
+    // The unsupported-tier body is the anonymous seq-member regex `/[^\n\r]*/`
+    // sitting between `tier_sep` (child_1) and `newline` (child_3). The generator
+    // now models such an absorbed anonymous seq-token as a typed `LeafSpan`
+    // (child_2): a fully-typed inter-sibling byte range, NOT a text-hack. Read the
+    // body directly from that span. This closed the pre-migration generator gap
+    // where the anonymous token surfaced no child (child_2 was always `Absent`)
+    // and the body had to be recovered by string-splitting the tier's source text;
+    // the fix is sibling to the sometimes-leaf-choice (`LeafText`) fix. The prefix
+    // `child_0`, a real named node, is likewise visitor-driven above. `input` is
+    // `&str` (already valid UTF-8), so slicing at the span's byte boundaries cannot
+    // fail; `.get` keeps this panic-free regardless of a malformed range.
+    let content_str = input
+        .get(children.child_2.range.clone())
+        .map(str::trim)
+        .unwrap_or("");
 
     let content = match NonEmptyString::new(content_str) {
         Some(c) => c,
@@ -271,11 +305,4 @@ fn apply_unsupported_tier(
 
     utterance.dependent_tiers.push(tier);
     true
-}
-
-/// Find first direct child matching `kind`.
-fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .find(|child| child.kind() == kind)
 }

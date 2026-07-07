@@ -15,82 +15,180 @@ use crate::node_types::{
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
+use crate::generated_traversal::{
+    AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsNode, NodeSlot, extract_contents,
+};
+use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+
 use super::super::super::parser_helpers::parse_separator_like;
 use super::super::content::{analyze_word_error, illegal_curly_quote_error, parse_overlap_point};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
+/// One `contents` alternative, keyed by its NEW-backend per-position choice
+/// enum (`ContentsChild0Choice` for the required first element,
+/// `ContentsChild1Choice` for each repeated-tail element): structurally
+/// identical 4-way choices (`whitespaces` / `content_item` / `separator` /
+/// `overlap_point`) the generator mangles into two separately-named types
+/// because `contents = repeat1(..)` splits into a required-first `child_0`
+/// plus a repeated-tail `child_1`. This trait lets the shared per-item
+/// processing below handle both with one body.
+trait ContentsItem<'tree> {
+    /// The item's raw node, or `None` for the `whitespaces` alternative (the
+    /// NEW backend models whitespace as an explicit choice member since it
+    /// does not use `--skip whitespaces`; skipping it here subsumes the OLD
+    /// `WHITESPACES => continue` arm).
+    fn item_node(&self) -> Option<tree_sitter::Node<'tree>>;
+}
+impl<'tree> ContentsItem<'tree> for ContentsChild0Choice<'tree> {
+    fn item_node(&self) -> Option<tree_sitter::Node<'tree>> {
+        match self {
+            Self::Whitespaces(_) => None,
+            Self::ContentItem(n) => Some(n.raw_node()),
+            Self::Separator(n) => Some(n.raw_node()),
+            Self::OverlapPoint(n) => Some(n.raw_node()),
+        }
+    }
+}
+impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
+    fn item_node(&self) -> Option<tree_sitter::Node<'tree>> {
+        match self {
+            Self::Whitespaces(_) => None,
+            Self::ContentItem(n) => Some(n.raw_node()),
+            Self::Separator(n) => Some(n.raw_node()),
+            Self::OverlapPoint(n) => Some(n.raw_node()),
+        }
+    }
+}
+
 /// Parse main-tier `contents` nodes into ordered `UtteranceContent` items.
 ///
-/// The `contents` rule collects words, separators, overlap markers, and other inline tokens described
-/// in the Main Tier section of the manual. We walk its children, accept either wrapped `content_item`
-/// nodes or the granular leaf nodes the serializer sometimes produces, and report structural errors
-/// when the tree diverges from the specification. When we encounter parser `ERROR` fragments (common
-/// around overlapped markers such as `⌈2`), we attempt to glue them to the preceding word token so the
-/// resulting `UtteranceContent` still matches the manual’s lookahead expectations.
+/// The `contents` rule (`repeat1(choice(whitespaces, content_item, separator, overlap_point))`)
+/// collects words, separators, overlap markers, and other inline tokens described in the Main Tier
+/// section of the manual. Iteration is driven by the generated typed visitor: one
+/// [`extract_contents`] call yields the required first element (`child_0`) plus the repeated tail
+/// (`child_1`, a `Vec`), each a [`NodeSlot`] over its own per-position choice enum
+/// ([`ContentsChild0Choice`] / [`ContentsChild1Choice`]), so structure comes from typed node
+/// dispatch rather than `node.kind()` string matching, and a recovery node can never be silently
+/// dropped. Unlike the OLD backend's lazy `extract_contents_iter`, the NEW backend has no iterator
+/// form (every migrated cluster in this workstream materializes its repeats eagerly, per the B1
+/// template), so the `Vec` for `child_1` is fully built before this function iterates it; this is a
+/// deliberate, accepted architectural property of the NEW backend, not a generator gap. Each
+/// concrete choice is handed to the existing [`parse_content_item`] (its internals migrate in a
+/// separate task). When we encounter parser `ERROR` fragments (common around overlapped markers
+/// such as `⌈2`), we attempt to glue them to the preceding word token so the resulting
+/// `UtteranceContent` still matches the manual’s lookahead expectations.
 pub fn parse_main_tier_contents(
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<UtteranceContent> {
-    let child_count = node.child_count();
-    let mut content = Vec::with_capacity(child_count);
+    // `content` starts empty rather than pre-sized to `node.child_count()`: that
+    // count includes the (now explicit) `whitespaces` children, so on a normal
+    // whitespace-separated utterance it over-allocates by roughly 2x. Utterances
+    // are short, so the one or two reallocations a growing `Vec` costs are cheaper
+    // than a guaranteed 2x over-allocation and leave no wasted capacity.
+    let mut content = Vec::new();
 
-    for idx in 0..child_count {
-        let Some(child) = node.child(idx as u32) else {
-            continue;
-        };
-
-        if child.is_error() {
-            if attach_error_suffix_to_previous_word(child, source, &mut content) {
-                continue;
-            }
-            errors.report(analyze_word_error(child, source));
-            continue;
-        }
-
-        match child.kind() {
-            CONTENT_ITEM => {
-                if let ParseOutcome::Parsed(item) = parse_content_item(child, source, errors) {
-                    content.push(item);
-                }
-            }
-            // Fallback: accept direct overlap/separator nodes
-            OVERLAP_POINT
-            | SEPARATOR
-            | NON_COLON_SEPARATOR
-            | COLON
-            | COMMA
-            | SEMICOLON
-            | TAG_MARKER
-            | VOCATIVE_MARKER
-            | CA_CONTINUATION_MARKER
-            | UNMARKED_ENDING
-            | UPTAKE_SYMBOL
-            | CA_NO_BREAK
-            | CA_TECHNICAL_BREAK
-            | RISING_TO_HIGH
-            | RISING_TO_MID
-            | LEVEL_PITCH
-            | FALLING_TO_MID
-            | FALLING_TO_LOW => {
-                if let ParseOutcome::Parsed(item) = parse_content_item(child, source, errors) {
-                    content.push(item);
-                }
-            }
-            WHITESPACES => continue,
-            _ => {
-                errors.report(ParseError::new(
-                    ErrorCode::StructuralOrderError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                    ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                    format!("Unexpected '{}' in contents", child.kind()),
-                ));
-            }
-        }
+    let contents = extract_contents(ContentsNode(node));
+    process_contents_slot(contents.child_0.slot, source, errors, &mut content);
+    for element in contents.child_1.slot {
+        process_contents_slot(element.slot, source, errors, &mut content);
     }
+    surface_unexpected(&contents.unexpected, source, errors);
 
     content
+}
+
+/// Process one `contents` position's slot (either the required `child_0` or one
+/// element of the repeated `child_1` tail) into `content`.
+///
+/// The per-slot body is byte-identical to the OLD backend's single loop body
+/// (see the removed `extract_contents_iter` version this replaces): the SAME
+/// four arms, just driven by an exhaustive `NodeSlot` match instead of an
+/// iterator yield.
+fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
+    slot: NodeSlot<'tree, C>,
+    source: &str,
+    errors: &impl ErrorSink,
+    content: &mut Vec<UtteranceContent>,
+) {
+    match slot {
+        // A classified `content_item` / `separator` / `overlap_point` (or a
+        // `whitespaces` item, skipped: `item_node()` returns `None`). The
+        // pre-migration code routed ALL THREE non-whitespace alternatives
+        // through `parse_content_item` with byte-identical bodies. The old
+        // kind() dispatch never checked `is_missing`, so a MISSING node (whose
+        // kind is still one of the alternatives) followed the same path; we
+        // keep that by treating a `Missing` raw node the same as a `Present`
+        // non-whitespace item's raw node (the NEW backend's `Missing` variant
+        // carries no choice classification to check for `whitespaces` against,
+        // matching the OLD "treat Missing like Present" precedent as closely as
+        // the closed `NodeSlot` shape allows). `Present` is the valid path;
+        // `Missing` is recovery-only (a childless MISSING node yields a
+        // rejected `parse_content_item` and pushes nothing).
+        NodeSlot::Present(item) => {
+            if let Some(item_node) = item.item_node()
+                && let ParseOutcome::Parsed(parsed) = parse_content_item(item_node, source, errors)
+            {
+                content.push(parsed);
+            }
+        }
+        NodeSlot::Missing(item_node) => {
+            if let ParseOutcome::Parsed(parsed) = parse_content_item(item_node, source, errors) {
+                content.push(parsed);
+            }
+        }
+        // Parser `ERROR` fragment, reproduced byte-identically from the old
+        // `child.is_error()` branch: first try to glue the fragment to the
+        // preceding word token; only if that fails report the word-error
+        // diagnostic at the exact node span (so the whole-tree recovery
+        // backstop, which also covers ERROR nodes, dedups on span).
+        NodeSlot::Error(error_node) => {
+            if !attach_error_suffix_to_previous_word(error_node, source, content) {
+                errors.report(analyze_word_error(error_node, source));
+            }
+        }
+        // A child whose kind is none of the `contents` alternatives. On valid
+        // CHAT this is unreachable: the grammar's `contents` rule yields only
+        // `whitespaces` / `content_item` / `separator` / `overlap_point`, so a
+        // non-matching kind can arrive only via error recovery, which wraps
+        // stray tokens in `ERROR` nodes (handled above). Reproduce the old
+        // catch-all's structural diagnostic verbatim. (The old leaf-fallback
+        // also listed bare separator leaves such as `colon`/`comma`, but the
+        // grammar never emits those directly under `contents`; were one to
+        // surface via recovery, flagging it as unexpected is a sanctioned
+        // malformed-only improvement over the old silent accept, and routing it
+        // back through kind() dispatch is the very anti-pattern this migration
+        // removes.)
+        NodeSlot::Unexpected(unexpected_node) => {
+            errors.report(ParseError::new(
+                ErrorCode::StructuralOrderError,
+                Severity::Error,
+                SourceLocation::from_offsets(
+                    unexpected_node.start_byte(),
+                    unexpected_node.end_byte(),
+                ),
+                ErrorContext::new(
+                    source,
+                    unexpected_node.start_byte()..unexpected_node.end_byte(),
+                    "",
+                ),
+                format!("Unexpected '{}' in contents", unexpected_node.kind()),
+            ));
+        }
+        // Reachable at `child_0` (never at a `child_1` repeat element, since
+        // `repeat_split` never pushes an `Absent` element there) when the
+        // OUTER `contents` node itself is a childless MISSING placeholder
+        // (`body.rs`'s `NodeSlot::Missing` arm for the tier-body `content`
+        // position hands this function a zero-width synthetic node with no
+        // children at all, so `child_0`'s cursor peek finds nothing). Matches
+        // the OLD backend's `extract_contents_iter` on the same input, which
+        // likewise yields zero items (empty iteration over a childless node):
+        // both produce empty `content`. No-op, not a diagnostic (a missing
+        // `contents` node's own "Missing"-ness is reported once, by `body.rs`'s
+        // caller, not duplicated here).
+        NodeSlot::Absent => {}
+    }
 }
 
 /// Attach compact error fragments to the previous word token when the parser emits a split marker.

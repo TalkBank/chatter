@@ -1,344 +1,220 @@
-//! Body extraction for `main_tier` conversion.
+//! Tier-body extraction for `main_tier` conversion.
+//!
+//! Driven by the generated typed visitor: one `extract_tier_body` call yields the
+//! optional `linkers`, the optional `langcode`, the required `contents`, and the
+//! required `utterance_end` as typed slots. This UNIFIES what used to be a
+//! separate body walk (linkers / langcode / contents) and a separate end re-walk
+//! (terminator / postcodes / bullet) into a single pass over [`TierBodyChildren`].
+//! Each slot is matched EXHAUSTIVELY over [`NodeSlot`] so recovery nodes are
+//! handled explicitly rather than silently dropped, and the recovery diagnostics
+//! ("Malformed language code", "Missing terminator in tier_body", the tier-body
+//! "unexpected child" message) are reproduced byte-identically. The `contents`
+//! internals are still parsed by the existing `parse_main_tier_contents` (migrated
+//! in task 3c). The `utterance_end` internals are now decoded off the generated
+//! visitor by [`super::ending::parse_utterance_end`] (task 3d): terminator subtype,
+//! postcodes, and trailing bullet come from `extract_utterance_end`'s typed slots.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
+//! - <https://talkbank.org/0info/manuals/CHAT.html#Terminators>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::model::{UtteranceContent, Word};
-use crate::node_types::{
-    CONTENTS, LANGCODE, LINKERS, OVERLAP_POINT, SPACE, TIER_BODY, UTTERANCE_END, WHITESPACES,
-};
-use talkbank_model::ParseOutcome;
+use crate::generated_traversal::{AsRawNode, NodeSlot, TierBodyChildren};
+use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use tree_sitter::Node;
 
 use super::super::super::content::analyze_word_error;
 use super::super::contents::parse_main_tier_contents;
-use super::BodyData;
+use super::ending::{UtteranceEndTail, parse_utterance_end};
 use super::linkers::parse_linkers;
+use super::{TierBodyData, report_missing_child};
 
-/// Parse the main-tier body for utterance linkers, optional language switches, and content items.
+/// Parse the typed `tier_body` slots into the unified [`TierBodyData`].
 ///
-/// The CHAT main tier supports utterance linkers (`++`, `+<`, `+"`, etc.), optional language-code
-/// tokens, and the primary `contents` block. This function walks either the new `tier_body` wrapper
-/// or the legacy CST structure, records those elements, and delegates to `parse_main_tier_contents`
-/// so each `UtteranceContent` matches the grammar described in the Main Tier chapter.
-pub(super) fn parse_body(
-    node: Node,
+/// `body` is the result of `extract_tier_body`: `linkers` (optional),
+/// `language_code` (the optional NESTED `[langcode, whitespaces]` group),
+/// `content_2` (the required `contents` block; field accessor `content()`),
+/// and `ending` (the required `utterance_end` block). The valid path emits no
+/// diagnostics; the remaining slot states reproduce the prior recovery behavior.
+pub(super) fn parse_tier_body(
+    body: &TierBodyChildren,
+    source: &str,
+    original_input: &str,
+    errors: &impl ErrorSink,
+) -> TierBodyData {
+    // Linkers (optional). The slot is `Positioned<Option<NodeSlot<LinkersNode>>>`
+    // (shape UNCHANGED from OLD: `linkers` is a single-symbol optional, no
+    // interstitial whitespace to widen it into a group). Exhaustive over the
+    // outer `Option` and the inner 5-state `NodeSlot`: only `Present` contributes
+    // (decoded by the shared linker parser); every other state maps to an empty
+    // linker list, matching the pre-migration absent-linkers behavior with no new
+    // diagnostic.
+    let linkers = match &body.linkers.slot {
+        Some(NodeSlot::Present(linkers_node)) => {
+            parse_linkers(linkers_node.raw_node(), source, errors)
+        }
+        Some(
+            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
+        )
+        | None => Vec::new(),
+    };
+
+    // Optional language-switch token.
+    let language_code = parse_optional_langcode(body, source, errors);
+
+    // Content: the `contents` block. `Present` carries a typed `ContentsNode`;
+    // `Missing` carries a bare `Node` directly under the NEW closed `NodeSlot`
+    // (a MISSING node is childless, so the walk yields an empty vec), matching
+    // the old behavior of running the contents walk over whatever node sat at
+    // this position. The contents internals are migrated separately (this
+    // cluster's `contents.rs`, below).
+    let content = match &body.content_2.slot {
+        NodeSlot::Present(contents_node) => {
+            parse_main_tier_contents(contents_node.raw_node(), source, errors)
+        }
+        NodeSlot::Missing(node) => parse_main_tier_contents(*node, source, errors),
+        // Unreachable on valid input: a required slot recovers as Present/MISSING,
+        // never as an ERROR or a wrong kind. Surface the node (the whole-tree
+        // backstop also covers ERROR nodes) and yield empty content rather than
+        // fabricating model values.
+        NodeSlot::Error(node) => {
+            errors.report(analyze_word_error(*node, source));
+            Vec::new()
+        }
+        NodeSlot::Unexpected(node) => {
+            report_unexpected_tier_body_child(*node, source, errors);
+            Vec::new()
+        }
+        NodeSlot::Absent => Vec::new(),
+    };
+
+    // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
+    // `Present`/`Missing` both descend through the visitor-driven
+    // `parse_utterance_end` decode (which itself calls `extract_utterance_end`
+    // and matches its five slots exhaustively), exactly as the old re-walk did
+    // when it found a (possibly MISSING) `utterance_end` child inside
+    // `tier_body`. A MISSING (childless) `utterance_end` yields no terminator
+    // and no error; the `MissingTerminator` (E305) diagnostic comes from
+    // validation, not here.
+    let UtteranceEndTail {
+        terminator,
+        postcodes,
+        bullet,
+    } = match &body.ending.slot {
+        NodeSlot::Present(ending_node) => {
+            parse_utterance_end(ending_node.raw_node(), source, errors)
+        }
+        NodeSlot::Missing(node) => parse_utterance_end(*node, source, errors),
+        // A stray ERROR node landed at the `utterance_end` slot position. The
+        // previous tier-body walk surfaced such an ERROR via the shared
+        // word-error analyzer (and then re-found the real `utterance_end`); route
+        // it to the same analyzer here. No terminator is recovered; the whole-tree
+        // backstop covers the surviving ERROR / MISSING nodes. Malformed-only path.
+        NodeSlot::Error(error_node) => {
+            errors.report(analyze_word_error(*error_node, source));
+            UtteranceEndTail::default()
+        }
+        // No usable `utterance_end` at this position: the old end-parser reported
+        // `MissingTerminator` "in tier_body" when no `utterance_end` child was
+        // found inside `tier_body`. Unreachable on valid input (the slot recovers
+        // as Present/MISSING): confirmed empirically (see the B3 report) for a
+        // terminator-less-but-otherwise-well-formed line, which still yields a
+        // `Present` `utterance_end` (its OWN inner terminator slot is merely
+        // absent) rather than reaching this arm.
+        NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+            report_missing_child(
+                original_input,
+                errors,
+                ErrorCode::MissingTerminator,
+                "Missing terminator in tier_body",
+            );
+            UtteranceEndTail::default()
+        }
+    };
+
+    // Surface the carrier's own `unexpected` sink (R2). Empty on every fixture
+    // probed so far; load-bearing once the whole-tree backstop is deleted.
+    surface_unexpected(&body.unexpected, source, errors);
+
+    TierBodyData {
+        linkers,
+        language_code,
+        content,
+        terminator,
+        postcodes,
+        bullet,
+    }
+}
+
+/// Decode the optional `langcode` slot into a language-code string.
+///
+/// Reproduces the prior `LANGCODE` arm byte-identically for a `Present` token:
+/// parse the token text via the shared language-code parser; if no valid code is
+/// produced, report a `Malformed language code` structural diagnostic at the
+/// token span. The NEW backend groups `tier_body`'s
+/// `optional(seq(langcode, whitespaces))` into a NESTED carrier
+/// (`TierBodyLanguageCodeChildren`, since the pair together is what is
+/// grammar-optional, not `langcode` alone: the R2/B2 nested-group precedent),
+/// so this descends one level (`group.child_0`) to reach the langcode itself.
+/// The outer `None` and every non-`Present` slot state, at either nesting
+/// level, map to no language code and no diagnostic, matching the
+/// pre-migration absent-langcode behavior.
+fn parse_optional_langcode(
+    body: &TierBodyChildren,
     source: &str,
     errors: &impl ErrorSink,
-    mut idx: usize,
-) -> BodyData {
-    let child_count = node.child_count();
-    let mut linkers: Vec<crate::model::Linker> = Vec::new();
-    let mut language_code: Option<String> = None;
-    let mut content = Vec::new();
+) -> Option<talkbank_model::model::LanguageCode> {
+    let group = match &body.language_code.slot {
+        Some(NodeSlot::Present(group)) => group,
+        Some(
+            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
+        )
+        | None => return None,
+    };
+    surface_unexpected(&group.unexpected, source, errors);
 
-    // Check if we have a tier_body wrapper node (new unified grammar)
-    if let Some(child) = node.child(idx as u32)
-        && child.kind() == TIER_BODY
+    // Only a `Present` langcode token proceeds to decode, matching the OLD
+    // `.ok()` collapse (which yielded `Some` for `Present` ONLY): a zero-width
+    // MISSING langcode placeholder maps to no code and no diagnostic, the same
+    // as Error/Unexpected/Absent, exactly like the pre-migration behavior.
+    let node = match &group.child_0.slot {
+        NodeSlot::Present(langcode_node) => langcode_node.raw_node(),
+        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+            return None;
+        }
+    };
+
+    // Valid token: return the parsed code directly (already typed, no
+    // String round-trip). Anything else falls through to the "Malformed
+    // language code" diagnostic and no code, byte-identical to the prior
+    // flag-then-check.
+    if let Ok(raw) = node.utf8_text(source.as_bytes())
+        && let Some(lc) = crate::tokens::parse_langcode_token(raw)
     {
-        // Parse tier_body's children instead of main_tier's children
-        idx += 1; // Move past tier_body for return value
-        return parse_tier_body_children(child, source, errors, idx);
+        return Some(lc);
     }
 
-    // Legacy parsing for old grammar structure (or error recovery)
-    while idx < child_count {
-        let child = match node.child(idx as u32) {
-            Some(c) => c,
-            None => {
-                errors.report(ParseError::new(
-                    ErrorCode::StructuralOrderError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                    format!("Failed to access child at position {} of main_tier", idx),
-                ));
-                idx += 1;
-                continue;
-            }
-        };
-
-        if handle_error_node_with_recovery(child, source, errors, &mut idx, &mut content) {
-            continue;
-        }
-
-        match child.kind() {
-            WHITESPACES | SPACE => {
-                idx += 1;
-            }
-            // Error recovery path: tier_body can follow an ERROR node.
-            // Parse it as the main body instead of reporting structural order noise.
-            TIER_BODY => {
-                return parse_tier_body_children(child, source, errors, idx + 1);
-            }
-            LINKERS => {
-                linkers = parse_linkers(child, source, errors);
-                idx += 1;
-            }
-            LANGCODE => {
-                // Delegate to shared langcode token parser
-                if let Ok(raw) = child.utf8_text(source.as_bytes())
-                    && let Some(lc) = crate::tokens::parse_langcode_token(raw)
-                {
-                    language_code = Some(lc.to_string());
-                }
-                if language_code.is_none() {
-                    errors.report(ParseError::new(
-                        ErrorCode::StructuralOrderError,
-                        Severity::Error,
-                        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                        "Malformed language code".to_string(),
-                    ));
-                }
-                idx += 1;
-            }
-            OVERLAP_POINT => {
-                // Overlap points can appear before contents (CA markers)
-                // Parse as utterance content and add to content vector
-                use crate::parser::tree_parsing::main_tier::content::parse_overlap_point;
-                if let ParseOutcome::Parsed(overlap) = parse_overlap_point(child, source, errors) {
-                    content.push(overlap);
-                }
-                idx += 1;
-            }
-            CONTENTS => {
-                // Add any parsed contents from the contents node
-                let mut contents_items = parse_main_tier_contents(child, source, errors);
-                content.append(&mut contents_items);
-                idx += 1;
-                continue;
-            }
-            UTTERANCE_END => {
-                break;
-            }
-            _ => {
-                errors.report(ParseError::new(
-                    ErrorCode::StructuralOrderError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                    ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                    format!("Unexpected child '{}' in main_tier", child.kind()),
-                ));
-                idx += 1;
-            }
-        }
-    }
-
-    BodyData {
-        linkers,
-        language_code,
-        content,
-        idx,
-    }
+    errors.report(ParseError::new(
+        ErrorCode::StructuralOrderError,
+        Severity::Error,
+        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+        "Malformed language code".to_string(),
+    ));
+    None
 }
 
-/// Parse children of `tier_body` (new unified grammar introduced for `main_tier`).
+/// Report the tier-body `StructuralOrderError` "unexpected child" diagnostic.
 ///
-/// When the CST includes a `tier_body` node, it consolidates the same elements documented in the
-/// Main Tier section (linkers, language codes, contents). This helper retains the same behavior by
-/// sharing the parser for each element, ensuring `BodyData` stays consistent regardless of grammar changes.
-fn parse_tier_body_children(
-    tier_body_node: Node,
-    source: &str,
-    errors: &impl ErrorSink,
-    parent_idx: usize,
-) -> BodyData {
-    let child_count = tier_body_node.child_count();
-    let mut linkers: Vec<crate::model::Linker> = Vec::new();
-    let mut language_code: Option<String> = None;
-    let mut content = Vec::new();
-    let mut idx = 0;
-
-    while idx < child_count {
-        let child = match tier_body_node.child(idx as u32) {
-            Some(c) => c,
-            None => {
-                idx += 1;
-                continue;
-            }
-        };
-
-        if handle_error_node_with_recovery(child, source, errors, &mut idx, &mut content) {
-            continue;
-        }
-
-        match child.kind() {
-            WHITESPACES | SPACE => {
-                idx += 1;
-            }
-            LINKERS => {
-                linkers = parse_linkers(child, source, errors);
-                idx += 1;
-            }
-            LANGCODE => {
-                // Delegate to shared langcode token parser
-                if let Ok(raw) = child.utf8_text(source.as_bytes())
-                    && let Some(lc) = crate::tokens::parse_langcode_token(raw)
-                {
-                    language_code = Some(lc.to_string());
-                }
-                if language_code.is_none() {
-                    errors.report(ParseError::new(
-                        ErrorCode::StructuralOrderError,
-                        Severity::Error,
-                        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                        "Malformed language code".to_string(),
-                    ));
-                }
-                idx += 1;
-            }
-            CONTENTS => {
-                let mut contents_items = parse_main_tier_contents(child, source, errors);
-                content.append(&mut contents_items);
-                idx += 1;
-                continue;
-            }
-            UTTERANCE_END => {
-                break;
-            }
-            _ => {
-                errors.report(ParseError::new(
-                    ErrorCode::StructuralOrderError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                    ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                    format!("Unexpected child '{}' in tier_body", child.kind()),
-                ));
-                idx += 1;
-            }
-        }
-    }
-
-    BodyData {
-        linkers,
-        language_code,
-        content,
-        idx: parent_idx, // Return parent's idx (position after tier_body)
-    }
-}
-
-/// Handle `ERROR` nodes with suffix-attachment and lexical fallback recovery.
-fn handle_error_node_with_recovery(
-    child: Node,
-    source: &str,
-    errors: &impl ErrorSink,
-    idx: &mut usize,
-    content: &mut Vec<UtteranceContent>,
-) -> bool {
-    if !child.is_error() {
-        return false;
-    }
-
-    if attach_error_suffix_to_previous_word(child, source, content) {
-        *idx += 1;
-        return true;
-    }
-
-    if recover_error_as_word(child, source, content) {
-        *idx += 1;
-        return true;
-    }
-
-    // Preserve parser diagnostics without fabricating model placeholders.
-    errors.report(analyze_word_error(child, source));
-    *idx += 1;
-    true
-}
-
-/// Attach compact marker fragments (for example `@xyz`) to the previous word token.
-fn attach_error_suffix_to_previous_word(
-    error_node: Node,
-    source: &str,
-    content: &mut [UtteranceContent],
-) -> bool {
-    let Ok(error_text) = error_node.utf8_text(source.as_bytes()) else {
-        return false;
-    };
-
-    if error_text.is_empty() || error_text.bytes().any(|b| b.is_ascii_whitespace()) {
-        return false;
-    }
-
-    let Some(last) = content.last_mut() else {
-        return false;
-    };
-
-    let should_attach = match last {
-        UtteranceContent::Word(word) => {
-            error_text.starts_with('@')
-                || (word.raw_text().contains('@')
-                    && error_text.bytes().all(|b| {
-                        b.is_ascii_alphanumeric() || matches!(b, b':' | b'+' | b'&' | b'-' | b'_')
-                    }))
-        }
-        UtteranceContent::AnnotatedWord(annotated) => {
-            error_text.starts_with('@')
-                || (annotated.inner.raw_text().contains('@')
-                    && error_text.bytes().all(|b| {
-                        b.is_ascii_alphanumeric() || matches!(b, b':' | b'+' | b'&' | b'-' | b'_')
-                    }))
-        }
-        UtteranceContent::ReplacedWord(replaced) => {
-            error_text.starts_with('@')
-                || (replaced.word.raw_text().contains('@')
-                    && error_text.bytes().all(|b| {
-                        b.is_ascii_alphanumeric() || matches!(b, b':' | b'+' | b'&' | b'-' | b'_')
-                    }))
-        }
-        _ => false,
-    };
-
-    if should_attach {
-        match last {
-            UtteranceContent::Word(word) => {
-                let new_raw = format!("{}{}", word.raw_text(), error_text);
-                word.set_raw_text(new_raw);
-            }
-            UtteranceContent::AnnotatedWord(annotated) => {
-                let new_raw = format!("{}{}", annotated.inner.raw_text(), error_text);
-                annotated.inner.set_raw_text(new_raw);
-            }
-            UtteranceContent::ReplacedWord(replaced) => {
-                let new_raw = format!("{}{}", replaced.word.raw_text(), error_text);
-                replaced.word.set_raw_text(new_raw);
-            }
-            _ => return false,
-        }
-        true
-    } else {
-        false
-    }
-}
-
-/// Recover standalone lexical `ERROR` fragments as conservative `Word` nodes.
-fn recover_error_as_word(
-    error_node: Node,
-    source: &str,
-    content: &mut Vec<UtteranceContent>,
-) -> bool {
-    let Ok(error_text) = error_node.utf8_text(source.as_bytes()) else {
-        return false;
-    };
-
-    if error_text.is_empty() || error_text.bytes().any(|b| b.is_ascii_whitespace()) {
-        return false;
-    }
-
-    // Conservative lexical recovery for dropped tokens after media bullets.
-    let looks_like_word = error_text
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'\'' | b'-' | b'_' | b'`'));
-    if !looks_like_word {
-        return false;
-    }
-
-    let span = crate::error::Span::from_usize(error_node.start_byte(), error_node.end_byte());
-    let word = Word::new_unchecked(error_text, error_text).with_span(span);
-    content.push(UtteranceContent::Word(Box::new(word)));
-    true
+/// Reproduces the previous catch-all arm of the tier-body walk byte-identically.
+fn report_unexpected_tier_body_child(node: Node, source: &str, errors: &impl ErrorSink) {
+    errors.report(ParseError::new(
+        ErrorCode::StructuralOrderError,
+        Severity::Error,
+        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+        format!("Unexpected child '{}' in tier_body", node.kind()),
+    ));
 }

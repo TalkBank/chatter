@@ -56,7 +56,7 @@ fn chat_file_round_trip() {
     let lines = vec![
         Line::header(Header::Utf8),
         Line::header(Header::Languages {
-            codes: vec![LanguageCode::new("eng")].into(),
+            codes: vec![LanguageCode::new("eng").expect("test literal is non-empty")].into(),
         }),
         Line::utterance(Utterance::new(MainTier::new(
             "CHI",

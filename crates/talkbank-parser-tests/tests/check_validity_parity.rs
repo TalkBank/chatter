@@ -39,8 +39,15 @@ enum ParityStatus {
     Parity,
     /// CLAN flags it but chatter does not yet: the fixture must validate clean.
     Gap,
-    /// Intentional: chatter handles it differently; `expected_chatter_codes`
-    /// records that behaviour.
+    /// Intentional divergence from CLAN, in one of two shapes:
+    /// - chatter rejects differently or more strictly: `expected_chatter_codes`
+    ///   lists the codes it must emit (asserted present, like `Parity`).
+    /// - chatter intentionally ACCEPTS what CLAN rejects, because the CHECK code
+    ///   is a CLAN-internal concern rather than a CHAT-validity rule (e.g. CHECK
+    ///   109, a postcode on a dependent tier: CLAN's own analysis tools do not
+    ///   choke on it, only CHECK flags it): `expected_chatter_codes` is empty and
+    ///   the fixture must validate clean. Unlike `Gap`, this clean state is a
+    ///   permanent intentional choice, not a defect to close.
     Divergence,
 }
 
@@ -109,6 +116,43 @@ fn chatter_codes(parser: &TreeSitterParser, fixture: &str) -> Result<Vec<String>
     Ok(codes)
 }
 
+/// Push a failure for every code in `expected_chatter_codes` that chatter did
+/// not emit. Shared by the `Parity` arm and the chatter-stricter `Divergence`
+/// shape, which assert the same thing.
+fn report_missing_expected_codes(
+    entry: &ParityEntry,
+    codes: &[String],
+    failures: &mut Vec<String>,
+) {
+    for expected in &entry.expected_chatter_codes {
+        if !codes.contains(expected) {
+            failures.push(format!(
+                "CHECK {} ({}): expected chatter {} but got {:?} [{}]",
+                entry.check_code, entry.fixture, expected, codes, entry.note
+            ));
+        }
+    }
+}
+
+/// Push a failure if chatter emitted any error code on a fixture that must
+/// validate clean. Shared by the `Gap` arm and the chatter-accepts `Divergence`
+/// shape; `marked` and `hint` carry each status's distinct message (a gap is a
+/// defect to close, an accept-divergence is a permanent intentional state).
+fn report_unexpected_codes(
+    entry: &ParityEntry,
+    codes: &[String],
+    failures: &mut Vec<String>,
+    marked: &str,
+    hint: &str,
+) {
+    if !codes.is_empty() {
+        failures.push(format!(
+            "CHECK {} ({}): {} but chatter now emits {:?} -- {} [{}]",
+            entry.check_code, entry.fixture, marked, codes, hint, entry.note
+        ));
+    }
+}
+
 /// CI gate: chatter's behaviour on every grounded fixture must match its
 /// manifest `status`. No CLAN binary required.
 #[test]
@@ -121,29 +165,33 @@ fn chatter_matches_check() -> Result<(), TestError> {
     for entry in &manifest.entries {
         let codes = chatter_codes(&parser, &entry.fixture)?;
         match entry.status {
-            ParityStatus::Parity | ParityStatus::Divergence => {
-                for expected in &entry.expected_chatter_codes {
-                    if !codes.contains(expected) {
-                        failures.push(format!(
-                            "CHECK {} ({}): expected chatter {} but got {:?} [{}]",
-                            entry.check_code, entry.fixture, expected, codes, entry.note
-                        ));
-                    }
+            ParityStatus::Parity => report_missing_expected_codes(entry, &codes, &mut failures),
+            ParityStatus::Divergence => {
+                // Two shapes; see `ParityStatus::Divergence`. Empty expected codes
+                // means chatter intentionally accepts (must validate clean);
+                // non-empty means it rejects via those codes (like parity).
+                if entry.expected_chatter_codes.is_empty() {
+                    report_unexpected_codes(
+                        entry,
+                        &codes,
+                        &mut failures,
+                        "marked intentional `divergence` (chatter accepts)",
+                        "reassess the divergence, not a gap",
+                    );
+                } else {
+                    report_missing_expected_codes(entry, &codes, &mut failures);
                 }
             }
-            ParityStatus::Gap => {
-                // chatter does not yet catch this CLAN rule, so the fixture must
-                // validate clean. When the rule is implemented chatter will emit
-                // a code here and this assertion fails, prompting a flip of the
-                // manifest entry to `parity` with the new code.
-                if !codes.is_empty() {
-                    failures.push(format!(
-                        "CHECK {} ({}): marked `gap` but chatter now emits {:?} -- close the \
-                         gap and flip the manifest entry to `parity` [{}]",
-                        entry.check_code, entry.fixture, codes, entry.note
-                    ));
-                }
-            }
+            // chatter does not yet catch this CLAN rule, so the fixture must
+            // validate clean; emitting a code here fails the test and prompts a
+            // flip of the manifest entry to `parity`.
+            ParityStatus::Gap => report_unexpected_codes(
+                entry,
+                &codes,
+                &mut failures,
+                "marked `gap`",
+                "close the gap and flip the manifest entry to `parity`",
+            ),
         }
     }
 

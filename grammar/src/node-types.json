@@ -822,6 +822,21 @@
     }
   },
   {
+    "type": "blank_line",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "newline",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "bullet",
     "named": true,
     "fields": {
@@ -2122,6 +2137,10 @@
       "multiple": false,
       "required": true,
       "types": [
+        {
+          "type": "blank_line",
+          "named": true
+        },
         {
           "type": "header",
           "named": true

@@ -24,7 +24,7 @@ fn header_round_trip_begin() {
 #[test]
 fn header_round_trip_languages() {
     let header = Header::Languages {
-        codes: vec![LanguageCode::new("eng")].into(),
+        codes: vec![LanguageCode::new("eng").expect("test literal is non-empty")].into(),
     };
     let output = header.to_chat();
     assert_eq!(output, "@Languages:\teng");

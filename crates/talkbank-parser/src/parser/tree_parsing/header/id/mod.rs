@@ -37,8 +37,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#ID_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Participants_Header>
 
-mod fields;
-mod helpers;
 mod parse;
 
 pub use parse::parse_id_header;

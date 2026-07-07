@@ -30,7 +30,9 @@ pub(crate) use cst_assertions::{
 pub(crate) use error_analysis::{
     analyze_dependent_tier_error, analyze_error_node, analyze_line_error,
 };
-pub(crate) use error_checking::{check_for_errors_recursive, collect_recovery_nodes};
+pub(crate) use error_checking::{
+    check_for_errors_recursive, collect_recovery_nodes, surface_unexpected,
+};
 pub(crate) use node_dispatch::{parse_pause_node, parse_separator_like, parse_separator_node};
 // parse_ca_element_node, parse_ca_delimiter_node removed, word-internal CA markers
 // are now parsed by the direct parser (Phase 2 word coarsening)

@@ -1,0 +1,37 @@
+# nextest configuration for the chatter workspace.
+#
+# The load-bearing setting here is the global hang guard (`slow-timeout`).
+
+[profile.default]
+# Hang guard (added 2026-07-04 after a reliability incident).
+#
+# nextest runs each test in its own process (and its own process group). With no
+# wall-clock cap, a test that enters an infinite loop (a pathological input that
+# spins `TreeSitterParser::parse_chat_file`, say) runs forever; and if the parent
+# nextest is itself terminated (a CI timeout, a Ctrl-C, an editor/tool SIGTERM),
+# the still-running test child is ORPHANED and keeps burning CPU indefinitely.
+# On 2026-07-04, dozens of orphaned `parser_equivalence` / roundtrip test
+# processes from a SIGTERM'd run were found spinning at ~70% CPU each a full day
+# later, starving every subsequent build (load average 37). The ~70% CPU (not
+# ~0%) proves a real compute loop, not an idle deadlock.
+#
+# `slow-timeout` marks a test "slow" every `period`; after `terminate-after`
+# periods nextest SIGTERMs (then SIGKILLs) the test's whole process group, so a
+# hung test is bounded to about `period * terminate-after` and can never orphan.
+# Every real test in the default profile finishes in well under a second (the
+# full 1750-test run phase is ~3s), so a 120s ceiling only ever fires on a
+# genuine hang, and does so LOUDLY, naming the offending test. For the per-file
+# `parser_equivalence` cases the test name encodes the `.cha` file, which is the
+# data needed to root-cause the underlying parser loop.
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+# The opt-in whole-corpus oracle (`full_corpus_parse`, talkbank-parser-re2c)
+# legitimately runs for many minutes over tens of thousands of real files in
+# release mode. It is `#[ignore]`d (never part of a default run), but when a
+# developer runs it explicitly with `--ignored` it must not be clipped by the
+# hang guard above. Give just that test a much larger ceiling (about 30 min)
+# while still bounding a true hang.
+[[profile.default.overrides]]
+filter = 'test(full_corpus_parse)'
+slow-timeout = { period = "300s", terminate-after = 6 }
+

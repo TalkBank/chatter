@@ -3,7 +3,6 @@ colon_separator - Standalone colon between words must parse as , not as inside a
 ================================================================================
 *CHI:	hello : world .
 
-
 --------------------------------------------------------------------------------
 
 (source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (separator (colon)) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

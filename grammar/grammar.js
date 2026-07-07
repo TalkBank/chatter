@@ -184,7 +184,11 @@ export default grammar({
     // ============================================================================
 
     continuation: $ => /[\r\n]+\t/,  // Multi-line continuation (newline followed by tab)
-    newline: $ => /[\r\n]+/,
+    // A single line break (LF, CRLF, or lone CR). Deliberately NOT `[\r\n]+`:
+    // fusing consecutive newlines into one token erased blank lines, so they
+    // could never be detected. With a single-break token, a blank line is a
+    // standalone `newline` that the `blank_line` rule represents structurally.
+    newline: $ => /\r\n|[\r\n]/,
 
     star: $ => '*',       // Main tier prefix marker
     hyphen: $ => '-',     // Used in MOR suffixes and other contexts
@@ -382,8 +386,16 @@ export default grammar({
     line: $ => choice(
       $.header,
       $.utterance,
+      $.blank_line,
       $.unsupported_line,
     ),
+
+    // A blank line: a line break with no content. CHAT does not allow blank
+    // lines anywhere in the transcript (CLAN CHECK 91). Represented as a
+    // structural node (the single-break `newline` token no longer fuses
+    // consecutive newlines) so the parser can flag it from the tree rather than
+    // by scanning source text; the Rust parser emits BlankLineNotAllowed (E747).
+    blank_line: $ => $.newline,
 
     // Catch-all for lines that don't start with *, @, or %, prevents ERROR
     // cascade when junk lines appear in CHAT files.  The Rust parser will
@@ -1219,12 +1231,27 @@ export default grammar({
         choice($.word_segment, $.shortening, $.stress_marker),
         repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
       ),
-      // Marker-initial: ⌈hello⌉, °hello°, °↑hello°, °°hello°°, one or more
+      // Marker-initial: ⌈hello⌉, °hello°, °↑hello°, °°hello°°, ^hello, one or more
       // structural markers MUST be followed by text content (prevents standalone
       // markers from forming degenerate words). Multiple markers allow stacked CA
       // notation: °↑ (piano + pitch up), °° (pianissimo), ⌈° (overlap + piano).
+      //
+      // syllable_pause (^) is accepted in this leading position so a word-initial
+      // pause (e.g. ^banana) PARSES into a structured word whose word_body begins
+      // with a `syllable_pause` child, instead of failing into a line-level ERROR.
+      // The pause stays a separate typed child (word_segment purity is preserved),
+      // and it still MUST be followed by spoken material, so a lone `^` does not
+      // form a degenerate word. The "pause not between spoken material" rule (E252)
+      // is then enforced by the typed-model validator `check_prosodic_markers`,
+      // reading the parsed position, NOT by scanning the raw text of an ERROR node.
       seq(
-        repeat1(choice($.overlap_point, $.ca_element, $.ca_delimiter, $.underline_begin)),
+        repeat1(choice(
+          $.overlap_point,
+          $.ca_element,
+          $.ca_delimiter,
+          $.underline_begin,
+          $.syllable_pause,
+        )),
         choice($.word_segment, $.shortening, $.stress_marker),
         repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
       ),

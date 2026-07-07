@@ -42,22 +42,13 @@ pub(crate) fn analyze_utterance_error(
         return;
     }
 
-    // Check for empty replacement (e.g., "[:]")
-    if error_text.contains("[:]")
-        || (error_text.contains("[") && error_text.contains(":") && error_text.contains("]"))
-    {
-        errors.report(
-            ParseError::new(
-                ErrorCode::EmptyReplacement,
-                Severity::Error,
-                SourceLocation::from_offsets(start, end),
-                ErrorContext::new(source, start..end, error_text),
-                "Replacement text cannot be empty",
-            )
-            .with_suggestion("Add replacement text after [: , e.g., word [: corrected]"),
-        );
-        return;
-    }
+    // NOTE (2026-06-25): the former "empty replacement [:]" scan was removed here.
+    // An empty replacement `word [:]` PARSES into a structured `replacement` node
+    // (zero-width body with a MISSING word_segment); the typed replacement path
+    // emits E376 and the MISSING slot emits E342. No utterance-level ERROR node
+    // ever carries `[:]` text, so this scan was DEAD. Classifying ERROR-node text is
+    // the banned anti-pattern (root CLAUDE.md "CST Traversal Rules"). Regression:
+    // crates/talkbank-parser/tests/e208_empty_replacement_regression.rs.
 
     // Check for invalid scoped annotation (e.g., "[@ xyz]")
     if error_text.contains("[@") {

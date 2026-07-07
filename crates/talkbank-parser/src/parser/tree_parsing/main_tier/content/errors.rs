@@ -127,18 +127,16 @@ pub(crate) fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         }
     }
 
-    // E208: Empty replacement [:] (PRIORITY 5)
-    // Detect replacement with no words
-    if error_text.contains("[:]") {
-        return ParseError::new(
-            ErrorCode::EmptyReplacement,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Empty replacement - [: ] must contain corrected word(s)".to_string(),
-        )
-        .with_suggestion("Add replacement text after [: , e.g., word [: corrected]");
-    }
+    // NOTE (2026-06-25): the former "empty replacement [:]" branch was removed here.
+    // An empty replacement (e.g. `word [:]`) does NOT become an ERROR node: it PARSES
+    // into a structured `replacement` node whose body is a zero-width `standalone_word`
+    // with a MISSING `word_segment`. The replacement-parsing path (typed model) emits
+    // E376 (ContentAnnotationParseError), and the MISSING recovery slot emits E342.
+    // No content-level ERROR node ever carries `[:]` text (a bare `[:]` or `<group> [:]`
+    // becomes a FILE-level ERROR with no `[:]` branch), so this scan was DEAD. Classifying
+    // the raw text of an ERROR node to guess the diagnostic is the banned anti-pattern
+    // (root CLAUDE.md "CST Traversal Rules"); empty-replacement detection lives on the
+    // structural replacement path. Regression: tests/e208_empty_replacement_regression.rs.
 
     // E202: Missing form type after @ (PRIORITY 5)
     // Detect @ symbol without form type marker (e.g., "hello@", standalone "@", or " @ word")
@@ -211,25 +209,15 @@ pub(crate) fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         );
     }
 
-    // Invalid form marker: @ followed by letters but not in the valid set
-    if let Some(idx) = find_invalid_form_marker_offset(error_text) {
-        let absolute_start = error_node.start_byte() + idx;
-        return ParseError::new(
-            ErrorCode::InvalidFormType,
-            Severity::Error,
-            SourceLocation::from_offsets(absolute_start, error_node.end_byte()),
-            ErrorContext::new(source, absolute_start..error_node.end_byte(), ""),
-            format!(
-                "Unknown form marker '{}' - not a recognized CHAT form type",
-                &error_text[idx..]
-            ),
-        )
-        .with_suggestion(
-            "Valid form markers: @b (babbling), @c (child-invented), @d (dialect), \
-             @f (family-specific), @i (interjection), @l (letter), @n (neologism), \
-             @o (onomatopoeia), @s:lang (second language), @u (unibet)",
-        );
-    }
+    // NOTE (2026-06-25): the former "invalid form marker" branch was removed here.
+    // An unknown form marker (e.g. `word@zz`) PARSES into a structured word with a
+    // `form_marker` child, and E203 (InvalidFormType) is emitted by the parser's
+    // typed `form_marker` dispatch (main_tier/word/mod.rs), which reads the parsed
+    // `form_marker` node's own text and checks the base against the valid marker set
+    // via `FormType::parse`. Reading a parsed node's own content for validation is
+    // typed-model work; classifying the raw text of an ERROR node to guess the
+    // diagnostic is the banned anti-pattern (root CLAUDE.md "CST Traversal Rules").
+    // This diagnostic was re-homed onto structure + the typed parser dispatch.
 
     // Curly single quotes (U+2018/U+2019) are illegal word characters (E256).
     // The normal path recognizes them as a dedicated `illegal_curly_quote` node
@@ -286,17 +274,15 @@ pub(crate) fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         );
     }
 
-    // Caret ^ at word start, syllable pause misuse
-    if error_text.starts_with('^') {
-        return ParseError::new(
-            ErrorCode::SyllablePauseNotBetweenSpokenMaterial,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "'^' (syllable pause) cannot appear at word start".to_string(),
-        )
-        .with_suggestion("Syllable pause '^' must appear between syllables: ba^na^na");
-    }
+    // NOTE (2026-06-25): the former "caret ^ at word start" branch was removed here.
+    // A leading syllable pause (e.g. `^banana`) is now ACCEPTED by the grammar's
+    // `word_body` rule and parses into a structured word whose first child is a
+    // `syllable_pause` node. E252 (SyllablePauseNotBetweenSpokenMaterial) is emitted
+    // by the typed-model validator `check_prosodic_markers` (talkbank-model:
+    // validation/word/structure.rs), which reads the parsed `WordContent::SyllablePause`
+    // position, never the raw ERROR text. Classifying the text of an ERROR node to
+    // guess the diagnostic is the banned anti-pattern (see the root CLAUDE.md
+    // "CST Traversal Rules"); this diagnostic was re-homed onto structure + typed model.
 
     // Missing space before bracket annotation, "[/]" attached to word
     if error_text.trim_start().starts_with("[/]")
@@ -445,36 +431,10 @@ fn find_missing_form_type_offset(error_text: &str) -> Option<usize> {
     None
 }
 
-/// Finds an `@` followed by letters that aren't a valid CHAT form marker.
-///
-/// Valid form markers (from the grammar whitelist):
-/// a, b, c, d, f, fp, g, i, k, l, ls, n, o, p, q, sas, si, sl, t, u, wp, x, z
-fn find_invalid_form_marker_offset(error_text: &str) -> Option<usize> {
-    const VALID_MARKERS: &[&str] = &[
-        "a", "b", "c", "d", "f", "fp", "g", "i", "k", "l", "ls", "n", "o", "p", "q", "sas", "si",
-        "sl", "t", "u", "wp", "x", "z",
-    ];
-
-    for (idx, _) in error_text.match_indices('@') {
-        let rest = &error_text[idx + 1..];
-        // Must have at least one letter after @
-        if rest.is_empty() || !rest.as_bytes()[0].is_ascii_alphabetic() {
-            continue;
-        }
-        // Extract the marker text (letters and hyphens until non-alpha)
-        let marker_end = rest
-            .find(|c: char| !c.is_ascii_alphabetic() && c != '-')
-            .unwrap_or(rest.len());
-        let marker = &rest[..marker_end];
-        // Skip if it looks like a language suffix (@s:eng), the base is valid
-        let base = marker.split(':').next().unwrap_or(marker);
-        if !VALID_MARKERS.contains(&base) {
-            return Some(idx);
-        }
-    }
-
-    None
-}
+// NOTE (2026-06-25): `find_invalid_form_marker_offset` was removed with its single
+// call site above. Invalid form markers (`word@zz`) are now detected by the parser's
+// typed `form_marker` dispatch (main_tier/word/mod.rs) reading the parsed node's own
+// text against `FormType::parse`, not by scanning the raw text of an ERROR node.
 
 /// Finds unclosed replacement offset.
 fn find_unclosed_replacement_offset(error_text: &str) -> Option<(usize, usize)> {

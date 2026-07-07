@@ -15,8 +15,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#User_Defined_Tiers>
 
-use crate::node_types::{COLON, NEWLINE, SPACE, TAB, TIER_SEP, WHITESPACES};
-use crate::parser::tree_parsing::parser_helpers::is_dependent_tier;
+use crate::generated_traversal::{
+    AsRawNode, DependentTierChoice, NodeSlot, extract_dependent_tier,
+};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::UserDefinedTier;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -102,10 +103,10 @@ pub fn parse_dependent_tier(input: &str, errors: &impl ErrorSink) -> ParseOutcom
         return ParseOutcome::rejected();
     };
 
-    // Find the dependent tier node in the CST
-    // It's the first tier after the main tier
+    // Find the dependent tier node in the CST (the first tier after the main
+    // tier), already classified into a typed `DependentTierChoice`.
     let root = tree.root_node();
-    let Some(tier_node) = find_first_dependent_tier(root) else {
+    let Some(tier_choice) = find_first_dependent_tier(root) else {
         errors.report(ParseError::new(
             ErrorCode::InvalidDependentTier,
             Severity::Error,
@@ -116,14 +117,23 @@ pub fn parse_dependent_tier(input: &str, errors: &impl ErrorSink) -> ParseOutcom
         return ParseOutcome::rejected();
     };
 
-    // Extract tier type and content from CST node (no text hacking!)
-    extract_tier_from_node(tier_node, &wrapped, input, errors)
+    // Extract tier type and content from the typed choice (no text hacking!)
+    extract_tier_from_node(tier_choice, &wrapped, input, errors)
 }
 
-/// Find first dependent tier node in CST
-fn find_first_dependent_tier(root: tree_sitter::Node) -> Option<tree_sitter::Node> {
-    if is_dependent_tier(root.kind()) {
-        return Some(root);
+/// Find the first dependent tier in the CST and classify it into a typed
+/// [`DependentTierChoice`].
+///
+/// Replaces the removed `is_dependent_tier(root.kind())` `node.kind()` check with
+/// the generated supertype classifier [`extract_dependent_tier`], which maps a
+/// node to `NodeSlot::Present(DependentTierChoice)` iff the node is a concrete
+/// dependent tier (and `Unexpected` otherwise). Recurses in document order,
+/// returning the first node the classifier accepts.
+fn find_first_dependent_tier<'tree>(
+    root: tree_sitter::Node<'tree>,
+) -> Option<DependentTierChoice<'tree>> {
+    if let NodeSlot::Present(choice) = extract_dependent_tier(root).content.slot {
+        return Some(choice);
     }
 
     let mut cursor = root.walk();
@@ -136,104 +146,128 @@ fn find_first_dependent_tier(root: tree_sitter::Node) -> Option<tree_sitter::Nod
     None
 }
 
-/// Extract UserDefinedTier from CST node using proper tree traversal
+/// Extract a generic `UserDefinedTier { label, content }` from a typed
+/// [`DependentTierChoice`], without fabricated defaults.
+///
+/// The `match child.kind()` classification the removed hand-walk used is gone:
+/// the tier is already classified as a `DependentTierChoice`, and its children
+/// are read POSITIONALLY (a structural read, not a `node.kind()` dispatch), which
+/// the grammar guarantees for every dependent tier: `child_0` is the
+/// `*_tier_prefix` (the label), `child_1` is the `tier_sep`, and the LAST child
+/// is the `newline` (except `%wor`, whose grammar rule has no trailing newline).
+/// The label and content bytes are BYTE-IDENTICAL to the removed walk:
+///
+/// - label = `child_0`'s text with the leading `%` stripped.
+/// - content = the children between `tier_sep` and the trailing newline, joined
+///   with a single space between non-empty parts. For a tier whose body is a
+///   single node this is that node's text; for a recovered tier (e.g. a `%pho`
+///   line with trailing whitespace that tree-sitter recovers as an `ERROR`
+///   sibling of `pho_groups`) the body node and the `ERROR` node are BOTH content
+///   children, joined, exactly as the removed walk did.
 fn extract_tier_from_node(
-    node: tree_sitter::Node,
+    choice: DependentTierChoice,
     source: &str,
     original_input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UserDefinedTier> {
-    // The node is a tier node - extract label/content from CST without fabricated defaults.
-    let mut tier_type: Option<String> = None;
-    let mut content_parts: Vec<String> = Vec::new();
-    let mut saw_content_node = false;
+    let node = choice.raw_node();
+
+    // `%wor` is the one dependent tier whose grammar rule has no trailing
+    // `newline` child; for every other tier the last child is the newline, which
+    // is a structural delimiter, not content.
+    let has_trailing_newline = !matches!(choice, DependentTierChoice::WorDependentTier(_));
 
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        match child.kind() {
-            TIER_SEP | COLON | TAB | SPACE | WHITESPACES | NEWLINE => {}
-            // All tier prefixes (including x_tier_prefix "%xfoo" and
-            // unsupported_tier_prefix "%custom") end with "_tier_prefix".
-            // Strip the leading '%' to get the tier label.
-            kind if kind.ends_with("_tier_prefix") => match child.utf8_text(source.as_bytes()) {
-                Ok(text) => {
-                    if let Some(label) = text.strip_prefix('%') {
-                        if label.is_empty() {
-                            errors.report(ParseError::new(
-                                ErrorCode::InvalidDependentTier,
-                                Severity::Error,
-                                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                                ErrorContext::new(
-                                    original_input,
-                                    0..original_input.len(),
-                                    original_input,
-                                ),
-                                "Dependent tier label cannot be empty",
-                            ));
-                            return ParseOutcome::rejected();
-                        }
-                        tier_type = Some(label.to_string());
-                    } else {
-                        errors.report(ParseError::new(
-                            ErrorCode::InvalidDependentTier,
-                            Severity::Error,
-                            SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                            ErrorContext::new(
-                                original_input,
-                                0..original_input.len(),
-                                original_input,
-                            ),
-                            format!(
-                                "Dependent tier prefix '{}' is missing leading '%' marker",
-                                text
-                            ),
-                        ));
-                        return ParseOutcome::rejected();
-                    }
-                }
-                Err(_) => {
-                    errors.report(ParseError::new(
-                        ErrorCode::UnparsableContent,
-                        Severity::Error,
-                        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                        ErrorContext::new(original_input, 0..original_input.len(), original_input),
-                        "Unparsable content: dependent tier prefix is not valid UTF-8",
-                    ));
-                    return ParseOutcome::rejected();
-                }
-            },
-            _ => match child.utf8_text(source.as_bytes()) {
-                Ok(text) => {
-                    saw_content_node = true;
-                    content_parts.push(text.to_string());
-                }
-                Err(_) => {
-                    errors.report(ParseError::new(
-                        ErrorCode::UnparsableContent,
-                        Severity::Error,
-                        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                        ErrorContext::new(original_input, 0..original_input.len(), original_input),
-                        "Unparsable content: dependent tier content is not valid UTF-8",
-                    ));
-                    return ParseOutcome::rejected();
-                }
-            },
-        }
-    }
+    let children: Vec<tree_sitter::Node> = node.children(&mut cursor).collect();
 
-    let tier_type = match tier_type {
-        Some(tier_type) => tier_type,
-        None => {
+    // Label: child_0 is invariantly the tier's `*_tier_prefix`.
+    let Some(prefix) = children.first() else {
+        errors.report(ParseError::new(
+            ErrorCode::InvalidDependentTier,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(original_input, 0..original_input.len(), original_input),
+            "Could not extract dependent tier label from parsed structure",
+        ));
+        return ParseOutcome::rejected();
+    };
+    let tier_type = match prefix.utf8_text(source.as_bytes()) {
+        Ok(text) => match text.strip_prefix('%') {
+            Some(label) if !label.is_empty() => label.to_string(),
+            Some(_) => {
+                errors.report(ParseError::new(
+                    ErrorCode::InvalidDependentTier,
+                    Severity::Error,
+                    SourceLocation::from_offsets(prefix.start_byte(), prefix.end_byte()),
+                    ErrorContext::new(original_input, 0..original_input.len(), original_input),
+                    "Dependent tier label cannot be empty",
+                ));
+                return ParseOutcome::rejected();
+            }
+            None => {
+                errors.report(ParseError::new(
+                    ErrorCode::InvalidDependentTier,
+                    Severity::Error,
+                    SourceLocation::from_offsets(prefix.start_byte(), prefix.end_byte()),
+                    ErrorContext::new(original_input, 0..original_input.len(), original_input),
+                    format!(
+                        "Dependent tier prefix '{}' is missing leading '%' marker",
+                        text
+                    ),
+                ));
+                return ParseOutcome::rejected();
+            }
+        },
+        Err(_) => {
             errors.report(ParseError::new(
-                ErrorCode::InvalidDependentTier,
+                ErrorCode::UnparsableContent,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                SourceLocation::from_offsets(prefix.start_byte(), prefix.end_byte()),
                 ErrorContext::new(original_input, 0..original_input.len(), original_input),
-                "Could not extract dependent tier label from parsed structure",
+                "Unparsable content: dependent tier prefix is not valid UTF-8",
             ));
             return ParseOutcome::rejected();
         }
     };
+
+    // Content: the children strictly between the `tier_sep` (child_1) and the
+    // trailing newline (dropped for non-`%wor`). Every such child is a content
+    // node in the removed walk's sense (it is neither the prefix nor a structural
+    // delimiter), joined with the same "single space between non-empty parts"
+    // rule.
+    let content_end = if has_trailing_newline {
+        children.len().saturating_sub(1)
+    } else {
+        children.len()
+    };
+    // Content begins after child_0 (prefix) and child_1 (tier_sep); the `.min`
+    // keeps the range valid for a degenerate tier with fewer children.
+    const FIRST_CONTENT_CHILD: usize = 2;
+    let content_start = FIRST_CONTENT_CHILD.min(content_end);
+    let content_children = &children[content_start..content_end];
+
+    let mut saw_content_node = false;
+    let mut content = String::new();
+    for child in content_children {
+        let text = match child.utf8_text(source.as_bytes()) {
+            Ok(text) => text,
+            Err(_) => {
+                errors.report(ParseError::new(
+                    ErrorCode::UnparsableContent,
+                    Severity::Error,
+                    SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
+                    ErrorContext::new(original_input, 0..original_input.len(), original_input),
+                    "Unparsable content: dependent tier content is not valid UTF-8",
+                ));
+                return ParseOutcome::rejected();
+            }
+        };
+        saw_content_node = true;
+        if !content.is_empty() && !text.is_empty() {
+            content.push(' ');
+        }
+        content.push_str(text);
+    }
 
     if !saw_content_node {
         errors.report(ParseError::new(
@@ -244,14 +278,6 @@ fn extract_tier_from_node(
             "Could not extract dependent tier content from parsed structure",
         ));
         return ParseOutcome::rejected();
-    }
-
-    let mut content = String::new();
-    for part in content_parts {
-        if !content.is_empty() && !part.is_empty() {
-            content.push(' ');
-        }
-        content.push_str(&part);
     }
 
     if content.is_empty() {

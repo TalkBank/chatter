@@ -1,7 +1,8 @@
-//! Parity tests: validate the generated `GrammarTraversal` against real CHAT data.
+//! Parity tests: validate the generated `extract_*` free functions against
+//! real CHAT data.
 //!
 //! These tests parse the 74-file reference corpus with tree-sitter and exercise
-//! the generated extraction methods on every matching node. They verify:
+//! the generated extraction functions on every matching node. They verify:
 //! 1. Extraction doesn't panic on any real-world CST
 //! 2. Required children are Present in well-formed CHAT
 //! 3. Speaker text, tier body, headers extract correctly
@@ -10,9 +11,18 @@ use std::collections::BTreeMap;
 
 use talkbank_parser_tests::generated_traversal::*;
 
-/// Minimal traversal implementation, uses all generated defaults.
-struct TestTraversal;
-impl GrammarTraversal for TestTraversal {}
+/// Read the UTF-8 text of a leaf wrapper's raw node.
+///
+/// The OLD backend's leaf wrappers carried an inherent `.text(source)`
+/// convenience method; the NEW backend's wrappers do not (verified: zero
+/// occurrences of that method in `generated_traversal.rs`), so callers
+/// read the wrapped raw node and decode directly, matching the idiom used
+/// throughout the already-migrated production parser (e.g.
+/// `node.utf8_text(source.as_bytes())` in `tree_parsing/main_tier/structure/
+/// contents.rs`).
+fn node_text<'s>(node: tree_sitter::Node, source: &'s str) -> &'s str {
+    node.utf8_text(source.as_bytes()).unwrap_or("")
+}
 
 /// Walk a tree-sitter tree, calling `callback` on every node.
 fn walk_all<'tree, F>(node: tree_sitter::Node<'tree>, callback: &mut F)
@@ -54,20 +64,39 @@ fn corpus_dir() -> Option<std::path::PathBuf> {
 fn test_main_tier_all_fields_present() {
     let source = "@UTF8\n@Begin\n@Participants:\tCHI Target_Child\n*CHI:\thello world .\n@End\n";
     let tree = parse_chat(source);
-    let mut t = TestTraversal;
     let mut found = false;
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "main_tier" {
-            let c = t.extract_main_tier(node);
-            assert!(c.child_0.is_present(), "star: {:?}", c.child_0);
-            assert!(c.speaker.is_present(), "speaker: {:?}", c.speaker);
-            assert!(c.child_2.is_present(), "colon: {:?}", c.child_2);
-            assert!(c.child_3.is_present(), "tab: {:?}", c.child_3);
-            assert!(c.child_4.is_present(), "tier_body: {:?}", c.child_4);
+            let c = extract_main_tier(MainTierNode(node));
+            assert!(
+                matches!(c.child_0.slot, NodeSlot::Present(_)),
+                "star: {:?}",
+                c.child_0.slot
+            );
+            assert!(
+                matches!(c.speaker.slot, NodeSlot::Present(_)),
+                "speaker: {:?}",
+                c.speaker.slot
+            );
+            assert!(
+                matches!(c.child_2.slot, NodeSlot::Present(_)),
+                "colon: {:?}",
+                c.child_2.slot
+            );
+            assert!(
+                matches!(c.child_3.slot, NodeSlot::Present(_)),
+                "tab: {:?}",
+                c.child_3.slot
+            );
+            assert!(
+                matches!(c.child_4.slot, NodeSlot::Present(_)),
+                "tier_body: {:?}",
+                c.child_4.slot
+            );
 
-            if let NodeSlot::Present(spk) = &c.speaker {
-                assert_eq!(spk.text(source), "CHI");
+            if let NodeSlot::Present(spk) = &c.speaker.slot {
+                assert_eq!(node_text(spk.0, source), "CHI");
             }
             found = true;
         }
@@ -83,16 +112,27 @@ fn test_main_tier_all_fields_present() {
 fn test_participants_header() {
     let source = "@UTF8\n@Begin\n@Participants:\tCHI Target_Child, MOT Mother\n*CHI:\thi .\n@End\n";
     let tree = parse_chat(source);
-    let mut t = TestTraversal;
     let mut found = false;
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "participants_header" {
-            let c = t.extract_participants_header(node);
+            let c = extract_participants_header(ParticipantsHeaderNode(node));
             // Should have all required children present
-            assert!(c.child_0.is_present(), "prefix: {:?}", c.child_0);
-            assert!(c.child_1.is_present(), "header_sep: {:?}", c.child_1);
-            assert!(c.child_2.is_present(), "contents: {:?}", c.child_2);
+            assert!(
+                matches!(c.child_0.slot, NodeSlot::Present(_)),
+                "prefix: {:?}",
+                c.child_0.slot
+            );
+            assert!(
+                matches!(c.child_1.slot, NodeSlot::Present(_)),
+                "header_sep: {:?}",
+                c.child_1.slot
+            );
+            assert!(
+                matches!(c.child_2.slot, NodeSlot::Present(_)),
+                "contents: {:?}",
+                c.child_2.slot
+            );
             found = true;
         }
     });
@@ -104,18 +144,29 @@ fn test_date_header() {
     let source =
         "@UTF8\n@Begin\n@Participants:\tCHI Target_Child\n@Date:\t01-JAN-2000\n*CHI:\thi .\n@End\n";
     let tree = parse_chat(source);
-    let mut t = TestTraversal;
     let mut found = false;
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "date_header" {
-            let c = t.extract_date_header(node);
-            assert!(c.child_0.is_present(), "date_prefix: {:?}", c.child_0);
-            assert!(c.child_1.is_present(), "header_sep: {:?}", c.child_1);
-            assert!(c.child_2.is_present(), "date_contents: {:?}", c.child_2);
+            let c = extract_date_header(DateHeaderNode(node));
+            assert!(
+                matches!(c.child_0.slot, NodeSlot::Present(_)),
+                "date_prefix: {:?}",
+                c.child_0.slot
+            );
+            assert!(
+                matches!(c.child_1.slot, NodeSlot::Present(_)),
+                "header_sep: {:?}",
+                c.child_1.slot
+            );
+            assert!(
+                matches!(c.child_2.slot, NodeSlot::Present(_)),
+                "date_contents: {:?}",
+                c.child_2.slot
+            );
 
-            if let NodeSlot::Present(date) = &c.child_2 {
-                assert_eq!(date.text(source), "01-JAN-2000");
+            if let NodeSlot::Present(date) = &c.child_2.slot {
+                assert_eq!(node_text(date.0, source), "01-JAN-2000");
             }
             found = true;
         }
@@ -131,7 +182,6 @@ fn test_date_header() {
 fn test_full_document_extraction() {
     let source = "@UTF8\n@Begin\n@Participants:\tCHI Target_Child\n*CHI:\thi .\n@End\n";
     let tree = parse_chat(source);
-    let mut t = TestTraversal;
 
     // The root is source_file (CHOICE), its first child is full_document (SEQ)
     let root = tree.root_node();
@@ -139,8 +189,12 @@ fn test_full_document_extraction() {
     let full_doc = root.child(0).expect("should have full_document child");
     assert_eq!(full_doc.kind(), "full_document");
 
-    let c = t.extract_full_document(full_doc);
-    assert!(c.child_0.is_present(), "utf8_header: {:?}", c.child_0);
+    let c = extract_full_document(FullDocumentNode(full_doc));
+    assert!(
+        matches!(c.child_0.slot, NodeSlot::Present(_)),
+        "utf8_header: {:?}",
+        c.child_0.slot
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -168,9 +222,8 @@ fn test_corpus_wide_extraction() {
     {
         let source = std::fs::read_to_string(entry.path()).expect("read file");
         let tree = parser.parse(&source, None).expect("parse");
-        let mut t = TestTraversal;
 
-        // Walk every node and call the matching extraction method.
+        // Walk every node and call the matching extraction function.
         // The key validation: this doesn't panic on any real CST node.
         walk_all(tree.root_node(), &mut |node| {
             let kind = node.kind();
@@ -179,79 +232,83 @@ fn test_corpus_wide_extraction() {
             // Call extraction for key SEQ rules to verify they work
             match kind {
                 "full_document" => {
-                    let _ = t.extract_full_document(node);
+                    let _ = extract_full_document(FullDocumentNode(node));
                 }
                 "main_tier" => {
-                    let _ = t.extract_main_tier(node);
+                    let _ = extract_main_tier(MainTierNode(node));
                 }
                 "utterance" => {
-                    let _ = t.extract_utterance(node);
+                    let _ = extract_utterance(UtteranceNode(node));
                 }
                 "tier_body" => {
-                    let _ = t.extract_tier_body(node);
+                    let _ = extract_tier_body(TierBodyNode(node));
                 }
                 "utterance_end" => {
-                    let _ = t.extract_utterance_end(node);
+                    let _ = extract_utterance_end(UtteranceEndNode(node));
                 }
                 "participants_header" => {
-                    let _ = t.extract_participants_header(node);
+                    let _ = extract_participants_header(ParticipantsHeaderNode(node));
                 }
                 "languages_header" => {
-                    let _ = t.extract_languages_header(node);
+                    let _ = extract_languages_header(LanguagesHeaderNode(node));
                 }
                 "id_header" => {
-                    let _ = t.extract_id_header(node);
+                    let _ = extract_id_header(IdHeaderNode(node));
                 }
                 "date_header" => {
-                    let _ = t.extract_date_header(node);
+                    let _ = extract_date_header(DateHeaderNode(node));
                 }
                 "media_header" => {
-                    let _ = t.extract_media_header(node);
+                    let _ = extract_media_header(MediaHeaderNode(node));
                 }
                 "comment_header" => {
-                    let _ = t.extract_comment_header(node);
+                    let _ = extract_comment_header(CommentHeaderNode(node));
                 }
                 "mor_dependent_tier" => {
-                    let _ = t.extract_mor_dependent_tier(node);
+                    let _ = extract_mor_dependent_tier(MorDependentTierNode(node));
                 }
                 "gra_dependent_tier" => {
-                    let _ = t.extract_gra_dependent_tier(node);
+                    let _ = extract_gra_dependent_tier(GraDependentTierNode(node));
                 }
                 "pho_dependent_tier" => {
-                    let _ = t.extract_pho_dependent_tier(node);
+                    let _ = extract_pho_dependent_tier(PhoDependentTierNode(node));
                 }
                 "com_dependent_tier" => {
-                    let _ = t.extract_com_dependent_tier(node);
+                    let _ = extract_com_dependent_tier(ComDependentTierNode(node));
                 }
                 "word_with_optional_annotations" => {
-                    let _ = t.extract_word_with_optional_annotations(node);
+                    let _ = extract_word_with_optional_annotations(
+                        WordWithOptionalAnnotationsNode(node),
+                    );
                 }
                 "nonword_with_optional_annotations" => {
-                    let _ = t.extract_nonword_with_optional_annotations(node);
+                    let _ = extract_nonword_with_optional_annotations(
+                        NonwordWithOptionalAnnotationsNode(node),
+                    );
                 }
                 "mor_word" => {
-                    let _ = t.extract_mor_word(node);
+                    let _ = extract_mor_word(MorWordNode(node));
                 }
                 "mor_content" => {
-                    let _ = t.extract_mor_content(node);
+                    let _ = extract_mor_content(MorContentNode(node));
                 }
                 "gra_relation" => {
-                    let _ = t.extract_gra_relation(node);
+                    let _ = extract_gra_relation(GraRelationNode(node));
                 }
                 "replacement" => {
-                    let _ = t.extract_replacement(node);
+                    let _ = extract_replacement(ReplacementNode(node));
                 }
                 "group_with_annotations" => {
-                    let _ = t.extract_group_with_annotations(node);
+                    let _ = extract_group_with_annotations(GroupWithAnnotationsNode(node));
                 }
                 "begin_header" => {
-                    let _ = t.extract_begin_header(node);
+                    let _ = extract_begin_header(BeginHeaderNode(node));
                 }
                 "end_header" => {
-                    let _ = t.extract_end_header(node);
+                    let _ = extract_end_header(EndHeaderNode(node));
                 }
                 "utf8_header" => {
-                    let _ = t.extract_utf8_header(node);
+                    let _ = extract_utf8_header(Utf8HeaderNode(node));
                 }
                 _ => {}
             }
@@ -339,7 +396,6 @@ fn test_speaker_parity_with_existing_parser() {
     {
         let source = std::fs::read_to_string(entry.path()).expect("read file");
         let tree = parser.parse(&source, None).expect("parse");
-        let mut t = TestTraversal;
 
         // Parse with the Rust parser
         let Ok(existing) = chat_parser.parse_chat_file(&source) else {
@@ -350,9 +406,9 @@ fn test_speaker_parity_with_existing_parser() {
         let mut gen_speakers = Vec::new();
         walk_all(tree.root_node(), &mut |node| {
             if node.kind() == "main_tier" {
-                let c = t.extract_main_tier(node);
-                if let NodeSlot::Present(spk) = &c.speaker {
-                    gen_speakers.push(spk.text(&source).to_string());
+                let c = extract_main_tier(MainTierNode(node));
+                if let NodeSlot::Present(spk) = &c.speaker.slot {
+                    gen_speakers.push(node_text(spk.0, &source).to_string());
                 }
             }
         });
@@ -381,476 +437,479 @@ fn test_speaker_parity_with_existing_parser() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 6: ALL 116 extraction methods on every node, zero panics
+// Test 6: ALL 113 extraction functions on every node, zero panics
+//
+// The OLD-backend harness dispatched 116 rule kinds, including the three
+// HIDDEN seq rules `_id_demographic_fields` / `_id_identity_fields` /
+// `_id_role_fields`. Tree-sitter inlines HIDDEN (underscore-prefixed) rules
+// into their parent, so a node of that kind never appears in a real CST
+// (confirmed: `walk_all` never visits one; this is the same "hidden rule
+// inlining" property `visitor_hidden_rule_inlining.rs` exercises for
+// `id_contents`), and the NEW backend correspondingly does NOT generate an
+// `extract__id_*` free function for them at all (verified: zero such
+// functions in `generated_traversal.rs`). Those three arms were
+// already dead code in the OLD harness (never reached); dropping them is not
+// a coverage change, only the removal of unreachable arms for functions that
+// no longer exist. The remaining 113 real rules are ported 1:1, same set,
+// same "no panic" assertion.
 // ---------------------------------------------------------------------------
 
-/// Dispatch to the appropriate extraction method based on node kind.
+/// Dispatch to the appropriate extraction function based on node kind.
 /// Returns true if an extraction was performed.
-#[allow(non_snake_case, clippy::too_many_lines)]
-fn try_extract(t: &mut TestTraversal, node: tree_sitter::Node) -> bool {
+#[allow(clippy::too_many_lines)]
+fn try_extract(node: tree_sitter::Node) -> bool {
     match node.kind() {
-        "_id_demographic_fields" => {
-            let _ = t.extract__id_demographic_fields(node);
-            true
-        }
-        "_id_identity_fields" => {
-            let _ = t.extract__id_identity_fields(node);
-            true
-        }
-        "_id_role_fields" => {
-            let _ = t.extract__id_role_fields(node);
-            true
-        }
         "act_dependent_tier" => {
-            let _ = t.extract_act_dependent_tier(node);
+            let _ = extract_act_dependent_tier(ActDependentTierNode(node));
             true
         }
         "activities_header" => {
-            let _ = t.extract_activities_header(node);
+            let _ = extract_activities_header(ActivitiesHeaderNode(node));
             true
         }
         "add_dependent_tier" => {
-            let _ = t.extract_add_dependent_tier(node);
+            let _ = extract_add_dependent_tier(AddDependentTierNode(node));
             true
         }
         "alt_dependent_tier" => {
-            let _ = t.extract_alt_dependent_tier(node);
+            let _ = extract_alt_dependent_tier(AltDependentTierNode(node));
             true
         }
         "bck_header" => {
-            let _ = t.extract_bck_header(node);
+            let _ = extract_bck_header(BckHeaderNode(node));
             true
         }
         "begin_header" => {
-            let _ = t.extract_begin_header(node);
+            let _ = extract_begin_header(BeginHeaderNode(node));
             true
         }
         "bg_header" => {
-            let _ = t.extract_bg_header(node);
+            let _ = extract_bg_header(BgHeaderNode(node));
             true
         }
         "birth_of_header" => {
-            let _ = t.extract_birth_of_header(node);
+            let _ = extract_birth_of_header(BirthOfHeaderNode(node));
             true
         }
         "birthplace_of_header" => {
-            let _ = t.extract_birthplace_of_header(node);
+            let _ = extract_birthplace_of_header(BirthplaceOfHeaderNode(node));
             true
         }
         "blank_header" => {
-            let _ = t.extract_blank_header(node);
+            let _ = extract_blank_header(BlankHeaderNode(node));
             true
         }
         "cod_dependent_tier" => {
-            let _ = t.extract_cod_dependent_tier(node);
+            let _ = extract_cod_dependent_tier(CodDependentTierNode(node));
             true
         }
         "coh_dependent_tier" => {
-            let _ = t.extract_coh_dependent_tier(node);
+            let _ = extract_coh_dependent_tier(CohDependentTierNode(node));
             true
         }
         "color_words_header" => {
-            let _ = t.extract_color_words_header(node);
+            let _ = extract_color_words_header(ColorWordsHeaderNode(node));
             true
         }
         "com_dependent_tier" => {
-            let _ = t.extract_com_dependent_tier(node);
+            let _ = extract_com_dependent_tier(ComDependentTierNode(node));
             true
         }
         "comment_header" => {
-            let _ = t.extract_comment_header(node);
+            let _ = extract_comment_header(CommentHeaderNode(node));
             true
         }
         "date_header" => {
-            let _ = t.extract_date_header(node);
+            let _ = extract_date_header(DateHeaderNode(node));
             true
         }
         "def_dependent_tier" => {
-            let _ = t.extract_def_dependent_tier(node);
+            let _ = extract_def_dependent_tier(DefDependentTierNode(node));
             true
         }
         "full_document" => {
-            let _ = t.extract_full_document(node);
+            let _ = extract_full_document(FullDocumentNode(node));
             true
         }
         "eg_header" => {
-            let _ = t.extract_eg_header(node);
+            let _ = extract_eg_header(EgHeaderNode(node));
             true
         }
         "end_header" => {
-            let _ = t.extract_end_header(node);
+            let _ = extract_end_header(EndHeaderNode(node));
             true
         }
         "eng_dependent_tier" => {
-            let _ = t.extract_eng_dependent_tier(node);
+            let _ = extract_eng_dependent_tier(EngDependentTierNode(node));
             true
         }
         "err_dependent_tier" => {
-            let _ = t.extract_err_dependent_tier(node);
+            let _ = extract_err_dependent_tier(ErrDependentTierNode(node));
             true
         }
         "event" => {
-            let _ = t.extract_event(node);
+            let _ = extract_event(EventNode(node));
             true
         }
         "exp_dependent_tier" => {
-            let _ = t.extract_exp_dependent_tier(node);
+            let _ = extract_exp_dependent_tier(ExpDependentTierNode(node));
             true
         }
         "fac_dependent_tier" => {
-            let _ = t.extract_fac_dependent_tier(node);
+            let _ = extract_fac_dependent_tier(FacDependentTierNode(node));
             true
         }
         "flo_dependent_tier" => {
-            let _ = t.extract_flo_dependent_tier(node);
+            let _ = extract_flo_dependent_tier(FloDependentTierNode(node));
             true
         }
         "font_header" => {
-            let _ = t.extract_font_header(node);
+            let _ = extract_font_header(FontHeaderNode(node));
             true
         }
         "g_header" => {
-            let _ = t.extract_g_header(node);
+            let _ = extract_g_header(GHeaderNode(node));
             true
         }
         "gls_dependent_tier" => {
-            let _ = t.extract_gls_dependent_tier(node);
+            let _ = extract_gls_dependent_tier(GlsDependentTierNode(node));
             true
         }
         "gpx_dependent_tier" => {
-            let _ = t.extract_gpx_dependent_tier(node);
+            let _ = extract_gpx_dependent_tier(GpxDependentTierNode(node));
             true
         }
         "gra_contents" => {
-            let _ = t.extract_gra_contents(node);
+            let _ = extract_gra_contents(GraContentsNode(node));
             true
         }
         "gra_dependent_tier" => {
-            let _ = t.extract_gra_dependent_tier(node);
+            let _ = extract_gra_dependent_tier(GraDependentTierNode(node));
             true
         }
         "gra_relation" => {
-            let _ = t.extract_gra_relation(node);
+            let _ = extract_gra_relation(GraRelationNode(node));
             true
         }
         "group_with_annotations" => {
-            let _ = t.extract_group_with_annotations(node);
+            let _ = extract_group_with_annotations(GroupWithAnnotationsNode(node));
             true
         }
         "header_sep" => {
-            let _ = t.extract_header_sep(node);
+            let _ = extract_header_sep(HeaderSepNode(node));
             true
         }
         "id_contents" => {
-            let _ = t.extract_id_contents(node);
+            let _ = extract_id_contents(IdContentsNode(node));
             true
         }
         "id_header" => {
-            let _ = t.extract_id_header(node);
+            let _ = extract_id_header(IdHeaderNode(node));
             true
         }
         "int_dependent_tier" => {
-            let _ = t.extract_int_dependent_tier(node);
+            let _ = extract_int_dependent_tier(IntDependentTierNode(node));
             true
         }
         "l1_of_header" => {
-            let _ = t.extract_l1_of_header(node);
+            let _ = extract_l1_of_header(L1OfHeaderNode(node));
             true
         }
         "languages_contents" => {
-            let _ = t.extract_languages_contents(node);
+            let _ = extract_languages_contents(LanguagesContentsNode(node));
             true
         }
         "languages_header" => {
-            let _ = t.extract_languages_header(node);
+            let _ = extract_languages_header(LanguagesHeaderNode(node));
             true
         }
         "location_header" => {
-            let _ = t.extract_location_header(node);
+            let _ = extract_location_header(LocationHeaderNode(node));
             true
         }
         "long_feature_begin" => {
-            let _ = t.extract_long_feature_begin(node);
+            let _ = extract_long_feature_begin(LongFeatureBeginNode(node));
             true
         }
         "long_feature_end" => {
-            let _ = t.extract_long_feature_end(node);
+            let _ = extract_long_feature_end(LongFeatureEndNode(node));
             true
         }
         "main_pho_group" => {
-            let _ = t.extract_main_pho_group(node);
+            let _ = extract_main_pho_group(MainPhoGroupNode(node));
             true
         }
         "main_sin_group" => {
-            let _ = t.extract_main_sin_group(node);
+            let _ = extract_main_sin_group(MainSinGroupNode(node));
             true
         }
         "main_tier" => {
-            let _ = t.extract_main_tier(node);
+            let _ = extract_main_tier(MainTierNode(node));
             true
         }
         "media_contents" => {
-            let _ = t.extract_media_contents(node);
+            let _ = extract_media_contents(MediaContentsNode(node));
             true
         }
         "media_header" => {
-            let _ = t.extract_media_header(node);
+            let _ = extract_media_header(MediaHeaderNode(node));
             true
         }
         "mod_dependent_tier" => {
-            let _ = t.extract_mod_dependent_tier(node);
+            let _ = extract_mod_dependent_tier(ModDependentTierNode(node));
             true
         }
         "modsyl_dependent_tier" => {
-            let _ = t.extract_modsyl_dependent_tier(node);
+            let _ = extract_modsyl_dependent_tier(ModsylDependentTierNode(node));
             true
         }
         "mor_content" => {
-            let _ = t.extract_mor_content(node);
+            let _ = extract_mor_content(MorContentNode(node));
             true
         }
         "mor_contents" => {
-            let _ = t.extract_mor_contents(node);
+            let _ = extract_mor_contents(MorContentsNode(node));
             true
         }
         "mor_dependent_tier" => {
-            let _ = t.extract_mor_dependent_tier(node);
+            let _ = extract_mor_dependent_tier(MorDependentTierNode(node));
             true
         }
         "mor_feature" => {
-            let _ = t.extract_mor_feature(node);
+            let _ = extract_mor_feature(MorFeatureNode(node));
             true
         }
         "mor_post_clitic" => {
-            let _ = t.extract_mor_post_clitic(node);
+            let _ = extract_mor_post_clitic(MorPostCliticNode(node));
             true
         }
         "mor_word" => {
-            let _ = t.extract_mor_word(node);
+            let _ = extract_mor_word(MorWordNode(node));
             true
         }
         "new_episode_header" => {
-            let _ = t.extract_new_episode_header(node);
+            let _ = extract_new_episode_header(NewEpisodeHeaderNode(node));
             true
         }
         "nonvocal_begin" => {
-            let _ = t.extract_nonvocal_begin(node);
+            let _ = extract_nonvocal_begin(NonvocalBeginNode(node));
             true
         }
         "nonvocal_end" => {
-            let _ = t.extract_nonvocal_end(node);
+            let _ = extract_nonvocal_end(NonvocalEndNode(node));
             true
         }
         "nonvocal_simple" => {
-            let _ = t.extract_nonvocal_simple(node);
+            let _ = extract_nonvocal_simple(NonvocalSimpleNode(node));
             true
         }
         "nonword_with_optional_annotations" => {
-            let _ = t.extract_nonword_with_optional_annotations(node);
+            let _ =
+                extract_nonword_with_optional_annotations(NonwordWithOptionalAnnotationsNode(node));
             true
         }
         "number_header" => {
-            let _ = t.extract_number_header(node);
+            let _ = extract_number_header(NumberHeaderNode(node));
             true
         }
         "options_contents" => {
-            let _ = t.extract_options_contents(node);
+            let _ = extract_options_contents(OptionsContentsNode(node));
             true
         }
         "options_header" => {
-            let _ = t.extract_options_header(node);
+            let _ = extract_options_header(OptionsHeaderNode(node));
             true
         }
         "ort_dependent_tier" => {
-            let _ = t.extract_ort_dependent_tier(node);
+            let _ = extract_ort_dependent_tier(OrtDependentTierNode(node));
             true
         }
         "other_spoken_event" => {
-            let _ = t.extract_other_spoken_event(node);
+            let _ = extract_other_spoken_event(OtherSpokenEventNode(node));
             true
         }
         "page_header" => {
-            let _ = t.extract_page_header(node);
+            let _ = extract_page_header(PageHeaderNode(node));
             true
         }
         "par_dependent_tier" => {
-            let _ = t.extract_par_dependent_tier(node);
+            let _ = extract_par_dependent_tier(ParDependentTierNode(node));
             true
         }
         "participant" => {
-            let _ = t.extract_participant(node);
+            let _ = extract_participant(ParticipantNode(node));
             true
         }
         "participants_contents" => {
-            let _ = t.extract_participants_contents(node);
+            let _ = extract_participants_contents(ParticipantsContentsNode(node));
             true
         }
         "participants_header" => {
-            let _ = t.extract_participants_header(node);
+            let _ = extract_participants_header(ParticipantsHeaderNode(node));
             true
         }
         "pho_dependent_tier" => {
-            let _ = t.extract_pho_dependent_tier(node);
+            let _ = extract_pho_dependent_tier(PhoDependentTierNode(node));
             true
         }
         "pho_grouped_content" => {
-            let _ = t.extract_pho_grouped_content(node);
+            let _ = extract_pho_grouped_content(PhoGroupedContentNode(node));
             true
         }
         "pho_groups" => {
-            let _ = t.extract_pho_groups(node);
+            let _ = extract_pho_groups(PhoGroupsNode(node));
             true
         }
         "pho_words" => {
-            let _ = t.extract_pho_words(node);
+            let _ = extract_pho_words(PhoWordsNode(node));
             true
         }
         "phoaln_dependent_tier" => {
-            let _ = t.extract_phoaln_dependent_tier(node);
+            let _ = extract_phoaln_dependent_tier(PhoalnDependentTierNode(node));
             true
         }
         "phosyl_dependent_tier" => {
-            let _ = t.extract_phosyl_dependent_tier(node);
+            let _ = extract_phosyl_dependent_tier(PhosylDependentTierNode(node));
             true
         }
         "pid_header" => {
-            let _ = t.extract_pid_header(node);
+            let _ = extract_pid_header(PidHeaderNode(node));
             true
         }
         "quotation" => {
-            let _ = t.extract_quotation(node);
+            let _ = extract_quotation(QuotationNode(node));
             true
         }
         "recording_quality_header" => {
-            let _ = t.extract_recording_quality_header(node);
+            let _ = extract_recording_quality_header(RecordingQualityHeaderNode(node));
             true
         }
         "replacement" => {
-            let _ = t.extract_replacement(node);
+            let _ = extract_replacement(ReplacementNode(node));
             true
         }
         "room_layout_header" => {
-            let _ = t.extract_room_layout_header(node);
+            let _ = extract_room_layout_header(RoomLayoutHeaderNode(node));
             true
         }
         "sin_dependent_tier" => {
-            let _ = t.extract_sin_dependent_tier(node);
+            let _ = extract_sin_dependent_tier(SinDependentTierNode(node));
             true
         }
         "sin_grouped_content" => {
-            let _ = t.extract_sin_grouped_content(node);
+            let _ = extract_sin_grouped_content(SinGroupedContentNode(node));
             true
         }
         "sin_groups" => {
-            let _ = t.extract_sin_groups(node);
+            let _ = extract_sin_groups(SinGroupsNode(node));
             true
         }
         "sit_dependent_tier" => {
-            let _ = t.extract_sit_dependent_tier(node);
+            let _ = extract_sit_dependent_tier(SitDependentTierNode(node));
             true
         }
         "situation_header" => {
-            let _ = t.extract_situation_header(node);
+            let _ = extract_situation_header(SituationHeaderNode(node));
             true
         }
         "spa_dependent_tier" => {
-            let _ = t.extract_spa_dependent_tier(node);
+            let _ = extract_spa_dependent_tier(SpaDependentTierNode(node));
             true
         }
         "t_header" => {
-            let _ = t.extract_t_header(node);
+            let _ = extract_t_header(THeaderNode(node));
             true
         }
         "tape_location_header" => {
-            let _ = t.extract_tape_location_header(node);
+            let _ = extract_tape_location_header(TapeLocationHeaderNode(node));
             true
         }
         "thumbnail_header" => {
-            let _ = t.extract_thumbnail_header(node);
+            let _ = extract_thumbnail_header(ThumbnailHeaderNode(node));
             true
         }
         "tier_body" => {
-            let _ = t.extract_tier_body(node);
+            let _ = extract_tier_body(TierBodyNode(node));
             true
         }
         "tier_sep" => {
-            let _ = t.extract_tier_sep(node);
+            let _ = extract_tier_sep(TierSepNode(node));
             true
         }
         "tim_dependent_tier" => {
-            let _ = t.extract_tim_dependent_tier(node);
+            let _ = extract_tim_dependent_tier(TimDependentTierNode(node));
             true
         }
         "time_duration_header" => {
-            let _ = t.extract_time_duration_header(node);
+            let _ = extract_time_duration_header(TimeDurationHeaderNode(node));
             true
         }
         "time_start_header" => {
-            let _ = t.extract_time_start_header(node);
+            let _ = extract_time_start_header(TimeStartHeaderNode(node));
             true
         }
         "transcriber_header" => {
-            let _ = t.extract_transcriber_header(node);
+            let _ = extract_transcriber_header(TranscriberHeaderNode(node));
             true
         }
         "transcription_header" => {
-            let _ = t.extract_transcription_header(node);
+            let _ = extract_transcription_header(TranscriptionHeaderNode(node));
             true
         }
         "types_header" => {
-            let _ = t.extract_types_header(node);
+            let _ = extract_types_header(TypesHeaderNode(node));
             true
         }
         "unsupported_dependent_tier" => {
-            let _ = t.extract_unsupported_dependent_tier(node);
+            let _ = extract_unsupported_dependent_tier(UnsupportedDependentTierNode(node));
             true
         }
         "unsupported_header" => {
-            let _ = t.extract_unsupported_header(node);
+            let _ = extract_unsupported_header(UnsupportedHeaderNode(node));
             true
         }
         "unsupported_line" => {
-            let _ = t.extract_unsupported_line(node);
+            let _ = extract_unsupported_line(UnsupportedLineNode(node));
             true
         }
         "utf8_header" => {
-            let _ = t.extract_utf8_header(node);
+            let _ = extract_utf8_header(Utf8HeaderNode(node));
             true
         }
         "utterance" => {
-            let _ = t.extract_utterance(node);
+            let _ = extract_utterance(UtteranceNode(node));
             true
         }
         "utterance_end" => {
-            let _ = t.extract_utterance_end(node);
+            let _ = extract_utterance_end(UtteranceEndNode(node));
             true
         }
         "videos_header" => {
-            let _ = t.extract_videos_header(node);
+            let _ = extract_videos_header(VideosHeaderNode(node));
             true
         }
         "warning_header" => {
-            let _ = t.extract_warning_header(node);
+            let _ = extract_warning_header(WarningHeaderNode(node));
             true
         }
         "window_header" => {
-            let _ = t.extract_window_header(node);
+            let _ = extract_window_header(WindowHeaderNode(node));
             true
         }
         "wor_dependent_tier" => {
-            let _ = t.extract_wor_dependent_tier(node);
+            let _ = extract_wor_dependent_tier(WorDependentTierNode(node));
             true
         }
         "wor_tier_body" => {
-            let _ = t.extract_wor_tier_body(node);
+            let _ = extract_wor_tier_body(WorTierBodyNode(node));
             true
         }
         "word_with_optional_annotations" => {
-            let _ = t.extract_word_with_optional_annotations(node);
+            let _ = extract_word_with_optional_annotations(WordWithOptionalAnnotationsNode(node));
             true
         }
         "x_dependent_tier" => {
-            let _ = t.extract_x_dependent_tier(node);
+            let _ = extract_x_dependent_tier(XDependentTierNode(node));
             true
         }
         _ => false,
@@ -858,7 +917,7 @@ fn try_extract(t: &mut TestTraversal, node: tree_sitter::Node) -> bool {
 }
 
 #[test]
-fn test_all_116_extraction_methods_no_panics() {
+fn test_all_113_extraction_functions_no_panics() {
     let dir = {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -889,11 +948,10 @@ fn test_all_116_extraction_methods_no_panics() {
     {
         let source = std::fs::read_to_string(entry.path()).expect("read file");
         let tree = parser.parse(&source, None).expect("parse");
-        let mut t = TestTraversal;
 
         walk_all(tree.root_node(), &mut |node| {
             total_nodes += 1;
-            if try_extract(&mut t, node) {
+            if try_extract(node) {
                 extracted_nodes += 1;
                 *kind_counts.entry(node.kind().to_string()).or_default() += 1;
             }
@@ -905,11 +963,11 @@ fn test_all_116_extraction_methods_no_panics() {
     assert!(files >= 74, "Should parse all 74 files");
 
     let unique_kinds_extracted = kind_counts.len();
-    eprintln!("=== ALL 116 METHODS: Corpus-wide results ===");
+    eprintln!("=== ALL 113 FUNCTIONS: Corpus-wide results ===");
     eprintln!("Files: {files}");
     eprintln!("Total CST nodes: {total_nodes}");
-    eprintln!("Nodes extracted by generated methods: {extracted_nodes}");
-    eprintln!("Unique rule kinds with extraction: {unique_kinds_extracted}/116");
+    eprintln!("Nodes extracted by generated functions: {extracted_nodes}");
+    eprintln!("Unique rule kinds with extraction: {unique_kinds_extracted}/113");
     eprintln!();
     eprintln!("Per-kind counts (top 30):");
     let mut sorted_kinds: Vec<_> = kind_counts.iter().collect();
@@ -926,7 +984,22 @@ fn test_all_116_extraction_methods_no_panics() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 7: Semantic conversion, @Options header → OptionNameValue
+// Test 7: Semantic conversion, @Options header -> ChatOptionFlag
+//
+// The OLD backend generated an auxiliary `OptionNameValue` "strict +
+// catch-all value" enum (`CA` / `NoAlign` / `Other(String)`) purely as a
+// traversal-generator convenience; it was never consumed by production
+// parsing (verified: the ONLY uses of `OptionNameValue` anywhere in the crate
+// were `generated_traversal.rs` itself and this test file). Production has
+// always classified `@Options` tokens through the real model type
+// `talkbank_model::ChatOptionFlag` (`special.rs`'s `option_flags`, migrated
+// onto the NEW free-fn descent in Task B2). The NEW backend does not
+// generate this auxiliary value-enum family at all (verified: zero
+// "Validated values for" occurrences in `generated_traversal.rs`,
+// versus 6 in the OLD module), so this test now exercises the SAME grammar
+// classification (`@Options: CA` -> known; `@Options: SomeUnknownOption` ->
+// unknown) against the type production actually uses, rather than a
+// generated-but-unused stub the NEW backend no longer produces.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -935,25 +1008,28 @@ fn test_options_header_semantic_conversion() {
     let source =
         "@UTF8\n@Begin\n@Participants:\tCHI Target_Child\n@Options:\tCA\n*CHI:\thi .\n@End\n";
     let tree = parse_chat(source);
-    let mut t = TestTraversal;
     let mut found_option = false;
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
-            let children = t.extract_options_header(node);
+            let children = extract_options_header(OptionsHeaderNode(node));
 
-            // The payload is options_contents (child_2)
-            if let NodeSlot::Present(contents_node) = &children.child_2 {
-                // Extract option_name from options_contents
-                let contents_children = t.extract_options_contents(contents_node.0);
+            // The payload is options_contents (child_2); its slot already
+            // carries the typed `OptionsContentsNode` wrapper, so it is
+            // passed straight into `extract_options_contents` with no
+            // unwrap-then-rewrap.
+            if let NodeSlot::Present(contents_node) = &children.child_2.slot {
+                let contents_children = extract_options_contents(*contents_node);
 
-                if let NodeSlot::Present(option_node) = &contents_children.child_0 {
-                    let option_text = option_node.text(source);
+                if let NodeSlot::Present(option_node) = &contents_children.child_0.slot {
+                    let option_text = node_text(option_node.0, source);
 
-                    // Use the generated OptionNameValue enum
-                    let value = OptionNameValue::from_text(option_text);
-                    assert_eq!(value, OptionNameValue::CA);
-                    assert!(value.is_known());
+                    let value = talkbank_model::ChatOptionFlag::from_text(option_text);
+                    assert_eq!(value, talkbank_model::ChatOptionFlag::Ca);
+                    assert!(!matches!(
+                        value,
+                        talkbank_model::ChatOptionFlag::Unsupported(_)
+                    ));
                     found_option = true;
                 }
             }
@@ -968,21 +1044,20 @@ fn test_options_header_unknown_value() {
     // File with @Options: SomeUnknownOption
     let source = "@UTF8\n@Begin\n@Participants:\tCHI Target_Child\n@Options:\tSomeUnknownOption\n*CHI:\thi .\n@End\n";
     let tree = parse_chat(source);
-    let mut t = TestTraversal;
     let mut found = false;
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
-            let children = t.extract_options_header(node);
-            if let NodeSlot::Present(contents_node) = &children.child_2 {
-                let contents_children = t.extract_options_contents(contents_node.0);
-                if let NodeSlot::Present(option_node) = &contents_children.child_0 {
-                    let value = OptionNameValue::from_text(option_node.text(source));
+            let children = extract_options_header(OptionsHeaderNode(node));
+            if let NodeSlot::Present(contents_node) = &children.child_2.slot {
+                let contents_children = extract_options_contents(*contents_node);
+                if let NodeSlot::Present(option_node) = &contents_children.child_0.slot {
+                    let value =
+                        talkbank_model::ChatOptionFlag::from_text(node_text(option_node.0, source));
                     assert!(
-                        matches!(value, OptionNameValue::Other(ref s) if s == "SomeUnknownOption"),
-                        "Unknown option should be Other, got {value:?}"
+                        matches!(value, talkbank_model::ChatOptionFlag::Unsupported(ref s) if s == "SomeUnknownOption"),
+                        "Unknown option should be Unsupported, got {value:?}"
                     );
-                    assert!(!value.is_known());
                     found = true;
                 }
             }

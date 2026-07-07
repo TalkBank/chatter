@@ -45,13 +45,11 @@ use talkbank_model::model::{
 /// Parse an atomic `langcode` token into a [`LanguageCode`].
 ///
 /// Input: the full token text, e.g. `"[- eng]"`.
-/// Returns `None` if the format doesn't match `[- <code>]`.
+/// Returns `None` if the format doesn't match `[- <code>]` (including an
+/// empty code, `"[- ]"`, which `LanguageCode::new` rejects fallibly).
 pub fn parse_langcode_token(token_text: &str) -> Option<LanguageCode> {
     let code = token_text.strip_prefix("[- ")?.strip_suffix(']')?;
-    if code.is_empty() {
-        return None;
-    }
-    Some(LanguageCode::new(code))
+    LanguageCode::new(code).ok()
 }
 
 // ---------------------------------------------------------------------------

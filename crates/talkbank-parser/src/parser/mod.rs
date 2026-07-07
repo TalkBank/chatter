@@ -25,5 +25,10 @@ pub mod participants;
 pub mod tier_parsers;
 pub mod tree_parsing;
 
+/// Region-neutral typed-CST seam shared by every parser region: the single
+/// content-child decode helper (`decode_present_child`). Structure now comes
+/// from the NEW backend's free `extract_*` functions, not a trait receiver.
+mod typed_cst;
+
 /// Re-export the main parser type and initialization error.
 pub use chat_file_parser::{ParserInitError, TreeSitterParser};

@@ -9,6 +9,8 @@ use talkbank_model::ErrorSink;
 use talkbank_model::model::SpaTier;
 use tree_sitter::Node;
 
+use crate::generated_traversal::{SpaDependentTierNode, extract_spa_dependent_tier};
+
 use super::helpers::{parse_text_tier_content, tier_span};
 
 /// Converts one `%spa` tier node.
@@ -17,10 +19,18 @@ use super::helpers::{parse_text_tier_content, tier_span};
 /// ```text
 /// spa_dependent_tier: seq('%', 'spa', colon, tab, text_with_bullets, newline)
 /// ```
+///
+/// Driven by the generated typed visitor: `extract_spa_dependent_tier` yields the
+/// body as `child_2.slot`, matched exhaustively by the shared
+/// [`parse_text_tier_content`], which also surfaces the carrier's `unexpected`
+/// sink (R2).
 pub fn parse_spa_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SpaTier {
     let span = tier_span(node);
+    let children = extract_spa_dependent_tier(SpaDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
+        children.child_2.slot,
+        &children.unexpected,
         source,
         errors,
         "spa_dependent_tier",

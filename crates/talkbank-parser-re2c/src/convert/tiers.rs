@@ -57,7 +57,8 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>) -> MainTier {
         // Token carries tag-extracted language code directly (e.g., "zho")
         let code = langcode_tok.text();
         if !code.is_empty() {
-            main_tier = main_tier.with_language_code(LanguageCode::new(code));
+            main_tier = main_tier
+                .with_language_code(LanguageCode::new(code).expect("checked non-empty above"));
         }
     }
 

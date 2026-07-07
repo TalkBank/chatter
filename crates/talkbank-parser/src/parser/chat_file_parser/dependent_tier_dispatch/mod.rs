@@ -11,7 +11,6 @@ mod helpers;
 mod parse;
 mod parsed;
 mod raw;
-mod unparsed;
 mod user_defined;
 
 pub(crate) use parse::parse_and_attach_dependent_tier;

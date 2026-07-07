@@ -241,7 +241,7 @@ fn test_validation_error_has_proper_span() -> Result<(), String> {
     let main_tier = &utterance.main;
 
     // Validate it
-    let languages = vec![LanguageCode::new("eng")];
+    let languages = vec![LanguageCode::new("eng").expect("test literal is non-empty")];
     let ctx = ValidationContext::new()
         .with_default_language(languages[0].clone())
         .with_declared_languages(languages);

@@ -82,10 +82,22 @@ where
     T: SpanShift,
     F: FnOnce(DependentTier) -> Option<T>,
 {
+    // A tier fragment's `input` is the tier CONTENT that follows the header;
+    // the wrapper supplies the tier line's terminator itself (the `\n` before
+    // the suffix below). If the caller's `input` already ends in a line
+    // terminator, emitting a second one would produce a blank line, which the
+    // parser then correctly rejects as E747 (blank lines not allowed), causing
+    // a spurious fragment rejection that does NOT reflect the tier content.
+    // Normalizing exactly one trailing terminator keeps this API in agreement
+    // with the re2c oracle (which parses the raw fragment and treats a trailing
+    // newline as a benign line end) while still surfacing a GENUINE extra blank
+    // line: an `input` ending in "\n\n" strips to "\n" and still doubles.
+    let body = strip_one_trailing_newline(input);
+
     // Build the minimal CHAT wrapper
     let chat = format!(
         "{}{}{}{}\n{}",
-        MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header, input, MINIMAL_CHAT_SUFFIX
+        MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header, body, MINIMAL_CHAT_SUFFIX
     );
 
     // Set up dual error handling
@@ -132,10 +144,15 @@ pub(crate) fn wrapper_parse_generic_tier(
     offset: usize,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<DependentTier> {
+    // As in `wrapper_parse_tier`: drop at most one caller-supplied trailing
+    // line terminator so the wrapper's own terminator does not double into a
+    // blank line (spurious E747). See that function for the full rationale.
+    let body = strip_one_trailing_newline(input);
+
     // Build wrapper (input already has tier header)
     let chat = format!(
         "{}{}{}\n{}",
-        MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, input, MINIMAL_CHAT_SUFFIX
+        MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, body, MINIMAL_CHAT_SUFFIX
     );
 
     // Set up dual error handling
@@ -165,6 +182,24 @@ pub(crate) fn wrapper_parse_generic_tier(
     }
 
     ParseOutcome::rejected()
+}
+
+/// Strip at most one trailing line terminator (`\r\n` or `\n`) from a tier
+/// fragment body.
+///
+/// The minimal-wrapper tier-fragment APIs supply the tier line's own
+/// terminator when they build the synthetic document. A caller-supplied
+/// trailing terminator in `input` would therefore double, producing a blank
+/// line that the parser rejects as E747. Removing exactly one terminator makes
+/// the wrapper robust to callers that hand it a whole line (terminator
+/// included), which is how a real fragment reparse often extracts one, while a
+/// deliberate extra blank line (`"...\n\n"`) still survives as `"...\n"` and is
+/// still reported.
+fn strip_one_trailing_newline(input: &str) -> &str {
+    match input.strip_suffix('\n') {
+        Some(without_lf) => without_lf.strip_suffix('\r').unwrap_or(without_lf),
+        None => input,
+    }
 }
 
 /// Extract the first dependent tier from a parsed ChatFile.
@@ -210,6 +245,73 @@ mod tests {
             .into_option()
             .ok_or_else(|| "Expected MOR tier to parse".to_string())?;
         assert!(!mor.items().is_empty());
+        Ok(())
+    }
+
+    /// Regression: a tier fragment whose `input` already ends in a line
+    /// terminator must still parse. The wrapper appends its own terminator, so
+    /// before `strip_one_trailing_newline` a trailing `\n` in `input` doubled
+    /// into a blank line and the fragment was spuriously rejected with E747
+    /// (BlankLineNotAllowed). This was the root cause of the re2c
+    /// `mor_tier_equivalence` / `gra_tier_equivalence` oracle divergence: the
+    /// re2c oracle parses the raw fragment and tolerates a trailing newline, so
+    /// the ts fragment API must too.
+    #[test]
+    fn wrapper_tolerates_trailing_newline_in_input() -> Result<(), String> {
+        let parser =
+            TreeSitterParser::new().map_err(|err| format!("Failed to create parser: {err}"))?;
+        let errors = ErrorCollector::new();
+
+        let result = wrapper_parse_tier(
+            &parser,
+            "%mor:\t",
+            "pro|I v|want n|cookie-PL .\n",
+            0,
+            &errors,
+            |tier| match tier {
+                DependentTier::Mor(tier) => Some(tier),
+                _ => None,
+            },
+        );
+
+        if !errors.is_empty() {
+            return Err(format!(
+                "expected no fragment errors for trailing-newline input, got: {:?}",
+                errors.to_vec()
+            ));
+        }
+        let mor: MorTier = result
+            .into_option()
+            .ok_or_else(|| "Expected MOR tier to parse".to_string())?;
+        assert_eq!(mor.items().len(), 3);
+        Ok(())
+    }
+
+    /// A deliberate extra blank line (`input` ending in `"\n\n"`) must still be
+    /// reported: `strip_one_trailing_newline` removes only ONE terminator, so
+    /// the second newline still doubles against the wrapper's terminator.
+    #[test]
+    fn wrapper_still_rejects_genuine_blank_line() -> Result<(), String> {
+        let parser =
+            TreeSitterParser::new().map_err(|err| format!("Failed to create parser: {err}"))?;
+        let errors = ErrorCollector::new();
+
+        let _ = wrapper_parse_tier(
+            &parser,
+            "%mor:\t",
+            "pro|I v|want n|cookie-PL .\n\n",
+            0,
+            &errors,
+            |tier| match tier {
+                DependentTier::Mor(tier) => Some(tier),
+                _ => None,
+            },
+        );
+
+        assert!(
+            !errors.is_empty(),
+            "a genuine extra blank line must still be reported"
+        );
         Ok(())
     }
 }

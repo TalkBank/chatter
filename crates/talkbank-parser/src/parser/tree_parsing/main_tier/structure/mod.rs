@@ -15,9 +15,7 @@ mod convert;
 pub mod errors;
 pub mod finder;
 pub(crate) mod terminator;
-mod utterance_end;
 
 pub use convert::convert_main_tier_node;
 pub use errors::collect_main_tier_errors;
 pub use finder::find_main_tier_node;
-pub use utterance_end::parse_utterance_end;

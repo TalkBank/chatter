@@ -69,7 +69,16 @@ impl<'a> From<&ast::GraTier<'a>> for GraTier {
 
 impl<'a> From<&ast::LanguagesHeaderParsed<'a>> for LanguageCodes {
     fn from(langs: &ast::LanguagesHeaderParsed<'a>) -> Self {
-        LanguageCodes::new(langs.codes.iter().map(|c| LanguageCode::new(*c)).collect())
+        // Each AST code is lexed via the `language_code` token rule
+        // (guaranteed non-empty, mirrors the tree-sitter grammar's
+        // `/[a-z]{2,4}/`), so `.expect()` is defensive only.
+        LanguageCodes::new(
+            langs
+                .codes
+                .iter()
+                .map(|c| LanguageCode::new(*c).expect("lexer-guaranteed non-empty code"))
+                .collect(),
+        )
     }
 }
 
@@ -285,10 +294,16 @@ impl<'a> From<&ast::WordWithAnnotations<'a>> for Word {
 
 impl<'a> From<&ast::IdHeaderParsed<'a>> for IDHeader {
     fn from(id: &ast::IdHeaderParsed<'a>) -> Self {
+        // Filter empty pieces (e.g. a malformed "eng,,ara") before
+        // constructing, mirroring the canonical tree-sitter side's
+        // `id/parse.rs` guard, so a filtered-non-empty `.expect()` is
+        // provably safe rather than reachable on malformed input.
         let lang_codes: Vec<LanguageCode> = id
             .language
             .split(',')
-            .map(|s| LanguageCode::new(s.trim()))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| LanguageCode::new(s).expect("filtered non-empty by the preceding filter"))
             .collect();
         let mut header = IDHeader::from_languages(
             LanguageCodes::new(lang_codes),

@@ -30,6 +30,7 @@ mod nonword;
 mod pho_group;
 mod quotation;
 mod sin_group;
+mod visitor_lowering;
 mod word;
 
 // Re-export helper functions

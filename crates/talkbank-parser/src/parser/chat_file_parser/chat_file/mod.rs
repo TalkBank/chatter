@@ -8,6 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+mod document_lowering;
 mod helpers;
 pub(crate) mod normalize;
 mod parse;

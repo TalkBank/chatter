@@ -164,6 +164,40 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
     }
 }
 
+/// Surface a NEW-backend carrier's `unexpected` sink (spec Section 7: children
+/// that filled no grammar position) using the SAME [`collect_recovery_nodes`]
+/// mapping the whole-tree backstop uses (`ERROR` -> `UnparsableContent`/E316,
+/// `MISSING` -> `MissingRequiredElement`/E342), reported at each offending
+/// node's exact span.
+///
+/// This is the shared mechanism every migrated visitor-driven carrier (Task
+/// B1 onward) uses to surface its own `unexpected` sink, mirroring the
+/// pattern `document_lowering.rs` established for Task B1
+/// (`DocumentLowering::surface_unexpected`). Because the whole-tree backstop
+/// still runs today and dedups by span overlap, an exact-span emission here
+/// is auto-suppressed as a backstop duplicate, so this can never introduce a
+/// NEW diagnostic while the backstop is present; it is the per-carrier
+/// mechanism that lets the backstop be deleted once every region surfaces its
+/// own recovery (migration Task D). In practice most carriers' `unexpected`
+/// sinks are empty for valid CHAT and for the recovery fixtures exercised by
+/// each cluster's characterization tests, so calling this is a no-op today.
+pub(crate) fn surface_unexpected(
+    unexpected: &[Node],
+    source: &str,
+    errors: &impl crate::error::ErrorSink,
+) {
+    if unexpected.is_empty() {
+        return;
+    }
+    let mut candidates = Vec::new();
+    for node in unexpected {
+        collect_recovery_nodes(*node, source, &mut candidates);
+    }
+    for candidate in candidates {
+        errors.report(candidate);
+    }
+}
+
 /// Whether an `ERROR` node is a structural-incompleteness WRAPPER, i.e. it
 /// directly contains recovered document-structure children (`line`, a
 /// `*_header`, or `full_document`). Such an ERROR appears when a top-level

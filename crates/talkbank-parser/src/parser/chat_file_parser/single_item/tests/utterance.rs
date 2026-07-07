@@ -3,7 +3,7 @@
 //! These tests document expected behavior and regressions.
 
 use super::{parse_main_tier, parse_utterance, with_snapshot_settings};
-use crate::model::{DependentTier, Separator, UtteranceContent};
+use crate::model::{DependentTier, Linker, Separator, Terminator, UtteranceContent};
 
 // ✅ SUCCESS CASE - Simplest valid utterance
 /// Parses the minimal valid main tier (`*SPK:\tword .`) and snapshots the structured result.
@@ -13,6 +13,97 @@ fn simplest_success() {
     with_snapshot_settings(|| {
         insta::assert_debug_snapshot!("utterance_parsing_tests__simplest_success", result);
     });
+}
+
+/// Characterization (Task 3b): a rich VALID main tier exercising every structural
+/// slot the main_tier/tier_body migration touches in one line: the speaker prefix
+/// (`*CHI:`), a linker (`++`), multi-word content (`hello world`), a terminator
+/// (`.`), and a postcode (`[+ trn]`). This pins the resulting `MainTier` model so
+/// that driving the dispatch through `extract_main_tier` / `extract_tier_body`
+/// stays byte-identical on the valid path. Passes pre- and post-migration.
+#[test]
+fn characterization_rich_valid_main_tier() {
+    let result = parse_main_tier("*CHI:\t++ hello world . [+ trn]");
+    let main_tier = result.expect("rich valid main tier should parse");
+
+    // Speaker prefix (`* CHI :`) decodes to the speaker code.
+    assert_eq!(main_tier.speaker.as_str(), "CHI");
+
+    // The `++` linker decodes to OtherCompletion.
+    assert_eq!(main_tier.content.linkers.len(), 1);
+    assert_eq!(main_tier.content.linkers[0], Linker::OtherCompletion);
+
+    // No utterance-scoped language code on this line.
+    assert!(main_tier.content.language_code.is_none());
+
+    // Two words in content order: "hello" then "world".
+    assert_eq!(main_tier.content.content.len(), 2);
+    assert!(matches!(
+        &main_tier.content.content[0],
+        UtteranceContent::Word(word) if word.raw_text() == "hello"
+    ));
+    assert!(matches!(
+        &main_tier.content.content[1],
+        UtteranceContent::Word(word) if word.raw_text() == "world"
+    ));
+
+    // Period terminator.
+    assert!(matches!(
+        main_tier.content.terminator,
+        Some(Terminator::Period { .. })
+    ));
+
+    // One postcode `[+ trn]` -> text "trn".
+    assert_eq!(main_tier.content.postcodes.len(), 1);
+    assert_eq!(main_tier.content.postcodes[0].text.as_str(), "trn");
+}
+
+/// Per-subtype coverage (Task 3d): one fixture per terminator subtype the grammar
+/// accepts, exercising the exhaustive 13-arm `TerminatorChoice` -> `Terminator`
+/// typed match in the visitor-driven utterance-end decode. Each CHAT token must map
+/// to its expected typed variant. If a new terminator subtype is added to the
+/// grammar/model without a case here, the decode's exhaustive match makes it a
+/// compile error, and this test documents the surface token for each variant.
+#[test]
+fn all_terminator_subtypes_map_to_expected_variant() {
+    // (surface token, predicate selecting the expected `Terminator` variant).
+    let cases: &[(&str, fn(&Terminator) -> bool)] = &[
+        (".", |t| matches!(t, Terminator::Period { .. })),
+        ("?", |t| matches!(t, Terminator::Question { .. })),
+        ("!", |t| matches!(t, Terminator::Exclamation { .. })),
+        ("+...", |t| matches!(t, Terminator::TrailingOff { .. })),
+        ("+/.", |t| matches!(t, Terminator::Interruption { .. })),
+        ("+//.", |t| matches!(t, Terminator::SelfInterruption { .. })),
+        ("+/?", |t| {
+            matches!(t, Terminator::InterruptedQuestion { .. })
+        }),
+        ("+!?", |t| matches!(t, Terminator::BrokenQuestion { .. })),
+        ("+\"/.", |t| matches!(t, Terminator::QuotedNewLine { .. })),
+        ("+\".", |t| {
+            matches!(t, Terminator::QuotedPeriodSimple { .. })
+        }),
+        ("+//?", |t| {
+            matches!(t, Terminator::SelfInterruptedQuestion { .. })
+        }),
+        ("+..?", |t| {
+            matches!(t, Terminator::TrailingOffQuestion { .. })
+        }),
+        ("+.", |t| matches!(t, Terminator::BreakForCoding { .. })),
+    ];
+    for (token, is_expected) in cases {
+        let input = format!("*CHI:\thello {token}");
+        let main_tier = parse_main_tier(&input)
+            .unwrap_or_else(|e| panic!("terminator {token:?} should parse, got: {e:?}"));
+        let terminator = main_tier
+            .content
+            .terminator
+            .as_ref()
+            .unwrap_or_else(|| panic!("terminator {token:?} should yield a terminator"));
+        assert!(
+            is_expected(terminator),
+            "terminator {token:?} mapped to an unexpected variant: {terminator:?}"
+        );
+    }
 }
 
 /// Regression: isolated `parse_utterance()` must preserve attached dependent tiers.

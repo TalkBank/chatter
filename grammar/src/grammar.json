@@ -121,7 +121,7 @@
     },
     "newline": {
       "type": "PATTERN",
-      "value": "[\\r\\n]+"
+      "value": "\\r\\n|[\\r\\n]"
     },
     "star": {
       "type": "STRING",
@@ -589,9 +589,17 @@
         },
         {
           "type": "SYMBOL",
+          "name": "blank_line"
+        },
+        {
+          "type": "SYMBOL",
           "name": "unsupported_line"
         }
       ]
+    },
+    "blank_line": {
+      "type": "SYMBOL",
+      "name": "newline"
     },
     "unsupported_line": {
       "type": "SEQ",
@@ -3149,6 +3157,10 @@
                     {
                       "type": "SYMBOL",
                       "name": "underline_begin"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "syllable_pause"
                     }
                   ]
                 }

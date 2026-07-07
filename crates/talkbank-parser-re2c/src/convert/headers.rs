@@ -20,11 +20,19 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
         Token::HeaderBlank(_) => Header::Blank,
         Token::HeaderNewEpisode(_) => Header::NewEpisode,
         Token::HeaderPrefix(p) if p.contains("@Languages") => {
+            // `Token::LanguageCode`'s lexer rule requires at least one
+            // character (mirrors the tree-sitter grammar's
+            // `language_code: $ => /[a-z]{2,4}/`), so the text is
+            // guaranteed non-empty here; `.expect()` is defensive only
+            // (this crate's file-level `expect_used` allow covers exactly
+            // this kind of lexer-guaranteed-non-empty case).
             let codes: Vec<LanguageCode> = h
                 .content
                 .iter()
                 .filter(|t| matches!(t, Token::LanguageCode(_)))
-                .map(|t| LanguageCode::new(t.text()))
+                .map(|t| {
+                    LanguageCode::new(t.text()).expect("lexed language_code token is non-empty")
+                })
                 .collect();
             Header::Languages {
                 codes: LanguageCodes::new(codes),
@@ -66,10 +74,18 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 custom,
             }) = h.content.first()
             {
-                // Language field can be comma-separated: "eng, ara"
+                // Language field can be comma-separated: "eng, ara". Filter
+                // empty pieces (e.g. a malformed "eng,,ara") before
+                // constructing, mirroring the canonical tree-sitter side's
+                // `id/parse.rs` guard, so a filtered-non-empty `.expect()`
+                // is provably safe rather than reachable on malformed input.
                 let lang_codes: Vec<LanguageCode> = language
                     .split(',')
-                    .map(|s| LanguageCode::new(s.trim()))
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| {
+                        LanguageCode::new(s).expect("filtered non-empty by the preceding filter")
+                    })
                     .collect();
                 let mut id = IDHeader::from_languages(
                     LanguageCodes::new(lang_codes),

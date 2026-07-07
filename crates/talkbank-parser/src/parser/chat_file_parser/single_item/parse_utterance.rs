@@ -40,7 +40,14 @@ pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseRe
         (input_with_newline, 0)
     } else {
         (
-            format!("{}{}\n{}", MINIMAL_CHAT_PREFIX, input, MINIMAL_CHAT_SUFFIX),
+            // Use `input_with_newline` (exactly one trailing newline) here and do
+            // NOT append another `\n`: appending `\n` to an input that already
+            // ends in `\n` produced a spurious blank line in the synthetic
+            // document, which the grammar now correctly rejects as E747.
+            format!(
+                "{}{}{}",
+                MINIMAL_CHAT_PREFIX, input_with_newline, MINIMAL_CHAT_SUFFIX
+            ),
             MINIMAL_CHAT_PREFIX.len(),
         )
     };

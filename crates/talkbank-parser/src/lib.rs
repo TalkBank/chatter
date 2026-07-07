@@ -70,6 +70,44 @@ pub(crate) mod validation {
     pub use talkbank_model::validation::*;
 }
 
+/// Auto-generated, exhaustive typed CST traversal for the CHAT grammar.
+///
+/// Produced by the self-contained `tree-sitter-grammar-utils` backend (the
+/// `generate_typed_traversal` example): free `extract_*` functions, a closed
+/// five-state `NodeSlot`, uniform per-rule `<Rule>Children` carriers, and a typed
+/// `unexpected` sink. This is the single generated visitor the whole production
+/// parser is driven by: every parser region dispatches CST structure through
+/// these functions. (The former hand-walk `node.kind()` dispatch and the OLD
+/// `GrammarTraversal` trait visitor were retired in the 2026-07 migration; this
+/// module is the canonical successor, renamed from its transitional
+/// `generated_traversal_typed` name once it became the sole visitor.)
+///
+/// Regenerate from a checkout of the `tree-sitter-grammar-utils` repo. There is
+/// NO `--skip` flag (the backend models grammar extras explicitly); the wrapper
+/// runs `rustfmt` on its own output, so this single command produces the
+/// canonical, fmt-clean file directly with no separate `cargo fmt` step:
+///
+/// ```sh
+/// cargo run --example generate_typed_traversal -p tree-sitter-node-types -- \
+///   <CHATTER>/grammar/src/grammar.json \
+///   <CHATTER>/grammar/src/node-types.json \
+///   --edition 2024 \
+///   --toolchain 1.96.1 \
+///   > <CHATTER>/crates/talkbank-parser/src/generated_traversal.rs
+/// ```
+///
+/// Never hand-edit the generated file (no dash-stripping, no adding allows): if
+/// the output is wrong, fix the generator in `tree-sitter-grammar-utils` as a
+/// GENERAL change and regenerate. The `generated_traversal_is_current` staleness
+/// guard recomputes the embedded digests from the committed grammar JSON, so a
+/// forgotten regeneration fails the test suite. The two suppressions below
+/// (`missing_docs`, because the crate is `#![deny(missing_docs)]` and the
+/// generated `pub` items carry no `///` docs; and
+/// `rustdoc::broken_intra_doc_links`) are structural to any generated traversal
+/// module registered in this crate.
+#[allow(missing_docs, rustdoc::broken_intra_doc_links)]
+pub mod generated_traversal;
+
 /// Node type string constants from tree-sitter-talkbank grammar.
 pub mod node_types;
 

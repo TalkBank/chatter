@@ -23,11 +23,12 @@
 //! )
 //! ```
 
+use crate::generated_traversal::{AsRawNode, ParticipantsHeaderNode, extract_participants_header};
 use crate::node_types::*;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::check_not_missing;
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{
     Header, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode, WarningText,
@@ -75,28 +76,46 @@ pub fn parse_participants_header(node: Node, source: &str, errors: &impl ErrorSi
     // trailing comma) so it is never silently swallowed.
     super::report_header_structural_errors(node, PARTICIPANTS_HEADER, source, errors);
 
-    // Find participants_contents child (prefix + header_sep + contents + newline)
-    let contents = match find_child_by_kind(node, PARTICIPANTS_CONTENTS) {
-        Some(child) => child,
-        _ => {
-            errors.report(ParseError::new(
-                ErrorCode::EmptyParticipantsHeader,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(
-                    source,
-                    node.start_byte()..node.end_byte(),
-                    "participants_header",
-                ),
-                "Missing participants_contents in @Participants header",
-            ));
-            return unknown_participants_header(
-                node,
+    // Extract `participants_contents` via typed slot `child_2` of the
+    // `participants_header` (unchanged index from the OLD module).
+    // `extract_participants_header` strips structural nodes (prefix, header_sep,
+    // newline) and exposes `participants_contents` as a `NodeSlot`;
+    // `present_or_recover().ok()` keeps only a Present node and funnels every
+    // non-Present recovery state to the same "Missing participants_contents"
+    // diagnostic.
+    //
+    // Level-2 PARTIAL: this OUTER access is typed via the NEW backend's free
+    // `extract_participants_header`. The INNER loops below stay as `node.kind()`
+    // walks: the participant-list repeat and the participant_word repeat are both
+    // `repeat(seq(...))` shapes, and while the NEW backend now types the FIRST
+    // element of such a repeat plus a typed `Vec` of the rest (a real capability
+    // improvement over the OLD module, which slotted only `child_0`), migrating
+    // this DOUBLE-nested repeat onto the newly-available typed shape is a
+    // behavior-visible restructuring beyond a pure call-convention swap, so it is
+    // deliberately DEFERRED out of scope for B2 (see the special.rs `@Options`
+    // note for the same deferral rationale).
+    let header_children = extract_participants_header(ParticipantsHeaderNode(node));
+    let Some(contents_node) = header_children.child_2.slot.present_or_recover().ok() else {
+        errors.report(ParseError::new(
+            ErrorCode::EmptyParticipantsHeader,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(
                 source,
-                "Missing participants_contents in @Participants header",
-            );
-        }
+                node.start_byte()..node.end_byte(),
+                "participants_header",
+            ),
+            "Missing participants_contents in @Participants header",
+        ));
+        surface_unexpected(&header_children.unexpected, source, errors);
+        return unknown_participants_header(
+            node,
+            source,
+            "Missing participants_contents in @Participants header",
+        );
     };
+    let contents = contents_node.raw_node();
+    surface_unexpected(&header_children.unexpected, source, errors);
 
     // Iterate through children to find participant nodes
     // Grammar: participant, repeat(seq(',', whitespaces, participant))
@@ -238,13 +257,6 @@ pub fn parse_participants_header(node: Node, source: &str, errors: &impl ErrorSi
     Header::Participants {
         entries: entries.into(),
     }
-}
-
-/// Finds child by kind.
-fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .find(|child| child.kind() == kind)
 }
 
 /// Parse a single participant entry

@@ -237,31 +237,20 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
         return;
     }
 
-    // Main tier containing caret prefix (^word), inline annotations ([%add:]),
-    // or other content that causes the entire line to be an ERROR node
+    // Main tier containing inline annotations ([%add:]), repetition ([x N]),
+    // or other content that causes the entire line to be an ERROR node.
+    //
+    // NOTE (2026-06-25): a leading syllable pause (`^word`) is NO LONGER handled
+    // here by scanning the ERROR text. The grammar's `word_body` now accepts a
+    // leading `syllable_pause`, so `*CHI:\t^banana .` parses into a structured
+    // word (no file-level ERROR), and E252 (SyllablePauseNotBetweenSpokenMaterial)
+    // is emitted by the typed-model validator `check_prosodic_markers` reading the
+    // parsed `WordContent::SyllablePause` position. Classifying the raw text of an
+    // ERROR node to guess the diagnostic is the banned anti-pattern (root CLAUDE.md
+    // "CST Traversal Rules"); this diagnostic was re-homed onto structure + model.
     if error_text.starts_with('*') && error_text.contains(":\t") {
         let content_start = error_text.find(":\t").unwrap_or(0) + 2;
         let content = error_text[content_start..].trim();
-
-        // ^word, caret/blocking prefix (obsolete CHAT construct)
-        if content.starts_with('^') {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::SyllablePauseNotBetweenSpokenMaterial,
-                    Severity::Error,
-                    SourceLocation::from_offsets(start + content_start, end),
-                    ErrorContext::new(source, start..end, error_text),
-                    format!(
-                        "'^' cannot appear at utterance start, '{}' is not valid CHAT",
-                        content.split_whitespace().next().unwrap_or(content)
-                    ),
-                )
-                .with_suggestion(
-                    "'^' is a syllable pause marker (ba^na^na). It cannot be used as a word prefix.",
-                ),
-            );
-            return;
-        }
 
         // [%add: ...] or similar inline dependent tier annotation
         if content.starts_with("[%") {
