@@ -12,8 +12,10 @@
 
 #![warn(missing_docs)]
 
+mod cache;
 mod http_provider;
 
+pub use cache::{CacheError, CachePath, ResponseCache};
 pub use http_provider::{
     ApiKey, HttpJudgmentProvider, HttpProviderConfig, RetryCount, TimeoutSecs,
 };

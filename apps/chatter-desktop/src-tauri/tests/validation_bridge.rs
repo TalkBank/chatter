@@ -16,7 +16,19 @@ use chatter_desktop_lib::protocol;
 use chatter_desktop_lib::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ValidateRequest,
 };
-use chatter_desktop_lib::validation::validate_target_streaming;
+use chatter_desktop_lib::validation::{initialize_cache, validate_target_streaming_with_config};
+use crossbeam_channel::{Receiver, Sender};
+use talkbank_transform::validation_runner::ValidationConfig;
+
+/// Test-only convenience wrapper: production always threads an explicit
+/// config and an app-lifetime cache (see `ValidationState` in `commands.rs`),
+/// but most tests here don't care about either, so this opens a fresh cache
+/// (isolated per-process by `cargo nextest`) and uses `ValidationConfig::default()`.
+fn validate_target_streaming(
+    target: PathBuf,
+) -> Result<(Receiver<FrontendEvent>, Sender<()>), String> {
+    validate_target_streaming_with_config(target, ValidationConfig::default(), initialize_cache())
+}
 
 /// Find the workspace root by walking up from the manifest dir.
 fn workspace_root() -> PathBuf {
@@ -313,9 +325,14 @@ fn protocol_contracts_serialize_to_expected_json_shape() {
 
     let validate = serde_json::to_value(ValidateRequest {
         path: "/tmp/reference".into(),
+        ..ValidateRequest::default()
     })
     .unwrap();
     assert_eq!(validate["path"], "/tmp/reference");
+    assert_eq!(validate["roundtrip"], false);
+    assert_eq!(validate["parserKind"], "tree-sitter");
+    assert_eq!(validate["strictLinkers"], false);
+    assert!(validate["jobs"].is_null());
 
     let open_in_clan = serde_json::to_value(OpenInClanRequest {
         file: "/tmp/reference.cha".into(),
@@ -689,6 +706,135 @@ fn desktop_bridge_renders_error_at_true_line() {
     assert!(
         checked,
         "expected at least one error diagnostic from the E601 fixture"
+    );
+}
+
+/// REGRESSION GUARD: the desktop's single-file validation path must hit the
+/// same on-disk validation cache the CLI and the desktop's own directory path
+/// use, not silently skip caching. Isolates the cache to a per-process temp
+/// directory via `TALKBANK_CHAT_CACHE_DIR` (see `chatter/CLAUDE.md` "Cache
+/// Policy"); safe because `cargo nextest` runs each test in its own process.
+#[test]
+fn single_file_validation_hits_cache_on_second_run() {
+    let cache_dir = std::env::temp_dir().join(format!(
+        "chatter-desktop-cache-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    // SAFETY: this test process runs alone under `cargo nextest` (one process
+    // per test), so no other thread in this process reads/writes this env var.
+    unsafe {
+        std::env::set_var("TALKBANK_CHAT_CACHE_DIR", &cache_dir);
+    }
+
+    let file = workspace_root().join("corpus/reference/core/basic-conversation.cha");
+    assert!(file.exists(), "fixture missing: {}", file.display());
+
+    let cache_hit_flag = |events: &[FrontendEvent]| -> bool {
+        events
+            .iter()
+            .find_map(|event| match event {
+                FrontendEvent::FileComplete { status, .. } => {
+                    let json = serde_json::to_value(status).unwrap();
+                    json["cacheHit"].as_bool()
+                }
+                _ => None,
+            })
+            .expect("single-file run should produce one FileComplete with a cacheHit field")
+    };
+
+    let first_run = collect_events(&file);
+    assert!(
+        !cache_hit_flag(&first_run),
+        "first validation of a fresh cache must be a cache miss"
+    );
+
+    let second_run = collect_events(&file);
+    assert!(
+        cache_hit_flag(&second_run),
+        "second validation of the same unchanged file must hit the cache, \
+         like the CLI and the desktop's directory-validation path already do"
+    );
+
+    std::fs::remove_dir_all(&cache_dir).ok();
+}
+
+/// REGRESSION GUARD: validating a single `.cha` file directly must run the
+/// same `@Media`-filename check (E531) the desktop's directory-validation
+/// path and the CLI already run. Before this fix, the single-file path
+/// bypassed the shared worker loop (and its file-stem-derived checks)
+/// entirely, so the identical file validated via "select this file" vs.
+/// "select its parent folder" produced different rule sets.
+#[test]
+fn single_file_validation_runs_media_filename_check() {
+    let fixture = workspace_root()
+        .join("tests/error_corpus/validation_errors/E531_media_filename_mismatch.cha");
+    assert!(fixture.exists(), "fixture missing: {}", fixture.display());
+
+    let events = collect_events(&fixture);
+
+    let found_e531 = events.iter().any(|event| {
+        if let FrontendEvent::Errors { diagnostics, .. } = event {
+            diagnostics.iter().any(|d| {
+                let json = serde_json::to_value(&d.error).unwrap();
+                json["code"].as_str() == Some("E531")
+            })
+        } else {
+            false
+        }
+    });
+
+    assert!(
+        found_e531,
+        "single-file validation of a file with a mismatched @Media basename \
+         must report E531, the same as directory validation of the same file"
+    );
+}
+
+/// REGRESSION GUARD: the single-file validation gate must use the exact same
+/// `.cha`-file predicate as directory validation and the CLI
+/// (`talkbank_transform::validation_runner::is_chat_transcript_path`), not a
+/// desktop-local reimplementation. That shared predicate is case-sensitive on
+/// the `.cha` extension and excludes macOS AppleDouble sidecar files
+/// (`._name.cha`); a local case-insensitive/sidecar-inclusive copy would
+/// accept files the directory walk (and CLAN) never would.
+#[test]
+fn single_file_gate_matches_shared_chat_transcript_predicate() {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+
+    let uppercase_ext = std::env::temp_dir().join(format!(
+        "chatter-desktop-predicate-test-{}-{}.CHA",
+        std::process::id(),
+        now
+    ));
+    std::fs::write(&uppercase_ext, "@UTF8\n@Begin\n@End\n").unwrap();
+    let uppercase_result = validate_target_streaming(uppercase_ext.clone());
+    std::fs::remove_file(&uppercase_ext).ok();
+    assert!(
+        uppercase_result.is_err(),
+        "a `.CHA` (uppercase) file must be rejected by the single-file gate, \
+         matching the case-sensitive shared predicate used by directory validation"
+    );
+
+    let sidecar = std::env::temp_dir().join(format!(
+        "._chatter-desktop-predicate-test-{}-{}.cha",
+        std::process::id(),
+        now
+    ));
+    std::fs::write(&sidecar, "@UTF8\n@Begin\n@End\n").unwrap();
+    let sidecar_result = validate_target_streaming(sidecar.clone());
+    std::fs::remove_file(&sidecar).ok();
+    assert!(
+        sidecar_result.is_err(),
+        "an AppleDouble sidecar file (`._name.cha`) must be rejected by the \
+         single-file gate, matching the shared predicate directory validation uses"
     );
 }
 

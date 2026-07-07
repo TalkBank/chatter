@@ -48,6 +48,14 @@ pub struct JudgmentArgs {
     #[arg(long = "llm-max-retries")]
     pub llm_max_retries: Option<u32>,
 
+    /// Response-cache file for holistic judgments. When set, identical
+    /// requests (same endpoint, model, and rendered prompt) are answered
+    /// from the cache, so re-running a batch after a crash or a code tweak
+    /// does not re-pay completed LLM calls. Env: CHATTER_LLM_CACHE. Absent
+    /// means uncached (today's behavior).
+    #[arg(long = "llm-cache")]
+    pub llm_cache: Option<PathBuf>,
+
     /// Optional session-context JSON file mapping session IDs to
     /// context records (sample_type, declared_roles, consent_tier,
     /// age_months; all optional, free vocabulary). --judgment

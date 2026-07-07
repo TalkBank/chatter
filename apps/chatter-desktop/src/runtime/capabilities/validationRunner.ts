@@ -6,7 +6,7 @@ export function createValidationRunnerCapability(
   transport: Pick<DesktopTransport, "invoke" | "listenValidationEvent">,
 ): ValidationRunnerCapability {
   return {
-    async startValidation(path, onEvent) {
+    async startValidation(path, settings, onEvent) {
       const unlisten = disposeOnce(
         await transport.listenValidationEvent((event) => {
           onEvent(event);
@@ -14,7 +14,13 @@ export function createValidationRunnerCapability(
       );
 
       try {
-        await transport.invoke(DESKTOP_COMMANDS.validate, { path });
+        await transport.invoke(DESKTOP_COMMANDS.validate, {
+          path,
+          roundtrip: settings.roundtrip,
+          parserKind: settings.parserKind,
+          strictLinkers: settings.strictLinkers,
+          jobs: settings.jobs,
+        });
       } catch (error) {
         unlisten();
         throw error;

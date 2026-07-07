@@ -317,7 +317,7 @@ fn test_concurrent_send_attempts_no_crash() {
         .collect();
 
     for h in handles {
-        h.join().expect("Thread must not panic");
+        assert!(h.join().is_ok(), "Thread must not panic");
     }
 }
 

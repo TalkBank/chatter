@@ -51,31 +51,20 @@ pub enum FrontendEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum FrontendFileStatus {
-    Valid {
-        cache_hit: bool,
-    },
+    #[serde(rename_all = "camelCase")]
+    Valid { cache_hit: bool },
 
     #[serde(rename_all = "camelCase")]
-    Invalid {
-        error_count: usize,
-        cache_hit: bool,
-    },
+    Invalid { error_count: usize, cache_hit: bool },
 
     #[serde(rename_all = "camelCase")]
-    RoundtripFailed {
-        cache_hit: bool,
-        reason: String,
-    },
+    RoundtripFailed { cache_hit: bool, reason: String },
 
     #[serde(rename_all = "camelCase")]
-    ParseError {
-        message: String,
-    },
+    ParseError { message: String },
 
     #[serde(rename_all = "camelCase")]
-    ReadError {
-        message: String,
-    },
+    ReadError { message: String },
 }
 
 /// Serializable version of `ValidationStatsSnapshot` for the frontend.

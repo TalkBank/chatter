@@ -7,16 +7,20 @@
  */
 
 import { useMemo, useState, useCallback } from "react";
+import type { Phase } from "../hooks/useValidation";
+import { shouldShowAllFilesValid } from "../hooks/validationState";
 import type { FileEntry, TreeNode } from "../types";
 
 interface Props {
   files: Map<string, FileEntry>;
   totalFiles: number;
+  /** Gates the "all valid" summary: only true once the run has actually finished. */
+  phase: Phase;
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
 }
 
-export default function FileTree({ files, totalFiles, selectedFile, onSelectFile }: Props) {
+export default function FileTree({ files, totalFiles, phase, selectedFile, onSelectFile }: Props) {
   // Filter to only files with errors (TUI parity: valid files are hidden)
   const filesWithErrors = useMemo(() => {
     const filtered = new Map<string, FileEntry>();
@@ -39,7 +43,13 @@ export default function FileTree({ files, totalFiles, selectedFile, onSelectFile
     );
   }
 
-  if (errorFileCount === 0) {
+  // Only claim "all valid" once the run has actually finished. Before that,
+  // `errorFileCount === 0` is also true for the entire window between
+  // "discovery done" and "last file actually validated" whenever no error has
+  // streamed in *yet* - not the same thing as every file being valid. See
+  // apps/chatter-desktop/CLAUDE.md and the desktop-vs-CLI divergence writeup
+  // this test regression-guards.
+  if (shouldShowAllFilesValid(phase, errorFileCount)) {
     return (
       <div className="file-tree-panel">
         <div className="tree-header">

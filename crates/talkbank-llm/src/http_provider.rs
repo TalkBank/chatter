@@ -9,15 +9,19 @@
 //! provider-agnostic [`JudgmentError`] from `talkbank-transform`. This module
 //! contains the toolchain's only network call.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use ureq::Agent;
 
 use talkbank_transform::speaker_id::{
     EndpointUrl, HolisticJudgment, JudgmentError, JudgmentProvider, JudgmentRequest, ModelId, Role,
     render_messages,
 };
+
+use crate::cache::ResponseCache;
 
 // ---------------------------------------------------------------------------
 // Named constants (no bare numeric literals in logic)
@@ -107,27 +111,41 @@ impl HttpProviderConfig {
 
 /// An OpenAI-compatible HTTP judgment provider. Holds the config and a
 /// prebuilt ureq [`Agent`] (a cheap-to-clone connection pool) so repeated
-/// calls reuse connections.
+/// calls reuse connections. The optional [`ResponseCache`] is wrapped in an
+/// `Arc` so the provider (and every clone of it) shares one cache handle
+/// rather than each clone opening and rewriting its own copy of the file.
 #[derive(Debug, Clone)]
 pub struct HttpJudgmentProvider {
     /// Endpoint, model, auth, timeout, and retry budget.
     config: HttpProviderConfig,
     /// Connection pool + timeout policy, built once from `config`.
     agent: Agent,
+    /// Persistent response cache. `None` means every call is a live HTTP
+    /// request (today's behavior, unchanged).
+    cache: Option<Arc<ResponseCache>>,
 }
 
 impl HttpJudgmentProvider {
-    /// Build a provider from `config`. The ureq agent is configured with the
-    /// per-attempt global timeout and with HTTP-status-as-error turned OFF so
-    /// the `judge` loop can inspect the status code itself (to distinguish
-    /// retryable 5xx from non-retryable 4xx).
+    /// Build a provider from `config` with no response cache: every call is
+    /// a live HTTP request.
     pub fn new(config: HttpProviderConfig) -> Self {
-        let agent: Agent = Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(config.timeout.0)))
-            .http_status_as_error(false)
-            .build()
-            .into();
-        Self { config, agent }
+        Self {
+            agent: build_agent(&config),
+            config,
+            cache: None,
+        }
+    }
+
+    /// Build a provider from `config`, backed by `cache`. A repeated request
+    /// (same endpoint and exact wire-request JSON) is served from `cache`
+    /// without an HTTP call; a new request is answered over HTTP and its raw
+    /// response body is written through to `cache` before being parsed.
+    pub fn with_cache(config: HttpProviderConfig, cache: ResponseCache) -> Self {
+        Self {
+            agent: build_agent(&config),
+            config,
+            cache: Some(Arc::new(cache)),
+        }
     }
 
     /// The completions URL: configured endpoint + `CHAT_COMPLETIONS_PATH`.
@@ -191,6 +209,38 @@ impl HttpJudgmentProvider {
     }
 }
 
+/// Build the ureq [`Agent`] for `config`: the per-attempt global timeout,
+/// and HTTP-status-as-error turned OFF so the `judge` retry loop can inspect
+/// the status code itself (to distinguish retryable 5xx from non-retryable
+/// 4xx). Shared by [`HttpJudgmentProvider::new`] and
+/// [`HttpJudgmentProvider::with_cache`] so the two constructors cannot drift.
+fn build_agent(config: &HttpProviderConfig) -> Agent {
+    Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(config.timeout.0)))
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
+/// Cache key for one request: hex SHA-256 of the endpoint URL followed by
+/// the exact serialized wire-request JSON. The rendered messages (and thus
+/// any prompt or `PromptVersion` change) are part of that JSON, so a stale
+/// entry can never be served without a separate version field to keep in
+/// sync by hand, the same versioned-key discipline `talkbank-cache` uses,
+/// applied here by folding everything that affects the answer into the key.
+fn compute_cache_key(endpoint: &EndpointUrl, body: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(endpoint.0.as_bytes());
+    hasher.update(body.as_bytes());
+    // `Sha256::finalize()`'s output type does not implement `LowerHex`
+    // directly; format each byte instead of the whole digest.
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 /// Outcome of a single HTTP attempt, used by the retry loop.
 enum AttemptOutcome {
     /// A successful (2xx) response with its body text.
@@ -228,12 +278,36 @@ impl JudgmentProvider for HttpJudgmentProvider {
         let body = serde_json::to_string(&wire_request)
             .map_err(|e| JudgmentError::Provider(format!("failed to serialize request: {e}")))?;
 
+        // 3b. Cache lookup: key = sha256(endpoint + wire request JSON). The
+        //     key is computed once and reused for both the lookup below and
+        //     the write-through after a live fetch, so a hit and a
+        //     subsequent miss can never disagree on the key. A cache hit
+        //     short-circuits straight to the existing parse path, no HTTP
+        //     attempt is made.
+        let cache_entry = self
+            .cache
+            .as_ref()
+            .map(|cache| (cache, compute_cache_key(&self.config.endpoint, &body)));
+        if let Some((cache, key)) = &cache_entry
+            && let Some(cached_body) = cache.get(key)
+        {
+            return parse_completion(&cached_body);
+        }
+
         // 4. Attempt with retries. The loop runs 1 + max_retries times in the
         //    worst case (one initial attempt plus the retry budget).
         let mut last_error = String::new();
         for _ in 0..=self.config.max_retries.0 {
             match self.attempt(&url, &body) {
                 AttemptOutcome::Body(text) => {
+                    // 4b. Write-through before parsing: a cache-write failure
+                    //     is surfaced loudly (never a silent bypass) even
+                    //     though a good response was in hand.
+                    if let Some((cache, key)) = &cache_entry {
+                        cache
+                            .put(key, text.clone())
+                            .map_err(|e| JudgmentError::Provider(format!("cache: {e}")))?;
+                    }
                     return parse_completion(&text);
                 }
                 AttemptOutcome::FatalStatus(msg) => {

@@ -15,29 +15,23 @@ pub(crate) fn initialize_validation_cache(
     path: &Path,
     cache_refresh: CacheRefreshMode,
 ) -> Option<ValidationCacheHandle> {
-    match UnifiedCache::new() {
-        Ok(cache) => {
-            let cache = Arc::new(cache);
+    let cache = UnifiedCache::open_or_else(|error| {
+        eprintln!("Warning: Failed to initialize cache: {}", error);
+    })?;
 
-            if cache_refresh.should_clear_cache() {
-                let path_str = path.to_string_lossy();
-                match cache.clear_prefix(&path_str) {
-                    Ok(count) => {
-                        eprintln!("Cleared {} cache entries", count);
-                    }
-                    Err(error) => {
-                        eprintln!("Warning: Failed to clear cache: {}", error);
-                    }
-                }
+    if cache_refresh.should_clear_cache() {
+        let path_str = path.to_string_lossy();
+        match cache.clear_prefix(&path_str) {
+            Ok(count) => {
+                eprintln!("Cleared {} cache entries", count);
             }
-
-            Some(cache)
-        }
-        Err(error) => {
-            eprintln!("Warning: Failed to initialize cache: {}", error);
-            None
+            Err(error) => {
+                eprintln!("Warning: Failed to clear cache: {}", error);
+            }
         }
     }
+
+    Some(cache)
 }
 
 /// Return one cached validation result when available.

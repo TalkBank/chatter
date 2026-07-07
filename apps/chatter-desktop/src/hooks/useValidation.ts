@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useValidationRunnerCapability } from "../runtime/DesktopRuntimeContext";
 import type { ValidationRun } from "../runtime/desktopRuntime";
+import type { ValidationSettings } from "../protocol/desktopProtocol";
 import {
   applyValidationEvent,
   createInitialValidationState,
@@ -31,7 +32,7 @@ export function useValidation() {
     return relativeDisplayName(fullPath, rootRef.current);
   }, []);
 
-  const startValidation = useCallback(async (path: string) => {
+  const startValidation = useCallback(async (path: string, settings: ValidationSettings) => {
     disposeRun();
 
     rootRef.current = path;
@@ -39,7 +40,7 @@ export function useValidation() {
     setState({ ...createInitialValidationState(), phase: "discovering" });
 
     try {
-      runRef.current = await validationRunner.startValidation(path, (event) => {
+      runRef.current = await validationRunner.startValidation(path, settings, (event) => {
         setState((prev) => applyValidationEvent(prev, event, relativeName));
       });
     } catch (err) {

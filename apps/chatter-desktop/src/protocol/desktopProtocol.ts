@@ -21,7 +21,27 @@ export type DesktopEventName =
 
 export type ExportFormat = "json" | "text";
 
-export interface ValidateCommandArgs {
+/** Which parser backend to validate with. Mirrors Rust `ParserKindRequest`. */
+export type ParserKindSetting = "tree-sitter" | "re2c";
+
+/** User-configurable validation settings, threaded through to `ValidationConfig`. */
+export interface ValidationSettings {
+  roundtrip: boolean;
+  parserKind: ParserKindSetting;
+  strictLinkers: boolean;
+  /** Number of parallel validation jobs; `null` = use all CPUs. */
+  jobs: number | null;
+}
+
+/** Matches `ValidationConfig::default()` on the Rust side. */
+export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
+  roundtrip: false,
+  parserKind: "tree-sitter",
+  strictLinkers: false,
+  jobs: null,
+};
+
+export interface ValidateCommandArgs extends ValidationSettings {
   path: string;
 }
 

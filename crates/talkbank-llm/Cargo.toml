@@ -15,10 +15,13 @@ talkbank-transform = { workspace = true }
 ureq = "3.3.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 httpmock = "0.8.3"
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 # The integration tests construct a JudgmentRequest, whose `anchor` field is a
 # talkbank_model::SpeakerCode, so the test crate names talkbank-model directly.
 talkbank-model = { workspace = true }

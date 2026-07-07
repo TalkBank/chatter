@@ -89,6 +89,19 @@ export function applyValidationEvent(
   return assertNever(event);
 }
 
+/**
+ * Whether the file tree may claim "all valid". This must be gated on the run
+ * having actually finished, not merely on the error-file count being zero:
+ * `errorFileCount` only reflects files that have streamed a result *so far*,
+ * so it reads as zero for the entire window between "discovery done" and
+ * "last file actually validated" whenever no error has arrived yet. See
+ * apps/chatter-desktop/CLAUDE.md's parity notes for the desktop-vs-CLI
+ * divergence this guards against.
+ */
+export function shouldShowAllFilesValid(phase: Phase, errorFileCount: number): boolean {
+  return phase === "finished" && errorFileCount === 0;
+}
+
 export function relativeDisplayName(fullPath: string, targetPath: string): string {
   if (!targetPath) return normalizeDisplayPath(fullPath);
   if (fullPath === targetPath) return basename(fullPath);

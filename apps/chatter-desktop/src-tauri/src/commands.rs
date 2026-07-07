@@ -7,21 +7,30 @@ use crossbeam_channel::Sender;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::protocol::commands::{
-    ExportFormat, ExportResultsRequest, OpenInClanRequest, ValidateRequest,
+    ExportFormat, ExportResultsRequest, OpenInClanRequest, ParserKindRequest, ValidateRequest,
 };
-use crate::validation::validate_target_streaming;
+use crate::validation::{initialize_cache, validate_target_streaming_with_config};
+use talkbank_transform::UnifiedCache;
+use talkbank_transform::validation_runner::ValidationConfig;
 
-/// Shared state: cancel sender for the current validation run.
+/// Shared state: cancel sender for the current validation run, and the
+/// on-disk validation cache opened once for the app's lifetime.
 ///
-/// Uses `ArcSwapOption` for lock-free atomic swap, no mutex needed.
+/// Uses `ArcSwapOption` for lock-free atomic swap of the cancel sender, no
+/// mutex needed. The cache is opened once here rather than per validation
+/// run: `UnifiedCache::new()` opens a SQLite pool and a dedicated tokio
+/// runtime, so building a fresh one on every "Validate"/"Re-validate" click
+/// would pay that setup cost repeatedly for no benefit.
 pub struct ValidationState {
     cancel_tx: ArcSwapOption<Sender<()>>,
+    cache: Option<Arc<UnifiedCache>>,
 }
 
 impl ValidationState {
     pub fn new() -> Self {
         Self {
             cancel_tx: ArcSwapOption::empty(),
+            cache: initialize_cache(),
         }
     }
 }
@@ -34,17 +43,30 @@ impl Default for ValidationState {
 
 /// Start validation on a single file or folder target.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn validate(
     app: AppHandle,
     state: State<'_, ValidationState>,
     path: String,
+    roundtrip: bool,
+    parser_kind: ParserKindRequest,
+    strict_linkers: bool,
+    jobs: Option<u32>,
 ) -> Result<(), String> {
-    let request = ValidateRequest { path };
+    let request = ValidateRequest {
+        path,
+        roundtrip,
+        parser_kind,
+        strict_linkers,
+        jobs,
+    };
     if request.path.is_empty() {
         return Err("No path provided".into());
     }
 
-    let (rx, cancel_tx) = validate_target_streaming(request.path.into())?;
+    let config = ValidationConfig::from(&request);
+    let (rx, cancel_tx) =
+        validate_target_streaming_with_config(request.path.into(), config, state.cache.clone())?;
 
     // Atomically store the cancel sender (lock-free)
     state.cancel_tx.store(Some(Arc::new(cancel_tx)));
@@ -274,6 +296,11 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Strin
             serde_json::to_string_pretty(&parsed).map_err(|e| e.to_string())?
         }
         ExportFormat::Text => {
+            // Reuse the canonical miette-rendered text already computed once in
+            // `events.rs::to_frontend_event` (the same text the on-screen error
+            // panel shows), instead of hand-rebuilding a poorer one-line
+            // "path:line: code msg" form from raw JSON fields. Keeps exported
+            // text byte-identical to what the app displayed.
             let parsed: Vec<serde_json::Value> =
                 serde_json::from_str(&request.results).map_err(|e| e.to_string())?;
             let mut lines = Vec::new();
@@ -281,13 +308,8 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Strin
                 let path = file_entry["path"].as_str().unwrap_or("?");
                 if let Some(errors) = file_entry["errors"].as_array() {
                     for error in errors {
-                        let code = error["code"].as_str().unwrap_or("?");
-                        let msg = error["message"].as_str().unwrap_or("?");
-                        let line = error["location"]["line"]
-                            .as_u64()
-                            .map(|n| n.to_string())
-                            .unwrap_or_default();
-                        lines.push(format!("{path}:{line}: {code} {msg}"));
+                        let rendered_text = error["renderedText"].as_str().unwrap_or("?");
+                        lines.push(format!("{path}\n{rendered_text}"));
                     }
                 }
             }

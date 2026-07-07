@@ -42,8 +42,15 @@ test("validation runner listens before invoking and disposes once", async () => 
     },
   };
 
+  const settings = {
+    roundtrip: false,
+    parserKind: "tree-sitter",
+    strictLinkers: false,
+    jobs: null,
+  };
+
   const validationRunner = createValidationRunnerCapability(transport);
-  const run = await validationRunner.startValidation("/tmp/reference", (event) => {
+  const run = await validationRunner.startValidation("/tmp/reference", settings, (event) => {
     seenEvents.push(event);
   });
 
@@ -52,7 +59,16 @@ test("validation runner listens before invoking and disposes once", async () => 
     { type: "started", totalFiles: 2 },
   ]);
   assert.deepEqual(invocations, [
-    [DESKTOP_COMMANDS.validate, { path: "/tmp/reference" }],
+    [
+      DESKTOP_COMMANDS.validate,
+      {
+        path: "/tmp/reference",
+        roundtrip: false,
+        parserKind: "tree-sitter",
+        strictLinkers: false,
+        jobs: null,
+      },
+    ],
   ]);
 
   await run.cancel();
@@ -78,7 +94,11 @@ test("validation runner disposes the listener if validate fails", async () => {
   });
 
   await assert.rejects(
-    validationRunner.startValidation("/tmp/reference", () => {}),
+    validationRunner.startValidation(
+      "/tmp/reference",
+      { roundtrip: false, parserKind: "tree-sitter", strictLinkers: false, jobs: null },
+      () => {},
+    ),
     /boom/,
   );
   assert.equal(disposed, true);

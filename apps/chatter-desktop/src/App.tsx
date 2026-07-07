@@ -4,8 +4,10 @@ import ErrorPanel from "./components/ErrorPanel";
 import FileTree from "./components/FileTree";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import ProgressBar from "./components/ProgressBar";
+import ValidationSettingsPanel from "./components/ValidationSettingsPanel";
 import { useTheme } from "./hooks/useTheme";
 import { useValidation } from "./hooks/useValidation";
+import { DEFAULT_VALIDATION_SETTINGS, type ValidationSettings } from "./protocol/desktopProtocol";
 import type { ParseError } from "./protocol/validation";
 import {
   useClanCapability,
@@ -25,6 +27,9 @@ export default function App() {
     () => localStorage.getItem("chatter-last-target"),
   );
   const [startTime, setStartTime] = useState<number | null>(null);
+  const [validationSettings, setValidationSettings] = useState<ValidationSettings>(
+    DEFAULT_VALIDATION_SETTINGS,
+  );
 
   useEffect(() => {
     clan.checkClanAvailable().then(setClanAvailable).catch(() => {});
@@ -103,9 +108,9 @@ export default function App() {
       localStorage.setItem("chatter-last-target", path);
       setSelectedFile(null);
       setStartTime(null);
-      startValidation(path);
+      startValidation(path, validationSettings);
     },
-    [startValidation],
+    [startValidation, validationSettings],
   );
 
   const handleRevalidate = useCallback(() => {
@@ -113,9 +118,9 @@ export default function App() {
       reset();
       setSelectedFile(null);
       setStartTime(null);
-      startValidation(lastTarget);
+      startValidation(lastTarget, validationSettings);
     }
-  }, [lastTarget, reset, startValidation]);
+  }, [lastTarget, reset, startValidation, validationSettings]);
 
   const handleOpenInClan = useCallback(
     async (file: string, error: ParseError) => {
@@ -139,6 +144,15 @@ export default function App() {
   }, []);
 
   const handleExport = useCallback(async () => {
+    // Guard explicitly rather than relying solely on the Export button's own
+    // `phase === "finished"` gating in ProgressBar: `state.files` only holds a
+    // complete, stable result set once the run has actually finished, and this
+    // handler should not derive an export from a still-streaming partial set.
+    if (state.phase !== "finished") {
+      console.error("export requested before validation finished; ignoring");
+      return;
+    }
+
     try {
       const path = await exportCapability.chooseExportPath();
       if (!path) return;
@@ -146,7 +160,10 @@ export default function App() {
       const format = path.endsWith(".json") ? "json" : "text";
       const results = [...state.files.values()].map((file) => ({
         path: file.path,
-        errors: file.diagnostics.map((diagnostic) => diagnostic.error),
+        errors: file.diagnostics.map((diagnostic) => ({
+          ...diagnostic.error,
+          renderedText: diagnostic.renderedText,
+        })),
         status: file.status,
       }));
 
@@ -155,7 +172,7 @@ export default function App() {
       console.error("export failed:", err);
       alert(`Export failed: ${err}`);
     }
-  }, [exportCapability, state.files]);
+  }, [exportCapability, state.files, state.phase]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -202,11 +219,17 @@ export default function App() {
           theme={theme}
           onThemeChange={setTheme}
         />
+        <ValidationSettingsPanel
+          settings={validationSettings}
+          onChange={setValidationSettings}
+          disabled={isRunning}
+        />
       </div>
       <div className="main-panels">
         <FileTree
           files={state.files}
           totalFiles={state.totalFiles}
+          phase={state.phase}
           selectedFile={selectedFile}
           onSelectFile={setSelectedFile}
         />

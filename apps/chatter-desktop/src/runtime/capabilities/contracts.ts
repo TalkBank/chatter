@@ -4,14 +4,27 @@ import type {
   DesktopCommandResultMap,
   ExportFormat,
   ValidationEventPayload,
+  ValidationSettings,
 } from "../../protocol/desktopProtocol";
 import type { FileStatus, ParseError, ValidationEvent } from "../../protocol/validation";
 
+/** A `ParseError` paired with its pre-rendered miette text, for text export.
+ *
+ * Carrying `renderedText` through lets the Rust export command reuse the
+ * canonical rendering already computed once in `events.rs` instead of
+ * hand-rebuilding a poorer "path:line: code msg" line from raw fields.
+ */
+export interface ValidationExportError extends ParseError {
+  renderedText: string;
+}
+
 export interface ValidationExportEntry {
   path: string;
-  errors: ParseError[];
+  errors: ValidationExportError[];
   status: FileStatus | null;
 }
+
+export type { ParserKindSetting, ValidationSettings } from "../../protocol/desktopProtocol";
 
 export interface OpenInClanRequest {
   file: string;
@@ -34,6 +47,7 @@ export interface DesktopEnvironmentCapability {
 export interface ValidationRunnerCapability {
   startValidation(
     path: string,
+    settings: ValidationSettings,
     onEvent: (event: ValidationEvent) => void,
   ): Promise<ValidationRun>;
 }
