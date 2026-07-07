@@ -32,6 +32,7 @@ fn test_is_platform_supported() {
 }
 
 #[test]
+#[ignore = "live Apple Events round-trip to the installed CLAN app; blocks on macOS automation consent (TCC) for every fresh test-binary hash, so it cannot run unattended - opt-in via --run-ignored"]
 fn test_is_clan_available() {
     let available = is_clan_available();
     println!("CLAN available: {}", available);
@@ -39,6 +40,7 @@ fn test_is_clan_available() {
 }
 
 #[test]
+#[ignore = "live Apple Events round-trip to the installed CLAN app; blocks on macOS automation consent (TCC) for every fresh test-binary hash, so it cannot run unattended - opt-in via --run-ignored"]
 fn test_get_capabilities() {
     let caps = get_capabilities();
     println!("Capabilities result: {:?}", caps);
@@ -168,6 +170,7 @@ fn test_platform_support_matches_compile_target() {
 }
 
 #[test]
+#[ignore = "live Apple Events round-trip to the installed CLAN app; blocks on macOS automation consent (TCC) for every fresh test-binary hash, so it cannot run unattended - opt-in via --run-ignored"]
 fn test_capabilities_platform_bit_consistent() {
     // The platform-supported bit (bit 0) in capabilities must agree
     // with is_platform_supported().
@@ -189,6 +192,7 @@ fn test_capabilities_platform_bit_consistent() {
 }
 
 #[test]
+#[ignore = "live Apple Events round-trip to the installed CLAN app; blocks on macOS automation consent (TCC) for every fresh test-binary hash, so it cannot run unattended - opt-in via --run-ignored"]
 fn test_capabilities_unicode_and_timeout_always_set() {
     // Bits 2 (unicode) and 3 (timeout) should always be set per the docs.
     if let Ok(c) = get_capabilities() {
@@ -339,6 +343,7 @@ fn test_version_is_semver_like() {
 }
 
 #[test]
+#[ignore = "live Apple Events round-trip to the installed CLAN app; blocks on macOS automation consent (TCC) for every fresh test-binary hash, so it cannot run unattended - opt-in via --run-ignored"]
 fn test_is_clan_available_is_deterministic() {
     // Calling is_clan_available twice should return the same value
     // (CLAN installation status doesn't change mid-test).
