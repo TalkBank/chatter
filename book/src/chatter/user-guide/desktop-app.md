@@ -1,7 +1,7 @@
 # Chatter Desktop
 
 **Status:** Current
-**Last modified:** 2026-06-21 21:33 EDT
+**Last modified:** 2026-07-06 17:27 EDT
 
 Chatter Desktop is a native graphical validation app for CHAT files, released
 alongside the `chatter` CLI. Prefer the `chatter` CLI for scripted or batch
@@ -118,6 +118,22 @@ collapsed view. Collapsed cards show only the error code and first line of the
 message. When a file has 5 or more errors, an **Expand All / Collapse All**
 button appears.
 
+### Validation settings
+
+A **⚙ Settings** popover next to the file picker exposes the same knobs the
+CLI's flags do, since both surfaces build the same underlying validation
+config:
+
+| Setting | Equivalent CLI flag | Default |
+|---------|---------------------|---------|
+| Roundtrip check | `--roundtrip` | Off |
+| Parser | `--parser tree-sitter\|re2c` | Tree-sitter |
+| Strict cross-utterance linkers | (enables E351-E355) | Off |
+| Parallel jobs | `--jobs N` | All CPUs |
+
+Settings are disabled while a validation run is in progress and apply to the
+next run (including Re-validate).
+
 ### Dark mode
 
 Chatter follows your system appearance by default. A **System / Light / Dark**
@@ -227,10 +243,12 @@ apps/chatter-desktop/
     runtime/          Tauri transport + capability-focused runtime seam
 ```
 
-The Rust backend calls `validate_directory_streaming()` from
-`talkbank-transform` directly, the same streaming validation pipeline used by
-the TUI. Events flow over crossbeam channels to the Rust side, then are
-serialized to JSON and emitted to the frontend via Tauri's event bridge.
+The Rust backend calls `validate_directory_streaming()` and
+`validate_files_streaming()` from `talkbank-transform` directly (folder vs.
+single-file targets respectively), the same streaming validation pipeline and
+on-disk cache used by the CLI and TUI. Events flow over crossbeam channels to
+the Rust side, then are serialized to JSON and emitted to the frontend via
+Tauri's event bridge.
 
 Cancellation uses `ArcSwapOption` for lock-free atomic swap of the cancel
 sender, no mutex.

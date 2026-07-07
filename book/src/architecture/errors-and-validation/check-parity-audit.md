@@ -1,7 +1,7 @@
 # CHECK Parity Audit
 
 **Status:** Current
-**Last updated:** 2026-06-17 11:29 EDT
+**Last updated:** 2026-06-25 07:30 EDT
 
 CLAN's `check` (CHECK) was the long-standing validator for CHAT files. `chatter
 validate` is the forward-looking replacement, and it is the **binding judgment
@@ -83,8 +83,8 @@ one of three buckets:
   divergence, do not implement.* Examples: CHECK error 49 (uppercase-in-word)
   has been commented out in `check.cpp` since 2019, so flagging it would
   diverge from *current* CHECK; CHECK error 109 (postcodes on dependent tiers)
-  is a raw character-match text-hack on `%`-tier tokens that `chatter` models as
-  structured content.
+  is a raw character-match text-hack `chatter` deliberately does not reproduce
+  (worked example below).
 - **(c) Enhancement beyond CHECK.** A TalkBank code with no CHECK counterpart.
   These are validation rules `chatter` adds; they need no CHECK mapping.
 
@@ -115,6 +115,33 @@ both, reaching the same recovery:
 This is the canonical shape of a CHECK-parity rule implemented to `chatter`'s
 standards: a recognized construct (parse, don't merely fail), the same behavior
 in both parsers, and a spec in `spec/errors/` that drives the tests.
+
+## Worked example: CHECK 109 (intentional divergence, do not implement)
+
+CHECK error 109 ("Postcodes are not allowed on dependent tiers") is the canonical
+bucket-(b) divergence. CLAN fires it from `check_CheckWords`
+(`OSX-CLAN/src/clan/check.cpp:3471-3690`) whenever a `%`-tier word matches the raw
+character pattern `[+ ` or `[- ` (the `isPostCodeMark` macro), on any non-`%x`
+dependent tier. `chatter` deliberately does not reproduce it, for two reasons.
+
+- **There is nothing typed to flag.** `chatter` models postcodes as structured
+  `Postcode` nodes inside `TierContent.postcodes`, a slot carried by the main tier.
+  Ordinary dependent tiers have their own tier types (`%com` is a text tier) with
+  no postcode slot, so a `[+ ...]`-shaped token on one is just part of the tier
+  text. Detecting it would require a raw character scan of the tier string, the
+  banned CHAT text-hacking; there is no structured node to validate.
+- **It is not a CHAT-validity rule.** An empirical check (2026-06-25) ran the real
+  CLAN *analysis* tools on dependent-tier postcodes: FREQ and MLU exclude the
+  `[+ ...]` token from their counts exactly as they do on the main tier, and KWAL
+  prints the line without error. No analysis tool chokes; only CHECK flags it, so
+  CHECK 109 guards against a failure mode its own toolchain does not have.
+
+The divergence is grounded permanently as a `divergence` entry (CHECK 109) in the
+behavioral parity manifest
+(`crates/talkbank-parser-tests/tests/check_parity/manifest.json`): the
+`chatter_matches_check` gate asserts `chatter` keeps validating the fixture clean
+(a permanent intentional state, not a gap to close), and `clan_check_grounding`
+re-confirms the real CLAN binary still emits 109.
 
 ## Related
 

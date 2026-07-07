@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-06-24 07:38 EDT
+**Last modified:** 2026-07-06 20:00 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -132,7 +132,7 @@ cargo check --workspace --all-targets
 cargo build --workspace --all-targets --locked
 cargo nextest run --workspace                # Preferred: parallel per-test
 cargo nextest run -p talkbank-model          # Single crate
-cargo clippy --all-targets -- -D warnings    # Periodic lint check
+just clippy                                  # Two-pass, CI-matching; run ONCE before push, not mid-session
 
 # Single test by name
 cargo nextest run -E 'test(test_name)'
@@ -161,6 +161,81 @@ cd apps/chatter-desktop && cargo tauri build                # distributable app 
 # ci.yml runs the runner below); run it locally the same way:
 bash scripts/lint/shellcheck-all.sh
 ```
+
+### Never Run Concurrent Cargo Invocations Against This Workspace
+
+**Cargo serializes all access to a shared `target/` directory through a file
+lock; only one `cargo`/`just`/`cargo nextest` process can hold it at a time.**
+Launching a second cargo-family command against this workspace before an
+earlier one has actually finished does not run in parallel: the second
+command silently prints `Blocking waiting for file lock on build directory`
+and queues behind the first. Wall-clock time for a queued command can balloon
+to many multiples of its real compute time, and looks indistinguishable from
+"the build is incredibly slow" unless you notice that specific line in its
+output.
+
+**Incident (2026-07-06).** While diagnosing why an evening session's cargo
+commands each seemed to take 15-30 minutes, a "no-op" `cargo check
+-p chatter-desktop` (no source changes since the prior successful check) was
+timed at `real 17m27s` but only `user 5.73s` + `sys 60.72s` of actual CPU
+work, under 70 seconds total. The other ~16 minutes was spent blocked on the
+target-directory lock held by an earlier background cargo/nextest invocation
+that had been launched (via an agent's `run_in_background`) before confirming
+the previous one had completed. The machine itself was fine throughout: 82%
+CPU idle, minimal swap, plenty of free RAM. Every long "build" that evening
+was substantially inflated the same way; only one at any given moment was
+ever actually compiling.
+
+**The rule.** Run ONE cargo-family invocation at a time against this
+workspace (`chatter/` root workspace, or `spec/tools`'s separate workspace).
+Wait for it to actually complete (confirm completion, do not just fire off
+the next command hoping it queues acceptably) before starting another. Do not
+launch a second `cargo check`/`clippy`/`build`/`nextest run`/`test` "just to
+also check X" while an earlier one against this same workspace might still be
+running. If a cargo command's wall-clock time looks unexpectedly long, check
+its output for `Blocking waiting for file lock` before concluding the
+compiler itself is slow, that line means the clock is measuring queue time,
+not compile time. If two cargo operations against this workspace are
+genuinely both needed right now, give the second one its own
+`CARGO_TARGET_DIR` (e.g. `CARGO_TARGET_DIR=/tmp/chatter-target-2 cargo ...`)
+rather than assuming they will interleave gracefully against the same
+`target/` directory.
+
+### Don't Run Clippy Mid-Session: It's a Pre-Push Gate, Not a Habit
+
+**Run `just clippy` (the two-pass, CI-matching invocation) exactly ONCE, at
+the very end, immediately before committing or pushing.** Do not run it
+after every small edit, "just to check," or as a periodic sanity habit
+during iterative development. Use `cargo check -p <crate>` (or
+`cargo build -p <crate>`) for the fast inner dev loop instead; save clippy
+for the final pass.
+
+**This is the repo's own designed workflow, not a new restriction.** The
+`justfile`'s `push` recipe already runs `just clippy` right before `git
+push`, and its comment explicitly says clippy is deliberately kept OUT of
+the pre-push git hook itself because "a long clippy run cannot stall the
+push past GitHub's SSH idle timeout." That design only works if clippy runs
+once per push, at the end, not repeatedly mid-session.
+
+**Why running it repeatedly is actively costly, not just slow-but-harmless:**
+1. **Two-pass clippy is two full builds with different flags** (`--lib --bins`
+   strict vs. `--tests` with panic/unwrap/expect lints relaxed). Each flag
+   set is a distinct build fingerprint, so running both passes forces a
+   rebuild of shared dependencies that a plain `cargo check` would have
+   reused. Repeating this mid-session multiplies that cost every time.
+2. **It contends with the same `target/` directory lock** described above:
+   a clippy pass launched while another cargo/nextest command is still
+   running against this workspace queues behind it, not beside it.
+3. **It doesn't test anything a passing `cargo check` + the actual test
+   suite doesn't already cover for correctness.** Clippy findings are style
+   and lint-policy compliance; running it early and often does not catch
+   bugs faster than running it once at the end, it only spends build time
+   sooner instead of later.
+
+**The decision test:** "Am I about to commit or push?" If not, don't run
+clippy; run `cargo check -p <crate>` instead. If yes, run `just clippy`
+exactly once as the final step before the commit/push, per the "Build,
+Test, and Lint" gate this file already documents.
 
 **Shell scripts must pass `shellcheck` (strictest).** The `shellcheck` CI job
 runs `scripts/lint/shellcheck-all.sh` over every tracked `*.sh` and shebang
@@ -305,27 +380,30 @@ run this full sequence:
 1. `cd grammar && tree-sitter generate`, **MANDATORY after every
    grammar.js edit, including reverts**
 2. `cd grammar && tree-sitter test`
-3. Regenerate typed CST traversal, requires a local checkout of the
-   `tree-sitter-grammar-utils` repository. From that checkout, run
-   the `generate_traversal` example pointed at this repo's
-   `grammar/src/grammar.json` + `grammar/src/node-types.json`, with
-   `--skip whitespaces`, and redirect stdout into this repo's
-   `crates/talkbank-parser-tests/src/generated_traversal.rs`, then
-   run `cargo fmt -p talkbank-parser-tests` to normalize the output
-   (the generator formats with prettyplease; this repo's CI checks
-   rustfmt, so the one `cargo fmt` pass is the ONLY post-processing
-   step). The generator's output is otherwise commit-ready as-is:
-   it is em-dash-free, carries its own `#![allow(...)]` for the lints
-   normal in generated code (including `clippy::collapsible_if`), and
-   stamps a deterministic provenance header (generator identity +
-   SHA-256 digests of the two input files, NO wall-clock timestamp).
-   **Never hand-edit `generated_traversal.rs`** (no dash-stripping, no
-   adding allows): if the output is wrong, fix the generator in
-   `tree-sitter-grammar-utils` and regenerate. See that crate's
-   `lib.rs` doc-comment for the exact command shape. A staleness guard
-   (`generated_traversal_is_current`) recomputes the embedded digests
-   from the committed grammar JSON, so a forgotten regeneration fails
-   the test suite instead of shipping silently.
+3. Regenerate the typed CST traversal module, requires a local
+   checkout of the `tree-sitter-grammar-utils` repository. There is a
+   SINGLE generated module now (the 2026-07 migration onto the
+   self-contained backend is complete and the OLD `generate_traversal`
+   module was retired): the `generate_typed_traversal` example, pointed
+   at this repo's `grammar/src/grammar.json` +
+   `grammar/src/node-types.json`, with NO `--skip` flag (the backend
+   models grammar extras explicitly), redirected into
+   `crates/talkbank-parser/src/generated_traversal.rs`. It self-formats
+   via rustfmt, so there is NO separate `cargo fmt` step; pass
+   `--edition 2024 --toolchain <the repo's rust-toolchain.toml pin,
+   currently 1.96.1>` so the output matches CI's rustfmt byte-for-byte.
+   Staleness guard: `generated_traversal_is_current`. The generator's
+   output is commit-ready as-is: it is em-dash-free, carries its own
+   `#![allow(...)]` for the lints normal in generated code, and stamps a
+   deterministic provenance header (generator identity + SHA-256 digests
+   of the two input files, NO wall-clock timestamp). **Never hand-edit
+   the generated file** (no dash-stripping, no adding allows): if the
+   output is wrong, fix the generator in `tree-sitter-grammar-utils` as
+   a GENERAL change and regenerate. See the crate's `lib.rs`
+   doc-comment for the exact command shape. The staleness guard
+   recomputes the embedded digests from the committed grammar JSON, so
+   a forgotten regeneration fails the test suite instead of shipping
+   silently.
 4. Regenerate corpus tests and error tests from specs (via the spec
    tooling, see `spec/CLAUDE.md` for the current command).
 5. `cargo nextest run -p talkbank-parser && cargo nextest run -p talkbank-parser-tests`
@@ -552,8 +630,16 @@ until both workflows have completed.
   per-region diagnostic (`ERROR` -> `UnparsableContent`/E316, `MISSING`
   -> `MissingRequiredElement`/E342). Never silently drop a recovery
   node; the AST is still produced (recovery preserved), only the
-  diagnostic is added. The re2c oracle must mirror this (emit a matching
-  diagnostic on the same input), per its MISSING-Token Recovery Policy.
+  diagnostic is added. This whole-tree backstop is a deliberate
+  COMPLEMENT to the per-position `NodeSlot` recovery handling in the
+  generated visitor (see "CST Traversal Rules"), NOT redundant with it:
+  per-position handling catches recovery at positions the grammar models;
+  the backstop catches recovery nodes that land where no rule models a
+  slot. It is empirically load-bearing (2026-07-04): with it removed,
+  `chatter_matches_check` (CHECK parity) and
+  `no_recovery_node_in_accepted_file` both fail. The re2c oracle must
+  mirror this (emit a matching diagnostic on the same input), per its
+  MISSING-Token Recovery Policy.
 - Lenient recovery must not fail fast on malformed existing `%mor`
   / `%gra` tiers. If the source contains a `%mor` or `%gra` line,
   the recovered AST must preserve that tier slot in place even when
@@ -567,14 +653,56 @@ until both workflows have completed.
 - Prefer shared diagnostic constructors over ad hoc
   `ParseError::new(...)`.
 
-### CST Traversal Rules (talkbank-parser)
+### CST Traversal Rules (talkbank-parser): drive parsing from the generated visitor
 
-- `WHITESPACES` nodes: skip with comment explaining no semantic
-  content.
-- Unrecognized CST nodes: MUST report via `ErrorSink` using
-  `unexpected_node_error()`.
-- Group content dispatch: all nested content types must be
-  explicitly dispatched.
+**The production parser MUST be driven by the generated, exhaustive, typed CST
+visitor (`GrammarTraversal`, generated by `tree-sitter-grammar-utils` from
+`grammar/src/grammar.json` + `node-types.json`). Hand-walking the tree-sitter CST
+with `node.kind() == "..."` / `match child.kind()` string dispatch is BANNED.**
+The generated visitor exposes every child position as a `NodeSlot`
+(`Present` / `Missing` / `Error` / `Unexpected` / `Absent`), so a consumer CANNOT
+silently drop a recovery node: ERROR and MISSING are explicit slot variants that
+every call site must handle. Because structure comes from typed node dispatch,
+there is NO place for text-hacking, classifying the *text* of an ERROR node to
+guess what was malformed (the `analyze_word_error` / `analyze_error_node`
+anti-pattern) is likewise BANNED. Recovery handling (ERROR -> E316,
+MISSING -> E342) is expressed PRIMARILY through `NodeSlot` variants at each
+modeled position, so a consumer cannot silently drop a recovery node at a
+position the grammar models. A whole-tree recovery backstop is deliberately
+RETAINED as a complementary second layer (see "Parser Recovery and Data
+Integrity"): it surfaces recovery nodes that land where no grammar rule models a
+slot (top-level junk, deeply-recovered structures), which per-position handling
+structurally cannot reach. The anti-pattern the visitor ends is the hand-walk
+DROPPING nodes, NOT the backstop; the two layers are complementary and both are
+required. Empirically confirmed load-bearing (2026-07-04): deleting the backstop
+regresses `chatter_matches_check` (CHECK parity) and
+`no_recovery_node_in_accepted_file` (recovery-is-not-validity), because recovery
+diagnostics on malformed input land at positions no per-region `NodeSlot`
+covers. Do not remove it.
+
+**Why this rule exists (do not repeat the mistake).** `tree-sitter-grammar-utils`
+and the `GrammarTraversal` visitor were created on 2026-03-23 specifically to end
+the recurring failure of the parser dropping ERROR/MISSING nodes. But the visitor
+was NEVER wired into the production parser: across every commit in every repo of
+the lineage (talkbank-utils-private -> talkbank-tools -> chatter), the only
+`impl GrammarTraversal` that ever existed was a test stub
+(`impl GrammarTraversal for TestTraversal`). The production parser hand-walked
+`node.kind()` string dispatch the whole time and shipped public (v0.1.0) still
+doing so, which is the root cause of the recurring missing-node bugs and the
+ERROR-text text-hacking. (The whole-tree recovery backstop was the MITIGATION that
+kept those dropped nodes from vanishing silently; per-position `NodeSlot` handling
+now prevents the drop at every modeled position, and the backstop is deliberately
+RETAINED as the whole-tree safety net for the unmodeled positions per-position
+handling cannot reach, see the reframed note above and "Parser Recovery and Data
+Integrity".) The parser was re-founded on the visitor in the 2026-07 migration
+(every consumer cluster flipped off `node.kind()` dispatch); NEW parser code must
+not add hand-walk dispatch or ERROR-text classification.
+
+- `WHITESPACES` nodes: skip with a comment explaining no semantic content.
+- Unrecognized / unexpected node kinds: surfaced as `NodeSlot::Unexpected` and
+  reported via `ErrorSink`; never silently ignored.
+- Group / nested content: dispatched through the generated typed methods, all
+  variants exhaustive; no `_ =>` catch-all that discards content.
 
 ### Test File Policy
 

@@ -1,7 +1,7 @@
 # Speaker-ID (`chatter speaker-id`)
 
 **Status:** Draft
-**Last modified:** 2026-06-15 12:18 EDT
+**Last modified:** 2026-07-01 21:55 EDT
 
 `chatter speaker-id` assigns CHAT-conformant speaker codes and role
 tags to a CHAT file whose speakers carry anonymous or placeholder
@@ -316,11 +316,11 @@ The override file is a UTF-8 TOML document with one
 `[<session_id>]` table per decision. A minimal entry:
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [session-101-t1]
 mode = "auto"
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR0 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "rename", PAR1 = "drop" }
 scores = { PAR0 = 0.1931, PAR1 = 0.7347 }
 margin = 3.81
@@ -339,10 +339,11 @@ Highlights from the reference:
 - `mode = "auto" | "explicit" | "override"` records how the decision
   was made (informational for audit trail; behavior at apply time
   is the same).
-- `inserted_role.code` is the CHAT speaker code (`INV`, `MOT`, `FAT`,
-  `PAR`, …); `inserted_role.tag` is the CHAT role-tag
-  (`Investigator`, `Mother`, …). All renamed speakers in one
-  entry share the same role.
+- `adult_roles` maps each renamed speaker's donor code to its own
+  role assignment: `adult_roles[<donor_code>].code` is the CHAT
+  speaker code (`INV`, `MOT`, `FAT`, `PAR`, …); `.tag` is the CHAT
+  role-tag (`Investigator`, `Mother`, …). Renamed speakers in one
+  entry may share a role or each carry a distinct one.
 - `mapping` must cover every speaker in the input, no defaulting.
 - `scores` and `margin` are optional but the writer always records
   them when an auto attempt produced them (even when the final

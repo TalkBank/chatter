@@ -78,6 +78,20 @@ pub enum AdjudicationError {
     /// TOML parse / serialize error.
     #[error("adjudication TOML error: {0}")]
     Toml(String),
+
+    /// The file's `schema_version` is missing or not equal to
+    /// [`PendingAdjudications::CURRENT_SCHEMA_VERSION`]. Refuses rather
+    /// than risk silently reinterpreting an old-shape file under the new
+    /// types.
+    #[error(
+        "unsupported pending-adjudications schema_version {found:?}; this binary supports {supported}"
+    )]
+    UnsupportedSchemaVersion {
+        /// The schema version as read from the file.
+        found: Option<u32>,
+        /// The schema version this binary supports.
+        supported: u32,
+    },
 }
 
 /// Discriminator over the adjudication points the pipeline has.
@@ -111,9 +125,11 @@ pub struct SuggestedSpeakerIdMapping {
     /// Per-speaker action map the algorithm would have applied had
     /// the confidence threshold been lower.
     pub mapping: BTreeMap<String, SpeakerAction>,
-    /// The inserted-role spec the algorithm would have paired with
-    /// the mapping (typically from the CLI's `--inserted-role`).
-    pub inserted_role: InsertedRoleSpec,
+    /// Per-donor-speaker-code role assignment, for every speaker whose
+    /// `mapping` action is `Rename`. Empty when the mapping is all-Drop
+    /// (no adult to assign a role to; there is no placeholder entry, an
+    /// empty map is the correct representation of "no adult").
+    pub adult_roles: BTreeMap<String, InsertedRoleSpec>,
 }
 
 /// One pending adjudication, carrying the inputs + evidence the
@@ -241,13 +257,18 @@ pub struct PendingAdjudications {
 impl Default for PendingAdjudications {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: Self::CURRENT_SCHEMA_VERSION,
             entries: Vec::new(),
         }
     }
 }
 
 impl PendingAdjudications {
+    /// Current schema version supported by this binary. Bumped from 1 to
+    /// 2 for the `adult_roles` map (was `inserted_role`, a single field).
+    /// Readers refuse any other value.
+    pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+
     /// Read a pending-adjudications file from disk. Refuses
     /// unknown schema versions; uses `default()` only when the
     /// caller supplies a path that does not exist via
@@ -259,6 +280,31 @@ impl PendingAdjudications {
         })?;
         let parsed: PendingAdjudications =
             toml::from_str(&bytes).map_err(|e| AdjudicationError::Toml(e.to_string()))?;
+        if parsed.schema_version != Self::CURRENT_SCHEMA_VERSION {
+            return Err(AdjudicationError::UnsupportedSchemaVersion {
+                found: Some(parsed.schema_version),
+                supported: Self::CURRENT_SCHEMA_VERSION,
+            });
+        }
+        Ok(parsed)
+    }
+
+    /// Parse a pending-adjudications document from an in-memory TOML
+    /// string, applying the same schema-version refusal as [`read`].
+    /// Test-only: the production readers take a `&Path`, so this exists
+    /// for tests that assert on the parsed shape without a file on disk.
+    ///
+    /// [`read`]: Self::read
+    #[cfg(test)]
+    fn read_from_str_for_test(s: &str) -> Result<Self, AdjudicationError> {
+        let parsed: PendingAdjudications =
+            toml::from_str(s).map_err(|e| AdjudicationError::Toml(e.to_string()))?;
+        if parsed.schema_version != Self::CURRENT_SCHEMA_VERSION {
+            return Err(AdjudicationError::UnsupportedSchemaVersion {
+                found: Some(parsed.schema_version),
+                supported: Self::CURRENT_SCHEMA_VERSION,
+            });
+        }
         Ok(parsed)
     }
 
@@ -270,6 +316,12 @@ impl PendingAdjudications {
             Ok(s) => {
                 let parsed: PendingAdjudications =
                     toml::from_str(&s).map_err(|e| AdjudicationError::Toml(e.to_string()))?;
+                if parsed.schema_version != Self::CURRENT_SCHEMA_VERSION {
+                    return Err(AdjudicationError::UnsupportedSchemaVersion {
+                        found: Some(parsed.schema_version),
+                        supported: Self::CURRENT_SCHEMA_VERSION,
+                    });
+                }
                 Ok(parsed)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
@@ -304,7 +356,7 @@ impl PendingAdjudications {
 pub enum OperatorDecision {
     /// Accept the algorithm's suggested choice verbatim. The pending
     /// entry's `suggested` field becomes the override entry's
-    /// `mapping` + `inserted_role`.
+    /// `mapping` + `adult_roles`.
     AcceptSuggested {
         /// Optional operator note recorded in the override entry.
         note: Option<String>,
@@ -313,7 +365,7 @@ pub enum OperatorDecision {
     /// mapping. Used when the operator has external evidence (audio
     /// review, contributor data sheet) that contradicts the
     /// algorithm's per-speaker scoring. Both `mapping` and
-    /// `inserted_role` come from the operator; the pending entry's
+    /// `adult_roles` come from the operator; the pending entry's
     /// `suggested` field is ignored at apply time but preserved in
     /// the pending file's audit trail.
     OverrideMapping {
@@ -321,10 +373,9 @@ pub enum OperatorDecision {
         /// speaker the merge stage will see in the donor file (same
         /// rule as the algorithm's mapping).
         mapping: BTreeMap<String, SpeakerAction>,
-        /// Operator-supplied inserted-role spec. May differ from the
-        /// pending entry's suggested inserted role (e.g., MOT instead
-        /// of INV after the operator confirms it's a parent sample).
-        inserted_role: InsertedRoleSpec,
+        /// Operator-supplied per-speaker role assignments. May differ
+        /// from the pending entry's suggested roles.
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         /// Operator note explaining the override. Strongly
         /// recommended on this path, captures the *why* a future
         /// reader would want.
@@ -332,13 +383,13 @@ pub enum OperatorDecision {
     },
     /// Parent-role-lookup decision: operator picks a role for an
     /// already-identified parent speaker. The mapping comes from the
-    /// pending entry's `speaker_mapping` field; only the
-    /// `inserted_role` is operator-supplied.
+    /// pending entry's `speaker_mapping` field; only `adult_roles` is
+    /// operator-supplied.
     ChooseRole {
-        /// Operator-supplied role spec (e.g. `{ code: "MOT", tag:
-        /// "Mother" }`). Becomes the override entry's
-        /// `inserted_role`.
-        inserted_role: InsertedRoleSpec,
+        /// Operator-supplied role assignment, keyed by the single donor
+        /// speaker code this pending entry names (`ParentRoleLookup`'s
+        /// `donor_speaker` field).
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         /// Operator note explaining the choice. Recommended when
         /// the source isn't obvious (e.g., audio-based judgment vs
         /// contributor data sheet).
@@ -436,16 +487,16 @@ enum ScriptedChoice {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
-    /// `choice = { kind = "override-mapping", mapping = { … }, inserted_role = { … }, note = "..." }`
+    /// `choice = { kind = "override-mapping", mapping = { … }, adult_roles = { … }, note = "..." }`
     OverrideMapping {
         mapping: BTreeMap<String, SpeakerAction>,
-        inserted_role: InsertedRoleSpec,
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
-    /// `choice = { kind = "choose-role", inserted_role = { … }, note = "..." }`
+    /// `choice = { kind = "choose-role", adult_roles = { … }, note = "..." }`
     ChooseRole {
-        inserted_role: InsertedRoleSpec,
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
@@ -457,20 +508,16 @@ impl From<ScriptedChoice> for OperatorDecision {
             ScriptedChoice::AcceptSuggested { note } => OperatorDecision::AcceptSuggested { note },
             ScriptedChoice::OverrideMapping {
                 mapping,
-                inserted_role,
+                adult_roles,
                 note,
             } => OperatorDecision::OverrideMapping {
                 mapping,
-                inserted_role,
+                adult_roles,
                 note,
             },
-            ScriptedChoice::ChooseRole {
-                inserted_role,
-                note,
-            } => OperatorDecision::ChooseRole {
-                inserted_role,
-                note,
-            },
+            ScriptedChoice::ChooseRole { adult_roles, note } => {
+                OperatorDecision::ChooseRole { adult_roles, note }
+            }
         }
     }
 }
@@ -571,7 +618,7 @@ fn apply_decision(
             OperatorDecision::AcceptSuggested { note },
         ) => MergeOverride::operator_decision(
             suggested.mapping.clone(),
-            suggested.inserted_role.clone(),
+            suggested.adult_roles.clone(),
             entry.scores.clone(),
             entry.margin,
             operator.to_string(),
@@ -582,14 +629,14 @@ fn apply_decision(
             PendingKindData::SpeakerIdLowConfidence { .. },
             OperatorDecision::OverrideMapping {
                 mapping,
-                inserted_role,
+                adult_roles,
                 note,
             },
         ) => MergeOverride::operator_decision(
             // Operator's mapping replaces the algorithm's suggestion;
             // the pending entry's scores+margin ride through for audit.
             mapping.clone(),
-            inserted_role.clone(),
+            adult_roles.clone(),
             entry.scores.clone(),
             entry.margin,
             operator.to_string(),
@@ -600,15 +647,12 @@ fn apply_decision(
             PendingKindData::ParentRoleLookup {
                 speaker_mapping, ..
             },
-            OperatorDecision::ChooseRole {
-                inserted_role,
-                note,
-            },
+            OperatorDecision::ChooseRole { adult_roles, note },
         ) => MergeOverride::operator_decision(
             // Parent-role-lookup has no Jaccard inputs, scores+margin
             // intentionally empty/None.
             speaker_mapping.clone(),
-            inserted_role.clone(),
+            adult_roles.clone(),
             BTreeMap::new(),
             None,
             operator.to_string(),
@@ -625,7 +669,7 @@ fn apply_decision(
             // the override is a forward-looking decision, not a log of
             // why the decision was needed.
             suggested.mapping.clone(),
-            suggested.inserted_role.clone(),
+            suggested.adult_roles.clone(),
             entry.scores.clone(),
             entry.margin,
             operator.to_string(),
@@ -636,12 +680,12 @@ fn apply_decision(
             PendingKindData::SanityScanMisclassification { .. },
             OperatorDecision::OverrideMapping {
                 mapping,
-                inserted_role,
+                adult_roles,
                 note,
             },
         ) => MergeOverride::operator_decision(
             mapping.clone(),
-            inserted_role.clone(),
+            adult_roles.clone(),
             entry.scores.clone(),
             entry.margin,
             operator.to_string(),
@@ -664,18 +708,20 @@ fn apply_decision(
 mod tests {
     use super::*;
 
-    /// A pre-provenance pending TOML that has no `engine` field must parse
-    /// with `engine == Deterministic` and `judgment == None`. This verifies
-    /// that adding the new fields with `serde(default)` did not break
-    /// backward compatibility with files written by earlier binaries.
+    /// A pending TOML with no `engine`/`judgment` keys must parse with
+    /// `engine == Deterministic` and `judgment == None`. This verifies
+    /// that the provenance fields' `serde(default)` still applies at the
+    /// current schema version and shape.
     #[test]
     fn legacy_pending_toml_without_engine_defaults_to_deterministic() {
-        // Minimal valid pending TOML in the pre-provenance format: no
-        // `engine` or `judgment` keys at all. The `inserted_role` is an
-        // inline table; the speaker-id-low-confidence kind tag must be
-        // present for the flattened enum to parse.
+        // Minimal valid pending TOML at the current schema version, with
+        // no `engine` or `judgment` keys (simulating a file written before
+        // those fields existed, which predates this schema version but
+        // shares its shape otherwise). The `adult_roles` map is an inline
+        // table of inline tables; the speaker-id-low-confidence kind tag
+        // must be present for the flattened enum to parse.
         let toml = r#"
-schema_version = 1
+schema_version = 2
 
 [[entries]]
 session_id = "legacy-session-1"
@@ -683,30 +729,51 @@ created_at = "2026-01-01T00:00:00Z"
 kind = "speaker-id-low-confidence"
 
 [entries.suggested]
-inserted_role = { code = "INV", tag = "Investigator" }
 
 [entries.suggested.mapping]
 PAR0 = "drop"
 PAR1 = "rename"
+
+[entries.suggested.adult_roles]
+PAR1 = { code = "INV", tag = "Investigator" }
 "#;
 
-        let parsed: PendingAdjudications =
-            toml::from_str(toml).expect("legacy pending TOML must parse");
+        let parsed: PendingAdjudications = PendingAdjudications::read_from_str_for_test(toml)
+            .expect("legacy-shape TOML must parse");
 
         assert_eq!(parsed.entries.len(), 1, "must have exactly one entry");
-
         let entry = &parsed.entries[0];
-
-        assert_eq!(
-            entry.engine,
-            DecisionEngine::Deterministic,
-            "missing engine field must default to Deterministic"
-        );
-        assert!(
-            entry.judgment.is_none(),
-            "missing judgment field must default to None"
-        );
+        assert_eq!(entry.engine, DecisionEngine::Deterministic);
+        assert!(entry.judgment.is_none());
         assert_eq!(entry.session_id, "legacy-session-1");
+    }
+
+    /// A pending file whose schema_version is not CURRENT_SCHEMA_VERSION
+    /// must be refused with a typed error, not silently accepted (before
+    /// this task there was no check at all).
+    #[test]
+    fn read_refuses_wrong_schema_version() {
+        let dir = std::env::temp_dir().join(format!("pending-schema-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("pending.toml");
+        // Well-formed except for the version: `entries` is a required
+        // field, so it must be present for parsing to reach the
+        // schema-version check (the point under test).
+        std::fs::write(&path, "schema_version = 1\nentries = []\n").expect("write fixture");
+
+        let err = PendingAdjudications::read(&path).expect_err("schema_version 1 must be refused");
+        assert!(
+            matches!(
+                err,
+                AdjudicationError::UnsupportedSchemaVersion {
+                    found: Some(1),
+                    supported: PendingAdjudications::CURRENT_SCHEMA_VERSION,
+                }
+            ),
+            "expected UnsupportedSchemaVersion{{found: Some(1), supported: 2}}; got: {err}"
+        );
+        std::fs::remove_file(&path).ok();
+        std::fs::remove_dir(&dir).ok();
     }
 
     /// Confirm that a `Deterministic` entry does NOT serialize the `engine`
@@ -723,10 +790,7 @@ PAR1 = "rename"
                         m.insert("PAR0".to_string(), SpeakerAction::Drop);
                         m
                     },
-                    inserted_role: InsertedRoleSpec {
-                        code: "INV".to_string(),
-                        tag: "Investigator".to_string(),
-                    },
+                    adult_roles: std::collections::BTreeMap::new(),
                 },
             },
             scores: std::collections::BTreeMap::new(),
@@ -736,7 +800,7 @@ PAR1 = "rename"
             judgment: None,
         };
         let doc = PendingAdjudications {
-            schema_version: 1,
+            schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
             entries: vec![entry],
         };
 
@@ -750,5 +814,66 @@ PAR1 = "rename"
             !toml_str.contains("judgment"),
             "Deterministic entries must NOT write a 'judgment' field; got:\n{toml_str}"
         );
+    }
+
+    /// apply_decision on AcceptSuggested must carry the pending entry's
+    /// FULL adult_roles map into the resulting MergeOverride, not a
+    /// single value, so a multi-adult suggestion survives acceptance.
+    #[test]
+    fn apply_decision_accept_suggested_preserves_full_adult_roles_map() {
+        let mut adult_roles = BTreeMap::new();
+        adult_roles.insert(
+            "PAR0".to_string(),
+            InsertedRoleSpec {
+                code: "INV".to_string(),
+                tag: "Investigator".to_string(),
+                specific_role: None,
+            },
+        );
+        adult_roles.insert(
+            "PAR1".to_string(),
+            InsertedRoleSpec {
+                code: "FAT".to_string(),
+                tag: "Father".to_string(),
+                specific_role: None,
+            },
+        );
+        let mut mapping = BTreeMap::new();
+        mapping.insert("PAR0".to_string(), SpeakerAction::Rename);
+        mapping.insert("PAR1".to_string(), SpeakerAction::Rename);
+        let entry = PendingEntry {
+            session_id: "sess-accept-multi".to_string(),
+            created_at: Utc::now(),
+            data: PendingKindData::SpeakerIdLowConfidence {
+                suggested: SuggestedSpeakerIdMapping {
+                    mapping,
+                    adult_roles,
+                },
+            },
+            scores: BTreeMap::new(),
+            margin: None,
+            threshold_used: None,
+            engine: DecisionEngine::Llm,
+            judgment: None,
+        };
+        let mut overrides = OverrideFile::default();
+        apply_decision(
+            &entry,
+            &OperatorDecision::AcceptSuggested { note: None },
+            "tester",
+            &mut overrides,
+        )
+        .expect("apply_decision must succeed");
+
+        let recorded = overrides
+            .get("sess-accept-multi")
+            .expect("entry must be recorded");
+        assert_eq!(
+            recorded.adult_roles.len(),
+            2,
+            "both adults must survive into the override entry"
+        );
+        assert_eq!(recorded.adult_roles.get("PAR0").unwrap().code, "INV");
+        assert_eq!(recorded.adult_roles.get("PAR1").unwrap().code, "FAT");
     }
 }

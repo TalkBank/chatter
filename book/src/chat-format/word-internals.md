@@ -1,7 +1,7 @@
 # The CHAT Word
 
 **Status:** Current
-**Last modified:** 2026-05-29 18:43 EDT
+**Last modified:** 2026-06-25 10:51 EDT
 
 "Word" is the most complex and most misunderstood concept in CHAT. This
 chapter documents what a word actually is, how the grammar parses it, and
@@ -187,7 +187,9 @@ Key fields:
 - **`category`**: optional prefix (`Omission`, `CAOmission`, `Filler`,
   `Nonword`, `PhonologicalFragment`).
 - **`form_type`**: optional `@` suffix (`@c` child-invented, `@d` dialect,
-  `@z:label` user-defined, etc.).
+  `@z:label` user-defined, etc.). The user-defined form requires the colon and
+  a label (`@z:label`); a colon-less marker such as `@zzz` is not a valid form
+  and is rejected with E203 (matching CLAN CHECK 147).
 - **`lang`**: optional `@s` language marker (`Shortcut`, `Explicit`,
   `Multiple`, `Ambiguous`).
 - **`part_of_speech`**: optional `$` tag.

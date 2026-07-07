@@ -435,11 +435,11 @@ fn speaker_id_reference_writes_override() -> Result<(), TestError> {
 /// entry that a batch orchestrator writes after a successful
 /// reference-mode run; the replay path applies it verbatim without
 /// re-running the Jaccard step.
-const FIX_OVERRIDE_FILE: &str = r#"schema_version = 1
+const FIX_OVERRIDE_FILE: &str = r#"schema_version = 2
 
 [donor]
 mode = "auto"
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "drop", PAR1 = "rename" }
 operator = "fixture"
 decided_at = "2026-01-01T00:00:00Z"

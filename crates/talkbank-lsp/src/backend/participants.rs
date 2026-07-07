@@ -116,16 +116,30 @@ pub(crate) fn handle_get_participants(
 pub(crate) fn handle_format_id_line(
     request: &IdLineFieldsRequest,
 ) -> Result<Value, LspBackendError> {
-    let id_header = build_id_header(request);
+    let id_header = build_id_header(request)?;
     let formatted = id_header.to_string();
 
     Ok(Value::String(formatted))
 }
 
 /// Build an `IDHeader` from user-provided plain string fields.
-fn build_id_header(input: &IdLineFieldsRequest) -> IDHeader {
+///
+/// # Errors
+///
+/// Returns [`LspBackendError::ArgumentInvalid`] when the `language` field is
+/// empty: `LanguageCode` construction is fallible on empty input, and the
+/// language here is a user-typed webview field, so the failure surfaces as a
+/// normal command-argument validation error instead of tearing down the
+/// server (the previous panicking constructor crashed here on an empty
+/// language field).
+fn build_id_header(input: &IdLineFieldsRequest) -> Result<IDHeader, LspBackendError> {
+    let language =
+        LanguageCode::new(&input.language).map_err(|error| LspBackendError::ArgumentInvalid {
+            label: "language",
+            reason: error.to_string(),
+        })?;
     let mut header = IDHeader::new(
-        LanguageCode::new(&input.language),
+        language,
         SpeakerCode::new(&input.speaker),
         ParticipantRole::new(&input.role),
     );
@@ -152,7 +166,7 @@ fn build_id_header(input: &IdLineFieldsRequest) -> IDHeader {
         header = header.with_custom_field(CustomIdField::new(&input.custom));
     }
 
-    header
+    Ok(header)
 }
 
 /// Extract participant entries with line numbers from the parsed `ChatFile`.

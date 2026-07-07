@@ -42,11 +42,11 @@ const FIX_MERGED_INVERTED_MLU: &str = "@UTF8
 /// The auto-decision picked PAR0 as the winner (mapped to drop) and
 /// renamed PAR1 to INV, but the sanity scan will detect that this
 /// looks inverted and suggest swapping.
-const FIX_OVERRIDE_PASS1_AUTO: &str = "schema_version = 1
+const FIX_OVERRIDE_PASS1_AUTO: &str = "schema_version = 2
 
 [session-misclass]
 mode = \"auto\"
-inserted_role = { code = \"INV\", tag = \"Investigator\" }
+adult_roles = { PAR1 = { code = \"INV\", tag = \"Investigator\" } }
 mapping = { PAR0 = \"drop\", PAR1 = \"rename\" }
 operator = \"pass1-auto\"
 decided_at = \"2026-05-28T11:00:00Z\"

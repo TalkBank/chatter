@@ -15,6 +15,7 @@ use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use super::cache_utils;
 use super::error::CacheError;
@@ -50,6 +51,26 @@ impl CachePool {
     pub fn new() -> Result<Self, CacheError> {
         let cache_dir = cache_utils::default_cache_dir()?;
         Self::with_directory(cache_dir)
+    }
+
+    /// Open the default cache, `Arc`-wrapped for sharing across worker
+    /// threads/validation runs, degrading to `None` on failure instead of
+    /// propagating the error.
+    ///
+    /// `on_error` is invoked with the failure so the caller can present it
+    /// however fits their context (a CLI wants an unconditional `eprintln!`
+    /// warning; other contexts may prefer `tracing::warn!` or silence). This
+    /// exists so every "open the cache or degrade gracefully" call site
+    /// shares the same construction and `Option`-collapsing logic instead of
+    /// each hand-rolling the same `match`.
+    pub fn open_or_else(on_error: impl FnOnce(&CacheError)) -> Option<Arc<Self>> {
+        match Self::new() {
+            Ok(cache) => Some(Arc::new(cache)),
+            Err(error) => {
+                on_error(&error);
+                None
+            }
+        }
     }
 
     /// Create pool at specified directory, keyed to the current rule set.

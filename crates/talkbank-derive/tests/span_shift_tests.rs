@@ -93,9 +93,10 @@ fn option_some_shifts() {
         span: Some(Span::new(10, 20)),
     };
     m.shift_spans_after(5, 3);
-    let span = m.span.expect("should still be Some");
-    assert_eq!(span.start, 13);
-    assert_eq!(span.end, 23);
+    assert_eq!(
+        m.span.as_ref().map(|span| (span.start, span.end)),
+        Some((13, 23))
+    );
 }
 
 #[test]

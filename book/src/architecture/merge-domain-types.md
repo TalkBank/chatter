@@ -1,7 +1,7 @@
 # Merge Pipeline, Domain Types
 
 **Status:** Draft
-**Last modified:** 2026-05-29 18:43 EDT
+**Last modified:** 2026-07-01 15:45 EDT
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and any future
@@ -500,10 +500,10 @@ pub enum MergeError {
     #[error("File 1 has no time-bulleted utterances; cannot merge against a shared timeline")]
     NoTimelineInFile1,
 
-    #[error("File 1 @Languages = {file1}, File 2 @Languages = {file2}; merge requires matching language")]
+    #[error("File 2 declares language(s) not present in File 1's @Languages; File 1 = {file1}, File 2 = {file2}")]
     LanguageMismatch {
-        file1: LanguageCode,
-        file2: LanguageCode,
+        file1: LanguageCodes,
+        file2: LanguageCodes,
     },
 
     #[error("speaker {speaker} appears in both files but is not in --retain; specify --retain to disambiguate")]

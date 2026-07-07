@@ -1,7 +1,7 @@
 # Adjudication Workflow
 
 **Status:** Draft
-**Last updated:** 2026-06-13 20:54 EDT
+**Last updated:** 2026-07-01 21:55 EDT
 
 This page specifies how human-in-the-loop adjudication fits into
 the merge pipeline. Several pipeline stages have decision points
@@ -76,8 +76,8 @@ file via the same schema.
 
 | # | Adjudication point | Trigger | Operator's decision | Affects |
 |---|---|---|---|---|
-| 1 | **Speaker-id low confidence** | `chatter speaker-id` Jaccard margin < threshold | Per-speaker mapping (drop/rename) and `inserted_role` | Speaker labeling, drop set, downstream merge |
-| 2 | **Parent role lookup** | Parent-sample session needs `MOT` vs `FAT` decision | `inserted_role.code` and `.tag` for this session | The merged file's headers + main-tier prefixes |
+| 1 | **Speaker-id low confidence** | `chatter speaker-id` Jaccard margin < threshold | Per-speaker mapping (drop/rename) and per-donor-code `adult_roles` | Speaker labeling, drop set, downstream merge |
+| 2 | **Parent role lookup** | Parent-sample session needs `MOT` vs `FAT` decision | `adult_roles[donor_speaker].code` and `.tag` for this session | The merged file's headers + main-tier prefixes |
 | 3 | **Diarization-mix flag** | Operator observes Batchalign collapsed multiple real-world speakers into one label | `flags = ["diarization-mixed"]` plus a note | Downstream consumers know output is imperfect; might gate publication |
 | 4 | **Post-merge sanity scan** | Auto-scan flags retained-speaker utterances with high-text-similarity inserted-speaker utterances nearby (suggesting speaker-id misclassification) | Confirm or override the original speaker-id mapping | Triggers re-run of speaker-id + merge for the session |
 | 5 | **Unbulleted reference file** | Reference CHAT file has no time bullets; merge can't proceed | Either bullet the reference upstream, or request fresh authoritative data | Pipeline blocked for this session pending external fix |
@@ -148,7 +148,7 @@ adjudication tool, without polluting the override file with
 ### Schema
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [[entries]]
 session_id = "session-102-t1"
@@ -174,7 +174,7 @@ preview = """
 """
 
 # Suggested defaults the operator can accept-as-is:
-suggested = { mapping = { PAR0 = "drop", PAR1 = "rename" }, inserted_role = { code = "INV", tag = "Investigator" } }
+suggested = { mapping = { PAR0 = "drop", PAR1 = "rename" }, adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } } }
 
 [[entries]]
 session_id = "session-103-t1-parent"
@@ -285,7 +285,7 @@ choice = { kind = "accept-suggested", note = "verified by listening" }
 [[decisions]]
 session_id = "session-103-t1-parent"
 kind = "parent-role-lookup"
-choice = { kind = "override", inserted_role = { code = "FAT", tag = "Father" }, note = "per contributor data sheet" }
+choice = { kind = "override", adult_roles = { PAR0 = { code = "FAT", tag = "Father" } }, note = "per contributor data sheet" }
 ```
 
 The adjudication tool reads the scripted file, matches decisions
@@ -359,9 +359,9 @@ pub enum OperatorDecision {
         note: Option<String>,
     },
 
-    /// Override the inserted role only (parent-role lookup).
+    /// Override the inserted role(s) only (parent-role lookup).
     OverrideInsertedRole {
-        inserted_role: InsertedRole,
+        adult_roles: BTreeMap<String, InsertedRoleSpec>,
         note: Option<String>,
     },
 
@@ -525,9 +525,14 @@ chatter adjudicate --re-adjudicate <SESSION_ID> --override-file overrides.toml
 ```
 
 It needs a small override-file schema extension, a per-entry
-optional `history: Vec<MergeOverride>` field. This is a minor
-schema change; if it ships in v1, no schema bump is needed; if it
-ships later, that is a `schema_version = 2` migration.
+optional `history: Vec<MergeOverride>` field. This is a minor,
+additive schema change, comparable to the 2026-06 `engine`/`judgment`
+addition (no version bump needed either way), not a breaking one;
+`schema_version` is already `2` as of the `adult_roles` map (see
+[Merge Override File Format §Future schema
+changes](../chatter/integrating/merge-overrides.md#future-schema-changes)),
+so a future breaking change to this schema would need `schema_version
+= 3`, not `2`.
 
 ## Composition with the orchestrator
 

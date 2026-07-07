@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-06-17 11:29 EDT
+**Last modified:** 2026-06-24 23:42 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -53,6 +53,16 @@ typed as `don` + `U+2019` + `t` is rejected; write `don't` with the ASCII
 apostrophe instead. `chatter` flags the curly form wherever it appears in word
 content and points the diagnostic at the exact character. This mirrors CLAN
 CHECK errors 138 and 139.
+
+### E243: Private-use or non-standard Unicode in a word
+
+A word may contain only standard Unicode. Characters from the Unicode Private
+Use Area and the other non-standard code points in the `U+E000`-`U+FFFF` block
+are rejected, including the replacement character `U+FFFD` that marks a botched
+text encoding. The most common cause is a file saved in the wrong encoding:
+re-save it as UTF-8 and replace any private-use or compatibility-area character
+with its standard Unicode equivalent. `chatter` points the diagnostic at the
+exact character. This mirrors CLAN CHECK error 86.
 
 ### E304: Missing speaker code
 

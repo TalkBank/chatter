@@ -820,3 +820,275 @@ fn merge_ambiguous_speaker_returns_err() {
         other => panic!("expected MergeError::AmbiguousSpeaker, got: {other:?}"),
     }
 }
+
+// ============================================================================
+// Dedupe-on-insert: file1 already declares a participant the donor also uses
+// ============================================================================
+
+/// File 1 fixture: reference transcript that vestigially declares `INV`
+/// (a placeholder header row) but has zero `*INV:` utterances. Reproduces
+/// the `CWNS-264-4` / `CWNS-265-4` shape from the IISRP merge.
+const FIX_REF_VESTIGIAL_INV: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child, INV Investigator
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tvestigial, audio
+*CHI:\thello there . \u{15}0_1000\u{15}
+@End
+";
+
+/// File 2 fixture: donor with real `INV` content using the same code and
+/// role as file1's vestigial declaration.
+const FIX_DONOR_REAL_INV: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Investigator
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tvestigial, audio
+*INV:\thow are you today . \u{15}1000_2500\u{15}
+@End
+";
+
+/// When file1 declares a participant code with zero utterances and
+/// matching role, and the donor uses that same code with real content,
+/// the merge must dedupe silently: exactly one `@Participants`/`@ID`
+/// declaration for that code in the output, and the donor's utterances
+/// merged in under it.
+#[test]
+fn merge_dedupes_vestigial_participant_declaration() {
+    let options = ParseValidateOptions::default();
+    let merged = merge_chats(
+        FIX_REF_VESTIGIAL_INV,
+        FIX_DONOR_REAL_INV,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+        options,
+    )
+    .expect("merge should succeed: file1's INV declaration is vestigial and matches the donor's");
+
+    let participants_count = merged.matches("@Participants:").count();
+    assert_eq!(
+        participants_count, 1,
+        "expected exactly one @Participants header line; got {participants_count}\n{merged}"
+    );
+    let inv_entry_count = merged.matches("INV Investigator").count();
+    assert_eq!(
+        inv_entry_count, 1,
+        "@Participants line must declare 'INV Investigator' exactly once; got:\n{merged}"
+    );
+    let inv_id_count = merged
+        .lines()
+        .filter(|l| l.starts_with("@ID:") && l.contains("|INV|"))
+        .count();
+    assert_eq!(
+        inv_id_count, 1,
+        "expected exactly one @ID row for INV; got {inv_id_count}\n{merged}"
+    );
+    assert!(
+        merged.contains("*INV:\thow are you today . \u{15}1000_2500\u{15}"),
+        "donor's INV utterance must be merged in under the shared code.\n{merged}"
+    );
+}
+
+/// File 2 fixture: donor's INV entry has a DIFFERENT role than file1's
+/// vestigial declaration (Investigator vs. a generic Adult), a metadata
+/// conflict that must refuse rather than silently pick one side.
+const FIX_DONOR_INV_ROLE_CONFLICT: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Adult
+@ID:\teng|corpus|INV|||||Adult|||
+@Media:\tvestigial, audio
+*INV:\thow are you today . \u{15}1000_2500\u{15}
+@End
+";
+
+#[test]
+fn merge_refuses_on_role_conflicting_declared_participant() {
+    let options = ParseValidateOptions::default();
+    let err = merge_chats(
+        FIX_REF_VESTIGIAL_INV,
+        FIX_DONOR_INV_ROLE_CONFLICT,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+        options,
+    )
+    .expect_err("merge must refuse: file1 says INV is Investigator, donor says INV is Adult");
+
+    assert!(
+        matches!(err, MergeError::ParticipantAlreadyDeclared { .. }),
+        "expected ParticipantAlreadyDeclared; got: {err}"
+    );
+}
+
+/// File 1 fixture: file1's vestigial `INV` declaration carries a real,
+/// specific name ("Bob"), same role as file1's other vestigial fixture.
+const FIX_REF_VESTIGIAL_INV_NAMED: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child, INV Bob Investigator
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tvestigial, audio
+*CHI:\thello there . \u{15}0_1000\u{15}
+@End
+";
+
+/// File 2 fixture: donor's `INV` entry has the SAME role as file1's
+/// vestigial declaration (Investigator) but a DIFFERENT specific name
+/// ("Carol" vs. file1's "Bob"), a metadata conflict on the name
+/// dimension alone that must refuse rather than silently pick one
+/// side's name.
+const FIX_DONOR_INV_NAME_CONFLICT: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Carol Investigator
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tvestigial, audio
+*INV:\thow are you today . \u{15}1000_2500\u{15}
+@End
+";
+
+/// Both file1 and the donor declare a name for `INV`, the roles match,
+/// but the names disagree ("Bob" vs. "Carol"). Per the merge-robustness
+/// design spec (Gap 1), name is part of the dedupe metadata-equality
+/// check whenever both sides actually provide one; the merge must
+/// refuse rather than silently keep file1's name and drop the donor's
+/// conflicting one.
+#[test]
+fn merge_refuses_on_name_conflicting_declared_participant() {
+    let options = ParseValidateOptions::default();
+    let err = merge_chats(
+        FIX_REF_VESTIGIAL_INV_NAMED,
+        FIX_DONOR_INV_NAME_CONFLICT,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+        options,
+    )
+    .expect_err("merge must refuse: file1 says INV is named Bob, donor says INV is named Carol");
+
+    assert!(
+        matches!(err, MergeError::ParticipantAlreadyDeclared { .. }),
+        "expected ParticipantAlreadyDeclared; got: {err}"
+    );
+}
+
+/// File 1 fixture: `INV` has REAL utterances in file1 (not vestigial) and
+/// is not in `--retain`. Colliding with a donor `INV` must refuse, same
+/// as the role-conflict case, even though the roles happen to match.
+const FIX_REF_NONVESTIGIAL_INV: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child, INV Investigator
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tnonvestigial, audio
+*CHI:\thello there . \u{15}0_1000\u{15}
+*INV:\thi yourself . \u{15}1000_2000\u{15}
+@End
+";
+
+/// Donor fixture: `INV` is declared in `@Participants`/`@ID` but has ZERO
+/// real utterances (the donor only utters via `SIS`). This isolates the
+/// "file1 nonvestigial" branch of the new precondition: the pre-existing
+/// `AmbiguousSpeaker` check only inspects UTTERANCE-bearing speakers in
+/// File 2 (`unique_utterance_speakers`), so a donor `INV` with zero
+/// utterances never reaches that check at all. `ParticipantAlreadyDeclared`
+/// is the only check that can refuse this pairing, since it looks at
+/// FILE 1's utterance count for the colliding code, not the donor's.
+const FIX_DONOR_DECLARED_INV_NO_UTTERANCES: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Investigator, SIS Sibling
+@ID:\teng|corpus|INV|||||Investigator|||
+@ID:\teng|corpus|SIS|||||Sibling|||
+@Media:\tnonvestigial, audio
+*SIS:\thi there . \u{15}1000_2000\u{15}
+@End
+";
+
+#[test]
+fn merge_refuses_on_nonvestigial_declared_participant() {
+    let options = ParseValidateOptions::default();
+    let err = merge_chats(
+        FIX_REF_NONVESTIGIAL_INV,
+        FIX_DONOR_DECLARED_INV_NO_UTTERANCES,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+        options,
+    )
+    .expect_err(
+        "merge must refuse: file1's INV is not vestigial (has real utterances), even \
+         though the donor never actually utters as INV",
+    );
+
+    assert!(
+        matches!(err, MergeError::ParticipantAlreadyDeclared { .. }),
+        "expected ParticipantAlreadyDeclared; got: {err}"
+    );
+}
+
+// ============================================================================
+// @Languages subset matching: donor (ASR, monolingual) vs. reference
+// (hand-coded, multilingual)
+// ============================================================================
+
+const FIX_REF_BILINGUAL: &str = "@UTF8
+@Begin
+@Languages:\teng, spa
+@Participants:\tCHI Target_Child
+@ID:\teng, spa|corpus|CHI|2;06.||||Target_Child|||
+@Media:\tlangs, audio
+*CHI:\thello there . \u{15}0_1000\u{15}
+@End
+";
+
+const FIX_DONOR_MONOLINGUAL_ENG: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Investigator
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tlangs, audio
+*INV:\thow are you today . \u{15}1000_2500\u{15}
+@End
+";
+
+/// Reference declares [eng, spa]; donor declares [eng], a strict subset.
+/// This must succeed today it does not (exact-equality check refuses).
+#[test]
+fn merge_succeeds_when_donor_languages_are_a_subset_of_reference() {
+    let options = ParseValidateOptions::default();
+    let merged = merge_chats(
+        FIX_REF_BILINGUAL,
+        FIX_DONOR_MONOLINGUAL_ENG,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+        options,
+    )
+    .expect("donor's [eng] is a subset of reference's [eng, spa]; merge must succeed");
+    assert!(
+        merged.contains("@Languages:\teng, spa"),
+        "merged output must carry file1's (reference's) @Languages verbatim.\n{merged}"
+    );
+}
+
+/// Reference declares [eng] only; donor declares [eng, spa]. Donor is
+/// over-claiming relative to reference; must still refuse.
+#[test]
+fn merge_refuses_when_donor_languages_exceed_reference() {
+    let options = ParseValidateOptions::default();
+    let err = merge_chats(
+        FIX_DONOR_MONOLINGUAL_ENG, // reused as file1: declares only eng
+        FIX_REF_BILINGUAL,         // reused as file2: declares eng, spa
+        &[SpeakerCode::new("INV")],
+        &default_strip_tiers(),
+        options,
+    )
+    .expect_err("donor declaring spa when reference only declares eng must refuse");
+    assert!(
+        matches!(err, MergeError::LanguageMismatch { .. }),
+        "expected LanguageMismatch; got: {err}"
+    );
+}

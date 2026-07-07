@@ -127,7 +127,7 @@ pub fn run_sanity_scan(
                 data: PendingKindData::SanityScanMisclassification {
                     suggested: SuggestedSpeakerIdMapping {
                         mapping: flag.suggested_mapping,
-                        inserted_role: flag.suggested_inserted_role,
+                        adult_roles: flag.suggested_adult_roles,
                     },
                     reason: flag.reason,
                 },

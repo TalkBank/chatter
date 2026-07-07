@@ -67,12 +67,13 @@ dashmap = "6.2"
 dirs = "6.0"
 indexmap = { version = "2.14", features = ["serde"] }
 parking_lot = "0.12"
+sha2 = "0.11"
 
 # Serialization, schema, error reporting
 csv = "1"
 jsonschema = { version = "0.46", default-features = false, features = ["resolve-file"] }
 miette = { version = "7.6.0", features = ["derive"] }
-quick-xml = "0.40"
+quick-xml = "0.41"
 schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
@@ -116,7 +117,7 @@ unicode-width = "0.2"
 notify = "8.2"
 
 # Doc / formatting helpers
-comrak = "0.52.0"
+comrak = "0.53.0"
 
 # String matching / NLP utilities
 ferrous-opencc = "0.4.0"

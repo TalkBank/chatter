@@ -240,6 +240,7 @@ impl CommandFamilyService for UtilityCommandService {
                     llm_api_key: judgment.llm_api_key.as_deref(),
                     llm_timeout_secs: judgment.llm_timeout_secs,
                     llm_max_retries: judgment.llm_max_retries,
+                    llm_cache_path: judgment.llm_cache.as_deref(),
                     session_context_path: judgment.session_context.as_deref(),
                 },
             ),
@@ -279,6 +280,7 @@ impl CommandFamilyService for UtilityCommandService {
                 llm_api_key: judgment.llm_api_key.as_deref(),
                 llm_timeout_secs: judgment.llm_timeout_secs,
                 llm_max_retries: judgment.llm_max_retries,
+                llm_cache_path: judgment.llm_cache.as_deref(),
                 session_context: judgment.session_context.as_deref(),
             }),
             Commands::Pipeline {
@@ -310,6 +312,7 @@ impl CommandFamilyService for UtilityCommandService {
                 llm_api_key: judgment.llm_api_key.as_deref(),
                 llm_timeout_secs: judgment.llm_timeout_secs,
                 llm_max_retries: judgment.llm_max_retries,
+                llm_cache_path: judgment.llm_cache.as_deref(),
                 session_context: judgment.session_context.as_deref(),
             }),
             Commands::Adjudicate {

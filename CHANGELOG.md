@@ -9,6 +9,44 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Added
+
+- **`--llm-cache <file>` (env `CHATTER_LLM_CACHE`) for holistic speaker-id
+  judgment.** A persistent, write-through JSON response cache for
+  `speaker-id` / `pipeline` / `batch --judgment holistic`: an identical
+  request (same endpoint, model, and rendered prompt) is served from the
+  cache instead of making another LLM call, so re-running a batch after a
+  crash or an unrelated code change does not re-pay completed sessions.
+  Absent flag and env variable means uncached, unchanged from before.
+
+### Fixed
+
+- **`chatter batch` no longer reports holistic suggestions as merges.** In
+  holistic-judgment mode the per-session pipeline exits 0 after writing a
+  suggestion to the pending file without merging (the operator adjudicates
+  first); the batch summary counted those as "merged" and reported zero
+  pending work. Outcomes are now classified by whether the merged output
+  actually exists, and the summary separately counts merges, suggestions
+  awaiting adjudication, and low-confidence refusals awaiting adjudication.
+- **E552 (`@Media` says `unlinked` but timing exists) now says where the
+  timing was found and how to fix it.** When the only timing evidence is
+  word-level bullets inside a `%wor` tier (invisible in normal display), the
+  message names the `%wor` tier and offers both remedies (the media is in
+  fact aligned: remove `unlinked`; or the `%wor` tier is stale: remove it)
+  instead of asserting the media is linked and pointing at bullets the user
+  cannot see. The main-tier-bullet case keeps its direct advice.
+- **Chatter Desktop's single-file validation now shares the CLI's validation
+  engine.** Previously, validating a single `.cha` file in the desktop app
+  (as opposed to its parent folder) bypassed the on-disk cache entirely,
+  skipped the `@Media`-filename check (E531), and could not honor
+  `--roundtrip` / `--parser` / `--strict-linkers`. All of these now work
+  identically to `chatter validate` and to the desktop's own folder
+  validation, and a new **Settings** panel exposes the equivalent options.
+- **Chatter Desktop no longer shows "N files, all valid" before a run has
+  actually finished.** The file tree previously derived this message from
+  the partial, still-streaming result set, so it could flash "all valid"
+  mid-run whenever no error had streamed in yet.
+
 ## [0.2.1] - 2026-06-24
 
 ### Added

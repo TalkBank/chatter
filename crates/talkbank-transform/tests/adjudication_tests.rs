@@ -38,17 +38,21 @@ fn adjudicate_speaker_id_accepts_suggested() {
     .collect();
 
     let mut pending = PendingAdjudications {
-        schema_version: 1,
+        schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-102-t1".to_string(),
             created_at: Utc.with_ymd_and_hms(2026, 5, 27, 11, 0, 0).unwrap(),
             data: PendingKindData::SpeakerIdLowConfidence {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: suggested_mapping.clone(),
-                    inserted_role: InsertedRoleSpec {
-                        code: "INV".to_string(),
-                        tag: "Investigator".to_string(),
-                    },
+                    adult_roles: BTreeMap::from([(
+                        "PAR1".to_string(),
+                        InsertedRoleSpec {
+                            code: "INV".to_string(),
+                            tag: "Investigator".to_string(),
+                            specific_role: None,
+                        },
+                    )]),
                 },
             },
             scores: BTreeMap::from([("PAR0".to_string(), 0.6286), ("PAR1".to_string(), 0.3457)]),
@@ -95,13 +99,17 @@ fn adjudicate_speaker_id_accepts_suggested() {
         entry.mapping, suggested_mapping,
         "mapping should match the suggested mapping verbatim"
     );
+    let par1_role = entry
+        .adult_roles
+        .get("PAR1")
+        .expect("PAR1 (the renamed speaker) should have a role entry");
     assert_eq!(
-        entry.inserted_role.code, "INV",
-        "inserted_role.code should match the suggested INV"
+        par1_role.code, "INV",
+        "adult_roles[PAR1].code should match the suggested INV"
     );
     assert_eq!(
-        entry.inserted_role.tag, "Investigator",
-        "inserted_role.tag should match the suggested Investigator"
+        par1_role.tag, "Investigator",
+        "adult_roles[PAR1].tag should match the suggested Investigator"
     );
     assert_eq!(
         entry.operator, "test-operator",
@@ -142,17 +150,21 @@ fn adjudicate_speaker_id_override_mapping() {
     .collect();
 
     let mut pending = PendingAdjudications {
-        schema_version: 1,
+        schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-204-t1".to_string(),
             created_at: Utc.with_ymd_and_hms(2026, 5, 27, 11, 0, 0).unwrap(),
             data: PendingKindData::SpeakerIdLowConfidence {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: suggested_mapping,
-                    inserted_role: InsertedRoleSpec {
-                        code: "INV".to_string(),
-                        tag: "Investigator".to_string(),
-                    },
+                    adult_roles: BTreeMap::from([(
+                        "PAR1".to_string(),
+                        InsertedRoleSpec {
+                            code: "INV".to_string(),
+                            tag: "Investigator".to_string(),
+                            specific_role: None,
+                        },
+                    )]),
                 },
             },
             scores: BTreeMap::from([("PAR0".to_string(), 0.5500), ("PAR1".to_string(), 0.4700)]),
@@ -168,10 +180,14 @@ fn adjudicate_speaker_id_override_mapping() {
         "session-204-t1".to_string(),
         OperatorDecision::OverrideMapping {
             mapping: operator_mapping.clone(),
-            inserted_role: InsertedRoleSpec {
-                code: "MOT".to_string(),
-                tag: "Mother".to_string(),
-            },
+            adult_roles: BTreeMap::from([(
+                "PAR0".to_string(),
+                InsertedRoleSpec {
+                    code: "MOT".to_string(),
+                    tag: "Mother".to_string(),
+                    specific_role: None,
+                },
+            )]),
             note: Some("audio review: PAR1 voice matches the child".to_string()),
         },
     )]);
@@ -198,13 +214,17 @@ fn adjudicate_speaker_id_override_mapping() {
     // Inserted role also comes from the operator, not from the
     // pending entry's suggestion (the operator may pick a totally
     // different role).
+    let par0_role = entry
+        .adult_roles
+        .get("PAR0")
+        .expect("PAR0 (the operator's renamed speaker) should have a role entry");
     assert_eq!(
-        entry.inserted_role.code, "MOT",
-        "inserted_role.code should be the operator-supplied MOT"
+        par0_role.code, "MOT",
+        "adult_roles[PAR0].code should be the operator-supplied MOT"
     );
     assert_eq!(
-        entry.inserted_role.tag, "Mother",
-        "inserted_role.tag should be the operator-supplied Mother"
+        par0_role.tag, "Mother",
+        "adult_roles[PAR0].tag should be the operator-supplied Mother"
     );
     // OverrideMapping is recorded as Explicit mode (operator-made).
     assert_eq!(entry.mode, OverrideMode::Explicit);
@@ -244,7 +264,7 @@ fn adjudicate_parent_role_lookup_chooses_role() {
     .collect();
 
     let mut pending = PendingAdjudications {
-        schema_version: 1,
+        schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-307-parent".to_string(),
             created_at: Utc.with_ymd_and_hms(2026, 5, 27, 12, 0, 0).unwrap(),
@@ -265,10 +285,14 @@ fn adjudicate_parent_role_lookup_chooses_role() {
     let mut prompter = ScriptedPrompter::from_decisions(vec![(
         "session-307-parent".to_string(),
         OperatorDecision::ChooseRole {
-            inserted_role: InsertedRoleSpec {
-                code: "MOT".to_string(),
-                tag: "Mother".to_string(),
-            },
+            adult_roles: BTreeMap::from([(
+                "PAR".to_string(),
+                InsertedRoleSpec {
+                    code: "MOT".to_string(),
+                    tag: "Mother".to_string(),
+                    specific_role: None,
+                },
+            )]),
             note: Some("contributor data sheet: mother sample".to_string()),
         },
     )]);
@@ -286,9 +310,13 @@ fn adjudicate_parent_role_lookup_chooses_role() {
     let entry = overrides
         .get("session-307-parent")
         .expect("override file should contain the parent-role decision");
-    // The chosen role is recorded.
-    assert_eq!(entry.inserted_role.code, "MOT");
-    assert_eq!(entry.inserted_role.tag, "Mother");
+    // The chosen role is recorded against the donor speaker (PAR).
+    let par_role = entry
+        .adult_roles
+        .get("PAR")
+        .expect("PAR should have the chosen role entry");
+    assert_eq!(par_role.code, "MOT");
+    assert_eq!(par_role.tag, "Mother");
     // The pre-recorded mapping rides through.
     assert_eq!(entry.mapping, speaker_mapping);
     // Mode is Explicit (operator picked).
@@ -334,17 +362,21 @@ fn adjudicate_sanity_scan_accept_suggested() {
     .collect();
 
     let mut pending = PendingAdjudications {
-        schema_version: 1,
+        schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-455-t2".to_string(),
             created_at: Utc.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap(),
             data: PendingKindData::SanityScanMisclassification {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: suggested_mapping.clone(),
-                    inserted_role: InsertedRoleSpec {
-                        code: "INV".to_string(),
-                        tag: "Investigator".to_string(),
-                    },
+                    adult_roles: BTreeMap::from([(
+                        "PAR0".to_string(),
+                        InsertedRoleSpec {
+                            code: "INV".to_string(),
+                            tag: "Investigator".to_string(),
+                            specific_role: None,
+                        },
+                    )]),
                 },
                 reason: "anchor CHI mean utterance length 8.4 exceeds INV mean 3.1; \
                          child typically shorter than adult, likely swap"
@@ -383,8 +415,12 @@ fn adjudicate_sanity_scan_accept_suggested() {
         entry.mapping, suggested_mapping,
         "mapping should match the scan's suggested (swapped) mapping verbatim"
     );
-    assert_eq!(entry.inserted_role.code, "INV");
-    assert_eq!(entry.inserted_role.tag, "Investigator");
+    let par0_role = entry
+        .adult_roles
+        .get("PAR0")
+        .expect("PAR0 (the scan's renamed speaker) should have a role entry");
+    assert_eq!(par0_role.code, "INV");
+    assert_eq!(par0_role.tag, "Investigator");
     assert_eq!(
         entry.mode,
         OverrideMode::Explicit,

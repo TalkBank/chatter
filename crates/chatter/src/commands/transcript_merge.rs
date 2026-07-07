@@ -68,7 +68,8 @@ pub fn run_merge(file1: &Path, file2: &Path, retain: &[String], output: Option<&
                 MergeError::RetainSpeakersMissing { .. }
                 | MergeError::NoTimelineInFile1
                 | MergeError::LanguageMismatch { .. }
-                | MergeError::AmbiguousSpeaker { .. } => EXIT_PRECONDITION,
+                | MergeError::AmbiguousSpeaker { .. }
+                | MergeError::ParticipantAlreadyDeclared { .. } => EXIT_PRECONDITION,
                 MergeError::Parse(_) => EXIT_INPUT_ERROR,
             };
             std::process::exit(code);

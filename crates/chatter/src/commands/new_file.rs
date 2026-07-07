@@ -139,7 +139,10 @@ mod tests {
         require_header(&chat_file, RequiredHeader::Id)?;
         require_header(&chat_file, RequiredHeader::End)?;
 
-        require_language(&chat_file, LanguageCode::new("eng"))?;
+        require_language(
+            &chat_file,
+            LanguageCode::new("eng").expect("test literal is non-empty"),
+        )?;
         require_participant(&chat_file, "CHI", "Target_Child")?;
         require_id_header(&chat_file, "eng", "corpus", "CHI", "Target_Child")?;
         Ok(())
@@ -161,7 +164,10 @@ mod tests {
         );
 
         let chat_file = parse_file(&path)?;
-        require_language(&chat_file, LanguageCode::new("spa"))?;
+        require_language(
+            &chat_file,
+            LanguageCode::new("spa").expect("test literal is non-empty"),
+        )?;
         require_participant(&chat_file, "MOT", "Mother")?;
         require_id_header(&chat_file, "spa", "mydata", "MOT", "Mother")?;
         require_utterance(&chat_file, "MOT", "hola mundo .")?;
@@ -252,7 +258,8 @@ mod tests {
         speaker: &str,
         role: &str,
     ) -> Result<(), TestError> {
-        let expected_language = LanguageCode::new(language);
+        let expected_language =
+            LanguageCode::new(language).expect("test call sites pass non-empty literals");
         let expected_corpus = CorpusName::new(corpus);
         let expected_speaker = SpeakerCode::new(speaker);
         let expected_role = ParticipantRole::new(role);

@@ -1,7 +1,7 @@
 # Merge Override File Format
 
 **Status:** Draft
-**Last updated:** 2026-06-15 15:00 EDT
+**Last updated:** 2026-07-01 21:55 EDT
 
 The merge override file is the typed, human-readable record of
 operator decisions in the `chatter speaker-id` →  `chatter merge`
@@ -43,7 +43,7 @@ UTF-8 TOML. The file has exactly one top-level key,
 keyed by a session ID.
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [<session_id_1>]
 mode = "auto"
@@ -66,7 +66,7 @@ if the ID contains non-bare-key characters).
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema_version` | unsigned integer | yes | The schema version this file conforms to. Currently `1`. Readers refuse files with any other value. |
+| `schema_version` | unsigned integer | yes | The schema version this file conforms to. Currently `2`. Readers refuse files with any other value. |
 
 The reader **refuses** files with `schema_version` absent or
 unknown, returning a typed error
@@ -91,7 +91,7 @@ omitted; unknown fields cause a parse error.
 | Field | Type | Meaning |
 |---|---|---|
 | `mode` | string enum | One of `"auto"`, `"explicit"`, `"override"`. How the decision was made; see "Mode semantics" below. |
-| `inserted_role` | inline table | The CHAT identity assigned to every speaker whose `mapping` action is `"rename"`. Fields: `code` (string, CHAT speaker code), `tag` (string, CHAT role-tag). |
+| `adult_roles` | table of donor code → inline table | The CHAT identity assigned to each speaker whose `mapping` action is `"rename"`, keyed by that speaker's donor code. Every `"rename"` key in `mapping` must have a matching key here. Each inline table has fields: `code` (string, CHAT speaker code), `tag` (string, CHAT role-tag), `specific_role` (string, optional, CHAT specific-role label such as `First_Investigator`, set only when two adults in the entry share `tag`). |
 | `mapping` | inline table | Map from input speaker codes to actions. Keys are speaker codes; values are `"rename"` or `"drop"`. Every speaker that exists in the input CHAT file must appear in `mapping`. |
 | `operator` | string | Free-form identifier of the person who created the entry (username, initials, email prefix). Recorded as audit trail. |
 | `decided_at` | RFC 3339 datetime | When the decision was made. Must include a time zone (UTC recommended). |
@@ -147,13 +147,16 @@ writer follows these conventions:
 
 Each entry in `mapping` is one of:
 
-- `"rename"`: the speaker is renamed to
-  `inserted_role.code` with role tag `inserted_role.tag` in the
+- `"rename"`: the speaker is renamed per its own entry in
+  `adult_roles` (looked up by the speaker's donor code), to
+  `adult_roles[<donor_code>].code` with role tag
+  `adult_roles[<donor_code>].tag`, and specific-role label
+  `adult_roles[<donor_code>].specific_role` if present, in the
   output CHAT file. Every utterance for this speaker has its
   `*CODE:` prefix rewritten; the `@Participants` entry for this
-  speaker has its code + role-tag rewritten (preserving any
-  intervening name); the `@ID` row's code (field 3) and role
-  (field 8) are rewritten.
+  speaker has its code + role-tag (+ specific-role label, if set)
+  rewritten; the `@ID` row's code (field 3) and role (field 8) are
+  rewritten.
 - `"drop"`: the speaker's utterances are removed from the
   output entirely. The speaker's `@Participants` entry and `@ID`
   row are also removed.
@@ -199,7 +202,7 @@ modifies the list SHOULD deduplicate.
 1. Open `path` UTF-8.
 2. Parse via `toml`.
 3. Refuse if `schema_version` is absent or not equal to the
-   binary's `CURRENT_SCHEMA_VERSION` (currently `1`). Error:
+   binary's `CURRENT_SCHEMA_VERSION` (currently `2`). Error:
    `OverrideFileError::UnsupportedSchemaVersion { found, supported }`.
 4. Parse all `[<session_id>]` tables into `MergeOverride` values;
    reject unknown fields.
@@ -220,7 +223,7 @@ returns `None` if absent.
 - Top-level field order: `schema_version` first.
 - Entries ordered by session ID alphabetically (`BTreeMap`
   default).
-- Per-entry field order: `mode`, `inserted_role`, `mapping`,
+- Per-entry field order: `mode`, `adult_roles`, `mapping`,
   `scores`, `margin`, `operator`, `decided_at`, `note`, `flags`,
   `engine`, `judgment`.
 - Optional fields omitted when empty / absent.
@@ -236,11 +239,11 @@ overridden via `--session-id`.
 ## Example: minimal auto-mode entry
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [session-101-t1]
 mode = "auto"
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR0 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "rename", PAR1 = "drop" }
 scores = { PAR0 = 0.1931, PAR1 = 0.7347 }
 margin = 3.81
@@ -260,7 +263,7 @@ audio, confirmed the call, and re-ran with `--mapping`:
 ```toml
 [session-102-t1]
 mode = "explicit"
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "drop", PAR1 = "rename" }
 scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
 margin = 1.82
@@ -280,7 +283,7 @@ observation, the audit trail is reproducible.
 ```toml
 [session-103-t1-parent]
 mode = "explicit"
-inserted_role = { code = "MOT", tag = "Mother" }
+adult_roles = { PAR0 = { code = "MOT", tag = "Mother" } }
 mapping = { PAR0 = "rename", PAR1 = "drop" }
 scores = { PAR0 = 0.3727, PAR1 = 0.6940 }
 margin = 1.86
@@ -303,7 +306,7 @@ The same file run on a different day from the override file:
 ```toml
 [session-102-t1]
 mode = "override"
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "drop", PAR1 = "rename" }
 scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
 margin = 1.82
@@ -342,10 +345,32 @@ domain-specific conventions:
 
 ## Future schema changes
 
-Schema version increments will appear here under "Migration" with
-the version-to-version diff and migration instructions. Until
-then, this is the only schema; the policy is strict
-refuse-with-clear-error on any other `schema_version` value.
+Schema version increments appear here under "Migration" with the
+version-to-version diff and migration instructions. The policy is
+strict refuse-with-clear-error on any `schema_version` value this
+binary does not recognize; there is no auto-migration.
+
+### Migration: schema_version 1 -> 2 (`adult_roles` map, 2026-07)
+
+`schema_version` bumped from `1` to `2` when the single per-entry
+`inserted_role` field was replaced by `adult_roles`, a map from
+donor speaker code to `InsertedRoleSpec`. The old field could only
+name one CHAT identity per entry, so a session with two distinct
+adult speakers (two different roles, or two speakers sharing one
+role) had no way to record more than one of them. `adult_roles`
+keys each `InsertedRoleSpec` by the donor code it applies to, so
+every `"rename"` speaker in `mapping` gets its own role assignment;
+`InsertedRoleSpec` also gained an optional `specific_role` field for
+the CHAT manual's `First_Investigator`/`Second_Investigator`-style
+disambiguation when two adults in one entry share a role.
+
+This is a **breaking, non-migrating** version bump: a
+`schema_version = 1` file is refused with
+`OverrideFileError::UnsupportedSchemaVersion`, not auto-converted.
+Operators holding a pre-bump override file must re-adjudicate those
+sessions. The `pending-adjudications.toml` format bumped its own
+schema version in lockstep for the same reason; see
+[Adjudication Workflow](../../architecture/adjudication-workflow.md#the-pending-adjudications-artifact).
 
 ### 2026-06 additive fields: `engine` and `judgment` (no version bump)
 
@@ -357,7 +382,7 @@ compatible in both directions:
 - **Old reader, new file:** TOML `deny_unknown_fields` is not set
   globally; older binaries that parse a file containing `engine` and
   `judgment` will silently ignore the unknown keys. The decision
-  itself (mode, mapping, inserted_role) is unaffected.
+  itself (mode, mapping, adult_roles) is unaffected.
 - **New reader, old file:** `engine` has `#[serde(default)]` and
   defaults to `"deterministic"`; `judgment` has
   `skip_serializing_if = "Option::is_none"` and is absent, which

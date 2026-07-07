@@ -14,7 +14,7 @@ use common::CliHarness;
 /// Pre-existing pending-adjudications fixture: one
 /// speaker-id-low-confidence entry whose suggested mapping has
 /// PAR0=drop, PAR1=rename to INV/Investigator.
-const FIX_PENDING_ONE_SPEAKER_ID: &str = r#"schema_version = 1
+const FIX_PENDING_ONE_SPEAKER_ID: &str = r#"schema_version = 2
 
 [[entries]]
 session_id = "session-102-t1"
@@ -24,7 +24,7 @@ threshold_used = 2.0
 margin = 1.82
 
 [entries.suggested]
-inserted_role = { code = "INV", tag = "Investigator" }
+adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
 mapping = { PAR0 = "drop", PAR1 = "rename" }
 
 [entries.scores]
@@ -157,10 +157,122 @@ fn adjudicate_interactive_accepts_suggested() -> Result<(), TestError> {
     Ok(())
 }
 
+/// Pre-existing pending-adjudications fixture: one
+/// speaker-id-low-confidence entry with TWO adult verdicts in a single
+/// entry's `adult_roles` map, PAR0 renamed to INV/Investigator and
+/// PAR1 renamed to FAT/Father (Task 8's multi-adult representation,
+/// which replaced the earlier single shared `inserted_role` field).
+const FIX_PENDING_MULTI_ADULT: &str = r#"schema_version = 2
+
+[[entries]]
+session_id = "session-410-multi-adult"
+kind = "speaker-id-low-confidence"
+created_at = "2026-05-27T11:00:00Z"
+threshold_used = 2.0
+margin = 1.82
+
+[entries.suggested]
+adult_roles = { PAR0 = { code = "INV", tag = "Investigator" }, PAR1 = { code = "FAT", tag = "Father" } }
+mapping = { PAR0 = "rename", PAR1 = "rename" }
+
+[entries.scores]
+PAR0 = 0.6286
+PAR1 = 0.5457
+"#;
+
+/// Scripted decision fixture: accept-suggested for the multi-adult
+/// session, no note.
+const FIX_SCRIPTED_ACCEPT_SUGGESTED_MULTI_ADULT: &str = r#"schema_version = 1
+
+[[decisions]]
+session_id = "session-410-multi-adult"
+kind = "speaker-id-low-confidence"
+choice = { kind = "accept-suggested" }
+"#;
+
+/// `chatter adjudicate --scripted` on a multi-adult
+/// speaker-id-low-confidence entry (Task 8's `adult_roles` map) must
+/// carry BOTH adult role assignments into the override file, not
+/// collapse to a single shared role. This is the subprocess-level
+/// counterpart to the unit-level
+/// `apply_decision_accept_suggested_preserves_full_adult_roles_map`
+/// test in `talkbank-transform`; this test exercises the real CLI
+/// binary's file-I/O glue end to end.
+#[test]
+fn adjudicate_scripted_accepts_suggested_multi_adult() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let pending = dir.path().join("pending.toml");
+    let scripted = dir.path().join("scripted.toml");
+    let overrides = dir.path().join("batch.overrides.toml");
+    fs::write(&pending, FIX_PENDING_MULTI_ADULT)?;
+    fs::write(&scripted, FIX_SCRIPTED_ACCEPT_SUGGESTED_MULTI_ADULT)?;
+
+    harness
+        .chatter_cmd()
+        .arg("adjudicate")
+        .arg(&pending)
+        .arg("--override-file")
+        .arg(&overrides)
+        .arg("--scripted")
+        .arg(&scripted)
+        .arg("--operator")
+        .arg("test-fixture-multi-adult")
+        .assert()
+        .success();
+
+    // Override file exists with the resolved entry.
+    assert!(overrides.exists(), "override file should be written");
+    let overrides_text = fs::read_to_string(&overrides)?;
+    assert!(
+        overrides_text.contains("session-410-multi-adult"),
+        "override file should carry the resolved session ID:\n{overrides_text}"
+    );
+    assert!(
+        overrides_text.contains("\"explicit\""),
+        "AcceptSuggested decision should record as mode=explicit:\n{overrides_text}"
+    );
+
+    // Both adult roles must survive intact: PAR0 -> INV/Investigator
+    // and PAR1 -> FAT/Father, not collapsed to a single shared role.
+    assert!(
+        overrides_text.contains("\"INV\""),
+        "override file should carry PAR0's inserted_role.code INV:\n{overrides_text}"
+    );
+    assert!(
+        overrides_text.contains("\"Investigator\""),
+        "override file should carry PAR0's inserted_role.tag Investigator:\n{overrides_text}"
+    );
+    assert!(
+        overrides_text.contains("\"FAT\""),
+        "override file should carry PAR1's inserted_role.code FAT:\n{overrides_text}"
+    );
+    assert!(
+        overrides_text.contains("\"Father\""),
+        "override file should carry PAR1's inserted_role.tag Father:\n{overrides_text}"
+    );
+    assert!(
+        overrides_text.contains("test-fixture-multi-adult"),
+        "override file should carry the --operator value:\n{overrides_text}"
+    );
+
+    // Pending file has been rewritten without the resolved entry.
+    let pending_text = fs::read_to_string(&pending)?;
+    assert!(
+        !pending_text.contains("session-410-multi-adult"),
+        "pending file should no longer carry the resolved session:\n{pending_text}"
+    );
+    assert!(
+        pending_text.contains("schema_version"),
+        "pending file should still declare schema_version after rewrite:\n{pending_text}"
+    );
+    Ok(())
+}
+
 /// Pre-existing pending-adjudications fixture with a parent-role-lookup
 /// entry. The pipeline identified a parent speaker but doesn't know
 /// whether to label them `MOT`, `FAT`, or another role.
-const FIX_PENDING_PARENT_ROLE: &str = r#"schema_version = 1
+const FIX_PENDING_PARENT_ROLE: &str = r#"schema_version = 2
 
 [[entries]]
 session_id = "session-307-parent"
@@ -172,10 +284,10 @@ donor_speaker = "PAR"
 PAR = "rename"
 "#;
 
-/// `chatter adjudicate --interactive` parses `choose CODE TAG
-/// [optional note]` lines for parent-role-lookup pending entries.
-/// The operator types the role on stdin; the override file records
-/// the chosen role paired with the pre-set speaker mapping.
+/// `chatter adjudicate --interactive` parses `choose SPK:CODE:TAG
+/// [SPK:CODE:TAG ...] [optional note]` lines for parent-role-lookup
+/// pending entries. The operator types the role on stdin; the override
+/// file records the chosen role paired with the pre-set speaker mapping.
 #[test]
 fn adjudicate_interactive_chooses_role() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -193,7 +305,7 @@ fn adjudicate_interactive_chooses_role() -> Result<(), TestError> {
         .arg("--interactive")
         .arg("--operator")
         .arg("parent-role-fixture")
-        .write_stdin("choose MOT Mother contributor data sheet\n")
+        .write_stdin("choose PAR:MOT:Mother contributor data sheet\n")
         .assert()
         .success();
 
@@ -223,12 +335,12 @@ fn adjudicate_interactive_chooses_role() -> Result<(), TestError> {
     Ok(())
 }
 
-/// `chatter adjudicate --interactive` parses `override CODE TAG
-/// SPK=action [SPK=action ...] [note...]` lines for
+/// `chatter adjudicate --interactive` parses `override SPK:CODE:TAG
+/// [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]` lines for
 /// speaker-id-low-confidence entries. This is the interactive
 /// counterpart of cycle 20's `OverrideMapping` decision: the
 /// operator looked at the algorithm's suggestion, decided it was
-/// wrong, and supplies the mapping + inserted_role directly.
+/// wrong, and supplies the mapping + per-speaker roles directly.
 #[test]
 fn adjudicate_interactive_override_mapping() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -238,9 +350,9 @@ fn adjudicate_interactive_override_mapping() -> Result<(), TestError> {
     fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
 
     // The cycle-18 pending fixture suggests PAR0=drop, PAR1=rename
-    // with inserted_role=INV:Investigator. The operator overrides:
-    // PAR0=rename, PAR1=drop, inserted_role=MOT:Mother, with a
-    // multi-word note.
+    // with PAR1's role INV:Investigator. The operator overrides:
+    // PAR0=rename, PAR1=drop, and assigns PAR0 the role MOT:Mother
+    // (SPK:CODE:TAG syntax), with a multi-word note.
     harness
         .chatter_cmd()
         .arg("adjudicate")
@@ -250,7 +362,7 @@ fn adjudicate_interactive_override_mapping() -> Result<(), TestError> {
         .arg("--interactive")
         .arg("--operator")
         .arg("override-fixture")
-        .write_stdin("override MOT Mother PAR0=rename PAR1=drop audio review confirms swap\n")
+        .write_stdin("override PAR0:MOT:Mother PAR0=rename PAR1=drop audio review confirms swap\n")
         .assert()
         .success();
 

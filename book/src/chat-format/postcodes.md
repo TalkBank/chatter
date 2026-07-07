@@ -1,7 +1,7 @@
 # Postcodes (`[+ ...]`)
 
 **Status:** Reference
-**Last updated:** 2026-05-11 23:01 EDT
+**Last updated:** 2026-06-25 07:30 EDT
 
 A **postcode** is a tagged annotation token that attaches to an
 *utterance as a whole* and appears after the terminator. The
@@ -181,9 +181,16 @@ pub struct TierContent {
 ```
 
 (See `talkbank-model/src/model/content/main_tier.rs` and
-`tier_content.rs` for the exact shape; the same `TierContent` type is
-shared by dependent tiers, so the postcode slot exists on every tier
-even though only main-tier postcodes are conventional.)
+`tier_content.rs` for the exact shape. The `postcodes` slot lives on
+`TierContent`, which is the **main-tier** payload. Dependent tiers do
+not use `TierContent`: each has its own type (for example `%com` is a
+text tier, `%wor` is a list of timed items), and none carries a
+postcode slot. So a `[+ ...]`-shaped token on a dependent tier is
+parsed as ordinary tier content, never a `Postcode`. This is why
+`chatter` does not, and structurally cannot without banned raw-text
+scanning, reproduce CLAN CHECK 109 ("postcodes are not allowed on
+dependent tiers"); that deliberate divergence is recorded in the
+[CHECK Parity Audit](../architecture/errors-and-validation/check-parity-audit.md).)
 
 Because postcodes live at the utterance level, the per-word
 traversal helpers (`walk_words`, `walk_words_mut`) do not visit

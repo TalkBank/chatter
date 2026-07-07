@@ -34,6 +34,7 @@ fn par1_to_inv() -> MappingSpec {
         SpeakerAssignment::Rename {
             code: SpeakerCode::new("INV"),
             role: ParticipantRole::new("Investigator"),
+            specific_role: None,
         },
     );
     m
@@ -440,14 +441,14 @@ fn identify_mapping_borderline_refuses() {
 #[test]
 fn legacy_override_without_engine_reads_as_deterministic() {
     let toml = r#"
-schema_version = 1
+schema_version = 2
 
 [NF203-2]
 mode = "auto"
 operator = "reference-mode"
 decided_at = "2026-05-01T00:00:00Z"
 
-[NF203-2.inserted_role]
+[NF203-2.adult_roles.PAR0]
 code = "INV"
 tag = "Investigator"
 
@@ -497,14 +498,18 @@ fn llm_entries_filters_by_engine() {
         ]),
         margin: ConfidenceMargin(8.0),
     };
-    let inserted_role = InsertedRoleSpec {
-        code: "INV".to_string(),
-        tag: "Investigator".to_string(),
-    };
+    let adult_roles = std::collections::BTreeMap::from([(
+        "PAR1".to_string(),
+        InsertedRoleSpec {
+            code: "INV".to_string(),
+            tag: "Investigator".to_string(),
+            specific_role: None,
+        },
+    )]);
     let entry = MergeOverride::auto_decision(
         &mapping,
         &report,
-        inserted_role,
+        adult_roles,
         "test-operator".to_string(),
         Utc::now(),
     );

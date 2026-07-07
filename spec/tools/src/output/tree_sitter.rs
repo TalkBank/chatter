@@ -81,8 +81,16 @@ pub fn format_test(example: &ConstructExample, _level: &str) -> String {
         format!("{} - {}", example.name, example.description)
     };
 
+    // The CST is captured by parsing `input` (normalized to a single trailing
+    // newline in `generate_corpus_files`). tree-sitter's corpus format trims
+    // EXACTLY ONE trailing newline from the fixture before parsing, so we emit
+    // `{input}\n` here: tree-sitter then reads back exactly `{input}` (with its
+    // single trailing newline) and reproduces the captured CST. The old
+    // `newline: /[\r\n]+/` fused any number of trailing newlines into one node,
+    // so this exact count never mattered; the grammar now represents a blank
+    // line as a `blank_line` node, so it does.
     format!(
-        "{separator}\n{name}\n{separator}\n{input}\n\n{divider}\n\n{cst}\n",
+        "{separator}\n{name}\n{separator}\n{input}\n{divider}\n\n{cst}\n",
         name = test_name,
         input = input,
         cst = cst,
@@ -158,6 +166,14 @@ pub fn generate_corpus_files_with_templates(
                 ));
                 continue;
             };
+
+            // Normalize to exactly one trailing newline so the fixture we WRITE
+            // and the bytes we PARSE for the captured CST are identical. A
+            // trailing blank line here used to be harmless (the old
+            // `newline: /[\r\n]+/` swallowed it) but the grammar now represents
+            // a blank line as a `blank_line` node, so any divergence breaks the
+            // corpus test.
+            let wrapped_input = format!("{}\n", wrapped_input.trim_end_matches(['\n', '\r']));
 
             let tree = match parse_wrapped_input(&mut parser, &example.name, &wrapped_input) {
                 Ok(tree) => tree,

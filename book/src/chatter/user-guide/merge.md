@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-06-11 15:32 EDT
+**Last modified:** 2026-07-07 13:40 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -178,7 +178,7 @@ two inputs:
 | `@UTF8` | File 1 | always required to be `@UTF8` |
 | `@Begin` / `@End` | File 1 | always present in merge output |
 | `@Window` | File 1 if present | not generated if absent |
-| `@Languages` | File 1 | must match File 2; mismatch is an error |
+| `@Languages` | File 1 | File 2's languages must be a subset of File 1's; any language declared in File 2 but not in File 1 is an error |
 | `@Media` | File 1 | File 2's `@Media` is discarded; warning if mismatched media filename (NOT the modality field, see below) |
 | `@Participants` | concatenation | File 1's entries first, then File 2's entries for non-retained speakers in their original order |
 | `@ID` | concatenation | File 1's `@ID` rows first; File 2's `@ID` rows for non-retained speakers appended in their original order |
@@ -335,6 +335,24 @@ produces no merged file. The operator supplies the LLM connection with
 `CHATTER_LLM_ENDPOINT` / `CHATTER_LLM_MODEL`); an optional
 `--session-context <file.json>` provides per-session context that the
 LLM prompt includes to sharpen its judgment.
+
+#### Response caching (`--llm-cache`)
+
+`--llm-cache <file>` (env fallback `CHATTER_LLM_CACHE`) points holistic
+judgment at a persistent, write-through JSON response cache. When set, a
+request identical to one already answered (same endpoint, model, and
+rendered prompt) is served from the cache file instead of making another
+LLM call, so re-running a `batch` after a crash, or after fixing an
+unrelated bug, does not re-pay every already-completed session. The cache
+key folds in the exact wire request, so any prompt or `PromptVersion`
+change invalidates stale entries automatically, no separate version bump
+is needed. A cache file that exists but is not valid JSON is a hard error
+(the run refuses rather than silently ignoring or overwriting it); a
+missing file is treated as an empty cache and created on first write.
+Absent flag and env variable means uncached, today's default behavior.
+`chatter batch` threads `--llm-cache` to every per-session `chatter
+pipeline` subprocess it spawns, so one cache file accumulates entries
+across the whole batch.
 
 #### Session-context JSON (`--session-context`)
 

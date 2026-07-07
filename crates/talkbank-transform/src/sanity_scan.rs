@@ -60,11 +60,14 @@ pub struct SanityScanFlag {
     /// [`crate::adjudication::PendingKindData::SanityScanMisclassification`]
     /// entry's `suggested.mapping`.
     pub suggested_mapping: BTreeMap<String, SpeakerAction>,
-    /// The inserted-role spec passed through from the override
-    /// entry. Pass-1 already knew what role label the inserted
-    /// donor speakers were given; the scan preserves it on the
-    /// suggested mapping.
-    pub suggested_inserted_role: InsertedRoleSpec,
+    /// Per-donor-speaker-code role assignment for the swapped
+    /// suggestion, keyed by the speaker whose swapped action is
+    /// `Rename` (the original drop speaker, which the scan now believes
+    /// is the adult to merge in). Pass-1 already knew what role label the
+    /// inserted donor speaker was given; the scan carries it onto the
+    /// swapped speaker. Ready to drop into a
+    /// [`crate::adjudication::SuggestedSpeakerIdMapping`]'s `adult_roles`.
+    pub suggested_adult_roles: BTreeMap<String, InsertedRoleSpec>,
     /// Free-form diagnostic explaining what triggered the flag.
     /// Surfaced to the operator via the pending entry's `reason`
     /// field.
@@ -94,7 +97,15 @@ pub fn scan_session(
     anchor: &SpeakerCode,
     threshold: SanityScanThreshold,
 ) -> Option<SanityScanFlag> {
-    let inserted_code = SpeakerCode::new(override_entry.inserted_role.code.as_str());
+    // Determine the binary Drop/Rename pair first: the single Rename
+    // speaker's inserted-role spec is that donor code's entry in the
+    // override's per-speaker `adult_roles` map (was a single shared
+    // `inserted_role` field before the multi-adult representation). A
+    // malformed entry missing that role makes the scan skip the session
+    // (returns None) rather than crash.
+    let (drop_speaker, rename_speaker) = binary_mapping_pair(override_entry)?;
+    let inserted_role_spec = override_entry.adult_roles.get(&rename_speaker)?;
+    let inserted_code = SpeakerCode::new(inserted_role_spec.code.as_str());
     let anchor_mean = mean_utterance_word_count(merged_chat, anchor)?;
     let inserted_mean = mean_utterance_word_count(merged_chat, &inserted_code)?;
     if inserted_mean <= 0.0 {
@@ -103,7 +114,6 @@ pub fn scan_session(
     if anchor_mean < inserted_mean * threshold.0 {
         return None;
     }
-    let (drop_speaker, rename_speaker) = binary_mapping_pair(override_entry)?;
     let swapped = swapped_mapping(&drop_speaker, &rename_speaker);
     let reason = format!(
         "anchor {anchor} mean utterance word count {anchor_mean:.2} exceeds inserted {inserted} \
@@ -117,11 +127,15 @@ pub fn scan_session(
         ratio = anchor_mean / inserted_mean,
         threshold = threshold.0,
     );
+    // After the swap the original drop speaker takes the Rename action,
+    // so it inherits the inserted role; key the suggested map by it.
+    let mut suggested_adult_roles: BTreeMap<String, InsertedRoleSpec> = BTreeMap::new();
+    suggested_adult_roles.insert(drop_speaker.clone(), inserted_role_spec.clone());
     Some(SanityScanFlag {
         anchor_mean_words: anchor_mean,
         inserted_mean_words: inserted_mean,
         suggested_mapping: swapped,
-        suggested_inserted_role: override_entry.inserted_role.clone(),
+        suggested_adult_roles,
         reason,
     })
 }
