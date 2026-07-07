@@ -9,6 +9,8 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-07
+
 ### Added
 
 - **`--llm-cache <file>` (env `CHATTER_LLM_CACHE`) for holistic speaker-id

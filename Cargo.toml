@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 authors = ["Franklin Chen <franklinchen@franklinchen.com>"]
 license = "MIT OR Apache-2.0"
@@ -141,17 +141,17 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # TalkBank crates, path for local dev, version for crates.io publishing
-send2clan = { path = "crates/send2clan", version = "0.2.0" }
-talkbank-cache = { path = "crates/talkbank-cache", version = "0.2.0" }
-chatter = { path = "crates/chatter", version = "0.2.0" }
-talkbank-derive = { path = "crates/talkbank-derive", version = "0.2.0" }
-talkbank-llm = { path = "crates/talkbank-llm", version = "0.2.0" }
-talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.2.0" }
-talkbank-model = { path = "crates/talkbank-model", version = "0.2.0" }
-talkbank-parser = { path = "crates/talkbank-parser", version = "0.2.0" }
-talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.2.0" }
-talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.2.0" }
-talkbank-transform = { path = "crates/talkbank-transform", version = "0.2.0" }
+send2clan = { path = "crates/send2clan", version = "0.3.0" }
+talkbank-cache = { path = "crates/talkbank-cache", version = "0.3.0" }
+chatter = { path = "crates/chatter", version = "0.3.0" }
+talkbank-derive = { path = "crates/talkbank-derive", version = "0.3.0" }
+talkbank-llm = { path = "crates/talkbank-llm", version = "0.3.0" }
+talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.3.0" }
+talkbank-model = { path = "crates/talkbank-model", version = "0.3.0" }
+talkbank-parser = { path = "crates/talkbank-parser", version = "0.3.0" }
+talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.3.0" }
+talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.3.0" }
+talkbank-transform = { path = "crates/talkbank-transform", version = "0.3.0" }
 
 # Testing
 assert_cmd = "2.2"
