@@ -138,12 +138,8 @@ fn test_valid_compound() {
 fn test_e220_digit_validation_eng() {
     // "hello123" - 8 bytes
     let word = Word::new_unchecked("hello123", "hello123").with_span(Span::from(20..28));
-    let errors = run_word_validation(
-        &word,
-        Some(&LanguageCode::new("eng")),
-        &[LanguageCode::new("eng")],
-        false,
-    );
+    let eng = LanguageCode::new("eng").expect("test literal is non-empty");
+    let errors = run_word_validation(&word, Some(&eng), std::slice::from_ref(&eng), false);
 
     let e220_errors: Vec<_> = errors
         .iter()
@@ -174,12 +170,8 @@ fn test_e220_digit_validation_eng() {
 #[test]
 fn test_e220_digit_validation_zho() {
     let word = Word::new_unchecked("hello123", "hello123");
-    let errors = run_word_validation(
-        &word,
-        Some(&LanguageCode::new("zho")),
-        &[LanguageCode::new("zho")],
-        false,
-    );
+    let zho = LanguageCode::new("zho").expect("test literal is non-empty");
+    let errors = run_word_validation(&word, Some(&zho), std::slice::from_ref(&zho), false);
 
     assert!(
         !errors.iter().any(|e| e.code.as_str() == "E220"),
@@ -211,7 +203,7 @@ fn test_e220_all_number_languages() {
     let word = Word::new_unchecked("word123", "word123");
 
     for lang in number_langs {
-        let lang_code = LanguageCode::new(lang);
+        let lang_code = LanguageCode::new(lang).expect("test fixture codes are non-empty");
         let errors = run_word_validation(
             &word,
             Some(&lang_code),

@@ -5,7 +5,7 @@
 Syntax error - caret at word start
 
 ## Metadata
-- **Status**: not_implemented
+- **Status**: implemented
 - **Layer**: validation
 
 - **Error Code**: E252

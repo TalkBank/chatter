@@ -754,6 +754,16 @@ pub enum ErrorCode {
     #[code("E746")]
     XphointGroupCountMismatch,
 
+    /// A blank line in the transcript.
+    ///
+    /// CHAT does not allow blank lines anywhere in the transcript (CLAN CHECK
+    /// 91). The grammar represents a blank line as a structural `blank_line`
+    /// node (the single-break `newline` token no longer fuses consecutive
+    /// newlines), so the parser emits this from the tree, not by scanning the
+    /// source text.
+    #[code("E747")]
+    BlankLineNotAllowed,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

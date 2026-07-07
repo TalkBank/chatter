@@ -258,7 +258,7 @@ Syntax error - caret at word start
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E252](E252.md) | caret at word start | error | ⏳ |
+| [E252](E252.md) | caret at word start | error | ✅ |
 
 ## validation (E2x)
 
@@ -532,6 +532,14 @@ Missing required element
 |------|------|----------|--------|
 | [E342](E342.md) | E342: Missing required element | error | ⏳ |
 
+## Main tier structure (E3x)
+
+An angle-bracket group on the main tier must be followed by anannotation (a retrace marker such as , a scope code such as ,an explanation , etc.). A bare group with nothing afterit is malformed CHAT. CLAN's reports it as.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E342](E342.md) | bracket group with no following annotation is invalid | error | ✅ |
+
 ## validation (E3x)
 
 Invalid nesting of scoped annotations (quotation precedes pattern). This is a cross-utterance validator () that is currently DISABLED ().
@@ -747,6 +755,14 @@ Scoped annotation parse error
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E375](E375.md) | E375: Scoped annotation parse error | error | ✅ |
+
+## Word annotation (E3x)
+
+A replacement annotation must be preceded by whitespace, exactlylike every other bracketed annotation (the scope codes , , ,, etc., which already requires a space before). Areplacement written with no space, glued directly to the word it replaces(), is invalid CHAT.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E375](E375.md) | E375: Replacement  glued to a word without a preceding space | error | ✅ |
 
 ## Word validation (E3x)
 
@@ -1219,6 +1235,14 @@ The header ends with a trailing comma: a stray comma after thelast participant, 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E550](E550.md) | E550: Trailing comma in @Participants | error | ✅ |
+
+## header_validation (E5x)
+
+The header's status declares that the transcript isnot time-aligned to the media file. Timing evidence anywhere in thetranscript contradicts that declaration: either the transcript really isaligned (so must be removed), or the timing tier is stale (soit must be removed). This is the inverse of E544 (declared linkagewithout timing evidence).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E552](E552.md) | E552:  declares  but transcript carries timing | error | ✅ |
 
 ## validation (E6x)
 

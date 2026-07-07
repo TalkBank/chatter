@@ -9,7 +9,7 @@ use crate::model::{LanguageCode, ValidationTag, ValidationTagged};
 
 /// Short helper for constructing one `LanguageCode`.
 fn lc(code: &str) -> LanguageCode {
-    LanguageCode::new(code)
+    LanguageCode::new(code).expect("test fixture codes are non-empty")
 }
 
 /// Confirms `WordLanguages` validation tags match semantic health.

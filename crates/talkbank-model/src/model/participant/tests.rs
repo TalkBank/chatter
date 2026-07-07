@@ -4,9 +4,15 @@
 //! across `@Participants`, `@ID`, and optional birth-date metadata sources.
 
 use super::super::{
-    ChatDate, IDHeader, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
+    ChatDate, IDHeader, LanguageCode, ParticipantEntry, ParticipantName, ParticipantRole,
+    SpeakerCode,
 };
 use super::Participant;
+
+/// Short helper for constructing the `@ID` language field from a test literal.
+fn lc(code: &str) -> LanguageCode {
+    LanguageCode::new(code).expect("test fixture codes are non-empty")
+}
 
 /// Verifies baseline participant assembly from `@Participants` plus `@ID`.
 ///
@@ -20,7 +26,7 @@ fn test_participant_new() {
         role: ParticipantRole::new("Target_Child"),
     };
 
-    let id = IDHeader::new("eng", "CHI", "Target_Child");
+    let id = IDHeader::new(lc("eng"), "CHI", "Target_Child");
 
     let participant = Participant::new(entry, id);
 
@@ -41,7 +47,7 @@ fn test_participant_with_birth_date() {
         role: ParticipantRole::new("Target_Child"),
     };
 
-    let id = IDHeader::new("eng", "CHI", "Target_Child")
+    let id = IDHeader::new(lc("eng"), "CHI", "Target_Child")
         .with_age("10;03.")
         .with_corpus("chiat");
 
@@ -65,7 +71,7 @@ fn test_participant_convenience_methods() {
         role: ParticipantRole::new("Target_Child"),
     };
 
-    let id = IDHeader::new("eng", "CHI", "Target_Child")
+    let id = IDHeader::new(lc("eng"), "CHI", "Target_Child")
         .with_age("2;6.0")
         .with_sex(super::super::Sex::Female)
         .with_corpus("bates");

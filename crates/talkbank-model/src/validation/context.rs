@@ -291,20 +291,16 @@ impl ValidationContext {
             return None;
         }
 
-        let primary = self.shared.declared_languages[0].as_str();
-        let secondary = self
-            .shared
-            .declared_languages
-            .get(1)
-            .map(|code| code.as_str());
+        let primary = &self.shared.declared_languages[0];
+        let secondary = self.shared.declared_languages.get(1);
 
-        if current_lang.as_str() == primary {
+        if current_lang.as_str() == primary.as_str() {
             // In primary → switch to secondary (may be None if only one language)
-            secondary.map(LanguageCode::from)
+            secondary.cloned()
         } else if let Some(sec) = secondary {
-            if current_lang.as_str() == sec {
+            if current_lang.as_str() == sec.as_str() {
                 // In secondary → switch to primary
-                Some(LanguageCode::from(primary))
+                Some(primary.clone())
             } else {
                 // In tertiary language or unlisted language → can't use @s
                 None

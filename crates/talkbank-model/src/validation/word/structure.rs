@@ -6,6 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#WordInternalPause_Marker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Part_of_Speech>
 
+use std::ops::RangeInclusive;
+
 use crate::model::{Word, WordContent, WordStressMarkerType};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
@@ -73,6 +75,49 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
             );
         }
     }
+
+    // Reject Private-Use-Area and other non-standard high-BMP code points (CLAN
+    // CHECK error 86); the rejected range is named once in
+    // `is_nonstandard_unicode_word_char`.
+    for (idx, ch) in cleaned.char_indices() {
+        let cp = ch as u32;
+        if is_nonstandard_unicode_word_char(cp) {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::IllegalCharactersInWord,
+                    Severity::Error,
+                    SourceLocation::new(word.span),
+                    ErrorContext::new(cleaned, word.span, cleaned),
+                    format!(
+                        "Word contains a non-standard Unicode character U+{cp:04X} at position {idx} (private-use or compatibility area)"
+                    ),
+                )
+                .with_suggestion(
+                    "Replace private-use and compatibility-area characters with their standard Unicode equivalents; CHAT requires standard Unicode.",
+                ),
+            );
+        }
+    }
+}
+
+/// Whether `cp` is a non-standard high-BMP word code point that CLAN CHECK
+/// rejects (error 86, `isIllegalASCII` in OSX-CLAN `check.cpp:2880`). CLAN flags
+/// the 3-byte UTF-8 block U+E000..=U+FFFF as non-standard EXCEPT two ranges it
+/// whitelists for internal use: U+F170..=U+F264 (CLAN-internal markup) and the
+/// fullwidth ASCII forms U+FF01..=U+FF5E. (U+00B7, the allowed middle dot, sits
+/// below this block.) CHAT requires standard Unicode, so private-use and
+/// compatibility-area code points are invalid in word text; this mirrors CLAN's
+/// range exactly for CHECK parity.
+fn is_nonstandard_unicode_word_char(cp: u32) -> bool {
+    // The 3-byte high-BMP block CLAN treats as non-standard.
+    const NONSTANDARD_BLOCK: RangeInclusive<u32> = 0xE000..=0xFFFF;
+    // CLAN-internal markup, whitelisted inside the block.
+    const CLAN_INTERNAL_MARKUP: RangeInclusive<u32> = 0xF170..=0xF264;
+    // Fullwidth ASCII forms, whitelisted inside the block.
+    const FULLWIDTH_ASCII: RangeInclusive<u32> = 0xFF01..=0xFF5E;
+    NONSTANDARD_BLOCK.contains(&cp)
+        && !CLAN_INTERNAL_MARKUP.contains(&cp)
+        && !FULLWIDTH_ASCII.contains(&cp)
 }
 
 /// Validate that shortening markers use properly nested parentheses.

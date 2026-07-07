@@ -82,30 +82,32 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[serde(transparent)]
 pub struct LanguageCode(pub Arc<str>);
 
+/// Why constructing a [`LanguageCode`] failed.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum LanguageCodeError {
+    /// The input string was empty.
+    ///
+    /// Use [`LanguageCode::empty`] for parser recovery when a language field
+    /// is missing; that sentinel is a real, valid code (`"und"`), never a
+    /// silently-accepted empty value.
+    #[error("language code cannot be empty; use LanguageCode::empty() for parser recovery")]
+    Empty,
+}
+
 impl LanguageCode {
     /// Construct and intern a language token.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `value` is empty. Use [`try_new`](Self::try_new) for
-    /// fallible construction, or [`empty`](Self::empty) for parser recovery
-    /// when a language field is missing.
-    pub fn new(value: impl AsRef<str>) -> Self {
-        let s = value.as_ref();
-        assert!(
-            !s.is_empty(),
-            "LanguageCode cannot be empty, use LanguageCode::empty() for parser recovery"
-        );
-        Self(crate::model::language_interner().intern(s))
-    }
-
-    /// Fallible construction, returns `None` for empty strings.
-    pub fn try_new(value: impl AsRef<str>) -> Option<Self> {
+    /// Returns [`LanguageCodeError::Empty`] if `value` is empty. Use
+    /// [`empty`](Self::empty) for parser recovery when a language field is
+    /// missing.
+    pub fn new(value: impl AsRef<str>) -> Result<Self, LanguageCodeError> {
         let s = value.as_ref();
         if s.is_empty() {
-            None
+            Err(LanguageCodeError::Empty)
         } else {
-            Some(Self(crate::model::language_interner().intern(s)))
+            Ok(Self(crate::model::language_interner().intern(s)))
         }
     }
 
@@ -163,16 +165,27 @@ impl AsRef<str> for LanguageCode {
     }
 }
 
-impl From<String> for LanguageCode {
+impl TryFrom<String> for LanguageCode {
+    type Error = LanguageCodeError;
+
     /// Interns an owned string as a `LanguageCode`.
-    fn from(value: String) -> Self {
+    ///
+    /// A plain `From` is deliberately not implemented: construction can fail
+    /// on empty input, and a silent `From` that panicked or silently
+    /// substituted a placeholder would hide that failure from the caller.
+    fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::new(value)
     }
 }
 
-impl From<&str> for LanguageCode {
+impl TryFrom<&str> for LanguageCode {
+    type Error = LanguageCodeError;
+
     /// Interns a borrowed string as a `LanguageCode`.
-    fn from(value: &str) -> Self {
+    ///
+    /// See [`TryFrom<String>`](#impl-TryFrom<String>-for-LanguageCode) for why
+    /// this is fallible rather than a plain `From`.
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::new(value)
     }
 }
@@ -278,24 +291,24 @@ mod tests {
 
     #[test]
     fn new_accepts_valid_code() {
-        let code = LanguageCode::new("eng");
+        let code = LanguageCode::new("eng").expect("non-empty literal");
         assert_eq!(code.as_str(), "eng");
     }
 
     #[test]
-    #[should_panic(expected = "LanguageCode cannot be empty")]
     fn new_rejects_empty_string() {
-        LanguageCode::new("");
+        assert_eq!(LanguageCode::new(""), Err(LanguageCodeError::Empty));
     }
 
     #[test]
-    fn try_new_returns_none_for_empty() {
-        assert!(LanguageCode::try_new("").is_none());
+    fn try_from_str_rejects_empty_string() {
+        let result: Result<LanguageCode, LanguageCodeError> = "".try_into();
+        assert_eq!(result, Err(LanguageCodeError::Empty));
     }
 
     #[test]
-    fn try_new_returns_some_for_valid() {
-        let code = LanguageCode::try_new("spa").unwrap();
+    fn try_from_str_accepts_valid_code() {
+        let code: LanguageCode = "spa".try_into().expect("non-empty literal");
         assert_eq!(code.as_str(), "spa");
     }
 
@@ -308,13 +321,13 @@ mod tests {
 
     #[test]
     fn regular_code_is_not_undetermined() {
-        let code = LanguageCode::new("eng");
+        let code = LanguageCode::new("eng").expect("non-empty literal");
         assert!(!code.is_undetermined());
     }
 
     /// Helper to validate a language code and collect errors.
     fn validate_code(code: &str) -> Vec<crate::ParseError> {
-        let lc = LanguageCode::new(code);
+        let lc = LanguageCode::new(code).expect("test call sites pass non-empty literals");
         let ctx = ValidationContext::new();
         let errors = crate::ErrorCollector::new();
         lc.validate(&ctx, &errors);
@@ -350,6 +363,40 @@ mod tests {
             errors.is_empty(),
             "Expected no errors for valid ISO 639-3 code 'nle', got: {:?}",
             errors.iter().map(|e| e.code.as_str()).collect::<Vec<_>>()
+        );
+    }
+
+    /// Deserialization is deliberately LENIENT (parse-don't-validate): an empty
+    /// code deserializes successfully via the `#[serde(transparent)]` derive, even
+    /// though `new("")` rejects it for programmatic construction. This mirrors the
+    /// sibling `NonEmptyString` (see its `test_deserialize_empty_allowed_but_invalid`):
+    /// the `from-json` ingress reconstructs the model faithfully and the separate
+    /// `Validate` pass flags domain violations (see the companion test below).
+    ///
+    /// DO NOT "fix" this by giving `LanguageCode` a strict custom `Deserialize`
+    /// that rejects empty: that was tried and reverted (2026-07-04, Franklin's
+    /// call) as inconsistent with the codebase's serde-boundary convention.
+    #[test]
+    fn deserialize_empty_is_lenient() {
+        let code: LanguageCode =
+            serde_json::from_str("\"\"").expect("deserialize is lenient: empty is accepted");
+        assert_eq!(code.as_str(), "");
+    }
+
+    /// The lenient-deserialize convention pairs with a strict `Validate`: an empty
+    /// (or otherwise malformed) code that entered via `from-json` is caught by
+    /// validation, not by the deserializer. This is the parse-don't-validate split
+    /// that makes the leniency above safe.
+    #[test]
+    fn deserialize_empty_is_flagged_by_validate() {
+        let code: LanguageCode =
+            serde_json::from_str("\"\"").expect("lenient deserialize accepts empty");
+        let ctx = ValidationContext::new();
+        let errors = crate::ErrorCollector::new();
+        code.validate(&ctx, &errors);
+        assert!(
+            !errors.into_vec().is_empty(),
+            "an empty language code must be flagged by the Validate pass (length check)"
         );
     }
 }

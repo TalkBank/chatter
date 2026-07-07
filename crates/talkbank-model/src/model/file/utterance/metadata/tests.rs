@@ -19,12 +19,14 @@ use crate::{ErrorCode, Span};
 
 /// Builds `LanguageCode` values for test fixtures.
 fn codes(list: &[&str]) -> Vec<LanguageCode> {
-    list.iter().map(|code| LanguageCode::new(*code)).collect()
+    list.iter()
+        .map(|code| LanguageCode::new(*code).expect("test fixture codes are non-empty"))
+        .collect()
 }
 
 /// Short helper for constructing one `LanguageCode`.
 fn lc(code: &str) -> LanguageCode {
-    LanguageCode::new(code)
+    LanguageCode::new(code).expect("test fixture codes are non-empty")
 }
 
 /// Default-language resolution populates utterance and per-word metadata.
@@ -171,7 +173,8 @@ fn test_compute_language_metadata_tier_scoped() -> Result<(), String> {
         ],
         Terminator::Period { span: Span::DUMMY },
     );
-    main_tier.content.language_code = Some(LanguageCode::new("eng"));
+    main_tier.content.language_code =
+        Some(LanguageCode::new("eng").expect("test literal is non-empty"));
 
     let mut utterance = Utterance::new(main_tier);
 

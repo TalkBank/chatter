@@ -3266,6 +3266,11 @@
           "type": "string"
         },
         {
+          "const": "E747",
+          "description": "A blank line in the transcript.\n\nCHAT does not allow blank lines anywhere in the transcript (CLAN CHECK\n91). The grammar represents a blank line as a structural `blank_line`\nnode (the single-break `newline` token no longer fuses consecutive\nnewlines), so the parser emits this from the tree, not by scanning the\nsource text.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

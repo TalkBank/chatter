@@ -128,12 +128,29 @@ pub(super) fn check_media_unlinked_has_no_timing<S: ValidationState>(
         return;
     }
 
+    // The message names WHERE the timing evidence was found, because the two
+    // surfaces demand different advice. Main-tier bullets are visible and mean
+    // the media really is linked (CLAN CHECK 124's case). A %wor-only surface
+    // is INVISIBLE in normal display (bullets are control characters inside
+    // the dependent tier), and its presence may equally mean the %wor tier is
+    // stale and should be removed; asserting "the media is in fact linked"
+    // there sends the user hunting for bullets they cannot see and toward the
+    // wrong fix. (Real CLAN does not flag the %wor-only case at all; this is
+    // a deliberate chatter-stricter check, so the message must carry the full
+    // explanation itself.)
+    let message = if main_bullets.is_empty() {
+        "@Media header declares `unlinked`, but the %wor tier carries word-level timing bullets \
+         (not visible in normal display); either the transcript is in fact aligned to the media \
+         (remove `unlinked` from the @Media header) or the %wor tier is stale and should be removed"
+    } else {
+        "@Media header declares `unlinked`, but the transcript has timing bullets; remove `unlinked` from the @Media header (the media is in fact linked)"
+    };
     errors.report(ParseError::new(
         ErrorCode::MediaUnlinkedWithTiming,
         Severity::Error,
         SourceLocation::at_offset(span.start as usize),
         ErrorContext::new("", 0..0, "media_linkage"),
-        "@Media header declares `unlinked`, but the transcript has timing bullets; remove `unlinked` from the @Media header (the media is in fact linked)",
+        message,
     ));
 }
 

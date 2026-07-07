@@ -8,12 +8,14 @@ use crate::model::{LanguageCode, ValidationTag, ValidationTagged, Word, WordLang
 
 /// Builds `LanguageCode` values for test fixtures.
 fn codes(list: &[&str]) -> Vec<LanguageCode> {
-    list.iter().map(|code| LanguageCode::new(*code)).collect()
+    list.iter()
+        .map(|code| LanguageCode::new(*code).expect("test fixture codes are non-empty"))
+        .collect()
 }
 
 /// Short helper for constructing one `LanguageCode`.
 fn lc(code: &str) -> LanguageCode {
-    LanguageCode::new(code)
+    LanguageCode::new(code).expect("test fixture codes are non-empty")
 }
 
 /// Words without markers inherit the default/tier language.
@@ -77,7 +79,7 @@ fn dona_at_s_with_undeclared_tier_language_must_be_unresolved_not_eng_sentinel()
     word.lang = Some(WordLanguageMarker::Shortcut);
 
     let declared = codes(&["cat", "spa"]);
-    let wrong_tier = LanguageCode::new("eng"); // simulates primary_lang=eng leaking in
+    let wrong_tier = LanguageCode::new("eng").expect("test literal is non-empty"); // simulates primary_lang=eng leaking in
 
     let LanguageResolutionOutcome {
         resolution: lang,
@@ -158,10 +160,10 @@ fn test_resolve_word_language_word_shortcut() {
 #[test]
 fn test_resolve_word_language_word_explicit() {
     let mut word1 = Word::new_unchecked("ni3@s:zho", "ni3");
-    word1.lang = Some(WordLanguageMarker::explicit("zho"));
+    word1.lang = Some(WordLanguageMarker::explicit(lc("zho")));
 
     let mut word2 = Word::new_unchecked("hao3@s:zho", "hao3");
-    word2.lang = Some(WordLanguageMarker::explicit("zho"));
+    word2.lang = Some(WordLanguageMarker::explicit(lc("zho")));
 
     let declared_languages = codes(&["zho", "eng"]);
     let tier_language = declared_languages.get(1);
@@ -233,7 +235,7 @@ fn test_resolve_word_language_tertiary() {
 #[test]
 fn test_resolve_word_language_undeclared_explicit_code() {
     let mut word = Word::new_unchecked("ciao@s:ita", "ciao");
-    word.lang = Some(WordLanguageMarker::explicit("ita"));
+    word.lang = Some(WordLanguageMarker::explicit(lc("ita")));
 
     let declared_languages = codes(&["zho", "eng"]);
     let tier_language = declared_languages.first();
@@ -254,7 +256,7 @@ fn test_resolve_word_language_undeclared_explicit_code() {
 fn test_resolve_word_language_declared_explicit_code() {
     // Valid case: explicit code that IS in @Languages header
     let mut word = Word::new_unchecked("hello@s:eng", "hello");
-    word.lang = Some(WordLanguageMarker::explicit("eng"));
+    word.lang = Some(WordLanguageMarker::explicit(lc("eng")));
 
     let declared_languages = codes(&["zho", "eng"]);
     let tier_language = declared_languages.first();
@@ -275,7 +277,7 @@ fn test_resolve_word_language_explicit_with_no_declared_languages() {
     // Edge case: No @Languages header at all
     // (file-level validation should catch missing @Languages)
     let mut word = Word::new_unchecked("hello@s:eng", "hello");
-    word.lang = Some(WordLanguageMarker::explicit("eng"));
+    word.lang = Some(WordLanguageMarker::explicit(lc("eng")));
 
     let declared_languages: Vec<LanguageCode> = vec![];
     let tier_language: Option<&LanguageCode> = None;

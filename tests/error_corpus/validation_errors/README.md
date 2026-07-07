@@ -1,7 +1,7 @@
 # Retained validation fixture (not a generated corpus)
 
 **Status:** Reference
-**Last updated:** 2026-06-16 20:46 EDT
+**Last updated:** 2026-07-07 14:09 EDT
 
 This directory once held a hand-written validation-error corpus emitted by the
 `generate_error_corpus` binary (`crates/talkbank-parser-tests/src/bin/`). That
@@ -19,4 +19,21 @@ on its exact content and line layout:
 - `crates/talkbank-transform/tests/render_parity.rs` (error line-numbering parity)
 - `apps/chatter-desktop/src-tauri/tests/validation_bridge.rs` (desktop bridge)
 
-Do not delete or regenerate this file. Edit it only alongside those tests.
+`E531_media_filename_mismatch.cha` is also retained as a committed,
+hand-maintained fixture: its `@Media: wrong-basename, audio` header
+deliberately does not match the fixture's own basename, so any validation
+path that runs `check_media_filename_match` (E531 / CLAN CHECK 157) against
+it must report the mismatch. `apps/chatter-desktop/src-tauri/tests/validation_bridge.rs`
+uses it as a regression guard that the desktop app's single-file validation
+path runs this check identically to its directory-validation path and to
+`chatter validate`.
+
+`E552_unlinked_with_wor_timing.cha` is likewise retained and hand-maintained:
+`@Media ... unlinked` with timing bullets ONLY in the `%wor` tier (no
+main-tier bullets). `crates/talkbank-transform/tests/e552_message_quality.rs`
+drives it through the full pipeline (alignment on) and pins the E552 message
+that names the `%wor` tier and offers both remedies; real CLAN CHECK accepts
+this file (grounded 2026-07-07), so the case is deliberate chatter-stricter
+behavior whose message must self-explain.
+
+Do not delete or regenerate these files. Edit them only alongside those tests.

@@ -134,10 +134,12 @@ fn validate_flags_all_at_s_single_language_utterance() {
     );
 
     let context = ValidationContext::new()
-        .with_default_language(crate::model::LanguageCode::new("eng"))
+        .with_default_language(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+        )
         .with_declared_languages(vec![
-            crate::model::LanguageCode::new("eng"),
-            crate::model::LanguageCode::new("spa"),
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            crate::model::LanguageCode::new("spa").expect("test literal is non-empty"),
         ]);
     let errors = ErrorCollector::new();
     main.validate(&context, &errors);
@@ -166,10 +168,12 @@ fn validate_allows_mixed_tagged_and_untagged_utterance() {
     );
 
     let context = ValidationContext::new()
-        .with_default_language(crate::model::LanguageCode::new("eng"))
+        .with_default_language(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+        )
         .with_declared_languages(vec![
-            crate::model::LanguageCode::new("eng"),
-            crate::model::LanguageCode::new("spa"),
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            crate::model::LanguageCode::new("spa").expect("test literal is non-empty"),
         ]);
     let errors = ErrorCollector::new();
     main.validate(&context, &errors);
@@ -219,8 +223,11 @@ fn whole_utterance_target_returns_some_for_uniform_at_s_only_words() {
         Terminator::Period { span: Span::DUMMY },
     );
 
-    let default = LanguageCode::new("yue");
-    let declared = vec![LanguageCode::new("yue"), LanguageCode::new("eng")];
+    let default = LanguageCode::new("yue").expect("test literal is non-empty");
+    let declared = vec![
+        LanguageCode::new("yue").expect("test literal is non-empty"),
+        LanguageCode::new("eng").expect("test literal is non-empty"),
+    ];
     let target = main.whole_utterance_language_switch_target(Some(&default), &declared);
     assert_eq!(
         target.as_ref().map(|c| c.as_str()),
@@ -252,7 +259,10 @@ fn whole_utterance_target_returns_none_when_nonword_filler_lacks_lang_marker() {
         Terminator::Period { span: Span::DUMMY },
     );
 
-    let declared = vec![LanguageCode::new("yue"), LanguageCode::new("eng")];
+    let declared = vec![
+        LanguageCode::new("yue").expect("test literal is non-empty"),
+        LanguageCode::new("eng").expect("test literal is non-empty"),
+    ];
     let target = main.whole_utterance_language_switch_target(None, &declared);
     assert_eq!(
         target, None,
@@ -282,7 +292,10 @@ fn whole_utterance_target_returns_none_when_filler_lacks_lang_marker() {
         Terminator::Period { span: Span::DUMMY },
     );
 
-    let declared = vec![LanguageCode::new("eng"), LanguageCode::new("spa")];
+    let declared = vec![
+        LanguageCode::new("eng").expect("test literal is non-empty"),
+        LanguageCode::new("spa").expect("test literal is non-empty"),
+    ];
     let target = main.whole_utterance_language_switch_target(None, &declared);
     assert_eq!(
         target, None,
@@ -307,7 +320,10 @@ fn whole_utterance_target_returns_none_when_phonological_fragment_lacks_lang_mar
         Terminator::Period { span: Span::DUMMY },
     );
 
-    let declared = vec![LanguageCode::new("eng"), LanguageCode::new("spa")];
+    let declared = vec![
+        LanguageCode::new("eng").expect("test literal is non-empty"),
+        LanguageCode::new("spa").expect("test literal is non-empty"),
+    ];
     let target = main.whole_utterance_language_switch_target(None, &declared);
     assert_eq!(
         target, None,
@@ -351,8 +367,11 @@ fn whole_utterance_target_returns_none_when_retraced_filler_lacks_lang_marker() 
         Terminator::Period { span: Span::DUMMY },
     );
 
-    let default = LanguageCode::new("eng");
-    let declared = vec![LanguageCode::new("eng"), LanguageCode::new("spa")];
+    let default = LanguageCode::new("eng").expect("test literal is non-empty");
+    let declared = vec![
+        LanguageCode::new("eng").expect("test literal is non-empty"),
+        LanguageCode::new("spa").expect("test literal is non-empty"),
+    ];
     let target = main.whole_utterance_language_switch_target(Some(&default), &declared);
     assert_eq!(
         target, None,
@@ -370,7 +389,7 @@ fn whole_utterance_target_returns_none_when_retraced_filler_lacks_lang_marker() 
 #[test]
 fn whole_utterance_target_accepts_rewrite_when_filler_has_matching_explicit_lang() {
     use crate::model::LanguageCode;
-    let lang = LanguageCode::new("eng");
+    let lang = LanguageCode::new("eng").expect("test literal is non-empty");
     let mut filler = Word::new_unchecked("&-um", "um");
     filler = filler
         .with_category(WordCategory::Filler)
@@ -384,7 +403,10 @@ fn whole_utterance_target_accepts_rewrite_when_filler_has_matching_explicit_lang
         Terminator::Period { span: Span::DUMMY },
     );
 
-    let declared = vec![LanguageCode::new("yue"), lang.clone()];
+    let declared = vec![
+        LanguageCode::new("yue").expect("test literal is non-empty"),
+        lang.clone(),
+    ];
     let target = main.whole_utterance_language_switch_target(None, &declared);
     assert_eq!(
         target.as_ref().map(|c| c.as_str()),

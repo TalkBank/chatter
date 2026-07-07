@@ -133,7 +133,7 @@
       "expected_codes": [
         "E252"
       ],
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E252_auto.md"
     },
     {
@@ -1137,6 +1137,22 @@
       ],
       "status": "implemented",
       "source_spec": "spec/errors/E549_duplicate_speaker_declaration.md"
+    },
+    {
+      "fixture": "E552_declares_but_transcript_carries_timing.cha",
+      "expected_codes": [
+        "E552"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E552_media_unlinked_with_timing.md"
+    },
+    {
+      "fixture": "E552_declares_but_transcript_carries_timing_2.cha",
+      "expected_codes": [
+        "E552"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E552_media_unlinked_with_timing.md"
     },
     {
       "fixture": "E600_Tier_alignment_skipped_due_to_parse_errors.cha",

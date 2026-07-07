@@ -692,7 +692,11 @@ mod tests {
     fn test_e543_id_before_participants() {
         use crate::model::IDHeader;
 
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let participants = Header::Participants {
             entries: vec![].into(),
         };
@@ -715,7 +719,11 @@ mod tests {
     fn test_e547_comment_between_id_and_birth() {
         use crate::model::{BulletContent, ChatDate, IDHeader, SpeakerCode};
 
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let comment = Header::Comment {
             content: BulletContent::from_text("a changeable header"),
         };
@@ -743,7 +751,11 @@ mod tests {
     fn test_birth_immediately_after_id_ok() {
         use crate::model::{ChatDate, IDHeader, SpeakerCode};
 
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let birth = Header::Birth {
             participant: SpeakerCode::new("CHI"),
             date: ChatDate::new("15-DEC-1970"),
@@ -762,7 +774,11 @@ mod tests {
     fn test_consecutive_constant_headers_ok() {
         use crate::model::{ChatDate, IDHeader, SpeakerCode};
 
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let birth_chi = Header::Birth {
             participant: SpeakerCode::new("CHI"),
             date: ChatDate::new("15-DEC-1970"),
@@ -797,7 +813,11 @@ mod tests {
         let comment = Header::Comment {
             content: BulletContent::from_text("intervening changeable header"),
         };
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let headers = vec![
             (&participants, Span::DUMMY),
             (&comment, Span::DUMMY),
@@ -820,7 +840,11 @@ mod tests {
         let participants = Header::Participants {
             entries: vec![].into(),
         };
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let headers = vec![(&participants, Span::DUMMY), (&id, Span::DUMMY)];
 
         let errors = ErrorCollector::new();
@@ -840,7 +864,11 @@ mod tests {
         let participants = Header::Participants {
             entries: vec![].into(),
         };
-        let id = Header::ID(IDHeader::new("eng", "CHI", "Target_Child"));
+        let id = Header::ID(IDHeader::new(
+            crate::model::LanguageCode::new("eng").expect("test literal is non-empty"),
+            "CHI",
+            "Target_Child",
+        ));
         let options = Header::Options {
             options: ChatOptionFlags::new(vec![ChatOptionFlag::Ca]),
         };

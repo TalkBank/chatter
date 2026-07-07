@@ -19,14 +19,14 @@ pub(super) fn get_other_language(
         return None;
     }
 
-    let primary = declared_languages[0].as_str();
-    let secondary = declared_languages.get(1).map(|code| code.as_str());
+    let primary = &declared_languages[0];
+    let secondary = declared_languages.get(1);
 
-    if current_lang.as_str() == primary {
-        secondary.map(LanguageCode::from)
+    if current_lang.as_str() == primary.as_str() {
+        secondary.cloned()
     } else if let Some(secondary_lang) = secondary {
-        if current_lang.as_str() == secondary_lang {
-            Some(LanguageCode::from(primary))
+        if current_lang.as_str() == secondary_lang.as_str() {
+            Some(primary.clone())
         } else {
             None
         }

@@ -526,7 +526,7 @@ mod tests {
             Line::header(Header::Utf8),
             Line::header(Header::Begin),
             Line::header(Header::Languages {
-                codes: vec![LanguageCode::new("eng")].into(),
+                codes: vec![LanguageCode::new("eng").expect("test literal is non-empty")].into(),
             }),
             Line::utterance(utt),
             Line::header(Header::End),
