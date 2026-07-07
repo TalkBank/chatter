@@ -34,6 +34,9 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::model::{Header, Line};
 use talkbank_parser::TreeSitterParser;
 
+/// One diagnostic: (code, span start, span end, message).
+type Diag = (String, u32, u32, String);
+
 // ---------------------------------------------------------------------------
 // Inline CHAT sources (exact byte positions annotated for span assertions)
 // ---------------------------------------------------------------------------
@@ -151,7 +154,7 @@ fn line_tags(chat_lines: &[Line]) -> Vec<String> {
 
 /// Parse `input` at the real streaming boundary and return the line tags plus
 /// every collected diagnostic as `(code, start, end, message)` tuples.
-fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<(String, u32, u32, String)>) {
+fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let chat = parser.parse_chat_file_streaming(input, &errors);

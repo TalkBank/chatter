@@ -8,16 +8,16 @@
 //! `HeaderTraversal` ZST seam established by 2b). The GEM family is:
 //!
 //! - `@Bg` (`bg_header`)  : optional `free_text` child (`BgHeaderChildren.child_2:
-//!                          Option<FreeTextNode>`), parsed via
-//!                          `parse_optional_gem_label`. Special bespoke logic:
-//!                          label-absent AND `header_contains_colon` -> `LazyGem`,
-//!                          else `BeginGem`.
+//!   Option<FreeTextNode>`), parsed via
+//!   `parse_optional_gem_label`. Special bespoke logic:
+//!   label-absent AND `header_contains_colon` -> `LazyGem`,
+//!   else `BeginGem`.
 //! - `@Eg` (`eg_header`)  : optional `free_text` child (`EgHeaderChildren.child_2:
-//!                          Option<FreeTextNode>`), parsed via
-//!                          `parse_optional_gem_label` -> `EndGem`.
+//!   Option<FreeTextNode>`), parsed via
+//!   `parse_optional_gem_label` -> `EndGem`.
 //! - `@G`  (`g_header`)   : required `free_text` child (`GHeaderChildren.child_2:
-//!                          NodeSlot<FreeTextNode>`), parsed via
-//!                          `parse_optional_gem_label` -> `LazyGem`.
+//!   NodeSlot<FreeTextNode>`), parsed via
+//!   `parse_optional_gem_label` -> `LazyGem`.
 //!
 //! This is BEHAVIOUR-PRESERVING: the produced `Header` payloads and every
 //! diagnostic must stay byte-identical. These tests pin the OBSERVABLE behaviour

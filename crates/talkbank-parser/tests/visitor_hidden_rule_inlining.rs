@@ -29,7 +29,7 @@
 //! first `pipe`, both REQUIRED) are `NodeSlot::Present`.
 
 use talkbank_parser::generated_traversal::{
-    AsRawNode, FullDocumentNode, IdContentsNode, LineActivitiesHeaderChoice, LineChoice, NodeSlot,
+    FullDocumentNode, IdContentsNode, LineActivitiesHeaderChoice, LineChoice, NodeSlot,
     extract_full_document, extract_id_contents, extract_id_header, extract_line,
 };
 

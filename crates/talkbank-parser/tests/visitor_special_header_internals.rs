@@ -11,16 +11,16 @@
 //! special family is more varied than the simple scalars:
 //!
 //! - `comment`            : `@Comment` -> `parse_bullet_content` on the
-//!                          `text_with_bullets_and_pics` content child (`child_2`).
+//!   `text_with_bullets_and_pics` content child (`child_2`).
 //! - `number` /
 //!   `recording_quality` /
 //!   `transcription`      : single option content child (`child_2`) -> `from_text`.
 //! - `birth_of` /
 //!   `birthplace_of` /
 //!   `l1_of`              : TWO content children (`speaker` at `child_2` + the
-//!                          value at `child_4`) -> a dual-field `Header`.
+//!   value at `child_4`) -> a dual-field `Header`.
 //! - `options`            : the `options_contents` content child (`child_2`),
-//!                          then an inner `option_name` walk -> `ChatOptionFlag`.
+//!   then an inner `option_name` walk -> `ChatOptionFlag`.
 //!
 //! It is BEHAVIOUR-PRESERVING: the produced `Header` payloads and every
 //! diagnostic must stay byte-identical. These tests pin the OBSERVABLE behaviour

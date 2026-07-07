@@ -114,7 +114,7 @@ fn valid_single_linkers_decode_to_expected_variants() {
             .unwrap_or_else(|| panic!("utterance index {index} present"));
         assert_eq!(
             utt.main.content.linkers.as_slice(),
-            &[expected_linker.clone()],
+            std::slice::from_ref(expected_linker),
             "utterance at index {index} must decode to exactly one {expected_linker:?} linker"
         );
     }

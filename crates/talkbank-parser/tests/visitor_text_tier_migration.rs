@@ -35,6 +35,9 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::model::{BulletContent, BulletContentSegment, DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
 
+/// One diagnostic: (code, span start, span end, message).
+type Diag = (String, u32, u32, String);
+
 /// A minimal `%com:` tier with an empty body. Full document scaffolding is
 /// required so the streaming parser reaches the utterance / dependent-tier
 /// region (the same inline-source approach the sibling Task 2a characterization
@@ -100,12 +103,7 @@ fn text_tier(dt: &DependentTier) -> Option<(&'static str, Vec<String>)> {
 /// Parse `input` at the streaming boundary and return, in document order, every
 /// text dependent tier as (variant name, segment tags), plus every collected
 /// diagnostic as `(code, start, end, message)`.
-fn parse_text_tiers_and_diags(
-    input: &str,
-) -> (
-    Vec<(&'static str, Vec<String>)>,
-    Vec<(String, u32, u32, String)>,
-) {
+fn parse_text_tiers_and_diags(input: &str) -> (Vec<(&'static str, Vec<String>)>, Vec<Diag>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let chat = parser.parse_chat_file_streaming(input, &errors);

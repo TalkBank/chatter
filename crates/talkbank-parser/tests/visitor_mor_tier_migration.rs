@@ -37,6 +37,9 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::model::{DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
 
+/// One diagnostic: (code, span start, span end, message).
+type Diag = (String, u32, u32, String);
+
 /// A valid `%mor` line with four plain items and a period terminator.
 const VALID_MULTI_ITEM: &str =
     "@UTF8\n@Begin\n*CHI:\tI go home now .\n%mor:\tpro|I v|go n|home adv|now .\n@End\n";
@@ -57,7 +60,7 @@ const NO_TERMINATOR: &str = "@UTF8\n@Begin\n*CHI:\tpick up .\n%mor:\tv|pick prt|
 /// matching the tier's canonical round-trip text), whether at least one
 /// `%mor` tier was attached at all, and every collected diagnostic as
 /// `(code, start, end, message)`.
-fn parse_mor(input: &str) -> (Vec<String>, bool, Vec<(String, u32, u32, String)>) {
+fn parse_mor(input: &str) -> (Vec<String>, bool, Vec<Diag>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let chat = parser.parse_chat_file_streaming(input, &errors);

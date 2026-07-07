@@ -15,8 +15,9 @@
 //! The VALID fixtures are read verbatim from `corpus/reference/core/`
 //! (already-passing, roundtrip-clean reference files), not hand-authored, so
 //! they exercise real CHAT syntax with zero fixture-authoring risk. Together
-//! `headers-episodes.cha` + `headers-time-and-types.cha` + `headers-media.cha`
-//! + `headers-comments.cha` drive EVERY one of the 25 dispatch call sites
+//! `headers-episodes.cha` plus `headers-time-and-types.cha`,
+//! `headers-media.cha`, and `headers-comments.cha` drive EVERY one of the
+//! 25 dispatch call sites
 //! except the `unsupported_header` catch-all and the `thumbnail_header` gap,
 //! which have no "valid happy path" (they are inherently the
 //! malformed/unmodeled cases), and are pinned separately below with a
@@ -37,6 +38,9 @@ use std::path::{Path, PathBuf};
 use talkbank_model::ErrorCollector;
 use talkbank_model::model::Line;
 use talkbank_parser::TreeSitterParser;
+
+/// One diagnostic: (code, span start, span end, message).
+type Diag = (String, u32, u32, String);
 
 /// Read a fixture verbatim from `corpus/reference/<relative>`.
 fn read_corpus_fixture(relative: &str) -> String {
@@ -65,7 +69,7 @@ fn line_reprs(lines: &[Line]) -> Vec<String> {
 /// Parse `input` at the real streaming boundary and return the line
 /// representations plus every collected diagnostic as `(code, start, end,
 /// message)` tuples.
-fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<(String, u32, u32, String)>) {
+fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let chat = parser.parse_chat_file_streaming(input, &errors);

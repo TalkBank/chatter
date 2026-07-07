@@ -67,7 +67,10 @@ fn characterization_rich_valid_main_tier() {
 #[test]
 fn all_terminator_subtypes_map_to_expected_variant() {
     // (surface token, predicate selecting the expected `Terminator` variant).
-    let cases: &[(&str, fn(&Terminator) -> bool)] = &[
+    /// One case: the CHAT terminator text and the predicate the parsed
+    /// terminator must satisfy.
+    type TerminatorCase<'a> = (&'a str, fn(&Terminator) -> bool);
+    let cases: &[TerminatorCase] = &[
         (".", |t| matches!(t, Terminator::Period { .. })),
         ("?", |t| matches!(t, Terminator::Question { .. })),
         ("!", |t| matches!(t, Terminator::Exclamation { .. })),

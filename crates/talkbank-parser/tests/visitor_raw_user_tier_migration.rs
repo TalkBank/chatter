@@ -35,6 +35,9 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::model::{DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
 
+/// One (label, rendering) pair captured from a parsed tier.
+type Pair = (String, String);
+
 /// A raw text-like tier (`%eng`, English translation) on one utterance. Exercises
 /// the reachable `apply_raw_tier` path: `extract_eng_dependent_tier` -> a
 /// `Present` `text_with_bullets` body slot -> `read_tier_body_text` -> a
@@ -59,7 +62,7 @@ const UNKNOWN_UNSUPPORTED_TIER: &str = "@UTF8\n@Begin\n*CHI:\thi .\n%custom:\tso
 /// Collect, in document order, every dependent tier of every utterance rendered
 /// as a stable `(kind, detail)` tuple, plus every collected diagnostic as
 /// `(code, message)`.
-fn parse_tiers(input: &str) -> (Vec<(String, String)>, Vec<(String, String)>) {
+fn parse_tiers(input: &str) -> (Vec<Pair>, Vec<Pair>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let chat = parser.parse_chat_file_streaming(input, &errors);

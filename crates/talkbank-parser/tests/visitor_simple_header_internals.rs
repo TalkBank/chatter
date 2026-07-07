@@ -18,8 +18,8 @@
 //!
 //! - `date_contents`           : `@Date`
 //! - `free_text`               : `@Location`, `@Activities`, `@Transcriber`,
-//!                               `@Room Layout`, `@Tape Location`, `@Warning`,
-//!                               `@Bck`, `@T`, `@Videos`
+//!   `@Room Layout`, `@Tape Location`, `@Warning`,
+//!   `@Bck`, `@T`, `@Videos`
 //! - `page_number`             : `@Page`
 //! - `time_duration_contents`  : `@Time Start`, `@Time Duration`
 //!

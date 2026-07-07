@@ -39,6 +39,9 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::model::{DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
 
+/// One diagnostic: (code, span start, span end, message).
+type Diag = (String, u32, u32, String);
+
 /// A valid `%gra` line with five `index|head|relation` triples on a single
 /// utterance. Exercises the reachable path: a `Present` `gra_contents` body slot
 /// and five `Present` relation slots, each decoded by `parse_gra_relation`.
@@ -66,13 +69,7 @@ fn rel_tuple(rel: &talkbank_model::model::GrammaticalRelation) -> (usize, usize,
 /// relations of every `%gra` tier as `(index, head, relation)` tuples, whether
 /// at least one `%gra` tier was attached at all, and every collected diagnostic
 /// as `(code, start, end, message)`.
-fn parse_gra(
-    input: &str,
-) -> (
-    Vec<(usize, usize, String)>,
-    bool,
-    Vec<(String, u32, u32, String)>,
-) {
+fn parse_gra(input: &str) -> (Vec<(usize, usize, String)>, bool, Vec<Diag>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let chat = parser.parse_chat_file_streaming(input, &errors);

@@ -6,12 +6,12 @@
 //! There are three gem-header variants (Task 2e migration):
 //!
 //! - `@G`  (`g_header`)  : `NodeSlot<FreeTextNode>` (grammar-required child).
-//!                         -> `Header::LazyGem { label }`.
+//!   -> `Header::LazyGem { label }`.
 //! - `@Bg` (`bg_header`) : `Option<FreeTextNode>` (grammar-optional child).
-//!                         -> `Header::BeginGem { label }` always, even when
-//!                         malformed (e.g. `@Bg:` empty-label bug fix).
+//!   -> `Header::BeginGem { label }` always, even when
+//!   malformed (e.g. `@Bg:` empty-label bug fix).
 //! - `@Eg` (`eg_header`) : `Option<FreeTextNode>` (grammar-optional child).
-//!                         -> `Header::EndGem { label }`.
+//!   -> `Header::EndGem { label }`.
 //!
 //! The CHAT grammar rule for `@G` is:
 //!   `g_header: seq(g_prefix, header_sep, free_text, newline)`
