@@ -35,3 +35,14 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 filter = 'test(full_corpus_parse)'
 slow-timeout = { period = "300s", terminate-after = 6 }
 
+
+# send2clan's availability probes talk to the real CLAN application over
+# Apple Events; a single probe legitimately takes tens of seconds even on
+# an idle machine (about 55s observed for the two-probe determinism test),
+# and can exceed the 120s default ceiling when the machine is loaded (it
+# timed out during the 2026-07-07 v0.3.0 release gate while a judgment
+# batch was running). Bound it generously rather than letting the hang
+# guard misclassify a slow external round-trip as a spin.
+[[profile.default.overrides]]
+filter = 'package(send2clan) and test(is_clan_available)'
+slow-timeout = { period = "150s", terminate-after = 2 }

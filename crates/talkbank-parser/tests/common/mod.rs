@@ -3,10 +3,21 @@
 //! Cargo treats `tests/common/mod.rs` as a regular module (not its own
 //! test binary), so each test file in `tests/` can `mod common;` and
 //! pull these in without paying the per-binary parse cost.
+//!
+//! Each integration-test binary compiles this module INDEPENDENTLY, so a
+//! helper used by one binary registers as dead code in every binary that
+//! does not call it; the allow below silences that structural false
+//! positive (it is not a license to keep genuinely unused helpers: a
+//! helper no test file references at all should be deleted).
+#![allow(dead_code)]
 
 use talkbank_model::model::{Line, Utterance};
 use talkbank_model::{ErrorCollector, ParseError, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
+
+/// One diagnostic as surfaced at the streaming boundary:
+/// `(code, span start, span end, message)`.
+pub type DiagRecord = (String, u32, u32, String);
 
 /// Parse `input` through `TreeSitterParser::parse_chat_file_streaming`
 /// and return every collected diagnostic.
@@ -53,9 +64,7 @@ pub fn parse_validate_and_collect_diagnostics(
 /// Parse `input` at the real streaming boundary, returning the parsed utterances
 /// (cloned out of the line list) and every collected diagnostic as
 /// `(code, start, end, message)` tuples.
-pub fn parse_utterances_and_diags(
-    input: &str,
-) -> (Vec<Utterance>, Vec<(String, u32, u32, String)>) {
+pub fn parse_utterances_and_diags(input: &str) -> (Vec<Utterance>, Vec<DiagRecord>) {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
     let file = parser.parse_chat_file_streaming(input, &errors);
