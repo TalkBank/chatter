@@ -1,0 +1,73 @@
+{
+ "comment": "CHECK codes with textual call sites that real CLAN cannot emit (grounded empirically 2026-07-08; the reference JSON's n_call_sites counted commented-out code). Evidence per code from check.cpp reading + probe fixtures in the campaign scratch dir.",
+ "codes": [
+  {
+   "code": 28,
+   "reason": "call site inside a comment block dated 11-02-98 (check.cpp ~4992); word-level code 55 fires on the same shapes"
+  },
+  {
+   "code": 29,
+   "reason": "same 11-02-98 comment block; code 56 fires instead"
+  },
+  {
+   "code": 30,
+   "reason": "unreachable with the stock depfile: text after a no-colon header re-matches a different template, so (17) fires first (verified across 4 shapes)"
+  },
+  {
+   "code": 33,
+   "reason": "dt-fallthrough requires an @d/@t template followed by another pattern; every stock-depfile route emits (34)/(35) instead (7 attempts)"
+  },
+  {
+   "code": 49,
+   "reason": "only call site inside a 2019-04-23 do-not-check-upper-case comment; empirically clean"
+  },
+  {
+   "code": 54,
+   "reason": "unreachable: the code-44 gate (check.cpp ~2241) fires and breaks on any line after the first @End, so end>1 cannot be reached"
+  },
+  {
+   "code": 81,
+   "reason": "sole call site commented out, dated 2025-07-04"
+  },
+  {
+   "code": 88,
+   "reason": "call site inside a comment block dated 2009-06-08"
+  },
+  {
+   "code": 95,
+   "reason": "capital-checking call sites retired 2019; commented out"
+  },
+  {
+   "code": 96,
+   "reason": "unreachable by dispatch: @Languages tiers set isSkip=TRUE (check.cpp ~5417) before check_ParseWords runs"
+  },
+  {
+   "code": 101,
+   "reason": "only call path inside #ifndef UNX; compiled out of the unix build (GUI CLANc only); no ASCII trigger path (see gui-vs-unix-check.md; unix CHECK is the authoritative bar per Franklin 2026-07-08)"
+  },
+  {
+   "code": 104,
+   "reason": "GUI font check; both call sites commented out"
+  },
+  {
+   "code": 105,
+   "reason": "GUI font check; both call sites commented out"
+  },
+  {
+   "code": 118,
+   "reason": "only call site commented out, dated 2025-07-04; probes emit (21)/(157) instead"
+  },
+  {
+   "code": 145,
+   "reason": "dead since 2019-04-17; comment literally delegates the rule to CHATTER"
+  },
+  {
+   "code": 151,
+   "reason": "alive ONLY in GUI CLANc (#ifndef UNX); unix CHECK accepts; chatter also accepts: a gap only if the GUI build defines the bar (open policy question) (see gui-vs-unix-check.md; unix CHECK is the authoritative bar per Franklin 2026-07-08)"
+  },
+  {
+   "code": 154,
+   "reason": "dead since 2018-10-07"
+  }
+ ]
+}

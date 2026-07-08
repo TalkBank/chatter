@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	CHECK_083_beg_backwards, audio
+*CHI:	hey .  1000_2000
+*MOT:	you .  3000_4000
+*CHI:	me .  2500_2600
+@End

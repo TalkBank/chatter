@@ -67,10 +67,26 @@ enum ParityStatus {
 #[derive(Deserialize)]
 struct ParityEntry {
     check_code: u16,
+    /// Verbatim CLAN CHECK message text (without the trailing `(NN)`),
+    /// used for documentation and, when `no_numeric_suffix` is set, as
+    /// the grounding match target.
+    #[serde(default)]
+    check_message: String,
     fixture: String,
     status: ParityStatus,
     #[serde(default)]
     expected_chatter_codes: Vec<String>,
+    /// Extra CLAN CHECK command-line flags this fixture's grounding
+    /// requires (e.g. `+c0` for option-gated rules); empty for
+    /// default-mode rules. The CLAN-gated grounding test passes these
+    /// through; the CI-side test ignores them.
+    #[serde(default)]
+    clan_flags: Vec<String>,
+    /// True for the rare CHECK messages printed WITHOUT a trailing
+    /// `(NN)` (e.g. code 51, whose format string lacks `(%d)`); the
+    /// grounding test then matches the message text instead.
+    #[serde(default)]
+    no_numeric_suffix: bool,
     #[serde(default)]
     note: String,
 }
@@ -236,13 +252,19 @@ fn clan_check_grounding() -> Result<(), TestError> {
         let output = Command::new("bash")
             .arg(&wrapper)
             .arg("check")
+            .args(&entry.clan_flags)
             .arg(&fixture)
             .output()
             .map_err(|e| TestError::Failure(format!("run CLAN wrapper: {e}")))?;
         // The pty emits CRLF; strip CR before scanning the (NN) trailers.
         let text = String::from_utf8_lossy(&output.stdout).replace('\r', "");
         let emitted = parse_check_numbers(&text);
-        if !emitted.contains(&entry.check_code) {
+        let grounded = if entry.no_numeric_suffix {
+            text.contains(entry.check_message.trim())
+        } else {
+            emitted.contains(&entry.check_code)
+        };
+        if !grounded {
             failures.push(format!(
                 "CHECK {} ({}): real CLAN CHECK no longer emits it (got {:?}). CLAN drifted; \
                  re-ground the fixture/mapping.",

@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	CHECK_133_overlap_same_speaker, audio
+*CHI:	dog . 0_5000
+*CHI:	cat . 1000_6000
+@End

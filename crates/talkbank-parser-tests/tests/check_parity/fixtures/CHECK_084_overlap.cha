@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	CHECK_084_overlap, audio
+*CHI:	hey .  1000_2000
+*MOT:	you .  1500_3000
+@End
