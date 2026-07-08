@@ -9,6 +9,19 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-08
+
+### Fixed
+
+- **Every public fallible constructor's error type is now publicly
+  nameable.** `LanguageCodeError` (from `LanguageCode::new`),
+  `XphointParseError`, and `PhoalnParseError` were not re-exported, so
+  downstream crates could not store them in typed `#[source]` fields and
+  had to stringify at the boundary; found by the first real downstream
+  consumption of the 0.3.0 API. A new API-surface guard test pins the
+  contract so a constructor error type can never silently become
+  unnameable again.
+
 ## [0.3.0] - 2026-07-07
 
 ### Added

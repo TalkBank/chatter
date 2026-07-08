@@ -113,6 +113,7 @@ pub use header::{
     Header,
     IDHeader,
     LanguageCode,
+    LanguageCodeError,
     LanguageCodes,
     LanguageName,
     LocationDescription,
@@ -258,6 +259,9 @@ pub use dependent_tier::{
     PhoTierType,
     // PHO
     PhoWord,
+    // Public fallible-parse error types (every public constructor's
+    // error type must be nameable downstream; see BUG-3 2026-07-08)
+    PhoalnParseError,
     PosCategory,
     // SIN
     SinGroupGestures,
@@ -269,6 +273,7 @@ pub use dependent_tier::{
     TextTier,
     UserDefinedDependentTier,
     WorTier,
+    XphointParseError,
 };
 
 // Re-export alignment metadata

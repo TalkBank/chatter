@@ -25,7 +25,7 @@ pub(crate) mod time_values;
 pub use age::AgeValue;
 pub use date::{ChatDate, Month};
 pub use header_strings::*;
-pub use language::LanguageCode;
+pub use language::{LanguageCode, LanguageCodeError};
 pub use participant::{ParticipantEntry, ParticipantName, ParticipantRole};
 pub use ses::{Ethnicity, SesCode, SesValue};
 pub use speaker::SpeakerCode;
