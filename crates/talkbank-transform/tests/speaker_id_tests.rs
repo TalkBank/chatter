@@ -437,7 +437,8 @@ fn identify_mapping_borderline_refuses() {
 
 /// A pre-provenance override file (no engine/judgment fields) must
 /// still read, defaulting engine=Deterministic and judgment=None.
-/// schema_version stays 1, so no version bump is needed.
+/// Adding provenance fields needed no schema-version bump (optional
+/// fields with defaults are backward-compatible within a version).
 #[test]
 fn legacy_override_without_engine_reads_as_deterministic() {
     let toml = r#"

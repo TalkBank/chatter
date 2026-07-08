@@ -1,7 +1,7 @@
 # Adjudication Workflow
 
 **Status:** Draft
-**Last updated:** 2026-07-01 21:55 EDT
+**Last updated:** 2026-07-07 21:17 EDT
 
 This page specifies how human-in-the-loop adjudication fits into
 the merge pipeline. Several pipeline stages have decision points
@@ -275,7 +275,7 @@ The `--scripted` mode is the testability seam. A scripted
 decision file looks like:
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [[decisions]]
 session_id = "session-102-t1"

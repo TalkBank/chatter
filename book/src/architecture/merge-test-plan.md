@@ -1,12 +1,13 @@
 # Merge Pipeline, Test Plan
 
 **Status:** Draft
-**Last modified:** 2026-05-30 06:55 EDT
+**Last modified:** 2026-07-07 21:17 EDT
 
 This page is the test-coverage roadmap for the new merge pipeline
 (`chatter speaker-id` + `chatter merge` + `chatter adjudicate` +
-the override-file format + the underlying `talkbank-model::merge`
-types). It exists because, per this repo's root `CLAUDE.md`
+the override-file format + the underlying
+`talkbank-transform::speaker_id` types). It exists because, per this
+repo's root `CLAUDE.md`
 red/green TDD rule, every new feature starts with failing tests
 at the highest level the feature lives at, and we want to
 enumerate those tests *before* writing the implementation, so
@@ -198,8 +199,8 @@ invariant through the CLI.
 | `merge_preserves_existing_overlap_markers` | retained file already has `[>]` somewhere | The original `[>]` is preserved byte-stable on the retained utt |
 | `merge_header_languages_passthrough` | Header reconciliation rule | Output `@Languages` matches File 1's |
 | `merge_header_media_file1_wins` | Header reconciliation rule | File 1 says `video`, File 2 says `audio` → output says `video` (no warning emitted for modality only) |
-| `merge_header_participants_concatenates` | Header reconciliation rule | Output `@Participants:` is File 1's entries + File 2's non-retained entries, in that order |
-| `merge_header_id_concatenates` | Header reconciliation rule | Output `@ID:` rows are File 1's + File 2's non-retained, original order within each file |
+| `merge_header_participants_concatenates` | Header reconciliation rule | Output `@Participants:` is File 1's entries + File 2's non-retained entries, in that order, with **dedupe-on-insert**: a File 2 entry whose speaker code File 1 already declares is skipped rather than inserted twice (legal only when File 1's declaration is vestigial: zero utterances, matching role/name metadata; otherwise the merge refuses with `MergeError::ParticipantAlreadyDeclared`) |
+| `merge_header_id_concatenates` | Header reconciliation rule | Output `@ID:` rows are File 1's + File 2's non-retained, original order within each file; the same dedupe-on-insert set also filters File 2's `@ID` rows, so a deduped participant contributes no duplicate `@ID` row |
 | `merge_header_comments_concatenate` | Header reconciliation rule | Output `@Comment` rows are File 1's + File 2's, in original order (ASR provenance preserved) |
 | `merge_preconditions_retain_missing` | exit code 2 precondition | File 1 declares no CHI; merge with `retain={CHI}` returns `Err(MergeError::RetainSpeakersMissing)` |
 | `merge_preconditions_no_timeline` | exit code 2 precondition | File 1 has no utterances with bullets → `Err(MergeError::NoTimelineInFile1)` |
@@ -212,8 +213,8 @@ invariant through the CLI.
 | Test | Scenario | Assertion |
 |---|---|---|
 | `override_file_round_trip` | Construct `OverrideFile` with one entry, write, read back | Re-read value `==` original |
-| `override_file_refuses_missing_schema_version` | TOML with no `schema_version` | `Err(OverrideFileError::UnsupportedSchemaVersion { found: 0, supported: 1 })` |
-| `override_file_refuses_wrong_schema_version` | `schema_version = 2` (future) | `Err(UnsupportedSchemaVersion { found: 2, supported: 1 })` |
+| `override_file_refuses_missing_schema_version` | TOML with no `schema_version` | `Err(OverrideFileError::UnsupportedSchemaVersion { found: None, supported: 2 })` (the shipped `found` is an `Option<u32>`, so absence reports as `None`, not a sentinel value) |
+| `override_file_refuses_wrong_schema_version` | `schema_version = 99` (any value other than the current `2`; a pre-bump `schema_version = 1` file is refused the same way, per the v1-to-v2 migration note in [merge-overrides.md](../chatter/integrating/merge-overrides.md)) | `Err(UnsupportedSchemaVersion { found: Some(99), supported: 2 })` |
 | `override_file_rejects_unknown_field` | Entry has an extraneous field `extra = "x"` | `Err(OverrideFileError::Parse)` |
 | `override_file_rejects_malformed_mode` | `mode = "guess"` | `Err(Parse)` (only `auto`/`explicit`/`override` accepted) |
 | `override_file_atomic_write` | Write to a path that already exists | Original file is replaced atomically; no `<path>.tmp` left behind |
@@ -229,6 +230,15 @@ invariant through the CLI.
 Smaller per-type tests. Each in its module's `#[cfg(test)] mod
 tests` section.
 
+Note on type names: several of the designed types referenced below
+shipped under different names or shapes (`InsertedRole` is
+`InsertedRoleSpec`; `Margin` is `ConfidenceMargin(f64)` with
+`f64::INFINITY` for the unbounded case; `RetainSet` and `MergeFlag`
+never shipped as newtypes). See the designed-vs-shipped table in
+[Domain Types](./merge-domain-types.md#designed-vs-shipped-quick-map)
+before writing any still-pending test from this table against the
+current code.
+
 | Test | Type | Assertion |
 |---|---|---|
 | `jaccard_score_new_in_range` | `JaccardScore` | `new(0.5)` → `Ok`; `new(-0.1)` and `new(1.1)` → `Err`; `new(NaN)` → `Err` |
@@ -240,9 +250,9 @@ tests` section.
 | `margin_meets_threshold` | `Margin` | `Finite(3.81).meets(threshold=2.0) == true`; `Finite(1.5).meets(2.0) == false`; `Unbounded.meets(threshold) == true` for any threshold |
 | `retain_set_parse` | `RetainSet` | `"CHI".parse() == Ok({CHI})`; `"CHI,SI2".parse() == Ok({CHI, SI2})`; `"".parse() == Err`; `"CHI,,SI2".parse() == Err` |
 | `inserted_role_parse` | `InsertedRole` | `"INV:Investigator".parse() == Ok(_)`; `"INV".parse() == Err`; `":Investigator".parse() == Err` |
-| `mapping_spec_parse_simple` | `parse_mapping_spec` | `"PAR0=drop,PAR1=INV:Investigator"` parses to a complete SpeakerMapping with correct actions and inserted_role |
-| `mapping_spec_parse_drop_only` | `parse_mapping_spec` | `"PAR0=drop"` parses iff no inserted_role context required (decide whether legal in isolation; if not, must error) |
-| `mapping_spec_parse_conflicting_roles` | `parse_mapping_spec` | `"PAR0=INV:Investigator,PAR1=MOT:Mother"`, two different inserted roles → error (v1 only allows one) |
+| `mapping_spec_parse_simple` | `parse_mapping_spec` | `"PAR0=drop,PAR1=INV:Investigator"` parses to a complete `MappingSpec` with `Drop` for PAR0 and a `Rename` carrying PAR1's own code + role |
+| `mapping_spec_parse_drop_only` | `parse_mapping_spec` | `"PAR0=drop"` parses; a drop-only mapping is legal in isolation, since roles are per-speaker and a mapping with no `Rename` needs no role at all |
+| `mapping_spec_parse_multiple_roles` | `parse_mapping_spec` | `"PAR0=INV:Investigator,PAR1=MOT:Mother"` parses, with each speaker's `Rename` carrying its own role. (The original plan named this `mapping_spec_parse_conflicting_roles` and expected an error because the designed v1 schema allowed only one shared inserted role; the shipped schema-v2 per-speaker `adult_roles` map makes multiple distinct roles a supported case, and two adults assigned the *same* role auto-disambiguate to numbered codes `INV1`/`INV2` with `First_`/`Second_` specific-role labels.) |
 | `merge_flag_serde_known_variants` | `MergeFlag` | `DiarizationMixed` serializes as `"diarization-mixed"` (kebab-case); deserializes the same |
 | `merge_flag_serde_custom` | `MergeFlag` | Unknown string deserializes as `Custom("unknown-flag")`; serializes verbatim |
 
@@ -496,7 +506,7 @@ design docs has at least one test:
 | merge user-guide | Tiebreak File1 first | L2 | `merge_stable_tiebreak_file1_first` |
 | merge user-guide | Bullets pass-through | L2 | `merge_bullets_pass_through` |
 | merge user-guide | Bullet lift from %wor | L2 | `merge_bullet_lift_from_wor` |
-| merge user-guide | Header reconciliation (all rows) | L2 | `merge_header_*` series |
+| merge user-guide | Header reconciliation (all rows, including @Participants / @ID dedupe-on-insert of donor codes File 1 already vestigially declares) | L2 | `merge_header_*` series |
 | merge user-guide + memory | No overlap markers injected | L2 | `merge_no_overlap_markers_injected` + `merge_preserves_existing_overlap_markers` |
 | merge user-guide | Each precondition → exit 2 | L3 | `merge_*_exits_2` series in L3.2 |
 | merge user-guide | Warns on bullet drift | L2 | `merge_warns_on_backward_bullet_drift` |
