@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! Regression probe for the NEW-backend reconstruction engine's recovery-aware
 //! `repeat` handling, pinned at the `generated_traversal::extract_full_document`
 //! seam that the document/line entry-point cluster (Task B1) drives.

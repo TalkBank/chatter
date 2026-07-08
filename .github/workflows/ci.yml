@@ -80,34 +80,26 @@ jobs:
       - name: cargo test --workspace
         run: cargo test --workspace --locked
 
-      # Two-pass clippy. Production code (lib + bin) is held to the
-      # strict per-crate `deny` lints (panic-audit policy). Test
-      # targets get the same `unwrap_used` / `expect_used` / `panic`
-      # / `unreachable` / `todo` / `unimplemented` lints relaxed;
-      # tests are allowed to unwrap fixtures by convention. Mirrors
-      # the workspace's `#![cfg_attr(test, allow(...))]` pattern at
-      # the lib-level but extended to integration tests in tests/*.rs.
+      # Single-pass clippy (unified 2026-07-08). Production strictness
+      # lives in the workspace [lints] deny table; test relaxation
+      # lives in source (crate-root cfg_attr for unit tests, an
+      # #![allow] header in each tests/*.rs). One flag set means one
+      # build profile and a policy readable entirely from source.
       #
-      # `-D warnings` on both passes turns any new clippy warning
-      # into a hard CI failure, preventing the kind of silent
-      # multi-month drift that left ~100 warnings unfixed before
-      # the 2026-05-29 sweep. The Rust version above is pinned, so
-      # new clippy lints (which ship with new stable releases) won't
-      # cause sudden mid-PR flap; drift is caught by the weekly
-      # clippy-rolling.yml job.
-      - name: cargo clippy (lib + bins, strict)
-        run: cargo clippy --workspace --lib --bins --locked -- -D warnings
-
-      - name: cargo clippy (tests, relaxed panic lints)
-        run: |
-          cargo clippy --workspace --tests --locked -- \
-            -A clippy::unwrap_used \
-            -A clippy::expect_used \
-            -A clippy::panic \
-            -A clippy::unreachable \
-            -A clippy::todo \
-            -A clippy::unimplemented \
-            -D warnings
+      # CI is the ONLY place clippy runs routinely: the local
+      # developer loop and the pre-push gate deliberately skip it
+      # (correctness is gated locally by tests; style/policy audit is
+      # async here). A red clippy on main is a fix-forward cosmetic
+      # commit, never a revert. Severity is two-tier and readable
+      # from the workspace [lints] table alone: the panic-family
+      # policy lints are deny (a violation of the no-panics house
+      # rule is the ONLY thing that turns this job red); every other
+      # lint surfaces as a warning annotation for leisure triage.
+      # Drift pulse: the weekly clippy-rolling.yml job plus
+      # opportunistic session sweeps (advisory lint rotted to ~100
+      # warnings once before, 2026-05-29; leisure needs a pulse).
+      - name: cargo clippy (single pass; red only on panic-policy denies)
+        run: cargo clippy --workspace --all-targets --locked
 
   book:
     name: mdBook build

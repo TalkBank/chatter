@@ -31,10 +31,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 # This crate is new: no legacy panic sites to grandfather, so the panic-discipline
 # lints are denied outright (matching talkbank-cache, the other post-audit crate).
-[lints.clippy]
-unwrap_used   = "deny"
-expect_used   = "deny"
-panic         = "deny"
-unreachable   = "deny"
-todo          = "deny"
-unimplemented = "deny"

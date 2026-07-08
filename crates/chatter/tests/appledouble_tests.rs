@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! AppleDouble sidecar files (`._name.cha`, created by macOS on non-HFS volumes
 //! such as USB drives and network shares) must never be discovered as CHAT
 //! transcripts by directory-walking commands. The skip is by NAME (`._` prefix),

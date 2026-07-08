@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! Acceptance test for typed top-level `choice`-rule classification (Task 0b).
 //!
 //! The generated traversal types every qualifying top-level `choice` RULE as a

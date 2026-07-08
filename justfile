@@ -68,15 +68,10 @@ doc-check:
 # from CI (producing false positives), so this mirrors the two-pass split. The
 # pre-push hook calls this, so `just clippy` and CI stay identical.
 clippy:
-    cargo clippy --workspace --lib --bins --locked -- -D warnings
-    cargo clippy --workspace --tests --locked -- \
-        -A clippy::unwrap_used \
-        -A clippy::expect_used \
-        -A clippy::panic \
-        -A clippy::unreachable \
-        -A clippy::todo \
-        -A clippy::unimplemented \
-        -D warnings
+    # Single pass: production strictness lives in the workspace [lints]
+    # table; test relaxation lives in-source (crate-root cfg_attr +
+    # per-test-file allow headers). One flag set = one build profile.
+    cargo clippy --workspace --all-targets --locked
 
 # Format the workspace.
 fmt:
@@ -122,7 +117,6 @@ push *ARGS:
     just actionlint
     just rust-sync-check
     just app-sync-check
-    just clippy
     git push {{ARGS}}
 
 # Regenerate symbol registry outputs for grammar and Rust consumers.

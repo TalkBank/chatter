@@ -63,10 +63,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 [package.metadata.cargo-machete]
 ignored = ["phf"]
 
-[lints.clippy]
-unwrap_used   = "deny"
-expect_used   = "deny"
-panic         = "deny"
-unreachable   = "deny"
-todo          = "deny"
-unimplemented = "deny"

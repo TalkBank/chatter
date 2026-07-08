@@ -38,10 +38,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 # Panic-site audit completed 2026-04-29, zero non-test sites in
 # this crate (see `docs/panic-audit/talkbank-parser.md`). `deny`
 # prevents new sites without a deliberate `#[allow]` opt-in.
-[lints.clippy]
-unwrap_used   = "deny"
-expect_used   = "deny"
-panic         = "deny"
-unreachable   = "deny"
-todo          = "deny"
-unimplemented = "deny"

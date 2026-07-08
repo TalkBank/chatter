@@ -48,11 +48,12 @@ categories = ["parser-implementations", "text-processing"]
 # design, and `unwrap()` on a fixture that's known to parse is the standard
 # Rust testing idiom.
 [workspace.lints.clippy]
-unwrap_used   = "warn"
-expect_used   = "warn"
-panic         = "warn"
-todo          = "warn"
-unimplemented = "warn"
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+unreachable   = "deny"
+todo          = "deny"
+unimplemented = "deny"
 
 [workspace.dependencies]
 # Foundational utilities and concurrency

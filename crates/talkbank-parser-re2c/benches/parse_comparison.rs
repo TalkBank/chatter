@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! Rigorous benchmark: TreeSitterParser vs Re2cParser (chumsky).
 //!
 //! Run: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`

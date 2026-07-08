@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! Characterization tests for the `%mor` dependent tier migrated onto the
 //! generated `extract_mor_dependent_tier` / `extract_mor_contents` /
 //! `extract_mor_content` / `extract_mor_word` / `extract_mor_feature` /

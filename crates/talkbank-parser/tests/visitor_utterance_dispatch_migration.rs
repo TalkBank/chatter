@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! Characterization tests for the utterance-level dispatch as it is migrated
 //! onto the generated `GrammarTraversal::extract_utterance` visitor (Task 3a of
 //! the visitor-driven parser migration).

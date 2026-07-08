@@ -31,10 +31,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 # Panic-site audit completed 2026-04-29 (inherited from talkbank-transform's
 # audit when this crate was extracted).
-[lints.clippy]
-unwrap_used   = "deny"
-expect_used   = "deny"
-panic         = "deny"
-unreachable   = "deny"
-todo          = "deny"
-unimplemented = "deny"

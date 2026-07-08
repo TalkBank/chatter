@@ -60,10 +60,3 @@ tempfile = { workspace = true }
 
 # Panic-site audit completed 2026-04-29 (see
 # `docs/panic-audit/chatter.md`). 14 non-test sites annotated.
-[lints.clippy]
-unwrap_used   = "deny"
-expect_used   = "deny"
-panic         = "deny"
-unreachable   = "deny"
-todo          = "deny"
-unimplemented = "deny"

@@ -1,3 +1,15 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+
 //! `chatter update` self-updates IN-PROCESS via the axoupdater library (the
 //! cargo-dist self-updater used as a library, not a separate `chatter-update`
 //! binary). This matches how mainstream CLIs self-update and removes the

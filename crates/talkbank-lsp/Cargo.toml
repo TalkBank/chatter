@@ -50,13 +50,6 @@ insta = { workspace = true }
 # and then promotes the panic-shape lints to `deny` for this crate
 # specifically. Other crates still inherit the workspace `warn`
 # floor.
-[lints.clippy]
-unwrap_used   = "deny"
-expect_used   = "deny"
-panic         = "deny"
-unreachable   = "deny"
-todo          = "deny"
-unimplemented = "deny"
 
 [package.metadata.dist]
 # Shipped as a standalone, first-class release artifact: the LSP server is

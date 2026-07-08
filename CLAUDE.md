@@ -132,7 +132,7 @@ cargo check --workspace --all-targets
 cargo build --workspace --all-targets --locked
 cargo nextest run --workspace                # Preferred: parallel per-test
 cargo nextest run -p talkbank-model          # Single crate
-just clippy                                  # Two-pass, CI-matching; run ONCE before push, not mid-session
+# clippy runs in CI, not locally (see the clippy policy section)
 
 # Single test by name
 cargo nextest run -E 'test(test_name)'
@@ -201,41 +201,38 @@ genuinely both needed right now, give the second one its own
 rather than assuming they will interleave gracefully against the same
 `target/` directory.
 
-### Don't Run Clippy Mid-Session: It's a Pre-Push Gate, Not a Habit
+### Clippy Policy: CI Owns It; Locally It Is Never Run Routinely
 
-**Run `just clippy` (the two-pass, CI-matching invocation) exactly ONCE, at
-the very end, immediately before committing or pushing.** Do not run it
-after every small edit, "just to check," or as a periodic sanity habit
-during iterative development. Use `cargo check -p <crate>` (or
-`cargo build -p <crate>`) for the fast inner dev loop instead; save clippy
-for the final pass.
+**Unified 2026-07-08 (Franklin's direction), replacing the earlier
+two-pass pre-push ritual.** The policy, in full:
 
-**This is the repo's own designed workflow, not a new restriction.** The
-`justfile`'s `push` recipe already runs `just clippy` right before `git
-push`, and its comment explicitly says clippy is deliberately kept OUT of
-the pre-push git hook itself because "a long clippy run cannot stall the
-push past GitHub's SSH idle timeout." That design only works if clippy runs
-once per push, at the end, not repeatedly mid-session.
-
-**Why running it repeatedly is actively costly, not just slow-but-harmless:**
-1. **Two-pass clippy is two full builds with different flags** (`--lib --bins`
-   strict vs. `--tests` with panic/unwrap/expect lints relaxed). Each flag
-   set is a distinct build fingerprint, so running both passes forces a
-   rebuild of shared dependencies that a plain `cargo check` would have
-   reused. Repeating this mid-session multiplies that cost every time.
-2. **It contends with the same `target/` directory lock** described above:
-   a clippy pass launched while another cargo/nextest command is still
-   running against this workspace queues behind it, not beside it.
-3. **It doesn't test anything a passing `cargo check` + the actual test
-   suite doesn't already cover for correctness.** Clippy findings are style
-   and lint-policy compliance; running it early and often does not catch
-   bugs faster than running it once at the end, it only spends build time
-   sooner instead of later.
-
-**The decision test:** "Am I about to commit or push?" If not, don't run
-clippy; run `cargo check -p <crate>` instead. If yes, run `just clippy`
-exactly once as the final step before the commit/push, per the "Build,
-Test, and Lint" gate this file already documents.
+- **Severity is two-tier and lives entirely in source.** The workspace
+  `[lints.clippy]` table holds the six panic-family lints (`unwrap_used`,
+  `expect_used`, `panic`, `unreachable`, `todo`, `unimplemented`) at
+  `deny`: these enforce the no-panics house rule and are the ONLY thing
+  that can fail a clippy run. Every other lint is advisory. Test code
+  relaxes the panic family in source (a `cfg_attr(test, allow(...))` at
+  each crate root for unit tests; an `#![allow(...)]` header at the top
+  of each `tests/*.rs` / bench / example). A missing test header fails
+  STRICTER, never looser.
+- **One pass, no flags.** The canonical invocation is
+  `cargo clippy --workspace --all-targets --locked` (the `just clippy`
+  recipe). No `-D`/`-A` flags anywhere: flag soup is what created the
+  old three-layer incoherence and a second full build profile.
+- **CI is where clippy runs.** The `ci.yml` clippy job runs the single
+  pass on every push. It goes red ONLY on a panic-policy violation;
+  style lints surface as warning annotations to triage at leisure.
+  Drift pulse: the weekly `clippy-rolling.yml` job plus opportunistic
+  session sweeps (advisory lint once rotted to ~100 warnings,
+  2026-05-29; leisure needs a pulse, not a blocker).
+- **Locally: never run clippy as a habit, a gate, or a check.** The
+  inner loop is `cargo check -p <crate>` + scoped tests; the pre-push
+  gate (justfile `push`) is fmt + sync-checks + tests, clippy removed.
+  Run clippy locally only when actively working ON clippy findings.
+- **History:** the two-pass ritual (strict `-D warnings` on lib/bins,
+  relaxed `-A` list on tests) was scaffolding for the panic-audit ramp,
+  which completed; it cost 71 minutes on the v0.3.1 release gate and
+  repeatedly caused pointless CI churn. Do not reintroduce it.
 
 **Shell scripts must pass `shellcheck` (strictest).** The `shellcheck` CI job
 runs `scripts/lint/shellcheck-all.sh` over every tracked `*.sh` and shebang
@@ -253,6 +250,20 @@ The version is the single `Cargo.toml [workspace.package] version`; every crate
 inherits it with `version.workspace = true`, so `chatter --version` and the crates all
 report the same number. Bumping it (with a matching `CHANGELOG.md` entry: the project
 follows Keep a Changelog and SemVer) is the first step of any release.
+
+**Gate the content, not the bump (Franklin, 2026-07-08).** A version
+bump invalidates every workspace crate's build fingerprint, so a gate
+run on the bump commit is always a full multi-profile rebuild (the
+v0.3.1 gate measured 2h19m). The release flow is therefore: run the
+FULL local gate (fmt, tests, doctests, book, spec) on the CONTENT
+commit, where builds are incremental; then make the version-bump
+commit (workspace version, pins, CHANGELOG section, sync-app-version,
+BOTH lockfiles refreshed, spec/Cargo.lock included, else fleet builds
+describe as dirty) and validate the bump commit with
+`cargo check --workspace` ONLY, which is exactly the check that
+catches the one thing a metadata bump can break (version-requirement
+resolution, as the 0.3.0 caret-pin incident proved); then push + tag.
+Clippy is CI's job on push (see the clippy policy section).
 
 Releases are produced by **cargo-dist**. Pushing a `vX.Y.Z` git tag that matches the
 workspace version triggers `.github/workflows/release.yml`, which builds the signed
@@ -770,11 +781,11 @@ race (cross-platform CI incident, 2026-06-12).
 - **Prefer `cargo nextest run`** for faster parallel-per-test
   execution. Use `cargo test --doc` for doctests (nextest can't run
   those).
-- CI runs **two-pass clippy**: `--lib --bins` with the strict
-  per-crate `deny` lints; `--tests` with `unwrap_used`, `expect_used`,
-  `panic`, `unreachable`, `todo`, `unimplemented` relaxed via
-  `-A`. Production code is held to the panic-audit policy; test code
-  is allowed to unwrap fixtures by convention.
+- CI runs **single-pass clippy** (`--workspace --all-targets`, no
+  flags): the workspace `[lints]` table denies the panic family in
+  production code; test code relaxes it via in-source attributes. Red
+  means a panic-policy violation, nothing else. See the clippy policy
+  section above.
 
 ### Error Handling
 
