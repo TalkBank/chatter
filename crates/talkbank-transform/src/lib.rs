@@ -74,6 +74,7 @@ pub mod extract;
 pub mod fix_s;
 pub mod join_retrace;
 pub mod parse;
+pub mod rediarize;
 pub mod redact;
 pub mod serialize;
 pub mod validate;
