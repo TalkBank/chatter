@@ -1,7 +1,7 @@
 # The Merge Workflow (`pipeline`, `batch`, `adjudicate`, `sanity-scan`)
 
 **Status:** Draft (experimental)
-**Last modified:** 2026-06-15 10:39 EDT
+**Last modified:** 2026-07-07 21:20 EDT
 
 The merge workflow combines, at scale, the two structural primitives
 documented elsewhere, [`chatter speaker-id`](./speaker-id.md) (assign
@@ -133,6 +133,33 @@ LLM / `--session-context` options as `pipeline`; see
 [Merge, LLM holistic judgment](./merge.md#llm-holistic-judgment-pending-only)
 for that mode and the session-context JSON format.
 
+### Reading the batch summary
+
+Every run ends with one summary line on stderr that accounts for every
+matched donor exactly once:
+
+```text
+batch summary: 345 matched donor(s); 0 merged, 345 suggestions awaiting
+adjudication, 0 low-confidence refusals awaiting adjudication, 0 errored,
+0 unmatched (no reference), 0 skipped (output existed)
+```
+
+- **merged**: the pipeline produced a merged output file (deterministic
+  mode, or a session already covered by an override decision).
+- **suggestions awaiting adjudication**: holistic mode judged the
+  session confidently and wrote a suggestion to the pending file; no
+  merge happens until an operator accepts it via `chatter adjudicate`.
+- **low-confidence refusals awaiting adjudication**: the engine declined
+  to suggest (below the confidence threshold); the entry is in the
+  pending file for a human call.
+- **errored / unmatched / skipped**: per-session failures, donors with
+  no same-named reference file, and outputs that already existed under
+  `--skip-existing`, respectively.
+
+The distinction between the first three matters operationally: a
+holistic run that ends `0 merged, N suggestions awaiting adjudication`
+has done its job; the merge itself happens after adjudication.
+
 ## `chatter adjudicate` (the operator step)
 
 Reads the pending file a pass produced, walks the operator through the
@@ -152,14 +179,38 @@ REQUIRED:
                          reads back.
 
 DECISION SOURCE (one of):
-  --interactive           Prompt per pending entry on stdin. Currently
-                         supports `accept` / `a` (accept the suggested
-                         mapping).
+  --interactive           Prompt per pending entry on stdin. See "The
+                         interactive decision language" below for the
+                         three decision verbs and their syntax.
   --scripted <TOML>       Pre-canned operator decisions, for replayable /
                          tested runs. Mutually exclusive with --interactive.
 
   --operator <NAME>       Recorded in each override entry (defaults to $USER).
 ```
+
+### The interactive decision language
+
+Each pending entry is printed with its full context (the sessions, the
+suggested mapping, the engine's confidence scores and reasoning), then
+one line is read from stdin. Three decision verbs are accepted:
+
+| Verb | Form | Meaning |
+|---|---|---|
+| `accept` (or `a`) | `accept [note...]` | Take the suggested mapping exactly as proposed |
+| `choose` | `choose SPK:CODE:TAG [SPK:CODE:TAG ...] [note...]` | Supply the speaker mapping yourself: each group maps a donor speaker to a CHAT code and role tag |
+| `override` | `override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]` | Supply the mapping AND per-speaker actions (for example `SPK=drop` to exclude a donor speaker entirely) |
+
+`SPK:CODE:TAG` groups are repeatable, so multi-adult sessions are
+expressed naturally, one group per speaker:
+
+```text
+choose A:CHI:Target_Child B:INV:Investigator C:MOT:Mother reviewed against the recording
+```
+
+Anything after the structured arguments is recorded verbatim as the
+operator's note. Every decision (verb, mapping, note, operator, and the
+engine's original scores) is appended to the override file, so the audit
+trail survives the session.
 
 This is the interactive review tool the `speaker-id` and `merge` pages
 refer to: the audit trail (who decided, the scores, any note) lands in

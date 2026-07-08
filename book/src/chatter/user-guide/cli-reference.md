@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-06-24 14:43 EDT
+**Last modified:** 2026-07-07 21:20 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -96,15 +96,16 @@ Options:
 | `--roundtrip` | Test serialization idempotency (developer tool) |
 | `--parser tree-sitter\|re2c` | Parser backend (default: tree-sitter; re2c is opt-in for faster batch validation) |
 | `--strict-linkers` | Enable strict cross-utterance linker pairing checks (E351-E355); off by default |
-| `--check-xphon` | Re-enable %xphon* cross-tier alignment checks (E725-E728); skipped by default |
+| `--suppress xphon` | Silence the Phon `%x` dependent-tier checks (E725-E728, E735-E746), which run by default |
 | `--audit FILE` | Stream errors to JSONL file (bulk audit mode) |
 | `--suppress CODES` | Suppress error codes or groups (comma-separated) |
 
-**Suppress groups:** `xphon` expands to E725/E726/E727/E728
-(%xphosyl/%xphoaln/%xmodsyl cross-tier alignment). These are
-**suppressed by default since 2026-04-21**; pass `--check-xphon` to
-include them. The `--suppress` flag can mix groups and codes:
-`--suppress xphon,E316`.
+**Suppress groups:** `xphon` expands to the whole Phon `%x`
+dependent-tier validation surface (%xmodsyl/%xphosyl/%xphoaln/%xphoint,
+codes E725-E728 and E735-E746). These checks **run by default**; pass
+`--suppress xphon` to silence the group. (The old `--check-xphon` flag
+is a deprecated no-op kept only so existing scripts do not break.) The
+`--suppress` flag can mix groups and codes: `--suppress xphon,E316`.
 
 ## `normalize`
 
@@ -357,15 +358,19 @@ yet complete. Work on copies and validate the output.
 |---------|--------------|
 | `merge` | Merge two CHAT transcripts of the same media into one, interleaving by time with explicit per-speaker provenance. Structural only: no ASR, no forced alignment, no content rewriting. |
 | `speaker-id` | Assign CHAT-conformant speaker codes to an anonymously-labeled file, from an explicit mapping or by text similarity against a reference transcript. |
-| `adjudicate` | Resolve pending low-confidence decisions (currently speaker-id) interactively, writing results to an override file. |
+| `adjudicate` | Resolve pending decisions (currently speaker-id) interactively or from a scripted decision file, writing results to an override file. |
 | `pipeline` | Per-session shortcut: run `speaker-id` in reference mode, then `merge`. |
 | `batch` | Loop `pipeline` over matched donor / reference file pairs across two directories. |
 | `sanity-scan` | Post-merge QA: flag sessions whose automatic decisions look suspicious by an out-of-band heuristic, for operator review via `adjudicate`. |
 
-Full guides: [Merge](merge.md) and [Speaker ID](speaker-id.md). The
-`speaker-id` holistic-judgment mode can call an LLM provider
-(`talkbank-llm`) when configured; the deterministic modes need no network
-access.
+Full guides: [Merge](merge.md), [Speaker ID](speaker-id.md), and the
+[Merge Workflow](merge-workflow.md) walkthrough. The holistic-judgment
+mode of `speaker-id` / `pipeline` / `batch` can call an LLM provider
+(`talkbank-llm`) when configured via `--llm-endpoint` / `--llm-model`
+(plus `--llm-timeout-secs`, `--llm-max-retries`, and a persistent
+response cache via `--llm-cache` or `CHATTER_LLM_CACHE`); the
+deterministic modes need no network access. Flag-level detail:
+[Merge, LLM holistic judgment](merge.md#llm-holistic-judgment-pending-only).
 
 ## Exit Codes
 

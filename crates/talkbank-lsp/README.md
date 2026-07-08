@@ -25,6 +25,11 @@ Language Server Protocol. It uses tree-sitter for incremental parsing and the
 ## Editor Integration
 
 Any editor with Language Server Protocol support can use `talkbank-lsp`.
+Prebuilt `talkbank-lsp` binaries ship with every
+[chatter release](https://github.com/TalkBank/chatter/releases/latest)
+(standalone installers and per-platform archives), or build from source
+with `cargo build --release -p talkbank-lsp`.
+
 Point your editor's LSP client at the `talkbank-lsp` binary (stdio
 transport) and start it with:
 

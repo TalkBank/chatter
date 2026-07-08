@@ -1,7 +1,34 @@
 # Distribution & Code Signing Strategy
 
-**Status:** Current. macOS signing provisioned (2026-06-05); wiring in progress. Windows still open. v0.1.0 release shape decided (2026-06-12, see "Decisions" below). Auto-update for both the CLI and the desktop app added to the v0.1.0 scope (2026-06-16, see "Auto-update" below). crates.io publication decided (2026-06-17, see "Decisions" below). Intel macOS kept for v0.1.0 (2026-06-21, supersedes the 2026-06-17 drop note, see "Decisions" below).
-**Last updated:** 2026-06-21 08:09 EDT
+**Status:** Current (state-of-the-world below); the phased proposal and
+per-release decision log that follow are retained as historical context.
+**Last updated:** 2026-07-07 21:20 EDT
+
+## State of the world (as of the 0.3.0 release)
+
+Everything the original v0.1.0 plan below scoped has SHIPPED and has been
+exercised across multiple releases (v0.1.0, v0.1.1, v0.2.0, v0.2.1):
+
+- **macOS is the signed, primary platform.** The desktop `.dmg` is
+  signed AND notarized on every release; CLI binaries are codesigned via
+  cargo-dist. The signing/notarization wiring described as "in progress"
+  in the decision log below is long done (`release.yml` +
+  `release-desktop.yml`).
+- **Auto-update is live in both channels** and has carried real users
+  across multiple version transitions: `chatter update` for the CLI and
+  the Tauri updater for the desktop app.
+- **The standalone `talkbank-lsp` server** ships in the same cargo-dist
+  release (its own installers and archives) since v0.2.1.
+- **Windows ships unsigned, and signing is DEPRIORITIZED** (decision
+  2026-07-07): every current chatter user is on macOS, so the
+  Authenticode/EV procurement analyzed below is parked indefinitely, not
+  queued. The SmartScreen workaround note in the install docs is the
+  standing posture. Revisit trigger: a real Windows user population.
+- **crates.io publication** remains deferred, now explicitly planned to
+  coincide with the 1.0 release. Until then downstream consumers use git
+  dependencies pinned to release tags.
+
+Everything below this section is the original planning record.
 
 ## Decisions, 2026-06-12 (v0.1.0 release shape)
 

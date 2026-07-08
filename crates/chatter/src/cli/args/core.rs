@@ -398,8 +398,10 @@ pub enum Commands {
         scripted: Option<PathBuf>,
 
         /// Prompt the operator interactively (one stdin line per
-        /// pending entry). Currently supports `accept` / `a` for
-        /// AcceptSuggested.
+        /// pending entry). Decisions: `accept` (take the suggestion),
+        /// `choose SPK:CODE:TAG ...` (pick a mapping), or `override
+        /// SPK:CODE:TAG ... SPK=action ...` (mapping plus per-speaker
+        /// actions), each with an optional trailing note.
         #[arg(long)]
         interactive: bool,
 

@@ -1,7 +1,7 @@
 # Install
 
 **Status:** Current
-**Last modified:** 2026-06-24 09:54 EDT
+**Last modified:** 2026-07-07 21:20 EDT
 
 Everything here comes from the [latest
 release](https://github.com/TalkBank/chatter/releases/latest).

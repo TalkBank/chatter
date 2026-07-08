@@ -1,7 +1,7 @@
 # Installation
 
 **Status:** Current
-**Last modified:** 2026-06-16 07:55 EDT
+**Last modified:** 2026-07-07 21:20 EDT
 
 `chatter` targets **Windows, macOS, and Linux**. There are two ways to
 install it: the **prebuilt binaries** (recommended for most people,

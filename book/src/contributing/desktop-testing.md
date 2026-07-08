@@ -1,7 +1,7 @@
 # Desktop App Testing
 
 **Status:** Current
-**Last updated:** 2026-05-20 20:28 EDT
+**Last updated:** 2026-07-07 21:20 EDT
 
 This document covers the testing strategy for the Chatter desktop app
 (`apps/chatter-desktop/`). Testing is split into three tiers by speed and scope.

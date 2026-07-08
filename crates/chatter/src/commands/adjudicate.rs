@@ -113,9 +113,11 @@ pub fn run_adjudicate(
 /// [`OperatorDecision`]. No business logic; per the design doc, all
 /// apply-logic lives in the adjudication core, not the UI.
 ///
-/// Currently supports `accept` / `a` for `AcceptSuggested`. Future
-/// extensions (`override` with operator-supplied mapping, `defer` /
-/// `skip`) ride the same trait.
+/// Supports `accept` / `a` (accept the suggestion), `choose
+/// SPK:CODE:TAG ...` (operator-picked mapping), and `override
+/// SPK:CODE:TAG ... SPK=action ...` (full mapping plus per-speaker
+/// actions), each with an optional trailing note. Future extensions
+/// (`defer` / `skip`) ride the same trait.
 struct TerminalPrompter;
 
 impl Prompter for TerminalPrompter {
