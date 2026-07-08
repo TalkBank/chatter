@@ -62,7 +62,7 @@ use crate::Line;
 /// let chat_file = ChatFile::new(vec![
 ///     Line::header_with_span(Header::Utf8, Span::DUMMY),
 ///     Line::header_with_span(Header::Begin, Span::DUMMY),
-///     Line::header_with_span(Header::Languages { codes: vec![LanguageCode::new("eng")].into() }, Span::DUMMY),
+///     Line::header_with_span(Header::Languages { codes: vec![LanguageCode::new("eng")?].into() }, Span::DUMMY),
 ///     // Utterances would be added here
 ///     Line::header_with_span(Header::End, Span::DUMMY),
 /// ]);
@@ -76,6 +76,7 @@ use crate::Line;
 /// //     Ok(json) => json,
 /// //     Err(_) => return,
 /// // };
+/// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct ChatFile<S: ValidationState = NotValidated> {

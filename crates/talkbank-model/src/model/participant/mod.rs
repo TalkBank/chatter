@@ -40,6 +40,7 @@
 //!     ParticipantRole,
 //!     ParticipantName,
 //!     ChatDate,
+//!     LanguageCode,
 //! };
 //!
 //! let entry = ParticipantEntry {
@@ -48,7 +49,7 @@
 //!     role: ParticipantRole::new("Target_Child"),
 //! };
 //!
-//! let id = IDHeader::new("eng", "CHI", "Target_Child")
+//! let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child")
 //!     .with_age("10;03.")
 //!     .with_corpus("chiat");
 //!
@@ -64,6 +65,7 @@
 //!     participant.birth_date.as_ref().map(|d| d.as_str()),
 //!     Some("28-JUN-2001")
 //! );
+//! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
 
 mod accessors;

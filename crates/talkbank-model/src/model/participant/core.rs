@@ -31,17 +31,18 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Example
 ///
 /// ```rust
-/// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName};
+/// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName, LanguageCode};
 /// let entry = ParticipantEntry {
 ///     speaker_code: SpeakerCode::new("CHI"),
 ///     name: Some(ParticipantName::new("Ruth")),
 ///     role: ParticipantRole::new("Target_Child"),
 /// };
 ///
-/// let id = IDHeader::new("eng", "CHI", "Target_Child");
+/// let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
 ///
 /// let participant = Participant::new(entry, id);
 /// assert_eq!(participant.code.as_str(), "CHI");
+/// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct Participant {
@@ -80,14 +81,14 @@ impl Participant {
     /// # Example
     ///
     /// ```rust
-    /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName};
+    /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName, LanguageCode};
     /// let entry = ParticipantEntry {
     ///     speaker_code: SpeakerCode::new("CHI"),
     ///     name: Some(ParticipantName::new("Ruth")),
     ///     role: ParticipantRole::new("Target_Child"),
     /// };
     ///
-    /// let id = IDHeader::new("eng", "CHI", "Target_Child");
+    /// let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
     ///
     /// let participant = Participant::new(entry, id);
     /// assert_eq!(participant.code.as_str(), "CHI");
@@ -97,6 +98,7 @@ impl Participant {
     /// );
     /// assert_eq!(participant.role.as_str(), "Target_Child");
     /// assert_eq!(participant.birth_date, None);
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
     pub fn new(entry: ParticipantEntry, id: IDHeader) -> Self {
         Self {
@@ -117,13 +119,13 @@ impl Participant {
     /// # Example
     ///
     /// ```rust
-    /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ChatDate};
+    /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ChatDate, LanguageCode};
     /// # let entry = ParticipantEntry {
     /// #     speaker_code: SpeakerCode::new("CHI"),
     /// #     name: None,
     /// #     role: ParticipantRole::new("Target_Child"),
     /// # };
-    /// # let id = IDHeader::new("eng", "CHI", "Target_Child");
+    /// # let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
     /// let participant = Participant::new(entry, id)
     ///     .with_birth_date(ChatDate::new("28-JUN-2001"));
     ///
@@ -131,6 +133,7 @@ impl Participant {
     ///     participant.birth_date.as_ref().map(|d| d.as_str()),
     ///     Some("28-JUN-2001")
     /// );
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
     pub fn with_birth_date(mut self, date: ChatDate) -> Self {
         self.birth_date = Some(date);
