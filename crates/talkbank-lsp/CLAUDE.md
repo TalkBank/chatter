@@ -1,15 +1,16 @@
 # `talkbank-lsp`, Language Server
 
 **Status:** Current
-**Last updated:** 2026-06-25 14:28 EDT
+**Last updated:** 2026-07-07 21:17 EDT
 
 Guidance for Claude Code when working inside `crates/talkbank-lsp/`. Read the
 workspace-level `CLAUDE.md` (at the chatter repo root) first; this file layers
 **LSP-specific rules** on top of the cross-cutting design rules.
 
 **Cross-ref (root `CLAUDE.md` "CST Traversal Rules"):** the LSP consumes
-`talkbank-parser` (the tree-sitter parser), which is being re-founded to be driven
-by the generated exhaustive `GrammarTraversal` visitor (no hand-walk, no
+`talkbank-parser` (the tree-sitter parser), which is driven by the generated
+exhaustive typed traversal module (`generated_traversal`: free `extract_*`
+functions over a closed `NodeSlot` enum; no hand-walk, no
 ERROR-text-classification). LSP diagnostics inherit that parser's recovery-node
 handling; do not add LSP-side text-scanning of CHAT content to recover structure.
 

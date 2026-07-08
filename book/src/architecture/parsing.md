@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-05-19 16:54 EDT
+**Last updated:** 2026-07-07 21:17 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -41,7 +41,51 @@ Concrete Syntax Tree (CST), green tree with all tokens
 ChatFile AST, typed model with validation-ready data
 ```
 
-The CST preserves every character of the source (whitespace, punctuation, comments). The Rust tree-parsing modules walk the CST and extract semantic information into the typed model.
+The CST preserves every character of the source (whitespace, punctuation, comments). The Rust tree-parsing modules extract semantic information from the CST into the typed model through a generated typed traversal layer, described next.
+
+### The generated typed traversal (`generated_traversal`)
+
+The bridge between the tree-sitter CST and the typed model is a single
+generated module, `crates/talkbank-parser/src/generated_traversal.rs`,
+produced by the `tree-sitter-grammar-utils` generator from the grammar's
+own machine-readable description (`grammar/src/grammar.json` plus
+`node-types.json`). It contains one `extract_*` function per grammar
+rule, each returning a typed view of that rule's children, so consumer
+code dispatches on generated types rather than on `node.kind()` strings.
+
+Every child position a grammar rule models is exposed as a `NodeSlot`
+with five states:
+
+| `NodeSlot` state | Meaning |
+|---|---|
+| `Present` | The expected node is there; a typed accessor is available |
+| `Missing` | Tree-sitter inserted a zero-width MISSING node during recovery |
+| `Error` | An ERROR subtree occupies the position |
+| `Unexpected` | A node of an unmodeled kind landed here |
+| `Absent` | An optional position is simply empty |
+
+This design makes silent recovery-node loss structurally impossible at
+modeled positions: `Missing` and `Error` are explicit variants every
+call site must handle (they map to the E342 and E316 diagnostics), not
+conditions a hand-written walk can forget to check. Hand-walking the CST
+with `node.kind()` comparisons, and classifying the text of ERROR nodes
+to guess what was malformed, are both banned in production parser code
+for exactly this reason.
+
+Recovery handling is two-layered by design: the per-position `NodeSlot`
+states cover every position the grammar models, and a whole-tree
+recovery backstop (see the recovery discussion below) surfaces recovery
+nodes that land where no grammar rule models a slot, such as top-level
+junk. The layers are complementary, and both are load-bearing: removing
+the backstop demonstrably regresses the CHECK-parity and
+recovery-is-not-validity test suites.
+
+The module is regenerated whenever the grammar changes (the regeneration
+workflow, including the staleness guard that fails the test suite if
+regeneration is forgotten, is documented in the repository root
+`CLAUDE.md` under "Grammar Change Workflow"). It is never edited by
+hand: generator defects are fixed in `tree-sitter-grammar-utils` and
+regenerated.
 
 ### Error Recovery
 

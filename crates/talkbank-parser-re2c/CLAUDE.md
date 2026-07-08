@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-**Last modified:** 2026-06-25 14:28 EDT
+**Last modified:** 2026-07-07 21:17 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **Cross-ref (root `CLAUDE.md` "CST Traversal Rules"):** the *tree-sitter* production
-parser (`talkbank-parser`) must be driven by the generated exhaustive
-`GrammarTraversal` visitor, no hand-walk of `node.kind()` strings, no
-ERROR-text-classification. That visitor rule is specific to the tree-sitter CST and
+parser (`talkbank-parser`) must be driven by the exhaustive generated typed
+traversal module (`generated_traversal`), no hand-walk of `node.kind()` strings, no
+ERROR-text-classification. That traversal rule is specific to the tree-sitter CST and
 does NOT apply to this re2c parser's internals: `Re2cParser` is the **independent
 equivalence oracle**, with its own lexer/parser, and must produce byte-identical
 `ChatFile` ASTs. The general no-text-hacking principle (detect errors from

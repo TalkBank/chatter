@@ -1,7 +1,7 @@
 # Transform Pipeline
 
 **Status:** Current
-**Last updated:** 2026-06-14 19:57 EDT
+**Last updated:** 2026-07-07 21:17 EDT
 
 The `talkbank-transform` crate provides high-level pipelines that compose parsing, validation, and serialization into reusable workflows.
 
@@ -94,6 +94,28 @@ flowchart TD
 ## Streaming Parse
 
 For large files or interactive use, the transform crate supports streaming parse where utterances are processed incrementally rather than loading the entire AST into memory.
+
+## The shared validation runner (every frontend, one engine)
+
+All bulk validation, whatever the frontend, flows through the
+`validation_runner` module's two streaming entry points in
+`crates/talkbank-transform/src/validation_runner/`:
+
+- `validate_directory_streaming` walks a directory and feeds every CHAT
+  transcript to a worker pool;
+- `validate_files_streaming` runs an explicit file list through the same
+  worker pool.
+
+Both share one worker loop, so every consumer gets identical rule
+coverage (including the file-stem-dependent checks such as the `@Media`
+filename match), identical stats accounting, and the same on-disk cache.
+The `chatter` CLI, the TUI, and the desktop app all call these
+entry points; the desktop app's single-file path was unified onto
+`validate_files_streaming` in 0.3.0 after field reports showed the
+previous bespoke path skipped the cache and the stem-based checks.
+The invariant to preserve: no frontend grows its own validation
+orchestration; a file must validate identically whether selected alone
+or reached by a directory walk.
 
 ## Caching
 

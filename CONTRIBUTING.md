@@ -1,13 +1,13 @@
 # Contributing to chatter
 
-**Last modified:** 2026-06-13 20:49 EDT
+**Last modified:** 2026-07-07 21:17 EDT
 
 ## Development setup
 
 A fresh clone needs:
 
 - **Rust** (pinned by `rust-toolchain.toml` to a specific stable release,
-  currently `channel = "1.96.0"`, not a floating `stable`, so per-push CI
+  not a floating `stable`, so per-push CI
   is reproducible). `rustup` installs it automatically on first `cargo`
   invocation.
 - **mdBook + mdbook-mermaid + lychee** for building and link-checking the
