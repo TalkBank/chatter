@@ -1,5 +1,15 @@
 //! Tauri command handlers.
 
+
+// The tauri::command proc macro's generated wrappers for
+// Result-returning commands with borrowed State contain unreachable!
+// arms; the panic-policy lint fires on those EXPANSIONS (function-level
+// allows do not reach the generated sibling items, verified both
+// attribute orders 2026-07-08). Module-scoped allow with this comment
+// is the narrowest working scope; our own code in this module must
+// still not write unreachable! (reviewed at the PR level).
+#![allow(clippy::unreachable)]
+
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
@@ -44,10 +54,6 @@ impl Default for ValidationState {
 /// Start validation on a single file or folder target.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-// The tauri::command macro's generated wrapper for Result-returning
-// commands with borrowed State contains an unreachable! arm; the
-// panic-policy lint fires on that EXPANSION, not on our code.
-#[allow(clippy::unreachable)]
 pub async fn validate(
     app: AppHandle,
     state: State<'_, ValidationState>,
@@ -88,8 +94,6 @@ pub async fn validate(
 
 /// Cancel the current validation run.
 #[tauri::command]
-// Same tauri macro-expansion unreachable! as `validate` above.
-#[allow(clippy::unreachable)]
 pub async fn cancel_validation(state: State<'_, ValidationState>) -> Result<(), String> {
     // Atomically take the cancel sender (lock-free)
     if let Some(tx) = state.cancel_tx.swap(None) {
