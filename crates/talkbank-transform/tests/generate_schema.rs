@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Regenerate the canonical CHAT JSON Schema from the Rust data model.

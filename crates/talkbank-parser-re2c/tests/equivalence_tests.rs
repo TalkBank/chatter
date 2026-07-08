@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Parser equivalence tests: Re2cParser vs TreeSitterParser.

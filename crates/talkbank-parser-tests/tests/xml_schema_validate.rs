@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! XSD validation harness: every emitted XML must validate against

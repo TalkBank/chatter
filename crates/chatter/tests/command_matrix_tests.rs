@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Matrix-style integration coverage for representative `chatter` command families.

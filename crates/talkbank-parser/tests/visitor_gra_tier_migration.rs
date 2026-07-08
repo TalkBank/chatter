@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Characterization tests for the `%gra` dependent tier migrated onto the

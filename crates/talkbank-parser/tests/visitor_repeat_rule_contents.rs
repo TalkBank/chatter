@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Acceptance test for typed TOP-LEVEL repeat-RULE enumeration (Task 0d-A).

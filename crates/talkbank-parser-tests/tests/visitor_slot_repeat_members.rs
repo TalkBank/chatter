@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Task 0d-B acceptance: a slot-level `repeat(seq)` MEMBER enumerates EVERY

@@ -10,7 +10,6 @@
 //! provider-agnostic `JudgmentError` so callers never see a transport- or
 //! parser-specific type.
 
-
 // Unit-test modules: panic-family clippy lints relaxed by policy
 // (see the workspace [lints] table for the production deny).
 #![cfg_attr(
@@ -24,7 +23,6 @@
         clippy::unimplemented,
     )
 )]
-
 #![warn(missing_docs)]
 
 mod cache;

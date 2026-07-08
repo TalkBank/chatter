@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Thin proxy, delegates to `cargo run -q -p xtask -- lint-docs-sync`.

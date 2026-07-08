@@ -1,4 +1,3 @@
-
 // Unit-test modules: panic-family clippy lints relaxed by policy
 // (see the workspace [lints] table for the production deny).
 #![cfg_attr(
@@ -12,7 +11,6 @@
         clippy::unimplemented,
     )
 )]
-
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![deny(missing_docs)]
 //! SQLite-backed validation and roundtrip cache for CHAT workflows.

@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! Integration tests for the `TALKBANK_CHAT_CACHE_DIR` cache-root override.

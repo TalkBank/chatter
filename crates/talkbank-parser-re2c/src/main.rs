@@ -1,4 +1,3 @@
-
 // Unit-test modules: panic-family clippy lints relaxed by policy
 // (see the workspace [lints] table for the production deny).
 #![cfg_attr(

@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented,
+    clippy::unimplemented
 )]
 
 //! AppleDouble sidecar files (`._name.cha`, created by macOS on non-HFS volumes
