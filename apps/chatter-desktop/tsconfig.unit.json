@@ -8,12 +8,12 @@
     "lib": ["ES2021"],
     "module": "CommonJS",
     // The app source uses extensionless (bundler-style) imports; this test build
-    // compiles it to CommonJS for `node --test`, which needs classic Node
-    // resolution. node16/bundler would force rewriting every relative import.
-    // `ignoreDeprecations` acknowledges the node10 name-deprecation until a TS7
-    // toolchain migration.
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "6.0",
+    // compiles it to CommonJS for `node --test`. TypeScript 7 removed the old
+    // `node10` resolution and instead permits (and defaults to) `bundler`
+    // resolution with a CommonJS `module`, which accepts the extensionless
+    // relative imports as-is. Stated explicitly so the choice survives future
+    // default changes.
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": false,
     "isolatedModules": false,

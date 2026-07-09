@@ -72,7 +72,7 @@ sha2 = "0.11"
 
 # Serialization, schema, error reporting
 csv = "1"
-jsonschema = { version = "0.46", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.47", default-features = false, features = ["resolve-file"] }
 miette = { version = "7.6.0", features = ["derive"] }
 quick-xml = "0.41"
 schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
