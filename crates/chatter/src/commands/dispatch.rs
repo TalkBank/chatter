@@ -249,7 +249,13 @@ impl CommandFamilyService for UtilityCommandService {
                 input,
                 turns,
                 output,
-            } => crate::commands::rediarize::run_rediarize(&input, &turns, output.as_ref()),
+                summary_json,
+            } => crate::commands::rediarize::run_rediarize(
+                &input,
+                &turns,
+                output.as_ref(),
+                summary_json.as_deref(),
+            ),
             Commands::Batch {
                 donor_dir,
                 reference_dir,

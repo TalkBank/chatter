@@ -13,7 +13,9 @@ use tracing::{Level, info, span, warn};
 
 use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
 use talkbank_model::ParseValidateOptions;
-use talkbank_transform::rediarize::{TurnsJsonError, parse_turns_json, rediarize_content};
+use talkbank_transform::rediarize::{
+    RediarizeSummary, TurnsJsonError, parse_turns_json, rediarize_content,
+};
 
 /// Cap on individually-listed flagged utterances in the summary; a
 /// pathological input (e.g. an empty turns file) flags every utterance,
@@ -21,14 +23,20 @@ use talkbank_transform::rediarize::{TurnsJsonError, parse_turns_json, rediarize_
 /// reported.
 const MAX_FLAGGED_DETAILS: usize = 20;
 
-/// Top-level entry for `chatter rediarize INPUT --turns TURNS.json [-o OUT]`.
+/// Top-level entry for `chatter rediarize INPUT --turns TURNS.json [-o OUT]
+/// [--summary-json SUMMARY.json]`.
 ///
 /// Exit codes per the user-guide contract: 0 success (flagged
 /// utterances do not fail the command), 1 invalid input (unreadable
 /// file, CHAT parse failure, malformed turns JSON), 2 precondition
 /// violation (turns JSON parsed but is semantically defective, e.g. an
 /// inverted span). No output file is written on any non-zero exit.
-pub fn run_rediarize(input: &Path, turns_path: &Path, output: Option<&PathBuf>) {
+pub fn run_rediarize(
+    input: &Path,
+    turns_path: &Path,
+    output: Option<&PathBuf>,
+    summary_json: Option<&Path>,
+) {
     let _span = span!(
         Level::INFO,
         "chatter_rediarize",
@@ -95,6 +103,27 @@ pub fn run_rediarize(input: &Path, turns_path: &Path, output: Option<&PathBuf>) 
         None => {
             print!("{rewritten}");
         }
+    }
+
+    // Machine-readable summary, the seam batch drivers consume instead
+    // of scraping the human-readable stderr text below. Written after
+    // the CHAT output so it, too, describes a completed operation.
+    if let Some(summary_path) = summary_json {
+        let summary = RediarizeSummary::new(turns_file.source.as_ref(), &outcome);
+        let json = match serde_json::to_string_pretty(&summary) {
+            Ok(json) => json,
+            Err(e) => {
+                warn!("failed to serialize summary: {}", e);
+                eprintln!("Error serializing summary: {}", e);
+                std::process::exit(EXIT_INPUT_ERROR);
+            }
+        };
+        if let Err(e) = fs::write(summary_path, json + "\n") {
+            warn!("failed to write {}: {}", summary_path.display(), e);
+            eprintln!("Error writing {}: {}", summary_path.display(), e);
+            std::process::exit(EXIT_INPUT_ERROR);
+        }
+        info!("wrote summary JSON: {}", summary_path.display());
     }
 
     // Outcome summary AFTER the write so it describes a completed

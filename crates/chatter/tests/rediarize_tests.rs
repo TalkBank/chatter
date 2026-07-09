@@ -148,6 +148,64 @@ fn rediarize_splits_merged_track() -> Result<(), TestError> {
     Ok(())
 }
 
+/// `--summary-json` writes a machine-readable outcome summary, the
+/// contract batch drivers consume instead of scraping the stderr text.
+/// Shape: `{"source": ..., "reassigned": N, "unchanged": N,
+/// "flagged": [{"utterance_index": N, "kept_speaker": "...",
+/// "reason": "no_bullet" | "no_overlapping_turn"}]}`.
+#[test]
+fn rediarize_writes_summary_json() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let input = dir.path().join("undercounted.cha");
+    let turns = dir.path().join("partial-turns.json");
+    let out = dir.path().join("rediarized.cha");
+    let summary_path = dir.path().join("summary.json");
+    fs::write(&input, FIX_UNDERCOUNTED_2SPK)?;
+    // Turns cover only the first second: 1 unchanged (PAR0 already
+    // correct), 2 flagged (no overlapping turn), 0 reassigned.
+    fs::write(
+        &turns,
+        r#"{"source": "pyannote/speaker-diarization-community-1",
+            "turns": [{"track": "PAR0", "start_ms": 0, "end_ms": 1000}]}"#,
+    )?;
+
+    let output = harness.run_output(&[
+        "rediarize",
+        input.to_str().expect("utf-8 temp path"),
+        "--turns",
+        turns.to_str().expect("utf-8 temp path"),
+        "-o",
+        out.to_str().expect("utf-8 temp path"),
+        "--summary-json",
+        summary_path.to_str().expect("utf-8 temp path"),
+    ])?;
+    common::assert_success(&output, "chatter rediarize --summary-json");
+
+    let summary: serde_json::Value = serde_json::from_str(&fs::read_to_string(&summary_path)?)?;
+    assert_eq!(
+        summary["source"], "pyannote/speaker-diarization-community-1",
+        "summary should carry the turns-file provenance: {summary}"
+    );
+    assert_eq!(summary["reassigned"], 0, "no reassignments: {summary}");
+    assert_eq!(
+        summary["unchanged"], 3,
+        "unchanged includes flagged (they kept their speaker): {summary}"
+    );
+    let flagged = summary["flagged"]
+        .as_array()
+        .expect("flagged should be an array");
+    assert_eq!(
+        flagged.len(),
+        2,
+        "two utterances overlap no turn: {summary}"
+    );
+    assert_eq!(flagged[0]["utterance_index"], 1, "{summary}");
+    assert_eq!(flagged[0]["kept_speaker"], "PAR1", "{summary}");
+    assert_eq!(flagged[0]["reason"], "no_overlapping_turn", "{summary}");
+    Ok(())
+}
+
 /// A turns file with an inverted span (`end_ms < start_ms`) is a
 /// defective diarization input: the command must refuse it with a
 /// diagnostic naming the problem, not silently proceed.

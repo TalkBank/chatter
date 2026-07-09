@@ -249,6 +249,12 @@ pub enum Commands {
         /// Output path (prints to stdout if omitted).
         #[arg(short, long)]
         output: Option<PathBuf>,
+
+        /// Also write a machine-readable outcome summary (counts plus
+        /// the full flagged list) as JSON to this path. Shape contract:
+        /// the rediarize book page.
+        #[arg(long)]
+        summary_json: Option<PathBuf>,
     },
 
     /// EXPERIMENTAL. Batch driver: loop `chatter pipeline` over matched donor /

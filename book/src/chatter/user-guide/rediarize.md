@@ -1,7 +1,7 @@
 # Rediarize (`chatter rediarize`)
 
 **Status:** Draft
-**Last modified:** 2026-07-08 18:41 EDT
+**Last modified:** 2026-07-08 21:50 EDT
 
 `chatter rediarize` re-attributes utterance speakers in a CHAT file
 from an external diarization. Given a transcript whose utterances
@@ -60,6 +60,42 @@ rediarize: 214 reassigned, 671 unchanged, 7 flagged
 
 Flagged utterances (see below) are listed individually with their
 utterance index, kept speaker, and reason.
+
+## Machine-readable summary (`--summary-json`)
+
+Batch drivers looping `rediarize` over a corpus should not scrape the
+stderr text. `--summary-json PATH` additionally writes the outcome as
+JSON:
+
+```bash
+chatter rediarize INPUT.cha --turns TURNS.json \
+    -o OUTPUT.cha --summary-json SUMMARY.json
+```
+
+```json
+{
+  "source": "pyannote/speaker-diarization-community-1",
+  "reassigned": 747,
+  "unchanged": 145,
+  "flagged": [
+    {"utterance_index": 12, "kept_speaker": "PAR1",
+     "reason": "no_overlapping_turn"}
+  ]
+}
+```
+
+- `source`: the turns file's provenance, passed through (`null` if the
+  turns file carried none).
+- `reassigned` / `unchanged`: utterance counts. `unchanged` includes
+  flagged utterances (they kept their speaker), so the file's total
+  bulleted-tier utterance count is `reassigned + unchanged`.
+- `flagged`: every declined reattribution, **never truncated** (the
+  stderr listing caps at 20 detail lines; this list is complete).
+  `utterance_index` is the 0-based position among main-tier lines;
+  `reason` is `"no_bullet"` or `"no_overlapping_turn"`.
+
+Field names and the `reason` strings are a stable output contract.
+The summary is written only on exit 0, after the CHAT output.
 
 ## The turns JSON format
 

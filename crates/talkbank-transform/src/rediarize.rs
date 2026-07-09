@@ -82,7 +82,12 @@ pub struct DiarizationTurn {
 }
 
 /// Why an utterance was left unchanged instead of reassigned.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Serializes as `"no_bullet"` / `"no_overlapping_turn"` in the
+/// machine-readable summary (see [`RediarizeSummary`]); those strings
+/// are a stable output contract for batch consumers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FlagReason {
     /// The utterance carries no media time bullet, so it cannot be placed
     /// on the diarization timeline.
@@ -196,7 +201,11 @@ pub fn parse_turns_json(text: &str) -> Result<TurnsFile, TurnsJsonError> {
 /// An utterance the transform could not confidently reattribute. Carries
 /// the 0-based main-tier position and the speaker it kept, so the caller
 /// can review or route it to human adjudication.
-#[derive(Debug, Clone)]
+///
+/// The serde field names (`utterance_index`, `kept_speaker`, `reason`)
+/// are the machine-readable summary contract (see [`RediarizeSummary`]);
+/// renaming a field is a breaking change to that contract.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct FlaggedUtterance {
     /// 0-based position of the utterance among main-tier lines.
     pub utterance_index: usize,
@@ -217,6 +226,48 @@ pub struct RediarizeOutcome {
     pub unchanged: usize,
     /// Utterances that could not be confidently reattributed.
     pub flagged: Vec<FlaggedUtterance>,
+}
+
+/// Machine-readable mirror of one rediarize pass: what `chatter
+/// rediarize --summary-json` writes, shared here so every frontend
+/// (CLI, desktop) emits the identical contract. Borrows from the
+/// outcome and turns file; serialize it, don't store it.
+///
+/// JSON shape (a stable output contract, documented in
+/// `book/src/chatter/user-guide/rediarize.md`):
+///
+/// ```json
+/// {"source": "pyannote/...", "reassigned": 747, "unchanged": 145,
+///  "flagged": [{"utterance_index": 12, "kept_speaker": "PAR1",
+///               "reason": "no_overlapping_turn"}]}
+/// ```
+///
+/// `unchanged` includes flagged utterances (they kept their speaker),
+/// so total utterances = `reassigned + unchanged`.
+#[derive(Debug, serde::Serialize)]
+pub struct RediarizeSummary<'a> {
+    /// Producer provenance from the turns file, if it carried one.
+    pub source: Option<&'a str>,
+    /// Utterances whose speaker changed to a different track.
+    pub reassigned: usize,
+    /// Utterances that kept their speaker (already correct, or flagged).
+    pub unchanged: usize,
+    /// Every utterance the transform declined to reattribute (unlike the
+    /// human-readable stderr summary, this list is never truncated).
+    pub flagged: &'a [FlaggedUtterance],
+}
+
+impl<'a> RediarizeSummary<'a> {
+    /// Assemble the summary from a pass's outcome plus the turns-file
+    /// provenance it was driven by.
+    pub fn new(source: Option<&'a DiarizationSource>, outcome: &'a RediarizeOutcome) -> Self {
+        Self {
+            source: source.map(DiarizationSource::as_str),
+            reassigned: outcome.reassigned,
+            unchanged: outcome.unchanged,
+            flagged: &outcome.flagged,
+        }
+    }
 }
 
 /// Content-level entry point mirroring `speaker_id::apply_mapping`:
