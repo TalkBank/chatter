@@ -1363,9 +1363,11 @@
    "check_code": 160,
    "check_message": "Space character is not allowed after '<' or before '>' character.",
    "fixture": "CHECK_160_space_in_angle.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A space directly after '<' or directly before '>' on a main (or %wor) tier. GAP: chatter accepts '*CHI:\\t< dog> [/] dog .' (rc=0, fresh --force validation). Both CLAN sub-cases (space after '<', check.cpp:4300; space before '>', 4306) are governed by the same rule; only the space-after-'<' variant was grounded."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E750"
+   ],
+   "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750_space_inside_angle_group.md. Main-tier groups covered; %wor angle groups not separately grounded."
   },
   {
    "check_code": 161,

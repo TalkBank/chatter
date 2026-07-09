@@ -788,6 +788,17 @@ pub enum ErrorCode {
     #[code("E749")]
     CommaGluedToNextWord,
 
+    /// A space directly after the opening `<` or directly before the
+    /// closing `>` of an angle-bracket group (`< dog>` / `<dog >`).
+    ///
+    /// Group delimiters hug their content (CLAN CHECK 160). The grammar
+    /// tolerates the whitespace as an explicit optional `whitespaces`
+    /// CST node so the parse recovers; this diagnostic marks the file
+    /// invalid instead of silently dropping the space (which also
+    /// silently rewrote the text on normalize).
+    #[code("E750")]
+    SpaceInsideAngleGroup,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

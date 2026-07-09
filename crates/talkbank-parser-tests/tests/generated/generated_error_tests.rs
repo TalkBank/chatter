@@ -1570,3 +1570,49 @@ fn test_e748_leading_zero_bullet_time_utf8_begin_languages_1() -> Result<(), tal
     Ok(())
 }
 
+
+/// Tests expected behavior.
+#[test]
+fn test_e750_space_inside_angle_group_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog> [/] dog .\n@Comment:\tERROR: space directly after the opening angle bracket\n@End");
+
+    let errors = match result {
+        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
+        Err(errors) => errors,
+    };
+
+    let expected_codes = vec!["E750"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+
+
+/// Tests expected behavior.
+#[test]
+fn test_e750_space_inside_angle_group_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t<dog > [/] dog .\n@Comment:\tERROR: space directly before the closing angle bracket\n@End");
+
+    let errors = match result {
+        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
+        Err(errors) => errors,
+    };
+
+    let expected_codes = vec!["E750"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+

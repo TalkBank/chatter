@@ -50,6 +50,37 @@ fn report_comma_glued_to_next_word<'a>(tokens: &[Token<'a>], errors: &impl Error
     }
 }
 
+/// Report E750 for whitespace hugging an angle-group delimiter: a
+/// `LessThan` token immediately followed by whitespace, or whitespace
+/// immediately followed by `GreaterThan` (`< dog>` / `<dog >`; CLAN
+/// CHECK 160). Mirrors the tree-sitter parser's check in the group
+/// parser (`main_tier/content/group/parser.rs`); token-level here
+/// because the lexer tokenizes whitespace explicitly, so the pattern
+/// is directly visible in the stream.
+fn report_space_inside_angle_group<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for pair in tokens.windows(2) {
+        let position =
+            if matches!(pair[0], Token::LessThan(_)) && matches!(pair[1], Token::Whitespace(_)) {
+                Some("after '<'")
+            } else if matches!(pair[0], Token::Whitespace(_))
+                && matches!(pair[1], Token::GreaterThan(_))
+            {
+                Some("before '>'")
+            } else {
+                None
+            };
+        if let Some(position) = position {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::SpaceInsideAngleGroup,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                format!("Space is not allowed {position} in an angle-bracket group"),
+            ));
+        }
+    }
+}
+
 /// Report E748 for every media-bullet timestamp written with a leading
 /// zero before another digit (`012`); a bare `0` is legal. Mirrors the
 /// tree-sitter parser's check in `media_bullet.rs` (CLAN CHECK 90,
@@ -92,6 +123,7 @@ pub fn parse_file_with_errors<'a>(
 ) -> ChatFile<'a> {
     report_leading_zero_bullet_times(tokens, errors);
     report_comma_glued_to_next_word(tokens, errors);
+    report_space_inside_angle_group(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
 

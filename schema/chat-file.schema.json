@@ -3281,6 +3281,11 @@
           "type": "string"
         },
         {
+          "const": "E750",
+          "description": "A space directly after the opening `<` or directly before the\nclosing `>` of an angle-bracket group (`< dog>` / `<dog >`).\n\nGroup delimiters hug their content (CLAN CHECK 160). The grammar\ntolerates the whitespace as an explicit optional `whitespaces`\nCST node so the parse recovers; this diagnostic marks the file\ninvalid instead of silently dropping the space (which also\nsilently rewrote the text on normalize).",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

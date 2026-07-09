@@ -15,6 +15,38 @@ use tree_sitter::Node;
 use super::super::super::annotations::parse_scoped_annotations;
 use super::contents::parse_group_contents;
 
+/// Which group delimiter the offending whitespace touches; drives the
+/// E750 message wording only.
+#[derive(Clone, Copy)]
+enum AngleSide {
+    /// Whitespace directly after the opening `<`.
+    AfterOpen,
+    /// Whitespace directly before the closing `>`.
+    BeforeClose,
+}
+
+/// Report E750 for a `whitespaces` CST node sitting inside the group
+/// delimiters (CLAN CHECK 160). The parse continues; the diagnostic
+/// alone marks the file invalid.
+fn report_space_inside_angle_group(
+    child: Node,
+    source: &str,
+    errors: &impl ErrorSink,
+    side: AngleSide,
+) {
+    let position = match side {
+        AngleSide::AfterOpen => "after '<'",
+        AngleSide::BeforeClose => "before '>'",
+    };
+    errors.report(ParseError::new(
+        ErrorCode::SpaceInsideAngleGroup,
+        Severity::Error,
+        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
+        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
+        format!("Space is not allowed {position} in an angle-bracket group"),
+    ));
+}
+
 /// Parse one `group_with_annotations` node into group utterance content, preserving the `<...>[...]` semantics.
 ///
 /// CHAT group annotations appear as `< contents > base_annotations` and are described in the Group and Annotation
@@ -64,12 +96,14 @@ pub(crate) fn parse_group_content(
         }
     }
 
-    // Position 1: optional whitespaces after <
+    // Position 1: optional whitespaces after <. The grammar tolerates
+    // it so the parse recovers, but it is invalid CHAT (CLAN CHECK
+    // 160): report E750 instead of silently dropping the space.
     if idx < child_count
         && let Some(child) = node.child(idx as u32)
         && child.kind() == WHITESPACES
     {
-        // Skip optional whitespace
+        report_space_inside_angle_group(child, source, errors, AngleSide::AfterOpen);
         idx += 1;
     }
 
@@ -78,6 +112,27 @@ pub(crate) fn parse_group_content(
         && let Some(child) = node.child(idx as u32)
     {
         if child.kind() == CONTENTS {
+            // In the real CST the delimiter-hugging whitespace lands
+            // INSIDE `contents` as its first/last child (empirically
+            // verified on the CHECK-160 fixture), not as a sibling
+            // between `less_than` and `contents` as the grammar sketch
+            // above suggests; check both shapes. Only the edge
+            // positions violate CHECK 160; interior whitespace between
+            // words is legal.
+            let contents_children = child.child_count();
+            if contents_children > 0 {
+                if let Some(first) = child.child(0)
+                    && first.kind() == WHITESPACES
+                {
+                    report_space_inside_angle_group(first, source, errors, AngleSide::AfterOpen);
+                }
+                if contents_children > 1
+                    && let Some(last) = child.child((contents_children - 1) as u32)
+                    && last.kind() == WHITESPACES
+                {
+                    report_space_inside_angle_group(last, source, errors, AngleSide::BeforeClose);
+                }
+            }
             group_items = parse_group_contents(child, source, errors);
             idx += 1;
         } else {
@@ -95,12 +150,13 @@ pub(crate) fn parse_group_content(
         }
     }
 
-    // Next: optional whitespaces before >
+    // Next: optional whitespaces before >. Same E750 contract as the
+    // after-`<` position above.
     if idx < child_count
         && let Some(child) = node.child(idx as u32)
         && child.kind() == WHITESPACES
     {
-        // Skip optional whitespace
+        report_space_inside_angle_group(child, source, errors, AngleSide::BeforeClose);
         idx += 1;
     }
 
