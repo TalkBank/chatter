@@ -474,10 +474,11 @@
    "expected_chatter_codes": [
     "E316"
    ],
-   "note": "A time bullet (\\x15) opened but never closed before end of scan; hidenc stays TRUE at word end (check.cpp:4049/4797). Fixture: '%pho:\\thello \\x15123' with no closing \\x15. QUIRK: on the unix build CLAN prints the error banner with an EMPTY message line: check_mess case 59's printf is inside '#if _MAC_CODE/#elif _WIN32' so on unix it only prints when err_itm is empty, and err_itm is always '<bullet>' here (check_displ). Trigger confirmed empirically with '+e59' (block prints) vs '+e1' (clean). Ma",
+   "note": "A time bullet (\\x15) opened but never closed before end of scan; hidenc stays TRUE at word end (check.cpp:4049/4797). Fixture: '%pho:\\thello \\x15123' with no closing \\x15. QUIRK: on the unix build CLAN prints the error banner with an EMPTY message line: check_mess case 59's printf is inside '#if _MAC_CODE/#elif _WIN32', so no (59) trailer and no message text ever appear. Grounded banner_only: run restricted to '+e59' (block prints) and cross-checked '+e1' (clean), re-confirmed 2026-07-09.",
    "clan_flags": [
     "+e59"
-   ]
+   ],
+   "banner_only": true
   },
   {
    "check_code": 60,
@@ -946,9 +947,9 @@
    "fixture": "CHECK_114_media_no_keyword.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E502"
+    "E316"
    ],
-   "note": "@Media header names a media file but lists neither 'audio' nor 'video' keyword. No dedicated chatter code; the grammar makes a keywordless @Media unparsable (E316 on the @Media line), so the same construct is rejected at parse time."
+   "note": "@Media names a media file but lists neither 'audio' nor 'video'; CLAN emits (114) on the @Media line. FIXTURE REPAIRED 2026-07-09: the survey-batch copy was truncated mid-@Media-line (no utterance, no @End), so CLAN aborted first-pass with (7) and could never reach 114; the drift guard caught it. chatter rejects the keywordless @Media at parse time (E316 unparsable header line; an incidental E747 blank-line cascade fires on the newline the recovery leaves behind, deliberately not asserted)."
   },
   {
    "check_code": 115,

@@ -87,6 +87,16 @@ struct ParityEntry {
     /// grounding test then matches the message text instead.
     #[serde(default)]
     no_numeric_suffix: bool,
+    /// True for codes whose unix-build CLAN prints an EMPTY message
+    /// line (code 59: `check_mess`'s printf sits behind
+    /// `#if _MAC_CODE/#elif _WIN32`), so neither a `(NN)` trailer nor
+    /// message text ever appears. Grounding then relies on the
+    /// `THERE WERE SOME ERROR(S) FOUND` banner, which is sound ONLY
+    /// when `clan_flags` is exactly `+e<check_code>` (CHECK restricted
+    /// to this one code); the grounding test enforces that flag shape
+    /// and fails the entry otherwise (fail closed, never vacuous).
+    #[serde(default)]
+    banner_only: bool,
     #[serde(default)]
     note: String,
 }
@@ -259,7 +269,19 @@ fn clan_check_grounding() -> Result<(), TestError> {
         // The pty emits CRLF; strip CR before scanning the (NN) trailers.
         let text = String::from_utf8_lossy(&output.stdout).replace('\r', "");
         let emitted = parse_check_numbers(&text);
-        let grounded = if entry.no_numeric_suffix {
+        let grounded = if entry.banner_only {
+            // Sound only when CHECK is restricted to exactly this code;
+            // otherwise any unrelated error would ground it vacuously.
+            let exclusive_flag = format!("+e{}", entry.check_code);
+            if entry.clan_flags != [exclusive_flag] {
+                failures.push(format!(
+                    "CHECK {} ({}): banner_only requires clan_flags == [\"+e{}\"], got {:?}",
+                    entry.check_code, entry.fixture, entry.check_code, entry.clan_flags
+                ));
+                continue;
+            }
+            text.contains("THERE WERE SOME ERROR(S) FOUND")
+        } else if entry.no_numeric_suffix {
             text.contains(entry.check_message.trim())
         } else {
             emitted.contains(&entry.check_code)
