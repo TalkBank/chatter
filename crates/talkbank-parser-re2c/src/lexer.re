@@ -153,8 +153,15 @@ impl<'a> Iterator for Lexer<'a> {
         // Word text segment: first char + zero or more rest chars
         w_text = ws_first ws_rest*;
 
-        // Shortening: (text) where text is a word_segment inside parens
-        w_short = "(" [^\x00 \t\r\n)]+ ")";
+        // Shortening: (text) where text is a word_segment inside parens.
+        // The interior is w_text, faithful to grammar.js
+        // `shortening: seq('(', $.word_segment, ')')`. The previous
+        // catch-all interior ([^\x00 \t\r\n)]+) wrongly absorbed pauses
+        // glued to a word end (`hello(.)`) into the word as a
+        // "shortening", diverging from the tree-sitter parser (which
+        // lexes word + pause) and masking CHECK-57/E751 (found
+        // 2026-07-09 via the CHECK_057 parity fixture).
+        w_short = "(" w_text ")";
 
         // Stress markers
         w_stress = [\u02C8\u02CC];

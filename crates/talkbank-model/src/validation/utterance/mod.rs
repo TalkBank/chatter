@@ -16,6 +16,7 @@ mod comma;
 mod overlap;
 mod phon_xtier;
 mod quotation;
+mod spacing;
 mod tiers;
 mod underline;
 
@@ -36,5 +37,6 @@ pub(crate) use overlap::check_overlap_index_values;
 pub(crate) use overlap::check_overlap_markers;
 pub(crate) use phon_xtier::check_phon_xtiers;
 pub(crate) use quotation::check_quotation_balance;
+pub(crate) use spacing::check_pause_glued_to_word;
 pub(crate) use tiers::check_no_duplicate_dependent_tiers;
 pub(crate) use underline::check_underline_balance;

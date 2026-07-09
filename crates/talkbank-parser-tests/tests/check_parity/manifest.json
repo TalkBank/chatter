@@ -462,9 +462,11 @@
    "check_code": 57,
    "check_message": "Please add space between word and pause symbol: '('.",
    "fixture": "CHECK_057_pause_glued_to_word.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A pause '(.)' opening directly attached to the end of a word with no space (check.cpp:4437, isPause at position e during word scan). chatter accepts 'hello(.) there .' (exit 0), presumably parsing '(.)' as omitted material or a pause without requiring the space. CLAN also emits (48) on the fixture."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E751"
+   ],
+   "note": "Pause '(' opening directly at the end of a word (check.cpp 4437). GAP CLOSED 2026-07-09: model validation check_pause_glued_to_word (span adjacency, utterance/spacing.rs) + re2c word-then-pause token-window mirror. Spec: E751_pause_glued_to_word.md. CLAN also emits (48) on the same fixture; expected_chatter_codes are subset-asserted so E751 alone is the pinned signal."
   },
   {
    "check_code": 59,

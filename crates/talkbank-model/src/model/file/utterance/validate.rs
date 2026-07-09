@@ -72,6 +72,9 @@ impl Validate for Utterance {
         // E749: comma glued to the following word (CLAN CHECK 92).
         crate::validation::utterance::check_comma_glued_to_next(self, errors);
 
+        // E751: pause glued to the preceding word (CLAN CHECK 57).
+        crate::validation::utterance::check_pause_glued_to_word(self, errors);
+
         // E401: Validate no duplicate dependent tiers
         crate::validation::utterance::check_no_duplicate_dependent_tiers(self, errors);
 

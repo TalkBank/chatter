@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-09 13:20 EDT
+**Last modified:** 2026-07-09 14:05 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word |
 | W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
 
 ## Common Errors and Fixes
@@ -184,6 +184,11 @@ Group delimiters hug their content: write `<dog> [/]`, never `< dog>`
 or `<dog >`. Mirrors CLAN CHECK error 160. Each offending space gets
 its own diagnostic; the group still parses, so downstream tooling sees
 the intended structure.
+
+### E751: Pause glued to the preceding word
+
+A pause marker must be space-delimited from the word before it: write
+`hello (.) there`, not `hello(.) there`. Mirrors CLAN CHECK error 57.
 
 ## Generated Error Documentation
 

@@ -3286,6 +3286,11 @@
           "type": "string"
         },
         {
+          "const": "E751",
+          "description": "A pause marker glued to the end of the preceding word\n(`hello(.)`).\n\nPauses are free-standing, space-delimited items (CLAN CHECK 57).\nDetected by span adjacency over the in-order content walk: the\npause's span starts at the byte where the previous word's span\nends.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

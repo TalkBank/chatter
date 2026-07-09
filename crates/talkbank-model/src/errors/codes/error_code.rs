@@ -799,6 +799,16 @@ pub enum ErrorCode {
     #[code("E750")]
     SpaceInsideAngleGroup,
 
+    /// A pause marker glued to the end of the preceding word
+    /// (`hello(.)`).
+    ///
+    /// Pauses are free-standing, space-delimited items (CLAN CHECK 57).
+    /// Detected by span adjacency over the in-order content walk: the
+    /// pause's span starts at the byte where the previous word's span
+    /// ends.
+    #[code("E751")]
+    PauseGluedToWord,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

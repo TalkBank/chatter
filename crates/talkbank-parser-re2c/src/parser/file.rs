@@ -81,6 +81,32 @@ fn report_space_inside_angle_group<'a>(tokens: &[Token<'a>], errors: &impl Error
     }
 }
 
+/// Report E751 for every pause token immediately following a word token
+/// with no whitespace between (`hello(.)`; CLAN CHECK 57). Mirrors the
+/// model-validation rule `check_pause_glued_to_word` (talkbank-model
+/// `validation/utterance/spacing.rs`), which cannot fire on this
+/// parser's output because its pauses carry dummy spans.
+fn report_pause_glued_to_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for pair in tokens.windows(2) {
+        let is_pause = matches!(
+            pair[1],
+            Token::PauseShort(_)
+                | Token::PauseMedium(_)
+                | Token::PauseLong(_)
+                | Token::PauseTimed(_)
+        );
+        if matches!(pair[0], Token::Word { .. }) && is_pause {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::PauseGluedToWord,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Pause must be separated from the preceding word by a space".to_owned(),
+            ));
+        }
+    }
+}
+
 /// Report E748 for every media-bullet timestamp written with a leading
 /// zero before another digit (`012`); a bare `0` is legal. Mirrors the
 /// tree-sitter parser's check in `media_bullet.rs` (CLAN CHECK 90,
@@ -124,6 +150,7 @@ pub fn parse_file_with_errors<'a>(
     report_leading_zero_bullet_times(tokens, errors);
     report_comma_glued_to_next_word(tokens, errors);
     report_space_inside_angle_group(tokens, errors);
+    report_pause_glued_to_word(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
 

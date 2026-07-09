@@ -1603,6 +1603,14 @@
       "source_spec": "spec/errors/E749_comma_glued_to_next_word.md"
     },
     {
+      "fixture": "E751_Pause_glued_to_the_preceding_word.cha",
+      "expected_codes": [
+        "E751"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E751_pause_glued_to_word.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"
