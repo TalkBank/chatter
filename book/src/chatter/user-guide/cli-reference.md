@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-07-07 21:20 EDT
+**Last modified:** 2026-07-08 18:41 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -27,6 +27,7 @@ flowchart TD
 
     chatter --> merge["merge\n(experimental)"]
     chatter --> speakerid["speaker-id\n(experimental)"]
+    chatter --> rediarize["rediarize\n(experimental)"]
     chatter --> adjudicate["adjudicate\n(experimental)"]
     chatter --> pipeline["pipeline\n(experimental)"]
     chatter --> batch["batch\n(experimental)"]
@@ -52,6 +53,7 @@ chatter schema
 chatter debug ...
 chatter merge FILE1 FILE2          # experimental: combine two transcripts
 chatter speaker-id INPUT           # experimental
+chatter rediarize INPUT --turns T  # experimental
 chatter adjudicate ...             # experimental
 chatter pipeline ...               # experimental
 chatter batch ...                  # experimental
@@ -358,12 +360,14 @@ yet complete. Work on copies and validate the output.
 |---------|--------------|
 | `merge` | Merge two CHAT transcripts of the same media into one, interleaving by time with explicit per-speaker provenance. Structural only: no ASR, no forced alignment, no content rewriting. |
 | `speaker-id` | Assign CHAT-conformant speaker codes to an anonymously-labeled file, from an explicit mapping or by text similarity against a reference transcript. |
+| `rediarize` | Re-attribute utterance speakers from an external diarizer's timestamped turns (JSON), keeping the words: repairs transcripts whose ASR under-counted or mixed speakers. |
 | `adjudicate` | Resolve pending decisions (currently speaker-id) interactively or from a scripted decision file, writing results to an override file. |
 | `pipeline` | Per-session shortcut: run `speaker-id` in reference mode, then `merge`. |
 | `batch` | Loop `pipeline` over matched donor / reference file pairs across two directories. |
 | `sanity-scan` | Post-merge QA: flag sessions whose automatic decisions look suspicious by an out-of-band heuristic, for operator review via `adjudicate`. |
 
-Full guides: [Merge](merge.md), [Speaker ID](speaker-id.md), and the
+Full guides: [Merge](merge.md), [Speaker ID](speaker-id.md),
+[Rediarize](rediarize.md), and the
 [Merge Workflow](merge-workflow.md) walkthrough. The holistic-judgment
 mode of `speaker-id` / `pipeline` / `batch` can call an LLM provider
 (`talkbank-llm`) when configured via `--llm-endpoint` / `--llm-model`

@@ -35,6 +35,7 @@ pub mod merge_preflight;
 pub mod new_file;
 pub mod normalize;
 pub mod pipeline;
+pub mod rediarize;
 pub mod sanity_scan;
 pub mod schema;
 pub mod speaker_id;

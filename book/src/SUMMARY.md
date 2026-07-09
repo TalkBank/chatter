@@ -23,6 +23,7 @@
 - [CHAT Processing Playbook (Editors & Analysts)](chatter/user-guide/chat-processing-playbook.md)
 - [Sanitize (Protected Corpora)](chatter/user-guide/sanitize.md)
 - [Speaker-ID (Label ASR Speakers)](chatter/user-guide/speaker-id.md)
+- [Rediarize (Repair Speaker Attribution)](chatter/user-guide/rediarize.md)
 - [Merge (Transcript Combination)](chatter/user-guide/merge.md)
 - [Merge Workflow (pipeline, batch, adjudicate, sanity-scan)](chatter/user-guide/merge-workflow.md)
 

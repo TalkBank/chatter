@@ -229,6 +229,28 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
+    /// EXPERIMENTAL. Re-attribute utterance speakers from an external
+    /// diarization. Each utterance with a media time bullet is assigned
+    /// to the diarization track with the greatest time overlap; the
+    /// words are kept byte-stable. Repairs transcripts whose ASR
+    /// under-counted or mixed speakers. See
+    /// `book/src/chatter/user-guide/rediarize.md`.
+    Rediarize {
+        /// Input CHAT file whose utterances carry time bullets.
+        input: PathBuf,
+
+        /// Turns JSON from the external diarizer:
+        /// `{"source": "...", "turns": [{"track": "PAR0",
+        /// "start_ms": 0, "end_ms": 1200}, ...]}`. Format contract:
+        /// the rediarize book page.
+        #[arg(long)]
+        turns: PathBuf,
+
+        /// Output path (prints to stdout if omitted).
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
     /// EXPERIMENTAL. Batch driver: loop `chatter pipeline` over matched donor /
     /// reference pairs in two directories. Files match by basename;
     /// donors without a matching reference are warned and skipped.

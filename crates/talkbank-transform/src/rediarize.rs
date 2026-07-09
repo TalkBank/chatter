@@ -26,8 +26,13 @@
 
 use std::collections::HashSet;
 
+use talkbank_model::ParseValidateOptions;
 use talkbank_model::model::header::{Header, ParticipantEntries, ParticipantEntry};
 use talkbank_model::model::{ChatFile, Line, SpeakerCode};
+
+use crate::PipelineError;
+use crate::pipeline::parse_and_validate;
+use crate::serialize::to_chat_string;
 
 /// A half-open media time span in milliseconds (`[start_ms, end_ms)`).
 ///
@@ -86,6 +91,108 @@ pub enum FlagReason {
     NoOverlappingTurn,
 }
 
+impl std::fmt::Display for FlagReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoBullet => write!(f, "no time bullet"),
+            Self::NoOverlappingTurn => write!(f, "no overlapping diarization turn"),
+        }
+    }
+}
+
+/// Free-form provenance a turns file carries about its producer,
+/// typically the diarizer model name (e.g.
+/// `pyannote/speaker-diarization-community-1`). Reported in audit
+/// trails; never interpreted by the transform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiarizationSource(String);
+
+impl DiarizationSource {
+    /// The provenance string as given by the producer.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for DiarizationSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// The parsed, validated content of a turns JSON file: the documented
+/// data seam between an external diarizer and this transform. Format
+/// contract: `book/src/chatter/user-guide/rediarize.md`.
+#[derive(Debug)]
+pub struct TurnsFile {
+    /// Optional producer provenance (`"source"` in the JSON).
+    pub source: Option<DiarizationSource>,
+    /// The timestamped diarization turns, validated (no inverted spans).
+    pub turns: Vec<DiarizationTurn>,
+}
+
+/// Why a turns JSON file was rejected. `Json` is malformed input
+/// (not JSON, wrong shape, unknown fields); `InvertedTurn` is
+/// well-formed JSON whose data is semantically defective.
+#[derive(Debug, thiserror::Error)]
+pub enum TurnsJsonError {
+    /// The text is not valid JSON or does not match the documented
+    /// shape (including unknown fields, which are rejected so typos
+    /// fail loudly).
+    #[error("turns JSON is malformed: {0}")]
+    Json(#[from] serde_json::Error),
+    /// A turn's span is inverted (`end_ms < start_ms`): defective
+    /// diarizer output the caller must fix at the source.
+    #[error("turn at index {index}: {source}")]
+    InvertedTurn {
+        /// 0-based index of the offending turn in the `turns` array.
+        index: usize,
+        /// The underlying span inversion.
+        source: InvertedSpan,
+    },
+}
+
+/// Raw serde mirror of the turns JSON. Unknown fields are rejected:
+/// a misspelled `start_ms` must fail the parse, not silently drop
+/// timing data.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTurnsFile {
+    #[serde(default)]
+    source: Option<String>,
+    turns: Vec<RawTurn>,
+}
+
+/// One raw turn entry as it appears in the JSON.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTurn {
+    track: String,
+    start_ms: u64,
+    end_ms: u64,
+}
+
+/// Parse the documented turns JSON into validated [`DiarizationTurn`]s.
+/// Rejects malformed JSON, unknown fields, and inverted spans; track
+/// codes are taken as given (the producer owns the diarizer-label to
+/// CHAT-code mapping).
+pub fn parse_turns_json(text: &str) -> Result<TurnsFile, TurnsJsonError> {
+    let raw: RawTurnsFile = serde_json::from_str(text)?;
+    let mut turns = Vec::with_capacity(raw.turns.len());
+    for (index, turn) in raw.turns.into_iter().enumerate() {
+        let span = TimeSpanMs::new(turn.start_ms, turn.end_ms)
+            .map_err(|source| TurnsJsonError::InvertedTurn { index, source })?;
+        turns.push(DiarizationTurn {
+            track: SpeakerCode::new(&turn.track),
+            span,
+        });
+    }
+    Ok(TurnsFile {
+        source: raw.source.map(DiarizationSource),
+        turns,
+    })
+}
+
 /// An utterance the transform could not confidently reattribute. Carries
 /// the 0-based main-tier position and the speaker it kept, so the caller
 /// can review or route it to human adjudication.
@@ -110,6 +217,20 @@ pub struct RediarizeOutcome {
     pub unchanged: usize,
     /// Utterances that could not be confidently reattributed.
     pub flagged: Vec<FlaggedUtterance>,
+}
+
+/// Content-level entry point mirroring `speaker_id::apply_mapping`:
+/// parse `content`, run [`rediarize`], and re-serialize through the
+/// typed model. This is the seam the CLI (and any future desktop
+/// surface) calls, so frontends share one implementation.
+pub fn rediarize_content(
+    content: &str,
+    turns: &[DiarizationTurn],
+    options: ParseValidateOptions,
+) -> Result<(String, RediarizeOutcome), PipelineError> {
+    let chat = parse_and_validate(content, options)?;
+    let (rewritten, outcome) = rediarize(&chat, turns);
+    Ok((to_chat_string(&rewritten), outcome))
 }
 
 /// Re-attribute every bulleted utterance in `chat` to its maximum-overlap
@@ -169,7 +290,10 @@ pub fn rediarize(chat: &ChatFile, turns: &[DiarizationTurn]) -> (ChatFile, Redia
 
 /// The diarization track with the greatest overlap against `bullet`, or
 /// `None` if no turn overlaps it at all.
-fn best_track(bullet: &talkbank_model::model::Bullet, turns: &[DiarizationTurn]) -> Option<SpeakerCode> {
+fn best_track(
+    bullet: &talkbank_model::model::Bullet,
+    turns: &[DiarizationTurn],
+) -> Option<SpeakerCode> {
     let utt = TimeSpanMs {
         start_ms: bullet.timing.start_ms,
         end_ms: bullet.timing.end_ms,

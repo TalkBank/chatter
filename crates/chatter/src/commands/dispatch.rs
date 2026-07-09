@@ -81,6 +81,7 @@ impl Commands {
             | Self::NewFile { .. }
             | Self::Merge { .. }
             | Self::SpeakerId { .. }
+            | Self::Rediarize { .. }
             | Self::Adjudicate { .. }
             | Self::Pipeline { .. }
             | Self::Batch { .. }
@@ -244,6 +245,11 @@ impl CommandFamilyService for UtilityCommandService {
                     session_context_path: judgment.session_context.as_deref(),
                 },
             ),
+            Commands::Rediarize {
+                input,
+                turns,
+                output,
+            } => crate::commands::rediarize::run_rediarize(&input, &turns, output.as_ref()),
             Commands::Batch {
                 donor_dir,
                 reference_dir,
