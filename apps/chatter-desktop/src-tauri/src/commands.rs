@@ -1,6 +1,5 @@
 //! Tauri command handlers.
 
-
 // The tauri::command proc macro's generated wrappers for
 // Result-returning commands with borrowed State contain unreachable!
 // arms; the panic-policy lint fires on those EXPANSIONS (function-level
