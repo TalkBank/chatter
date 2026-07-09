@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-09 08:35 EDT
+**Last modified:** 2026-07-09 10:55 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word |
 | W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
 
 ## Common Errors and Fixes
@@ -168,6 +168,15 @@ plain millisecond integers; write `12`, not `012`. A bare `0` (as in
 representation inside a bullet."). The bullet's numeric value still
 parses, so downstream tooling sees the intended times; the diagnostic
 alone makes the file invalid.
+
+### E749: Comma glued to the following word
+
+A comma on a speaker tier must be followed by a space or end-of-line:
+write `hey , you`, not `hey ,you`. Mirrors CLAN CHECK error 92. The
+check looks at the word immediately after the comma in document order
+(including inside `<...>` groups); constructs that place their own
+character after the comma (group and overlap marks, CA symbols) are
+not flagged.
 
 ## Generated Error Documentation
 

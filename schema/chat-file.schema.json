@@ -3276,6 +3276,11 @@
           "type": "string"
         },
         {
+          "const": "E749",
+          "description": "A comma glued to the word that follows it (`hey ,you`).\n\nA comma on a speaker tier must be followed by a space or\nend-of-line (CLAN CHECK 92). Detected by span adjacency over the\nin-order content walk: the rule fires only when the next item is\na word starting at the byte immediately after the comma, so\nexempt constructs that put any other character there (group `<`,\noverlap and CA marks) are naturally not flagged.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

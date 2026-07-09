@@ -779,9 +779,11 @@
    "check_code": 92,
    "check_message": "Item ',' must be followed by space or end-of-line.",
    "fixture": "CHECK_092_comma_no_space.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A comma (and certain CA marks) not followed by space or end-of-line on a speaker tier (check.cpp 4317; other sites are #ifndef UNX or CA-specific). Fixture 'hey ,you .'. chatter accepts (exit 0). GAP: comma must be followed by whitespace."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E749"
+   ],
+   "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749_comma_glued_to_next_word.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN."
   },
   {
    "check_code": 93,

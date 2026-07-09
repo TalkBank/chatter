@@ -777,6 +777,17 @@ pub enum ErrorCode {
     #[code("E748")]
     LeadingZeroBulletTime,
 
+    /// A comma glued to the word that follows it (`hey ,you`).
+    ///
+    /// A comma on a speaker tier must be followed by a space or
+    /// end-of-line (CLAN CHECK 92). Detected by span adjacency over the
+    /// in-order content walk: the rule fires only when the next item is
+    /// a word starting at the byte immediately after the comma, so
+    /// exempt constructs that put any other character there (group `<`,
+    /// overlap and CA marks) are naturally not flagged.
+    #[code("E749")]
+    CommaGluedToNextWord,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

@@ -1,4 +1,5 @@
-//! Comma validation: E258 (consecutive commas) and E259 (comma after non-spoken).
+//! Comma validation: E258 (consecutive commas), E259 (comma after
+//! non-spoken), and E749 (comma glued to the following word).
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
@@ -147,6 +148,67 @@ pub(crate) fn check_comma_after_non_spoken(utterance: &Utterance, errors: &impl 
             );
         }
     }
+}
+
+/// The source start byte of a content item, when the item is a word
+/// whose position can license E749. Non-word items return `None` by
+/// policy: a comma directly followed by a group, overlap, or CA mark is
+/// exempt in CLAN CHECK 92, and every such construct places its own
+/// character after the comma anyway, so word starts are the only
+/// adjacency that matters.
+fn word_start(item: &ContentItem<'_>) -> Option<u32> {
+    match item {
+        ContentItem::Word(word) => Some(word.span.start),
+        ContentItem::ReplacedWord(replaced) => Some(replaced.word.span.start),
+        ContentItem::Separator(_)
+        | ContentItem::Event(_)
+        | ContentItem::Pause(_)
+        | ContentItem::Action(_)
+        | ContentItem::OverlapPoint(_)
+        | ContentItem::OtherSpokenEvent(_)
+        | ContentItem::Freecode(_)
+        | ContentItem::InternalBullet(_)
+        | ContentItem::LongFeatureBegin(_)
+        | ContentItem::LongFeatureEnd(_)
+        | ContentItem::UnderlineBegin(_)
+        | ContentItem::UnderlineEnd(_)
+        | ContentItem::NonvocalBegin(_)
+        | ContentItem::NonvocalEnd(_)
+        | ContentItem::NonvocalSimple(_) => None,
+    }
+}
+
+/// E749: a comma must be followed by a space or end-of-line (CLAN CHECK
+/// 92). Fires when the item after a comma, in document order via
+/// [`walk_content`], is a word starting at the byte immediately after
+/// the comma. Dummy (0,0) spans are skipped: the re2c oracle fills
+/// dummy separator spans and mirrors this rule as a token-stream scan
+/// in its own front end instead.
+pub(crate) fn check_comma_glued_to_next(utterance: &Utterance, errors: &impl ErrorSink) {
+    let mut prev_comma_span: Option<crate::Span> = None;
+
+    walk_content(&utterance.main.content.content.0, None, &mut |item| {
+        if let Some(comma_span) = prev_comma_span
+            && comma_span != crate::Span::DUMMY
+            && let Some(start) = word_start(&item)
+            && start == comma_span.end
+        {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::CommaGluedToNextWord,
+                    Severity::Error,
+                    SourceLocation::new(comma_span),
+                    ErrorContext::new(",", comma_span, ","),
+                    "Comma must be followed by a space or end-of-line",
+                )
+                .with_suggestion("Add a space after the comma"),
+            );
+        }
+        prev_comma_span = match item {
+            ContentItem::Separator(Separator::Comma { span }) => Some(*span),
+            _ => None,
+        };
+    });
 }
 
 /// E258: Validate that no two comma separators appear consecutively in

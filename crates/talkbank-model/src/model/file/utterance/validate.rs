@@ -69,6 +69,9 @@ impl Validate for Utterance {
         // E259: Validate commas are not preceded by non-spoken content
         crate::validation::utterance::check_comma_after_non_spoken(self, errors);
 
+        // E749: comma glued to the following word (CLAN CHECK 92).
+        crate::validation::utterance::check_comma_glued_to_next(self, errors);
+
         // E401: Validate no duplicate dependent tiers
         crate::validation::utterance::check_no_duplicate_dependent_tiers(self, errors);
 

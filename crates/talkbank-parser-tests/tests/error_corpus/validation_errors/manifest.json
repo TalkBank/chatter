@@ -1595,6 +1595,14 @@
       "source_spec": "spec/errors/E746_xphoint_group_count_mismatch.md"
     },
     {
+      "fixture": "E749_Comma_glued_to_the_following_word.cha",
+      "expected_codes": [
+        "E749"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E749_comma_glued_to_next_word.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

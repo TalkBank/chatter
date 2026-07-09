@@ -27,6 +27,29 @@ pub fn parse_file<'a>(tokens: &'a [Token<'a>], source: &'a str) -> ChatFile<'a> 
     parse_file_with_errors(tokens, source, &NullErrorSink)
 }
 
+/// Report E749 for every comma token immediately followed by a word
+/// token with no whitespace/newline between (`hey ,you`; CLAN CHECK
+/// 92). Mirrors the model-validation rule `check_comma_glued_to_next`
+/// (talkbank-model `validation/utterance/comma.rs`), which cannot fire
+/// on this parser's output because its separators carry dummy spans;
+/// the lexer tokenizes whitespace, so adjacency IS the absence of a
+/// whitespace token between the comma and the next word. Narrowed to
+/// word-next exactly like the model rule (group/overlap/CA tokens after
+/// a comma are exempt in CHECK 92).
+fn report_comma_glued_to_next_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for pair in tokens.windows(2) {
+        if matches!(pair[0], Token::Comma(_)) && matches!(pair[1], Token::Word { .. }) {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::CommaGluedToNextWord,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Comma must be followed by a space or end-of-line".to_owned(),
+            ));
+        }
+    }
+}
+
 /// Report E748 for every media-bullet timestamp written with a leading
 /// zero before another digit (`012`); a bare `0` is legal. Mirrors the
 /// tree-sitter parser's check in `media_bullet.rs` (CLAN CHECK 90,
@@ -68,6 +91,7 @@ pub fn parse_file_with_errors<'a>(
     errors: &impl ErrorSink,
 ) -> ChatFile<'a> {
     report_leading_zero_bullet_times(tokens, errors);
+    report_comma_glued_to_next_word(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
 
