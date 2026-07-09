@@ -764,6 +764,19 @@ pub enum ErrorCode {
     #[code("E747")]
     BlankLineNotAllowed,
 
+    /// A media bullet timestamp written with a leading zero before another
+    /// digit (e.g. `\u{15}012_200\u{15}`).
+    ///
+    /// Bullet times are plain millisecond integers; CLAN CHECK rejects a
+    /// component matching `0[0-9]` as an "Illegal time representation inside
+    /// a bullet." (CHECK 90). A bare `0` component is legal. Detected at
+    /// parse time because the leading zero exists only in the source text
+    /// (the model stores `u64` milliseconds); the bullet's numeric value
+    /// still parses, so the AST keeps the bullet while the diagnostic makes
+    /// the file invalid.
+    #[code("E748")]
+    LeadingZeroBulletTime,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

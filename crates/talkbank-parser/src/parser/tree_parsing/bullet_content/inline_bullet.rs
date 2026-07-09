@@ -11,7 +11,7 @@ pub(super) fn parse_inline_bullet(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<(u64, u64)> {
-    let Some((start_ms, end_ms)) = parse_bullet_node_timestamps(node, source) else {
+    let Some((start_ms, end_ms)) = parse_bullet_node_timestamps(node, source, errors) else {
         errors.report(ParseError::new(
             ErrorCode::InvalidMediaBullet,
             Severity::Error,

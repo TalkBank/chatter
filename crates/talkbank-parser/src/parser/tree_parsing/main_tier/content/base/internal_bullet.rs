@@ -14,7 +14,7 @@ pub(crate) fn parse_internal_bullet(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Some((start_ms, end_ms)) = parse_bullet_node_timestamps(node, source) else {
+    let Some((start_ms, end_ms)) = parse_bullet_node_timestamps(node, source, errors) else {
         errors.report(ParseError::new(
             ErrorCode::InvalidMediaBullet,
             Severity::Error,

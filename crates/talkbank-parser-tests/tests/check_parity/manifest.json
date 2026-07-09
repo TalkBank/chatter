@@ -759,9 +759,11 @@
    "check_code": 90,
    "check_message": "Illegal time representation inside a bullet.",
    "fixture": "CHECK_090_leading_zero_time.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A bullet time value written with a leading zero before another digit, e.g. 012 (check.cpp 3865, res==3). Bullet \\x15012_200\\x15 with @Media header. chatter accepts leading-zero times (exit 0). GAP: chatter should reject leading-zero bullet times if CHECK parity is wanted."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E748"
+   ],
+   "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748_leading_zero_bullet_time.md. A bare 0 stays legal."
   },
   {
    "check_code": 91,

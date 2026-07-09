@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-06-24 23:42 EDT
+**Last modified:** 2026-07-09 08:35 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment (`%mor`, `%gra`, `%pho`, `%wor`) | E705: Main/%mor count mismatch, E721: %gra index error |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time |
 | W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
 
 ## Common Errors and Fixes
@@ -158,6 +158,16 @@ And this is valid too:
 ### E721: %gra sequential index error
 
 `%gra` entries must have sequential 1-based indices: `1|...|... 2|...|... 3|...|...`
+
+### E748: Leading zero in bullet timestamp
+
+A media bullet time component is written with a leading zero before
+another digit, for example `\u{15}012_200\u{15}`. Bullet times are
+plain millisecond integers; write `12`, not `012`. A bare `0` (as in
+`0_200`) is legal. This mirrors CLAN CHECK error 90 ("Illegal time
+representation inside a bullet."). The bullet's numeric value still
+parses, so downstream tooling sees the intended times; the diagnostic
+alone makes the file invalid.
 
 ## Generated Error Documentation
 

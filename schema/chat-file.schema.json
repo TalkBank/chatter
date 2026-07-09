@@ -3271,6 +3271,11 @@
           "type": "string"
         },
         {
+          "const": "E748",
+          "description": "A media bullet timestamp written with a leading zero before another\ndigit (e.g. `\\u{15}012_200\\u{15}`).\n\nBullet times are plain millisecond integers; CLAN CHECK rejects a\ncomponent matching `0[0-9]` as an \"Illegal time representation inside\na bullet.\" (CHECK 90). A bare `0` component is legal. Detected at\nparse time because the leading zero exists only in the source text\n(the model stores `u64` milliseconds); the bullet's numeric value\nstill parses, so the AST keeps the bullet while the diagnostic makes\nthe file invalid.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

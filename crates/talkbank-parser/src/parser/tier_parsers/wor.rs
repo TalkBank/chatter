@@ -260,7 +260,7 @@ fn push_wor_item(
             }
             WorTierBodyChild1Child0Choice::Bullet(bullet_node) => {
                 // Pair this bullet with the preceding word (if any).
-                if let Some(bullet) = parse_inline_bullet(bullet_node.raw_node(), source)
+                if let Some(bullet) = parse_inline_bullet(bullet_node.raw_node(), source, errors)
                     && let Some(WorItem::Word(word)) = items.last_mut()
                 {
                     word.inline_bullet = Some(bullet);
@@ -323,8 +323,10 @@ fn extract_langcode(
 /// Parse a `bullet` node into a `Bullet`.
 ///
 /// After grammar coarsening, `bullet` is a single token.
-fn parse_inline_bullet(node: Node, source: &str) -> Option<Bullet> {
+fn parse_inline_bullet(node: Node, source: &str, errors: &impl ErrorSink) -> Option<Bullet> {
     let (start_ms, end_ms) =
-        crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps(node, source)?;
+        crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps(
+            node, source, errors,
+        )?;
     Some(Bullet::new(start_ms, end_ms))
 }

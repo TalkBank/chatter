@@ -127,7 +127,7 @@ pub(super) fn parse_utterance_end(
             match group.child_1.slot {
                 NodeSlot::Present(bullet_node) => {
                     let raw = bullet_node.raw_node();
-                    match parse_bullet_node_timestamps(raw, source) {
+                    match parse_bullet_node_timestamps(raw, source, errors) {
                         Some((start_ms, end_ms)) => {
                             Some(Bullet::new(start_ms, end_ms).with_span(span_of(raw)))
                         }

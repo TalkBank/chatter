@@ -19,12 +19,25 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorVec, ParseError, Severity, SourceLocation, Span};
+use crate::error::{
+    ErrorCode, ErrorContext, ErrorSink, ErrorVec, ParseError, Severity, SourceLocation, Span,
+};
 use crate::model::Bullet;
 use tree_sitter::Node;
 
 /// Bullet delimiter character (U+0015)
 const BULLET_CHAR: char = '\u{15}';
+
+/// Split bullet token text into its raw `(start, end)` digit components.
+///
+/// Input format: `\u{15}START_END\u{15}`. Returns `None` when the
+/// delimiters or the `_` separator are missing; the components are NOT
+/// yet validated as numbers (callers parse and, separately, check the
+/// leading-zero representation rule, E748).
+pub(crate) fn parse_bullet_components(text: &str) -> Option<(&str, &str)> {
+    let inner = text.strip_prefix(BULLET_CHAR)?.strip_suffix(BULLET_CHAR)?;
+    inner.split_once('_')
+}
 
 /// Parse bullet text content from a token node.
 ///
@@ -33,11 +46,42 @@ const BULLET_CHAR: char = '\u{15}';
 /// deviation (including a trailing `-` or any non-digit byte in
 /// either timestamp).
 pub(crate) fn parse_bullet_text(text: &str) -> Option<(u64, u64)> {
-    let inner = text.strip_prefix(BULLET_CHAR)?.strip_suffix(BULLET_CHAR)?;
-    let (start_str, end_str) = inner.split_once('_')?;
+    let (start_str, end_str) = parse_bullet_components(text)?;
     let start_ms = start_str.parse::<u64>().ok()?;
     let end_ms = end_str.parse::<u64>().ok()?;
     Some((start_ms, end_ms))
+}
+
+/// True when a bullet time component is written with a leading zero
+/// before another digit (`012`). A bare `0` is legal; CLAN CHECK calls
+/// the leading-zero form an illegal time representation (CHECK 90).
+fn has_leading_zero(component: &str) -> bool {
+    component.len() > 1 && component.starts_with('0')
+}
+
+/// Build an E748 diagnostic for each bullet time component written with
+/// a leading zero. The bullet still parses (its numeric value is
+/// unambiguous); the diagnostics alone make the file invalid, mirroring
+/// CHECK 90. Returned rather than sunk so both the `ErrorSink`-based
+/// structured-bullet path and the `ErrorVec`-returning token path can
+/// consume it.
+fn leading_zero_errors(start_text: &str, end_text: &str, node: Node, source: &str) -> ErrorVec {
+    let mut out = ErrorVec::new();
+    for (component, which) in [(start_text, "start"), (end_text, "end")] {
+        if has_leading_zero(component) {
+            out.push(ParseError::new(
+                ErrorCode::LeadingZeroBulletTime,
+                Severity::Error,
+                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                ErrorContext::new(source, node.start_byte()..node.end_byte(), component),
+                format!(
+                    "Bullet {which} time '{component}' has a leading zero; \
+                     bullet times are plain millisecond integers"
+                ),
+            ));
+        }
+    }
+    out
 }
 
 /// Extract `(start_ms, end_ms)` from a structured `bullet` CST node.
@@ -50,18 +94,30 @@ pub(crate) fn parse_bullet_text(text: &str) -> Option<(u64, u64)> {
 /// trailing `-` but the named fields still resolve. Without the
 /// has_error gate we'd silently accept data that violates the
 /// grammar.
-pub(crate) fn parse_bullet_node_timestamps(node: Node, source: &str) -> Option<(u64, u64)> {
+///
+/// Reports E748 (leading-zero time representation, CHECK 90) through
+/// `errors` while still returning the parsed values: the numeric value
+/// is unambiguous, so the bullet is kept and the diagnostic alone makes
+/// the file invalid. Centralized here because every structured-bullet
+/// consumer (main tier, `%wor`, endings, bullet content) flows through
+/// this function.
+pub(crate) fn parse_bullet_node_timestamps(
+    node: Node,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Option<(u64, u64)> {
     if node.has_error() {
         return None;
     }
-    let start_ms: u64 = node
+    let start_text = node
         .child_by_field_name("start_time")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .and_then(|s| s.parse().ok())?;
-    let end_ms: u64 = node
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())?;
+    let end_text = node
         .child_by_field_name("end_time")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .and_then(|s| s.parse().ok())?;
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())?;
+    let start_ms: u64 = start_text.parse().ok()?;
+    let end_ms: u64 = end_text.parse().ok()?;
+    errors.report_vec(leading_zero_errors(start_text, end_text, node, source));
     Some((start_ms, end_ms))
 }
 
@@ -101,6 +157,13 @@ pub fn parse_media_bullet(node: Node, source: &str) -> (Option<Bullet>, ErrorVec
         ));
         return (None, errors);
     };
+
+    // parse_bullet_text succeeded, so the components are present; check
+    // the leading-zero representation rule (E748, CHECK 90) on the raw
+    // digit text while keeping the parsed bullet.
+    if let Some((start_text, end_text)) = parse_bullet_components(text) {
+        errors.extend(leading_zero_errors(start_text, end_text, node, source));
+    }
 
     if start_ms == 0 && end_ms == 0 {
         errors.push(ParseError::new(

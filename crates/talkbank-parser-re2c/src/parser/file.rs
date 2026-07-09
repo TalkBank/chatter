@@ -27,6 +27,39 @@ pub fn parse_file<'a>(tokens: &'a [Token<'a>], source: &'a str) -> ChatFile<'a> 
     parse_file_with_errors(tokens, source, &NullErrorSink)
 }
 
+/// Report E748 for every media-bullet timestamp written with a leading
+/// zero before another digit (`012`); a bare `0` is legal. Mirrors the
+/// tree-sitter parser's check in `media_bullet.rs` (CLAN CHECK 90,
+/// spec `E748_leading_zero_bullet_time.md`). Token-level scan because
+/// the raw digit text exists only here: the model stores `u64`
+/// milliseconds, so the representation is invisible downstream. The
+/// bullet still parses; the diagnostic alone makes the file invalid.
+fn report_leading_zero_bullet_times<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for tok in tokens {
+        if let Token::MediaBullet {
+            start_time,
+            end_time,
+            ..
+        } = tok
+        {
+            for (component, which) in [(start_time, "start"), (end_time, "end")] {
+                if component.len() > 1 && component.starts_with('0') {
+                    errors.report(ParseError::new(
+                        talkbank_model::errors::codes::ErrorCode::LeadingZeroBulletTime,
+                        talkbank_model::Severity::Error,
+                        talkbank_model::SourceLocation::new(Span::DUMMY),
+                        None,
+                        format!(
+                            "Bullet {which} time '{component}' has a leading zero; \
+                             bullet times are plain millisecond integers"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+}
+
 /// Parse a complete CHAT file from a leaked token slice, reporting
 /// parse failures to the given error sink.
 pub fn parse_file_with_errors<'a>(
@@ -34,6 +67,7 @@ pub fn parse_file_with_errors<'a>(
     source: &'a str,
     errors: &impl ErrorSink,
 ) -> ChatFile<'a> {
+    report_leading_zero_bullet_times(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
 
