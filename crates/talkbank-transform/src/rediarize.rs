@@ -385,19 +385,44 @@ fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Ve
         }
     }
 
-    // Append @ID rows for used tracks that had none, cloned from a template.
+    // Insert @ID rows for used tracks that had none, cloned from a
+    // template. They must land WITH the header block (after the last
+    // surviving @ID row, or after @Participants when every original
+    // @ID was dropped), never appended at end-of-file: an appended row
+    // lands after @End and makes the output invalid CHAT (E501; caught
+    // on the first real corpus file, 2026-07-08).
     if let Some(tpl) = template_id {
         let mut ordered: Vec<&SpeakerCode> = used_tracks.iter().collect();
         ordered.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for track in ordered {
-            if !declared_ids.contains(track) {
+        let new_rows: Vec<Line> = ordered
+            .into_iter()
+            .filter(|track| !declared_ids.contains(*track))
+            .map(|track| {
                 let mut new_id = tpl.clone();
                 new_id.speaker = track.clone();
-                result.push(Line::Header {
+                Line::Header {
                     header: Box::new(Header::ID(new_id)),
                     span: talkbank_model::Span::DUMMY,
-                });
-            }
+                }
+            })
+            .collect();
+        if !new_rows.is_empty() {
+            let anchor = result.iter().rposition(|line| {
+                matches!(line, Line::Header { header, .. }
+                    if matches!(header.as_ref(), Header::ID(_) | Header::Participants { .. }))
+            });
+            // `new_rows` is non-empty only when some utterance used the
+            // track, so a first utterance exists as the final fallback
+            // anchor; `result.len()` is the total-function backstop for
+            // a state that cannot occur (no headers AND no utterances).
+            let insert_at = match anchor {
+                Some(header_index) => header_index + 1,
+                None => result
+                    .iter()
+                    .position(|line| matches!(line, Line::Utterance(_)))
+                    .unwrap_or(result.len()),
+            };
+            result.splice(insert_at..insert_at, new_rows);
         }
     }
 

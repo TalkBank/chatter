@@ -117,6 +117,34 @@ fn rediarize_splits_merged_track() -> Result<(), TestError> {
         summary.contains("1 reassigned"),
         "summary should report the reassignment count:\n{summary}"
     );
+
+    // The output must remain structurally valid CHAT: the appended
+    // @ID row for PAR2 belongs with the other headers, and nothing
+    // may follow @End (validate's E501; caught on the first real
+    // corpus file, 2026-07-08).
+    let last_line = rewritten
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .expect("output should have content");
+    assert_eq!(
+        last_line, "@End",
+        "@End must be the final line; headers must not be appended after it:\n{rewritten}"
+    );
+    let id_line_numbers: Vec<usize> = rewritten
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.starts_with("@ID:"))
+        .map(|(n, _)| n)
+        .collect();
+    let first_utterance_line = rewritten
+        .lines()
+        .position(|l| l.starts_with('*'))
+        .expect("output should contain utterances");
+    assert!(
+        id_line_numbers.iter().all(|&n| n < first_utterance_line),
+        "every @ID row (including the appended PAR2 row) must precede the first utterance:\n{rewritten}"
+    );
     Ok(())
 }
 
