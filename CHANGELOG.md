@@ -9,6 +9,45 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-10
+
+### Added
+
+- **`chatter rediarize`: repair speaker attribution from external
+  diarization turns.** Takes a transcript whose utterance timing is
+  trusted but whose speaker labels are not, plus a speaker-turns JSON
+  file (`{"source": ..., "turns": [{"track", "start_ms", "end_ms"}]}`)
+  from an external diarizer, and re-attributes each timed utterance to
+  the dominant overlapping turn. Utterances with no turn coverage are
+  flagged, never guessed. Reconciled `@ID` rows are inserted in the
+  header block. `--summary-json` emits a machine-readable outcome
+  summary (per-utterance reattributions and flag reasons) for
+  downstream tooling.
+- **Four validation rules for constructs that do not make sense**,
+  each adjudicated against real CLAN CHECK behavior and the wild
+  corpus: E748 leading-zero media-bullet times; E749 comma glued to
+  the following word; E750 whitespace inside angle-group delimiters;
+  E751 pause marker glued to a word.
+
+### Fixed
+
+- The re2c oracle lexer now tokenizes short-form parenthesized
+  material the same way the canonical parser does (its catch-all
+  previously swallowed a trailing delimiter), keeping the two
+  independent parsers in cross-check agreement on the new spacing
+  rules.
+
+### Changed
+
+- Rust toolchain pin bumped to 1.97.0 (CI workflow pins synced);
+  workspace and spec lockfiles refreshed; desktop dependency bumps
+  (jsonschema 0.47, TypeScript 7).
+- Documentation: an architecture page on overlap-marker binding (why
+  edge-adjacent overlap markers bind into words, the ideal top-level
+  model, and the conversion-layer path); the grammar's empty-`extras`
+  (all-whitespace-explicit) design rationale is now recorded at the
+  declaration site.
+
 ## [0.3.1] - 2026-07-08
 
 ### Fixed

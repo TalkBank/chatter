@@ -48,3 +48,14 @@ slow-timeout = { period = "300s", terminate-after = 6 }
 [[profile.default.overrides]]
 filter = 'package(send2clan)'
 slow-timeout = { period = "150s", terminate-after = 2 }
+
+
+# docs_sync shells out to `cargo run -p xtask`. On a cold toolchain (right
+# after a rust-toolchain.toml bump) that first invocation compiles xtask's
+# whole dependency tree, which has repeatedly blown the default 120s
+# ceiling and failed otherwise-green release gates (hit during the 1.96
+# and 1.97 bumps, and again at the v0.3.2 gate). The work is a real
+# compile, not a hang; give it a cold-build-sized bound.
+[[profile.default.overrides]]
+filter = 'test(docs_sync_passes)'
+slow-timeout = { period = "300s", terminate-after = 2 }
