@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-09 23:39 EDT
+**Last modified:** 2026-07-10 07:28 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -289,8 +289,14 @@ ship in that same release, so the CLI and desktop move together.
 ## Architecture
 
 **CHAT manual:** https://talkbank.org/0info/manuals/CHAT.html, the
-authoritative reference for the transcript format this project
-parses and validates.
+background reference for the transcript format. **Authority ordering
+(Franklin, 2026-07-10): the manual is dated; when it and this project
+diverge, trust `spec/`, the grammar, and above all the actual corpus
+data (`~/0tb/data`, mirrored in the data-json mirror). Data grounds
+what constructs are real, spec/grammar define what we accept, the
+manual is context. Never reintroduce a legacy construct that has been
+removed from the data and from chatter, whatever the manual or CLAN
+still say about it.**
 
 ```
 grammar/        Tree-sitter grammar for CHAT format
@@ -597,7 +603,8 @@ what is valid CHAT: any fixture in it can be wrong, including being
 invalid CHAT mistakenly committed as valid. So when a parser/validation
 change causes a reference file to be rejected, do NOT reflexively treat
 that as a regression to suppress. Adjudicate the file against the real
-authorities (CLAN `check` as a strict lower bound, and the CHAT manual);
+authorities (CLAN `check` as a strict lower bound, plus our spec/grammar
+and the wild corpus data; the CHAT manual is dated background only);
 if the file is in fact invalid, FIX THE DATA (correct it, or move it to
 `spec/errors/` as an invalid example), do not weaken the parser to keep
 it passing. The intent is still that every file currently in
