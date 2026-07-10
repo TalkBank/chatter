@@ -1,4 +1,16 @@
-#![allow(unused_variables, unused_imports)]
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    unused_variables,
+    unused_imports,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented
+)]
 //! Test module for parser suite in `talkbank-chat`.
 //!
 //! These tests document expected behavior and regressions.

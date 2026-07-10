@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-07-09 23:39 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -402,7 +402,7 @@ run this full sequence:
    `crates/talkbank-parser/src/generated_traversal.rs`. It self-formats
    via rustfmt, so there is NO separate `cargo fmt` step; pass
    `--edition 2024 --toolchain <the repo's rust-toolchain.toml pin,
-   currently 1.96.1>` so the output matches CI's rustfmt byte-for-byte.
+   currently 1.97.0>` so the output matches CI's rustfmt byte-for-byte.
    Staleness guard: `generated_traversal_is_current`. The generator's
    output is commit-ready as-is: it is em-dash-free, carries its own
    `#![allow(...)]` for the lints normal in generated code, and stamps a

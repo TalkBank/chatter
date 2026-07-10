@@ -68,13 +68,13 @@ fn test_shortening_at_word_start() -> Result<(), String> {
     if let WordContent::Shortening(text) = &word.content[0] {
         assert_eq!(text.as_ref(), "th", "First item should be shortening 'th'");
     } else {
-        return Err(format!("Expected Shortening, got {:?}", &word.content[0]));
+        return Err(format!("Expected Shortening, got {:?}", word.content[0]));
     }
 
     if let WordContent::Text(text) = &word.content[1] {
         assert_eq!(text.as_ref(), "at", "Second item should be text 'at'");
     } else {
-        return Err(format!("Expected Text, got {:?}", &word.content[1]));
+        return Err(format!("Expected Text, got {:?}", word.content[1]));
     }
 
     Ok(())
@@ -110,7 +110,7 @@ fn test_ca_mode_parenthetical_becomes_ca_omission() -> Result<(), String> {
     if let WordContent::Text(text) = &word.content[0] {
         assert_eq!(text.as_ref(), "word", "Inner text should be plain text");
     } else {
-        return Err(format!("Expected Text content, got {:?}", &word.content[0]));
+        return Err(format!("Expected Text content, got {:?}", word.content[0]));
     }
 
     assert_eq!(
