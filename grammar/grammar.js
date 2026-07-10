@@ -73,6 +73,19 @@ export default grammar({
   name: 'talkbank',
 
   // Handle whitespace explicitly.
+  // Empty extras is the load-bearing design decision of this grammar
+  // (2026-03-08, unchanged since): ALL whitespace is grammar-visible.
+  // Rationale: the worst bug a CHAT parser can have (and one the legacy
+  // Java implementation had) is ignoring whitespace, so that accidental
+  // juxtaposition of content items is ACCEPTED as if properly
+  // separated: Java Chatter tokenized "hello(.)" correctly as a word
+  // and a pause, and that acceptance was precisely the problem: the
+  // missing required whitespace was invisible, unflaggable, and the
+  // malformed source never got cleaned. With extras empty, every space
+  // is a grammar-visible fact, so missing separation between content
+  // items is DETECTABLE and rejectable; the rejection itself is
+  // enforced by Rust validation (per the contents-rule note below),
+  // not by the grammar. Never add anything to extras.
   extras: $ => [],
 
   conflicts: $ => [
