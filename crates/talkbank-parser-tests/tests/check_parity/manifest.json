@@ -466,7 +466,7 @@
    "expected_chatter_codes": [
     "E751"
    ],
-   "note": "Pause '(' opening directly at the end of a word (check.cpp 4437). GAP CLOSED 2026-07-09: model validation check_pause_glued_to_word (span adjacency, utterance/spacing.rs) + re2c word-then-pause token-window mirror. Spec: E751_pause_glued_to_word.md. CLAN also emits (48) on the same fixture; expected_chatter_codes are subset-asserted so E751 alone is the pinned signal."
+   "note": "Pause '(' opening directly at the end of a word (check.cpp 4437). GAP CLOSED 2026-07-09: model validation check_pause_glued_to_word (span adjacency, utterance/spacing.rs) + re2c word-then-pause token-window mirror. Spec: E751_pause_glued_to_word.md. CLAN also emits (48) on the same fixture; expected_chatter_codes are subset-asserted so E751 alone is the pinned signal. ADJUDICATED (maintainer decision, 2026-07-10): NOT a pause-spacing rule; in our AST '(.)' is not a legal shortening ('.' is not a word character), so word-glued '(.)' is a PARSE error in nature. Rejection kept; refactor queued to move the diagnostic from the validation layer to the parse layer."
   },
   {
    "check_code": 59,
@@ -569,7 +569,7 @@
    "fixture": "CHECK_068_no_target_child.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (Franklin, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open policy question for Franklin). With the +g2 option (NAME_ROLE genopt, OFF by default), @Participants lacking a 'CHI Target_Child' entry triggers 68 unless '@Options: notarget' is present (check.cpp",
+   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With the +g2 option (NAME_ROLE genopt, OFF by default), @Participants lacking a 'CHI Target_Child' entry triggers 68 unless '@Options: notarget' is present (check.cpp",
    "clan_flags": [
     "+g2"
    ]
@@ -710,7 +710,7 @@
    "fixture": "CHECK_084_overlap.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (Franklin, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open policy question for Franklin). With +c0 (checkBullets==1, OFF by default): current tier's bullet BEG earlier than previous tier's END (overlap) (check.cpp 3901). OPTION-GATED: emitted only under 'c",
+   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With +c0 (checkBullets==1, OFF by default): current tier's bullet BEG earlier than previous tier's END (overlap) (check.cpp 3901). OPTION-GATED: emitted only under 'c",
    "clan_flags": [
     "+c0"
    ]
@@ -721,7 +721,7 @@
    "fixture": "CHECK_085_gap.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (Franklin, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open policy question for Franklin). With +c0 (checkBullets==1, OFF by default): gap between current tier's bullet BEG and previous tier's END (check.cpp 3905). OPTION-GATED: emitted only under 'check +c",
+   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With +c0 (checkBullets==1, OFF by default): gap between current tier's bullet BEG and previous tier's END (check.cpp 3905). OPTION-GATED: emitted only under 'check +c",
    "clan_flags": [
     "+c0"
    ]
@@ -765,7 +765,7 @@
    "expected_chatter_codes": [
     "E748"
    ],
-   "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748_leading_zero_bullet_time.md. A bare 0 stays legal."
+   "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748_leading_zero_bullet_time.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors."
   },
   {
    "check_code": 91,
@@ -785,7 +785,7 @@
    "expected_chatter_codes": [
     "E749"
    ],
-   "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749_comma_glued_to_next_word.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN."
+   "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749_comma_glued_to_next_word.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Comma-glue is unambiguous under our grammar; kept as an error by project policy: style violations are errors."
   },
   {
    "check_code": 93,
@@ -914,7 +914,7 @@
    "fixture": "CHECK_110_no_bullet.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (Franklin, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open policy question for Franklin). With +cN (checkBullets nonzero, OFF by default): a speaker tier containing no bullet at all (check.cpp 4915). OPTION-GATED: emitted only under 'check +c1' (or +c0); d",
+   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With +cN (checkBullets nonzero, OFF by default): a speaker tier containing no bullet at all (check.cpp 4915). OPTION-GATED: emitted only under 'check +c1' (or +c0); d",
    "clan_flags": [
     "+c1"
    ]
@@ -1369,7 +1369,7 @@
    "expected_chatter_codes": [
     "E750"
    ],
-   "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750_space_inside_angle_group.md. Main-tier groups covered; %wor angle groups not separately grounded."
+   "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750_space_inside_angle_group.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error."
   },
   {
    "check_code": 161,
