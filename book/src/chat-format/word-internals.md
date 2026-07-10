@@ -1,7 +1,7 @@
 # The CHAT Word
 
 **Status:** Current
-**Last modified:** 2026-06-25 10:51 EDT
+**Last modified:** 2026-07-10 12:07 EDT
 
 "Word" is the most complex and most misunderstood concept in CHAT. This
 chapter documents what a word actually is, how the grammar parses it, and
@@ -317,7 +317,10 @@ What follows is a summary for orientation.
 ### 1. Overlap markers (⌈⌉⌊⌋)
 
 Adjacent to text = part of the word. Space-separated = standalone
-`overlap_point`.
+`overlap_point`. This adjacency rule is a deliberate approximation of
+an ideal (edge markers top-level, interior markers in-word) whose full
+history, feasibility analysis, and open implementation decision are
+documented in [Overlap Marker Binding](../architecture/overlap-binding.md).
 
 ```text
 Yeah⌋⌈2 hey      ONE word: "Yeah⌋⌈2"

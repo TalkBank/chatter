@@ -48,6 +48,7 @@
 - [Overview](architecture/overview.md)
 - [Spec System](architecture/spec-system.md)
 - [Grammar](architecture/grammar.md)
+- [Overlap Marker Binding](architecture/overlap-binding.md)
 - [Parsing](architecture/parsing.md)
 - [CHAT Data Model](architecture/chat-model/chat-model.md)
 - [Transform Pipeline](architecture/transform-pipeline.md)
