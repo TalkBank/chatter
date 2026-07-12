@@ -1,7 +1,7 @@
 # CHAT Tokenization Rules
 
 **Status:** Current
-**Last updated:** 2026-03-24 07:21 EDT
+**Last updated:** 2026-07-11 12:49 EDT
 
 This document explains how CHAT text is split into tokens (words, markers,
 annotations). These rules are the most confusing aspect of CHAT and the
@@ -33,12 +33,14 @@ for the full exclusion table.
 
 ### Exception 1: Overlap Markers (⌈⌉⌊⌋)
 
-Overlap markers indicate simultaneous speech between speakers. They can
-appear either **inside** or **outside** words, depending on whitespace:
+Overlap markers indicate simultaneous speech between speakers. Custody
+follows the **whitespace-boundary rule** (2026-07-11): a marker glued
+to word material stays in the word (as part of a glued run); a marker
+whose outer side touches whitespace is top-level content:
 
 ```
 *CHI:   Yeah⌋⌈2 hey .
-        ^^^^^^^^       ← ONE word: "Yeah⌋⌈2" (no space = part of word)
+        ^^^^^^^^       ← ONE word: "Yeah⌋⌈2" (glued trailing run)
 
 *CHI:   Yeah ⌋ ⌈2 hey .
         ^^^^           ← word: "Yeah"
@@ -48,17 +50,26 @@ appear either **inside** or **outside** words, depending on whitespace:
 
 *CHI:   Yeah ⌋⌈2 hey .
         ^^^^           ← word: "Yeah"
-             ^^^^^     ← ONE word: "⌋⌈2" (contiguous = one token)
+             ^^^^^     ← TWO top-level overlap_points: ⌋ then ⌈2
+                         (glued pair, but no spoken-text host)
                   ^^^  ← word: "hey"
+
+*CHI:   ⌈one two⌉ .
+        ^^^            ← overlap_point: ⌈ (top-level, edge)
+         ^^^           ← word: "one"
+                       ← word: "two"; trailing ⌉ top-level
 ```
 
-**Key insight:** The grammar uses `prec(5)` for both `overlap_point` and
-`word_segment`. When adjacent to text, maximal munch makes the longer
-`word_segment` match win. Overlap markers are ONLY recognized as
-`overlap_point` when space-separated on both sides.
+**Key mechanics:** in-word custody is carried by the weighted hidden
+rules `_interior_overlap` / `_final_overlap_cluster` /
+`_final_overlap_form` (`prec.dynamic(2)` inside their rule bodies),
+racing against the fragmented readings under declared GLR conflicts.
+See `book/src/architecture/overlap-binding.md` for the full design
+record and the dynamic-precedence attachment traps.
 
-**`cleaned_text()` does NOT strip overlap markers.** They are part of
-the raw word content. Stripping for NLP is a downstream concern.
+**`cleaned_text()` does NOT strip in-word overlap markers.** They are
+part of the raw word content. Stripping for NLP is a downstream
+concern.
 
 ### Exception 2: Zero/Omission Prefix (0)
 

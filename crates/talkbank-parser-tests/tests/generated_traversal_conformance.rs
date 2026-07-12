@@ -118,6 +118,18 @@ pub(crate) trait InspectField {
     fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<RawViolation>);
 }
 
+/// An UNTYPED slot: the generated traversal falls back to a raw
+/// `tree_sitter::Node` member where a repeat position admits children of
+/// several flattened HIDDEN rules (e.g. `word_body`'s continuation repeat
+/// after the 2026-07-11 overlap-custody port: `_interior_overlap` /
+/// `_final_overlap_*` members flatten into the word). The conformance
+/// contract still holds through the slot variants (ERROR / MISSING /
+/// Unexpected are violations); a Present raw node is an opaque leaf with
+/// nothing further to recurse into.
+impl<'tree> Inspect for tree_sitter::Node<'tree> {
+    fn inspect(&self, _rule: &'static str, _out: &mut Vec<RawViolation>) {}
+}
+
 /// A tracked position: delegate straight to the slot/collection it carries.
 /// The leading extras a position records are not part of the conformance
 /// contract (they are comments/whitespace, never classified content).

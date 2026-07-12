@@ -1,7 +1,7 @@
 # The CHAT Word
 
 **Status:** Current
-**Last modified:** 2026-07-10 12:07 EDT
+**Last modified:** 2026-07-11 12:47 EDT
 
 "Word" is the most complex and most misunderstood concept in CHAT. This
 chapter documents what a word actually is, how the grammar parses it, and
@@ -78,31 +78,48 @@ standalone_word: $ => prec.right(6, seq(
   optional($.pos_tag),
 )),
 
-word_body: $ => prec.right(choice(
-  seq(
+// Schematic; see grammar.js for the full rule with its comments.
+word_body: $ => choice(
+  seq(          // standard start
     choice($.word_segment, $.shortening, $.stress_marker),
-    repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
+    repeat(choice(
+      $.word_segment, $.shortening, $.stress_marker, $._word_marker,
+      $._interior_overlap,        // prec.dynamic(2) in its rule body
+      $._final_overlap_cluster,   // prec.dynamic(2) in its rule body
+      $._final_overlap_form,      // prec.dynamic(2) in its rule body
+    )),
   ),
-  seq(
-    choice($.overlap_point, $.ca_element, $.ca_delimiter, $.underline_begin),
+  seq(          // marker-initial (CA/underline lead + required text)
+    repeat1(choice($.ca_element, $.ca_delimiter,
+                   $.underline_begin, $.syllable_pause)),
+    repeat(/* glued overlap steps */),
     choice($.word_segment, $.shortening, $.stress_marker),
-    repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
+    repeat(/* same continuation set as above */),
   ),
-)),
+),
 ```
 
 `word_body` has two branches:
 
 1. **Standard start**: the word begins with `word_segment`, `shortening`,
-   or `stress_marker`, followed by any number of body children.
-2. **Marker-initial**: the word begins with a structural marker (overlap,
-   CA, underline), but that marker must be immediately followed by text
-   content. This prevents degenerate words like a standalone overlap marker
-   from forming a valid `standalone_word`.
+   or `stress_marker`, followed by any number of body children. Glued
+   overlap/marker RUNS continue the word through the three weighted
+   hidden rules (`_interior_overlap`, `_final_overlap_cluster`,
+   `_final_overlap_form`); their `prec.dynamic(2)`, placed INSIDE the
+   rule bodies (reference-site placement does not attach, see
+   [Overlap Marker Binding](../architecture/overlap-binding.md)),
+   makes the fused word strictly beat every fragmented GLR reading.
+2. **Marker-initial**: the word begins with structural markers (CA,
+   underline, syllable pause), which must eventually be followed by text
+   content. This prevents degenerate words like a standalone marker from
+   forming a valid `standalone_word`; a bare edge overlap point at
+   whitespace parses as a top-level `overlap_point` content item.
 
 Lengthening and `+` (compound marker) are excluded from starting a word
 body. This is how standalone `:` falls through to `separator(colon)` --
-see Section 5 (Tokenization Ambiguities) below.
+see Section 5 (Tokenization Ambiguities) below. A GLUED trailing `:`
+(as in `the⌉:`) stays in-word as prosodic lengthening via the
+final-cluster rule.
 
 ## The word_segment Purity Invariant
 
@@ -316,20 +333,24 @@ What follows is a summary for orientation.
 
 ### 1. Overlap markers (⌈⌉⌊⌋)
 
-Adjacent to text = part of the word. Space-separated = standalone
-`overlap_point`. This adjacency rule is a deliberate approximation of
-an ideal (edge markers top-level, interior markers in-word) whose full
-history, feasibility analysis, and open implementation decision are
-documented in [Overlap Marker Binding](../architecture/overlap-binding.md).
+Custody follows the **whitespace-boundary rule** (adopted 2026-07-11,
+replacing the earlier adjacency approximation): a marker glued to word
+material on BOTH sides is word-internal; a marker whose outer side
+touches whitespace (or the utterance edge) is a top-level
+`overlap_point` content item. Glued runs of structural marks
+(underline, CA marks, lengthening) share custody with their glued
+neighbours, so `Yeah⌋⌈2` keeps its trailing run in-word while
+`⌈one two⌉` puts both edge markers top-level. Full history, the GLR
+mechanics (dynamic-precedence-weighted fused readings), and the
+campaign evidence are in
+[Overlap Marker Binding](../architecture/overlap-binding.md).
 
 ```text
-Yeah⌋⌈2 hey      ONE word: "Yeah⌋⌈2"
-Yeah ⌋ ⌈2 hey    three tokens: "Yeah", ⌋, ⌈2
+Yeah⌋⌈2 hey      "Yeah⌋⌈2" one word (glued run), then "hey"
+Yeah ⌋ ⌈2 hey    four tokens: "Yeah", ⌋, ⌈2, "hey"
+⌈one two⌉        (⌈) (one) (two) (⌉): edge markers top-level
+o⌈ne t⌉wo        two words with interior markers
 ```
-
-Maximal munch at `prec(5)` makes `word_segment` consume adjacent overlap
-characters. Overlap markers are only recognized as `overlap_point` when
-space-separated on both sides.
 
 ### 2. Zero/omission prefix (0)
 

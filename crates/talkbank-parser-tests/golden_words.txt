@@ -96,7 +96,6 @@ byłaś
 było
 bácsi
 båndoptageren
-b⌉
 c
 c'è
 c'è:
@@ -257,7 +256,6 @@ huske
 hvad
 hört
 høre
-h⌋
 i
 i:
 ice+cream
@@ -767,3 +765,6 @@ zoo↑
 这
 这个
 阿
+butt⌈er
+be⌉gin
+the⌉:

@@ -1,5 +1,5 @@
 //! Generator: tree-sitter-node-types 0.1.0 (generate_typed_traversal)
-//! Source grammar digest (sha256): grammar.json=d8da54cc3d5cc443fb64c6cc3a7a36fa6c48d70b464cd70f415ee797e4be70ef node-types.json=0771ebbeac85cf0729151f5119105eaaa40ca3a6367fb4205f6ca2991ea4a1af
+//! Source grammar digest (sha256): grammar.json=b67be5d34879e044bab1451d4e1e7566f482951736fa7fca7d16ae3075dfe91a node-types.json=579e2cd9014911f609947e80d5ccbdeed691e8405524312854137bf40b38096f
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -828,15 +828,6 @@ impl<'tree> AsRawNode<'tree> for LParenNode<'tree> {
 #[derive(Debug, Clone, Copy)]
 pub struct RParenNode<'tree>(pub tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RParenNode<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        self.0
-    }
-}
-/// Typed wrapper for `+` nodes (kind verified at construction).
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct PlusNode<'tree>(pub tree_sitter::Node<'tree>);
-impl<'tree> AsRawNode<'tree> for PlusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
@@ -3301,8 +3292,8 @@ impl<'tree> AsRawNode<'tree> for PipeNode<'tree> {
 /// Typed wrapper for `plus` nodes (kind verified at construction).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct Plus_2Node<'tree>(pub tree_sitter::Node<'tree>);
-impl<'tree> AsRawNode<'tree> for Plus_2Node<'tree> {
+pub struct PlusNode<'tree>(pub tree_sitter::Node<'tree>);
+impl<'tree> AsRawNode<'tree> for PlusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
@@ -24487,7 +24478,7 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
 #[derive(Debug, Clone)]
 pub struct PhoWordsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, Plus_2Node<'tree>>>,
+    pub child_0: Positioned<'tree, NodeSlot<'tree, PlusNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<'tree, NodeSlot<'tree, PhoWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
@@ -24584,7 +24575,7 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                             if __c.is_missing() {
                                                 NodeSlot::Missing(__c)
                                             } else {
-                                                NodeSlot::Present(Plus_2Node(__c))
+                                                NodeSlot::Present(PlusNode(__c))
                                             }
                                         } else {
                                             NodeSlot::Absent
@@ -34456,6 +34447,10 @@ pub fn extract_wor_word_item<'tree>(node: WorWordItemNode<'tree>) -> WorWordItem
     }
 }
 
+// fail-closed diagnosed partial in rule `word_body` at alt[0].seq[1].repeat: alternatives alt[3] and alt[5] accept a common child-kind sequence but build different typed structures (spec Section 9)
+// fail-closed diagnosed partial in rule `word_body` at alt[0].seq[1].repeat: alternatives alt[4] and alt[5] accept a common child-kind sequence but build different typed structures (spec Section 9)
+// fail-closed diagnosed partial in rule `word_body` at alt[1].seq[4].repeat: alternatives alt[3] and alt[5] accept a common child-kind sequence but build different typed structures (spec Section 9)
+// fail-closed diagnosed partial in rule `word_body` at alt[1].seq[4].repeat: alternatives alt[4] and alt[5] accept a common child-kind sequence but build different typed structures (spec Section 9)
 // Task 7 extract contract: pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'tree>
 #[derive(Debug, Clone)]
 pub enum WordBodyWordSegmentChild0Choice<'tree> {
@@ -34476,71 +34471,12 @@ impl<'tree> AsRawNode<'tree> for WordBodyWordSegmentChild0Choice<'tree> {
     }
 }
 #[derive(Debug, Clone)]
-pub enum WordBodyWordSegmentChild1LengtheningChoice<'tree> {
-    /// Alternative `Lengthening`.
-    Lengthening(LengtheningNode<'tree>),
-    /// Alternative `OverlapPoint`.
-    OverlapPoint(OverlapPointNode<'tree>),
-    /// Alternative `CaElement`.
-    CaElement(CaElementNode<'tree>),
-    /// Alternative `CaDelimiter`.
-    CaDelimiter(CaDelimiterNode<'tree>),
-    /// Alternative `UnderlineBegin`.
-    UnderlineBegin(UnderlineBeginNode<'tree>),
-    /// Alternative `UnderlineEnd`.
-    UnderlineEnd(UnderlineEndNode<'tree>),
-    /// Alternative `SyllablePause`.
-    SyllablePause(SyllablePauseNode<'tree>),
-    /// Alternative `Tilde`.
-    Tilde(TildeNode<'tree>),
-    /// Alternative `Variant8`.
-    Variant8(PlusNode<'tree>),
-}
-impl<'tree> AsRawNode<'tree> for WordBodyWordSegmentChild1LengtheningChoice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            WordBodyWordSegmentChild1LengtheningChoice::Lengthening(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::OverlapPoint(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::CaElement(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::CaDelimiter(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::UnderlineBegin(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::UnderlineEnd(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::SyllablePause(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::Tilde(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1LengtheningChoice::Variant8(inner) => inner.raw_node(),
-        }
-    }
-}
-#[derive(Debug, Clone)]
-pub enum WordBodyWordSegmentChild1Choice<'tree> {
-    /// Alternative `WordSegment`.
-    WordSegment(WordSegmentNode<'tree>),
-    /// Alternative `Shortening`.
-    Shortening(ShorteningNode<'tree>),
-    /// Alternative `StressMarker`.
-    StressMarker(StressMarkerNode<'tree>),
-    /// Alternative `Lengthening`.
-    Lengthening(WordBodyWordSegmentChild1LengtheningChoice<'tree>),
-}
-impl<'tree> AsRawNode<'tree> for WordBodyWordSegmentChild1Choice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            WordBodyWordSegmentChild1Choice::WordSegment(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1Choice::Shortening(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1Choice::StressMarker(inner) => inner.raw_node(),
-            WordBodyWordSegmentChild1Choice::Lengthening(inner) => inner.raw_node(),
-        }
-    }
-}
-#[derive(Debug, Clone)]
 pub struct WordBodyWordSegmentChildren<'tree> {
     /// Positional member 0.
     pub child_0: Positioned<'tree, NodeSlot<'tree, WordBodyWordSegmentChild0Choice<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<
-        'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyWordSegmentChild1Choice<'tree>>>>,
-    >,
+    pub child_1:
+        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, tree_sitter::Node<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34549,9 +34485,7 @@ pub struct WordBodyWordSegmentChildren<'tree> {
 }
 impl<'tree> WordBodyWordSegmentChildren<'tree> {}
 #[derive(Debug, Clone)]
-pub enum WordBodyOverlapPointChild0Choice<'tree> {
-    /// Alternative `OverlapPoint`.
-    OverlapPoint(OverlapPointNode<'tree>),
+pub enum WordBodyCaElementChild0Choice<'tree> {
     /// Alternative `CaElement`.
     CaElement(CaElementNode<'tree>),
     /// Alternative `CaDelimiter`.
@@ -34561,21 +34495,18 @@ pub enum WordBodyOverlapPointChild0Choice<'tree> {
     /// Alternative `SyllablePause`.
     SyllablePause(SyllablePauseNode<'tree>),
 }
-impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild0Choice<'tree> {
+impl<'tree> AsRawNode<'tree> for WordBodyCaElementChild0Choice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
-            WordBodyOverlapPointChild0Choice::OverlapPoint(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild0Choice::CaElement(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild0Choice::CaDelimiter(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild0Choice::UnderlineBegin(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild0Choice::SyllablePause(inner) => inner.raw_node(),
+            WordBodyCaElementChild0Choice::CaElement(inner) => inner.raw_node(),
+            WordBodyCaElementChild0Choice::CaDelimiter(inner) => inner.raw_node(),
+            WordBodyCaElementChild0Choice::UnderlineBegin(inner) => inner.raw_node(),
+            WordBodyCaElementChild0Choice::SyllablePause(inner) => inner.raw_node(),
         }
     }
 }
 #[derive(Debug, Clone)]
-pub enum WordBodyOverlapPointChild1Choice<'tree> {
-    /// Alternative `OverlapPoint`.
-    OverlapPoint(OverlapPointNode<'tree>),
+pub enum WordBodyCaElementChild1Choice<'tree> {
     /// Alternative `CaElement`.
     CaElement(CaElementNode<'tree>),
     /// Alternative `CaDelimiter`.
@@ -34585,41 +34516,18 @@ pub enum WordBodyOverlapPointChild1Choice<'tree> {
     /// Alternative `SyllablePause`.
     SyllablePause(SyllablePauseNode<'tree>),
 }
-impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild1Choice<'tree> {
+impl<'tree> AsRawNode<'tree> for WordBodyCaElementChild1Choice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
-            WordBodyOverlapPointChild1Choice::OverlapPoint(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild1Choice::CaElement(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild1Choice::CaDelimiter(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild1Choice::UnderlineBegin(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild1Choice::SyllablePause(inner) => inner.raw_node(),
+            WordBodyCaElementChild1Choice::CaElement(inner) => inner.raw_node(),
+            WordBodyCaElementChild1Choice::CaDelimiter(inner) => inner.raw_node(),
+            WordBodyCaElementChild1Choice::UnderlineBegin(inner) => inner.raw_node(),
+            WordBodyCaElementChild1Choice::SyllablePause(inner) => inner.raw_node(),
         }
     }
 }
 #[derive(Debug, Clone)]
-pub enum WordBodyOverlapPointChild2Choice<'tree> {
-    /// Alternative `WordSegment`.
-    WordSegment(WordSegmentNode<'tree>),
-    /// Alternative `Shortening`.
-    Shortening(ShorteningNode<'tree>),
-    /// Alternative `StressMarker`.
-    StressMarker(StressMarkerNode<'tree>),
-}
-impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild2Choice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            WordBodyOverlapPointChild2Choice::WordSegment(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild2Choice::Shortening(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild2Choice::StressMarker(inner) => inner.raw_node(),
-        }
-    }
-}
-#[derive(Debug, Clone)]
-pub enum WordBodyOverlapPointChild3LengtheningChoice<'tree> {
-    /// Alternative `Lengthening`.
-    Lengthening(LengtheningNode<'tree>),
-    /// Alternative `OverlapPoint`.
-    OverlapPoint(OverlapPointNode<'tree>),
+pub enum WordBodyCaElementChild2Child1Choice<'tree> {
     /// Alternative `CaElement`.
     CaElement(CaElementNode<'tree>),
     /// Alternative `CaDelimiter`.
@@ -34628,64 +34536,31 @@ pub enum WordBodyOverlapPointChild3LengtheningChoice<'tree> {
     UnderlineBegin(UnderlineBeginNode<'tree>),
     /// Alternative `UnderlineEnd`.
     UnderlineEnd(UnderlineEndNode<'tree>),
-    /// Alternative `SyllablePause`.
-    SyllablePause(SyllablePauseNode<'tree>),
-    /// Alternative `Tilde`.
-    Tilde(TildeNode<'tree>),
-    /// Alternative `Variant8`.
-    Variant8(PlusNode<'tree>),
-}
-impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild3LengtheningChoice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            WordBodyOverlapPointChild3LengtheningChoice::Lengthening(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::OverlapPoint(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::CaElement(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::CaDelimiter(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::UnderlineBegin(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::UnderlineEnd(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::SyllablePause(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::Tilde(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3LengtheningChoice::Variant8(inner) => inner.raw_node(),
-        }
-    }
-}
-#[derive(Debug, Clone)]
-pub enum WordBodyOverlapPointChild3Choice<'tree> {
-    /// Alternative `WordSegment`.
-    WordSegment(WordSegmentNode<'tree>),
-    /// Alternative `Shortening`.
-    Shortening(ShorteningNode<'tree>),
+    /// Alternative `Lengthening`.
+    Lengthening(LengtheningNode<'tree>),
     /// Alternative `StressMarker`.
     StressMarker(StressMarkerNode<'tree>),
-    /// Alternative `Lengthening`.
-    Lengthening(WordBodyOverlapPointChild3LengtheningChoice<'tree>),
 }
-impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild3Choice<'tree> {
+impl<'tree> AsRawNode<'tree> for WordBodyCaElementChild2Child1Choice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
-            WordBodyOverlapPointChild3Choice::WordSegment(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3Choice::Shortening(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3Choice::StressMarker(inner) => inner.raw_node(),
-            WordBodyOverlapPointChild3Choice::Lengthening(inner) => inner.raw_node(),
+            WordBodyCaElementChild2Child1Choice::CaElement(inner) => inner.raw_node(),
+            WordBodyCaElementChild2Child1Choice::CaDelimiter(inner) => inner.raw_node(),
+            WordBodyCaElementChild2Child1Choice::UnderlineBegin(inner) => inner.raw_node(),
+            WordBodyCaElementChild2Child1Choice::UnderlineEnd(inner) => inner.raw_node(),
+            WordBodyCaElementChild2Child1Choice::Lengthening(inner) => inner.raw_node(),
+            WordBodyCaElementChild2Child1Choice::StressMarker(inner) => inner.raw_node(),
         }
     }
 }
 #[derive(Debug, Clone)]
-pub struct WordBodyOverlapPointChildren<'tree> {
+pub struct WordBodyCaElementChild2Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, NodeSlot<'tree, OverlapPointNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild1Choice<'tree>>>>,
-    >,
-    /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild2Choice<'tree>>>,
-    /// Positional member 3.
-    pub child_3: Positioned<
-        'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild3Choice<'tree>>>>,
+        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyCaElementChild2Child1Choice<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -34693,13 +34568,57 @@ pub struct WordBodyOverlapPointChildren<'tree> {
     /// (spec Section 7). Never dropped.
     pub unexpected: Vec<tree_sitter::Node<'tree>>,
 }
-impl<'tree> WordBodyOverlapPointChildren<'tree> {}
+impl<'tree> WordBodyCaElementChild2Children<'tree> {}
+#[derive(Debug, Clone)]
+pub enum WordBodyCaElementChild3Choice<'tree> {
+    /// Alternative `WordSegment`.
+    WordSegment(WordSegmentNode<'tree>),
+    /// Alternative `Shortening`.
+    Shortening(ShorteningNode<'tree>),
+    /// Alternative `StressMarker`.
+    StressMarker(StressMarkerNode<'tree>),
+}
+impl<'tree> AsRawNode<'tree> for WordBodyCaElementChild3Choice<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        match self {
+            WordBodyCaElementChild3Choice::WordSegment(inner) => inner.raw_node(),
+            WordBodyCaElementChild3Choice::Shortening(inner) => inner.raw_node(),
+            WordBodyCaElementChild3Choice::StressMarker(inner) => inner.raw_node(),
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct WordBodyCaElementChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, WordBodyCaElementChild0Choice<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<
+        'tree,
+        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyCaElementChild1Choice<'tree>>>>,
+    >,
+    /// Positional member 2.
+    pub child_2: Positioned<
+        'tree,
+        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyCaElementChild2Children<'tree>>>>,
+    >,
+    /// Positional member 3.
+    pub child_3: Positioned<'tree, NodeSlot<'tree, WordBodyCaElementChild3Choice<'tree>>>,
+    /// Positional member 4.
+    pub child_4:
+        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, tree_sitter::Node<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> WordBodyCaElementChildren<'tree> {}
 #[derive(Debug, Clone)]
 pub enum WordBodyChoice<'tree> {
     /// Alternative `WordSegment`.
     WordSegment(WordBodyWordSegmentChildren<'tree>),
-    /// Alternative `OverlapPoint`.
-    OverlapPoint(WordBodyOverlapPointChildren<'tree>),
+    /// Alternative `CaElement`.
+    CaElement(WordBodyCaElementChildren<'tree>),
 }
 #[derive(Debug, Clone)]
 pub struct WordBodyChildren<'tree> {
@@ -34738,59 +34657,38 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 ReconShape::Kind("shortening"),
                                 ReconShape::Kind("stress_marker"),
                             ]),
-                            ReconShape::Repeat(&ReconShape::Choice(&[
-                                ReconShape::Kind("word_segment"),
-                                ReconShape::Kind("shortening"),
-                                ReconShape::Kind("stress_marker"),
-                                ReconShape::Choice(&[
-                                    ReconShape::Kind("lengthening"),
-                                    ReconShape::Kind("overlap_point"),
-                                    ReconShape::Kind("ca_element"),
-                                    ReconShape::Kind("ca_delimiter"),
-                                    ReconShape::Kind("underline_begin"),
-                                    ReconShape::Kind("underline_end"),
-                                    ReconShape::Kind("syllable_pause"),
-                                    ReconShape::Kind("tilde"),
-                                    ReconShape::Kind("+"),
-                                ]),
-                            ])),
+                            ReconShape::Repeat(&ReconShape::Raw),
                         ]),
                         ReconShape::Seq(&[
                             ReconShape::Choice(&[
-                                ReconShape::Kind("overlap_point"),
                                 ReconShape::Kind("ca_element"),
                                 ReconShape::Kind("ca_delimiter"),
                                 ReconShape::Kind("underline_begin"),
                                 ReconShape::Kind("syllable_pause"),
                             ]),
                             ReconShape::Repeat(&ReconShape::Choice(&[
-                                ReconShape::Kind("overlap_point"),
                                 ReconShape::Kind("ca_element"),
                                 ReconShape::Kind("ca_delimiter"),
                                 ReconShape::Kind("underline_begin"),
                                 ReconShape::Kind("syllable_pause"),
+                            ])),
+                            ReconShape::Repeat(&ReconShape::Seq(&[
+                                ReconShape::Kind("overlap_point"),
+                                ReconShape::Repeat(&ReconShape::Choice(&[
+                                    ReconShape::Kind("ca_element"),
+                                    ReconShape::Kind("ca_delimiter"),
+                                    ReconShape::Kind("underline_begin"),
+                                    ReconShape::Kind("underline_end"),
+                                    ReconShape::Kind("lengthening"),
+                                    ReconShape::Kind("stress_marker"),
+                                ])),
                             ])),
                             ReconShape::Choice(&[
                                 ReconShape::Kind("word_segment"),
                                 ReconShape::Kind("shortening"),
                                 ReconShape::Kind("stress_marker"),
                             ]),
-                            ReconShape::Repeat(&ReconShape::Choice(&[
-                                ReconShape::Kind("word_segment"),
-                                ReconShape::Kind("shortening"),
-                                ReconShape::Kind("stress_marker"),
-                                ReconShape::Choice(&[
-                                    ReconShape::Kind("lengthening"),
-                                    ReconShape::Kind("overlap_point"),
-                                    ReconShape::Kind("ca_element"),
-                                    ReconShape::Kind("ca_delimiter"),
-                                    ReconShape::Kind("underline_begin"),
-                                    ReconShape::Kind("underline_end"),
-                                    ReconShape::Kind("syllable_pause"),
-                                    ReconShape::Kind("tilde"),
-                                    ReconShape::Kind("+"),
-                                ]),
-                            ])),
+                            ReconShape::Repeat(&ReconShape::Raw),
                         ]),
                     ],
                     &cont_of(&[]),
@@ -34805,22 +34703,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                     ReconShape::Kind("shortening"),
                                     ReconShape::Kind("stress_marker"),
                                 ]),
-                                ReconShape::Repeat(&ReconShape::Choice(&[
-                                    ReconShape::Kind("word_segment"),
-                                    ReconShape::Kind("shortening"),
-                                    ReconShape::Kind("stress_marker"),
-                                    ReconShape::Choice(&[
-                                        ReconShape::Kind("lengthening"),
-                                        ReconShape::Kind("overlap_point"),
-                                        ReconShape::Kind("ca_element"),
-                                        ReconShape::Kind("ca_delimiter"),
-                                        ReconShape::Kind("underline_begin"),
-                                        ReconShape::Kind("underline_end"),
-                                        ReconShape::Kind("syllable_pause"),
-                                        ReconShape::Kind("tilde"),
-                                        ReconShape::Kind("+"),
-                                    ]),
-                                ])),
+                                ReconShape::Repeat(&ReconShape::Raw),
                             ]),
                             &cont_of(&[]),
                             __cur.rest(),
@@ -34847,24 +34730,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     ReconShape::Kind("shortening"),
                                                     ReconShape::Kind("stress_marker"),
                                                 ],
-                                                &cont_of(&[ReconShape::Repeat(
-                                                    &ReconShape::Choice(&[
-                                                        ReconShape::Kind("word_segment"),
-                                                        ReconShape::Kind("shortening"),
-                                                        ReconShape::Kind("stress_marker"),
-                                                        ReconShape::Choice(&[
-                                                            ReconShape::Kind("lengthening"),
-                                                            ReconShape::Kind("overlap_point"),
-                                                            ReconShape::Kind("ca_element"),
-                                                            ReconShape::Kind("ca_delimiter"),
-                                                            ReconShape::Kind("underline_begin"),
-                                                            ReconShape::Kind("underline_end"),
-                                                            ReconShape::Kind("syllable_pause"),
-                                                            ReconShape::Kind("tilde"),
-                                                            ReconShape::Kind("+"),
-                                                        ]),
-                                                    ]),
-                                                )]),
+                                                &cont_of(&[ReconShape::Repeat(&ReconShape::Raw)]),
                                                 __cur.rest(),
                                                 0,
                                             ) {
@@ -34916,293 +34782,32 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 let child_1 = {
                                     let leading_extras = __cur.take_leading_extras();
                                     let __count = repeat_count(
-                                        &ReconShape::Choice(&[
-                                            ReconShape::Kind("word_segment"),
-                                            ReconShape::Kind("shortening"),
-                                            ReconShape::Kind("stress_marker"),
-                                            ReconShape::Choice(&[
-                                                ReconShape::Kind("lengthening"),
-                                                ReconShape::Kind("overlap_point"),
-                                                ReconShape::Kind("ca_element"),
-                                                ReconShape::Kind("ca_delimiter"),
-                                                ReconShape::Kind("underline_begin"),
-                                                ReconShape::Kind("underline_end"),
-                                                ReconShape::Kind("syllable_pause"),
-                                                ReconShape::Kind("tilde"),
-                                                ReconShape::Kind("+"),
-                                            ]),
-                                        ]),
+                                        &ReconShape::Raw,
                                         &cont_of(&[]),
                                         __cur.rest(),
                                         0,
                                     );
                                     let mut __items = Vec::new();
                                     for _ in 0..__count {
-                                        __items
-                                            .push({
-                                                let leading_extras = __cur.take_leading_extras();
-                                                let slot = match __cur.peek() {
-                                                    Some(__c) if __c.is_error() => {
-                                                        __cur.advance();
-                                                        NodeSlot::Error(__c)
-                                                    }
-                                                    Some(__c) if __c.is_missing() => {
-                                                        __cur.advance();
-                                                        NodeSlot::Missing(__c)
-                                                    }
-                                                    _ => {
-                                                        match choice_split(
-                                                            &[
-                                                                ReconShape::Kind("word_segment"),
-                                                                ReconShape::Kind("shortening"),
-                                                                ReconShape::Kind("stress_marker"),
-                                                                ReconShape::Choice(
-                                                                    &[
-                                                                        ReconShape::Kind("lengthening"),
-                                                                        ReconShape::Kind("overlap_point"),
-                                                                        ReconShape::Kind("ca_element"),
-                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                        ReconShape::Kind("underline_begin"),
-                                                                        ReconShape::Kind("underline_end"),
-                                                                        ReconShape::Kind("syllable_pause"),
-                                                                        ReconShape::Kind("tilde"),
-                                                                        ReconShape::Kind("+"),
-                                                                    ],
-                                                                ),
-                                                            ],
-                                                            &cont_of(
-                                                                &[
-                                                                    ReconShape::Repeat(
-                                                                        &ReconShape::Choice(
-                                                                            &[
-                                                                                ReconShape::Kind("word_segment"),
-                                                                                ReconShape::Kind("shortening"),
-                                                                                ReconShape::Kind("stress_marker"),
-                                                                                ReconShape::Choice(
-                                                                                    &[
-                                                                                        ReconShape::Kind("lengthening"),
-                                                                                        ReconShape::Kind("overlap_point"),
-                                                                                        ReconShape::Kind("ca_element"),
-                                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                                        ReconShape::Kind("underline_begin"),
-                                                                                        ReconShape::Kind("underline_end"),
-                                                                                        ReconShape::Kind("syllable_pause"),
-                                                                                        ReconShape::Kind("tilde"),
-                                                                                        ReconShape::Kind("+"),
-                                                                                    ],
-                                                                                ),
-                                                                            ],
-                                                                        ),
-                                                                    ),
-                                                                ],
-                                                            ),
-                                                            __cur.rest(),
-                                                            0,
-                                                        ) {
-                                                            Some((0, _)) => {
-                                                                if let Some(__v) = __cur
-                                                                    .take_if_kind("word_segment")
-                                                                    .map(WordSegmentNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyWordSegmentChild1Choice::WordSegment(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((1, _)) => {
-                                                                if let Some(__v) = __cur
-                                                                    .take_if_kind("shortening")
-                                                                    .map(ShorteningNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyWordSegmentChild1Choice::Shortening(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((2, _)) => {
-                                                                if let Some(__v) = __cur
-                                                                    .take_if_kind("stress_marker")
-                                                                    .map(StressMarkerNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyWordSegmentChild1Choice::StressMarker(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((3, _)) => {
-                                                                if let Some(__v) = match choice_split(
-                                                                    &[
-                                                                        ReconShape::Kind("lengthening"),
-                                                                        ReconShape::Kind("overlap_point"),
-                                                                        ReconShape::Kind("ca_element"),
-                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                        ReconShape::Kind("underline_begin"),
-                                                                        ReconShape::Kind("underline_end"),
-                                                                        ReconShape::Kind("syllable_pause"),
-                                                                        ReconShape::Kind("tilde"),
-                                                                        ReconShape::Kind("+"),
-                                                                    ],
-                                                                    &cont_of(
-                                                                        &[
-                                                                            ReconShape::Repeat(
-                                                                                &ReconShape::Choice(
-                                                                                    &[
-                                                                                        ReconShape::Kind("word_segment"),
-                                                                                        ReconShape::Kind("shortening"),
-                                                                                        ReconShape::Kind("stress_marker"),
-                                                                                        ReconShape::Choice(
-                                                                                            &[
-                                                                                                ReconShape::Kind("lengthening"),
-                                                                                                ReconShape::Kind("overlap_point"),
-                                                                                                ReconShape::Kind("ca_element"),
-                                                                                                ReconShape::Kind("ca_delimiter"),
-                                                                                                ReconShape::Kind("underline_begin"),
-                                                                                                ReconShape::Kind("underline_end"),
-                                                                                                ReconShape::Kind("syllable_pause"),
-                                                                                                ReconShape::Kind("tilde"),
-                                                                                                ReconShape::Kind("+"),
-                                                                                            ],
-                                                                                        ),
-                                                                                    ],
-                                                                                ),
-                                                                            ),
-                                                                        ],
-                                                                    ),
-                                                                    __cur.rest(),
-                                                                    0,
-                                                                ) {
-                                                                    Some((0, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("lengthening")
-                                                                            .map(LengtheningNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::Lengthening(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((1, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("overlap_point")
-                                                                            .map(OverlapPointNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::OverlapPoint(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((2, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("ca_element")
-                                                                            .map(CaElementNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::CaElement(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((3, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("ca_delimiter")
-                                                                            .map(CaDelimiterNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::CaDelimiter(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((4, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("underline_begin")
-                                                                            .map(UnderlineBeginNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::UnderlineBegin(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((5, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("underline_end")
-                                                                            .map(UnderlineEndNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::UnderlineEnd(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((6, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("syllable_pause")
-                                                                            .map(SyllablePauseNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::SyllablePause(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((7, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("tilde")
-                                                                            .map(TildeNode)
-                                                                        {
-                                                                            Some(WordBodyWordSegmentChild1LengtheningChoice::Tilde(__v))
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((8, _)) => {
-                                                                        if let Some(__v) = __cur.take_if_kind("+").map(PlusNode) {
-                                                                            Some(
-                                                                                WordBodyWordSegmentChild1LengtheningChoice::Variant8(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    _ => None,
-                                                                } {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyWordSegmentChild1Choice::Lengthening(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            _ => NodeSlot::Absent,
-                                                        }
-                                                    }
-                                                };
-                                                Positioned { leading_extras, slot }
-                                            });
+                                        __items.push({
+                                            let leading_extras = __cur.take_leading_extras();
+                                            let slot = if let Some(__c) = __cur.peek() {
+                                                __cur.advance();
+                                                if __c.is_error() {
+                                                    NodeSlot::Error(__c)
+                                                } else if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(__c)
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            };
+                                            Positioned {
+                                                leading_extras,
+                                                slot,
+                                            }
+                                        });
                                     }
                                     Positioned {
                                         leading_extras,
@@ -35230,40 +34835,34 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                         if let Some(__v) = if shape_match(
                             &ReconShape::Seq(&[
                                 ReconShape::Choice(&[
-                                    ReconShape::Kind("overlap_point"),
                                     ReconShape::Kind("ca_element"),
                                     ReconShape::Kind("ca_delimiter"),
                                     ReconShape::Kind("underline_begin"),
                                     ReconShape::Kind("syllable_pause"),
                                 ]),
                                 ReconShape::Repeat(&ReconShape::Choice(&[
-                                    ReconShape::Kind("overlap_point"),
                                     ReconShape::Kind("ca_element"),
                                     ReconShape::Kind("ca_delimiter"),
                                     ReconShape::Kind("underline_begin"),
                                     ReconShape::Kind("syllable_pause"),
+                                ])),
+                                ReconShape::Repeat(&ReconShape::Seq(&[
+                                    ReconShape::Kind("overlap_point"),
+                                    ReconShape::Repeat(&ReconShape::Choice(&[
+                                        ReconShape::Kind("ca_element"),
+                                        ReconShape::Kind("ca_delimiter"),
+                                        ReconShape::Kind("underline_begin"),
+                                        ReconShape::Kind("underline_end"),
+                                        ReconShape::Kind("lengthening"),
+                                        ReconShape::Kind("stress_marker"),
+                                    ])),
                                 ])),
                                 ReconShape::Choice(&[
                                     ReconShape::Kind("word_segment"),
                                     ReconShape::Kind("shortening"),
                                     ReconShape::Kind("stress_marker"),
                                 ]),
-                                ReconShape::Repeat(&ReconShape::Choice(&[
-                                    ReconShape::Kind("word_segment"),
-                                    ReconShape::Kind("shortening"),
-                                    ReconShape::Kind("stress_marker"),
-                                    ReconShape::Choice(&[
-                                        ReconShape::Kind("lengthening"),
-                                        ReconShape::Kind("overlap_point"),
-                                        ReconShape::Kind("ca_element"),
-                                        ReconShape::Kind("ca_delimiter"),
-                                        ReconShape::Kind("underline_begin"),
-                                        ReconShape::Kind("underline_end"),
-                                        ReconShape::Kind("syllable_pause"),
-                                        ReconShape::Kind("tilde"),
-                                        ReconShape::Kind("+"),
-                                    ]),
-                                ])),
+                                ReconShape::Repeat(&ReconShape::Raw),
                             ]),
                             &cont_of(&[]),
                             __cur.rest(),
@@ -35286,7 +34885,6 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                         _ => {
                                             match choice_split(
                                                 &[
-                                                    ReconShape::Kind("overlap_point"),
                                                     ReconShape::Kind("ca_element"),
                                                     ReconShape::Kind("ca_delimiter"),
                                                     ReconShape::Kind("underline_begin"),
@@ -35294,44 +34892,39 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 ],
                                                 &cont_of(&[
                                                     ReconShape::Repeat(&ReconShape::Choice(&[
-                                                        ReconShape::Kind("overlap_point"),
                                                         ReconShape::Kind("ca_element"),
                                                         ReconShape::Kind("ca_delimiter"),
                                                         ReconShape::Kind("underline_begin"),
                                                         ReconShape::Kind("syllable_pause"),
+                                                    ])),
+                                                    ReconShape::Repeat(&ReconShape::Seq(&[
+                                                        ReconShape::Kind("overlap_point"),
+                                                        ReconShape::Repeat(&ReconShape::Choice(&[
+                                                            ReconShape::Kind("ca_element"),
+                                                            ReconShape::Kind("ca_delimiter"),
+                                                            ReconShape::Kind("underline_begin"),
+                                                            ReconShape::Kind("underline_end"),
+                                                            ReconShape::Kind("lengthening"),
+                                                            ReconShape::Kind("stress_marker"),
+                                                        ])),
                                                     ])),
                                                     ReconShape::Choice(&[
                                                         ReconShape::Kind("word_segment"),
                                                         ReconShape::Kind("shortening"),
                                                         ReconShape::Kind("stress_marker"),
                                                     ]),
-                                                    ReconShape::Repeat(&ReconShape::Choice(&[
-                                                        ReconShape::Kind("word_segment"),
-                                                        ReconShape::Kind("shortening"),
-                                                        ReconShape::Kind("stress_marker"),
-                                                        ReconShape::Choice(&[
-                                                            ReconShape::Kind("lengthening"),
-                                                            ReconShape::Kind("overlap_point"),
-                                                            ReconShape::Kind("ca_element"),
-                                                            ReconShape::Kind("ca_delimiter"),
-                                                            ReconShape::Kind("underline_begin"),
-                                                            ReconShape::Kind("underline_end"),
-                                                            ReconShape::Kind("syllable_pause"),
-                                                            ReconShape::Kind("tilde"),
-                                                            ReconShape::Kind("+"),
-                                                        ]),
-                                                    ])),
+                                                    ReconShape::Repeat(&ReconShape::Raw),
                                                 ]),
                                                 __cur.rest(),
                                                 0,
                                             ) {
                                                 Some((0, _)) => {
                                                     if let Some(__v) = __cur
-                                                        .take_if_kind("overlap_point")
-                                                        .map(OverlapPointNode)
+                                                        .take_if_kind("ca_element")
+                                                        .map(CaElementNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild0Choice::OverlapPoint(__v),
+                                                            WordBodyCaElementChild0Choice::CaElement(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35339,11 +34932,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 }
                                                 Some((1, _)) => {
                                                     if let Some(__v) = __cur
-                                                        .take_if_kind("ca_element")
-                                                        .map(CaElementNode)
+                                                        .take_if_kind("ca_delimiter")
+                                                        .map(CaDelimiterNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild0Choice::CaElement(__v),
+                                                            WordBodyCaElementChild0Choice::CaDelimiter(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35351,11 +34944,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 }
                                                 Some((2, _)) => {
                                                     if let Some(__v) = __cur
-                                                        .take_if_kind("ca_delimiter")
-                                                        .map(CaDelimiterNode)
+                                                        .take_if_kind("underline_begin")
+                                                        .map(UnderlineBeginNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild0Choice::CaDelimiter(__v),
+                                                            WordBodyCaElementChild0Choice::UnderlineBegin(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35363,23 +34956,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 }
                                                 Some((3, _)) => {
                                                     if let Some(__v) = __cur
-                                                        .take_if_kind("underline_begin")
-                                                        .map(UnderlineBeginNode)
-                                                    {
-                                                        NodeSlot::Present(
-                                                            WordBodyOverlapPointChild0Choice::UnderlineBegin(__v),
-                                                        )
-                                                    } else {
-                                                        NodeSlot::Absent
-                                                    }
-                                                }
-                                                Some((4, _)) => {
-                                                    if let Some(__v) = __cur
                                                         .take_if_kind("syllable_pause")
                                                         .map(SyllablePauseNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild0Choice::SyllablePause(__v),
+                                                            WordBodyCaElementChild0Choice::SyllablePause(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35398,34 +34979,29 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                     let leading_extras = __cur.take_leading_extras();
                                     let __count = repeat_count(
                                         &ReconShape::Choice(&[
-                                            ReconShape::Kind("overlap_point"),
                                             ReconShape::Kind("ca_element"),
                                             ReconShape::Kind("ca_delimiter"),
                                             ReconShape::Kind("underline_begin"),
                                             ReconShape::Kind("syllable_pause"),
                                         ]),
                                         &cont_of(&[
+                                            ReconShape::Repeat(&ReconShape::Seq(&[
+                                                ReconShape::Kind("overlap_point"),
+                                                ReconShape::Repeat(&ReconShape::Choice(&[
+                                                    ReconShape::Kind("ca_element"),
+                                                    ReconShape::Kind("ca_delimiter"),
+                                                    ReconShape::Kind("underline_begin"),
+                                                    ReconShape::Kind("underline_end"),
+                                                    ReconShape::Kind("lengthening"),
+                                                    ReconShape::Kind("stress_marker"),
+                                                ])),
+                                            ])),
                                             ReconShape::Choice(&[
                                                 ReconShape::Kind("word_segment"),
                                                 ReconShape::Kind("shortening"),
                                                 ReconShape::Kind("stress_marker"),
                                             ]),
-                                            ReconShape::Repeat(&ReconShape::Choice(&[
-                                                ReconShape::Kind("word_segment"),
-                                                ReconShape::Kind("shortening"),
-                                                ReconShape::Kind("stress_marker"),
-                                                ReconShape::Choice(&[
-                                                    ReconShape::Kind("lengthening"),
-                                                    ReconShape::Kind("overlap_point"),
-                                                    ReconShape::Kind("ca_element"),
-                                                    ReconShape::Kind("ca_delimiter"),
-                                                    ReconShape::Kind("underline_begin"),
-                                                    ReconShape::Kind("underline_end"),
-                                                    ReconShape::Kind("syllable_pause"),
-                                                    ReconShape::Kind("tilde"),
-                                                    ReconShape::Kind("+"),
-                                                ]),
-                                            ])),
+                                            ReconShape::Repeat(&ReconShape::Raw),
                                         ]),
                                         __cur.rest(),
                                         0,
@@ -35447,7 +35023,6 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     _ => {
                                                         match choice_split(
                                                             &[
-                                                                ReconShape::Kind("overlap_point"),
                                                                 ReconShape::Kind("ca_element"),
                                                                 ReconShape::Kind("ca_delimiter"),
                                                                 ReconShape::Kind("underline_begin"),
@@ -35458,11 +35033,29 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                     ReconShape::Repeat(
                                                                         &ReconShape::Choice(
                                                                             &[
-                                                                                ReconShape::Kind("overlap_point"),
                                                                                 ReconShape::Kind("ca_element"),
                                                                                 ReconShape::Kind("ca_delimiter"),
                                                                                 ReconShape::Kind("underline_begin"),
                                                                                 ReconShape::Kind("syllable_pause"),
+                                                                            ],
+                                                                        ),
+                                                                    ),
+                                                                    ReconShape::Repeat(
+                                                                        &ReconShape::Seq(
+                                                                            &[
+                                                                                ReconShape::Kind("overlap_point"),
+                                                                                ReconShape::Repeat(
+                                                                                    &ReconShape::Choice(
+                                                                                        &[
+                                                                                            ReconShape::Kind("ca_element"),
+                                                                                            ReconShape::Kind("ca_delimiter"),
+                                                                                            ReconShape::Kind("underline_begin"),
+                                                                                            ReconShape::Kind("underline_end"),
+                                                                                            ReconShape::Kind("lengthening"),
+                                                                                            ReconShape::Kind("stress_marker"),
+                                                                                        ],
+                                                                                    ),
+                                                                                ),
                                                                             ],
                                                                         ),
                                                                     ),
@@ -35473,28 +35066,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             ReconShape::Kind("stress_marker"),
                                                                         ],
                                                                     ),
-                                                                    ReconShape::Repeat(
-                                                                        &ReconShape::Choice(
-                                                                            &[
-                                                                                ReconShape::Kind("word_segment"),
-                                                                                ReconShape::Kind("shortening"),
-                                                                                ReconShape::Kind("stress_marker"),
-                                                                                ReconShape::Choice(
-                                                                                    &[
-                                                                                        ReconShape::Kind("lengthening"),
-                                                                                        ReconShape::Kind("overlap_point"),
-                                                                                        ReconShape::Kind("ca_element"),
-                                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                                        ReconShape::Kind("underline_begin"),
-                                                                                        ReconShape::Kind("underline_end"),
-                                                                                        ReconShape::Kind("syllable_pause"),
-                                                                                        ReconShape::Kind("tilde"),
-                                                                                        ReconShape::Kind("+"),
-                                                                                    ],
-                                                                                ),
-                                                                            ],
-                                                                        ),
-                                                                    ),
+                                                                    ReconShape::Repeat(&ReconShape::Raw),
                                                                 ],
                                                             ),
                                                             __cur.rest(),
@@ -35502,11 +35074,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                         ) {
                                                             Some((0, _)) => {
                                                                 if let Some(__v) = __cur
-                                                                    .take_if_kind("overlap_point")
-                                                                    .map(OverlapPointNode)
+                                                                    .take_if_kind("ca_element")
+                                                                    .map(CaElementNode)
                                                                 {
                                                                     NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild1Choice::OverlapPoint(__v),
+                                                                        WordBodyCaElementChild1Choice::CaElement(__v),
                                                                     )
                                                                 } else {
                                                                     NodeSlot::Absent
@@ -35514,11 +35086,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                             }
                                                             Some((1, _)) => {
                                                                 if let Some(__v) = __cur
-                                                                    .take_if_kind("ca_element")
-                                                                    .map(CaElementNode)
+                                                                    .take_if_kind("ca_delimiter")
+                                                                    .map(CaDelimiterNode)
                                                                 {
                                                                     NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild1Choice::CaElement(__v),
+                                                                        WordBodyCaElementChild1Choice::CaDelimiter(__v),
                                                                     )
                                                                 } else {
                                                                     NodeSlot::Absent
@@ -35526,11 +35098,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                             }
                                                             Some((2, _)) => {
                                                                 if let Some(__v) = __cur
-                                                                    .take_if_kind("ca_delimiter")
-                                                                    .map(CaDelimiterNode)
+                                                                    .take_if_kind("underline_begin")
+                                                                    .map(UnderlineBeginNode)
                                                                 {
                                                                     NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild1Choice::CaDelimiter(__v),
+                                                                        WordBodyCaElementChild1Choice::UnderlineBegin(__v),
                                                                     )
                                                                 } else {
                                                                     NodeSlot::Absent
@@ -35538,23 +35110,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                             }
                                                             Some((3, _)) => {
                                                                 if let Some(__v) = __cur
-                                                                    .take_if_kind("underline_begin")
-                                                                    .map(UnderlineBeginNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild1Choice::UnderlineBegin(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((4, _)) => {
-                                                                if let Some(__v) = __cur
                                                                     .take_if_kind("syllable_pause")
                                                                     .map(SyllablePauseNode)
                                                                 {
                                                                     NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild1Choice::SyllablePause(__v),
+                                                                        WordBodyCaElementChild1Choice::SyllablePause(__v),
                                                                     )
                                                                 } else {
                                                                     NodeSlot::Absent
@@ -35574,6 +35134,340 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 };
                                 let child_2 = {
                                     let leading_extras = __cur.take_leading_extras();
+                                    let __count = repeat_count(
+                                        &ReconShape::Seq(&[
+                                            ReconShape::Kind("overlap_point"),
+                                            ReconShape::Repeat(&ReconShape::Choice(&[
+                                                ReconShape::Kind("ca_element"),
+                                                ReconShape::Kind("ca_delimiter"),
+                                                ReconShape::Kind("underline_begin"),
+                                                ReconShape::Kind("underline_end"),
+                                                ReconShape::Kind("lengthening"),
+                                                ReconShape::Kind("stress_marker"),
+                                            ])),
+                                        ]),
+                                        &cont_of(&[
+                                            ReconShape::Choice(&[
+                                                ReconShape::Kind("word_segment"),
+                                                ReconShape::Kind("shortening"),
+                                                ReconShape::Kind("stress_marker"),
+                                            ]),
+                                            ReconShape::Repeat(&ReconShape::Raw),
+                                        ]),
+                                        __cur.rest(),
+                                        0,
+                                    );
+                                    let mut __items = Vec::new();
+                                    for _ in 0..__count {
+                                        __items
+                                            .push({
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if shape_match(
+                                                            &ReconShape::Seq(
+                                                                &[
+                                                                    ReconShape::Kind("overlap_point"),
+                                                                    ReconShape::Repeat(
+                                                                        &ReconShape::Choice(
+                                                                            &[
+                                                                                ReconShape::Kind("ca_element"),
+                                                                                ReconShape::Kind("ca_delimiter"),
+                                                                                ReconShape::Kind("underline_begin"),
+                                                                                ReconShape::Kind("underline_end"),
+                                                                                ReconShape::Kind("lengthening"),
+                                                                                ReconShape::Kind("stress_marker"),
+                                                                            ],
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                            ),
+                                                            &cont_of(
+                                                                &[
+                                                                    ReconShape::Repeat(
+                                                                        &ReconShape::Seq(
+                                                                            &[
+                                                                                ReconShape::Kind("overlap_point"),
+                                                                                ReconShape::Repeat(
+                                                                                    &ReconShape::Choice(
+                                                                                        &[
+                                                                                            ReconShape::Kind("ca_element"),
+                                                                                            ReconShape::Kind("ca_delimiter"),
+                                                                                            ReconShape::Kind("underline_begin"),
+                                                                                            ReconShape::Kind("underline_end"),
+                                                                                            ReconShape::Kind("lengthening"),
+                                                                                            ReconShape::Kind("stress_marker"),
+                                                                                        ],
+                                                                                    ),
+                                                                                ),
+                                                                            ],
+                                                                        ),
+                                                                    ),
+                                                                    ReconShape::Choice(
+                                                                        &[
+                                                                            ReconShape::Kind("word_segment"),
+                                                                            ReconShape::Kind("shortening"),
+                                                                            ReconShape::Kind("stress_marker"),
+                                                                        ],
+                                                                    ),
+                                                                    ReconShape::Repeat(&ReconShape::Raw),
+                                                                ],
+                                                            ),
+                                                            __cur.rest(),
+                                                            0,
+                                                        )
+                                                        .is_some()
+                                                    {
+                                                        NodeSlot::Present({
+                                                            let child_0 = {
+                                                                let leading_extras = __cur.take_leading_extras();
+                                                                let slot = if let Some(__c) = __cur.peek() {
+                                                                    if __c.is_error() {
+                                                                        __cur.advance();
+                                                                        NodeSlot::Error(__c)
+                                                                    } else if __c.kind() == "overlap_point" {
+                                                                        __cur.advance();
+                                                                        if __c.is_missing() {
+                                                                            NodeSlot::Missing(__c)
+                                                                        } else {
+                                                                            NodeSlot::Present(OverlapPointNode(__c))
+                                                                        }
+                                                                    } else {
+                                                                        NodeSlot::Absent
+                                                                    }
+                                                                } else {
+                                                                    NodeSlot::Absent
+                                                                };
+                                                                Positioned { leading_extras, slot }
+                                                            };
+                                                            let child_1 = {
+                                                                let leading_extras = __cur.take_leading_extras();
+                                                                let __count = repeat_count(
+                                                                    &ReconShape::Choice(
+                                                                        &[
+                                                                            ReconShape::Kind("ca_element"),
+                                                                            ReconShape::Kind("ca_delimiter"),
+                                                                            ReconShape::Kind("underline_begin"),
+                                                                            ReconShape::Kind("underline_end"),
+                                                                            ReconShape::Kind("lengthening"),
+                                                                            ReconShape::Kind("stress_marker"),
+                                                                        ],
+                                                                    ),
+                                                                    &cont_of(
+                                                                        &[
+                                                                            ReconShape::Repeat(
+                                                                                &ReconShape::Seq(
+                                                                                    &[
+                                                                                        ReconShape::Kind("overlap_point"),
+                                                                                        ReconShape::Repeat(
+                                                                                            &ReconShape::Choice(
+                                                                                                &[
+                                                                                                    ReconShape::Kind("ca_element"),
+                                                                                                    ReconShape::Kind("ca_delimiter"),
+                                                                                                    ReconShape::Kind("underline_begin"),
+                                                                                                    ReconShape::Kind("underline_end"),
+                                                                                                    ReconShape::Kind("lengthening"),
+                                                                                                    ReconShape::Kind("stress_marker"),
+                                                                                                ],
+                                                                                            ),
+                                                                                        ),
+                                                                                    ],
+                                                                                ),
+                                                                            ),
+                                                                            ReconShape::Choice(
+                                                                                &[
+                                                                                    ReconShape::Kind("word_segment"),
+                                                                                    ReconShape::Kind("shortening"),
+                                                                                    ReconShape::Kind("stress_marker"),
+                                                                                ],
+                                                                            ),
+                                                                            ReconShape::Repeat(&ReconShape::Raw),
+                                                                        ],
+                                                                    ),
+                                                                    __cur.rest(),
+                                                                    0,
+                                                                );
+                                                                let mut __items = Vec::new();
+                                                                for _ in 0..__count {
+                                                                    __items
+                                                                        .push({
+                                                                            let leading_extras = __cur.take_leading_extras();
+                                                                            let slot = match __cur.peek() {
+                                                                                Some(__c) if __c.is_error() => {
+                                                                                    __cur.advance();
+                                                                                    NodeSlot::Error(__c)
+                                                                                }
+                                                                                Some(__c) if __c.is_missing() => {
+                                                                                    __cur.advance();
+                                                                                    NodeSlot::Missing(__c)
+                                                                                }
+                                                                                _ => {
+                                                                                    match choice_split(
+                                                                                        &[
+                                                                                            ReconShape::Kind("ca_element"),
+                                                                                            ReconShape::Kind("ca_delimiter"),
+                                                                                            ReconShape::Kind("underline_begin"),
+                                                                                            ReconShape::Kind("underline_end"),
+                                                                                            ReconShape::Kind("lengthening"),
+                                                                                            ReconShape::Kind("stress_marker"),
+                                                                                        ],
+                                                                                        &cont_of(
+                                                                                            &[
+                                                                                                ReconShape::Repeat(
+                                                                                                    &ReconShape::Choice(
+                                                                                                        &[
+                                                                                                            ReconShape::Kind("ca_element"),
+                                                                                                            ReconShape::Kind("ca_delimiter"),
+                                                                                                            ReconShape::Kind("underline_begin"),
+                                                                                                            ReconShape::Kind("underline_end"),
+                                                                                                            ReconShape::Kind("lengthening"),
+                                                                                                            ReconShape::Kind("stress_marker"),
+                                                                                                        ],
+                                                                                                    ),
+                                                                                                ),
+                                                                                                ReconShape::Repeat(
+                                                                                                    &ReconShape::Seq(
+                                                                                                        &[
+                                                                                                            ReconShape::Kind("overlap_point"),
+                                                                                                            ReconShape::Repeat(
+                                                                                                                &ReconShape::Choice(
+                                                                                                                    &[
+                                                                                                                        ReconShape::Kind("ca_element"),
+                                                                                                                        ReconShape::Kind("ca_delimiter"),
+                                                                                                                        ReconShape::Kind("underline_begin"),
+                                                                                                                        ReconShape::Kind("underline_end"),
+                                                                                                                        ReconShape::Kind("lengthening"),
+                                                                                                                        ReconShape::Kind("stress_marker"),
+                                                                                                                    ],
+                                                                                                                ),
+                                                                                                            ),
+                                                                                                        ],
+                                                                                                    ),
+                                                                                                ),
+                                                                                                ReconShape::Choice(
+                                                                                                    &[
+                                                                                                        ReconShape::Kind("word_segment"),
+                                                                                                        ReconShape::Kind("shortening"),
+                                                                                                        ReconShape::Kind("stress_marker"),
+                                                                                                    ],
+                                                                                                ),
+                                                                                                ReconShape::Repeat(&ReconShape::Raw),
+                                                                                            ],
+                                                                                        ),
+                                                                                        __cur.rest(),
+                                                                                        0,
+                                                                                    ) {
+                                                                                        Some((0, _)) => {
+                                                                                            if let Some(__v) = __cur
+                                                                                                .take_if_kind("ca_element")
+                                                                                                .map(CaElementNode)
+                                                                                            {
+                                                                                                NodeSlot::Present(
+                                                                                                    WordBodyCaElementChild2Child1Choice::CaElement(__v),
+                                                                                                )
+                                                                                            } else {
+                                                                                                NodeSlot::Absent
+                                                                                            }
+                                                                                        }
+                                                                                        Some((1, _)) => {
+                                                                                            if let Some(__v) = __cur
+                                                                                                .take_if_kind("ca_delimiter")
+                                                                                                .map(CaDelimiterNode)
+                                                                                            {
+                                                                                                NodeSlot::Present(
+                                                                                                    WordBodyCaElementChild2Child1Choice::CaDelimiter(__v),
+                                                                                                )
+                                                                                            } else {
+                                                                                                NodeSlot::Absent
+                                                                                            }
+                                                                                        }
+                                                                                        Some((2, _)) => {
+                                                                                            if let Some(__v) = __cur
+                                                                                                .take_if_kind("underline_begin")
+                                                                                                .map(UnderlineBeginNode)
+                                                                                            {
+                                                                                                NodeSlot::Present(
+                                                                                                    WordBodyCaElementChild2Child1Choice::UnderlineBegin(__v),
+                                                                                                )
+                                                                                            } else {
+                                                                                                NodeSlot::Absent
+                                                                                            }
+                                                                                        }
+                                                                                        Some((3, _)) => {
+                                                                                            if let Some(__v) = __cur
+                                                                                                .take_if_kind("underline_end")
+                                                                                                .map(UnderlineEndNode)
+                                                                                            {
+                                                                                                NodeSlot::Present(
+                                                                                                    WordBodyCaElementChild2Child1Choice::UnderlineEnd(__v),
+                                                                                                )
+                                                                                            } else {
+                                                                                                NodeSlot::Absent
+                                                                                            }
+                                                                                        }
+                                                                                        Some((4, _)) => {
+                                                                                            if let Some(__v) = __cur
+                                                                                                .take_if_kind("lengthening")
+                                                                                                .map(LengtheningNode)
+                                                                                            {
+                                                                                                NodeSlot::Present(
+                                                                                                    WordBodyCaElementChild2Child1Choice::Lengthening(__v),
+                                                                                                )
+                                                                                            } else {
+                                                                                                NodeSlot::Absent
+                                                                                            }
+                                                                                        }
+                                                                                        Some((5, _)) => {
+                                                                                            if let Some(__v) = __cur
+                                                                                                .take_if_kind("stress_marker")
+                                                                                                .map(StressMarkerNode)
+                                                                                            {
+                                                                                                NodeSlot::Present(
+                                                                                                    WordBodyCaElementChild2Child1Choice::StressMarker(__v),
+                                                                                                )
+                                                                                            } else {
+                                                                                                NodeSlot::Absent
+                                                                                            }
+                                                                                        }
+                                                                                        _ => NodeSlot::Absent,
+                                                                                    }
+                                                                                }
+                                                                            };
+                                                                            Positioned { leading_extras, slot }
+                                                                        });
+                                                                }
+                                                                Positioned {
+                                                                    leading_extras,
+                                                                    slot: __items,
+                                                                }
+                                                            };
+                                                            let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                                            let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                                            WordBodyCaElementChild2Children {
+                                                                child_0,
+                                                                child_1,
+                                                                trailing_extras,
+                                                                unexpected,
+                                                            }
+                                                        })
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned { leading_extras, slot }
+                                            });
+                                    }
+                                    Positioned {
+                                        leading_extras,
+                                        slot: __items,
+                                    }
+                                };
+                                let child_3 = {
+                                    let leading_extras = __cur.take_leading_extras();
                                     let slot = match __cur.peek() {
                                         Some(__c) if __c.is_error() => {
                                             __cur.advance();
@@ -35590,24 +35484,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     ReconShape::Kind("shortening"),
                                                     ReconShape::Kind("stress_marker"),
                                                 ],
-                                                &cont_of(&[ReconShape::Repeat(
-                                                    &ReconShape::Choice(&[
-                                                        ReconShape::Kind("word_segment"),
-                                                        ReconShape::Kind("shortening"),
-                                                        ReconShape::Kind("stress_marker"),
-                                                        ReconShape::Choice(&[
-                                                            ReconShape::Kind("lengthening"),
-                                                            ReconShape::Kind("overlap_point"),
-                                                            ReconShape::Kind("ca_element"),
-                                                            ReconShape::Kind("ca_delimiter"),
-                                                            ReconShape::Kind("underline_begin"),
-                                                            ReconShape::Kind("underline_end"),
-                                                            ReconShape::Kind("syllable_pause"),
-                                                            ReconShape::Kind("tilde"),
-                                                            ReconShape::Kind("+"),
-                                                        ]),
-                                                    ]),
-                                                )]),
+                                                &cont_of(&[ReconShape::Repeat(&ReconShape::Raw)]),
                                                 __cur.rest(),
                                                 0,
                                             ) {
@@ -35617,7 +35494,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                         .map(WordSegmentNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild2Choice::WordSegment(__v),
+                                                            WordBodyCaElementChild3Choice::WordSegment(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35629,7 +35506,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                         .map(ShorteningNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild2Choice::Shortening(__v),
+                                                            WordBodyCaElementChild3Choice::Shortening(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35641,7 +35518,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                         .map(StressMarkerNode)
                                                     {
                                                         NodeSlot::Present(
-                                                            WordBodyOverlapPointChild2Choice::StressMarker(__v),
+                                                            WordBodyCaElementChild3Choice::StressMarker(__v),
                                                         )
                                                     } else {
                                                         NodeSlot::Absent
@@ -35656,302 +35533,35 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                         slot,
                                     }
                                 };
-                                let child_3 = {
+                                let child_4 = {
                                     let leading_extras = __cur.take_leading_extras();
                                     let __count = repeat_count(
-                                        &ReconShape::Choice(&[
-                                            ReconShape::Kind("word_segment"),
-                                            ReconShape::Kind("shortening"),
-                                            ReconShape::Kind("stress_marker"),
-                                            ReconShape::Choice(&[
-                                                ReconShape::Kind("lengthening"),
-                                                ReconShape::Kind("overlap_point"),
-                                                ReconShape::Kind("ca_element"),
-                                                ReconShape::Kind("ca_delimiter"),
-                                                ReconShape::Kind("underline_begin"),
-                                                ReconShape::Kind("underline_end"),
-                                                ReconShape::Kind("syllable_pause"),
-                                                ReconShape::Kind("tilde"),
-                                                ReconShape::Kind("+"),
-                                            ]),
-                                        ]),
+                                        &ReconShape::Raw,
                                         &cont_of(&[]),
                                         __cur.rest(),
                                         0,
                                     );
                                     let mut __items = Vec::new();
                                     for _ in 0..__count {
-                                        __items
-                                            .push({
-                                                let leading_extras = __cur.take_leading_extras();
-                                                let slot = match __cur.peek() {
-                                                    Some(__c) if __c.is_error() => {
-                                                        __cur.advance();
-                                                        NodeSlot::Error(__c)
-                                                    }
-                                                    Some(__c) if __c.is_missing() => {
-                                                        __cur.advance();
-                                                        NodeSlot::Missing(__c)
-                                                    }
-                                                    _ => {
-                                                        match choice_split(
-                                                            &[
-                                                                ReconShape::Kind("word_segment"),
-                                                                ReconShape::Kind("shortening"),
-                                                                ReconShape::Kind("stress_marker"),
-                                                                ReconShape::Choice(
-                                                                    &[
-                                                                        ReconShape::Kind("lengthening"),
-                                                                        ReconShape::Kind("overlap_point"),
-                                                                        ReconShape::Kind("ca_element"),
-                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                        ReconShape::Kind("underline_begin"),
-                                                                        ReconShape::Kind("underline_end"),
-                                                                        ReconShape::Kind("syllable_pause"),
-                                                                        ReconShape::Kind("tilde"),
-                                                                        ReconShape::Kind("+"),
-                                                                    ],
-                                                                ),
-                                                            ],
-                                                            &cont_of(
-                                                                &[
-                                                                    ReconShape::Repeat(
-                                                                        &ReconShape::Choice(
-                                                                            &[
-                                                                                ReconShape::Kind("word_segment"),
-                                                                                ReconShape::Kind("shortening"),
-                                                                                ReconShape::Kind("stress_marker"),
-                                                                                ReconShape::Choice(
-                                                                                    &[
-                                                                                        ReconShape::Kind("lengthening"),
-                                                                                        ReconShape::Kind("overlap_point"),
-                                                                                        ReconShape::Kind("ca_element"),
-                                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                                        ReconShape::Kind("underline_begin"),
-                                                                                        ReconShape::Kind("underline_end"),
-                                                                                        ReconShape::Kind("syllable_pause"),
-                                                                                        ReconShape::Kind("tilde"),
-                                                                                        ReconShape::Kind("+"),
-                                                                                    ],
-                                                                                ),
-                                                                            ],
-                                                                        ),
-                                                                    ),
-                                                                ],
-                                                            ),
-                                                            __cur.rest(),
-                                                            0,
-                                                        ) {
-                                                            Some((0, _)) => {
-                                                                if let Some(__v) = __cur
-                                                                    .take_if_kind("word_segment")
-                                                                    .map(WordSegmentNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild3Choice::WordSegment(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((1, _)) => {
-                                                                if let Some(__v) = __cur
-                                                                    .take_if_kind("shortening")
-                                                                    .map(ShorteningNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild3Choice::Shortening(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((2, _)) => {
-                                                                if let Some(__v) = __cur
-                                                                    .take_if_kind("stress_marker")
-                                                                    .map(StressMarkerNode)
-                                                                {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild3Choice::StressMarker(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            Some((3, _)) => {
-                                                                if let Some(__v) = match choice_split(
-                                                                    &[
-                                                                        ReconShape::Kind("lengthening"),
-                                                                        ReconShape::Kind("overlap_point"),
-                                                                        ReconShape::Kind("ca_element"),
-                                                                        ReconShape::Kind("ca_delimiter"),
-                                                                        ReconShape::Kind("underline_begin"),
-                                                                        ReconShape::Kind("underline_end"),
-                                                                        ReconShape::Kind("syllable_pause"),
-                                                                        ReconShape::Kind("tilde"),
-                                                                        ReconShape::Kind("+"),
-                                                                    ],
-                                                                    &cont_of(
-                                                                        &[
-                                                                            ReconShape::Repeat(
-                                                                                &ReconShape::Choice(
-                                                                                    &[
-                                                                                        ReconShape::Kind("word_segment"),
-                                                                                        ReconShape::Kind("shortening"),
-                                                                                        ReconShape::Kind("stress_marker"),
-                                                                                        ReconShape::Choice(
-                                                                                            &[
-                                                                                                ReconShape::Kind("lengthening"),
-                                                                                                ReconShape::Kind("overlap_point"),
-                                                                                                ReconShape::Kind("ca_element"),
-                                                                                                ReconShape::Kind("ca_delimiter"),
-                                                                                                ReconShape::Kind("underline_begin"),
-                                                                                                ReconShape::Kind("underline_end"),
-                                                                                                ReconShape::Kind("syllable_pause"),
-                                                                                                ReconShape::Kind("tilde"),
-                                                                                                ReconShape::Kind("+"),
-                                                                                            ],
-                                                                                        ),
-                                                                                    ],
-                                                                                ),
-                                                                            ),
-                                                                        ],
-                                                                    ),
-                                                                    __cur.rest(),
-                                                                    0,
-                                                                ) {
-                                                                    Some((0, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("lengthening")
-                                                                            .map(LengtheningNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::Lengthening(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((1, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("overlap_point")
-                                                                            .map(OverlapPointNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::OverlapPoint(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((2, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("ca_element")
-                                                                            .map(CaElementNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::CaElement(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((3, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("ca_delimiter")
-                                                                            .map(CaDelimiterNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::CaDelimiter(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((4, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("underline_begin")
-                                                                            .map(UnderlineBeginNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::UnderlineBegin(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((5, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("underline_end")
-                                                                            .map(UnderlineEndNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::UnderlineEnd(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((6, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("syllable_pause")
-                                                                            .map(SyllablePauseNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::SyllablePause(
-                                                                                    __v,
-                                                                                ),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((7, _)) => {
-                                                                        if let Some(__v) = __cur
-                                                                            .take_if_kind("tilde")
-                                                                            .map(TildeNode)
-                                                                        {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::Tilde(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    Some((8, _)) => {
-                                                                        if let Some(__v) = __cur.take_if_kind("+").map(PlusNode) {
-                                                                            Some(
-                                                                                WordBodyOverlapPointChild3LengtheningChoice::Variant8(__v),
-                                                                            )
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    }
-                                                                    _ => None,
-                                                                } {
-                                                                    NodeSlot::Present(
-                                                                        WordBodyOverlapPointChild3Choice::Lengthening(__v),
-                                                                    )
-                                                                } else {
-                                                                    NodeSlot::Absent
-                                                                }
-                                                            }
-                                                            _ => NodeSlot::Absent,
-                                                        }
-                                                    }
-                                                };
-                                                Positioned { leading_extras, slot }
-                                            });
+                                        __items.push({
+                                            let leading_extras = __cur.take_leading_extras();
+                                            let slot = if let Some(__c) = __cur.peek() {
+                                                __cur.advance();
+                                                if __c.is_error() {
+                                                    NodeSlot::Error(__c)
+                                                } else if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(__c)
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            };
+                                            Positioned {
+                                                leading_extras,
+                                                slot,
+                                            }
+                                        });
                                     }
                                     Positioned {
                                         leading_extras,
@@ -35960,11 +35570,12 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 };
                                 let trailing_extras: Vec<Extra<'tree>> = Vec::new();
                                 let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
-                                WordBodyOverlapPointChildren {
+                                WordBodyCaElementChildren {
                                     child_0,
                                     child_1,
                                     child_2,
                                     child_3,
+                                    child_4,
                                     trailing_extras,
                                     unexpected,
                                 }
@@ -35972,7 +35583,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                         } else {
                             None
                         } {
-                            NodeSlot::Present(WordBodyChoice::OverlapPoint(__v))
+                            NodeSlot::Present(WordBodyChoice::CaElement(__v))
                         } else {
                             NodeSlot::Absent
                         }
@@ -36004,7 +35615,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
 
 // Task 7 extract contract: pub fn extract_word_with_optional_annotations<'tree>(node: WordWithOptionalAnnotationsNode<'tree>) -> WordWithOptionalAnnotationsChildren<'tree>
 #[derive(Debug, Clone)]
-pub struct WordWithOptionalAnnotationsChild1Children<'tree> {
+pub struct WordWithOptionalAnnotationsChild1OverlapPointChild2Children<'tree> {
     /// Positional member 0.
     pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
@@ -36015,7 +35626,7 @@ pub struct WordWithOptionalAnnotationsChild1Children<'tree> {
     /// (spec Section 7). Never dropped.
     pub unexpected: Vec<tree_sitter::Node<'tree>>,
 }
-impl<'tree> WordWithOptionalAnnotationsChild1Children<'tree> {
+impl<'tree> WordWithOptionalAnnotationsChild1OverlapPointChild2Children<'tree> {
     /// The `replacement` grammar field (accessor method `replacement`).
     #[must_use]
     pub fn replacement(&self) -> &Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>> {
@@ -36023,15 +35634,83 @@ impl<'tree> WordWithOptionalAnnotationsChild1Children<'tree> {
     }
 }
 #[derive(Debug, Clone)]
-pub struct WordWithOptionalAnnotationsChildren<'tree> {
+pub struct WordWithOptionalAnnotationsChild1OverlapPointChildren<'tree> {
     /// Positional member 0.
-    pub word: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    pub child_0: Positioned<'tree, NodeSlot<'tree, OverlapPointNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<
-        'tree,
-        Option<NodeSlot<'tree, WordWithOptionalAnnotationsChild1Children<'tree>>>,
-    >,
+    pub child_1:
+        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, OverlapPointNode<'tree>>>>>,
     /// Positional member 2.
+    pub child_2: Positioned<
+        'tree,
+        Option<NodeSlot<'tree, WordWithOptionalAnnotationsChild1OverlapPointChild2Children<'tree>>>,
+    >,
+    /// Positional member 3.
+    pub annotations: Positioned<'tree, NodeSlot<'tree, BaseAnnotationsNode<'tree>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> WordWithOptionalAnnotationsChild1OverlapPointChildren<'tree> {
+    /// The `annotations` grammar field (accessor method `annotations`).
+    #[must_use]
+    pub fn annotations(&self) -> &Positioned<'tree, NodeSlot<'tree, BaseAnnotationsNode<'tree>>> {
+        &self.annotations
+    }
+}
+#[derive(Debug, Clone)]
+pub struct WordWithOptionalAnnotationsChild1OverlapPoint1Children<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, OverlapPointNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1:
+        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, OverlapPointNode<'tree>>>>>,
+    /// Positional member 2.
+    pub child_2: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    /// Positional member 3.
+    pub replacement: Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> WordWithOptionalAnnotationsChild1OverlapPoint1Children<'tree> {
+    /// The `replacement` grammar field (accessor method `replacement`).
+    #[must_use]
+    pub fn replacement(&self) -> &Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>> {
+        &self.replacement
+    }
+}
+#[derive(Debug, Clone)]
+pub struct WordWithOptionalAnnotationsChild1WhitespacesChild0Children<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    /// Positional member 1.
+    pub replacement: Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> WordWithOptionalAnnotationsChild1WhitespacesChild0Children<'tree> {
+    /// The `replacement` grammar field (accessor method `replacement`).
+    #[must_use]
+    pub fn replacement(&self) -> &Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>> {
+        &self.replacement
+    }
+}
+#[derive(Debug, Clone)]
+pub struct WordWithOptionalAnnotationsChild1WhitespacesChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<
+        'tree,
+        Option<NodeSlot<'tree, WordWithOptionalAnnotationsChild1WhitespacesChild0Children<'tree>>>,
+    >,
+    /// Positional member 1.
     pub annotations: Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -36039,7 +35718,7 @@ pub struct WordWithOptionalAnnotationsChildren<'tree> {
     /// (spec Section 7). Never dropped.
     pub unexpected: Vec<tree_sitter::Node<'tree>>,
 }
-impl<'tree> WordWithOptionalAnnotationsChildren<'tree> {
+impl<'tree> WordWithOptionalAnnotationsChild1WhitespacesChildren<'tree> {
     /// The `annotations` grammar field (accessor method `annotations`).
     #[must_use]
     pub fn annotations(
@@ -36047,6 +35726,29 @@ impl<'tree> WordWithOptionalAnnotationsChildren<'tree> {
     ) -> &Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>> {
         &self.annotations
     }
+}
+#[derive(Debug, Clone)]
+pub enum WordWithOptionalAnnotationsChild1Choice<'tree> {
+    /// Alternative `OverlapPoint`.
+    OverlapPoint(WordWithOptionalAnnotationsChild1OverlapPointChildren<'tree>),
+    /// Alternative `OverlapPoint_1`.
+    OverlapPoint_1(WordWithOptionalAnnotationsChild1OverlapPoint1Children<'tree>),
+    /// Alternative `Whitespaces`.
+    Whitespaces(WordWithOptionalAnnotationsChild1WhitespacesChildren<'tree>),
+}
+#[derive(Debug, Clone)]
+pub struct WordWithOptionalAnnotationsChildren<'tree> {
+    /// Positional member 0.
+    pub word: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, NodeSlot<'tree, WordWithOptionalAnnotationsChild1Choice<'tree>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> WordWithOptionalAnnotationsChildren<'tree> {
     /// The `word` grammar field (accessor method `word`).
     #[must_use]
     pub fn word(&self) -> &Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>> {
@@ -36088,133 +35790,642 @@ pub fn extract_word_with_optional_annotations<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
-                &ReconShape::Seq(&[
-                    ReconShape::Kind("whitespaces"),
-                    ReconShape::Kind("replacement"),
-                ]),
-                &cont_of(&[ReconShape::Optional(&ReconShape::Kind("base_annotations"))]),
-                __cur.rest(),
-                0,
-            )
-            .0
-            {
-                Some(if let Some(__c) = __cur.peek() {
-                    if __c.is_error() {
-                        __cur.advance();
-                        NodeSlot::Error(__c)
-                    } else if shape_match(
-                        &ReconShape::Seq(&[
-                            ReconShape::Kind("whitespaces"),
-                            ReconShape::Kind("replacement"),
-                        ]),
-                        &cont_of(&[ReconShape::Optional(&ReconShape::Kind("base_annotations"))]),
+            let slot = match __cur.peek() {
+                Some(__c) if __c.is_error() => {
+                    __cur.advance();
+                    NodeSlot::Error(__c)
+                }
+                Some(__c) if __c.is_missing() => {
+                    __cur.advance();
+                    NodeSlot::Missing(__c)
+                }
+                _ => {
+                    match choice_split(
+                        &[
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("overlap_point"),
+                                ReconShape::Repeat(&ReconShape::Kind("overlap_point")),
+                                ReconShape::Optional(&ReconShape::Seq(&[
+                                    ReconShape::Kind("whitespaces"),
+                                    ReconShape::Kind("replacement"),
+                                ])),
+                                ReconShape::Kind("base_annotations"),
+                            ]),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("overlap_point"),
+                                ReconShape::Repeat(&ReconShape::Kind("overlap_point")),
+                                ReconShape::Kind("whitespaces"),
+                                ReconShape::Kind("replacement"),
+                            ]),
+                            ReconShape::Seq(&[
+                                ReconShape::Optional(&ReconShape::Seq(&[
+                                    ReconShape::Kind("whitespaces"),
+                                    ReconShape::Kind("replacement"),
+                                ])),
+                                ReconShape::Optional(&ReconShape::Kind("base_annotations")),
+                            ]),
+                        ],
+                        &cont_of(&[]),
                         __cur.rest(),
                         0,
-                    )
-                    .is_some()
-                    {
-                        NodeSlot::Present({
-                            let child_0 = {
-                                let leading_extras = __cur.take_leading_extras();
-                                let slot = if let Some(__c) = __cur.peek() {
-                                    if __c.is_error() {
-                                        __cur.advance();
-                                        NodeSlot::Error(__c)
-                                    } else if __c.kind() == "whitespaces" {
-                                        __cur.advance();
-                                        if __c.is_missing() {
-                                            NodeSlot::Missing(__c)
+                    ) {
+                        Some((0, _)) => {
+                            if let Some(__v) = if shape_match(
+                                &ReconShape::Seq(&[
+                                    ReconShape::Kind("overlap_point"),
+                                    ReconShape::Repeat(&ReconShape::Kind("overlap_point")),
+                                    ReconShape::Optional(&ReconShape::Seq(&[
+                                        ReconShape::Kind("whitespaces"),
+                                        ReconShape::Kind("replacement"),
+                                    ])),
+                                    ReconShape::Kind("base_annotations"),
+                                ]),
+                                &cont_of(&[]),
+                                __cur.rest(),
+                                0,
+                            )
+                            .is_some()
+                            {
+                                Some({
+                                    let child_0 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "overlap_point" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(OverlapPointNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
                                         } else {
-                                            NodeSlot::Present(WhitespacesNode(__c))
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
                                         }
-                                    } else {
-                                        NodeSlot::Absent
-                                    }
-                                } else {
-                                    NodeSlot::Absent
-                                };
-                                Positioned {
-                                    leading_extras,
-                                    slot,
-                                }
-                            };
-                            let replacement = {
-                                let leading_extras = __cur.take_leading_extras();
-                                let slot = if let Some(__c) = __cur.peek() {
-                                    if __c.is_error() {
-                                        __cur.advance();
-                                        NodeSlot::Error(__c)
-                                    } else if __c.kind() == "replacement" {
-                                        __cur.advance();
-                                        if __c.is_missing() {
-                                            NodeSlot::Missing(__c)
+                                    };
+                                    let child_1 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let __count = repeat_count(
+                                            &ReconShape::Kind("overlap_point"),
+                                            &cont_of(&[
+                                                ReconShape::Optional(&ReconShape::Seq(&[
+                                                    ReconShape::Kind("whitespaces"),
+                                                    ReconShape::Kind("replacement"),
+                                                ])),
+                                                ReconShape::Kind("base_annotations"),
+                                            ]),
+                                            __cur.rest(),
+                                            0,
+                                        );
+                                        let mut __items = Vec::new();
+                                        for _ in 0..__count {
+                                            __items.push({
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "overlap_point" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(OverlapPointNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            });
+                                        }
+                                        Positioned {
+                                            leading_extras,
+                                            slot: __items,
+                                        }
+                                    };
+                                    let child_2 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if optional_split(
+                                            &ReconShape::Seq(&[
+                                                ReconShape::Kind("whitespaces"),
+                                                ReconShape::Kind("replacement"),
+                                            ]),
+                                            &cont_of(&[ReconShape::Kind("base_annotations")]),
+                                            __cur.rest(),
+                                            0,
+                                        )
+                                        .0
+                                        {
+                                            Some(if let Some(__c) = __cur.peek() {
+                                                if __c.is_error() {
+                                                    __cur.advance();
+                                                    NodeSlot::Error(__c)
+                                                } else if shape_match(
+                                                    &ReconShape::Seq(&[
+                                                        ReconShape::Kind("whitespaces"),
+                                                        ReconShape::Kind("replacement"),
+                                                    ]),
+                                                    &cont_of(&[ReconShape::Kind(
+                                                        "base_annotations",
+                                                    )]),
+                                                    __cur.rest(),
+                                                    0,
+                                                )
+                                                .is_some()
+                                                {
+                                                    NodeSlot::Present({
+                                                        let child_0 = {
+                                                            let leading_extras =
+                                                                __cur.take_leading_extras();
+                                                            let slot = if let Some(__c) =
+                                                                __cur.peek()
+                                                            {
+                                                                if __c.is_error() {
+                                                                    __cur.advance();
+                                                                    NodeSlot::Error(__c)
+                                                                } else if __c.kind()
+                                                                    == "whitespaces"
+                                                                {
+                                                                    __cur.advance();
+                                                                    if __c.is_missing() {
+                                                                        NodeSlot::Missing(__c)
+                                                                    } else {
+                                                                        NodeSlot::Present(
+                                                                            WhitespacesNode(__c),
+                                                                        )
+                                                                    }
+                                                                } else {
+                                                                    NodeSlot::Absent
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            };
+                                                            Positioned {
+                                                                leading_extras,
+                                                                slot,
+                                                            }
+                                                        };
+                                                        let replacement = {
+                                                            let leading_extras =
+                                                                __cur.take_leading_extras();
+                                                            let slot = if let Some(__c) =
+                                                                __cur.peek()
+                                                            {
+                                                                if __c.is_error() {
+                                                                    __cur.advance();
+                                                                    NodeSlot::Error(__c)
+                                                                } else if __c.kind()
+                                                                    == "replacement"
+                                                                {
+                                                                    __cur.advance();
+                                                                    if __c.is_missing() {
+                                                                        NodeSlot::Missing(__c)
+                                                                    } else {
+                                                                        NodeSlot::Present(
+                                                                            ReplacementNode(__c),
+                                                                        )
+                                                                    }
+                                                                } else {
+                                                                    NodeSlot::Absent
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            };
+                                                            Positioned {
+                                                                leading_extras,
+                                                                slot,
+                                                            }
+                                                        };
+                                                        let trailing_extras: Vec<Extra<'tree>> =
+                                                            Vec::new();
+                                                        let unexpected: Vec<
+                                                            tree_sitter::Node<'tree>,
+                                                        > = Vec::new();
+                                                        WordWithOptionalAnnotationsChild1OverlapPointChild2Children {
+                                                                child_0,
+                                                                replacement,
+                                                                trailing_extras,
+                                                                unexpected,
+                                                            }
+                                                    })
+                                                } else {
+                                                    NodeSlot::Absent
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            })
                                         } else {
-                                            NodeSlot::Present(ReplacementNode(__c))
+                                            None
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
                                         }
-                                    } else {
-                                        NodeSlot::Absent
+                                    };
+                                    let annotations = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "base_annotations" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(BaseAnnotationsNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    WordWithOptionalAnnotationsChild1OverlapPointChildren {
+                                        child_0,
+                                        child_1,
+                                        child_2,
+                                        annotations,
+                                        trailing_extras,
+                                        unexpected,
                                     }
-                                } else {
-                                    NodeSlot::Absent
-                                };
-                                Positioned {
-                                    leading_extras,
-                                    slot,
-                                }
-                            };
-                            let trailing_extras: Vec<Extra<'tree>> = Vec::new();
-                            let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
-                            WordWithOptionalAnnotationsChild1Children {
-                                child_0,
-                                replacement,
-                                trailing_extras,
-                                unexpected,
+                                })
+                            } else {
+                                None
+                            } {
+                                NodeSlot::Present(
+                                    WordWithOptionalAnnotationsChild1Choice::OverlapPoint(__v),
+                                )
+                            } else {
+                                NodeSlot::Absent
                             }
-                        })
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                })
-            } else {
-                None
-            };
-            Positioned {
-                leading_extras,
-                slot,
-            }
-        };
-        let annotations = {
-            let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
-                &ReconShape::Kind("base_annotations"),
-                &cont_of(&[]),
-                __cur.rest(),
-                0,
-            )
-            .0
-            {
-                Some(if let Some(__c) = __cur.peek() {
-                    if __c.is_error() {
-                        __cur.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "base_annotations" {
-                        __cur.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(BaseAnnotationsNode(__c))
                         }
-                    } else {
-                        NodeSlot::Absent
+                        Some((1, _)) => {
+                            if let Some(__v) = if shape_match(
+                                &ReconShape::Seq(&[
+                                    ReconShape::Kind("overlap_point"),
+                                    ReconShape::Repeat(&ReconShape::Kind("overlap_point")),
+                                    ReconShape::Kind("whitespaces"),
+                                    ReconShape::Kind("replacement"),
+                                ]),
+                                &cont_of(&[]),
+                                __cur.rest(),
+                                0,
+                            )
+                            .is_some()
+                            {
+                                Some({
+                                    let child_0 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "overlap_point" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(OverlapPointNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let child_1 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let __count = repeat_count(
+                                            &ReconShape::Kind("overlap_point"),
+                                            &cont_of(&[
+                                                ReconShape::Kind("whitespaces"),
+                                                ReconShape::Kind("replacement"),
+                                            ]),
+                                            __cur.rest(),
+                                            0,
+                                        );
+                                        let mut __items = Vec::new();
+                                        for _ in 0..__count {
+                                            __items.push({
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "overlap_point" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(OverlapPointNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            });
+                                        }
+                                        Positioned {
+                                            leading_extras,
+                                            slot: __items,
+                                        }
+                                    };
+                                    let child_2 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "whitespaces" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(WhitespacesNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let replacement = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "replacement" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(ReplacementNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    WordWithOptionalAnnotationsChild1OverlapPoint1Children {
+                                        child_0,
+                                        child_1,
+                                        child_2,
+                                        replacement,
+                                        trailing_extras,
+                                        unexpected,
+                                    }
+                                })
+                            } else {
+                                None
+                            } {
+                                NodeSlot::Present(
+                                    WordWithOptionalAnnotationsChild1Choice::OverlapPoint_1(__v),
+                                )
+                            } else {
+                                NodeSlot::Absent
+                            }
+                        }
+                        Some((2, _)) => {
+                            if let Some(__v) = if shape_match(
+                                &ReconShape::Seq(&[
+                                    ReconShape::Optional(&ReconShape::Seq(&[
+                                        ReconShape::Kind("whitespaces"),
+                                        ReconShape::Kind("replacement"),
+                                    ])),
+                                    ReconShape::Optional(&ReconShape::Kind("base_annotations")),
+                                ]),
+                                &cont_of(&[]),
+                                __cur.rest(),
+                                0,
+                            )
+                            .is_some()
+                            {
+                                Some({
+                                    let child_0 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if optional_split(
+                                            &ReconShape::Seq(&[
+                                                ReconShape::Kind("whitespaces"),
+                                                ReconShape::Kind("replacement"),
+                                            ]),
+                                            &cont_of(&[ReconShape::Optional(&ReconShape::Kind(
+                                                "base_annotations",
+                                            ))]),
+                                            __cur.rest(),
+                                            0,
+                                        )
+                                        .0
+                                        {
+                                            Some(if let Some(__c) = __cur.peek() {
+                                                if __c.is_error() {
+                                                    __cur.advance();
+                                                    NodeSlot::Error(__c)
+                                                } else if shape_match(
+                                                    &ReconShape::Seq(&[
+                                                        ReconShape::Kind("whitespaces"),
+                                                        ReconShape::Kind("replacement"),
+                                                    ]),
+                                                    &cont_of(&[ReconShape::Optional(
+                                                        &ReconShape::Kind("base_annotations"),
+                                                    )]),
+                                                    __cur.rest(),
+                                                    0,
+                                                )
+                                                .is_some()
+                                                {
+                                                    NodeSlot::Present({
+                                                        let child_0 = {
+                                                            let leading_extras =
+                                                                __cur.take_leading_extras();
+                                                            let slot = if let Some(__c) =
+                                                                __cur.peek()
+                                                            {
+                                                                if __c.is_error() {
+                                                                    __cur.advance();
+                                                                    NodeSlot::Error(__c)
+                                                                } else if __c.kind()
+                                                                    == "whitespaces"
+                                                                {
+                                                                    __cur.advance();
+                                                                    if __c.is_missing() {
+                                                                        NodeSlot::Missing(__c)
+                                                                    } else {
+                                                                        NodeSlot::Present(
+                                                                            WhitespacesNode(__c),
+                                                                        )
+                                                                    }
+                                                                } else {
+                                                                    NodeSlot::Absent
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            };
+                                                            Positioned {
+                                                                leading_extras,
+                                                                slot,
+                                                            }
+                                                        };
+                                                        let replacement = {
+                                                            let leading_extras =
+                                                                __cur.take_leading_extras();
+                                                            let slot = if let Some(__c) =
+                                                                __cur.peek()
+                                                            {
+                                                                if __c.is_error() {
+                                                                    __cur.advance();
+                                                                    NodeSlot::Error(__c)
+                                                                } else if __c.kind()
+                                                                    == "replacement"
+                                                                {
+                                                                    __cur.advance();
+                                                                    if __c.is_missing() {
+                                                                        NodeSlot::Missing(__c)
+                                                                    } else {
+                                                                        NodeSlot::Present(
+                                                                            ReplacementNode(__c),
+                                                                        )
+                                                                    }
+                                                                } else {
+                                                                    NodeSlot::Absent
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            };
+                                                            Positioned {
+                                                                leading_extras,
+                                                                slot,
+                                                            }
+                                                        };
+                                                        let trailing_extras: Vec<Extra<'tree>> =
+                                                            Vec::new();
+                                                        let unexpected: Vec<
+                                                            tree_sitter::Node<'tree>,
+                                                        > = Vec::new();
+                                                        WordWithOptionalAnnotationsChild1WhitespacesChild0Children {
+                                                                child_0,
+                                                                replacement,
+                                                                trailing_extras,
+                                                                unexpected,
+                                                            }
+                                                    })
+                                                } else {
+                                                    NodeSlot::Absent
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let annotations = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if optional_split(
+                                            &ReconShape::Kind("base_annotations"),
+                                            &cont_of(&[]),
+                                            __cur.rest(),
+                                            0,
+                                        )
+                                        .0
+                                        {
+                                            Some(if let Some(__c) = __cur.peek() {
+                                                if __c.is_error() {
+                                                    __cur.advance();
+                                                    NodeSlot::Error(__c)
+                                                } else if __c.kind() == "base_annotations" {
+                                                    __cur.advance();
+                                                    if __c.is_missing() {
+                                                        NodeSlot::Missing(__c)
+                                                    } else {
+                                                        NodeSlot::Present(BaseAnnotationsNode(__c))
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    WordWithOptionalAnnotationsChild1WhitespacesChildren {
+                                        child_0,
+                                        annotations,
+                                        trailing_extras,
+                                        unexpected,
+                                    }
+                                })
+                            } else {
+                                None
+                            } {
+                                NodeSlot::Present(
+                                    WordWithOptionalAnnotationsChild1Choice::Whitespaces(__v),
+                                )
+                            } else {
+                                NodeSlot::Absent
+                            }
+                        }
+                        _ => NodeSlot::Absent,
                     }
-                } else {
-                    NodeSlot::Absent
-                })
-            } else {
-                None
+                }
             };
             Positioned {
                 leading_extras,
@@ -36233,7 +36444,6 @@ pub fn extract_word_with_optional_annotations<'tree>(
         WordWithOptionalAnnotationsChildren {
             word,
             child_1,
-            annotations,
             trailing_extras,
             unexpected,
         }

@@ -89,10 +89,50 @@ export default grammar({
   extras: $ => [],
 
   conflicts: $ => [
+    // SPIKE (ideal overlap): a content-position overlap point may be a
+    // standalone item or the leading chain of the following word; GLR +
+    // the chain's dynamic precedence decide (word follows -> chain).
+    [$.contents, $.word_with_optional_annotations],
+    // SPIKE (ideal overlap): at `segment ⌉` the parser cannot know with
+    // one token of lookahead whether the overlap continues the word
+    // (interior pair, text follows) or ends it (top-level edge marker,
+    // whitespace follows). GLR explores both; the dead branch dies at
+    // the next token. Without this, LR commits to the interior path
+    // and a trailing edge marker degrades into an ERROR node.
+    [$.word_body],
+    // Inside a glued post-overlap cluster, LR cannot know whether
+    // spoken text will follow (interior) or the word ends there
+    // (final cluster); GLR + the branches' dynamic weights decide.
+    [$._interior_overlap, $._final_overlap_cluster, $._final_overlap_form],
+    // Generalized leads (2026-07-11): a glued mark mid-word is either a
+    // plain in-word marker or the LEAD of an interior/cluster run; one
+    // token of lookahead cannot tell. GLR explores both; when both
+    // complete the CSTs are identical (children flatten into word_body
+    // either way) and the weighted run wins any fused-vs-fragmented
+    // ambiguity further up.
+    [$._word_marker, $._interior_overlap],
+    [$._word_marker, $._interior_overlap, $._final_overlap_cluster],
+    [$._word_marker, $._final_overlap_cluster],
+    [$._word_marker, $._final_overlap_cluster, $._final_overlap_form],
+    [$._word_marker, $._interior_overlap, $._final_overlap_cluster, $._final_overlap_form],
+    // Round-8 fork: at an overlap point with word material on the
+    // stack, word_body may EXTEND (_final_* branches) or REDUCE so the
+    // wrapper's bare-edge slot takes the marker; without this
+    // declaration LR reduces silently and strands glued clusters
+    // (`⁎ja⌈:⁎` losing `:⁎` to top level).
+    [$.standalone_word],
     [$.contents],
     [$.contents, $.word_body],  // overlap_point/ca_element/underline can be standalone content or word-internal
     [$.base_content_item, $.word_body],  // underline_begin can be standalone or word-internal
     [$.word_with_optional_annotations],
+    // Leading intonation marks: standalone separator vs the word's
+    // overlap-leading chain; GLR resolves (chain wins only when an
+    // overlap point follows, via its prec.dynamic).
+    [$.non_colon_separator],
+    // Leading underline mark: standalone content item vs the word's
+    // overlap-leading chain (GLR; chain wins only with a following
+    // overlap point, via its prec.dynamic).
+    [$.base_content_item],
     [$.nonword_with_optional_annotations],  // Annotations create ambiguity with following content
     [$.base_annotations],
     [$.final_codes],
@@ -1081,18 +1121,50 @@ export default grammar({
     // Example: "wurd [: word] [!]" - misspelling with replacement and stressing
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Error_Coding
     word_with_optional_annotations: $ => seq(
+      // SPIKE (ideal overlap), leading mirror of the trailing chain:
+      // CA marks may precede a top-level opening overlap that abuts
+      // the word (`∙⌊hhh⌋`). Overlap-led anchoring as below.
       field('word', $.standalone_word),
-      optional(seq(
-        // A replacement `[: ...]` is a separate token and MUST be preceded by
-        // whitespace, exactly like every `base_annotation` (see `base_annotations`
-        // below, which already requires `$.whitespaces`). A glued `word[: foo]`
-        // is invalid CHAT (CLAN CHECK error 161, "space required before [ code");
-        // requiring the space here makes the glued form an ERROR node so the
-        // parser rejects it, instead of silently accepting it.
-        $.whitespaces,
-        field('replacement', $.replacement)
-      )),
-      field('annotations', optional($.base_annotations))
+      // SPIKE (ideal overlap): a closing/opening overlap point at the
+      // word's trailing edge is top-level content, but real CA data
+      // both annotates overlap-wrapped material (`⌈drug⌉ [!]`) and
+      // closes CA delimiter pairs across it (`☺you ⌈there⌉☺`,
+      // `∇⌈ho:ney⌉∇`, `⌉::`). The trailing chain is OVERLAP-LED (so a
+      // plain `word☺` never takes this path and keeps its shipping
+      // in-word binding) and may continue with CA marks/lengthening.
+      // All stay typed children of the wrapper.
+      //
+      // RESTRUCTURE (2026-07-11): glued clusters now bind word-interior
+      // (_final_overlap_cluster/_form); this slot keeps only BARE
+      // trailing edge markers, unweighted, so a following annotation
+      // keeps its host (`⌈www⌉ [= ...]`, `⌊okay⌋ [!]`).
+      // Trailing bare edge markers are ANNOTATION-GATED: the slot exists
+      // solely so `⌈www⌉ [!]` / `⌊okay⌋ [= ...]` keep an annotation
+      // host. Without a following replacement/annotation the arm is
+      // structurally dead, so it can never outcompete the word-interior
+      // cluster branches (`the⌉:` stays one word, per Franklin's
+      // 2026-07-11 ruling) and a bare `word⌉ ` edge falls to the
+      // standalone top-level overlap item as designed.
+      choice(
+        seq(
+          repeat1($.overlap_point),
+          optional(seq($.whitespaces, field('replacement', $.replacement))),
+          field('annotations', $.base_annotations),
+        ),
+        seq(
+          repeat1($.overlap_point),
+          $.whitespaces,
+          field('replacement', $.replacement),
+        ),
+        seq(
+          // The no-edge-marker arm: replacement/annotations as before.
+          // A replacement `[: ...]` MUST be preceded by whitespace, like
+          // every base_annotation; a glued `word[: foo]` is invalid CHAT
+          // (CLAN CHECK 161) and errors here by construction.
+          optional(seq($.whitespaces, field('replacement', $.replacement))),
+          field('annotations', optional($.base_annotations)),
+        ),
+      )
     ),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Group_Scopes
@@ -1226,9 +1298,14 @@ export default grammar({
     // of position.
     // All non-text word content items that can appear inside a word.
     // Each is a structured child, never consumed by word_segment.
+    // NOTE (2026-07-11): do NOT wrap this rule in prec.dynamic: a
+    // hidden choice of single symbols produces trivial productions
+    // whose dynamic precedence never reaches the runtime subtree sums
+    // (verified empirically: zero corpus effect). Fused-vs-fragmented
+    // weighting lives on _interior_overlap/_final_overlap_* instead,
+    // whose seq-bodied productions DO carry weight.
     _word_marker: $ => choice(
       $.lengthening,
-      $.overlap_point,
       $.ca_element,
       $.ca_delimiter,
       $.underline_begin,
@@ -1238,13 +1315,27 @@ export default grammar({
       '+',  // compound marker
     ),
 
-    word_body: $ => prec.right(choice(
+    word_body: $ => choice(
       // Standard start: text, shortening, or stress, then optional continuation
       seq(
         choice($.word_segment, $.shortening, $.stress_marker),
-        repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
+        // prec.dynamic(2): an interior overlap (spoken text glued on
+        // BOTH sides) must STRICTLY beat the fragmented reading (word
+        // + edge-led word), which scores 1 per marker via the wrapper
+        // chains; at equal weight GLR tie-breaking fragments
+        // (`be⌉gin` parsing as `be` + `⌉gin`).
+        repeat(choice(
+          $.word_segment, $.shortening, $.stress_marker, $._word_marker,
+          // Weights live in the rule BODIES (_interior_overlap /
+          // _final_overlap_* are prec.dynamic(2) seq-bodied rules);
+          // reference-site prec.dynamic does not attach (2026-07-11
+          // disproof, FINDINGS), so none is used here.
+          $._interior_overlap,
+          $._final_overlap_cluster,
+          $._final_overlap_form,
+        )),
       ),
-      // Marker-initial: ⌈hello⌉, °hello°, °↑hello°, °°hello°°, ^hello, one or more
+      // Marker-initial: °hello°, °↑hello°, °°hello°°, ^hello, one or more
       // structural markers MUST be followed by text content (prevents standalone
       // markers from forming degenerate words). Multiple markers allow stacked CA
       // notation: °↑ (piano + pitch up), °° (pianissimo), ⌈° (overlap + piano).
@@ -1259,16 +1350,130 @@ export default grammar({
       // reading the parsed position, NOT by scanning the raw text of an ERROR node.
       seq(
         repeat1(choice(
-          $.overlap_point,
           $.ca_element,
           $.ca_delimiter,
           $.underline_begin,
           $.syllable_pause,
         )),
+        // Glued overlap steps between the leading cluster and the
+        // spoken text (`∙⌊hhh`, `↑↑⌈␂␁Why:`): the marker's left side
+        // is glued to the cluster, so custody is word-interior; a
+        // BARE `⌈word` at whitespace never reaches here (repeat1 of
+        // marks required first).
+        repeat(prec.dynamic(1, seq(
+          $.overlap_point,
+          repeat(choice(
+            $.ca_element, $.ca_delimiter, $.underline_begin,
+            $.underline_end, $.lengthening, $.stress_marker,
+          )),
+        ))),
         choice($.word_segment, $.shortening, $.stress_marker),
-        repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
+        repeat(choice(
+          $.word_segment, $.shortening, $.stress_marker, $._word_marker,
+          // Weights live in the rule BODIES (_interior_overlap /
+          // _final_overlap_* are prec.dynamic(2) seq-bodied rules);
+          // reference-site prec.dynamic does not attach (2026-07-11
+          // disproof, FINDINGS), so none is used here.
+          $._interior_overlap,
+          $._final_overlap_cluster,
+          $._final_overlap_form,
+        )),
+      ),
+    ),
+
+    // SPIKE (ideal overlap binding): an overlap point may live inside a
+    // word ONLY with spoken material on both sides; edge-juxtaposed
+    // overlap points are top-level content. The pair keeps the marker
+    // and its following text as ordinary word_body siblings, so
+    // interior ASTs are unchanged from the shipping grammar.
+    _interior_overlap: $ => prec.dynamic(2, seq(
+      // Lead generalized 2026-07-11 (B4-family): ANY glued structural
+      // mark licenses the weighted interior reading (whitespace-boundary
+      // principle): `l\u2402\u2401uo\u2402\u2402ntoilta` must fuse the same way
+      // `be\u2309gin` does, or the tie falls to position-dependent GLR
+      // version order and the word splits mid-utterance.
+      choice(
+        $.overlap_point,
+        $.underline_begin,
+        $.underline_end,
+        $.ca_element,
+        $.ca_delimiter,
+      ),
+      // Marker chains: lengthening, CA material, or a compound marker
+      // may interpose before the spoken text that licenses the
+      // interior reading (`the⌈:`, `⌈e:h⌉∇`, `full⌉+grown`).
+      repeat(choice($.lengthening, $.ca_element, $.ca_delimiter, '+')),
+      choice(
+        // token.immediate: the interior reading is only lexically
+        // viable when spoken text follows the marker with NO
+        // whitespace; at a trailing edge (whitespace next) this token
+        // cannot lex, the interior path dies in the lexer, and the
+        // marker parses top-level. Aliased so the CST node name stays
+        // word_segment (interior ASTs identical to shipping grammar).
+        alias(token.immediate(prec(5, seq(
+          WORD_SEGMENT_FIRST_RE,
+          WORD_SEGMENT_REST_RE,
+        ))), $.word_segment),
+        $.shortening,
+        $.stress_marker,
       ),
     )),
+
+    // Juxtaposition-matrix cells 1-3, INTERIOR custody: an overlap
+    // point whose outer side is GLUED (a CA/intonation suffix cluster,
+    // or a special-form marker) stays inside the word; only a marker
+    // touching whitespace on its outer side is top-level. The
+    // NON-EMPTY cluster requirement is what keeps true edge markers
+    // (`godt⌉ `) out of these branches.
+    // Two arms (2026-07-11 round 3): an OVERLAP-led trailing run needs
+    // a non-empty tail (repeat1), preserving the designed bare-edge
+    // behavior (`godt⌉ ` keeps its ⌉ top-level); a NON-overlap glued
+    // mark leads a run of ANY length (repeat), so a single trailing
+    // `␂␂` or `∙` stays in-word (782-hunk class: `word␂␁s␂␂` was
+    // splitting off its underline_end at position-dependent ties).
+    _final_overlap_cluster: $ => prec.dynamic(2, prec.right(choice(
+      seq(
+        $.overlap_point,
+        // Intonation arrows are deliberately ABSENT: adjudicated
+        // 2026-07-11 (spec ca_arrow_end_separator + wild data) as
+        // utterance-level separators even when glued: `⌉↘` is TWO items.
+        repeat1(choice(
+          $.ca_delimiter, $.ca_element, $.lengthening,
+          $.underline_begin, $.underline_end, $.stress_marker,
+          // Marker chains: a glued close+open run (`⌋⌈:`) stays in the
+          // suffix cluster; every marker in the chain has a glued
+          // neighbour, so none is at the whitespace boundary.
+          $.overlap_point,
+        )),
+      ),
+      seq(
+        choice(
+          $.underline_begin,
+          $.underline_end,
+          $.ca_element,
+          $.ca_delimiter,
+        ),
+        repeat(choice(
+          $.ca_delimiter, $.ca_element, $.lengthening,
+          $.underline_begin, $.underline_end, $.stress_marker,
+          $.overlap_point,
+        )),
+      ),
+    ))),
+
+    // `⌋@c`, `⌉@wp`: the special-form marker licenses the glued
+    // reading even with an empty cluster; the form marker lands inside
+    // word_body here (instead of standalone_word's usual slot), and
+    // the CST-to-model conversion re-associates it.
+    _final_overlap_form: $ => prec.dynamic(2, prec.right(seq(
+      $.overlap_point,
+      repeat(choice(
+        $.ca_delimiter, $.ca_element, $.lengthening,
+        $.underline_begin, $.underline_end, $.stress_marker,
+        $.overlap_point,
+      )),
+      $.form_marker,
+    ))),
 
     // CA elements: individual markers within words (pitch, articulation, etc.)
     // Built from symbol registry CA_ELEMENT_SYMBOLS

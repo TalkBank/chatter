@@ -2777,6 +2777,58 @@
               "type": "SEQ",
               "members": [
                 {
+                  "type": "REPEAT1",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "overlap_point"
+                  }
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "whitespaces"
+                        },
+                        {
+                          "type": "FIELD",
+                          "name": "replacement",
+                          "content": {
+                            "type": "SYMBOL",
+                            "name": "replacement"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                },
+                {
+                  "type": "FIELD",
+                  "name": "annotations",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "base_annotations"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "REPEAT1",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "overlap_point"
+                  }
+                },
+                {
                   "type": "SYMBOL",
                   "name": "whitespaces"
                 },
@@ -2791,25 +2843,52 @@
               ]
             },
             {
-              "type": "BLANK"
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "whitespaces"
+                        },
+                        {
+                          "type": "FIELD",
+                          "name": "replacement",
+                          "content": {
+                            "type": "SYMBOL",
+                            "name": "replacement"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                },
+                {
+                  "type": "FIELD",
+                  "name": "annotations",
+                  "content": {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "base_annotations"
+                      },
+                      {
+                        "type": "BLANK"
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           ]
-        },
-        {
-          "type": "FIELD",
-          "name": "annotations",
-          "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "base_annotations"
-              },
-              {
-                "type": "BLANK"
-              }
-            ]
-          }
         }
       ]
     },
@@ -3050,10 +3129,6 @@
         },
         {
           "type": "SYMBOL",
-          "name": "overlap_point"
-        },
-        {
-          "type": "SYMBOL",
           "name": "ca_element"
         },
         {
@@ -3083,15 +3158,31 @@
       ]
     },
     "word_body": {
-      "type": "PREC_RIGHT",
-      "value": 0,
-      "content": {
-        "type": "CHOICE",
-        "members": [
-          {
-            "type": "SEQ",
-            "members": [
-              {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "word_segment"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "shortening"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "stress_marker"
+                }
+              ]
+            },
+            {
+              "type": "REPEAT",
+              "content": {
                 "type": "CHOICE",
                 "members": [
                   {
@@ -3105,46 +3196,323 @@
                   {
                     "type": "SYMBOL",
                     "name": "stress_marker"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_word_marker"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_interior_overlap"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_final_overlap_cluster"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_final_overlap_form"
                   }
                 ]
-              },
-              {
-                "type": "REPEAT",
-                "content": {
-                  "type": "CHOICE",
-                  "members": [
-                    {
-                      "type": "SYMBOL",
-                      "name": "word_segment"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "shortening"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "stress_marker"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "_word_marker"
-                    }
-                  ]
-                }
               }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "REPEAT1",
+            }
+          ]
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "REPEAT1",
+              "content": {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "ca_element"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "ca_delimiter"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "underline_begin"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "syllable_pause"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "PREC_DYNAMIC",
+                "value": 1,
                 "content": {
-                  "type": "CHOICE",
+                  "type": "SEQ",
                   "members": [
                     {
                       "type": "SYMBOL",
                       "name": "overlap_point"
+                    },
+                    {
+                      "type": "REPEAT",
+                      "content": {
+                        "type": "CHOICE",
+                        "members": [
+                          {
+                            "type": "SYMBOL",
+                            "name": "ca_element"
+                          },
+                          {
+                            "type": "SYMBOL",
+                            "name": "ca_delimiter"
+                          },
+                          {
+                            "type": "SYMBOL",
+                            "name": "underline_begin"
+                          },
+                          {
+                            "type": "SYMBOL",
+                            "name": "underline_end"
+                          },
+                          {
+                            "type": "SYMBOL",
+                            "name": "lengthening"
+                          },
+                          {
+                            "type": "SYMBOL",
+                            "name": "stress_marker"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "word_segment"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "shortening"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "stress_marker"
+                }
+              ]
+            },
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "word_segment"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "shortening"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "stress_marker"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_word_marker"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_interior_overlap"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_final_overlap_cluster"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_final_overlap_form"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "_interior_overlap": {
+      "type": "PREC_DYNAMIC",
+      "value": 2,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "overlap_point"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "underline_begin"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "underline_end"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ca_element"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ca_delimiter"
+              }
+            ]
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "lengthening"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "ca_element"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "ca_delimiter"
+                },
+                {
+                  "type": "STRING",
+                  "value": "+"
+                }
+              ]
+            }
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "IMMEDIATE_TOKEN",
+                  "content": {
+                    "type": "PREC",
+                    "value": 5,
+                    "content": {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "PATTERN",
+                          "value": "[^,;:!?.()\\[\\]{}⌈⌉⌊⌋〔〕\\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋⁇§⁎°↫∆∇∬∮▁▔◉☺♋Ϋ⁑↑↓↻≠∙∾⤆⤇Ἡ\\u0015\\u0001\\u0002\\u0003\\u0004\\u0007\\u0008\\t\\n\\r ‹›\"“”‘’„@*&%‡+=~∞≡$0]"
+                        },
+                        {
+                          "type": "PATTERN",
+                          "value": "[^,;:!?.()\\[\\]{}⌈⌉⌊⌋〔〕\\\\\\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋⁇§⁎°↫∆∇∬∮▁▔◉☺♋Ϋ⁑↑↓↻≠∙∾⤆⤇Ἡ\\u0015\\u0001\\u0002\\u0003\\u0004\\u0007\\u0008\\t\\n\\r ‹›\"“”‘’„@*&%‡+=~∞≡$]*"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "named": true,
+                "value": "word_segment"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "shortening"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stress_marker"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "_final_overlap_cluster": {
+      "type": "PREC_DYNAMIC",
+      "value": 2,
+      "content": {
+        "type": "PREC_RIGHT",
+        "value": 0,
+        "content": {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "overlap_point"
+                },
+                {
+                  "type": "REPEAT1",
+                  "content": {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "ca_delimiter"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "ca_element"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "lengthening"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "underline_begin"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "underline_end"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "stress_marker"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "overlap_point"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "underline_begin"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "underline_end"
                     },
                     {
                       "type": "SYMBOL",
@@ -3153,62 +3521,106 @@
                     {
                       "type": "SYMBOL",
                       "name": "ca_delimiter"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "underline_begin"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "syllable_pause"
                     }
                   ]
+                },
+                {
+                  "type": "REPEAT",
+                  "content": {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "ca_delimiter"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "ca_element"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "lengthening"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "underline_begin"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "underline_end"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "stress_marker"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "overlap_point"
+                      }
+                    ]
+                  }
                 }
-              },
-              {
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "_final_overlap_form": {
+      "type": "PREC_DYNAMIC",
+      "value": 2,
+      "content": {
+        "type": "PREC_RIGHT",
+        "value": 0,
+        "content": {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "overlap_point"
+            },
+            {
+              "type": "REPEAT",
+              "content": {
                 "type": "CHOICE",
                 "members": [
                   {
                     "type": "SYMBOL",
-                    "name": "word_segment"
+                    "name": "ca_delimiter"
                   },
                   {
                     "type": "SYMBOL",
-                    "name": "shortening"
+                    "name": "ca_element"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "lengthening"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "underline_begin"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "underline_end"
                   },
                   {
                     "type": "SYMBOL",
                     "name": "stress_marker"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "overlap_point"
                   }
                 ]
-              },
-              {
-                "type": "REPEAT",
-                "content": {
-                  "type": "CHOICE",
-                  "members": [
-                    {
-                      "type": "SYMBOL",
-                      "name": "word_segment"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "shortening"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "stress_marker"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "_word_marker"
-                    }
-                  ]
-                }
               }
-            ]
-          }
-        ]
+            },
+            {
+              "type": "SYMBOL",
+              "name": "form_marker"
+            }
+          ]
+        }
       }
     },
     "ca_element": {
@@ -6525,6 +6937,45 @@
   "extras": [],
   "conflicts": [
     [
+      "contents",
+      "word_with_optional_annotations"
+    ],
+    [
+      "word_body"
+    ],
+    [
+      "_interior_overlap",
+      "_final_overlap_cluster",
+      "_final_overlap_form"
+    ],
+    [
+      "_word_marker",
+      "_interior_overlap"
+    ],
+    [
+      "_word_marker",
+      "_interior_overlap",
+      "_final_overlap_cluster"
+    ],
+    [
+      "_word_marker",
+      "_final_overlap_cluster"
+    ],
+    [
+      "_word_marker",
+      "_final_overlap_cluster",
+      "_final_overlap_form"
+    ],
+    [
+      "_word_marker",
+      "_interior_overlap",
+      "_final_overlap_cluster",
+      "_final_overlap_form"
+    ],
+    [
+      "standalone_word"
+    ],
+    [
       "contents"
     ],
     [
@@ -6537,6 +6988,12 @@
     ],
     [
       "word_with_optional_annotations"
+    ],
+    [
+      "non_colon_separator"
+    ],
+    [
+      "base_content_item"
     ],
     [
       "nonword_with_optional_annotations"

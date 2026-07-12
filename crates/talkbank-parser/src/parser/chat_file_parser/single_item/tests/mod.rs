@@ -5,6 +5,7 @@
 use crate::parser::{ParserInitError, TreeSitterParser};
 use talkbank_model::{ErrorCode, ErrorContext, ParseError, ParseErrors, Severity, SourceLocation};
 
+mod canonical_overlap_spacing;
 mod utterance;
 mod word;
 

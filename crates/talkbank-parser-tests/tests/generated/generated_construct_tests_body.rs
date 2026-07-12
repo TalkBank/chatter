@@ -273,6 +273,33 @@ fn test_overlap_with_action() -> Result<(), talkbank_parser_tests::test_error::T
 
 #[test]
 /// Tests expected behavior.
+fn test_overlap_digit_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t⌊1hello .\n@End")?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
+fn test_overlap_enclosed() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t⌈is⌉ .\n@End")?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
+fn test_overlap_in_word_lint() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tbutt⌈er⌉ .\n@End")?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
 fn test_overlap_standalone() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
     let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t⌈ hello ⌉ .\n@End")?;
@@ -1104,33 +1131,6 @@ fn test_lengthening() -> Result<(), talkbank_parser_tests::test_error::TestError
 fn test_lengthening_between_segments() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
     let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\ta:b .\n@End")?;
-
-    Ok(())
-}
-
-#[test]
-/// Tests expected behavior.
-fn test_overlap_digit_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
-    let parser = TreeSitterParser::new()?;
-    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t⌊1hello .\n@End")?;
-
-    Ok(())
-}
-
-#[test]
-/// Tests expected behavior.
-fn test_overlap_enclosed() -> Result<(), talkbank_parser_tests::test_error::TestError> {
-    let parser = TreeSitterParser::new()?;
-    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t⌈is⌉ .\n@End")?;
-
-    Ok(())
-}
-
-#[test]
-/// Tests expected behavior.
-fn test_overlap_in_word_lint() -> Result<(), talkbank_parser_tests::test_error::TestError> {
-    let parser = TreeSitterParser::new()?;
-    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tbutt⌈er⌉ .\n@End")?;
 
     Ok(())
 }

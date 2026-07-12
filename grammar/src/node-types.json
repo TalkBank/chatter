@@ -4672,6 +4672,10 @@
           "named": true
         },
         {
+          "type": "form_marker",
+          "named": true
+        },
+        {
           "type": "lengthening",
           "named": true
         },
@@ -4751,9 +4755,13 @@
       }
     },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "overlap_point",
+          "named": true
+        },
         {
           "type": "whitespaces",
           "named": true

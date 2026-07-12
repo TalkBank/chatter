@@ -98,16 +98,82 @@ fn golden_main_tier_roundtrip_for_every_parser() -> Result<(), TestError> {
                 continue;
             }
 
-            if serialized != *tier_line {
+            // The roundtrip INVARIANT is SEMANTIC (ratified 2026-07-11):
+            // serializing the parsed model and reparsing must yield a
+            // semantically equal model. Byte equality with the SOURCE is
+            // deliberately NOT asserted (golden tiers carry non-canonical
+            // spacing); instead the CANONICAL serialization must be a
+            // fixpoint: reparse-then-reserialize reproduces it exactly.
+            let resink = ErrorCollector::new();
+            let reparsed = parser.parse_main_tier_fragment(&serialized, 0, &resink);
+            if !resink.is_empty() {
                 failed_tiers.push((
                     "tree-sitter",
                     i,
                     tier_line,
                     format!(
-                        "Roundtrip mismatch:
-  Original: {}
-  Roundtrip: {}",
+                        "Canonical serialization does not reparse cleanly:
+  Original:  {}
+  Canonical: {}
+  Errors: {:?}",
+                        tier_line,
+                        serialized,
+                        resink.to_vec()
+                    ),
+                ));
+                continue;
+            }
+            let reparsed = match reparsed {
+                ParseOutcome::Parsed(p) => p,
+                ParseOutcome::Rejected => {
+                    failed_tiers.push((
+                        "tree-sitter",
+                        i,
+                        tier_line,
+                        format!(
+                            "Canonical serialization rejected on reparse:
+  Original:  {}
+  Canonical: {}",
+                            tier_line, serialized
+                        ),
+                    ));
+                    continue;
+                }
+            };
+            if !reparsed.semantic_eq(&parsed) {
+                failed_tiers.push((
+                    "tree-sitter",
+                    i,
+                    tier_line,
+                    format!(
+                        "SEMANTIC roundtrip mismatch:
+  Original:  {}
+  Canonical: {}",
                         tier_line, serialized
+                    ),
+                ));
+                continue;
+            }
+            let mut reserialized = String::new();
+            if let Err(e) = reparsed.write_chat(&mut reserialized) {
+                failed_tiers.push((
+                    "tree-sitter",
+                    i,
+                    tier_line,
+                    format!("Reserialization error: {}", e),
+                ));
+                continue;
+            }
+            if reserialized != serialized {
+                failed_tiers.push((
+                    "tree-sitter",
+                    i,
+                    tier_line,
+                    format!(
+                        "Canonical form is not a serialization fixpoint:
+  First:  {}
+  Second: {}",
+                        serialized, reserialized
                     ),
                 ));
             }
