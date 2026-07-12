@@ -34,7 +34,7 @@ toml = "1.0"
 toml_edit = "0.25"
 
 # Tree-sitter (for template generation - spec tools CAN use tree-sitter for parsing examples)
-tree-sitter = "0.26"
+tree-sitter = "0.26.11"
 tree-sitter-talkbank = { path = "../grammar" }
 walkdir = "2.5"
 oxc_allocator = "0.116.0"
