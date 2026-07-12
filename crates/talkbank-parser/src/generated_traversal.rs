@@ -222,11 +222,29 @@ fn is_skippable_extra(node: &tree_sitter::Node) -> bool {
 struct Cursor<'children, 'tree> {
     children: &'children [tree_sitter::Node<'tree>],
     pos: usize,
+    /// One reconstruction memo shared by EVERY split call in this
+    /// extraction. Owned by the cursor so its lifetime spans the whole
+    /// walk of one node's children: `repeat_count`'s bottom-up warm and
+    /// the per-element `choice_split` lookaheads that follow it then hit
+    /// the same cache (keyed on absolute indices into the stable child
+    /// slice), making a `repeat` over `n` children linear instead of
+    /// re-deriving the tail from a cold memo at every position. `Memo`
+    /// carries no borrows (its keys are pointer addresses and indices),
+    /// so holding it here adds no lifetime.
+    memo: Memo,
 }
 impl<'children, 'tree> Cursor<'children, 'tree> {
     /// Start at the first child.
     fn new(children: &'children [tree_sitter::Node<'tree>]) -> Self {
-        Self { children, pos: 0 }
+        Self {
+            children,
+            pos: 0,
+            memo: Memo::default(),
+        }
+    }
+    /// The shared reconstruction memo (see the `memo` field).
+    fn memo(&self) -> &Memo {
+        &self.memo
     }
     /// Consume and return the run of leading `extra` children at the
     /// cursor (comments, whitespace, and any grammar-declared extra).
@@ -253,6 +271,22 @@ impl<'children, 'tree> Cursor<'children, 'tree> {
     /// The not-yet-consumed children (for lookahead and the final sweep).
     fn rest(&self) -> &[tree_sitter::Node<'tree>] {
         self.children.get(self.pos..).unwrap_or(&[])
+    }
+    /// The full, STABLE child slice this cursor walks. The split routines
+    /// (`shape_match`, `repeat_split`, `choice_split`, ...) memoize on
+    /// absolute indices into their `children` argument, so every
+    /// per-position split call in one extraction passes THIS slice (not a
+    /// re-sliced `rest()`) together with [`index`](Self::index), letting a
+    /// single shared `Memo` cache results across all positions. Matching a
+    /// prefix from an absolute `start` yields the same answer a `rest()`
+    /// view from `0` would, since the matchers only look forward.
+    fn all(&self) -> &'children [tree_sitter::Node<'tree>] {
+        self.children
+    }
+    /// The cursor's absolute index into [`all`](Self::all): the `start`
+    /// argument the shared-memo split calls pass.
+    fn index(&self) -> usize {
+        self.pos
     }
     /// Consume and return the child at the cursor iff it is a present
     /// (non-error, non-missing) node of kind `kind`; else leave it.
@@ -383,6 +417,8 @@ enum ContFrame {
 type ShapeMemoKey = (usize, Vec<ContFrame>, usize);
 /// A memo key for `cont_end`: (continuation, index).
 type ContMemoKey = (Vec<ContFrame>, usize);
+/// A memo key for `repeat_split`: (continuation, element address, index).
+type RepeatMemoKey = (Vec<ContFrame>, usize, usize);
 /// The stable address a shape reference points at: its identity for memo
 /// keys. Within one top-level match every reachable shape is `'static`
 /// (or, for the single top-level shape, lives for the whole call), so
@@ -431,6 +467,14 @@ struct Memo {
     shape: std::cell::RefCell<std::collections::HashMap<ShapeMemoKey, Option<usize>>>,
     /// `cont_end` results, keyed by [`ContMemoKey`].
     cont: std::cell::RefCell<std::collections::HashMap<ContMemoKey, Option<usize>>>,
+    /// `repeat_split` results, keyed by [`RepeatMemoKey`]. The value is
+    /// the greedy `(count, end)` plus a `fits` flag recording whether
+    /// `end` is a genuine continuation-fitting boundary (as opposed to
+    /// the "match every element" fallback used when no boundary fits).
+    /// Memoizing this is what makes matching a `repeat` over `n`
+    /// children linear rather than quadratic: without it, every start
+    /// position re-scanned the whole tail.
+    repeat: std::cell::RefCell<std::collections::HashMap<RepeatMemoKey, (usize, usize, bool)>>,
 }
 /// Wrap a flat run of tail shapes (already composed across nesting levels
 /// by the emitter into one slice) as a continuation whose base is `Nil`.
@@ -665,10 +709,18 @@ fn repeat_split(
     let memo = Memo::default();
     repeat_split_inner(element, cont, children, start, &memo)
 }
-/// Memoized [`repeat_split`]: its two loops call the memoized
-/// `shape_match_inner` / `cont_fits_inner`, and its own results are cached
-/// via the `RepeatSelf` frame in [`cont_end_inner`], so the whole
-/// repeat/tail split is polynomial (see [`Memo`]).
+/// Memoized [`repeat_split`]: the greedy `(count, end)` for a
+/// `Repeat(element)` followed by `cont`, dropping the internal tail-fits
+/// flag that [`repeat_split_fit`] carries.
+///
+/// This is the ONE depth-safe entry to the repeat split: it fills the
+/// repeat memo bottom-up ONCE for this `(element, cont)` (guarded by a
+/// sentinel at the top position) BEFORE reading it, so
+/// [`repeat_split_fit`]'s self-recurrence never descends `O(n)` deep no
+/// matter which caller arrives here (the public split/count entries, the
+/// `RepeatSelf` continuation frame in [`cont_end_inner`], or
+/// [`shape_match_inner`] on a `Repeat` shape). All of them route through
+/// this function, so none needs to warm on its own.
 fn repeat_split_inner(
     element: &'static ReconShape,
     cont: &Cont,
@@ -676,29 +728,86 @@ fn repeat_split_inner(
     start: usize,
     memo: &Memo,
 ) -> (usize, usize) {
-    if recon_shape_nullable(element) {
-        return (0, start);
+    let sentinel: RepeatMemoKey = (cont_key(cont), shape_addr(element), children.len());
+    if memo.repeat.borrow().get(&sentinel).is_none() {
+        repeat_warm(element, cont, children, 0, memo);
     }
-    let elem_cont = Cont::RepeatSelf(element, cont);
-    let mut ends = vec![start];
-    let mut cursor = start;
-    while let Some(next) = shape_match_inner(element, &elem_cont, children, cursor, memo) {
-        if next > cursor {
-            cursor = next;
-            ends.push(cursor);
-        } else {
-            break;
-        }
-    }
-    let mut chosen: Option<usize> = None;
-    for (count, end) in ends.iter().enumerate() {
-        if cont_fits_inner(cont, children, *end, memo) {
-            chosen = Some(count);
-        }
-    }
-    let count = chosen.unwrap_or(ends.len().saturating_sub(1));
-    let end = ends.get(count).copied().unwrap_or(start);
+    let (count, end, _fits) = repeat_split_fit(element, cont, children, start, memo);
     (count, end)
+}
+/// The repeat/tail split as a LINEAR recurrence over the next element
+/// boundary, memoized in `memo.repeat` and returning
+/// `(count, end, fits)`:
+/// - `count` / `end`: how many elements to consume and the child index
+///   just past them, using the greedy tail-aware rule (the LARGEST count
+///   whose end lets `cont` match; else, when nothing fits, every element).
+/// - `fits`: whether `end` is a genuine `cont`-fitting boundary, so a
+///   shallower caller can tell "a deeper boundary fits" from the
+///   "match-everything" fallback and reproduce the largest-fitting-count
+///   choice in O(1).
+///
+/// Why a recurrence and not the old two-loop scan: the previous
+/// implementation, for each start, rebuilt the whole vector of element
+/// boundaries and re-scanned `cont_fits` across it. Both loops were
+/// `O(n - start)`, and (through the `RepeatSelf` frame in
+/// [`cont_end_inner`]) it ran at every start, so a `repeat` over `n`
+/// children was `O(n^2)` in time even though every subproblem was
+/// memoized elsewhere. This form solves `start` from the single next
+/// boundary `mid` plus the memoized result at `mid`, so with the
+/// bottom-up [`repeat_warm`] fill each position is `O(1)` and the whole
+/// repeat is linear.
+fn repeat_split_fit(
+    element: &'static ReconShape,
+    cont: &Cont,
+    children: &[tree_sitter::Node],
+    start: usize,
+    memo: &Memo,
+) -> (usize, usize, bool) {
+    let key: RepeatMemoKey = (cont_key(cont), shape_addr(element), start);
+    if let Some(hit) = memo.repeat.borrow().get(&key) {
+        return *hit;
+    }
+    let result = if recon_shape_nullable(element) {
+        (0, start, cont_fits_inner(cont, children, start, memo))
+    } else {
+        let elem_cont = Cont::RepeatSelf(element, cont);
+        match shape_match_inner(element, &elem_cont, children, start, memo) {
+            Some(mid) if mid > start => {
+                let (rest_count, rest_end, rest_fits) =
+                    repeat_split_fit(element, cont, children, mid, memo);
+                if rest_fits {
+                    (rest_count.saturating_add(1), rest_end, true)
+                } else if cont_fits_inner(cont, children, start, memo) {
+                    (0, start, true)
+                } else {
+                    (rest_count.saturating_add(1), rest_end, false)
+                }
+            }
+            _ => (0, start, cont_fits_inner(cont, children, start, memo)),
+        }
+    };
+    memo.repeat.borrow_mut().insert(key, result);
+    result
+}
+/// Fill `memo.repeat` for `[start, children.len()]` BOTTOM-UP so that
+/// [`repeat_split_fit`]'s self-recurrence (`start -> mid > start`) only
+/// ever reads an already-cached higher position. This is what keeps the
+/// recurrence both `O(1)` per position (linear time overall) and
+/// `O(grammar depth)` in STACK DEPTH: without it the natural top-down
+/// descent is one frame per element, so a `repeat` over `n` children was
+/// `O(n)` deep and overflowed the stack on a long tier (found
+/// 2026-07-12). Every position is a pure function of the input, so
+/// computing a few extra low positions is harmless.
+fn repeat_warm(
+    element: &'static ReconShape,
+    cont: &Cont,
+    children: &[tree_sitter::Node],
+    start: usize,
+    memo: &Memo,
+) {
+    for pos in (start..=children.len()).rev() {
+        let _ = repeat_split_fit(element, cont, children, pos, memo);
+    }
 }
 /// How many elements a `Repeat(element)` followed by `cont` should
 /// consume: the count component of the shared `repeat_split`. The gate
@@ -5443,7 +5552,7 @@ pub fn extract_base_annotations<'tree>(
                 if __c.is_error() {
                     __cur.advance();
                     NodeSlot::Error(__c)
-                } else if shape_match(
+                } else if shape_match_inner(
                     &ReconShape::Seq(&[
                         ReconShape::Kind("whitespaces"),
                         ReconShape::Supertype(&[
@@ -5484,8 +5593,9 @@ pub fn extract_base_annotations<'tree>(
                             "scoped_uncertain",
                         ]),
                     ]))]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 )
                 .is_some()
                 {
@@ -5735,7 +5845,7 @@ pub fn extract_base_annotations<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Supertype(&[
@@ -5757,9 +5867,11 @@ pub fn extract_base_annotations<'tree>(
                     ]),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items
@@ -5769,7 +5881,7 @@ pub fn extract_base_annotations<'tree>(
                             if __c.is_error() {
                                 __cur.advance();
                                 NodeSlot::Error(__c)
-                            } else if shape_match(
+                            } else if shape_match_inner(
                                     &ReconShape::Seq(
                                         &[
                                             ReconShape::Kind("whitespaces"),
@@ -5824,8 +5936,9 @@ pub fn extract_base_annotations<'tree>(
                                             ),
                                         ],
                                     ),
-                                    __cur.rest(),
-                                    0,
+                                    __cur.all(),
+                                    __cur.index(),
+                                    __cur.memo(),
                                 )
                                 .is_some()
                             {
@@ -6159,7 +6272,7 @@ pub fn extract_base_content_item<'tree>(
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("underline_begin"),
                         ReconShape::Kind("underline_end"),
@@ -6173,8 +6286,9 @@ pub fn extract_base_content_item<'tree>(
                         ReconShape::Kind("bullet"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur
@@ -6578,14 +6692,15 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("header_sep"),
                     ReconShape::Kind("free_text"),
                 ]),
                 &cont_of(&[ReconShape::Kind("newline")]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -6593,14 +6708,15 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
                     if __c.is_error() {
                         __cur.advance();
                         NodeSlot::Error(__c)
-                    } else if shape_match(
+                    } else if shape_match_inner(
                         &ReconShape::Seq(&[
                             ReconShape::Kind("header_sep"),
                             ReconShape::Kind("free_text"),
                         ]),
                         &cont_of(&[ReconShape::Kind("newline")]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     )
                     .is_some()
                     {
@@ -6776,7 +6892,7 @@ pub fn extract_birth_of_header<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("header_gap"),
                 &cont_of(&[
                     ReconShape::Kind("speaker"),
@@ -6784,8 +6900,9 @@ pub fn extract_birth_of_header<'tree>(
                     ReconShape::Kind("date_contents"),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -6989,7 +7106,7 @@ pub fn extract_birthplace_of_header<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("header_gap"),
                 &cont_of(&[
                     ReconShape::Kind("speaker"),
@@ -6997,8 +7114,9 @@ pub fn extract_birthplace_of_header<'tree>(
                     ReconShape::Kind("free_text"),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -8241,7 +8359,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("base_content_item"),
                         ReconShape::Kind("group_with_annotations"),
@@ -8251,8 +8369,9 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                         ReconShape::Kind("main_sin_group"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur
@@ -8410,7 +8529,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[
                             ReconShape::Kind("whitespaces"),
                             ReconShape::Kind("content_item"),
@@ -8423,8 +8542,9 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                             ReconShape::Kind("separator"),
                             ReconShape::Kind("overlap_point"),
                         ]))]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
                             if let Some(__v) =
@@ -8471,7 +8591,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Choice(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("content_item"),
@@ -8479,9 +8599,11 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                     ReconShape::Kind("overlap_point"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -8496,7 +8618,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                             NodeSlot::Missing(__c)
                         }
                         _ => {
-                            match choice_split(
+                            match choice_split_inner(
                                 &[
                                     ReconShape::Kind("whitespaces"),
                                     ReconShape::Kind("content_item"),
@@ -8509,8 +8631,9 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                     ReconShape::Kind("separator"),
                                     ReconShape::Kind("overlap_point"),
                                 ]))]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             ) {
                                 Some((0, _)) => {
                                     if let Some(__v) =
@@ -8626,14 +8749,15 @@ pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateConten
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("strict_date"),
                         ReconShape::Kind("generic_date"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("strict_date").map(StrictDateNode) {
@@ -9257,14 +9381,15 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("header_sep"),
                     ReconShape::Kind("free_text"),
                 ]),
                 &cont_of(&[ReconShape::Kind("newline")]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -9272,14 +9397,15 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
                     if __c.is_error() {
                         __cur.advance();
                         NodeSlot::Error(__c)
-                    } else if shape_match(
+                    } else if shape_match_inner(
                         &ReconShape::Seq(&[
                             ReconShape::Kind("header_sep"),
                             ReconShape::Kind("free_text"),
                         ]),
                         &cont_of(&[ReconShape::Kind("newline")]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     )
                     .is_some()
                     {
@@ -10353,7 +10479,7 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                 if __c.is_error() {
                     __cur.advance();
                     NodeSlot::Error(__c)
-                } else if shape_match(
+                } else if shape_match_inner(
                     &ReconShape::Seq(&[
                         ReconShape::Kind("whitespaces"),
                         ReconShape::Kind("postcode"),
@@ -10362,8 +10488,9 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                         ReconShape::Kind("whitespaces"),
                         ReconShape::Kind("postcode"),
                     ]))]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 )
                 .is_some()
                 {
@@ -10438,15 +10565,17 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("postcode"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -10455,7 +10584,7 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("postcode"),
@@ -10464,8 +10593,9 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("postcode"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -10910,7 +11040,7 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[
                             ReconShape::Kind("rest_of_line"),
                             ReconShape::Kind("continuation"),
@@ -10919,8 +11049,9 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                             ReconShape::Kind("rest_of_line"),
                             ReconShape::Kind("continuation"),
                         ]))]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
                             if let Some(__v) =
@@ -10951,15 +11082,17 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Choice(&[
                     ReconShape::Kind("rest_of_line"),
                     ReconShape::Kind("continuation"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -10974,7 +11107,7 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                             NodeSlot::Missing(__c)
                         }
                         _ => {
-                            match choice_split(
+                            match choice_split_inner(
                                 &[
                                     ReconShape::Kind("rest_of_line"),
                                     ReconShape::Kind("continuation"),
@@ -10983,8 +11116,9 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                                     ReconShape::Kind("rest_of_line"),
                                     ReconShape::Kind("continuation"),
                                 ]))]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             ) {
                                 Some((0, _)) => {
                                     if let Some(__v) =
@@ -11112,7 +11246,7 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Supertype(&[
                     "color_words_header",
                     "font_header",
@@ -11124,9 +11258,11 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
                     ReconShape::Repeat(&ReconShape::Kind("line")),
                     ReconShape::Kind("end_header"),
                 ]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -11222,12 +11358,14 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Kind("line"),
                 &cont_of(&[ReconShape::Kind("end_header")]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -11795,15 +11933,17 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("gra_relation"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -11812,7 +11952,7 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("gra_relation"),
@@ -11821,8 +11961,9 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("gra_relation"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -12687,14 +12828,15 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[ReconShape::Kind("space"), ReconShape::Kind("tab")],
                         &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
                             ReconShape::Kind("space"),
                             ReconShape::Kind("tab"),
                         ]))]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
                             if let Some(__v) = __cur.take_if_kind("space").map(SpaceNode) {
@@ -12721,12 +12863,14 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Choice(&[ReconShape::Kind("space"), ReconShape::Kind("tab")]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -12741,14 +12885,15 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                             NodeSlot::Missing(__c)
                         }
                         _ => {
-                            match choice_split(
+                            match choice_split_inner(
                                 &[ReconShape::Kind("space"), ReconShape::Kind("tab")],
                                 &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
                                     ReconShape::Kind("space"),
                                     ReconShape::Kind("tab"),
                                 ]))]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             ) {
                                 Some((0, _)) => {
                                     if let Some(__v) = __cur.take_if_kind("space").map(SpaceNode) {
@@ -12921,11 +13066,12 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[ReconShape::Kind("age_format"), ReconShape::LeafText],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("age_format").map(AgeFormatNode) {
@@ -13101,7 +13247,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_2 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_corpus")),
@@ -13136,8 +13282,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13168,7 +13315,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_corpus"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
@@ -13202,8 +13349,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13234,7 +13382,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_4 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("pipe"),
@@ -13267,8 +13415,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13371,7 +13520,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_8 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_age")),
@@ -13400,8 +13549,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13432,7 +13582,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_9 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_age"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
@@ -13460,8 +13610,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13492,7 +13643,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_10 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("pipe"),
@@ -13519,8 +13670,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13575,7 +13727,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_12 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_sex")),
@@ -13600,8 +13752,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13632,7 +13785,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_13 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_sex"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
@@ -13656,8 +13809,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13688,7 +13842,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_14 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("pipe"),
@@ -13711,8 +13865,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13767,7 +13922,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_16 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_group")),
@@ -13788,8 +13943,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13820,7 +13976,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_17 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_group"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
@@ -13840,8 +13996,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13872,7 +14029,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_18 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("pipe"),
@@ -13891,8 +14048,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13947,7 +14105,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_20 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_ses")),
@@ -13964,8 +14122,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -13996,7 +14155,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_21 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_ses"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
@@ -14012,8 +14171,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14044,7 +14204,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_22 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("pipe"),
@@ -14059,8 +14219,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14163,7 +14324,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_26 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_education")),
@@ -14174,8 +14335,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14206,7 +14368,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_27 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_education"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
@@ -14216,8 +14378,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14248,7 +14411,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_28 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("pipe"),
@@ -14257,8 +14420,9 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14313,15 +14477,16 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_30 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("id_custom_field")),
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14352,14 +14517,15 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_31 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("id_custom_field"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("pipe"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14390,11 +14556,12 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         };
         let child_32 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[ReconShape::Kind("pipe")]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -14675,11 +14842,12 @@ pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesC
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[ReconShape::Kind("languages_contents"), ReconShape::LeafText],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur
@@ -14774,7 +14942,7 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("ses_combined"),
                         ReconShape::Kind("ses_code_value"),
@@ -14782,8 +14950,9 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                         ReconShape::Kind("generic_id_ses"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("ses_combined").map(SesCombinedNode) {
@@ -14893,15 +15062,16 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("male_value"),
                         ReconShape::Kind("female_value"),
                         ReconShape::Kind("generic_id_sex"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("male_value").map(MaleValueNode) {
@@ -15149,7 +15319,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("header_gap"),
                 &cont_of(&[
                     ReconShape::Kind("speaker"),
@@ -15157,8 +15327,9 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                     ReconShape::Kind("language_code"),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -15521,7 +15692,7 @@ pub fn extract_languages_contents<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("comma"),
@@ -15529,9 +15700,11 @@ pub fn extract_languages_contents<'tree>(
                     ReconShape::Kind("language_code"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -15540,7 +15713,7 @@ pub fn extract_languages_contents<'tree>(
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                                 ReconShape::Kind("comma"),
@@ -15553,15 +15726,16 @@ pub fn extract_languages_contents<'tree>(
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("language_code"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
                             NodeSlot::Present({
                                 let child_0 = {
                                     let leading_extras = __cur.take_leading_extras();
-                                    let slot = if optional_split(
+                                    let slot = if optional_split_inner(
                                         &ReconShape::Kind("whitespaces"),
                                         &cont_of(&[
                                             ReconShape::Kind("comma"),
@@ -15576,8 +15750,9 @@ pub fn extract_languages_contents<'tree>(
                                                 ReconShape::Kind("language_code"),
                                             ])),
                                         ]),
-                                        __cur.rest(),
-                                        0,
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
                                     )
                                     .0
                                     {
@@ -16029,7 +16204,7 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Supertype(&[
                             "activities_header",
@@ -16072,8 +16247,9 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                         ReconShape::Kind("unsupported_line"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = {
@@ -16498,7 +16674,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                 if __c.is_error() {
                     __cur.advance();
                     NodeSlot::Error(__c)
-                } else if shape_match(
+                } else if shape_match_inner(
                     &ReconShape::Seq(&[
                         ReconShape::Supertype(&[
                             "ca_no_break_linker",
@@ -16523,8 +16699,9 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                         ]),
                         ReconShape::Kind("whitespaces"),
                     ]))]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 )
                 .is_some()
                 {
@@ -16678,7 +16855,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Supertype(&[
                         "ca_no_break_linker",
@@ -16692,9 +16869,11 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                     ReconShape::Kind("whitespaces"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items
@@ -16704,7 +16883,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                             if __c.is_error() {
                                 __cur.advance();
                                 NodeSlot::Error(__c)
-                            } else if shape_match(
+                            } else if shape_match_inner(
                                     &ReconShape::Seq(
                                         &[
                                             ReconShape::Supertype(
@@ -16743,8 +16922,9 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                             ),
                                         ],
                                     ),
-                                    __cur.rest(),
-                                    0,
+                                    __cur.all(),
+                                    __cur.index(),
+                                    __cur.memo(),
                                 )
                                 .is_some()
                             {
@@ -17099,14 +17279,15 @@ pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureC
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("long_feature_begin"),
                         ReconShape::Kind("long_feature_end"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur
@@ -17929,15 +18110,16 @@ pub fn extract_media_contents<'tree>(
         };
         let child_4 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("comma"),
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("media_status"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -17945,15 +18127,16 @@ pub fn extract_media_contents<'tree>(
                     if __c.is_error() {
                         __cur.advance();
                         NodeSlot::Error(__c)
-                    } else if shape_match(
+                    } else if shape_match_inner(
                         &ReconShape::Seq(&[
                             ReconShape::Kind("comma"),
                             ReconShape::Kind("whitespaces"),
                             ReconShape::Kind("media_status"),
                         ]),
                         &cont_of(&[]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     )
                     .is_some()
                     {
@@ -18129,7 +18312,7 @@ pub fn extract_media_filename<'tree>(
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Seq(&[
                             ReconShape::Kind("double_quote"),
@@ -18139,19 +18322,21 @@ pub fn extract_media_filename<'tree>(
                         ReconShape::LeafText,
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
-                        if let Some(__v) = if shape_match(
+                        if let Some(__v) = if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("double_quote"),
                                 ReconShape::LeafText,
                                 ReconShape::Kind("double_quote"),
                             ]),
                             &cont_of(&[]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -18447,7 +18632,7 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("missing_value"),
                         ReconShape::Kind("unlinked_value"),
@@ -18455,8 +18640,9 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                         ReconShape::Kind("generic_media_status"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("missing_value").map(MissingValueNode)
@@ -18569,7 +18755,7 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("video_value"),
                         ReconShape::Kind("audio_value"),
@@ -18577,8 +18763,9 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                         ReconShape::Kind("generic_media_type"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("video_value").map(VideoValueNode) {
@@ -18984,12 +19171,14 @@ pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChil
         };
         let post_clitics = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Kind("mor_post_clitic"),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -19240,7 +19429,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[
                             ReconShape::Seq(&[
                                 ReconShape::Kind("mor_content"),
@@ -19284,11 +19473,12 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                             ]),
                         ],
                         &cont_of(&[ReconShape::Optional(&ReconShape::Kind("whitespaces"))]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
-                            if let Some(__v) = if shape_match(
+                            if let Some(__v) = if shape_match_inner(
                                 &ReconShape::Seq(&[
                                     ReconShape::Kind("mor_content"),
                                     ReconShape::Repeat(&ReconShape::Seq(&[
@@ -19315,8 +19505,9 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                     ])),
                                 ]),
                                 &cont_of(&[ReconShape::Optional(&ReconShape::Kind("whitespaces"))]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             )
                             .is_some()
                             {
@@ -19347,7 +19538,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                     };
                                     let child_1 = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let __count = repeat_count(
+                                        let __count = repeat_split_inner(
                                             &ReconShape::Seq(&[
                                                 ReconShape::Kind("whitespaces"),
                                                 ReconShape::Kind("mor_content"),
@@ -19375,9 +19566,11 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                     "whitespaces",
                                                 )),
                                             ]),
-                                            __cur.rest(),
-                                            0,
-                                        );
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
+                                        )
+                                        .0;
                                         let mut __items = Vec::new();
                                         for _ in 0..__count {
                                             __items
@@ -19387,7 +19580,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                         if __c.is_error() {
                                                             __cur.advance();
                                                             NodeSlot::Error(__c)
-                                                        } else if shape_match(
+                                                        } else if shape_match_inner(
                                                                 &ReconShape::Seq(
                                                                     &[
                                                                         ReconShape::Kind("whitespaces"),
@@ -19431,8 +19624,9 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                         ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                                                                     ],
                                                                 ),
-                                                                __cur.rest(),
-                                                                0,
+                                                                __cur.all(),
+                                                                __cur.index(),
+                                                                __cur.memo(),
                                                             )
                                                             .is_some()
                                                         {
@@ -19504,7 +19698,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                     };
                                     let child_2 = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let slot = if optional_split(
+                                        let slot = if optional_split_inner(
                                             &ReconShape::Seq(&[
                                                 ReconShape::Kind("whitespaces"),
                                                 ReconShape::Supertype(&[
@@ -19526,8 +19720,9 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                             &cont_of(&[ReconShape::Optional(&ReconShape::Kind(
                                                 "whitespaces",
                                             ))]),
-                                            __cur.rest(),
-                                            0,
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
                                         )
                                         .0
                                         {
@@ -19535,7 +19730,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                 if __c.is_error() {
                                                     __cur.advance();
                                                     NodeSlot::Error(__c)
-                                                } else if shape_match(
+                                                } else if shape_match_inner(
                                                     &ReconShape::Seq(&[
                                                         ReconShape::Kind("whitespaces"),
                                                         ReconShape::Supertype(&[
@@ -19557,8 +19752,9 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                     &cont_of(&[ReconShape::Optional(
                                                         &ReconShape::Kind("whitespaces"),
                                                     )]),
-                                                    __cur.rest(),
-                                                    0,
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
                                                 )
                                                 .is_some()
                                                 {
@@ -19946,11 +20142,12 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -20415,12 +20612,14 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Kind("mor_feature"),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -20645,7 +20844,7 @@ pub fn extract_non_colon_separator<'tree>(
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("comma"),
                         ReconShape::Kind("semicolon"),
@@ -20663,8 +20862,9 @@ pub fn extract_non_colon_separator<'tree>(
                         ReconShape::Kind("falling_to_low"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("comma").map(CommaNode) {
@@ -20857,15 +21057,16 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("nonvocal_begin"),
                         ReconShape::Kind("nonvocal_end"),
                         ReconShape::Kind("nonvocal_simple"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) =
@@ -21336,11 +21537,12 @@ pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[ReconShape::Kind("event"), ReconShape::Kind("zero")],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("event").map(EventNode) {
@@ -21443,11 +21645,12 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
         };
         let annotations = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("base_annotations"),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -21698,7 +21901,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("1"),
                         ReconShape::Kind("2"),
@@ -21710,8 +21913,9 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                         ReconShape::Kind("generic_number"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("1").map(K1Node) {
@@ -21844,15 +22048,16 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("CA"),
                         ReconShape::Kind("NoAlign"),
                         ReconShape::Kind("generic_option_name"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("CA").map(CANode) {
@@ -21970,16 +22175,18 @@ pub fn extract_options_contents<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("comma"),
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("option_name"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -21988,7 +22195,7 @@ pub fn extract_options_contents<'tree>(
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("comma"),
                                 ReconShape::Kind("whitespaces"),
@@ -21999,8 +22206,9 @@ pub fn extract_options_contents<'tree>(
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("option_name"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -23082,15 +23290,17 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("participant_word"),
                 ]),
                 &cont_of(&[ReconShape::Optional(&ReconShape::Kind("whitespaces"))]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -23099,7 +23309,7 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("participant_word"),
@@ -23111,8 +23321,9 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                 ])),
                                 ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                             ]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -23193,11 +23404,12 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
         };
         let child_2 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -23312,16 +23524,18 @@ pub fn extract_participants_contents<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("comma"),
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("participant"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -23330,7 +23544,7 @@ pub fn extract_participants_contents<'tree>(
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("comma"),
                                 ReconShape::Kind("whitespaces"),
@@ -23341,8 +23555,9 @@ pub fn extract_participants_contents<'tree>(
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("participant"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -23951,7 +24166,7 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("pho_words"),
                         ReconShape::Seq(&[
@@ -23961,8 +24176,9 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                         ]),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("pho_words").map(PhoWordsNode) {
@@ -23972,15 +24188,16 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                         }
                     }
                     Some((1, _)) => {
-                        if let Some(__v) = if shape_match(
+                        if let Some(__v) = if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("pho_begin_group"),
                                 ReconShape::Kind("pho_grouped_content"),
                                 ReconShape::Kind("pho_end_group"),
                             ]),
                             &cont_of(&[]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -24165,15 +24382,17 @@ pub fn extract_pho_grouped_content<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("pho_words"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -24182,7 +24401,7 @@ pub fn extract_pho_grouped_content<'tree>(
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("pho_words"),
@@ -24191,8 +24410,9 @@ pub fn extract_pho_grouped_content<'tree>(
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("pho_words"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -24350,15 +24570,17 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("pho_group"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -24367,7 +24589,7 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("pho_group"),
@@ -24376,8 +24598,9 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("pho_group"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -24535,12 +24758,14 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[ReconShape::Kind("plus"), ReconShape::Kind("pho_word")]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -24549,7 +24774,7 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("plus"),
                                 ReconShape::Kind("pho_word"),
@@ -24558,8 +24783,9 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                 ReconShape::Kind("plus"),
                                 ReconShape::Kind("pho_word"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -25613,7 +25839,7 @@ pub fn extract_recording_quality_option<'tree>(
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("1"),
                         ReconShape::Kind("2"),
@@ -25623,8 +25849,9 @@ pub fn extract_recording_quality_option<'tree>(
                         ReconShape::Kind("generic_recording_quality"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("1").map(K1Node) {
@@ -25808,7 +26035,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                 if __c.is_error() {
                     __cur.advance();
                     NodeSlot::Error(__c)
-                } else if shape_match(
+                } else if shape_match_inner(
                     &ReconShape::Seq(&[
                         ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                         ReconShape::Kind("standalone_word"),
@@ -25820,15 +26047,16 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                         ])),
                         ReconShape::Kind("right_bracket"),
                     ]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 )
                 .is_some()
                 {
                     NodeSlot::Present({
                         let child_0 = {
                             let leading_extras = __cur.take_leading_extras();
-                            let slot = if optional_split(
+                            let slot = if optional_split_inner(
                                 &ReconShape::Kind("whitespaces"),
                                 &cont_of(&[
                                     ReconShape::Kind("standalone_word"),
@@ -25838,8 +26066,9 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                     ])),
                                     ReconShape::Kind("right_bracket"),
                                 ]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             )
                             .0
                             {
@@ -25914,15 +26143,17 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("standalone_word"),
                 ]),
                 &cont_of(&[ReconShape::Kind("right_bracket")]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -25931,7 +26162,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                                 ReconShape::Kind("standalone_word"),
@@ -25943,15 +26174,16 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                 ])),
                                 ReconShape::Kind("right_bracket"),
                             ]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
                             NodeSlot::Present({
                                 let child_0 = {
                                     let leading_extras = __cur.take_leading_extras();
-                                    let slot = if optional_split(
+                                    let slot = if optional_split_inner(
                                         &ReconShape::Kind("whitespaces"),
                                         &cont_of(&[
                                             ReconShape::Kind("standalone_word"),
@@ -25963,8 +26195,9 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                             ])),
                                             ReconShape::Kind("right_bracket"),
                                         ]),
-                                        __cur.rest(),
-                                        0,
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
                                     )
                                     .0
                                     {
@@ -26276,14 +26509,15 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("non_colon_separator"),
                         ReconShape::Kind("colon"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur
@@ -26636,7 +26870,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("sin_word"),
                         ReconShape::Seq(&[
@@ -26646,8 +26880,9 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                         ]),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("sin_word").map(SinWordNode) {
@@ -26657,15 +26892,16 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                         }
                     }
                     Some((1, _)) => {
-                        if let Some(__v) = if shape_match(
+                        if let Some(__v) = if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("sin_begin_group"),
                                 ReconShape::Kind("sin_grouped_content"),
                                 ReconShape::Kind("sin_end_group"),
                             ]),
                             &cont_of(&[]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -26850,15 +27086,17 @@ pub fn extract_sin_grouped_content<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("sin_word"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -26867,7 +27105,7 @@ pub fn extract_sin_grouped_content<'tree>(
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("sin_word"),
@@ -26876,8 +27114,9 @@ pub fn extract_sin_grouped_content<'tree>(
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("sin_word"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -27035,15 +27274,17 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("whitespaces"),
                     ReconShape::Kind("sin_group"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -27052,7 +27293,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                         if __c.is_error() {
                             __cur.advance();
                             NodeSlot::Error(__c)
-                        } else if shape_match(
+                        } else if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("sin_group"),
@@ -27061,8 +27302,9 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                 ReconShape::Kind("whitespaces"),
                                 ReconShape::Kind("sin_group"),
                             ]))]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -27196,11 +27438,12 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[ReconShape::Kind("zero"), ReconShape::LeafText],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("zero").map(ZeroNode) {
@@ -27824,7 +28067,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("full_document"),
                         ReconShape::Kind("utterance"),
@@ -27908,8 +28151,9 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                         ReconShape::Kind("standalone_word"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("full_document").map(FullDocumentNode)
@@ -28560,7 +28804,7 @@ pub fn extract_standalone_word<'tree>(
     {
         let child_0 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Choice(&[ReconShape::Kind("word_prefix"), ReconShape::Kind("zero")]),
                 &cont_of(&[
                     ReconShape::Kind("word_body"),
@@ -28568,8 +28812,9 @@ pub fn extract_standalone_word<'tree>(
                     ReconShape::Optional(&ReconShape::Kind("word_lang_suffix")),
                     ReconShape::Optional(&ReconShape::Kind("pos_tag")),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -28583,7 +28828,7 @@ pub fn extract_standalone_word<'tree>(
                         NodeSlot::Missing(__c)
                     }
                     _ => {
-                        match choice_split(
+                        match choice_split_inner(
                             &[ReconShape::Kind("word_prefix"), ReconShape::Kind("zero")],
                             &cont_of(&[
                                 ReconShape::Kind("word_body"),
@@ -28591,8 +28836,9 @@ pub fn extract_standalone_word<'tree>(
                                 ReconShape::Optional(&ReconShape::Kind("word_lang_suffix")),
                                 ReconShape::Optional(&ReconShape::Kind("pos_tag")),
                             ]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         ) {
                             Some((0, _)) => {
                                 if let Some(__v) =
@@ -28648,14 +28894,15 @@ pub fn extract_standalone_word<'tree>(
         };
         let child_2 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("form_marker"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Kind("word_lang_suffix")),
                     ReconShape::Optional(&ReconShape::Kind("pos_tag")),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -28686,11 +28933,12 @@ pub fn extract_standalone_word<'tree>(
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("word_lang_suffix"),
                 &cont_of(&[ReconShape::Optional(&ReconShape::Kind("pos_tag"))]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -28721,28 +28969,35 @@ pub fn extract_standalone_word<'tree>(
         };
         let child_4 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot =
-                if optional_split(&ReconShape::Kind("pos_tag"), &cont_of(&[]), __cur.rest(), 0).0 {
-                    Some(if let Some(__c) = __cur.peek() {
-                        if __c.is_error() {
-                            __cur.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "pos_tag" {
-                            __cur.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(PosTagNode(__c))
-                            }
+            let slot = if optional_split_inner(
+                &ReconShape::Kind("pos_tag"),
+                &cont_of(&[]),
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0
+            {
+                Some(if let Some(__c) = __cur.peek() {
+                    if __c.is_error() {
+                        __cur.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pos_tag" {
+                        __cur.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PosTagNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
-                    })
+                    }
                 } else {
-                    None
-                };
+                    NodeSlot::Absent
+                })
+            } else {
+                None
+            };
             Positioned {
                 leading_extras,
                 slot,
@@ -29244,7 +29499,7 @@ pub fn extract_text_with_bullets<'tree>(
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[
                             ReconShape::Kind("text_segment"),
                             ReconShape::Kind("bullet"),
@@ -29255,8 +29510,9 @@ pub fn extract_text_with_bullets<'tree>(
                             ReconShape::Kind("bullet"),
                             ReconShape::Kind("continuation"),
                         ]))]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
                             if let Some(__v) =
@@ -29294,16 +29550,18 @@ pub fn extract_text_with_bullets<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Choice(&[
                     ReconShape::Kind("text_segment"),
                     ReconShape::Kind("bullet"),
                     ReconShape::Kind("continuation"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -29318,7 +29576,7 @@ pub fn extract_text_with_bullets<'tree>(
                             NodeSlot::Missing(__c)
                         }
                         _ => {
-                            match choice_split(
+                            match choice_split_inner(
                                 &[
                                     ReconShape::Kind("text_segment"),
                                     ReconShape::Kind("bullet"),
@@ -29329,8 +29587,9 @@ pub fn extract_text_with_bullets<'tree>(
                                     ReconShape::Kind("bullet"),
                                     ReconShape::Kind("continuation"),
                                 ]))]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             ) {
                                 Some((0, _)) => {
                                     if let Some(__v) =
@@ -29475,7 +29734,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[
                             ReconShape::Kind("text_segment"),
                             ReconShape::Kind("bullet"),
@@ -29488,8 +29747,9 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                             ReconShape::Kind("inline_pic"),
                             ReconShape::Kind("continuation"),
                         ]))]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
                             if let Some(__v) =
@@ -29540,7 +29800,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Choice(&[
                     ReconShape::Kind("text_segment"),
                     ReconShape::Kind("bullet"),
@@ -29548,9 +29808,11 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                     ReconShape::Kind("continuation"),
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -29565,7 +29827,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                             NodeSlot::Missing(__c)
                         }
                         _ => {
-                            match choice_split(
+                            match choice_split_inner(
                                 &[
                                     ReconShape::Kind("text_segment"),
                                     ReconShape::Kind("bullet"),
@@ -29578,8 +29840,9 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                     ReconShape::Kind("inline_pic"),
                                     ReconShape::Kind("continuation"),
                                 ]))]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             ) {
                                 Some((0, _)) => {
                                     if let Some(__v) =
@@ -29864,7 +30127,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
     {
         let linkers = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("linkers"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Seq(&[
@@ -29874,8 +30137,9 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                     ReconShape::Kind("contents"),
                     ReconShape::Kind("utterance_end"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -29906,7 +30170,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         };
         let language_code = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("langcode"),
                     ReconShape::Kind("whitespaces"),
@@ -29915,8 +30179,9 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                     ReconShape::Kind("contents"),
                     ReconShape::Kind("utterance_end"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -29924,7 +30189,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                     if __c.is_error() {
                         __cur.advance();
                         NodeSlot::Error(__c)
-                    } else if shape_match(
+                    } else if shape_match_inner(
                         &ReconShape::Seq(&[
                             ReconShape::Kind("langcode"),
                             ReconShape::Kind("whitespaces"),
@@ -29933,8 +30198,9 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                             ReconShape::Kind("contents"),
                             ReconShape::Kind("utterance_end"),
                         ]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     )
                     .is_some()
                     {
@@ -30355,14 +30621,15 @@ pub fn extract_time_duration_contents<'tree>(
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("strict_time"),
                         ReconShape::Kind("generic_time"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("strict_time").map(StrictTimeNode) {
@@ -31040,7 +31307,7 @@ pub fn extract_transcription_option<'tree>(
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Kind("eye_dialect"),
                         ReconShape::Kind("partial"),
@@ -31052,8 +31319,9 @@ pub fn extract_transcription_option<'tree>(
                         ReconShape::Kind("generic_transcription"),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
                         if let Some(__v) = __cur.take_if_kind("eye_dialect").map(EyeDialectNode) {
@@ -31254,7 +31522,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("comma"),
@@ -31266,8 +31534,9 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                     ReconShape::Kind("types_group"),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -31322,7 +31591,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         };
         let child_5 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("types_activity"),
@@ -31332,8 +31601,9 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                     ReconShape::Kind("types_group"),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -31388,7 +31658,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         };
         let child_7 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[
                     ReconShape::Kind("comma"),
@@ -31396,8 +31666,9 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                     ReconShape::Kind("types_group"),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -31452,11 +31723,12 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         };
         let child_9 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[ReconShape::Kind("types_group"), ReconShape::Kind("newline")]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -32130,7 +32402,7 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Supertype(&[
                     "act_dependent_tier",
                     "add_dependent_tier",
@@ -32166,9 +32438,11 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
                     "xphoint_dependent_tier",
                 ]),
                 &cont_of(&[]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items.push({
@@ -32634,7 +32908,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
     {
         let child_0 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Supertype(&[
                     "break_for_coding",
                     "broken_question",
@@ -32659,8 +32933,9 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -32822,7 +33097,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("final_codes"),
                 &cont_of(&[
                     ReconShape::Optional(&ReconShape::Seq(&[
@@ -32832,8 +33107,9 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -32864,7 +33140,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         };
         let child_2 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("bullet"),
@@ -32873,8 +33149,9 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                     ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -32882,7 +33159,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                     if __c.is_error() {
                         __cur.advance();
                         NodeSlot::Error(__c)
-                    } else if shape_match(
+                    } else if shape_match_inner(
                         &ReconShape::Seq(&[
                             ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                             ReconShape::Kind("bullet"),
@@ -32891,23 +33168,25 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                             ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                             ReconShape::Kind("newline"),
                         ]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     )
                     .is_some()
                     {
                         NodeSlot::Present({
                             let child_0 = {
                                 let leading_extras = __cur.take_leading_extras();
-                                let slot = if optional_split(
+                                let slot = if optional_split_inner(
                                     &ReconShape::Kind("whitespaces"),
                                     &cont_of(&[
                                         ReconShape::Kind("bullet"),
                                         ReconShape::Optional(&ReconShape::Kind("whitespaces")),
                                         ReconShape::Kind("newline"),
                                     ]),
-                                    __cur.rest(),
-                                    0,
+                                    __cur.all(),
+                                    __cur.index(),
+                                    __cur.memo(),
                                 )
                                 .0
                                 {
@@ -32985,11 +33264,12 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         };
         let child_3 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Kind("whitespaces"),
                 &cont_of(&[ReconShape::Kind("newline")]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -33741,7 +34021,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
     {
         let language_code = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Kind("langcode"),
                     ReconShape::Kind("whitespaces"),
@@ -33774,8 +34054,9 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                     ])),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -33783,7 +34064,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                     if __c.is_error() {
                         __cur.advance();
                         NodeSlot::Error(__c)
-                    } else if shape_match(
+                    } else if shape_match_inner(
                         &ReconShape::Seq(&[
                             ReconShape::Kind("langcode"),
                             ReconShape::Kind("whitespaces"),
@@ -33816,8 +34097,9 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                             ])),
                             ReconShape::Kind("newline"),
                         ]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     )
                     .is_some()
                     {
@@ -33895,7 +34177,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
-            let __count = repeat_count(
+            let __count = repeat_split_inner(
                 &ReconShape::Seq(&[
                     ReconShape::Choice(&[
                         ReconShape::Kind("wor_word_item"),
@@ -33924,9 +34206,11 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                     ])),
                     ReconShape::Kind("newline"),
                 ]),
-                __cur.rest(),
-                0,
-            );
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0;
             let mut __items = Vec::new();
             for _ in 0..__count {
                 __items
@@ -33936,7 +34220,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                             if __c.is_error() {
                                 __cur.advance();
                                 NodeSlot::Error(__c)
-                            } else if shape_match(
+                            } else if shape_match_inner(
                                     &ReconShape::Seq(
                                         &[
                                             ReconShape::Choice(
@@ -33991,8 +34275,9 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                             ReconShape::Kind("newline"),
                                         ],
                                     ),
-                                    __cur.rest(),
-                                    0,
+                                    __cur.all(),
+                                    __cur.index(),
+                                    __cur.memo(),
                                 )
                                 .is_some()
                             {
@@ -34009,7 +34294,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                 NodeSlot::Missing(__c)
                                             }
                                             _ => {
-                                                match choice_split(
+                                                match choice_split_inner(
                                                     &[
                                                         ReconShape::Kind("wor_word_item"),
                                                         ReconShape::Kind("bullet"),
@@ -34058,8 +34343,9 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                             ReconShape::Kind("newline"),
                                                         ],
                                                     ),
-                                                    __cur.rest(),
-                                                    0,
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
                                                 ) {
                                                     Some((0, _)) => {
                                                         if let Some(__v) = __cur
@@ -34171,7 +34457,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         };
         let child_2 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if optional_split(
+            let slot = if optional_split_inner(
                 &ReconShape::Supertype(&[
                     "break_for_coding",
                     "broken_question",
@@ -34188,8 +34474,9 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                     "trailing_off_question",
                 ]),
                 &cont_of(&[ReconShape::Kind("newline")]),
-                __cur.rest(),
-                0,
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
             )
             .0
             {
@@ -34649,7 +34936,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                 NodeSlot::Missing(__c)
             }
             _ => {
-                match choice_split(
+                match choice_split_inner(
                     &[
                         ReconShape::Seq(&[
                             ReconShape::Choice(&[
@@ -34692,11 +34979,12 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                         ]),
                     ],
                     &cont_of(&[]),
-                    __cur.rest(),
-                    0,
+                    __cur.all(),
+                    __cur.index(),
+                    __cur.memo(),
                 ) {
                     Some((0, _)) => {
-                        if let Some(__v) = if shape_match(
+                        if let Some(__v) = if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Choice(&[
                                     ReconShape::Kind("word_segment"),
@@ -34706,8 +34994,9 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 ReconShape::Repeat(&ReconShape::Raw),
                             ]),
                             &cont_of(&[]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -34724,15 +35013,16 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             NodeSlot::Missing(__c)
                                         }
                                         _ => {
-                                            match choice_split(
+                                            match choice_split_inner(
                                                 &[
                                                     ReconShape::Kind("word_segment"),
                                                     ReconShape::Kind("shortening"),
                                                     ReconShape::Kind("stress_marker"),
                                                 ],
                                                 &cont_of(&[ReconShape::Repeat(&ReconShape::Raw)]),
-                                                __cur.rest(),
-                                                0,
+                                                __cur.all(),
+                                                __cur.index(),
+                                                __cur.memo(),
                                             ) {
                                                 Some((0, _)) => {
                                                     if let Some(__v) = __cur
@@ -34781,12 +35071,14 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 };
                                 let child_1 = {
                                     let leading_extras = __cur.take_leading_extras();
-                                    let __count = repeat_count(
+                                    let __count = repeat_split_inner(
                                         &ReconShape::Raw,
                                         &cont_of(&[]),
-                                        __cur.rest(),
-                                        0,
-                                    );
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .0;
                                     let mut __items = Vec::new();
                                     for _ in 0..__count {
                                         __items.push({
@@ -34832,7 +35124,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                         }
                     }
                     Some((1, _)) => {
-                        if let Some(__v) = if shape_match(
+                        if let Some(__v) = if shape_match_inner(
                             &ReconShape::Seq(&[
                                 ReconShape::Choice(&[
                                     ReconShape::Kind("ca_element"),
@@ -34865,8 +35157,9 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 ReconShape::Repeat(&ReconShape::Raw),
                             ]),
                             &cont_of(&[]),
-                            __cur.rest(),
-                            0,
+                            __cur.all(),
+                            __cur.index(),
+                            __cur.memo(),
                         )
                         .is_some()
                         {
@@ -34883,7 +35176,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             NodeSlot::Missing(__c)
                                         }
                                         _ => {
-                                            match choice_split(
+                                            match choice_split_inner(
                                                 &[
                                                     ReconShape::Kind("ca_element"),
                                                     ReconShape::Kind("ca_delimiter"),
@@ -34915,8 +35208,9 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     ]),
                                                     ReconShape::Repeat(&ReconShape::Raw),
                                                 ]),
-                                                __cur.rest(),
-                                                0,
+                                                __cur.all(),
+                                                __cur.index(),
+                                                __cur.memo(),
                                             ) {
                                                 Some((0, _)) => {
                                                     if let Some(__v) = __cur
@@ -34977,7 +35271,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 };
                                 let child_1 = {
                                     let leading_extras = __cur.take_leading_extras();
-                                    let __count = repeat_count(
+                                    let __count = repeat_split_inner(
                                         &ReconShape::Choice(&[
                                             ReconShape::Kind("ca_element"),
                                             ReconShape::Kind("ca_delimiter"),
@@ -35003,9 +35297,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             ]),
                                             ReconShape::Repeat(&ReconShape::Raw),
                                         ]),
-                                        __cur.rest(),
-                                        0,
-                                    );
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .0;
                                     let mut __items = Vec::new();
                                     for _ in 0..__count {
                                         __items
@@ -35021,7 +35317,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                         NodeSlot::Missing(__c)
                                                     }
                                                     _ => {
-                                                        match choice_split(
+                                                        match choice_split_inner(
                                                             &[
                                                                 ReconShape::Kind("ca_element"),
                                                                 ReconShape::Kind("ca_delimiter"),
@@ -35069,8 +35365,9 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                     ReconShape::Repeat(&ReconShape::Raw),
                                                                 ],
                                                             ),
-                                                            __cur.rest(),
-                                                            0,
+                                                            __cur.all(),
+                                                            __cur.index(),
+                                                            __cur.memo(),
                                                         ) {
                                                             Some((0, _)) => {
                                                                 if let Some(__v) = __cur
@@ -35134,7 +35431,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 };
                                 let child_2 = {
                                     let leading_extras = __cur.take_leading_extras();
-                                    let __count = repeat_count(
+                                    let __count = repeat_split_inner(
                                         &ReconShape::Seq(&[
                                             ReconShape::Kind("overlap_point"),
                                             ReconShape::Repeat(&ReconShape::Choice(&[
@@ -35154,9 +35451,11 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             ]),
                                             ReconShape::Repeat(&ReconShape::Raw),
                                         ]),
-                                        __cur.rest(),
-                                        0,
-                                    );
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .0;
                                     let mut __items = Vec::new();
                                     for _ in 0..__count {
                                         __items
@@ -35166,7 +35465,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     if __c.is_error() {
                                                         __cur.advance();
                                                         NodeSlot::Error(__c)
-                                                    } else if shape_match(
+                                                    } else if shape_match_inner(
                                                             &ReconShape::Seq(
                                                                 &[
                                                                     ReconShape::Kind("overlap_point"),
@@ -35215,8 +35514,9 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                     ReconShape::Repeat(&ReconShape::Raw),
                                                                 ],
                                                             ),
-                                                            __cur.rest(),
-                                                            0,
+                                                            __cur.all(),
+                                                            __cur.index(),
+                                                            __cur.memo(),
                                                         )
                                                         .is_some()
                                                     {
@@ -35244,51 +35544,53 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                             };
                                                             let child_1 = {
                                                                 let leading_extras = __cur.take_leading_extras();
-                                                                let __count = repeat_count(
-                                                                    &ReconShape::Choice(
-                                                                        &[
-                                                                            ReconShape::Kind("ca_element"),
-                                                                            ReconShape::Kind("ca_delimiter"),
-                                                                            ReconShape::Kind("underline_begin"),
-                                                                            ReconShape::Kind("underline_end"),
-                                                                            ReconShape::Kind("lengthening"),
-                                                                            ReconShape::Kind("stress_marker"),
-                                                                        ],
-                                                                    ),
-                                                                    &cont_of(
-                                                                        &[
-                                                                            ReconShape::Repeat(
-                                                                                &ReconShape::Seq(
-                                                                                    &[
-                                                                                        ReconShape::Kind("overlap_point"),
-                                                                                        ReconShape::Repeat(
-                                                                                            &ReconShape::Choice(
-                                                                                                &[
-                                                                                                    ReconShape::Kind("ca_element"),
-                                                                                                    ReconShape::Kind("ca_delimiter"),
-                                                                                                    ReconShape::Kind("underline_begin"),
-                                                                                                    ReconShape::Kind("underline_end"),
-                                                                                                    ReconShape::Kind("lengthening"),
-                                                                                                    ReconShape::Kind("stress_marker"),
-                                                                                                ],
+                                                                let __count = repeat_split_inner(
+                                                                        &ReconShape::Choice(
+                                                                            &[
+                                                                                ReconShape::Kind("ca_element"),
+                                                                                ReconShape::Kind("ca_delimiter"),
+                                                                                ReconShape::Kind("underline_begin"),
+                                                                                ReconShape::Kind("underline_end"),
+                                                                                ReconShape::Kind("lengthening"),
+                                                                                ReconShape::Kind("stress_marker"),
+                                                                            ],
+                                                                        ),
+                                                                        &cont_of(
+                                                                            &[
+                                                                                ReconShape::Repeat(
+                                                                                    &ReconShape::Seq(
+                                                                                        &[
+                                                                                            ReconShape::Kind("overlap_point"),
+                                                                                            ReconShape::Repeat(
+                                                                                                &ReconShape::Choice(
+                                                                                                    &[
+                                                                                                        ReconShape::Kind("ca_element"),
+                                                                                                        ReconShape::Kind("ca_delimiter"),
+                                                                                                        ReconShape::Kind("underline_begin"),
+                                                                                                        ReconShape::Kind("underline_end"),
+                                                                                                        ReconShape::Kind("lengthening"),
+                                                                                                        ReconShape::Kind("stress_marker"),
+                                                                                                    ],
+                                                                                                ),
                                                                                             ),
-                                                                                        ),
+                                                                                        ],
+                                                                                    ),
+                                                                                ),
+                                                                                ReconShape::Choice(
+                                                                                    &[
+                                                                                        ReconShape::Kind("word_segment"),
+                                                                                        ReconShape::Kind("shortening"),
+                                                                                        ReconShape::Kind("stress_marker"),
                                                                                     ],
                                                                                 ),
-                                                                            ),
-                                                                            ReconShape::Choice(
-                                                                                &[
-                                                                                    ReconShape::Kind("word_segment"),
-                                                                                    ReconShape::Kind("shortening"),
-                                                                                    ReconShape::Kind("stress_marker"),
-                                                                                ],
-                                                                            ),
-                                                                            ReconShape::Repeat(&ReconShape::Raw),
-                                                                        ],
-                                                                    ),
-                                                                    __cur.rest(),
-                                                                    0,
-                                                                );
+                                                                                ReconShape::Repeat(&ReconShape::Raw),
+                                                                            ],
+                                                                        ),
+                                                                        __cur.all(),
+                                                                        __cur.index(),
+                                                                        __cur.memo(),
+                                                                    )
+                                                                    .0;
                                                                 let mut __items = Vec::new();
                                                                 for _ in 0..__count {
                                                                     __items
@@ -35304,7 +35606,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                                     NodeSlot::Missing(__c)
                                                                                 }
                                                                                 _ => {
-                                                                                    match choice_split(
+                                                                                    match choice_split_inner(
                                                                                         &[
                                                                                             ReconShape::Kind("ca_element"),
                                                                                             ReconShape::Kind("ca_delimiter"),
@@ -35356,8 +35658,9 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                                                 ReconShape::Repeat(&ReconShape::Raw),
                                                                                             ],
                                                                                         ),
-                                                                                        __cur.rest(),
-                                                                                        0,
+                                                                                        __cur.all(),
+                                                                                        __cur.index(),
+                                                                                        __cur.memo(),
                                                                                     ) {
                                                                                         Some((0, _)) => {
                                                                                             if let Some(__v) = __cur
@@ -35478,15 +35781,16 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             NodeSlot::Missing(__c)
                                         }
                                         _ => {
-                                            match choice_split(
+                                            match choice_split_inner(
                                                 &[
                                                     ReconShape::Kind("word_segment"),
                                                     ReconShape::Kind("shortening"),
                                                     ReconShape::Kind("stress_marker"),
                                                 ],
                                                 &cont_of(&[ReconShape::Repeat(&ReconShape::Raw)]),
-                                                __cur.rest(),
-                                                0,
+                                                __cur.all(),
+                                                __cur.index(),
+                                                __cur.memo(),
                                             ) {
                                                 Some((0, _)) => {
                                                     if let Some(__v) = __cur
@@ -35535,12 +35839,14 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                 };
                                 let child_4 = {
                                     let leading_extras = __cur.take_leading_extras();
-                                    let __count = repeat_count(
+                                    let __count = repeat_split_inner(
                                         &ReconShape::Raw,
                                         &cont_of(&[]),
-                                        __cur.rest(),
-                                        0,
-                                    );
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .0;
                                     let mut __items = Vec::new();
                                     for _ in 0..__count {
                                         __items.push({
@@ -35800,7 +36106,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                     NodeSlot::Missing(__c)
                 }
                 _ => {
-                    match choice_split(
+                    match choice_split_inner(
                         &[
                             ReconShape::Seq(&[
                                 ReconShape::Kind("overlap_point"),
@@ -35826,11 +36132,12 @@ pub fn extract_word_with_optional_annotations<'tree>(
                             ]),
                         ],
                         &cont_of(&[]),
-                        __cur.rest(),
-                        0,
+                        __cur.all(),
+                        __cur.index(),
+                        __cur.memo(),
                     ) {
                         Some((0, _)) => {
-                            if let Some(__v) = if shape_match(
+                            if let Some(__v) = if shape_match_inner(
                                 &ReconShape::Seq(&[
                                     ReconShape::Kind("overlap_point"),
                                     ReconShape::Repeat(&ReconShape::Kind("overlap_point")),
@@ -35841,8 +36148,9 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     ReconShape::Kind("base_annotations"),
                                 ]),
                                 &cont_of(&[]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             )
                             .is_some()
                             {
@@ -35873,7 +36181,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     };
                                     let child_1 = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let __count = repeat_count(
+                                        let __count = repeat_split_inner(
                                             &ReconShape::Kind("overlap_point"),
                                             &cont_of(&[
                                                 ReconShape::Optional(&ReconShape::Seq(&[
@@ -35882,9 +36190,11 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                 ])),
                                                 ReconShape::Kind("base_annotations"),
                                             ]),
-                                            __cur.rest(),
-                                            0,
-                                        );
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
+                                        )
+                                        .0;
                                         let mut __items = Vec::new();
                                         for _ in 0..__count {
                                             __items.push({
@@ -35919,14 +36229,15 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     };
                                     let child_2 = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let slot = if optional_split(
+                                        let slot = if optional_split_inner(
                                             &ReconShape::Seq(&[
                                                 ReconShape::Kind("whitespaces"),
                                                 ReconShape::Kind("replacement"),
                                             ]),
                                             &cont_of(&[ReconShape::Kind("base_annotations")]),
-                                            __cur.rest(),
-                                            0,
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
                                         )
                                         .0
                                         {
@@ -35934,7 +36245,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                 if __c.is_error() {
                                                     __cur.advance();
                                                     NodeSlot::Error(__c)
-                                                } else if shape_match(
+                                                } else if shape_match_inner(
                                                     &ReconShape::Seq(&[
                                                         ReconShape::Kind("whitespaces"),
                                                         ReconShape::Kind("replacement"),
@@ -35942,8 +36253,9 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                     &cont_of(&[ReconShape::Kind(
                                                         "base_annotations",
                                                     )]),
-                                                    __cur.rest(),
-                                                    0,
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
                                                 )
                                                 .is_some()
                                                 {
@@ -36082,7 +36394,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                             }
                         }
                         Some((1, _)) => {
-                            if let Some(__v) = if shape_match(
+                            if let Some(__v) = if shape_match_inner(
                                 &ReconShape::Seq(&[
                                     ReconShape::Kind("overlap_point"),
                                     ReconShape::Repeat(&ReconShape::Kind("overlap_point")),
@@ -36090,8 +36402,9 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     ReconShape::Kind("replacement"),
                                 ]),
                                 &cont_of(&[]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             )
                             .is_some()
                             {
@@ -36122,15 +36435,17 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     };
                                     let child_1 = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let __count = repeat_count(
+                                        let __count = repeat_split_inner(
                                             &ReconShape::Kind("overlap_point"),
                                             &cont_of(&[
                                                 ReconShape::Kind("whitespaces"),
                                                 ReconShape::Kind("replacement"),
                                             ]),
-                                            __cur.rest(),
-                                            0,
-                                        );
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
+                                        )
+                                        .0;
                                         let mut __items = Vec::new();
                                         for _ in 0..__count {
                                             __items.push({
@@ -36233,7 +36548,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                             }
                         }
                         Some((2, _)) => {
-                            if let Some(__v) = if shape_match(
+                            if let Some(__v) = if shape_match_inner(
                                 &ReconShape::Seq(&[
                                     ReconShape::Optional(&ReconShape::Seq(&[
                                         ReconShape::Kind("whitespaces"),
@@ -36242,15 +36557,16 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     ReconShape::Optional(&ReconShape::Kind("base_annotations")),
                                 ]),
                                 &cont_of(&[]),
-                                __cur.rest(),
-                                0,
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
                             )
                             .is_some()
                             {
                                 Some({
                                     let child_0 = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let slot = if optional_split(
+                                        let slot = if optional_split_inner(
                                             &ReconShape::Seq(&[
                                                 ReconShape::Kind("whitespaces"),
                                                 ReconShape::Kind("replacement"),
@@ -36258,8 +36574,9 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                             &cont_of(&[ReconShape::Optional(&ReconShape::Kind(
                                                 "base_annotations",
                                             ))]),
-                                            __cur.rest(),
-                                            0,
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
                                         )
                                         .0
                                         {
@@ -36267,7 +36584,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                 if __c.is_error() {
                                                     __cur.advance();
                                                     NodeSlot::Error(__c)
-                                                } else if shape_match(
+                                                } else if shape_match_inner(
                                                     &ReconShape::Seq(&[
                                                         ReconShape::Kind("whitespaces"),
                                                         ReconShape::Kind("replacement"),
@@ -36275,8 +36592,9 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                     &cont_of(&[ReconShape::Optional(
                                                         &ReconShape::Kind("base_annotations"),
                                                     )]),
-                                                    __cur.rest(),
-                                                    0,
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
                                                 )
                                                 .is_some()
                                                 {
@@ -36371,11 +36689,12 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                     };
                                     let annotations = {
                                         let leading_extras = __cur.take_leading_extras();
-                                        let slot = if optional_split(
+                                        let slot = if optional_split_inner(
                                             &ReconShape::Kind("base_annotations"),
                                             &cont_of(&[]),
-                                            __cur.rest(),
-                                            0,
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
                                         )
                                         .0
                                         {
