@@ -721,13 +721,30 @@ fn desktop_bridge_renders_error_at_true_line() {
     );
 }
 
+/// Serializes tests that mutate the process-global `TALKBANK_CHAT_CACHE_DIR`.
+///
+/// Under `cargo test` (which CI runs) the whole test binary is ONE process with
+/// many threads, so that env var is shared: two cache tests setting it
+/// concurrently would race, and other tests reading it would validate into
+/// whichever directory is currently set. (Under `cargo nextest` each test is its
+/// own process and this cannot happen, which is why these tests passed locally
+/// and failed in CI.) Holding this lock keeps the variable stable for the
+/// duration of each cache test. Note it does NOT stop non-cache tests from
+/// validating INTO the active directory, so these tests deliberately do not
+/// assert "the first run is all cache misses" (that would race with a concurrent
+/// test caching the same reference files); the load-bearing contract is the
+/// SECOND-run behaviour, which holds because each test's own first run populates
+/// its freshly-created directory.
+static CACHE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// REGRESSION GUARD: the desktop's single-file validation path must hit the
 /// same on-disk validation cache the CLI and the desktop's own directory path
-/// use, not silently skip caching. Isolates the cache to a per-process temp
+/// use, not silently skip caching. Isolates the cache to a per-test temp
 /// directory via `TALKBANK_CHAT_CACHE_DIR` (see `chatter/CLAUDE.md` "Cache
-/// Policy"); safe because `cargo nextest` runs each test in its own process.
+/// Policy"), serialized against the other cache test by `CACHE_ENV_LOCK`.
 #[test]
 fn single_file_validation_hits_cache_on_second_run() {
+    let _cache_env_guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cache_dir = std::env::temp_dir().join(format!(
         "chatter-desktop-cache-test-{}-{}",
         std::process::id(),
@@ -737,8 +754,8 @@ fn single_file_validation_hits_cache_on_second_run() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&cache_dir).unwrap();
-    // SAFETY: this test process runs alone under `cargo nextest` (one process
-    // per test), so no other thread in this process reads/writes this env var.
+    // SAFETY: `CACHE_ENV_LOCK` is held, so no other cache test mutates this env
+    // var concurrently for the duration of this test.
     unsafe {
         std::env::set_var("TALKBANK_CHAT_CACHE_DIR", &cache_dir);
     }
@@ -759,11 +776,8 @@ fn single_file_validation_hits_cache_on_second_run() {
             .expect("single-file run should produce one FileComplete with a cacheHit field")
     };
 
-    let first_run = collect_events(&file);
-    assert!(
-        !cache_hit_flag(&first_run),
-        "first validation of a fresh cache must be a cache miss"
-    );
+    // Populate the cache (this test's own fresh directory).
+    let _first_run = collect_events(&file);
 
     let second_run = collect_events(&file);
     assert!(
@@ -865,6 +879,7 @@ fn single_file_gate_matches_shared_chat_transcript_predicate() {
 /// `cargo nextest` runs each test alone).
 #[test]
 fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
+    let _cache_env_guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cache_dir = std::env::temp_dir().join(format!(
         "chatter-desktop-dircache-test-{}-{}",
         std::process::id(),
@@ -874,8 +889,8 @@ fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&cache_dir).unwrap();
-    // SAFETY: one process per test under `cargo nextest`; no other thread here
-    // reads or writes this env var.
+    // SAFETY: `CACHE_ENV_LOCK` is held, so no other cache test mutates this env
+    // var concurrently for the duration of this test.
     unsafe {
         std::env::set_var("TALKBANK_CHAT_CACHE_DIR", &cache_dir);
     }
@@ -896,25 +911,14 @@ fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
             })
             .collect()
     };
-    let cache_hit_files = |events: &[FrontendEvent]| -> std::collections::BTreeSet<String> {
-        events
-            .iter()
-            .filter_map(|event| match event {
-                FrontendEvent::FileComplete { file, status } => {
-                    let json = serde_json::to_value(status).unwrap();
-                    (json["cacheHit"].as_bool() == Some(true)).then(|| file.clone())
-                }
-                _ => None,
-            })
-            .collect()
-    };
-
+    // The first run populates this test's freshly-created cache directory. We do
+    // NOT assert it is all cache misses: under `cargo test` a concurrent test can
+    // validate the same reference files into the shared global cache directory
+    // (see CACHE_ENV_LOCK). The load-bearing contract is the second run's
+    // behaviour below, which holds regardless because this run cached every
+    // clean file itself.
     let first_run = collect_events(&corpus);
     let diag_files = files_with_diagnostics(&first_run);
-    assert!(
-        cache_hit_files(&first_run).is_empty(),
-        "first validation against a fresh cache must be all misses"
-    );
 
     let second_run = collect_events(&corpus);
     let mut completed = 0usize;
