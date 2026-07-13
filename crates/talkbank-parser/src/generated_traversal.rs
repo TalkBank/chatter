@@ -1,5 +1,5 @@
 //! Generator: tree-sitter-node-types 0.1.0 (generate_typed_traversal)
-//! Source grammar digest (sha256): grammar.json=b67be5d34879e044bab1451d4e1e7566f482951736fa7fca7d16ae3075dfe91a node-types.json=579e2cd9014911f609947e80d5ccbdeed691e8405524312854137bf40b38096f
+//! Source grammar digest (sha256): grammar.json=6d54a2b831b37f9ca5ab03514da609aae18c3797095475e1ee7ef8bd2b06843c node-types.json=579e2cd9014911f609947e80d5ccbdeed691e8405524312854137bf40b38096f
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.

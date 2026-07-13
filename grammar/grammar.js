@@ -88,11 +88,14 @@ export default grammar({
   // not by the grammar. Never add anything to extras.
   extras: $ => [],
 
+  // NOTE (2026-07-13 overlap-port cleanup): the overlap grammar port left
+  // several conflict declarations that tree-sitter's generator reports as
+  // unnecessary (no actual LR/GLR conflict corresponds to them, so declaring
+  // them is a no-op). Eight such declarations were removed; the generated
+  // `src/parser.c` is byte-identical before and after, so removal changes no
+  // parse behavior. Every entry that remains is load-bearing: removing it
+  // makes `tree-sitter generate` fail with a real unresolved conflict.
   conflicts: $ => [
-    // SPIKE (ideal overlap): a content-position overlap point may be a
-    // standalone item or the leading chain of the following word; GLR +
-    // the chain's dynamic precedence decide (word follows -> chain).
-    [$.contents, $.word_with_optional_annotations],
     // SPIKE (ideal overlap): at `segment ⌉` the parser cannot know with
     // one token of lookahead whether the overlap continues the word
     // (interior pair, text follows) or ends it (top-level edge marker,
@@ -110,29 +113,11 @@ export default grammar({
     // complete the CSTs are identical (children flatten into word_body
     // either way) and the weighted run wins any fused-vs-fragmented
     // ambiguity further up.
-    [$._word_marker, $._interior_overlap],
     [$._word_marker, $._interior_overlap, $._final_overlap_cluster],
     [$._word_marker, $._final_overlap_cluster],
-    [$._word_marker, $._final_overlap_cluster, $._final_overlap_form],
-    [$._word_marker, $._interior_overlap, $._final_overlap_cluster, $._final_overlap_form],
-    // Round-8 fork: at an overlap point with word material on the
-    // stack, word_body may EXTEND (_final_* branches) or REDUCE so the
-    // wrapper's bare-edge slot takes the marker; without this
-    // declaration LR reduces silently and strands glued clusters
-    // (`⁎ja⌈:⁎` losing `:⁎` to top level).
-    [$.standalone_word],
     [$.contents],
-    [$.contents, $.word_body],  // overlap_point/ca_element/underline can be standalone content or word-internal
     [$.base_content_item, $.word_body],  // underline_begin can be standalone or word-internal
     [$.word_with_optional_annotations],
-    // Leading intonation marks: standalone separator vs the word's
-    // overlap-leading chain; GLR resolves (chain wins only when an
-    // overlap point follows, via its prec.dynamic).
-    [$.non_colon_separator],
-    // Leading underline mark: standalone content item vs the word's
-    // overlap-leading chain (GLR; chain wins only with a following
-    // overlap point, via its prec.dynamic).
-    [$.base_content_item],
     [$.nonword_with_optional_annotations],  // Annotations create ambiguity with following content
     [$.base_annotations],
     [$.final_codes],

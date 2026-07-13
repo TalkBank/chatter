@@ -6937,10 +6937,6 @@
   "extras": [],
   "conflicts": [
     [
-      "contents",
-      "word_with_optional_annotations"
-    ],
-    [
       "word_body"
     ],
     [
@@ -6950,37 +6946,15 @@
     ],
     [
       "_word_marker",
-      "_interior_overlap"
-    ],
-    [
-      "_word_marker",
       "_interior_overlap",
       "_final_overlap_cluster"
     ],
     [
       "_word_marker",
       "_final_overlap_cluster"
-    ],
-    [
-      "_word_marker",
-      "_final_overlap_cluster",
-      "_final_overlap_form"
-    ],
-    [
-      "_word_marker",
-      "_interior_overlap",
-      "_final_overlap_cluster",
-      "_final_overlap_form"
-    ],
-    [
-      "standalone_word"
     ],
     [
       "contents"
-    ],
-    [
-      "contents",
-      "word_body"
     ],
     [
       "base_content_item",
@@ -6988,12 +6962,6 @@
     ],
     [
       "word_with_optional_annotations"
-    ],
-    [
-      "non_colon_separator"
-    ],
-    [
-      "base_content_item"
     ],
     [
       "nonword_with_optional_annotations"
