@@ -9,6 +9,43 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+<!--
+Not yet on main; land before cutting v0.3.3:
+- Word-content validity: reject junk inside words (`|`, ideographic comma,
+  mojibake, ...) per the curated word-segment allowlist. Pending adjudication.
+- CHECK-parity endgame closes (48 illegal `|`, 76 single-letter `@l`) and the
+  remaining per-rule decisions.
+-->
+
+### Added
+
+- **`talkbank_transform::build_chat`: assemble a validated CHAT file from a
+  typed transcript description.** Given participants, optional media, and
+  utterances as pre-formatted CHAT main-tier text (`TranscriptDescription`),
+  it synthesizes the header block, parses each utterance through the
+  tree-sitter parser, and returns a `ChatFile`. The description carries a
+  `media_status`, so a transcript that names its media but has no timing
+  bullets yet (pre-forced-alignment) can emit `@Media: <id>, audio, unlinked`
+  and stay valid instead of falsely claiming linkage (E544).
+- **`talkbank_transform::num_words::expand_number`: spell digit tokens as
+  language-appropriate number words** (13 lookup-table languages, CJK, and
+  English ordinals/decades), so generated CHAT satisfies E220 (numeric digits
+  are not allowed in words for languages that do not permit them).
+
+### Changed
+
+- **Overlap custody now follows whitespace boundaries, with canonical overlap
+  serialization.** Overlap markers bind to the token on the correct side of a
+  whitespace boundary, and serialization emits a single canonical form.
+- **tree-sitter updated to 0.26.11** across the workspace (CLI, grammar
+  bindings, and the generated parser).
+
+### Fixed
+
+- **Long dependent-tier reconstruction is now linear-time.** A quadratic blowup
+  on very long utterance tiers is eliminated; pathological inputs that
+  previously stalled the parser now reconstruct in linear time.
+
 ## [0.3.2] - 2026-07-10
 
 ### Added
