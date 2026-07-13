@@ -205,11 +205,23 @@ pub fn validate_file(
             println!("✓ No errors found in {}", path.display());
             return FileValidationOutcome::Valid;
         }
-        eprintln!(
-            "✗ Errors found in {} ({} error(s))",
-            path.display(),
-            errors.len()
-        );
+        // Key the headline on hard-error count: a file whose only
+        // diagnostics are warnings is valid CHAT and must not be
+        // headlined as an error (presentation-only; validity is decided
+        // by the parallel pipeline that the modern CLI actually uses).
+        if crate::output::has_hard_error(&errors) {
+            eprintln!(
+                "✗ Errors found in {} ({} error(s))",
+                path.display(),
+                errors.len()
+            );
+        } else {
+            eprintln!(
+                "⚠ Warnings in {} ({} warning(s))",
+                path.display(),
+                errors.len()
+            );
+        }
         return FileValidationOutcome::Invalid;
     }
 

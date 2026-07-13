@@ -12,8 +12,17 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use talkbank_model::{ErrorSink, ParseError};
+use talkbank_model::{ErrorSink, ParseError, Severity};
 use talkbank_transform::{RenderMode, render_diagnostics};
+
+/// True when the set contains at least one hard error (`Severity::Error`).
+///
+/// A file with only warnings is valid CHAT, so the per-file headline must not
+/// call it an error; this predicate keys the "errors" vs "warnings" framing on
+/// the hard-error count rather than on "has any diagnostic".
+pub(crate) fn has_hard_error(errors: &[ParseError]) -> bool {
+    errors.iter().any(|error| error.severity == Severity::Error)
+}
 
 /// Print errors to stderr with miette formatting.
 ///
@@ -22,7 +31,12 @@ use talkbank_transform::{RenderMode, render_diagnostics};
 /// produces the same per-error text this function always emitted.
 pub fn print_errors(path: &Path, content: &str, errors: &[ParseError]) {
     if !errors.is_empty() {
-        eprintln!("✗ Errors found in {}", path.display());
+        if has_hard_error(errors) {
+            eprintln!("✗ Errors found in {}", path.display());
+        } else {
+            // Warnings do not make a file invalid: do not headline it as an error.
+            eprintln!("⚠ Warnings in {}", path.display());
+        }
         eprintln!();
     }
 
@@ -49,7 +63,16 @@ pub fn should_show_cascading_hint(errors: &[ParseError]) -> bool {
         // Structural errors: E0xx, E1xx, E2xx, E3xx, E4xx, E5xx
         // Alignment errors: E7xx
         match code_str.as_bytes() {
-            [b'E', b'0'..=b'5', ..] => has_structural = true,
+            // Only a HARD structural error taints the parse and causes
+            // alignment checks to be skipped; a warning-severity code in the
+            // structural range (e.g. E254 UndeclaredExplicitWordLanguage) does
+            // not, so it must not trigger the "fix structural errors first"
+            // hint on an otherwise-valid file.
+            [b'E', b'0'..=b'5', ..] if error.severity == Severity::Error => {
+                has_structural = true
+            }
+            // Any alignment diagnostic (error or warning) means alignment
+            // actually ran, so the "checks were skipped" hint does not apply.
             [b'E', b'7', ..] => has_alignment = true,
             _ => {}
         }
@@ -90,13 +113,23 @@ impl TerminalErrorSink {
 
     /// Prints single error.
     fn print_single_error(&self, error: ParseError) {
-        // Print header on first error
+        // Print header on first diagnostic. The streaming sink only sees one
+        // diagnostic at a time, so it keys the headline on THIS diagnostic's
+        // severity: a run whose first (and only) diagnostics are warnings is a
+        // valid file and must not be headlined as an error. (Caveat inherent to
+        // streaming: if a warning streams before a later hard error, the header
+        // reads "Warnings"; the batch `print_errors` path, which sees the whole
+        // set at once, has no such ambiguity and is the default validate route.)
         if self
             .header_printed
             .compare_exchange(0, 1, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            eprintln!("✗ Errors found in {}", self.path.display());
+            if error.severity == Severity::Error {
+                eprintln!("✗ Errors found in {}", self.path.display());
+            } else {
+                eprintln!("⚠ Warnings in {}", self.path.display());
+            }
             eprintln!();
         }
 

@@ -1,7 +1,7 @@
 # Quick Start
 
 **Status:** Current
-**Last updated:** 2026-06-15 15:00 EDT
+**Last updated:** 2026-07-13 17:59 EDT
 
 This page gets you from zero to productive with `chatter` in five minutes.
 [Install chatter first](installation.md) if you haven't already.
@@ -44,6 +44,27 @@ E305 (https://talkbank.org/errors/E305)
 
 Every error code (`E305`, `E705`, etc.) is documented with fix guidance in the
 [validation error reference](validation-errors.md).
+
+Not every diagnostic is an error. Some codes are warnings: the file is valid
+CHAT, but something is worth flagging (for example `E254`, a word-level
+`@s:` language override that is not listed in `@Languages`). A file whose only
+diagnostics are warnings is reported as valid, and its heading reflects that:
+
+```text
+⚠ Warnings in transcript.cha
+
+E254 (https://talkbank.org/errors/E254)
+
+  ⚠ warning[E254]: Explicit word language 'spa' is not listed in @Languages
+   ╭─[input:6:15]
+ 6 │ *CHI:   hello hola@s:spa .
+   ·               ─────┬────
+   ·                    ╰── here
+   ╰────
+  help: Add 'spa' to @Languages or confirm the word-level override is intentional
+```
+
+The summary still counts this file under `Valid`, and the exit code stays `0`.
 
 ## Validate an entire corpus
 
