@@ -17,9 +17,8 @@ use super::parse_main_tier;
 
 /// Parse a main-tier line and serialize it back (the canonicalizer).
 fn canon(line: &str) -> String {
-    let tier = parse_main_tier(line).unwrap_or_else(|e| {
-        panic!("canonical-spacing fixture must parse: {line:?}: {e:?}")
-    });
+    let tier = parse_main_tier(line)
+        .unwrap_or_else(|e| panic!("canonical-spacing fixture must parse: {line:?}: {e:?}"));
     let mut out = String::new();
     tier.write_chat(&mut out)
         .unwrap_or_else(|e| panic!("serialization must not fail: {e}"));
@@ -89,9 +88,8 @@ fn semantic_roundtrip_holds_across_spellings() {
         let original = parse_main_tier(line).expect("fixture parses");
         let mut serialized = String::new();
         original.write_chat(&mut serialized).expect("serializes");
-        let reparsed = parse_main_tier(&serialized).unwrap_or_else(|e| {
-            panic!("canonical text must reparse: {serialized:?}: {e:?}")
-        });
+        let reparsed = parse_main_tier(&serialized)
+            .unwrap_or_else(|e| panic!("canonical text must reparse: {serialized:?}: {e:?}"));
         assert!(
             reparsed.semantic_eq(&original),
             "semantic roundtrip failed for {line:?} via {serialized:?}"
