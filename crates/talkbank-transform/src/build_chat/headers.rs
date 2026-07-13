@@ -24,12 +24,31 @@ pub(super) fn build_header_lines(
         }),
     ];
 
+    // `@Options` sits between `@Participants` and the `@ID` block (published
+    // MICASE order). Optional: emitted only when the caller supplies flags.
+    if let Some(options) = &desc.options {
+        lines.push(Line::header(Header::Options {
+            options: options.clone(),
+        }));
+    }
+
     for id in id_headers {
         lines.push(Line::header(Header::ID(id)));
     }
 
     if let Some(media_header) = build_media_header(desc) {
         lines.push(Line::header(Header::Media(media_header)));
+    }
+
+    // Changeable headers follow `@Media`, in published MICASE order:
+    // `@Date` then `@Situation`. Each is optional.
+    if let Some(date) = &desc.date {
+        lines.push(Line::header(Header::Date { date: date.clone() }));
+    }
+    if let Some(situation) = &desc.situation {
+        lines.push(Line::header(Header::Situation {
+            text: situation.clone(),
+        }));
     }
 
     lines

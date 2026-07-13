@@ -13,7 +13,8 @@
 //! schema on top downstream.
 
 use talkbank_model::model::{
-    AgeValue, CustomIdField, EducationDescription, GroupName, MediaStatus, SesValue, Sex,
+    AgeValue, ChatDate, ChatOptionFlags, CustomIdField, EducationDescription, GroupName,
+    MediaStatus, SesValue, Sex, SituationDescription,
 };
 
 /// Description of a transcript to assemble into CHAT.
@@ -36,6 +37,12 @@ pub struct TranscriptDescription {
     /// validation (E544, MediaLinkageWithoutTiming) when no bullets are
     /// present. Forced alignment removes the status once it adds bullets.
     pub media_status: Option<MediaStatus>,
+    /// Optional `@Date` (recording/transcript date). `None` omits the header.
+    pub date: Option<ChatDate>,
+    /// Optional `@Situation` (setting description). `None` omits the header.
+    pub situation: Option<SituationDescription>,
+    /// Optional `@Options` (CHAT processing flags, e.g. `CA`). `None` omits it.
+    pub options: Option<ChatOptionFlags>,
     /// Utterances in document order.
     pub utterances: Vec<UtteranceDesc>,
 }

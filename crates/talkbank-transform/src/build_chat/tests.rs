@@ -9,6 +9,9 @@ fn desc_with(status: Option<MediaStatus>) -> TranscriptDescription {
         media_name: Some("rec.mp3".to_string()),
         media_type: Some("audio".to_string()),
         media_status: status,
+        date: None,
+        situation: None,
+        options: None,
         utterances: vec![UtteranceDesc {
             speaker: "CHI".to_string(),
             text: "hello world .".to_string(),
@@ -98,6 +101,35 @@ fn participant_demographics_reach_the_id_header() {
     assert_eq!(id.sex, Some(Sex::Female));
     assert_eq!(id.group, Some(GroupName::new("NRN")));
     assert_eq!(id.education, Some(EducationDescription::new("ST")));
+}
+
+/// Regression: `@Date` / `@Situation` / `@Options` set on the description must
+/// reach the emitted header block (they had no home before, so every generator
+/// dropped them). Also pins the published-MICASE ordering: `@Options` before
+/// the `@ID` block, `@Date`/`@Situation` after `@Media`.
+#[test]
+fn transcript_headers_date_situation_options_are_emitted_in_order() {
+    use talkbank_model::WriteChat;
+    use talkbank_model::model::{ChatDate, ChatOptionFlag, ChatOptionFlags, SituationDescription};
+
+    let mut desc = desc_with(Some(MediaStatus::Unlinked));
+    desc.date = Some(ChatDate::new("07-JUL-1998"));
+    desc.situation = Some(SituationDescription::new("Honors Advising Office"));
+    desc.options = Some(ChatOptionFlags(vec![ChatOptionFlag::Ca]));
+
+    let chat = build_chat(&desc).expect("build_chat");
+    let text = chat.to_chat_string();
+    assert!(text.contains("@Options:\tCA"), "expected @Options: CA");
+    assert!(text.contains("@Date:\t07-JUL-1998"), "expected @Date");
+    assert!(
+        text.contains("@Situation:\tHonors Advising Office"),
+        "expected @Situation"
+    );
+    // Ordering: @Options before @ID; @Date/@Situation after @Media.
+    let pos = |needle: &str| text.find(needle).expect(needle);
+    assert!(pos("@Options:") < pos("@ID:"), "@Options must precede @ID");
+    assert!(pos("@Media:") < pos("@Date:"), "@Date must follow @Media");
+    assert!(pos("@Date:") < pos("@Situation:"), "@Date before @Situation");
 }
 
 #[test]
