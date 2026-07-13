@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-13 16:42 EDT
+**Last modified:** 2026-07-13 17:08 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -265,17 +265,20 @@ catches the one thing a metadata bump can break (version-requirement
 resolution, as the 0.3.0 caret-pin incident proved); then push + tag.
 Clippy is CI's job on push (see the clippy policy section).
 
-**The gate's test step MUST run CI's exact command, `cargo test --workspace
---locked` (the `just test` recipe), NEVER `cargo nextest` (2026-07-13
-incident).** `cargo nextest` runs each test in its OWN PROCESS; `cargo test`
-(what CI runs) runs the whole binary as ONE process with many threads. So any
-test that touches process-global state (an env var like
-`TALKBANK_CHAT_CACHE_DIR`, a `static`, the working directory) can pass under
-nextest's isolation and FAIL under CI's `cargo test`, exactly what shipped a red
-v0.3.3 release commit: a cache test's `set_var(TALKBANK_CHAT_CACHE_DIR)` raced
-another test under `cargo test`. nextest is for the fast inner dev loop only; the
-release/pre-push gate reproduces CI, and CI runs `cargo test`. Corollary: never
-"prove a release green" with a runner CI does not use.
+**Tests run under `cargo nextest run --workspace --locked` in BOTH CI and the
+local gate, plus a separate `cargo test --doc --workspace --locked` (nextest
+does not run doctests). NEVER `cargo test` for the main suite (2026-07-13
+incident).** nextest isolates each test in its OWN PROCESS; `cargo test` runs
+the whole binary as ONE process with many threads, and then the cache tests
+race the shared SQLite validation-cache migration (`UNIQUE constraint failed:
+_sqlx_migrations.version`), which breaks cache init and flakes cache-hit
+assertions. That flake shipped a red v0.3.3 release commit. CI (`ci.yml`,
+`cross-platform.yml`) was switched from `cargo test` to nextest so it matches
+the runner the tests are designed for, and the gate uses the SAME runner, so
+"green locally" means "green in CI". Corollary: gate and CI must always use the
+same test runner. (Root-cause note: the SQLite cache migration itself is not
+concurrency-safe, a real parallel-`chatter` bug tracked separately; nextest
+only sidesteps it for the test suite.)
 
 Releases are produced by **cargo-dist**. Pushing a `vX.Y.Z` git tag that matches the
 workspace version triggers `.github/workflows/release.yml`, which builds the signed

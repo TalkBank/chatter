@@ -75,5 +75,16 @@ jobs:
       - name: cargo build
         run: cargo build --workspace --all-targets --locked
 
-      - name: cargo test --workspace
-        run: cargo test --workspace --locked
+      # nextest isolates each test in its own process (the cache tests require
+      # it: under `cargo test` concurrent tests race the shared SQLite
+      # validation-cache migration). Doctests run separately, nextest skips them.
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: cargo nextest run --workspace
+        run: cargo nextest run --workspace --locked
+
+      - name: cargo test --doc --workspace
+        run: cargo test --doc --workspace --locked

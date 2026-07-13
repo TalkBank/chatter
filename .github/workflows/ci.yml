@@ -77,8 +77,21 @@ jobs:
       - name: cargo build
         run: cargo build --workspace --all-targets --locked
 
-      - name: cargo test --workspace
-        run: cargo test --workspace --locked
+      # Run tests under nextest (the project's runner): it isolates each test in
+      # its OWN process, which the cache tests require. Under `cargo test` the
+      # whole binary is one process and concurrent tests race the shared SQLite
+      # validation-cache migration (2026-07-13 flake). Doctests run separately
+      # because nextest does not execute them.
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: cargo nextest run --workspace
+        run: cargo nextest run --workspace --locked
+
+      - name: cargo test --doc --workspace
+        run: cargo test --doc --workspace --locked
 
       # Single-pass clippy (unified 2026-07-08). Production strictness
       # lives in the workspace [lints] deny table; test relaxation
