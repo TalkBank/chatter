@@ -17,6 +17,15 @@ Deferred to a later release:
   remaining per-rule decisions.
 -->
 
+### Fixed
+
+- **The validation cache no longer fails to initialize when opened
+  concurrently.** Two `chatter` runs sharing a cache directory (or a
+  multi-threaded consumer) could race the one-time SQLite setup and hit
+  `UNIQUE constraint failed: _sqlx_migrations.version` or a WAL init
+  collision, silently disabling caching for that run. Concurrent opens on a
+  fresh cache directory now retry the transient init race and all succeed.
+
 ## [0.3.3] - 2026-07-13
 
 ### Added

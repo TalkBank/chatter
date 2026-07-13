@@ -157,8 +157,43 @@ impl CachePool {
         })
     }
 
-    /// Open a file-backed pool with WAL mode and performance PRAGMAs.
+    /// Open a file-backed pool with WAL mode + PRAGMAs, serializing the one-time
+    /// init (create + WAL setup + migrate) against concurrent openers.
+    ///
+    /// Openers racing a FRESH database collide two ways: first-connection WAL
+    /// setup (surfacing as `InitDatabase`), and the migration (both apply
+    /// version 1 -> `UNIQUE constraint failed: _sqlx_migrations.version`). WAL +
+    /// `busy_timeout` serialize steady-state reads/writes but NOT this one-time
+    /// init, so a fresh cache dir opened by two parallel `chatter` runs, or by
+    /// many test threads, could break cache init. We serialize by bounded RETRY:
+    /// once the winner has created + migrated the db, a re-attempt connects to a
+    /// ready db and the migration no-ops. A genuine failure surfaces after the
+    /// attempts. The in-memory pool is per-connection and never shared, so it is
+    /// not affected.
     async fn open_file_pool(db_path: &Path) -> Result<SqlitePool, CacheError> {
+        // Bounded so a persistent (non-race) failure still terminates; the total
+        // backoff budget comfortably covers a winner creating + migrating the db.
+        const MAX_ATTEMPTS: u32 = 16;
+        const BACKOFF: std::time::Duration = std::time::Duration::from_millis(15);
+
+        let mut attempt: u32 = 0;
+        loop {
+            match Self::try_open_file_pool(db_path).await {
+                Ok(pool) => return Ok(pool),
+                Err(error) => {
+                    attempt += 1;
+                    if attempt >= MAX_ATTEMPTS || !Self::is_concurrent_init_race(&error) {
+                        return Err(error);
+                    }
+                    // Let the winning opener finish init before re-attempting.
+                    tokio::time::sleep(BACKOFF).await;
+                }
+            }
+        }
+    }
+
+    /// One attempt to connect a file-backed pool and apply migrations.
+    async fn try_open_file_pool(db_path: &Path) -> Result<SqlitePool, CacheError> {
         let options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true)
@@ -180,6 +215,23 @@ impl CachePool {
             .map_err(CacheError::Migration)?;
 
         Ok(pool)
+    }
+
+    /// True for the transient errors a concurrent FRESH-db open can raise: the
+    /// first-connection WAL/init collision (`InitDatabase`) and the migration
+    /// version race (`_sqlx_migrations` UNIQUE / "already exists"). A persistent
+    /// (non-race) failure returns false so it surfaces immediately.
+    fn is_concurrent_init_race(error: &CacheError) -> bool {
+        match error {
+            CacheError::InitDatabase { .. } => true,
+            CacheError::Migration(migrate_error) => {
+                let message = migrate_error.to_string();
+                message.contains("_sqlx_migrations")
+                    || message.contains("UNIQUE constraint failed")
+                    || message.contains("already exists")
+            }
+            _ => false,
+        }
     }
 
     /// Clean up expired cache entries (older than 30 days).
