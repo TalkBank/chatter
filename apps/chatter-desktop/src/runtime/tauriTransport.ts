@@ -1,7 +1,8 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
+import { ask, message, open, save } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import {
@@ -15,6 +16,12 @@ import type {
   AvailableUpdate,
   DesktopTransport,
 } from "./capabilities/contracts";
+
+/** Webview event the Rust menu emits when "Check for Updates..." is clicked. */
+const MENU_CHECK_FOR_UPDATES_EVENT = "menu://check-for-updates";
+
+/** Webview event the Rust menu emits when "About Chatter" is clicked. */
+const MENU_ABOUT_EVENT = "menu://about";
 
 function isNativeDesktop(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -118,5 +125,43 @@ export const tauriTransport: DesktopTransport = {
       `Chatter ${version} is available (you have ${currentVersion}). Update now?${detail}`,
       { title: "Update Chatter", kind: "info" },
     );
+  },
+
+  async showMessage(title, body) {
+    await message(body, { title, kind: "info" });
+  },
+
+  async onMenuCheckForUpdates(listener) {
+    // The native menu only exists in the desktop shell; the web/dev shell has
+    // no such event, so subscribing is a no-op there.
+    if (!isNativeDesktop()) {
+      return () => {};
+    }
+    const unlisten = await listen(MENU_CHECK_FOR_UPDATES_EVENT, () => {
+      listener();
+    });
+    return () => {
+      void unlisten();
+    };
+  },
+
+  async onMenuAbout(listener) {
+    if (!isNativeDesktop()) {
+      return () => {};
+    }
+    const unlisten = await listen(MENU_ABOUT_EVENT, () => {
+      listener();
+    });
+    return () => {
+      void unlisten();
+    };
+  },
+
+  async openExternalUrl(url) {
+    await invoke("open_external", { url });
+  },
+
+  async getAppVersion() {
+    return getVersion();
   },
 };

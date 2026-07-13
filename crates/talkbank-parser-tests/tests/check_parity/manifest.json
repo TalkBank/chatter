@@ -96,9 +96,9 @@
    "check_code": 11,
    "check_message": "Symbol is not declared in the depfile.",
    "fixture": "CHECK_011_undeclared_symbol_pct_fac.cha",
-   "status": "gap",
+   "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "A word on a dependent tier that starts with a non-alphanumeric, non-$ character and matches no depfile template pattern; %fac is declared only '*' so '=abc' falls through check_matchplate to return(11) (check.cpp:1549). chatter accepts '%fac:\\t=abc' (exit 0). chatter has no depfile-driven per-tier symbol vocabulary; any dependent-tier symbol check would need the depfile template model."
+   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
   },
   {
    "check_code": 12,
@@ -184,9 +184,9 @@
    "check_code": 20,
    "check_message": "Undeclared suffix in depfile.",
    "fixture": "CHECK_020_undeclared_suffix_compound.cha",
-   "status": "gap",
+   "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "In a compound word (contains '+'), a '-' suffix segment that matches no '+'-prefixed depfile fix pattern; 'a+b-' has dangling suffix '-' which matches neither '+-_*' nor any other pattern (check.cpp:2560 in check_CheckFixes). In NON-compound words the depfile wildcard '*-_*' plus '*-' match every suffix ('go-qq', 'go-' pass CLEAN), so code 20 is only reachable via the compound path with a dangling '-'. chatter accepts 'a+b- .' (exit 0)."
+   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
   },
   {
    "check_code": 21,
@@ -273,9 +273,9 @@
    "check_code": 32,
    "check_message": "Code is not declared in depfile.",
    "fixture": "CHECK_032_undeclared_dollar_code.cha",
-   "status": "gap",
+   "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "A word starting with '$' on a tier whose depfile template has no matching $ pattern; %fac is declared only '*' (check.cpp:1547 return from check_matchplate). chatter accepts '%fac:\\t$abc' (exit 0). Tiers declared with '$*' (%spa, %cod, ...) accept any $code, so the fixture must use a tier without '$*' in its template."
+   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
   },
   {
    "check_code": 34,
@@ -311,9 +311,9 @@
    "check_code": 37,
    "check_message": "Undeclared prefix.",
    "fixture": "CHECK_037_undeclared_prefix.cha",
-   "status": "gap",
+   "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "In a compound word, a '#'-terminated prefix segment that matches no '+'-prefixed depfile pattern; 'a+un#go' fails all (check.cpp:2556). '#' is a prefix marker char because depfile main-tier pattern '*_*#' ends in '#'. In NON-compound words '_*#' matches every prefix ('qq#go' yields only (48)), so 37 needs the compound path. CLAN also emits (48) on the fixture. chatter accepts 'a+un#go .' (exit 0)."
+   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
   },
   {
    "check_code": 38,
@@ -600,9 +600,9 @@
    "check_code": 71,
    "check_message": "Item '[/]' must be before pause (#).",
    "fixture": "CHECK_071_retrace_after_pause.cha",
-   "status": "gap",
+   "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "A bracketed code '[...]' (not '[+' or '[^') immediately following a pause word '#' on a speaker/%wor tier (check.cpp 4735). Fixture 'he # [/] he .'; CLAN also emits (11) for the bare '#' symbol. chatter accepts the file entirely (exit 0), so the retrace-after-pause ordering rule is a gap."
+   "note": "Documented divergence (Franklin, 2026-07-12): the ordering rule keys on the # pause marker, which is legacy CLAN and not a live construct in chatter (chatter uses (.)/(..)/(...)); the rule references a construct chatter does not have. chatter deliberately accepts."
   },
   {
    "check_code": 72,

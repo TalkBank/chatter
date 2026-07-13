@@ -328,3 +328,51 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Strin
 
     std::fs::write(&request.path, output).map_err(|e| e.to_string())
 }
+
+/// Open an external `http(s)` URL in the user's default browser.
+///
+/// Backs the About dialog's links (talkbank.org, the GitHub repo). Only
+/// `http`/`https` URLs are accepted, so a compromised webview cannot use this
+/// to launch arbitrary local programs. The app carries no `shell`/`opener`
+/// plugin, so this shells out to the platform opener directly.
+#[tauri::command]
+pub fn open_external(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(format!("refusing to open non-http(s) URL: {url}"));
+    }
+    // Defense in depth: a well-formed URL percent-encodes whitespace and control
+    // characters, so their raw presence marks a hostile string. Rejecting them
+    // keeps such a string from ever reaching a platform opener.
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(format!(
+            "refusing to open URL containing whitespace or control characters: {url}"
+        ));
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "macos")]
+    command.arg(&url);
+
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "linux")]
+    command.arg(&url);
+
+    // Use `explorer.exe`, which receives the URL as a single argv entry and
+    // opens it in the default browser WITHOUT a shell. Never `cmd /C start`:
+    // that hands the URL to the cmd.exe parser, a command-injection vector.
+    #[cfg(target_os = "windows")]
+    let mut command = std::process::Command::new("explorer");
+    #[cfg(target_os = "windows")]
+    command.arg(&url);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    return Err("opening external URLs is unsupported on this platform".to_string());
+
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+    {
+        command.spawn().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}

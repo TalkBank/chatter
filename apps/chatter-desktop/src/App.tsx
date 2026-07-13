@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import AboutModal from "./components/AboutModal";
 import DropZone from "./components/DropZone";
 import ErrorPanel from "./components/ErrorPanel";
 import FileTree from "./components/FileTree";
@@ -10,6 +11,7 @@ import { useValidation } from "./hooks/useValidation";
 import { DEFAULT_VALIDATION_SETTINGS, type ValidationSettings } from "./protocol/desktopProtocol";
 import type { ParseError } from "./protocol/validation";
 import {
+  useAboutCapability,
   useClanCapability,
   useExportCapability,
   useUpdatesCapability,
@@ -20,8 +22,10 @@ export default function App() {
   const clan = useClanCapability();
   const exportCapability = useExportCapability();
   const updates = useUpdatesCapability();
+  const about = useAboutCapability();
   const { state, startValidation, cancelValidation, reset } = useValidation();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [clanAvailable, setClanAvailable] = useState(false);
   const [lastTarget, setLastTarget] = useState<string | null>(
     () => localStorage.getItem("chatter-last-target"),
@@ -35,12 +39,67 @@ export default function App() {
     clan.checkClanAvailable().then(setClanAvailable).catch(() => {});
   }, [clan]);
 
-  // Check for a newer release once on launch. The capability prompts the user
-  // and installs on acceptance; it never throws, so a failed or offline check
-  // silently leaves the app running on the current version.
+  // Update checks: on launch, periodically in the background, and on demand
+  // from the "Check for Updates..." app-menu item. The launch-only check
+  // missed long-running or rarely-relaunched installs (a host sat weeks
+  // behind), so a 6-hour background check plus a manual trigger close that
+  // gap. Every path is best-effort and never throws.
   useEffect(() => {
     void updates.checkOnLaunch();
+
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+    const interval = setInterval(() => {
+      void updates.checkOnLaunch();
+    }, SIX_HOURS_MS);
+
+    // Guard the async listener registration against cleanup running before the
+    // subscribe promise resolves (React StrictMode double-mounts in dev, or any
+    // effect re-run). Without the flag, `unsubscribe` is still undefined at
+    // cleanup, the pending listener is never removed, and multiple live
+    // listeners stack, so one menu click fires `checkNow` (and its dialog)
+    // several times.
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void updates
+      .onCheckRequested(() => {
+        void updates.checkNow();
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unsubscribe = fn;
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      unsubscribe?.();
+    };
   }, [updates]);
+
+  // Open the About modal when the "About Chatter" menu item fires. Same
+  // cancelled-flag-safe async subscription as the update listener above.
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void about
+      .onAboutRequested(() => {
+        setAboutOpen(true);
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unsubscribe = fn;
+        }
+      });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [about]);
 
   // Track validation start time for ETA
   useEffect(() => {
@@ -205,6 +264,7 @@ export default function App() {
   return (
     <div className="app">
       <OnboardingOverlay />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <div className="drop-zone-area">
         <span className="app-wordmark">
           Chatter

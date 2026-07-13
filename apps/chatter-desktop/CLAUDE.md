@@ -1,7 +1,7 @@
 # CLAUDE.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-07-06 17:27 EDT
+**Last updated:** 2026-07-13 15:47 EDT
 
 ## Overview
 
@@ -189,12 +189,57 @@ playbook in `../../docs/strategy/distribution-and-signing.md`.
 
 ## Auto-update
 
-The app auto-updates via `tauri-plugin-updater`. On launch it checks the
-GitHub Releases `latest.json` (`plugins.updater.endpoints` in
-`tauri.conf.json`), and on finding a newer version prompts the user and, on
-acceptance, downloads, installs, and relaunches. The flow is a best-effort
-launch-time check that never throws, so an offline or failed check leaves the
-app running on the current version.
+The app auto-updates via `tauri-plugin-updater`. It checks the GitHub Releases
+`latest.json` (`plugins.updater.endpoints` in `tauri.conf.json`) at three
+points, and on finding a newer version prompts the user and, on acceptance,
+downloads, installs, and relaunches. Every path is best-effort and never
+throws, so an offline or failed check leaves the app running on the current
+version.
+
+Three trigger points (all in `App.tsx`'s update effect, driving the `updates`
+capability):
+
+1. **On launch** (`checkOnLaunch`), once on mount.
+2. **Periodically in the background** every 6 hours (`SIX_HOURS_MS`), silent,
+   reusing `checkOnLaunch`. This closes the gap where a launch-only check let a
+   rarely-relaunched or long-running install fall weeks behind (a real fleet
+   incident: a host sat on an old version because its user never relaunched).
+3. **On demand** from the native app menu item **"Check for Updates..."**
+   (`checkNow`). Unlike the launch flow, a manual check gives visible feedback:
+   if the app is already current it shows an "up to date" dialog, and a failed
+   check shows a failure dialog (via the transport's `showMessage`).
+
+The menu wiring: the Rust menu (`src-tauri/src/lib.rs`, `build_app_menu`)
+defines the "Check for Updates..." item with id `check-for-updates`; its
+`on_menu_event` handler emits the webview event `menu://check-for-updates`. The
+frontend subscribes through the runtime seam (`updates.onCheckRequested` ->
+`transport.onMenuCheckForUpdates`, so `@tauri-apps/*` stays inside
+`tauriTransport.ts`) and runs `checkNow`.
+
+The async menu subscriptions (`onCheckRequested`, `onAboutRequested`) register
+with a cancelled-flag guard in `App.tsx`: if the effect cleanup runs before the
+`listen` promise resolves (React StrictMode double-mount in `cargo tauri dev`,
+or any effect re-run), the resolved unsubscribe is invoked immediately instead
+of leaking. Without it, listeners stack and a single menu click fires several
+times (the dialog would appear multiple times and only dismiss one per OK).
+
+## About modal
+
+"About Chatter" is a custom React modal (`src/components/AboutModal.tsx`), not
+the native macOS about panel, because the native panel cannot show clickable
+links. `build_app_menu` (`src-tauri/src/lib.rs`) defines a custom `about` menu
+item whose `on_menu_event` emits `menu://about`; the frontend subscribes via the
+`about` capability (`src/runtime/capabilities/about.ts` ->
+`transport.onMenuAbout`, seam-respecting) and opens the modal. The modal shows
+the app name, version (from `@tauri-apps/api/app`'s `getVersion`, via
+`transport.getAppVersion`), a short description, a credit line, and links to
+talkbank.org and the GitHub repo. Links open in the OS browser through
+`about.openExternal` -> `transport.openExternalUrl` -> the `open_external`
+Tauri command (`commands.rs`), which shells out to the platform opener and
+rejects any non-`http(s)` URL. It does NOT use a bare `<a href>` (that would
+navigate the app webview away from itself), and the app carries no
+`shell`/`opener` plugin, hence the small dedicated command. Dismissable via the
+Close button, the backdrop, or Escape.
 
 Wiring (do not bypass the runtime seam):
 

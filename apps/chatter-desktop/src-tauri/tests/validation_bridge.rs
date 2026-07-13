@@ -850,6 +850,97 @@ fn single_file_gate_matches_shared_chat_transcript_predicate() {
     );
 }
 
+/// CLAIM CHECK: a user reported the app "ran slowly and did not use the
+/// cache" while validating a folder of many files. The single-file cache path is
+/// already guarded (`single_file_validation_hits_cache_on_second_run`); this
+/// pins the DIRECTORY path that report exercised and documents the exact
+/// cache contract that explains the experience: on re-validation of an unchanged
+/// folder, every file that produced NO diagnostics is served from the cache,
+/// while every file that produced ANY diagnostic (a warning is enough) is
+/// deliberately re-validated so its warnings re-display (see
+/// `validation_runner/worker.rs`: `CacheOutcome::Valid` is written only when
+/// `errors.is_empty()`). On warning-heavy real corpora this means most files
+/// re-validate every run, which is the true root of "it does not use the cache."
+/// Cache isolated per-process via `TALKBANK_CHAT_CACHE_DIR` (safe because
+/// `cargo nextest` runs each test alone).
+#[test]
+fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
+    let cache_dir = std::env::temp_dir().join(format!(
+        "chatter-desktop-dircache-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    // SAFETY: one process per test under `cargo nextest`; no other thread here
+    // reads or writes this env var.
+    unsafe {
+        std::env::set_var("TALKBANK_CHAT_CACHE_DIR", &cache_dir);
+    }
+
+    let corpus = reference_corpus();
+    if !corpus.exists() {
+        println!("Skipping: reference corpus not present");
+        return;
+    }
+
+    // Files that emitted at least one diagnostic (warning or error) on a run.
+    let files_with_diagnostics = |events: &[FrontendEvent]| -> std::collections::BTreeSet<String> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                FrontendEvent::Errors { file, .. } => Some(file.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let cache_hit_files = |events: &[FrontendEvent]| -> std::collections::BTreeSet<String> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                FrontendEvent::FileComplete { file, status } => {
+                    let json = serde_json::to_value(status).unwrap();
+                    (json["cacheHit"].as_bool() == Some(true)).then(|| file.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    };
+
+    let first_run = collect_events(&corpus);
+    let diag_files = files_with_diagnostics(&first_run);
+    assert!(
+        cache_hit_files(&first_run).is_empty(),
+        "first validation against a fresh cache must be all misses"
+    );
+
+    let second_run = collect_events(&corpus);
+    let mut completed = 0usize;
+    for event in &second_run {
+        if let FrontendEvent::FileComplete { file, status } = event {
+            completed += 1;
+            let hit = serde_json::to_value(status).unwrap()["cacheHit"].as_bool() == Some(true);
+            if diag_files.contains(file) {
+                assert!(
+                    !hit,
+                    "a file with diagnostics must re-validate (not be served from cache) \
+                     so its warnings re-display: {file}"
+                );
+            } else {
+                assert!(
+                    hit,
+                    "a clean (zero-diagnostic) file must be served from cache on re-run: {file}"
+                );
+            }
+        }
+    }
+    assert!(completed > 0, "directory run should complete some files");
+
+    std::fs::remove_dir_all(&cache_dir).ok();
+}
+
 /// Open-in-CLAN parity (FFI-free portion): the desktop must resolve an error to
 /// the SAME CLAN-adjusted coordinates and highlight message the CLI/TUI uses.
 /// The actual Apple-Event send (`send2clan::send_to_clan`) cannot run in CI, so

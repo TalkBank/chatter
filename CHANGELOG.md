@@ -10,15 +10,25 @@ version and are listed under "Changed" / "Removed".
 ## [Unreleased]
 
 <!--
-Not yet on main; land before cutting v0.3.3:
+Deferred to a later release:
 - Word-content validity: reject junk inside words (`|`, ideographic comma,
   mojibake, ...) per the curated word-segment allowlist. Pending adjudication.
 - CHECK-parity endgame closes (48 illegal `|`, 76 single-letter `@l`) and the
   remaining per-rule decisions.
 -->
 
+## [0.3.3] - 2026-07-13
+
 ### Added
 
+- **Desktop app: a "Check for Updates..." menu item and a periodic background
+  update check.** The app previously checked for a new release only at launch,
+  so an app that was rarely relaunched could sit far behind. It now also checks
+  every six hours in the background, and the app menu has a manual "Check for
+  Updates..." item that reports when you are already up to date.
+- **Desktop app: a real "About Chatter" panel** with the version, a short
+  description, and clickable links to the TalkBank site and the source
+  repository, replacing the bare version-only default.
 - **`talkbank_transform::build_chat`: assemble a validated CHAT file from a
   typed transcript description.** Given participants, optional media, and
   utterances as pre-formatted CHAT main-tier text (`TranscriptDescription`),
@@ -45,6 +55,13 @@ Not yet on main; land before cutting v0.3.3:
 - **Long dependent-tier reconstruction is now linear-time.** A quadratic blowup
   on very long utterance tiers is eliminated; pathological inputs that
   previously stalled the parser now reconstruct in linear time.
+- **Desktop app: the validation settings popover no longer opens hidden behind
+  the results panel.** It was rendered below the panels in the stacking order;
+  it now sits above them.
+- **Desktop app: the "up to date" dialog now dismisses on the first OK.** A
+  listener leak (an async menu subscription whose cleanup could run before it
+  resolved) let duplicate listeners accumulate, so one menu click stacked
+  several identical dialogs.
 
 ## [0.3.2] - 2026-07-10
 

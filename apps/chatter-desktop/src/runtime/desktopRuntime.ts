@@ -1,6 +1,8 @@
 import type { ExportFormat } from "../protocol/desktopProtocol";
+import { createAboutCapability } from "./capabilities/about";
 import { createClanCapability } from "./capabilities/clan";
 import type {
+  AboutCapability,
   ClanCapability,
   DesktopEnvironmentCapability,
   DesktopRuntime,
@@ -31,12 +33,14 @@ export function createDesktopRuntime(
     clan: createClanCapability(transport),
     exports: createExportCapability(transport),
     updates: createUpdatesCapability(transport),
+    about: createAboutCapability(transport),
   };
 }
 
 export const desktopRuntime = createDesktopRuntime();
 
 export type {
+  AboutCapability,
   ClanCapability,
   DesktopEnvironmentCapability,
   DesktopRuntime,

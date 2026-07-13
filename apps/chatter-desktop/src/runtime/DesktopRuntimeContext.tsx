@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import {
   desktopRuntime,
+  type AboutCapability,
   type ClanCapability,
   type DesktopEnvironmentCapability,
   type DesktopRuntime,
@@ -54,4 +55,8 @@ export function useExportCapability(): ExportCapability {
 
 export function useUpdatesCapability(): UpdatesCapability {
   return useDesktopRuntimeContext().updates;
+}
+
+export function useAboutCapability(): AboutCapability {
+  return useDesktopRuntimeContext().about;
 }
