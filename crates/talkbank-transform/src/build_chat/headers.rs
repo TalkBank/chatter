@@ -61,12 +61,34 @@ fn build_id_headers(desc: &TranscriptDescription, langs: &[LanguageCode]) -> Vec
             } else {
                 participant.corpus.as_str()
             };
-            IDHeader::new(
+            let mut header = IDHeader::new(
                 lang_code.clone(),
                 participant.id.as_str(),
                 participant.role.as_str(),
             )
-            .with_corpus(corpus)
+            .with_corpus(corpus);
+            // Wire every demographic the caller supplied. A `None` field stays
+            // an empty `@ID` slot; the previous version wired none of these, so
+            // parsed demographics were silently dropped from every `@ID`.
+            if let Some(age) = &participant.age {
+                header = header.with_age(age.clone());
+            }
+            if let Some(sex) = &participant.sex {
+                header = header.with_sex(sex.clone());
+            }
+            if let Some(group) = &participant.group {
+                header = header.with_group(group.clone());
+            }
+            if let Some(ses) = &participant.ses {
+                header = header.with_ses(ses.clone());
+            }
+            if let Some(education) = &participant.education {
+                header = header.with_education(education.clone());
+            }
+            if let Some(custom) = &participant.custom {
+                header = header.with_custom_field(custom.clone());
+            }
+            header
         })
         .collect()
 }

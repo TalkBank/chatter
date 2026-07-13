@@ -5,12 +5,7 @@ use super::{BuildChatError, ParticipantDesc, TranscriptDescription, UtteranceDes
 fn desc_with(status: Option<MediaStatus>) -> TranscriptDescription {
     TranscriptDescription {
         langs: vec!["eng".to_string()],
-        participants: vec![ParticipantDesc {
-            id: "CHI".to_string(),
-            name: None,
-            role: "Target_Child".to_string(),
-            corpus: "test".to_string(),
-        }],
+        participants: vec![ParticipantDesc::new("CHI", "Target_Child", "test")],
         media_name: Some("rec.mp3".to_string()),
         media_type: Some("audio".to_string()),
         media_status: status,
@@ -60,6 +55,49 @@ fn empty_participants_is_an_error() {
         build_chat(&desc),
         Err(BuildChatError::NoParticipants)
     ));
+}
+
+/// Regression: demographics set on a `ParticipantDesc` must reach the emitted
+/// `@ID` header. Before this fix the input schema had nowhere to carry age /
+/// sex / group / education, so every generator's `@ID` came out demographics-
+/// empty (the MICASE converter dropped 1704/1759 populated records this way).
+#[test]
+fn participant_demographics_reach_the_id_header() {
+    use talkbank_model::model::{AgeValue, EducationDescription, GroupName, Header, Sex};
+
+    let mut desc = desc_with(Some(MediaStatus::Unlinked));
+    desc.participants = vec![
+        ParticipantDesc::new("S1", "Teacher", "MICASE")
+            .with_age(AgeValue::from_text("60;"))
+            .with_sex(Sex::Female)
+            .with_group(GroupName::new("NRN"))
+            .with_education(EducationDescription::new("ST")),
+    ];
+    desc.utterances = vec![UtteranceDesc {
+        speaker: "S1".to_string(),
+        text: "hello world .".to_string(),
+        start_ms: None,
+        end_ms: None,
+        lang: None,
+    }];
+
+    let chat = build_chat(&desc).expect("build_chat");
+    let id = chat
+        .lines
+        .iter()
+        .find_map(|line| match line {
+            Line::Header { header, .. } => match header.as_ref() {
+                Header::ID(id) => Some(id),
+                _ => None,
+            },
+            _ => None,
+        })
+        .expect("built CHAT should carry an @ID header");
+
+    assert_eq!(id.age, Some(AgeValue::from_text("60;")));
+    assert_eq!(id.sex, Some(Sex::Female));
+    assert_eq!(id.group, Some(GroupName::new("NRN")));
+    assert_eq!(id.education, Some(EducationDescription::new("ST")));
 }
 
 #[test]

@@ -12,7 +12,9 @@
 //! deliberately NOT part of this general builder; it layers its own richer
 //! schema on top downstream.
 
-use talkbank_model::model::MediaStatus;
+use talkbank_model::model::{
+    AgeValue, CustomIdField, EducationDescription, GroupName, MediaStatus, SesValue, Sex,
+};
 
 /// Description of a transcript to assemble into CHAT.
 #[derive(Debug, Clone)]
@@ -39,6 +41,14 @@ pub struct TranscriptDescription {
 }
 
 /// A participant in the transcript.
+///
+/// `id`, `role`, and `corpus` map to the first, eighth, and second `@ID`
+/// fields; the optional demographic fields carry the remaining `@ID` slots
+/// (`language|corpus|code|age|sex|group|SES|role|education|custom`). They are
+/// modeled with the same typed values as [`talkbank_model::model::IDHeader`]
+/// (`AgeValue`, `Sex`, ...) rather than raw strings, so a generator cannot
+/// silently emit a malformed demographic field or, as a prior bug did, drop
+/// demographics entirely because the input schema had nowhere to put them.
 #[derive(Debug, Clone)]
 pub struct ParticipantDesc {
     /// Speaker code (e.g. `"CHI"`, `"INV"`).
@@ -50,6 +60,86 @@ pub struct ParticipantDesc {
     pub role: String,
     /// Corpus name for `@ID`. An empty string falls back to a placeholder.
     pub corpus: String,
+    /// `@ID` field 4 (age). `None` leaves the field empty.
+    pub age: Option<AgeValue>,
+    /// `@ID` field 5 (sex). `None` leaves the field empty.
+    pub sex: Option<Sex>,
+    /// `@ID` field 6 (group). `None` leaves the field empty.
+    pub group: Option<GroupName>,
+    /// `@ID` field 7 (socioeconomic status). `None` leaves the field empty.
+    pub ses: Option<SesValue>,
+    /// `@ID` field 9 (education). `None` leaves the field empty.
+    pub education: Option<EducationDescription>,
+    /// `@ID` field 10 (corpus-specific custom extension). `None` leaves it empty.
+    pub custom: Option<CustomIdField>,
+}
+
+impl ParticipantDesc {
+    /// A participant with only the three required `@ID` fields set and every
+    /// optional demographic field empty. Use the `with_*` setters to add
+    /// demographics; this constructor keeps call sites from having to name
+    /// every field, so adding a future field never silently defaults an
+    /// existing caller's data.
+    pub fn new(
+        id: impl Into<String>,
+        role: impl Into<String>,
+        corpus: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: None,
+            role: role.into(),
+            corpus: corpus.into(),
+            age: None,
+            sex: None,
+            group: None,
+            ses: None,
+            education: None,
+            custom: None,
+        }
+    }
+
+    /// Sets the `@Participants` name field.
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets the `@ID` age field.
+    pub fn with_age(mut self, age: AgeValue) -> Self {
+        self.age = Some(age);
+        self
+    }
+
+    /// Sets the `@ID` sex field.
+    pub fn with_sex(mut self, sex: Sex) -> Self {
+        self.sex = Some(sex);
+        self
+    }
+
+    /// Sets the `@ID` group field.
+    pub fn with_group(mut self, group: GroupName) -> Self {
+        self.group = Some(group);
+        self
+    }
+
+    /// Sets the `@ID` socioeconomic-status field.
+    pub fn with_ses(mut self, ses: SesValue) -> Self {
+        self.ses = Some(ses);
+        self
+    }
+
+    /// Sets the `@ID` education field.
+    pub fn with_education(mut self, education: EducationDescription) -> Self {
+        self.education = Some(education);
+        self
+    }
+
+    /// Sets the `@ID` custom-extension field.
+    pub fn with_custom(mut self, custom: CustomIdField) -> Self {
+        self.custom = Some(custom);
+        self
+    }
 }
 
 /// A single utterance, given as pre-formatted CHAT main-tier text.
