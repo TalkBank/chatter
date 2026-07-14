@@ -14,7 +14,7 @@
 
 use talkbank_model::model::{
     AgeValue, ChatDate, ChatOptionFlags, CustomIdField, EducationDescription, GroupName,
-    LanguageName, MediaStatus, SesValue, Sex, SituationDescription, TranscriberName,
+    LanguageName, MediaStatus, PidValue, SesValue, Sex, SituationDescription, TranscriberName,
 };
 
 /// Description of a transcript to assemble into CHAT.
@@ -29,6 +29,10 @@ pub struct TranscriptDescription {
     pub media_name: Option<String>,
     /// Optional media type (`"audio"` or `"video"`). Defaults to `"audio"`.
     pub media_type: Option<String>,
+    /// Optional `@PID` (persistent TalkBank handle). Emitted between `@UTF8`
+    /// and `@Begin`. This is assigned at publish, not derivable from source:
+    /// preserve an existing PID here, never mint one. `None` omits the header.
+    pub pid: Option<PidValue>,
     /// Optional media linkage status for the `@Media` header.
     ///
     /// `MediaStatus::Unlinked` is the correct value for a transcript that

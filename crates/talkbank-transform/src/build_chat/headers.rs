@@ -13,8 +13,16 @@ pub(super) fn build_header_lines(
 ) -> Vec<Line> {
     let participant_entries = build_participant_entries(desc);
     let id_headers = build_id_headers(desc, langs);
-    let mut lines: Vec<Line> = vec![
-        Line::header(Header::Utf8),
+    let mut lines: Vec<Line> = vec![Line::header(Header::Utf8)];
+
+    // `@PID` (persistent handle) sits between `@UTF8` and `@Begin` (published
+    // order). Optional: emitted only when a PID is supplied (preserved, never
+    // minted).
+    if let Some(pid) = &desc.pid {
+        lines.push(Line::header(Header::Pid { pid: pid.clone() }));
+    }
+
+    lines.extend([
         Line::header(Header::Begin),
         Line::header(Header::Languages {
             codes: LanguageCodes::new(langs.to_vec()),
@@ -22,7 +30,7 @@ pub(super) fn build_header_lines(
         Line::header(Header::Participants {
             entries: ParticipantEntries::new(participant_entries),
         }),
-    ];
+    ]);
 
     // `@Options` sits between `@Participants` and the `@ID` block (published
     // MICASE order). Optional: emitted only when the caller supplies flags.

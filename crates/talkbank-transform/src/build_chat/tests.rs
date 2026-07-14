@@ -8,6 +8,7 @@ fn desc_with(status: Option<MediaStatus>) -> TranscriptDescription {
         participants: vec![ParticipantDesc::new("CHI", "Target_Child", "test")],
         media_name: Some("rec.mp3".to_string()),
         media_type: Some("audio".to_string()),
+        pid: None,
         media_status: status,
         date: None,
         situation: None,
@@ -113,10 +114,11 @@ fn participant_demographics_reach_the_id_header() {
 fn transcript_headers_date_situation_options_are_emitted_in_order() {
     use talkbank_model::WriteChat;
     use talkbank_model::model::{
-        ChatDate, ChatOptionFlag, ChatOptionFlags, SituationDescription, TranscriberName,
+        ChatDate, ChatOptionFlag, ChatOptionFlags, PidValue, SituationDescription, TranscriberName,
     };
 
     let mut desc = desc_with(Some(MediaStatus::Unlinked));
+    desc.pid = Some(PidValue::new("11312/a-00065721-1"));
     desc.date = Some(ChatDate::new("07-JUL-1998"));
     desc.situation = Some(SituationDescription::new("Honors Advising Office"));
     desc.options = Some(ChatOptionFlags(vec![ChatOptionFlag::Ca]));
@@ -124,6 +126,14 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
 
     let chat = build_chat(&desc).expect("build_chat");
     let text = chat.to_chat_string();
+    assert!(
+        text.contains("@PID:\t11312/a-00065721-1"),
+        "expected @PID"
+    );
+    // @PID sits between @UTF8 and @Begin.
+    let posn = |n: &str| text.find(n).expect(n);
+    assert!(posn("@UTF8") < posn("@PID:"), "@PID after @UTF8");
+    assert!(posn("@PID:") < posn("@Begin"), "@PID before @Begin");
     assert!(text.contains("@Options:\tCA"), "expected @Options: CA");
     assert!(text.contains("@Date:\t07-JUL-1998"), "expected @Date");
     assert!(
