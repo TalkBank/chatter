@@ -70,6 +70,7 @@
 // CHAT-format core: parse, serialize, validate, convert/normalize,
 // dependent-tier handling, field extraction, redaction.
 pub mod build_chat;
+pub mod capitalize;
 pub mod dependent_tiers;
 pub mod extract;
 pub mod fix_s;
