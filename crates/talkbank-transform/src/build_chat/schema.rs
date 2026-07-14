@@ -14,7 +14,7 @@
 
 use talkbank_model::model::{
     AgeValue, ChatDate, ChatOptionFlags, CustomIdField, EducationDescription, GroupName,
-    LanguageName, MediaStatus, SesValue, Sex, SituationDescription,
+    LanguageName, MediaStatus, SesValue, Sex, SituationDescription, TranscriberName,
 };
 
 /// Description of a transcript to assemble into CHAT.
@@ -43,6 +43,8 @@ pub struct TranscriptDescription {
     pub situation: Option<SituationDescription>,
     /// Optional `@Options` (CHAT processing flags, e.g. `CA`). `None` omits it.
     pub options: Option<ChatOptionFlags>,
+    /// Optional `@Transcriber` (transcriber name(s)). `None` omits the header.
+    pub transcriber: Option<TranscriberName>,
     /// Free-text `@Comment` header lines (e.g. speaker usage restrictions,
     /// preserved provenance). Emitted in order at the end of the header block.
     pub comments: Vec<String>,

@@ -12,6 +12,7 @@ fn desc_with(status: Option<MediaStatus>) -> TranscriptDescription {
         date: None,
         situation: None,
         options: None,
+        transcriber: None,
         comments: vec![],
         utterances: vec![UtteranceDesc {
             speaker: "CHI".to_string(),
@@ -111,12 +112,15 @@ fn participant_demographics_reach_the_id_header() {
 #[test]
 fn transcript_headers_date_situation_options_are_emitted_in_order() {
     use talkbank_model::WriteChat;
-    use talkbank_model::model::{ChatDate, ChatOptionFlag, ChatOptionFlags, SituationDescription};
+    use talkbank_model::model::{
+        ChatDate, ChatOptionFlag, ChatOptionFlags, SituationDescription, TranscriberName,
+    };
 
     let mut desc = desc_with(Some(MediaStatus::Unlinked));
     desc.date = Some(ChatDate::new("07-JUL-1998"));
     desc.situation = Some(SituationDescription::new("Honors Advising Office"));
     desc.options = Some(ChatOptionFlags(vec![ChatOptionFlag::Ca]));
+    desc.transcriber = Some(TranscriberName::new("Jane Doe"));
 
     let chat = build_chat(&desc).expect("build_chat");
     let text = chat.to_chat_string();
@@ -126,6 +130,7 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
         text.contains("@Situation:\tHonors Advising Office"),
         "expected @Situation"
     );
+    assert!(text.contains("@Transcriber:\tJane Doe"), "expected @Transcriber");
     // Ordering: @Options before @ID; @Date/@Situation after @Media.
     let pos = |needle: &str| text.find(needle).expect(needle);
     assert!(pos("@Options:") < pos("@ID:"), "@Options must precede @ID");

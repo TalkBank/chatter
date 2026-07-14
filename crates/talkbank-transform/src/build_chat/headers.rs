@@ -63,6 +63,12 @@ pub(super) fn build_header_lines(
         }));
     }
 
+    if let Some(transcriber) = &desc.transcriber {
+        lines.push(Line::header(Header::Transcriber {
+            transcriber: transcriber.clone(),
+        }));
+    }
+
     // `@Comment` lines close the header block (e.g. speaker usage restrictions,
     // preserved provenance).
     for comment in &desc.comments {
