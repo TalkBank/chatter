@@ -44,15 +44,10 @@ pub fn capitalize_english(chat: &mut ChatFile) {
                 return;
             };
             // The first plain-text segment (the stem) and its position.
-            let Some((idx, current)) = word
-                .content
-                .iter()
-                .enumerate()
-                .find_map(|(i, c)| match c {
-                    WordContent::Text(t) => Some((i, t.to_string())),
-                    _ => None,
-                })
-            else {
+            let Some((idx, current)) = word.content.iter().enumerate().find_map(|(i, c)| match c {
+                WordContent::Text(t) => Some((i, t.to_string())),
+                _ => None,
+            }) else {
                 return;
             };
             // Whole-word surface, for the pronoun-"I" and initial-eligibility
@@ -64,9 +59,8 @@ pub fn capitalize_english(chat: &mut ChatFile) {
             // Pronoun "I": whole-token match; only rewrite when the word is a
             // single text segment (no clitics/markers split out).
             if single_text {
-                let lower = cleaned.to_lowercase();
-                if let Some((_, dst)) = I_CAP_REWRITES.iter().find(|(src, _)| *src == lower) {
-                    next = (*dst).to_string();
+                if let Some(dst) = capitalized_pronoun_i(&cleaned) {
+                    next = dst.to_string();
                 }
             }
 
@@ -85,9 +79,20 @@ pub fn capitalize_english(chat: &mut ChatFile) {
     }
 }
 
+/// If `word` (case-insensitively) is a pronoun-"I" surface (`i`, `i'm`, `i'll`,
+/// `i've`, `i'd`), return its capitalized form. Shared with generators that
+/// capitalize their own word representation (the batchalign ASR post-processor).
+pub fn capitalized_pronoun_i(word: &str) -> Option<&'static str> {
+    let lower = word.to_lowercase();
+    I_CAP_REWRITES
+        .iter()
+        .find(|(src, _)| *src == lower)
+        .map(|(_, dst)| *dst)
+}
+
 /// Whether `text` is a "real" word eligible to be the capitalized
 /// utterance-initial token (not a CHAT marker, fragment, or non-letter start).
-fn is_capitalizable_initial(text: &str) -> bool {
+pub fn is_capitalizable_initial(text: &str) -> bool {
     if matches!(text, "xxx" | "yyy" | "www") || text.starts_with('&') {
         return false;
     }
@@ -96,7 +101,7 @@ fn is_capitalizable_initial(text: &str) -> bool {
 
 /// Uppercase the first character of `text` if it is lowercase; otherwise return
 /// it unchanged.
-fn capitalize_first(text: &str) -> String {
+pub fn capitalize_first(text: &str) -> String {
     let mut chars = text.chars();
     match chars.next() {
         Some(first) if first.is_lowercase() => {
@@ -151,5 +156,47 @@ mod tests {
             out.contains("*S1:\tYeah I saw it ."),
             "mid-utterance i -> I and initial cap; got:\n{out}"
         );
+    }
+
+    // The three token-level helpers below are public API for generators
+    // that capitalize their own word representation (the batchalign ASR
+    // post-processor, per the deferred talkbank-tools-on-chatter
+    // rewire); these tests are their contract.
+
+    #[test]
+    fn pronoun_i_helper_matches_all_surfaces_case_insensitively() {
+        assert_eq!(capitalized_pronoun_i("i"), Some("I"));
+        assert_eq!(capitalized_pronoun_i("i'm"), Some("I'm"));
+        assert_eq!(capitalized_pronoun_i("i'll"), Some("I'll"));
+        assert_eq!(capitalized_pronoun_i("i've"), Some("I've"));
+        assert_eq!(capitalized_pronoun_i("i'd"), Some("I'd"));
+        // Already-capitalized surfaces still map (idempotent callers).
+        assert_eq!(capitalized_pronoun_i("I"), Some("I"));
+        assert_eq!(capitalized_pronoun_i("I'M"), Some("I'm"));
+    }
+
+    #[test]
+    fn pronoun_i_helper_rejects_non_pronoun_tokens() {
+        for word in ["it", "in", "hi", "i's", "is", "", "island"] {
+            assert_eq!(capitalized_pronoun_i(word), None, "word: {word:?}");
+        }
+    }
+
+    #[test]
+    fn capitalizable_initial_skips_markers_fragments_and_non_letters() {
+        assert!(is_capitalizable_initial("dog"));
+        assert!(is_capitalizable_initial("étude"));
+        for text in ["xxx", "yyy", "www", "&-um", "&+fr", "0word", "'", ""] {
+            assert!(!is_capitalizable_initial(text), "text: {text:?}");
+        }
+    }
+
+    #[test]
+    fn capitalize_first_uppercases_only_a_lowercase_start() {
+        assert_eq!(capitalize_first("dog"), "Dog");
+        assert_eq!(capitalize_first("Dog"), "Dog");
+        assert_eq!(capitalize_first("étude"), "Étude");
+        assert_eq!(capitalize_first("0word"), "0word");
+        assert_eq!(capitalize_first(""), "");
     }
 }
