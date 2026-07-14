@@ -14,7 +14,7 @@
 
 use talkbank_model::model::{
     AgeValue, ChatDate, ChatOptionFlags, CustomIdField, EducationDescription, GroupName,
-    MediaStatus, SesValue, Sex, SituationDescription,
+    LanguageName, MediaStatus, SesValue, Sex, SituationDescription,
 };
 
 /// Description of a transcript to assemble into CHAT.
@@ -43,6 +43,9 @@ pub struct TranscriptDescription {
     pub situation: Option<SituationDescription>,
     /// Optional `@Options` (CHAT processing flags, e.g. `CA`). `None` omits it.
     pub options: Option<ChatOptionFlags>,
+    /// Free-text `@Comment` header lines (e.g. speaker usage restrictions,
+    /// preserved provenance). Emitted in order at the end of the header block.
+    pub comments: Vec<String>,
     /// Utterances in document order.
     pub utterances: Vec<UtteranceDesc>,
 }
@@ -79,6 +82,9 @@ pub struct ParticipantDesc {
     pub education: Option<EducationDescription>,
     /// `@ID` field 10 (corpus-specific custom extension). `None` leaves it empty.
     pub custom: Option<CustomIdField>,
+    /// Optional first language, emitted as a per-participant `@L1 of SPK:`
+    /// constant header (immediately after the `@ID` block). `None` omits it.
+    pub l1_language: Option<LanguageName>,
 }
 
 impl ParticipantDesc {
@@ -103,6 +109,7 @@ impl ParticipantDesc {
             ses: None,
             education: None,
             custom: None,
+            l1_language: None,
         }
     }
 
@@ -145,6 +152,12 @@ impl ParticipantDesc {
     /// Sets the `@ID` custom-extension field.
     pub fn with_custom(mut self, custom: CustomIdField) -> Self {
         self.custom = Some(custom);
+        self
+    }
+
+    /// Sets the participant's first language (`@L1 of`).
+    pub fn with_l1_language(mut self, language: LanguageName) -> Self {
+        self.l1_language = Some(language);
         self
     }
 }

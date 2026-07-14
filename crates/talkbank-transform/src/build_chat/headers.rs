@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use talkbank_model::model::{
-    Header, IDHeader, LanguageCode, LanguageCodes, Line, MediaHeader, MediaType,
+    BulletContent, Header, IDHeader, LanguageCode, LanguageCodes, Line, MediaHeader, MediaType,
     ParticipantEntries, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
 };
 
@@ -36,6 +36,18 @@ pub(super) fn build_header_lines(
         lines.push(Line::header(Header::ID(id)));
     }
 
+    // `@L1 of` is a constant participant header and must immediately follow the
+    // `@ID` block (before `@Media`). Emitted only for participants that carry a
+    // first language.
+    for participant in &desc.participants {
+        if let Some(language) = &participant.l1_language {
+            lines.push(Line::header(Header::L1Of {
+                participant: SpeakerCode::new(participant.id.as_str()),
+                language: language.clone(),
+            }));
+        }
+    }
+
     if let Some(media_header) = build_media_header(desc) {
         lines.push(Line::header(Header::Media(media_header)));
     }
@@ -48,6 +60,14 @@ pub(super) fn build_header_lines(
     if let Some(situation) = &desc.situation {
         lines.push(Line::header(Header::Situation {
             text: situation.clone(),
+        }));
+    }
+
+    // `@Comment` lines close the header block (e.g. speaker usage restrictions,
+    // preserved provenance).
+    for comment in &desc.comments {
+        lines.push(Line::header(Header::Comment {
+            content: BulletContent::from_text(comment),
         }));
     }
 

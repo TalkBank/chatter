@@ -12,6 +12,7 @@ fn desc_with(status: Option<MediaStatus>) -> TranscriptDescription {
         date: None,
         situation: None,
         options: None,
+        comments: vec![],
         utterances: vec![UtteranceDesc {
             speaker: "CHI".to_string(),
             text: "hello world .".to_string(),
@@ -130,6 +131,37 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
     assert!(pos("@Options:") < pos("@ID:"), "@Options must precede @ID");
     assert!(pos("@Media:") < pos("@Date:"), "@Date must follow @Media");
     assert!(pos("@Date:") < pos("@Situation:"), "@Date before @Situation");
+}
+
+/// Regression: `@L1 of` (per participant, immediately after the `@ID` block)
+/// and `@Comment` (end of header block) must be emitted from the description.
+#[test]
+fn l1_of_and_comment_headers_are_emitted_in_order() {
+    use talkbank_model::WriteChat;
+    use talkbank_model::model::LanguageName;
+
+    let mut desc = desc_with(Some(MediaStatus::Unlinked));
+    desc.participants = vec![
+        ParticipantDesc::new("S1", "Teacher", "MICASE").with_l1_language(LanguageName::new("est")),
+    ];
+    desc.utterances = vec![UtteranceDesc {
+        speaker: "S1".to_string(),
+        text: "hello .".to_string(),
+        start_ms: None,
+        end_ms: None,
+        lang: None,
+    }];
+    desc.comments = vec!["S1 quotation restriction: cite".to_string()];
+
+    let text = build_chat(&desc).expect("build_chat").to_chat_string();
+    assert!(text.contains("@L1 of S1:\test"), "expected coded @L1 of");
+    assert!(
+        text.contains("@Comment:\tS1 quotation restriction: cite"),
+        "expected @Comment"
+    );
+    let pos = |n: &str| text.find(n).expect(n);
+    assert!(pos("@ID:") < pos("@L1 of"), "@L1 of must follow @ID");
+    assert!(pos("@L1 of") < pos("@Media:"), "@L1 of must precede @Media");
 }
 
 #[test]
