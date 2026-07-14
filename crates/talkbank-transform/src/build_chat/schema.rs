@@ -99,11 +99,7 @@ impl ParticipantDesc {
     /// demographics; this constructor keeps call sites from having to name
     /// every field, so adding a future field never silently defaults an
     /// existing caller's data.
-    pub fn new(
-        id: impl Into<String>,
-        role: impl Into<String>,
-        corpus: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, role: impl Into<String>, corpus: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             name: None,

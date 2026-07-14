@@ -126,10 +126,7 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
 
     let chat = build_chat(&desc).expect("build_chat");
     let text = chat.to_chat_string();
-    assert!(
-        text.contains("@PID:\t11312/a-00065721-1"),
-        "expected @PID"
-    );
+    assert!(text.contains("@PID:\t11312/a-00065721-1"), "expected @PID");
     // @PID sits between @UTF8 and @Begin.
     let posn = |n: &str| text.find(n).expect(n);
     assert!(posn("@UTF8") < posn("@PID:"), "@PID after @UTF8");
@@ -140,12 +137,18 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
         text.contains("@Situation:\tHonors Advising Office"),
         "expected @Situation"
     );
-    assert!(text.contains("@Transcriber:\tJane Doe"), "expected @Transcriber");
+    assert!(
+        text.contains("@Transcriber:\tJane Doe"),
+        "expected @Transcriber"
+    );
     // Ordering: @Options before @ID; @Date/@Situation after @Media.
     let pos = |needle: &str| text.find(needle).expect(needle);
     assert!(pos("@Options:") < pos("@ID:"), "@Options must precede @ID");
     assert!(pos("@Media:") < pos("@Date:"), "@Date must follow @Media");
-    assert!(pos("@Date:") < pos("@Situation:"), "@Date before @Situation");
+    assert!(
+        pos("@Date:") < pos("@Situation:"),
+        "@Date before @Situation"
+    );
 }
 
 /// Regression: `@L1 of` (per participant, immediately after the `@ID` block)

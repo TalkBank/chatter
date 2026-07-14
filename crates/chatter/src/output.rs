@@ -68,9 +68,7 @@ pub fn should_show_cascading_hint(errors: &[ParseError]) -> bool {
             // structural range (e.g. E254 UndeclaredExplicitWordLanguage) does
             // not, so it must not trigger the "fix structural errors first"
             // hint on an otherwise-valid file.
-            [b'E', b'0'..=b'5', ..] if error.severity == Severity::Error => {
-                has_structural = true
-            }
+            [b'E', b'0'..=b'5', ..] if error.severity == Severity::Error => has_structural = true,
             // Any alignment diagnostic (error or warning) means alignment
             // actually ran, so the "checks were skipped" hint does not apply.
             [b'E', b'7', ..] => has_alignment = true,
