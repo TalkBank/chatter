@@ -17,8 +17,33 @@ Deferred to a later release:
   remaining per-rule decisions.
 -->
 
+### Added
+
+- **`build_chat` now emits the full standard header set.** The general
+  CHAT-generation schema (`TranscriptDescription` / `ParticipantDesc`)
+  gained typed optional fields for `@Date`, `@Situation`, `@Options`,
+  `@Transcriber`, `@Comment`, per-speaker `@L1 of`, and `@PID`
+  (preserved from a source, never minted), each emitted in canonical
+  header order. `@ID` demographics (age, sex, group, SES, education,
+  custom) are now carried through `ParticipantDesc` instead of being
+  silently dropped, fixing empty demographic slots in generated `@ID`
+  headers.
+- **Shared English capitalization transform**
+  (`talkbank_transform::capitalize`): capitalizes the pronoun "I"
+  family and the first real word of each utterance on the typed model,
+  for generators whose sources are all-lowercase (improves downstream
+  `%mor` accuracy). Token-level helpers are public for generators that
+  capitalize their own word representation.
+
 ### Fixed
 
+- **`chatter validate` no longer headlines a warnings-only file as an
+  error.** A file whose findings are all warnings (which is valid CHAT,
+  and was already counted valid in the summary) now prints
+  `⚠ Warnings in <file>` instead of the contradictory
+  `✗ Errors found in <file>`, and the "fix structural errors first"
+  hint fires only on hard errors. Presentation only; validation logic
+  unchanged.
 - **The validation cache no longer fails to initialize when opened
   concurrently.** Two `chatter` runs sharing a cache directory (or a
   multi-threaded consumer) could race the one-time SQLite setup and hit
