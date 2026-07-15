@@ -17,6 +17,9 @@ Deferred to a later release:
   remaining per-rule decisions.
 -->
 
+
+## [0.3.4] - 2026-07-15
+
 ### Added
 
 - **`@u` phonetic forms are now typed phonetic content.** A `@u` word
