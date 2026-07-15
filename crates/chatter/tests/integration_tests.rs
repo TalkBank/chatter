@@ -1211,3 +1211,72 @@ fn test_to_json_types_u_form_content_as_phonetic() -> Result<(), TestError> {
     }
     Ok(())
 }
+
+/// A mid-word syllable pause chain (`or^ga^ni^zi^ra`, `rhi^noceros`) is
+/// ONE word and validates clean. Regression: the v0.3.3 overlap-port
+/// grammar (6192c178) weighted interior overlap readings with
+/// prec.dynamic(2) but left `syllable_pause` out of the interior lead
+/// set, so GLR tie-breaking fragmented `or^ga^ni^zi^ra` into `or` +
+/// `^ga^ni^zi^ra`, and E252 then fired on the caret-initial fragment
+/// (2026-07-15 field report from real Croatian aphasia-protocol data).
+#[test]
+fn test_mid_word_syllable_pause_chain_is_one_word_and_valid() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("sylpause.cha");
+    fs::write(
+        &file_path,
+        "@UTF8\n@Begin\n@Languages:\thrv\n@Participants:\tPAR Participant\n\
+         @ID:\thrv|test|PAR|||||Participant|||\n\
+         *PAR:\tneka or^ga^ni^zi^ra ba [///] \u{0161}ta je .\n\
+         *PAR:\trhi^noceros je .\n@End\n",
+    )?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success();
+
+    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .arg("--skip-validation")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let doc: serde_json::Value = serde_json::from_slice(&output)
+        .map_err(|e| TestError::Failure(format!("to-json emitted invalid JSON: {e}")))?;
+
+    // The multi-caret token must surface as ONE word whose raw_text is the
+    // full chain: fragmentation (a word `or` plus a caret-initial word)
+    // is exactly the regression this test pins.
+    fn collect_words(node: &serde_json::Value, out: &mut Vec<String>) {
+        match node {
+            serde_json::Value::Object(map) => {
+                if map.get("type").and_then(|t| t.as_str()) == Some("word") {
+                    if let Some(raw) = map.get("raw_text").and_then(|r| r.as_str()) {
+                        out.push(raw.to_string());
+                    }
+                }
+                map.values().for_each(|v| collect_words(v, out));
+            }
+            serde_json::Value::Array(items) => items.iter().for_each(|v| collect_words(v, out)),
+            _ => {}
+        }
+    }
+    let mut words = Vec::new();
+    collect_words(&doc, &mut words);
+    if !words.iter().any(|w| w == "or^ga^ni^zi^ra") {
+        return Err(TestError::Failure(format!(
+            "or^ga^ni^zi^ra did not survive as one word; words seen: {words:?}"
+        )));
+    }
+    if !words.iter().any(|w| w == "rhi^noceros") {
+        return Err(TestError::Failure(format!(
+            "rhi^noceros did not survive as one word; words seen: {words:?}"
+        )));
+    }
+    Ok(())
+}

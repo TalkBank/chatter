@@ -344,6 +344,7 @@ impl_inspect_leaf!(
     PidPrefixNode,
     PipeNode,
     PlusNode,
+    Plus_2Node,
     PosTagNode,
     PostcodeNode,
     QuestionNode,
@@ -1064,39 +1065,62 @@ impl_inspect_choice!(WordBodyWordSegmentChild0Choice {
     Shortening,
     StressMarker
 });
-impl_inspect_choice!(WordBodyCaElementChild0Choice {
-    CaElement,
-    CaDelimiter,
-    UnderlineBegin,
-    SyllablePause
-});
-impl_inspect_choice!(WordBodyCaElementChild1Choice {
-    CaElement,
-    CaDelimiter,
-    UnderlineBegin,
-    SyllablePause
-});
-impl_inspect_choice!(WordBodyCaElementChild2Child1Choice {
+impl_inspect_choice!(WordBodyWordSegmentChild1LengtheningChoice {
+    Lengthening,
+    OverlapPoint,
     CaElement,
     CaDelimiter,
     UnderlineBegin,
     UnderlineEnd,
-    Lengthening,
-    StressMarker
+    SyllablePause,
+    Tilde,
+    Variant8
 });
-impl_inspect_choice!(WordBodyCaElementChild3Choice {
+impl_inspect_choice!(WordBodyWordSegmentChild1Choice {
+    WordSegment,
+    Shortening,
+    StressMarker,
+    Lengthening
+});
+impl_inspect_choice!(WordBodyOverlapPointChild0Choice {
+    OverlapPoint,
+    CaElement,
+    CaDelimiter,
+    UnderlineBegin,
+    SyllablePause
+});
+impl_inspect_choice!(WordBodyOverlapPointChild1Choice {
+    OverlapPoint,
+    CaElement,
+    CaDelimiter,
+    UnderlineBegin,
+    SyllablePause
+});
+impl_inspect_choice!(WordBodyOverlapPointChild2Choice {
     WordSegment,
     Shortening,
     StressMarker
 });
+impl_inspect_choice!(WordBodyOverlapPointChild3LengtheningChoice {
+    Lengthening,
+    OverlapPoint,
+    CaElement,
+    CaDelimiter,
+    UnderlineBegin,
+    UnderlineEnd,
+    SyllablePause,
+    Tilde,
+    Variant8
+});
+impl_inspect_choice!(WordBodyOverlapPointChild3Choice {
+    WordSegment,
+    Shortening,
+    StressMarker,
+    Lengthening
+});
 impl_inspect_choice!(WordBodyChoice {
     WordSegment,
-    CaElement
-});
-impl_inspect_choice!(WordWithOptionalAnnotationsChild1Choice {
-    OverlapPoint,
-    OverlapPoint_1,
-    Whitespaces
+    OverlapPoint
 });
 
 // --- *Children struct impls ---
@@ -1853,42 +1877,22 @@ impl_inspect_struct!(WorTierBodyChildren {
 });
 impl_inspect_struct!(WorWordItemChildren { content });
 impl_inspect_struct!(WordBodyWordSegmentChildren { child_0, child_1 });
-impl_inspect_struct!(WordBodyCaElementChild2Children { child_0, child_1 });
-impl_inspect_struct!(WordBodyCaElementChildren {
+impl_inspect_struct!(WordBodyOverlapPointChildren {
     child_0,
     child_1,
     child_2,
-    child_3,
-    child_4
+    child_3
 });
 impl_inspect_struct!(WordBodyChildren { content });
-impl_inspect_struct!(
-    WordWithOptionalAnnotationsChild1OverlapPointChild2Children {
-        child_0,
-        replacement
-    }
-);
-impl_inspect_struct!(WordWithOptionalAnnotationsChild1OverlapPointChildren {
-    child_0,
-    child_1,
-    child_2,
-    annotations
-});
-impl_inspect_struct!(WordWithOptionalAnnotationsChild1OverlapPoint1Children {
-    child_0,
-    child_1,
-    child_2,
-    replacement
-});
-impl_inspect_struct!(WordWithOptionalAnnotationsChild1WhitespacesChild0Children {
+impl_inspect_struct!(WordWithOptionalAnnotationsChild1Children {
     child_0,
     replacement
 });
-impl_inspect_struct!(WordWithOptionalAnnotationsChild1WhitespacesChildren {
-    child_0,
+impl_inspect_struct!(WordWithOptionalAnnotationsChildren {
+    word,
+    child_1,
     annotations
 });
-impl_inspect_struct!(WordWithOptionalAnnotationsChildren { word, child_1 });
 impl_inspect_struct!(XDependentTierChildren {
     child_0,
     child_1,

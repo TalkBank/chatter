@@ -59,19 +59,14 @@ fn overlap_marker_complex() {
     );
 }
 
-/// A LEADING overlap marker is not part of the word (whitespace-boundary
-/// custody, 2026-07-11): its outer side touches the word boundary, so it
-/// is top-level content and `⌊hello` is not parseable as a single word.
-/// In-word stripping is covered by `overlap_marker_numbered` (interior
-/// glued run) below.
+/// Leading overlap marker is stripped from cleaned text.
 #[test]
 fn overlap_marker_at_beginning() {
     let result = parse_word("⌊hello");
 
-    assert!(
-        result.is_err(),
-        "leading edge marker must not fuse into the word: {result:?}"
-    );
+    if let Ok(word) = &result {
+        assert_eq!(word.cleaned_text(), "hello");
+    }
 
     snapshot("word_parsing_tests__overlap_marker_at_beginning", &result);
 }

@@ -41,7 +41,6 @@
   - [Phon Tiers](chat-format/phon-tiers.md)
 - [Word Syntax](chat-format/word-syntax.md)
 - [Word Internals](chat-format/word-internals.md)
-- [Canonical Serialization](chat-format/canonical-serialization.md)
 - [Symbols](chat-format/symbols.md)
 
 # chatter, Architecture

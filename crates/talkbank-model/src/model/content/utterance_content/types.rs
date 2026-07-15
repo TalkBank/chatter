@@ -160,13 +160,6 @@ impl UtteranceContent {
         matches!(self, UtteranceContent::OverlapPoint(marker) if marker.is_opening())
     }
 
-    /// Returns `true` if this item is a comma separator (canonically glued
-    /// to the preceding item: `one, two`; the grammar accepts only the
-    /// glued-left spelling as preferred form).
-    pub fn is_comma_separator(&self) -> bool {
-        matches!(self, UtteranceContent::Separator(sep) if sep.is_comma())
-    }
-
     /// Returns `true` if this item is a closing overlap marker (`⌉` or `⌋`).
     ///
     /// Closing overlap markers should NOT have a space before them in serialization.

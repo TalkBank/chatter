@@ -1,8 +1,8 @@
 ================================================================================
-overlap_utterance - Utterance with an overlap-wrapped word. Custody follows thewhitespace-boundary principle (ideal overlap model, ported 2026-07-11):both markers touch whitespace on their outer side, so they are TOP-LEVELcontent items; is a plain word. Span pairing is model-derived.
+overlap_utterance - Utterance with a word containing overlap markers
 ================================================================================
 *CHI:	who ⌈is⌉ ?
 
 --------------------------------------------------------------------------------
 
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (overlap_point) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (overlap_point) (whitespaces)) ending: (utterance_end (question) (newline)))))
+(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (overlap_point) (word_segment) (overlap_point)))))) (whitespaces)) ending: (utterance_end (question) (newline)))))

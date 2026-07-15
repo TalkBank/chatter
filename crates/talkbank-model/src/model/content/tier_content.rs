@@ -186,31 +186,21 @@ impl TierContent {
             w.write_char(']')?;
         }
 
-        // Write content: single-space join in CANONICAL form.
-        //
-        // The model is deliberately spacing-agnostic (source spacing between
-        // contents items carries no semantics under whitespace-boundary
-        // custody), so serialization emits the canonical convention, ratified
-        // 2026-07-11 and documented in the book's "Canonical Serialization"
-        // chapter: contents items are joined by one space, EXCEPT the tight
-        // overlap rule + comma rule: an OPENING overlap point glues to the FOLLOWING item
-        // (`\u{2308}is`), a CLOSING overlap point glues to the PRECEDING one
-        // (`here\u{2309}`), and a COMMA glues to the PRECEDING item
-        // (`one, two`: the only comma spelling the grammar prefers). The
-        // roundtrip invariant is semantic
-        // (model -> text -> model), with canonical text a serialization
-        // fixpoint.
-        let mut prev: Option<&UtteranceContent> = None;
+        // Write content
         for (i, item) in self.content.iter().enumerate() {
-            let at_start = i == 0 && self.linkers.is_empty() && self.language_code.is_none();
-            let glue_left = item.is_closing_overlap()
-                || item.is_comma_separator()
-                || prev.is_some_and(UtteranceContent::is_opening_overlap);
-            if !at_start && !glue_left {
+            // Add space before item, EXCEPT:
+            // - First item (when i==0 and no linkers/language_code)
+            //
+            // NOTE: Overlap markers at content level are ALWAYS standalone and serialized
+            // with canonical spacing: space AFTER opening, space BEFORE closing.
+            // Word-internal overlaps are handled inside Word serialization (no extra spaces).
+            // The model is spacing-agnostic, so we normalize to canonical form here.
+            let needs_space = i > 0 || !self.linkers.is_empty() || self.language_code.is_some();
+
+            if needs_space {
                 w.write_char(' ')?;
             }
             item.write_chat(w)?;
-            prev = Some(item);
         }
 
         // Write terminator if present

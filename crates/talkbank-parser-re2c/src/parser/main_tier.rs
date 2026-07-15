@@ -374,103 +374,6 @@ fn event<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 ///
 /// Returns a parser that produces `Vec<ContentItem>`, the content items
 /// of a tier body (main tier or inside groups/quotations).
-/// Reconstruct a top-level overlap token from a peeled word-body marker.
-/// `s` is the full marker text (bracket + optional index), the same
-/// payload the standalone `overlap_point()` parser carries.
-fn overlap_token_for<'a>(kind: OverlapKind, s: &'a str) -> Token<'a> {
-    match kind {
-        OverlapKind::TopBegin => Token::OverlapTopBegin(s),
-        OverlapKind::TopEnd => Token::OverlapTopEnd(s),
-        OverlapKind::BottomBegin => Token::OverlapBottomBegin(s),
-        OverlapKind::BottomEnd => Token::OverlapBottomEnd(s),
-    }
-}
-
-/// Spoken material licenses a word body (grammar.js `word_body`:
-/// `choice(word_segment, shortening, stress_marker)`).
-fn is_spoken(item: &WordBodyItem<'_>) -> bool {
-    matches!(
-        item,
-        WordBodyItem::Text(_) | WordBodyItem::Shortening(_) | WordBodyItem::Stress(_)
-    )
-}
-
-/// Whitespace-boundary overlap custody, matching the tree-sitter grammar
-/// (ratified 2026-07-11). A LONE edge overlap point with spoken material
-/// on its inner (word) side and whitespace on its outer side is top-level
-/// content, not word-internal: `two⌉` -> word `two` + top-level `⌉`;
-/// `⌈one` -> top-level `⌈` + word `one`. A GLUED cluster (2+ adjacent
-/// markers, e.g. `Yeah⌋⌈2`) or a marker with a glued non-overlap
-/// neighbour (`the⌉:`) stays in the word, so the peel fires only when the
-/// marker's inner neighbour is spoken and its outer side is the word edge.
-/// A trailing marker followed by a form/lang/pos suffix or an annotation
-/// keeps its host and is not peeled. This is the re2c side of the same
-/// custody the tree-sitter parser applies; both must agree (spec oracle).
-fn peel_edge_overlaps<'a>(items: Vec<ContentItem<'a>>) -> Vec<ContentItem<'a>> {
-    let mut out = Vec::with_capacity(items.len());
-    for item in items {
-        match item {
-            ContentItem::Word(w) => push_peeled_word(w, &mut out),
-            other => out.push(other),
-        }
-    }
-    out
-}
-
-fn push_peeled_word<'a>(mut w: WordWithAnnotations<'a>, out: &mut Vec<ContentItem<'a>>) {
-    let n = w.body.len();
-    // Trailing edge: no suffix/annotation host follows, and the body ends
-    // with [spoken, lone overlap].
-    let trailing = w.form_marker.is_none()
-        && w.lang.is_none()
-        && w.pos_tag.is_none()
-        && w.annotations.is_empty()
-        && n >= 2
-        && matches!(w.body[n - 1], WordBodyItem::OverlapPoint(..))
-        && is_spoken(&w.body[n - 2]);
-    // Leading edge: a word-INITIAL overlap point can never be interior
-    // (there is no spoken material before it), so EVERY consecutive
-    // leading overlap point peels to top-level, whatever follows it
-    // (spoken text OR a marker-initial CA cluster, e.g. `⌈°word`). This
-    // is asymmetric with the trailing side, which keeps glued clusters
-    // in-word via `_final_overlap_cluster`. Guard: never strip so much
-    // that the word loses its spoken material.
-    let mut leading_count = 0usize;
-    if w.category.is_none() {
-        while leading_count < w.body.len()
-            && matches!(w.body[leading_count], WordBodyItem::OverlapPoint(..))
-        {
-            leading_count += 1;
-        }
-        if leading_count == w.body.len() {
-            leading_count = 0; // all-overlap body: not a real word, leave intact
-        }
-    }
-
-    if leading_count == 0 && !trailing {
-        out.push(ContentItem::Word(w));
-        return;
-    }
-
-    let mut trailing_item = None;
-    if trailing {
-        if let Some(WordBodyItem::OverlapPoint(kind, s)) = w.body.pop() {
-            w.raw_text = w.raw_text.strip_suffix(s).unwrap_or(w.raw_text);
-            trailing_item = Some(ContentItem::OverlapPoint(overlap_token_for(kind, s)));
-        }
-    }
-    for _ in 0..leading_count {
-        if let WordBodyItem::OverlapPoint(kind, s) = w.body.remove(0) {
-            w.raw_text = w.raw_text.strip_prefix(s).unwrap_or(w.raw_text);
-            out.push(ContentItem::OverlapPoint(overlap_token_for(kind, s)));
-        }
-    }
-    out.push(ContentItem::Word(w));
-    if let Some(t) = trailing_item {
-        out.push(t);
-    }
-}
-
 pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>> + Clone {
     recursive(|contents| {
         // Group: < contents > annotations
@@ -561,14 +464,8 @@ pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>
             bare_annotation(),
         ));
 
-        // Contents: one or more content items separated by whitespace,
-        // then apply whitespace-boundary overlap custody (peel edge
-        // overlap points to top-level; see peel_edge_overlaps).
-        content_item
-            .padded_by(ws())
-            .repeated()
-            .collect::<Vec<_>>()
-            .map(peel_edge_overlaps)
+        // Contents: one or more content items separated by whitespace
+        content_item.padded_by(ws()).repeated().collect::<Vec<_>>()
     })
 }
 
