@@ -19,6 +19,19 @@ Deferred to a later release:
 
 ### Added
 
+- **`@u` phonetic forms are now typed phonetic content.** A `@u` word
+  (a UNIBET/IPA phonetic transcription standing in a word slot, e.g.
+  the spoken side of an aphasia `[: target]` replacement) now models
+  its content as a dedicated `WordContent::Phonetic(WordPhonetic)`
+  node instead of orthographic text, in both parsers. Orthographic
+  word-hygiene rules structurally cannot apply to phonetic content;
+  the phonetic string itself stays deliberately lenient (IPA, ASCII
+  UNIBET, X-SAMPA), matching the `%pho` tier's stance. `to-json`
+  emits `{"type": "phonetic", ...}` for these nodes (schema updated);
+  `cleaned_text` remains the phonetic string verbatim; the sanitizer
+  redacts phonetic forms like spoken text. Scope is `@u` only;
+  sibling special forms remain orthographic words.
+
 - **`build_chat` now emits the full standard header set.** The general
   CHAT-generation schema (`TranscriptDescription` / `ParticipantDesc`)
   gained typed optional fields for `@Date`, `@Situation`, `@Options`,

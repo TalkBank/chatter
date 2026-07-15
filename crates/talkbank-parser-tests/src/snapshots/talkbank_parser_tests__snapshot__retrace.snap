@@ -644,7 +644,7 @@ expression: snapshot
                       "content": [
                         {
                           "content": "tika",
-                          "type": "text"
+                          "type": "phonetic"
                         }
                       ],
                       "form_type": "u",
@@ -806,7 +806,7 @@ expression: snapshot
                       "content": [
                         {
                           "content": "lɛɾɪ",
-                          "type": "text"
+                          "type": "phonetic"
                         }
                       ],
                       "form_type": "u",

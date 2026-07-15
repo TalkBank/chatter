@@ -30,6 +30,14 @@ pub(crate) fn sanitize_word(word: &mut Word, state: &mut PlaceholderState) {
                 word.content.replace_at(i, WordContent::Text(new_text));
                 modified = true;
             }
+            // A @u phonetic form is SPOKEN content: it can encode a name
+            // phonetically, so it must be redacted like text, never
+            // preserved as a structural marker.
+            WordContent::Phonetic(_) => {
+                let new_form = talkbank_model::WordPhonetic::new_unchecked(placeholder.as_str());
+                word.content.replace_at(i, WordContent::Phonetic(new_form));
+                modified = true;
+            }
             WordContent::Shortening(_) => {
                 let new_short = WordShortening::new_unchecked("x");
                 word.content

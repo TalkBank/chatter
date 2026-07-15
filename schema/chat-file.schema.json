@@ -7645,6 +7645,23 @@
           "type": "object"
         },
         {
+          "description": "Phonetic transcription content of a `@u` special form.\n\nA `@u` word is a phonetic transcription (historically UNIBET, now\nusually IPA) standing in a word slot: used when the orthographic\nword is unknown, unintelligible, or a paraphasia (frequently the\nspoken side of a `[: target]` replacement in aphasia data). Its\ncontent obeys phonetic conventions, not orthographic word\nconventions, so it carries this dedicated variant: orthographic\nword-hygiene rules structurally cannot apply to it.",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/WordPhonetic"
+            },
+            "type": {
+              "const": "phonetic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ],
+          "type": "object"
+        },
+        {
           "description": "(lo) - shortening (omitted sound)",
           "properties": {
             "content": {
@@ -8025,6 +8042,10 @@
         }
       },
       "type": "object"
+    },
+    "WordPhonetic": {
+      "$ref": "#/$defs/NonEmptyString",
+      "description": "The phonetic transcription string of a `@u` special-form word.\n\nDeliberately does NOT enforce a symbol inventory, matching the stance of\nthe `%pho` tier's `PhoWord`: IPA, legacy UNIBET (ASCII), and X-SAMPA\nnotations all pass. Strict phonetic-inventory constraints belong in\ncorpus- or project-specific validators, never here (Franklin's ruling,\n2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced."
     },
     "WordShortening": {
       "$ref": "#/$defs/NonEmptyString",

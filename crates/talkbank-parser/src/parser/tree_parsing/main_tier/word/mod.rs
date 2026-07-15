@@ -19,9 +19,10 @@ use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::content::word::{
     FormType, WordCategory, WordCliticBoundary, WordCompoundMarker, WordContent, WordContents,
-    WordLanguageMarker, WordLengthening, WordShortening, WordStressMarker, WordStressMarkerType,
-    WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
+    WordLanguageMarker, WordLengthening, WordPhonetic, WordShortening, WordStressMarker,
+    WordStressMarkerType, WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
+use talkbank_model::model::WriteChat;
 use talkbank_model::model::{LanguageCode, OverlapIndex, OverlapPoint, OverlapPointKind};
 use tree_sitter::Node;
 
@@ -179,6 +180,18 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
         return ParseOutcome::rejected();
     }
 
+    // A `@u` word's content is a PHONETIC transcription (UNIBET/IPA), not
+    // orthography: fold the lexed pieces back into one opaque phonetic
+    // node so orthographic word rules structurally cannot apply to it
+    // (option B of the 2026-07-13 UNIBET design; scope is @u ONLY per the
+    // 2026-07-14 adjudication). The fold serializes each piece's CHAT
+    // surface form, so round-tripping is lossless.
+    let content_items = if matches!(form_type, Some(FormType::U)) {
+        fold_phonetic(content_items)
+    } else {
+        content_items
+    };
+
     let mut word = Word::new_unchecked(raw_text, &cleaned);
     word.span = span;
     word.category = category;
@@ -188,6 +201,26 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
     word.content = WordContents::new(content_items);
 
     ParseOutcome::parsed(word)
+}
+
+/// Fold a `@u` word's lexed content pieces into a single phonetic node.
+///
+/// Falls back to the original pieces if serialization yields nothing (a
+/// content-free word already rejected upstream) so no information is ever
+/// dropped.
+fn fold_phonetic(content_items: SmallVec<[WordContent; 2]>) -> SmallVec<[WordContent; 2]> {
+    let mut phonetic = String::new();
+    for item in &content_items {
+        if item.write_chat(&mut phonetic).is_err() {
+            // Writing into a String cannot fail; treat a failure as "do
+            // not fold" rather than losing content.
+            return content_items;
+        }
+    }
+    match WordPhonetic::new(&phonetic) {
+        Some(form) => smallvec::smallvec![WordContent::Phonetic(form)],
+        None => content_items,
+    }
 }
 
 /// Build `WordContent` items from a `word_body` CST node.

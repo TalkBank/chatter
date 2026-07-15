@@ -205,6 +205,7 @@ pub use content::{
     WordContents,
     WordLanguageMarker,
     WordLengthening,
+    WordPhonetic,
     WordShortening,
     WordStressMarker,
     WordStressMarkerType,

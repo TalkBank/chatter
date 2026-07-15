@@ -36,8 +36,8 @@ pub use ca::{CADelimiter, CADelimiterType, CAElement, CAElementType};
 pub use category::WordCategory;
 pub use content::{
     UnderlineMarker, WordCliticBoundary, WordCompoundMarker, WordContent, WordLengthening,
-    WordShortening, WordStressMarker, WordStressMarkerType, WordSyllablePause, WordText,
-    WordUnderlineBegin, WordUnderlineEnd,
+    WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType, WordSyllablePause,
+    WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
 pub use form::FormType;
 pub use language::WordLanguageMarker;

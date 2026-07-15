@@ -309,6 +309,10 @@ impl Word {
                     in_segment_repetition = !in_segment_repetition;
                 }
                 WordContent::Text(t) if !in_segment_repetition => result.push_str(t.as_ref()),
+                // A @u phonetic form's cleaned text is the phonetic string
+                // verbatim (chatter's long-standing behavior, preserved
+                // through the typed-phonetic modeling change).
+                WordContent::Phonetic(f) if !in_segment_repetition => result.push_str(f.as_ref()),
                 WordContent::Shortening(s) if !in_segment_repetition => result.push_str(s.as_ref()),
                 _ => {}
             }

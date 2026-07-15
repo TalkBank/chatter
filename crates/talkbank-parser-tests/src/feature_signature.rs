@@ -45,6 +45,8 @@ impl WordCategoryClass {
 pub enum ContentKind {
     /// Plain text span.
     Text,
+    /// Phonetic transcription content of a `@u` special form.
+    Phonetic,
     /// Shortened form (`(text)`).
     Shortening,
     /// Compound marker (`+`).
@@ -72,6 +74,7 @@ impl ContentKind {
     fn from_content(content: &WordContent) -> Self {
         match content {
             WordContent::Text(_) => ContentKind::Text,
+            WordContent::Phonetic(_) => ContentKind::Phonetic,
             WordContent::Shortening(_) => ContentKind::Shortening,
             WordContent::CompoundMarker(_) => ContentKind::Compound,
             WordContent::OverlapPoint(_) => ContentKind::OverlapPoint,

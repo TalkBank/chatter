@@ -1,7 +1,7 @@
 # The CHAT Word
 
 **Status:** Current
-**Last modified:** 2026-07-11 12:47 EDT
+**Last modified:** 2026-07-14 21:18 EDT
 
 "Word" is the most complex and most misunderstood concept in CHAT. This
 chapter documents what a word actually is, how the grammar parses it, and
@@ -220,6 +220,7 @@ maps directly to a grammar node.
 | Grammar node | `WordContent` variant | Rust type | Example |
 |---|---|---|---|
 | `word_segment` | `Text` | `WordText(NonEmptyString)` | `hello`, `want` |
+| `word_segment` in a `@u` word | `Phonetic` | `WordPhonetic(NonEmptyString)` | `rɛmbə˞` in `rɛmbə˞@u` |
 | `shortening` | `Shortening` | `WordShortening(NonEmptyString)` | `(be)` in `(be)cause` |
 | `overlap_point` | `OverlapPoint` | `OverlapPoint` | `⌈`, `⌉2` |
 | `ca_element` | `CAElement` | `CAElement` | `↑`, `↓` |
@@ -235,7 +236,7 @@ maps directly to a grammar node.
 ### cleaned_text()
 
 `Word::cleaned_text()` derives NLP-ready text from `content` by
-concatenating only `Text` and `Shortening` variants:
+concatenating only `Text`, `Phonetic`, and `Shortening` variants:
 
 ```rust,ignore
 pub fn compute_cleaned_text(&self) -> String {
@@ -253,6 +254,24 @@ pub fn compute_cleaned_text(&self) -> String {
 
 This works because the purity invariant guarantees that `Text` elements
 never contain structural markers. There is nothing to strip.
+
+### `@u` phonetic forms are typed phonetic content
+
+A `@u` word is a phonetic transcription (historically UNIBET, now
+usually IPA) standing in a word slot: used when the orthographic word is
+unknown, unintelligible, or a paraphasia, frequently the spoken side of
+a `[: target]` replacement in aphasia data (`rɛmbə˞@u [: remember]`).
+Because its content obeys phonetic conventions rather than orthographic
+word conventions, the parsers fold a `@u` word's body into a single
+`WordContent::Phonetic(WordPhonetic)` node instead of `Text`. This makes
+"orthographic rules apply to orthographic words only" a property of the
+model: word-hygiene rules structurally cannot reach phonetic content.
+The phonetic string itself is deliberately lenient (IPA, ASCII UNIBET,
+and X-SAMPA all pass; only non-emptiness is enforced), matching the
+`%pho` tier's `PhoWord` stance. In `to-json` output the node appears as
+`{"type": "phonetic", "content": "..."}`, and `cleaned_text` remains the
+phonetic string verbatim. The scope is `@u` only: sibling special forms
+(`@b`, `@o`, ...) remain orthographic words.
 
 Examples:
 

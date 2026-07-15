@@ -103,6 +103,29 @@ pub(crate) fn compute_cleaned_text(body: &[WordBodyItem<'_>]) -> String {
     cleaned
 }
 
+/// Fold a `@u` word's lexed content pieces into a single phonetic node.
+///
+/// Serializes each piece's CHAT surface form so the fold is lossless for
+/// round-tripping; falls back to the original pieces if serialization
+/// yields nothing so no information is ever dropped. Kept as an
+/// independent implementation of the same rule as the tree-sitter
+/// parser's `fold_phonetic` (the two parsers deliberately cross-check
+/// each other).
+fn fold_phonetic(content_items: Vec<WordContent>) -> Vec<WordContent> {
+    use talkbank_model::model::WriteChat;
+
+    let mut phonetic = String::new();
+    for item in &content_items {
+        if item.write_chat(&mut phonetic).is_err() {
+            return content_items;
+        }
+    }
+    match talkbank_model::WordPhonetic::new(&phonetic) {
+        Some(form) => vec![WordContent::Phonetic(form)],
+        None => content_items,
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // WordWithAnnotations → Word
 // ═══════════════════════════════════════════════════════════════
@@ -114,6 +137,20 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
     let cleaned = compute_cleaned_text(&w.body);
 
     let content_items: Vec<WordContent> = w.body.iter().map(body_item_to_word_content).collect();
+
+    // A `@u` word's content is a PHONETIC transcription (UNIBET/IPA), not
+    // orthography: fold the lexed pieces into one opaque phonetic node,
+    // mirroring the tree-sitter parser (option B of the 2026-07-13 UNIBET
+    // design; scope is @u ONLY per the 2026-07-14 adjudication).
+    let is_u_form = w
+        .form_marker
+        .and_then(FormType::parse)
+        .is_some_and(|ft| matches!(ft, FormType::U));
+    let content_items = if is_u_form {
+        fold_phonetic(content_items)
+    } else {
+        content_items
+    };
 
     let cleaned_for_model = if cleaned.is_empty() { raw } else { &cleaned };
     let mut word = Word::new_unchecked(raw, cleaned_for_model)

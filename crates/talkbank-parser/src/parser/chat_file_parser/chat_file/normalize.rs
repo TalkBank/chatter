@@ -156,8 +156,9 @@ fn normalize_ca_omission_word(word: &mut Word) {
                 }
                 shortening_index = Some(idx);
             }
-            WordContent::Text(_) | WordContent::CompoundMarker(_) => {
-                // Not a standalone CA omission form.
+            WordContent::Text(_) | WordContent::Phonetic(_) | WordContent::CompoundMarker(_) => {
+                // Not a standalone CA omission form (phonetic content is
+                // lexical material the same way plain text is).
                 return;
             }
             WordContent::OverlapPoint(_)

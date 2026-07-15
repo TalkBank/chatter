@@ -390,7 +390,13 @@ pub(crate) fn check_prosodic_markers(word: &Word, errors: &impl ErrorSink) {
 ///
 /// Prosodic placement checks use this to distinguish markers from segment text.
 fn is_spoken_material(content: &WordContent) -> bool {
-    matches!(content, WordContent::Text(text) if !text.as_ref().is_empty())
+    match content {
+        WordContent::Text(text) => !text.as_ref().is_empty(),
+        // A @u phonetic form IS spoken material: it is the phonetic
+        // transcription of what was said.
+        WordContent::Phonetic(form) => !form.as_ref().is_empty(),
+        _ => false,
+    }
 }
 
 /// Return whether the word contains at least one spoken lexical segment.

@@ -81,8 +81,8 @@ pub use utterance_content::*;
 pub use word::{
     CADelimiter, CADelimiterType, CAElement, CAElementType, FormType, UnderlineMarker, Word,
     WordCategory, WordCliticBoundary, WordCompoundMarker, WordContent, WordContents,
-    WordLanguageMarker, WordLengthening, WordShortening, WordStressMarker, WordStressMarkerType,
-    WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
+    WordLanguageMarker, WordLengthening, WordPhonetic, WordShortening, WordStressMarker,
+    WordStressMarkerType, WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
 
 // Re-export types needed by submodules via super::

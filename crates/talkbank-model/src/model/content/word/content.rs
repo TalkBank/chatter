@@ -88,6 +88,16 @@ use talkbank_derive::{SemanticEq, SpanShift};
 pub enum WordContent {
     /// Plain text segment
     Text(WordText),
+    /// Phonetic transcription content of a `@u` special form.
+    ///
+    /// A `@u` word is a phonetic transcription (historically UNIBET, now
+    /// usually IPA) standing in a word slot: used when the orthographic
+    /// word is unknown, unintelligible, or a paraphasia (frequently the
+    /// spoken side of a `[: target]` replacement in aphasia data). Its
+    /// content obeys phonetic conventions, not orthographic word
+    /// conventions, so it carries this dedicated variant: orthographic
+    /// word-hygiene rules structurally cannot apply to it.
+    Phonetic(WordPhonetic),
     /// (lo) - shortening (omitted sound)
     Shortening(WordShortening),
     /// Overlap point within word
@@ -130,6 +140,7 @@ impl WriteChat for WordContent {
     fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
         match self {
             WordContent::Text(text) => w.write_str(text),
+            WordContent::Phonetic(form) => w.write_str(form),
             WordContent::Shortening(text) => {
                 w.write_char('(')?;
                 w.write_str(text)?;
@@ -160,6 +171,7 @@ impl Validate for WordContent {
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
         match self {
             WordContent::Text(text) => text.validate(context, errors),
+            WordContent::Phonetic(form) => form.validate(context, errors),
             WordContent::Shortening(text) => text.validate(context, errors),
             WordContent::OverlapPoint(point) => point.validate(context, errors),
             WordContent::CAElement(element) => element.validate(context, errors),
@@ -221,6 +233,57 @@ impl Validate for WordText {
         let ctx = context
             .clone()
             .with_field_label("word text")
+            .with_field_error_code(ErrorCode::EmptyWordContentText);
+        self.0.validate(&ctx, errors);
+    }
+}
+
+/// The phonetic transcription string of a `@u` special-form word.
+///
+/// Deliberately does NOT enforce a symbol inventory, matching the stance of
+/// the `%pho` tier's `PhoWord`: IPA, legacy UNIBET (ASCII), and X-SAMPA
+/// notations all pass. Strict phonetic-inventory constraints belong in
+/// corpus- or project-specific validators, never here (Franklin's ruling,
+/// 2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[serde(transparent)]
+pub struct WordPhonetic(pub NonEmptyString);
+
+impl WordPhonetic {
+    /// Builds `WordPhonetic` when `text` is non-empty.
+    pub fn new(text: impl AsRef<str>) -> Option<Self> {
+        NonEmptyString::new(text).map(Self)
+    }
+
+    /// Builds `WordPhonetic` without runtime emptiness checks.
+    pub fn new_unchecked(text: impl AsRef<str>) -> Self {
+        Self(NonEmptyString::new_unchecked(text))
+    }
+}
+
+impl std::ops::Deref for WordPhonetic {
+    type Target = str;
+
+    /// Borrows the inner non-empty phonetic string as `&str`.
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<str> for WordPhonetic {
+    /// Borrows the inner non-empty phonetic string as `&str`.
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Validate for WordPhonetic {
+    /// Enforces only non-emptiness: phonetic content is deliberately
+    /// lenient (no symbol-inventory checks; see the type docs).
+    fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
+        let ctx = context
+            .clone()
+            .with_field_label("phonetic form")
             .with_field_error_code(ErrorCode::EmptyWordContentText);
         self.0.validate(&ctx, errors);
     }

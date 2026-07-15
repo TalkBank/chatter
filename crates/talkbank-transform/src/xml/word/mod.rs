@@ -228,6 +228,13 @@ impl XmlEmitter {
                     self.writer
                         .write_event(Event::Text(escape_text(text.0.as_str())))?;
                 }
+                // A @u phonetic form's string is the word's character
+                // content in CHAT XML (the form marker itself is carried
+                // by the <w> attributes, same as other special forms).
+                WordContent::Phonetic(form) => {
+                    self.writer
+                        .write_event(Event::Text(escape_text(form.0.as_str())))?;
+                }
                 WordContent::CompoundMarker(_) => {
                     let mut tag = BytesStart::new("wk");
                     tag.push_attribute(("type", "cmp"));

@@ -1139,3 +1139,75 @@ fn test_sanitize_output_file() -> Result<(), TestError> {
     assert!(body.contains("w1"), "placeholder w1 missing:\n{body}");
     Ok(())
 }
+
+/// A `@u` phonetic form (UNIBET/IPA in a word slot) must validate clean
+/// and must surface in `to-json` as TYPED PHONETIC content, not as an
+/// orthographic text node. The fixture is the real aphasia pattern:
+/// phonetic surface + `[: target]` replacement + `[* code]` error.
+#[test]
+fn test_to_json_types_u_form_content_as_phonetic() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("unibet.cha");
+    fs::write(
+        &file_path,
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+         @ID:\teng|test|CHI|3;|female|||Target_Child|||\n\
+         *CHI:\ts\u{026a}nd\u{259}\u{02de}w\u{0251}n@u [: syndrome] [* n:k] .\n@End\n",
+    )?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success();
+
+    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let doc: serde_json::Value = serde_json::from_slice(&output)
+        .map_err(|e| TestError::Failure(format!("to-json emitted invalid JSON: {e}")))?;
+
+    // Find the @u word node anywhere in the document. Word objects are
+    // not always tagged with "type":"word" (e.g. inside replaced_word),
+    // so the signature is form_type:"u" plus a content array.
+    fn find_u_word(node: &serde_json::Value) -> Option<&serde_json::Value> {
+        match node {
+            serde_json::Value::Object(map) => {
+                if map.get("form_type").and_then(|t| t.as_str()) == Some("u")
+                    && map.get("content").is_some_and(|c| c.is_array())
+                {
+                    return Some(node);
+                }
+                map.values().find_map(find_u_word)
+            }
+            serde_json::Value::Array(items) => items.iter().find_map(find_u_word),
+            _ => None,
+        }
+    }
+    let word = find_u_word(&doc)
+        .ok_or_else(|| TestError::Failure("no @u word in to-json output".to_string()))?;
+
+    // The provenance requirement: the content is a typed phonetic node,
+    // never an orthographic "text" node (the 2026-07-13 UNIBET design,
+    // option B; Franklin's 2026-07-14 ruling: @u only).
+    let content = word["content"]
+        .as_array()
+        .ok_or_else(|| TestError::Failure("@u word has no content array".to_string()))?;
+    let kinds: Vec<&str> = content.iter().filter_map(|c| c["type"].as_str()).collect();
+    if kinds.contains(&"text") {
+        return Err(TestError::Failure(format!(
+            "@u word content is orthographic text, expected typed phonetic: {kinds:?}"
+        )));
+    }
+    if !kinds.contains(&"phonetic") {
+        return Err(TestError::Failure(format!(
+            "@u word content lacks a phonetic node: {kinds:?}"
+        )));
+    }
+    Ok(())
+}
