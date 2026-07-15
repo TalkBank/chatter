@@ -18,7 +18,34 @@ Deferred to a later release:
 -->
 
 
-## [0.3.4] - 2026-07-15
+## [0.3.5] - 2026-07-15
+
+Emergency release restoring corpus-correct word parsing. Versions
+0.3.3 and 0.3.4 have been YANKED (releases and tags removed).
+
+### Fixed
+
+- Reverted the whitespace-boundary overlap-custody grammar introduced
+  in 0.3.3. Its GLR-arbitrated word readings fragmented words carrying
+  four or more glued markers (for example multi-syllable-pause chains
+  like `or^ga^ni^zi^ra`), causing spurious E252/E331/E600/E705
+  validation errors across real corpora and, worse, a serialization
+  mutation (a space inserted into such words on rewrite). Word parsing
+  is restored to the 0.3.2 grammar, verified by an error-code
+  differential and a roundtrip comparison against the 0.3.2 binary
+  over a corpus sample: identical profiles.
+- A regression test pins that multi-marker words parse as one word and
+  validate cleanly.
+
+### Retained from the yanked releases
+
+- Typed `@u` phonetic word forms (UNIBET).
+- The `build_chat` header emitters and @ID demographics fix.
+- The shared English capitalization transform.
+- The long-tier stack-overflow fix and its regression test.
+- The SQLite cache concurrency-safety fix; CI runs under nextest.
+
+## [0.3.4] - 2026-07-15 [YANKED]
 
 ### Added
 
@@ -67,7 +94,7 @@ Deferred to a later release:
   collision, silently disabling caching for that run. Concurrent opens on a
   fresh cache directory now retry the transient init race and all succeed.
 
-## [0.3.3] - 2026-07-13
+## [0.3.3] - 2026-07-13 [YANKED]
 
 ### Added
 
