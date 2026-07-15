@@ -61,6 +61,23 @@ enum ParityStatus {
     ///   the fixture must validate clean. Unlike `Gap`, this clean state is a
     ///   permanent intentional choice, not a defect to close.
     Divergence,
+    /// Unix-build CLAN CHECK cannot emit this code at the current synced CLAN
+    /// HEAD, so there is nothing to reach parity WITH. Three sub-shapes, all
+    /// recorded in the entry `note` with `check.cpp` line evidence:
+    /// - the `check_err(N, ...)` call site is commented out in the source;
+    /// - the call site is compiled but unreachable in file mode (an earlier
+    ///   check preempts it, or the stock depfile's pattern shapes exclude it);
+    /// - the call site lives in an `#ifndef UNX` region (GUI-only; unix CHECK
+    ///   is the authoritative parity bar, see
+    ///   `clan-check-reference/gui-vs-unix-check.md`).
+    ///
+    /// A fixture is OPTIONAL here (the only status where it is): when present
+    /// it pins the construct anyway. The CI gate asserts chatter's recorded
+    /// behaviour on it (`expected_chatter_codes` present, or clean if empty),
+    /// and the CLAN-gated grounding test asserts the code is still NOT
+    /// emitted, a tripwire that fires if a future CLAN bundle revives the
+    /// rule and the entry needs re-adjudication.
+    NoObligation,
 }
 
 /// One CHECK number grounded against a fixture.
@@ -72,7 +89,11 @@ struct ParityEntry {
     /// the grounding match target.
     #[serde(default)]
     check_message: String,
-    fixture: String,
+    /// The grounding fixture under `tests/check_parity/fixtures/`. Required
+    /// for every status except `NoObligation` (where CLAN cannot emit the
+    /// code, so there may be no construct to ground); both tests fail closed
+    /// on a fixture-less entry of any other status.
+    fixture: Option<String>,
     status: ParityStatus,
     #[serde(default)]
     expected_chatter_codes: Vec<String>,
@@ -159,6 +180,7 @@ fn chatter_codes(parser: &TreeSitterParser, fixture: &str) -> Result<Vec<String>
 /// shape, which assert the same thing.
 fn report_missing_expected_codes(
     entry: &ParityEntry,
+    fixture: &str,
     codes: &[String],
     failures: &mut Vec<String>,
 ) {
@@ -166,7 +188,7 @@ fn report_missing_expected_codes(
         if !codes.contains(expected) {
             failures.push(format!(
                 "CHECK {} ({}): expected chatter {} but got {:?} [{}]",
-                entry.check_code, entry.fixture, expected, codes, entry.note
+                entry.check_code, fixture, expected, codes, entry.note
             ));
         }
     }
@@ -178,6 +200,7 @@ fn report_missing_expected_codes(
 /// defect to close, an accept-divergence is a permanent intentional state).
 fn report_unexpected_codes(
     entry: &ParityEntry,
+    fixture: &str,
     codes: &[String],
     failures: &mut Vec<String>,
     marked: &str,
@@ -186,7 +209,7 @@ fn report_unexpected_codes(
     if !codes.is_empty() {
         failures.push(format!(
             "CHECK {} ({}): {} but chatter now emits {:?} -- {} [{}]",
-            entry.check_code, entry.fixture, marked, codes, hint, entry.note
+            entry.check_code, fixture, marked, codes, hint, entry.note
         ));
     }
 }
@@ -201,9 +224,24 @@ fn chatter_matches_check() -> Result<(), TestError> {
 
     let mut failures = Vec::new();
     for entry in &manifest.entries {
-        let codes = chatter_codes(&parser, &entry.fixture)?;
+        let Some(fixture) = &entry.fixture else {
+            // Only `no_obligation` may go fixture-less (nothing groundable
+            // exists); any other status without a fixture is an authoring
+            // error, fail closed rather than silently skipping.
+            if entry.status != ParityStatus::NoObligation {
+                failures.push(format!(
+                    "CHECK {}: entry has no fixture but status {:?}; only \
+                     `no_obligation` entries may omit the fixture [{}]",
+                    entry.check_code, entry.status, entry.note
+                ));
+            }
+            continue;
+        };
+        let codes = chatter_codes(&parser, fixture)?;
         match entry.status {
-            ParityStatus::Parity => report_missing_expected_codes(entry, &codes, &mut failures),
+            ParityStatus::Parity => {
+                report_missing_expected_codes(entry, fixture, &codes, &mut failures);
+            }
             ParityStatus::Divergence => {
                 // Two shapes; see `ParityStatus::Divergence`. Empty expected codes
                 // means chatter intentionally accepts (must validate clean);
@@ -211,13 +249,14 @@ fn chatter_matches_check() -> Result<(), TestError> {
                 if entry.expected_chatter_codes.is_empty() {
                     report_unexpected_codes(
                         entry,
+                        fixture,
                         &codes,
                         &mut failures,
                         "marked intentional `divergence` (chatter accepts)",
                         "reassess the divergence, not a gap",
                     );
                 } else {
-                    report_missing_expected_codes(entry, &codes, &mut failures);
+                    report_missing_expected_codes(entry, fixture, &codes, &mut failures);
                 }
             }
             // chatter does not yet catch this CLAN rule, so the fixture must
@@ -225,11 +264,29 @@ fn chatter_matches_check() -> Result<(), TestError> {
             // flip of the manifest entry to `parity`.
             ParityStatus::Gap => report_unexpected_codes(
                 entry,
+                fixture,
                 &codes,
                 &mut failures,
                 "marked `gap`",
                 "close the gap and flip the manifest entry to `parity`",
             ),
+            // CLAN cannot emit the code, but the fixture still pins chatter's
+            // recorded behaviour on the construct: same two shapes as
+            // `Divergence` (codes present, or clean when the list is empty).
+            ParityStatus::NoObligation => {
+                if entry.expected_chatter_codes.is_empty() {
+                    report_unexpected_codes(
+                        entry,
+                        fixture,
+                        &codes,
+                        &mut failures,
+                        "marked `no_obligation` with chatter accepting",
+                        "re-adjudicate the entry if chatter now rejects",
+                    );
+                } else {
+                    report_missing_expected_codes(entry, fixture, &codes, &mut failures);
+                }
+            }
         }
     }
 
@@ -258,7 +315,12 @@ fn clan_check_grounding() -> Result<(), TestError> {
     let manifest = load_manifest()?;
     let mut failures = Vec::new();
     for entry in &manifest.entries {
-        let fixture = parity_dir().join("fixtures").join(&entry.fixture);
+        let Some(fixture_name) = &entry.fixture else {
+            // Fixture-less entries carry no CLAN-side obligation; the CI gate
+            // already fails closed if the status is not `no_obligation`.
+            continue;
+        };
+        let fixture = parity_dir().join("fixtures").join(fixture_name);
         let output = Command::new("bash")
             .arg(&wrapper)
             .arg("check")
@@ -269,6 +331,22 @@ fn clan_check_grounding() -> Result<(), TestError> {
         // The pty emits CRLF; strip CR before scanning the (NN) trailers.
         let text = String::from_utf8_lossy(&output.stdout).replace('\r', "");
         let emitted = parse_check_numbers(&text);
+        if entry.status == ParityStatus::NoObligation {
+            // Tripwire, inverted assertion: unix CLAN must still NOT emit the
+            // code on this construct. If a future CLAN bundle revives the rule
+            // (uncomments the call site, compiles the GUI-only region into the
+            // unix build, changes the preempting control flow), this fires and
+            // the entry must be re-adjudicated as parity/gap/divergence.
+            if emitted.contains(&entry.check_code) {
+                failures.push(format!(
+                    "CHECK {} ({}): marked `no_obligation` but real CLAN CHECK now \
+                     EMITS it (got {:?}). CLAN revived the rule; re-adjudicate the \
+                     entry. [{}]",
+                    entry.check_code, fixture_name, emitted, entry.note
+                ));
+            }
+            continue;
+        }
         let grounded = if entry.banner_only {
             // Sound only when CHECK is restricted to exactly this code;
             // otherwise any unrelated error would ground it vacuously.
@@ -276,7 +354,7 @@ fn clan_check_grounding() -> Result<(), TestError> {
             if entry.clan_flags != [exclusive_flag] {
                 failures.push(format!(
                     "CHECK {} ({}): banner_only requires clan_flags == [\"+e{}\"], got {:?}",
-                    entry.check_code, entry.fixture, entry.check_code, entry.clan_flags
+                    entry.check_code, fixture_name, entry.check_code, entry.clan_flags
                 ));
                 continue;
             }
@@ -290,7 +368,7 @@ fn clan_check_grounding() -> Result<(), TestError> {
             failures.push(format!(
                 "CHECK {} ({}): real CLAN CHECK no longer emits it (got {:?}). CLAN drifted; \
                  re-ground the fixture/mapping.",
-                entry.check_code, entry.fixture, emitted
+                entry.check_code, fixture_name, emitted
             ));
         }
     }
