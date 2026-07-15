@@ -1,0 +1,1468 @@
+============================================================
+word_markers: lengthening interior x1 (attested U:m)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said U:m again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (lengthening)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: lengthening trailing x1 (attested a:)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said a: again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (lengthening))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: lengthening interior x3 (attested m::)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said he:l:lo:w again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (lengthening)
+                        (word_segment)
+                        (lengthening)
+                        (word_segment)
+                        (lengthening)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: lengthening trailing dense x4 (attested a::::)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said a:::: again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (lengthening))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: lengthening interior dense x5
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said a:b:c:d:e:f again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (lengthening)
+                        (word_segment)
+                        (lengthening)
+                        (word_segment)
+                        (lengthening)
+                        (word_segment)
+                        (lengthening)
+                        (word_segment)
+                        (lengthening)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: syllable pause interior x1 (attested class)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said or^ga again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: syllable pause interior x2
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said a^b^c again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: syllable pause interior x3
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said or^ga^ni^zi again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: syllable pause interior x4 (field-regression class)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said or^ga^ni^zi^ra again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: syllable pause interior x6 (cliff margin)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said a^b^c^d^e^f^g again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: syllable pause with form marker (attested a^a@p)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said a^a@p again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))
+                      (form_marker)))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: tilde clitic interior x1 (attested class)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said os~padre again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (tilde)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: compound interior x2 (attested I+C+E)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said I+C+E again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (word_segment)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: mixed markers dense (pause + lengthening)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	said or^ga:^ni:^zi^ra again .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment)
+                        (lengthening)
+                        (syllable_pause)
+                        (word_segment)
+                        (lengthening)
+                        (syllable_pause)
+                        (word_segment)
+                        (syllable_pause)
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
