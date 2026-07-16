@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-15 22:18 EDT
+**Last modified:** 2026-07-15 23:14 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -216,6 +216,14 @@ The `@l` form marks a single spoken letter (`b@l`); use `@k` (letter
 sequence) or `@ls` (letter plural) for multi-letter content. Stuttered
 letters with repetition segments (`↫b^↫b@l`) are fine: repeated-segment
 material does not count toward the stem. Mirrors CLAN CHECK error 76.
+
+### E519 at word level: language codes must be real everywhere
+
+The ISO 639-3 registry check that guards `@Languages` and `@ID` also
+applies to explicit word-level switch codes (`word@s:CODE`, including
+`+`/`&` multi-code forms): the code needs no declaration, but it must
+name a real language. Utterance-level `[- CODE]` precodes are covered
+by E755 plus the header check.
 
 ### E755: Utterance language not declared in @Languages
 

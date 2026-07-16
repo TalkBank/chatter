@@ -31,6 +31,11 @@ version and are listed under "Changed" / "Removed".
   be declared in `@Languages` (utterance-level presence is
   substantial). Mirrors CLAN CHECK error 152.
 
+- Word-level explicit language codes (`word@s:CODE`) are now validated
+  against the ISO 639-3 registry (E519), the same rule that guards
+  `@Languages` and `@ID`; declaration in `@Languages` remains not
+  required.
+
 ### Removed
 
 - The E254 warning (word-level `@s:CODE` not listed in `@Languages`)
@@ -319,6 +324,11 @@ Emergency release restoring corpus-correct word parsing. Versions
   files that passed `chatter validate` under 0.1.1 may now report errors. This is
   intended: chatter is the CHAT-validity authority and is at least as strict as
   CLAN CHECK.
+
+- Word-level explicit language codes (`word@s:CODE`) are now validated
+  against the ISO 639-3 registry (E519), the same rule that guards
+  `@Languages` and `@ID`; declaration in `@Languages` remains not
+  required.
 
 ### Removed
 

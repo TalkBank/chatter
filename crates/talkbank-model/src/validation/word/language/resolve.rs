@@ -117,6 +117,23 @@ pub struct LanguageResolutionOutcome {
     pub diagnostics: Vec<ParseError>,
 }
 
+/// Report constraint violations for one word-level explicit language code,
+/// re-anchored to the word's span.
+///
+/// Delegates to the shared [`LanguageCode::report_code_issues`] rule set
+/// (shape, placeholder, ISO 639-3 registry), so header-level and word-level
+/// codes are held to the SAME standard by one implementation; only the
+/// diagnostic anchor differs (the shared rule anchors at offset 0, so each
+/// collected diagnostic is remapped onto the word before being surfaced).
+fn report_word_code_issues(code: &LanguageCode, word: &Word, diagnostics: &mut Vec<ParseError>) {
+    let collector = crate::ErrorCollector::new();
+    code.report_code_issues(&collector);
+    diagnostics.extend(collector.into_vec().into_iter().map(|mut error| {
+        error.location = SourceLocation::new(word.span);
+        error
+    }));
+}
+
 /// Resolve the effective language set for one word token.
 ///
 /// Returns a [`LanguageResolutionOutcome`] carrying the resolved
@@ -196,11 +213,18 @@ pub fn resolve_word_language(
             // transcript's substantial languages; a one-word insertion is
             // not substantial presence. Contrast the utterance-level
             // `[- CODE]` precode, which IS required to be declared (E755).
+            // The code must still be a REAL language (part 2 of the ruling):
+            // registry validation is what catches typo'd codes.
+            report_word_code_issues(code, word, &mut diagnostics);
             LanguageResolution::Single(code.clone())
         }
         Some(WordLanguageMarker::Multiple(codes)) => {
             // Multiple languages mixed together (code-mixing)
-            // Content must be valid in ALL component languages
+            // Content must be valid in ALL component languages, and every
+            // component must be a real ISO 639-3 code (ruling part 2).
+            for code in codes {
+                report_word_code_issues(code, word, &mut diagnostics);
+            }
             LanguageResolution::Multiple(codes.clone())
         }
         Some(WordLanguageMarker::Ambiguous(codes)) => {

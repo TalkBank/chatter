@@ -794,6 +794,14 @@
       "source_spec": "spec/errors/E519_auto.md"
     },
     {
+      "fixture": "E519_Word_level_language_code_not_in_the_ISO_639_3_registry.cha",
+      "expected_codes": [
+        "E519"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E519_word_level_language_code.md"
+    },
+    {
       "fixture": "E522_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "E522",

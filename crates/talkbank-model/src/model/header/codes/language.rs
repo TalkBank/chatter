@@ -200,6 +200,20 @@ impl std::borrow::Borrow<str> for LanguageCode {
 impl Validate for LanguageCode {
     /// Enforce basic CHAT-facing language-code constraints.
     fn validate(&self, _context: &ValidationContext, errors: &impl crate::ErrorSink) {
+        self.report_code_issues(errors);
+    }
+}
+
+impl LanguageCode {
+    /// Report every CHAT-facing constraint violation on this code:
+    /// 3-lowercase-letter shape, no disallowed placeholders, and ISO 639-3
+    /// registry membership. Context-free so BOTH validation layers share
+    /// one rule: header validation (`Validate for LanguageCode`, covering
+    /// `@Languages` / `@ID`) and word-level explicit-switch validation
+    /// (`resolve_word_language`, which re-anchors the reported spans to
+    /// the word). Diagnostics anchor at offset 0; callers with a real
+    /// span remap `location.span` after collection.
+    pub(crate) fn report_code_issues(&self, errors: &impl crate::ErrorSink) {
         let is_three_lowercase =
             self.0.len() == 3 && self.0.chars().all(|c| c.is_ascii_lowercase());
 
