@@ -156,11 +156,12 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
 #[test]
 fn l1_of_and_comment_headers_are_emitted_in_order() {
     use talkbank_model::WriteChat;
-    use talkbank_model::model::LanguageName;
+    use talkbank_model::model::LanguageCode;
 
     let mut desc = desc_with(Some(MediaStatus::Unlinked));
     desc.participants = vec![
-        ParticipantDesc::new("S1", "Teacher", "MICASE").with_l1_language(LanguageName::new("est")),
+        ParticipantDesc::new("S1", "Teacher", "MICASE")
+            .with_l1_language(LanguageCode::new("est").expect("non-empty literal")),
     ];
     desc.utterances = vec![UtteranceDesc {
         speaker: "S1".to_string(),

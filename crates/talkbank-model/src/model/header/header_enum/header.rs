@@ -13,10 +13,10 @@
 use super::super::{
     codes::{
         ActivitiesDescription, BackgroundDescription, BirthplaceDescription, ChatDate,
-        ColorWordList, FontSpec, GemLabel, LanguageCode, LanguageName, LocationDescription,
-        PageNumber, ParticipantEntry, PidValue, RoomLayoutDescription, SituationDescription,
-        SpeakerCode, TDescription, TapeLocationDescription, TimeDurationValue, TimeStartValue,
-        TranscriberName, VideoSpec, WarningText, WindowGeometry,
+        ColorWordList, FontSpec, GemLabel, LanguageCode, LocationDescription, PageNumber,
+        ParticipantEntry, PidValue, RoomLayoutDescription, SituationDescription, SpeakerCode,
+        TDescription, TapeLocationDescription, TimeDurationValue, TimeStartValue, TranscriberName,
+        VideoSpec, WarningText, WindowGeometry,
     },
     enums::{Number, RecordingQuality, Transcription},
     types_header::TypesHeader,
@@ -551,8 +551,15 @@ pub enum Header {
     L1Of {
         /// Speaker code of the participant
         participant: SpeakerCode,
-        /// First language name
-        language: LanguageName,
+        /// First language as an ISO 639-3 code.
+        ///
+        /// Wild corpus usage is uniformly codes (verified 2026-07-16:
+        /// 16 distinct values across 1,158 kept files, all three-letter
+        /// registry codes), so the field is typed as [`LanguageCode`]
+        /// and held to the same shared code rule set as `@Languages` /
+        /// `@ID` (migrated from a free-text `LanguageName` per the
+        /// 2026-07-15 @s-declaration ruling, part 2).
+        language: LanguageCode,
     },
 
     // =========================================================================

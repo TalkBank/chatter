@@ -355,9 +355,23 @@ pub(super) fn l1_of(
         }
     };
     surface_unexpected(&children.unexpected, input, errors);
+    // @L1 of values are ISO 639-3 codes (typed model migration,
+    // 2026-07-16); an empty value cannot form a code and falls back to
+    // an unknown header carrying the reason, like the missing-value path.
+    let language = match model::LanguageCode::new(language) {
+        Ok(code) => code,
+        Err(_empty) => {
+            return ParseOutcome::parsed(unknown_header_from_node(
+                header_actual,
+                input,
+                "Empty language value in @L1 of header",
+                None,
+            ));
+        }
+    };
     ParseOutcome::parsed(Header::L1Of {
         participant: model::SpeakerCode::new(participant),
-        language: model::LanguageName::new(language),
+        language,
     })
 }
 

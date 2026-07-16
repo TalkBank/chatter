@@ -36,6 +36,12 @@ version and are listed under "Changed" / "Removed".
   `@Languages` and `@ID`; declaration in `@Languages` remains not
   required.
 
+- `@L1 of` values are now typed ISO 639-3 language codes and validated
+  against the registry (E519), completing registry validation at every
+  position language codes appear. Wild usage was already uniformly
+  codes; generation via `build_chat` now takes a `LanguageCode` for the
+  participant first language.
+
 ### Removed
 
 - The E254 warning (word-level `@s:CODE` not listed in `@Languages`)

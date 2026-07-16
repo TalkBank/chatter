@@ -4304,8 +4304,8 @@
           "description": "@L1 of SPK:\\tlanguage",
           "properties": {
             "language": {
-              "$ref": "#/$defs/LanguageName",
-              "description": "First language name"
+              "$ref": "#/$defs/LanguageCode",
+              "description": "First language as an ISO 639-3 code.\n\nWild corpus usage is uniformly codes (verified 2026-07-16:\n16 distinct values across 1,158 kept files, all three-letter\nregistry codes), so the field is typed as [`LanguageCode`]\nand held to the same shared code rule set as `@Languages` /\n`@ID` (migrated from a free-text `LanguageName` per the\n2026-07-15 @s-declaration ruling, part 2)."
             },
             "participant": {
               "$ref": "#/$defs/SpeakerCode",
@@ -4655,10 +4655,6 @@
         "word_languages"
       ],
       "type": "object"
-    },
-    "LanguageName": {
-      "description": "Human-readable language name recorded in `@L1 of`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#L1_Header>",
-      "type": "string"
     },
     "LanguageSource": {
       "description": "Source of language resolution for a word.\n\nCHAT supports multiple ways to specify language for words:\n- **Default**: From `@Languages` header (primary language)\n- **TierScoped**: From utterance-level `[- code]` marker\n- **WordExplicit**: From word-level `@s:code` marker\n- **WordShortcut**: From word-level `@s` shortcut (toggles between primary/secondary)\n- **Unresolved**: No language could be determined (validation error)\n\nKeeping provenance separate from `WordLanguages` lets downstream tools\ndistinguish \"same resolved code, different source semantics\" cases, which\nmatters for corpus QA and language-switching diagnostics.\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)",

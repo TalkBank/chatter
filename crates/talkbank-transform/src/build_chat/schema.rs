@@ -14,7 +14,7 @@
 
 use talkbank_model::model::{
     AgeValue, ChatDate, ChatOptionFlags, CustomIdField, EducationDescription, GroupName,
-    LanguageName, MediaStatus, PidValue, SesValue, Sex, SituationDescription, TranscriberName,
+    LanguageCode, MediaStatus, PidValue, SesValue, Sex, SituationDescription, TranscriberName,
 };
 
 /// Description of a transcript to assemble into CHAT.
@@ -88,9 +88,10 @@ pub struct ParticipantDesc {
     pub education: Option<EducationDescription>,
     /// `@ID` field 10 (corpus-specific custom extension). `None` leaves it empty.
     pub custom: Option<CustomIdField>,
-    /// Optional first language, emitted as a per-participant `@L1 of SPK:`
-    /// constant header (immediately after the `@ID` block). `None` omits it.
-    pub l1_language: Option<LanguageName>,
+    /// Optional first language as an ISO 639-3 code, emitted as a
+    /// per-participant `@L1 of SPK:` constant header (immediately after
+    /// the `@ID` block). `None` omits it.
+    pub l1_language: Option<LanguageCode>,
 }
 
 impl ParticipantDesc {
@@ -157,8 +158,8 @@ impl ParticipantDesc {
         self
     }
 
-    /// Sets the participant's first language (`@L1 of`).
-    pub fn with_l1_language(mut self, language: LanguageName) -> Self {
+    /// Sets the participant's first language (`@L1 of`) as an ISO 639-3 code.
+    pub fn with_l1_language(mut self, language: LanguageCode) -> Self {
         self.l1_language = Some(language);
         self
     }

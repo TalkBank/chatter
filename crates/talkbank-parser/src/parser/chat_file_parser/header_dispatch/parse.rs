@@ -379,9 +379,20 @@ impl TreeSitterParser {
                                 None,
                             ));
                         };
+                        // @L1 of values are ISO 639-3 codes; an empty value
+                        // cannot form a code and takes the unknown-header
+                        // fallback like the missing-value path above.
+                        let Ok(language) = crate::model::LanguageCode::new(language) else {
+                            return Ok(unknown_header_with_reason(
+                                header_node,
+                                wrapped,
+                                "Empty language value in @L1 of header",
+                                None,
+                            ));
+                        };
                         Header::L1Of {
                             participant: crate::model::SpeakerCode::new(participant),
-                            language: crate::model::LanguageName::new(language),
+                            language,
                         }
                     }
                     WARNING_HEADER => {

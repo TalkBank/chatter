@@ -199,9 +199,19 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             participant: SpeakerCode::new(*speaker),
             place: BirthplaceDescription::new(&all_content),
         },
-        Token::HeaderL1Of(speaker) => Header::L1Of {
-            participant: SpeakerCode::new(*speaker),
-            language: LanguageName::new(&all_content),
+        // @L1 of values are ISO 639-3 codes (typed model migration,
+        // 2026-07-16); an empty value cannot form a code and mirrors the
+        // tree-sitter path's unknown-header fallback.
+        Token::HeaderL1Of(speaker) => match LanguageCode::new(&all_content) {
+            Ok(language) => Header::L1Of {
+                participant: SpeakerCode::new(*speaker),
+                language,
+            },
+            Err(_empty) => Header::Unknown {
+                text: WarningText::new(all_content),
+                parse_reason: Some("Empty language value in @L1 of header".to_string()),
+                suggested_fix: None,
+            },
         },
         Token::HeaderPrefix(p) if p.contains("@Bg") => Header::BeginGem {
             label: if all_content.is_empty() {

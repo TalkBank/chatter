@@ -57,6 +57,17 @@ pub(crate) fn check_header(
         Header::Languages { codes } => {
             codes.validate(_context, errors);
         }
+        Header::L1Of { language, .. } => {
+            // @L1 of carries an ISO 639-3 code held to the same shared rule
+            // set as @Languages / @ID; re-anchor the shared diagnostics
+            // (which anchor at offset 0) onto this header's span.
+            let collector = crate::ErrorCollector::new();
+            language.report_code_issues(&collector);
+            for mut error in collector.into_vec() {
+                error.location = crate::SourceLocation::new(span);
+                errors.report(error);
+            }
+        }
         Header::Date { date } => {
             check_date_header(date.as_str(), span, errors);
         }

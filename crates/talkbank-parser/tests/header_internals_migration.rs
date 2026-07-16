@@ -117,7 +117,7 @@ fn headers_speaker_info_fixture_parses_with_zero_diagnostics() {
         r#"Birth { participant: SpeakerCode("CHI"), date: Valid { day: 28, month: Jun, year: 2001, raw: "28-JUN-2001" } }"#,
         r#"Birth { participant: SpeakerCode("MOT"), date: Valid { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" } }"#,
         r#"Birthplace { participant: SpeakerCode("MOT"), place: BirthplaceDescription("Taipei, Taiwan") }"#,
-        r#"L1Of { participant: SpeakerCode("F_A_T"), language: LanguageName("ara") }"#,
+        r#"L1Of { participant: SpeakerCode("F_A_T"), language: LanguageCode("ara") }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) } }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: birth_of_header, birthplace_of_header, l1_of_header," }), Continuation, Text(BulletContentText { text: "age_format, multiple @Languages codes, participant with special chars" })]) } }"#,
         r#"Utterance"#,
