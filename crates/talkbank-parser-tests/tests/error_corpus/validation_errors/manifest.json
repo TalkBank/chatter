@@ -1659,6 +1659,14 @@
       "source_spec": "spec/errors/E755_undeclared_utterance_language.md"
     },
     {
+      "fixture": "E756_Empty_user_defined_tier.cha",
+      "expected_codes": [
+        "E756"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E756_empty_user_defined_tier.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

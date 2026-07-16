@@ -42,6 +42,11 @@ version and are listed under "Changed" / "Removed".
   codes; generation via `build_chat` now takes a `LanguageCode` for the
   participant first language.
 
+- E756 (empty user-defined `%x` tier) replaces W601: the rejection is
+  unchanged; the old code fired as a hard error despite its warning
+  prefix, so the number was the bug. The diagnostic message also no
+  longer double-prefixes the tier name (`%xfoo`, not `%xxfoo`).
+
 ### Removed
 
 - The E254 warning (word-level `@s:CODE` not listed in `@Languages`)

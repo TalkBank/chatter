@@ -1,8 +1,14 @@
 //! Validation rules for user-defined dependent tiers (`%x*`).
 //!
-//! These checks intentionally emit warnings instead of hard errors so legacy
-//! corpora can be migrated gradually from deprecated `%xLABEL` forms to
-//! corresponding standard tier tags.
+//! One rule lives here: a user-defined tier must carry content (E756).
+//! History: the check was born as W601 firing at Error severity (the
+//! warning-prefixed code was the bug; renumbered 2026-07-16, rejection
+//! unchanged). A sibling W602 check (deprecated `%xLABEL` where LABEL
+//! was a standard tier) was DELETED the same day as dead code: the Phon
+//! `%x`-tier fold routes every known label to typed tier parsers, so
+//! labels like `xpho` never reach this user-defined path (and the old
+//! branch compared against bare names like `pho`, which production
+//! labels, `x`-prefixed, could never equal).
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
@@ -10,75 +16,30 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 
 /// Validate one user-defined `%x*` tier payload.
 ///
-/// This emits warnings for empty content and for deprecated `%xLABEL` forms
-/// where `LABEL` is now a standard tier type.
-/// The function is intentionally warning-level so legacy corpora can be
-/// migrated incrementally without hard parse failures.
+/// `label` is the tier label as parsed, INCLUDING the `x` prefix (a
+/// `%xtst:` tier arrives as `xtst`).
 pub(crate) fn check_user_defined_tier_content(
     label: &str,
     content: &str,
     span: Span,
     errors: &impl ErrorSink,
 ) {
-    // W601: Warn if tier has empty content.
+    // E756: a tier declaring no content asserts an annotation that is
+    // not there and fails to make sense.
     if content.chars().all(|ch| ch.is_whitespace()) {
         let mut err = ParseError::new(
             ErrorCode::EmptyUserDefinedTier,
             Severity::Error,
             SourceLocation::at_offset(span.start as usize),
             ErrorContext::new(content, 0..content.len(), content),
-            format!("User-defined tier %x{} has no content", label),
+            format!("User-defined tier %{label} has no content"),
         )
-        .with_suggestion("User-defined tiers should contain custom analysis/annotation data");
+        .with_suggestion(
+            "User-defined tiers should contain custom analysis/annotation data; remove the empty tier line otherwise",
+        );
         err.location.span = span;
         errors.report(err);
     }
-
-    // Check tier label validity
-    check_tier_label(label, span, errors);
-}
-
-/// Validate user-defined tier labels against known standard tier names.
-///
-/// Labels that collide with standard tiers are reported as migration warnings
-/// so corpora can move from `%xfoo` to `%foo` forms.
-/// Unknown custom labels remain allowed by design.
-fn check_tier_label(label: &str, span: Span, errors: &impl ErrorSink) {
-    // Known tier types that have dedicated parsers or are standard tiers
-    const KNOWN_TIERS: &[&str] = &[
-        "mor", // Morphological tier
-        "gra", // Grammatical relation tier
-        "pho", "mod", "upho", // Phonological tiers
-        "sin",  // Gesture/sign tier
-        "com", "exp", "add", // Text tiers
-        "spa", "sit", "gpx", // More text tiers
-        "int", "act", "cod", // More text tiers
-        // Standard text-only tiers
-        "ort", "eng", "gls", "alt", "coh", "def", "err", "fac", "flo", "par", "tim",
-    ];
-
-    // W602: Warn if %xLABEL where LABEL is already a known standard tier.
-    if KNOWN_TIERS.contains(&label) {
-        let mut err = ParseError::new(
-            ErrorCode::UnknownUserDefinedTier,
-            Severity::Error,
-            SourceLocation::at_offset(span.start as usize),
-            ErrorContext::new(label, 0..label.len(), label),
-            format!(
-                "Deprecated experimental tier %x{}: should be updated to %{}",
-                label, label
-            ),
-        )
-        .with_suggestion(format!(
-            "Update tier from %x{} to %{} after validating/aligning content",
-            label, label
-        ));
-        err.location.span = span;
-        errors.report(err);
-    }
-
-    // Otherwise, it's a valid user-defined %x tier - no error
-    // User-defined tiers can have any label (foo, bar, custom, etc.)
 }
 
 #[cfg(test)]
@@ -87,50 +48,39 @@ mod tests {
     use crate::ErrorCollector;
 
     #[test]
-    fn test_w601_empty_tier() {
+    fn test_e756_empty_tier() {
         let errors = ErrorCollector::new();
-        check_user_defined_tier_content("foo", "", Span::DUMMY, &errors);
+        check_user_defined_tier_content("xfoo", "", Span::DUMMY, &errors);
         let error_vec = errors.into_vec();
         assert_eq!(error_vec.len(), 1);
         assert_eq!(error_vec[0].code, ErrorCode::EmptyUserDefinedTier);
         assert_eq!(error_vec[0].severity, Severity::Error);
+        // The message names the tier with a single % prefix (the label
+        // already carries the x; the old format double-prefixed to %xx...).
+        assert!(error_vec[0].message.contains("%xfoo"));
+        assert!(!error_vec[0].message.contains("%xxfoo"));
     }
 
     #[test]
-    fn test_w602_deprecated_xtier() {
-        // %xpho with content should warn (pho is a known standard tier now)
+    fn test_e756_whitespace_only_tier() {
         let errors = ErrorCollector::new();
-        check_user_defined_tier_content("pho", "test content", Span::DUMMY, &errors);
+        check_user_defined_tier_content("xtst", " \t", Span::DUMMY, &errors);
         let error_vec = errors.into_vec();
         assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnknownUserDefinedTier);
-        assert_eq!(error_vec[0].severity, Severity::Error);
+        assert_eq!(error_vec[0].code, ErrorCode::EmptyUserDefinedTier);
     }
 
     #[test]
     fn test_valid_user_tier_no_errors() {
-        // %xfoo with content is valid (custom user tier)
-        let errors = ErrorCollector::new();
-        check_user_defined_tier_content("foo", "test content", Span::DUMMY, &errors);
-        let error_vec = errors.into_vec();
-        assert!(
-            error_vec.is_empty(),
-            "Custom user-defined tier should be valid"
-        );
-    }
-
-    #[test]
-    fn test_valid_custom_labels() {
-        // Various custom labels should all be valid
-        let labels = vec!["foo", "bar", "custom", "abc123", "mydata"];
-        for label in labels {
+        // Any user-defined tier with content is valid; the deprecated
+        // %xLABEL check (W602) was deleted as dead code, so known-standard
+        // labels draw nothing here (their typed parsers own them upstream).
+        for label in ["xfoo", "xpho", "xmor", "xcustom"] {
             let errors = ErrorCollector::new();
-            check_user_defined_tier_content(label, "content", Span::DUMMY, &errors);
-            let error_vec = errors.into_vec();
+            check_user_defined_tier_content(label, "test content", Span::DUMMY, &errors);
             assert!(
-                error_vec.is_empty() || error_vec[0].code == ErrorCode::UnknownUserDefinedTier,
-                "Custom label {} should be valid or only warn",
-                label
+                errors.into_vec().is_empty(),
+                "user-defined tier {label} with content must be valid"
             );
         }
     }

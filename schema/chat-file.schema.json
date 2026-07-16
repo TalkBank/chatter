@@ -3306,6 +3306,11 @@
           "type": "string"
         },
         {
+          "const": "E756",
+          "description": "User-defined `%x` tier has empty or whitespace-only content: the\nline declares an annotation that is not there. Formerly W601 (which\nfired as a hard error despite the warning prefix); renumbered\n2026-07-16, rejection unchanged.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"
@@ -3318,16 +3323,6 @@
         {
           "const": "W211",
           "description": "Missing whitespace after overlap marker.",
-          "type": "string"
-        },
-        {
-          "const": "W601",
-          "description": "User-defined dependent tier is empty.",
-          "type": "string"
-        },
-        {
-          "const": "W602",
-          "description": "Unknown user-defined dependent tier name.",
           "type": "string"
         },
         {

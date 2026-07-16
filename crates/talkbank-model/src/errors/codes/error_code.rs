@@ -843,6 +843,13 @@ pub enum ErrorCode {
     #[code("E755")]
     UndeclaredUtteranceLanguage,
 
+    /// User-defined `%x` tier has empty or whitespace-only content: the
+    /// line declares an annotation that is not there. Formerly W601 (which
+    /// fired as a hard error despite the warning prefix); renumbered
+    /// 2026-07-16, rejection unchanged.
+    #[code("E756")]
+    EmptyUserDefinedTier,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================
@@ -855,12 +862,12 @@ pub enum ErrorCode {
     /// Missing whitespace after overlap marker.
     #[code("W211")]
     MissingWhitespaceAfterOverlap,
-    /// User-defined dependent tier is empty.
-    #[code("W601")]
-    EmptyUserDefinedTier,
-    /// Unknown user-defined dependent tier name.
-    #[code("W602")]
-    UnknownUserDefinedTier,
+    // W601 (empty user-defined tier) was RENUMBERED to E756 on 2026-07-16:
+    // it always fired as a hard error, so the warning-prefixed code was the
+    // bug (maintainer ruling). W601 is retired and not reused.
+    // W602 (deprecated %xLABEL) was DELETED the same day: the Phon %x-tier
+    // fold routes every known label to typed tier parsers, so the check was
+    // dead code. W602 is retired and not reused.
     /// Legacy warning from older CHAT validation.
     #[code("W999")]
     LegacyWarning,
