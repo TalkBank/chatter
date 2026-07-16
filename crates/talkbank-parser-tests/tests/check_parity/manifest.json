@@ -1016,9 +1016,11 @@
    "check_code": 121,
    "check_message": "Language code \"qqq\" not found in \"CLAN/lib/fixes/ISO-639.cut\" file.",
    "fixture": "CHECK_121_unknown_lang.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A language code (right length) that is not present in CLAN/lib/fixes/ISO-639.cut, on @Languages or the @ID language field. GAP: chatter accepts 'qqq' when @Languages and @ID agree. chatter validates code shape (3 chars, E519) and @ID/@Languages consistency, but not membership in the ISO-639 inventory. An earlier fixture with @ID eng vs @Languages qqq was rejected only for the mismatch (incidental E519), so the sharp consistent fixture is recorded."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E519"
+   ],
+   "note": "An UNASSIGNED three-letter code (qzz, outside the qaa-qtz private-use range) on @Languages/@ID. CLAN emits (121) from its legacy language table; chatter rejects via the full ISO 639-3 registry (E519, InvalidLanguageCode), the authoritative modern standard. PARITY per the 2026-07-14 ruling; fixture re-grounded 2026-07-15 from qqq to qzz because qqq is registry-VALID (private use), which the original fixture conflated; see the companion private-use divergence entry."
   },
   {
    "check_code": 122,
@@ -1510,6 +1512,14 @@
    "check_message": "Please add \"unlinked\" to @Media header.",
    "status": "no_obligation",
    "note": "Call site commented out after four days in service ('in 2018-10-03 out 2018-10-07', check.cpp 5752); never emitted by current builds. Media/bullet consistency is adjudicated under the live codes (112 ruling of 2026-07-14 covers the meaningful direction: bullets require @Media)."
+  },
+  {
+   "check_code": 121,
+   "check_message": "Undefined language code on @ID or @Languages tier.",
+   "fixture": "CHECK_121_private_use_lang.cha",
+   "status": "divergence",
+   "expected_chatter_codes": [],
+   "note": "A PRIVATE-USE code (qqq, inside ISO 639-3's reserved qaa-qtz range) on @Languages/@ID. CLAN's fixed table lacks the private-use range and emits (121); the ISO 639-3 registry defines qaa-qtz as valid codes reserved for local use, so chatter accepts them: an intentional registry-grounded divergence, not a gap. Wild grounding 2026-07-15: no kept file uses a private-use code (typed scan of every data-json languages field), so the divergence is currently theoretical."
   }
  ]
 }
