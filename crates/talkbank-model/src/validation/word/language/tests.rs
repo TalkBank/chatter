@@ -230,8 +230,11 @@ fn test_resolve_word_language_tertiary() {
 
 /// Explicit language codes are allowed even if absent from `@Languages`.
 ///
-/// The resolver stays permissive, but it should warn so transcribers notice the
-/// missing header declaration.
+/// An explicit word-level code is self-contained: it resolves cleanly with NO
+/// diagnostic even when absent from `@Languages` (maintainer ruling
+/// 2026-07-15, docs/design/2026-07-15-at-s-language-declaration-decision.md
+/// part 1; the E254 warning previously asserted here was retired by that
+/// ruling: it fired on 854 kept files of deliberate valid usage).
 #[test]
 fn test_resolve_word_language_undeclared_explicit_code() {
     let mut word = Word::new_unchecked("ciao@s:ita", "ciao");
@@ -245,8 +248,10 @@ fn test_resolve_word_language_undeclared_explicit_code() {
         diagnostics: errors,
     } = resolve_word_language(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Single(lc("ita")));
-    assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].severity, crate::Severity::Warning);
+    assert!(
+        errors.is_empty(),
+        "undeclared explicit word language must resolve silently, got {errors:?}"
+    );
 }
 
 /// Explicit language codes declared in `@Languages` resolve cleanly.

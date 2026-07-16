@@ -1520,6 +1520,16 @@
    "status": "divergence",
    "expected_chatter_codes": [],
    "note": "A PRIVATE-USE code (qqq, inside ISO 639-3's reserved qaa-qtz range) on @Languages/@ID. CLAN's fixed table lacks the private-use range and emits (121); the ISO 639-3 registry defines qaa-qtz as valid codes reserved for local use, so chatter accepts them: an intentional registry-grounded divergence, not a gap. Wild grounding 2026-07-15: no kept file uses a private-use code (typed scan of every data-json languages field), so the divergence is currently theoretical."
+  },
+  {
+   "check_code": 152,
+   "check_message": "Language is not defined on \"@Languages:\" header tier.",
+   "fixture": "CHECK_152_undeclared_precode_lang.cha",
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E755"
+   ],
+   "note": "A [- CODE] utterance precode whose language is absent from @Languages. CLAN emits (152) via the indirect check_isLangMatch(wh=152) call at check.cpp 4194/5501, which the reference JSON's literal check_err(N,) counter misses, so 152 was WRONGLY in the dead list until 2026-07-15 (the coverage tool auto-reclassifies once this entry exists). Adjudicated MEANINGFUL and closed as E755 per the @s-declaration ruling (docs design 2026-07-15, part 3): utterance-level presence is substantial and belongs in @Languages; wild grounding 0 of 7,167 precode-bearing files violate. Deliberate contrast: word-level @s:CODE carries NO declaration requirement (part 1 of the same ruling; the pre-2019 CHECK behavior and the retired E254 warning are explicitly NOT adopted: CLAN itself relaxed @s in 2019)."
   }
  ]
 }

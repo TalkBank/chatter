@@ -188,25 +188,14 @@ pub fn resolve_word_language(
             }
         }
         Some(WordLanguageMarker::Explicit(code)) => {
-            if !declared_languages.is_empty() && !declared_languages.iter().any(|decl| decl == code)
-            {
-                diagnostics.push(
-                    ParseError::new(
-                        ErrorCode::UndeclaredExplicitWordLanguage,
-                        Severity::Warning,
-                        SourceLocation::new(word.span),
-                        None,
-                        format!(
-                            "Explicit word language '{}' is not listed in @Languages",
-                            code.as_str()
-                        ),
-                    )
-                    .with_suggestion(format!(
-                        "Add '{}' to @Languages or confirm the word-level override is intentional",
-                        code.as_str()
-                    )),
-                );
-            }
+            // An explicit word-level code is self-contained: it deliberately
+            // carries NO requirement to be declared in @Languages (maintainer
+            // ruling 2026-07-15, docs/design/2026-07-15-at-s-language-
+            // declaration-decision.md part 1; the E254 warning that fired
+            // here was retired by that ruling). @Languages declares the
+            // transcript's substantial languages; a one-word insertion is
+            // not substantial presence. Contrast the utterance-level
+            // `[- CODE]` precode, which IS required to be declared (E755).
             LanguageResolution::Single(code.clone())
         }
         Some(WordLanguageMarker::Multiple(codes)) => {

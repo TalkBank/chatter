@@ -61,18 +61,24 @@ const CHAT_WITH_ALIGNMENT_ERROR: &str = r#"@UTF8
 @End
 "#;
 
-// A file whose ONLY diagnostic is a warning (E254
-// UndeclaredExplicitWordLanguage: the word-level `@s:spa` language override is
-// not declared in `@Languages`). This is valid CHAT: warnings do not make a
-// file invalid, so its per-file headline must be advisory, not an error.
-const WARNINGS_ONLY_CHAT: &str = r#"@UTF8
+// A file intended to carry ONLY warning-severity diagnostics. Valid CHAT:
+// warnings do not make a file invalid, so its per-file headline must be
+// advisory, not an error. NOTE: this fixture rode on the E254
+// undeclared-@s:CODE warning, retired 2026-07-15 (an undeclared word-level
+// language override is now silently valid), and no default-config construct
+// currently produces a warning-severity diagnostic through `chatter
+// validate`, so the subprocess test below is ignored until one exists again
+// (candidate: the W601/W602 severity-taxonomy adjudication). The headline
+// logic itself is pinned by unit tests on `has_hard_error` in
+// `src/output.rs`.
+const WARNINGS_ONLY_CHAT: &str = "@UTF8
 @Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
-*CHI:	hello hola@s:spa .
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:\thello hola@s:spa .
 @End
-"#;
+";
 
 // ============================================================================
 // Validate Command Tests
@@ -164,13 +170,17 @@ fn test_validate_invalid_file_text_mode_uses_stderr_for_diagnostics() -> Result<
 /// A warnings-only file is valid CHAT, so it must NOT be headlined as an error.
 ///
 /// Regression for the per-file headline keying on "has any diagnostic" instead
-/// of "has any hard error": a file whose sole diagnostic is a warning (E254)
-/// was printed as `✗ Errors found in <file>` and given the "fix the structural
+/// of "has any hard error": a file whose sole diagnostic is a warning was
+/// printed as `✗ Errors found in <file>` and given the "fix the structural
 /// errors first" cascading hint, while the summary correctly reported it Valid.
 /// The headline must instead read `⚠ Warnings in <file>`, the cascading hint
 /// (which is about hard structural errors tainting the parse) must not fire,
 /// and the run must succeed with `Valid: 1`.
 #[test]
+#[ignore = "no default-config construct currently produces a warning-severity \
+            diagnostic (E254 retired 2026-07-15); re-enable with a real \
+            warnings-only fixture once one exists (see WARNINGS_ONLY_CHAT \
+            note). The headline logic is unit-pinned in src/output.rs."]
 fn test_validate_warnings_only_file_not_headlined_as_error() -> Result<(), TestError> {
     let dir = tempdir()?;
     let file_path = dir.path().join("warnings_only.cha");
@@ -186,7 +196,6 @@ fn test_validate_warnings_only_file_not_headlined_as_error() -> Result<(), TestE
         // The warning itself must still be shown to the user.
         .stderr(predicate::str::contains("⚠ Warnings in"))
         .stderr(predicate::str::contains("warnings_only.cha"))
-        .stderr(predicate::str::contains("E254"))
         // But it must NOT be framed as an error, nor pointed at nonexistent
         // structural errors.
         .stderr(predicate::str::contains("✗ Errors found in").not())

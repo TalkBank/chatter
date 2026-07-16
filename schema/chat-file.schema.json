@@ -2721,11 +2721,6 @@
           "type": "string"
         },
         {
-          "const": "E254",
-          "description": "Explicit word language marker uses a language absent from `@Languages`.",
-          "type": "string"
-        },
-        {
           "const": "E255",
           "description": "Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`.",
           "type": "string"
@@ -3303,6 +3298,11 @@
         {
           "const": "E754",
           "description": "The `@l` letter form marks a single spoken letter, but the word's\nstem has more than one character. Sequences belong under `@k`\n(letter sequence) or `@ls` (letter plural). Replicates CLAN CHECK\nerror 76 (`check_isOneLetter`); the digraph question (one letter\northographically, two characters) is deferred, not decided here.",
+          "type": "string"
+        },
+        {
+          "const": "E755",
+          "description": "A `[- CODE]` utterance-level language is not declared in\n`@Languages`. Utterance-level presence is substantial, unlike a\nword-level `@s:CODE` insertion, which deliberately carries no\ndeclaration requirement (2026-07-15 ruling). Matches CLAN CHECK\nerror 152.",
           "type": "string"
         },
         {

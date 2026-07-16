@@ -27,6 +27,18 @@ version and are listed under "Changed" / "Removed".
   `@ls`. Repeated-segment material (`↫b^↫b@l`) does not count toward
   the stem, matching real CLAN CHECK behavior. Mirrors CLAN CHECK
   error 76.
+- New validation rule E755: a `[- CODE]` utterance-level language must
+  be declared in `@Languages` (utterance-level presence is
+  substantial). Mirrors CLAN CHECK error 152.
+
+### Removed
+
+- The E254 warning (word-level `@s:CODE` not listed in `@Languages`)
+  is retired: an explicit word-level language code is self-contained
+  and deliberately carries no declaration requirement. `@Languages`
+  declares the transcript's substantial languages; a one-word
+  insertion is not substantial presence. (This matches CLAN CHECK,
+  which dropped its own `@s` declaration requirement in 2019.)
 
 <!--
 Deferred to a later release:

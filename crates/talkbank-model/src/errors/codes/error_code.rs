@@ -317,9 +317,10 @@ pub enum ErrorCode {
     /// Word content is empty.
     #[code("E253")]
     EmptyWordContent,
-    /// Explicit word language marker uses a language absent from `@Languages`.
-    #[code("E254")]
-    UndeclaredExplicitWordLanguage,
+    // E254 (UndeclaredExplicitWordLanguage) was RETIRED 2026-07-15: an
+    // explicit word-level `@s:CODE` deliberately carries no requirement to
+    // be declared in `@Languages` (docs/design/2026-07-15-at-s-language-
+    // declaration-decision.md part 1). The number is not reused.
     /// Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`.
     #[code("E255")]
     WholeUtteranceLanguageSwitchShouldUsePrecode,
@@ -833,6 +834,14 @@ pub enum ErrorCode {
     /// orthographically, two characters) is deferred, not decided here.
     #[code("E754")]
     LetterFormMultipleLetters,
+
+    /// A `[- CODE]` utterance-level language is not declared in
+    /// `@Languages`. Utterance-level presence is substantial, unlike a
+    /// word-level `@s:CODE` insertion, which deliberately carries no
+    /// declaration requirement (2026-07-15 ruling). Matches CLAN CHECK
+    /// error 152.
+    #[code("E755")]
+    UndeclaredUtteranceLanguage,
 
     // =========================================================================
     // Warnings (Wxxx)

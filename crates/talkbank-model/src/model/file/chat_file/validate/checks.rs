@@ -149,6 +149,51 @@ pub(super) fn check_timing_has_media<S: ValidationState>(
     ));
 }
 
+/// E755: a `[- CODE]` utterance language must be declared in `@Languages`.
+///
+/// An utterance-level language switch is substantial language presence,
+/// so its language belongs in the `@Languages` declaration; a word-level
+/// `@s:CODE` insertion deliberately does NOT carry this requirement
+/// (maintainer ruling 2026-07-15,
+/// `docs/design/2026-07-15-at-s-language-declaration-decision.md`).
+/// Matches CLAN CHECK error 152. The check is skipped when no language
+/// is declared at all: a missing/empty `@Languages` is its own header
+/// error, and double-flagging every precode against it would be noise.
+///
+/// Spec: `spec/errors/E755_undeclared_utterance_language.md`.
+pub(super) fn check_utterance_language_declared<S: ValidationState>(
+    file: &ChatFile<S>,
+    errors: &impl crate::ErrorSink,
+) {
+    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+
+    let declared = &file.languages.0;
+    if declared.is_empty() {
+        return;
+    }
+    for utterance in file.utterances() {
+        let Some(code) = &utterance.main.content.language_code else {
+            continue;
+        };
+        if declared.iter().any(|d| d == code) {
+            continue;
+        }
+        errors.report(
+            ParseError::new(
+                ErrorCode::UndeclaredUtteranceLanguage,
+                Severity::Error,
+                SourceLocation::at_offset(utterance.main.span.start as usize),
+                ErrorContext::new("", 0..0, "utterance_language"),
+                format!(
+                    "utterance language '{}' is not declared in @Languages; an utterance-level switch is substantial language presence and belongs in the header",
+                    code.as_str()
+                ),
+            )
+            .with_suggestion(format!("add '{}' to the @Languages header", code.as_str())),
+        );
+    }
+}
+
 /// E552: the `@Media` header declares `unlinked`, yet the transcript has timing
 /// bullets, so the media is in fact linked and the `unlinked` qualifier must be
 /// removed. This is the inverse of [`check_media_linkage_has_timing`] (E544):

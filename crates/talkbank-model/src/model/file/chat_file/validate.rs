@@ -19,7 +19,8 @@ use crate::{Header, Line};
 mod checks;
 use checks::{
     check_cross_header_consistency, check_media_filename_match, check_media_linkage_has_timing,
-    check_media_unlinked_has_no_timing, check_timing_has_media, file_uses_ca_mode,
+    check_media_unlinked_has_no_timing, check_timing_has_media, check_utterance_language_declared,
+    file_uses_ca_mode,
 };
 
 fn unknown_alignment_warning(
@@ -335,6 +336,10 @@ impl<S: ValidationState> ChatFile<S> {
         // E752: timing evidence with NO @Media header at all (CLAN CHECK 112);
         // completes the media-consistency family in the remaining direction.
         check_timing_has_media(&headers_with_spans, self, &bullets, errors);
+
+        // E755: a [- CODE] utterance language must be declared in @Languages
+        // (CLAN CHECK 152); word-level @s:CODE deliberately exempt.
+        check_utterance_language_declared(self, errors);
 
         // E701, E704: Validate temporal constraints on media bullets
         // - E701 (CLAN Error 83): Global timeline monotonicity
