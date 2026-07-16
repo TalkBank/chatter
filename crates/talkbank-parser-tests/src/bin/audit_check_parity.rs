@@ -325,7 +325,10 @@ fn map_by_id(id: u16) -> Vec<String> {
         85 => &["E700"],
         89 | 90 => &["E360", "E361"],
         91 => &["E303"],
-        92 | 93 | 160 | 161 => &["W210", "W211", "E243"],
+        // W210/W211 retired 2026-07-16; the spacing-family analogs now
+        // live at E243 (illegal chars), E750 (space inside angle
+        // group), E751 (glued pause), and E757 (code glued to word).
+        92 | 93 | 160 | 161 => &["E243", "E750", "E751", "E757"],
         94 => &["E705", "E706", "E714", "E715", "E718", "E719", "E720"],
         // 107 = "Only single commas are allowed" = consecutive commas.
         107 => &["E258"],

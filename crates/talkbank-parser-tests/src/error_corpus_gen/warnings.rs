@@ -32,25 +32,10 @@ pub fn generate_wxxx_warnings(root: &Path) -> GenResult {
     )?;
     count += 1;
 
-    // W210: MissingWhitespaceBeforeContent
-    write_file(
-        &dir.join("W210_missing_whitespace_before.cha"),
-        ChatFileBuilder::new()
-            .speaker("CHI", "Target_Child")
-            .utterance("CHI", "hello.")
-            .build(),
-    )?;
-    count += 1;
-
-    // W211: MissingWhitespaceAfterOverlap
-    write_file(
-        &dir.join("W211_missing_whitespace_after_overlap.cha"),
-        ChatFileBuilder::new()
-            .speaker("CHI", "Target_Child")
-            .utterance("CHI", "hello \u{2308}world\u{2309}.")
-            .build(),
-    )?;
-    count += 1;
+    // W210/W211 were retired 2026-07-16 (never emitted by production
+    // code; real CLAN CHECK accepts the W210 construct, and W211's
+    // shape is valid overlap-hugging CA notation). Their fixture
+    // generation is deliberately gone; the numbers are not reused.
 
     // W999: LegacyWarning
     write_file(

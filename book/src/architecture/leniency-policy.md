@@ -1,7 +1,7 @@
 # Parser Leniency Policy
 
 **Status:** Current
-**Last updated:** 2026-06-15 13:08 EDT
+**Last updated:** 2026-07-16 11:58 EDT
 
 This document is the single source of truth for how the tree-sitter grammar,
 Rust validation layer, and CLI tooling divide responsibility for enforcing the
@@ -178,7 +178,7 @@ summarised here with its rationale.
 - **Rationale**: Warnings should not block parse/transform/export pipelines.
 - **Revisit**: Keep as default; add explicit `--strict` flag/profile if needed.
 
-### Decision 8: Spacing warnings W210/W211, disabled
+### Decision 8: Spacing warnings W210/W211, disabled (RETIRED 2026-07-16)
 
 - **Previous behaviour**: Style-level spacing warnings around terminators and
   overlap markers.
@@ -187,8 +187,13 @@ summarised here with its rationale.
   `talkbank-model/src/model/content/main_tier.rs`.
 - **Rationale**: Generated unexpected diagnostics on files treated as valid in
   reference workflow.
-- **Revisit**: Reintroduce as optional lint profile, not core validator hard
-  path.
+- **Revisit**: CLOSED. The codes were RETIRED outright on 2026-07-16
+  (maintainer ruling): real CLAN CHECK accepts the W210 construct
+  (glued terminator), overlap markers hug their content by design so
+  W211's shape is valid CA notation, and no production code ever
+  emitted either. The numbers are retired and not reused; no lint
+  profile will reintroduce them. The living spacing rules are E243,
+  E749, E750, E751, E757, and E758.
 
 ---
 
@@ -287,7 +292,6 @@ let sink = ConfigurableErrorSink::new(&inner, config);
 |-----|-------------|--------|
 | No `--profile` CLI flag | Users cannot select `strict` / `lenient` / `lint` from the command line | Medium |
 | `ConfigurableErrorSink` not wired into validation pipeline | Infrastructure exists but is not used by `chatter validate` | Medium |
-| No lint-style profile | Spacing/style warnings (W210, W211) have no home | Small (once profiles are wired) |
 | No profile serialization | Cannot load profiles from TOML/JSON config files | Medium |
 | No corpus-specific profiles | E.g., HSLLD-specific rules | Future |
 
@@ -298,8 +302,7 @@ From the permissiveness regression log:
 | Profile | Purpose | Behaviour |
 |---------|---------|-----------|
 | `reference-compatible` | Current permissive baseline | Default, matches current validation behaviour |
-| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E214, E248, E254, etc.) |
-| `lint-style` | Spacing/style warnings only | Enable W210, W211; do not fail pipeline |
+| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E214, E248, etc.; E254 was retired 2026-07-15 with the @s ruling) |
 
 The roundtrip gate should be pinned to an agreed profile to prevent future
 ambiguity about what "pass" means.

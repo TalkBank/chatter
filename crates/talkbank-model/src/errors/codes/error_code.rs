@@ -871,12 +871,14 @@ pub enum ErrorCode {
     /// Speaker code not found in `@Participants` (non-fatal).
     #[code("W108")]
     SpeakerNotFoundInParticipants,
-    /// Missing whitespace before content on main tier.
-    #[code("W210")]
-    MissingWhitespaceBeforeContent,
-    /// Missing whitespace after overlap marker.
-    #[code("W211")]
-    MissingWhitespaceAfterOverlap,
+    // W210 (missing whitespace before content, e.g. a glued terminator
+    // `hello.`) and W211 (missing whitespace after an overlap marker)
+    // were RETIRED on 2026-07-16 (maintainer ruling): no production
+    // code ever emitted them (their check was removed from the
+    // main-tier path long ago, see the leniency-policy book page,
+    // Decision 8), real CLAN CHECK accepts the W210 construct, and
+    // overlap markers hug their content by design, so W211's shape is
+    // valid CA notation. The numbers are retired and not reused.
     // W601 (empty user-defined tier) was RENUMBERED to E756 on 2026-07-16:
     // it always fired as a hard error, so the warning-prefixed code was the
     // bug (maintainer ruling). W601 is retired and not reused.

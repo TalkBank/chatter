@@ -3326,16 +3326,6 @@
           "type": "string"
         },
         {
-          "const": "W210",
-          "description": "Missing whitespace before content on main tier.",
-          "type": "string"
-        },
-        {
-          "const": "W211",
-          "description": "Missing whitespace after overlap marker.",
-          "type": "string"
-        },
-        {
           "const": "W999",
           "description": "Legacy warning from older CHAT validation.",
           "type": "string"
