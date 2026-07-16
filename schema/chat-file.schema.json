@@ -3291,6 +3291,11 @@
           "type": "string"
         },
         {
+          "const": "E752",
+          "description": "Transcript carries timing evidence (main-tier bullets or a\npositional `%wor` timing sidecar) but no `@Media` header declares\nthe media timeline the timestamps index. Inverse direction of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)\n(E544); corresponds to CLAN CHECK error 112.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

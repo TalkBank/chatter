@@ -809,6 +809,14 @@ pub enum ErrorCode {
     #[code("E751")]
     PauseGluedToWord,
 
+    /// Transcript carries timing evidence (main-tier bullets or a
+    /// positional `%wor` timing sidecar) but no `@Media` header declares
+    /// the media timeline the timestamps index. Inverse direction of
+    /// [`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)
+    /// (E544); corresponds to CLAN CHECK error 112.
+    #[code("E752")]
+    TimingWithoutMedia,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

@@ -1611,6 +1611,14 @@
       "source_spec": "spec/errors/E751_pause_glued_to_word.md"
     },
     {
+      "fixture": "E752_Timing_bullets_without_an_header.cha",
+      "expected_codes": [
+        "E752"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E752_timing_without_media.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-09 14:05 EDT
+**Last modified:** 2026-07-15 21:03 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media |
 | W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
 
 ## Common Errors and Fixes
@@ -189,6 +189,16 @@ the intended structure.
 
 A pause marker must be space-delimited from the word before it: write
 `hello (.) there`, not `hello(.) there`. Mirrors CLAN CHECK error 57.
+
+### E752: Timing bullets without an @Media header
+
+The transcript carries timing evidence (utterance bullets or %wor word
+timing) but no `@Media` header declares the recording those timestamps
+index. Add an `@Media` header naming the media file (or remove the
+timing bullets if the transcript is genuinely unlinked). Completes the
+media-consistency family: E544 covers declared linkage without timing,
+E552 covers a declared `unlinked` contradicted by timing. Mirrors CLAN
+CHECK error 112.
 
 ## Generated Error Documentation
 

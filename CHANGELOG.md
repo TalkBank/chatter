@@ -9,6 +9,15 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Added
+
+- New validation rule E752: timing bullets without an `@Media` header.
+  A transcript carrying timing evidence (utterance bullets or `%wor`
+  word timing) must declare the media those timestamps index; completes
+  the media-consistency family (E544: declared linkage without timing;
+  E552: declared `unlinked` contradicted by timing). Mirrors CLAN CHECK
+  error 112.
+
 <!--
 Deferred to a later release:
 - Word-content validity: reject junk inside words (`|`, ideographic comma,

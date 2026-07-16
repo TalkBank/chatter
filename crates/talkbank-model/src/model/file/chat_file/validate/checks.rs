@@ -85,6 +85,70 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
     ));
 }
 
+/// E752: transcript has timing evidence but NO `@Media` header at all.
+///
+/// Fires when the file carries timing evidence (main-tier bullets, or a
+/// positional `%wor` timing sidecar: the same union E544 uses) and the
+/// header block contains no `@Media` header of any form. A timestamp
+/// into an undeclared media timeline fails to make sense: consumers
+/// cannot resolve what the offsets index. Corresponds to CLAN CHECK
+/// error 112 ("Please add \"unlinked\" to @Media header").
+///
+/// Division of labour across the media-consistency family: this check
+/// requires the DECLARATION to exist when timing exists; whether a
+/// declaration's status contradicts the timing is
+/// [`check_media_unlinked_has_no_timing`] (E552), and whether declared
+/// linkage lacks timing is [`check_media_linkage_has_timing`] (E544).
+///
+/// The caller passes the already-collected main-tier bullets to avoid a
+/// duplicate walk.
+///
+/// Spec: `spec/errors/E752_timing_without_media.md`.
+pub(super) fn check_timing_has_media<S: ValidationState>(
+    headers: &[(&Header, crate::Span)],
+    file: &ChatFile<S>,
+    main_bullets: &[&crate::model::Bullet],
+    errors: &impl crate::ErrorSink,
+) {
+    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+
+    let has_media_header = headers
+        .iter()
+        .any(|(header, _)| matches!(header, Header::Media(_)));
+    if has_media_header {
+        // Any @Media declaration (qualified or not) satisfies this check;
+        // status-vs-timing contradictions belong to E544/E552.
+        return;
+    }
+
+    // Locate the first timing surface so the diagnostic points at real
+    // evidence: a main-tier bullet if any, else a positional %wor sidecar.
+    let first_timing_offset = main_bullets
+        .first()
+        .map(|bullet| bullet.span.start as usize)
+        .or_else(|| {
+            file.utterances().find_map(|utt| {
+                utt.alignments
+                    .as_ref()
+                    .and_then(|a| a.wor_timings.as_ref())
+                    .is_some_and(|w| w.is_positional())
+                    .then(|| utt.main.span.start as usize)
+            })
+        });
+    let Some(offset) = first_timing_offset else {
+        // No timing evidence anywhere: nothing requires @Media.
+        return;
+    };
+
+    errors.report(ParseError::new(
+        ErrorCode::TimingWithoutMedia,
+        Severity::Error,
+        SourceLocation::at_offset(offset),
+        ErrorContext::new("", 0..0, "media_linkage"),
+        "transcript has timing bullets but no @Media header declares the media they index; add an @Media header (or remove the timing bullets)",
+    ));
+}
+
 /// E552: the `@Media` header declares `unlinked`, yet the transcript has timing
 /// bullets, so the media is in fact linked and the `unlinked` qualifier must be
 /// removed. This is the inverse of [`check_media_linkage_has_timing`] (E544):

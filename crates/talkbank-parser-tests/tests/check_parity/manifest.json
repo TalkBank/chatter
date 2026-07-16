@@ -933,9 +933,11 @@
    "check_code": 112,
    "check_message": "Missing @Media: tier with media file name in headers section at the top of the file.",
    "fixture": "CHECK_112_missing_media.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E752"
+   ],
+   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output. CLOSED 2026-07-15 per the 2026-07-14 MEANINGFUL ruling: chatter rejects timing-without-@Media as E752 (inverse of E544); spec spec/errors/E752_timing_without_media.md."
   },
   {
    "check_code": 113,
