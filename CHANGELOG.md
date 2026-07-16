@@ -17,6 +17,11 @@ version and are listed under "Changed" / "Removed".
   the media-consistency family (E544: declared linkage without timing;
   E552: declared `unlinked` contradicted by timing). Mirrors CLAN CHECK
   error 112.
+- New validation rule E753: a word consisting only of a repetition
+  segment (fully `↫...↫`-wrapped, no stem outside the delimiters) is
+  rejected; word-category prefixes (`&-` filler, `&~` nonword, `0`
+  omission) count as a stem. Adopted from GUI CLAN CHECK error 151 as
+  a chatter-authority rule (the unix CHECK build never enforced it).
 
 <!--
 Deferred to a later release:

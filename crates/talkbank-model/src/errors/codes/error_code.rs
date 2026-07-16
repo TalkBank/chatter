@@ -817,6 +817,15 @@ pub enum ErrorCode {
     #[code("E752")]
     TimingWithoutMedia,
 
+    /// Word consists only of a repetition segment: every material part
+    /// sits inside `↫...↫` (U+21AB) segment-repetition delimiters with no
+    /// stem outside. The notation marks a repeated segment OF a word, so
+    /// a fully wrapped word asserts a repetition of nothing. Adopted from
+    /// GUI CLAN CHECK error 151 as a chatter-authority rule; a
+    /// word-category prefix marker (`&-` filler etc.) counts as a stem.
+    #[code("E753")]
+    WordOnlyRepetitionSegments,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

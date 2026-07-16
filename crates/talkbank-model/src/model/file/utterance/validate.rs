@@ -58,6 +58,9 @@ impl Validate for Utterance {
 
         // E230: Validate CA delimiter balance
         crate::validation::utterance::check_ca_delimiter_balance(self, errors);
+        // E753: a word consisting only of a repetition segment (fully
+        // ↫...↫-wrapped, no stem) is invalid; see the module docs.
+        crate::validation::utterance::check_repetition_segment_has_stem(self, errors);
 
         // E373: Validate overlap index values
         // E348: Validate overlap marker pairing

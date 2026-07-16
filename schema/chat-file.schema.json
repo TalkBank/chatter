@@ -3296,6 +3296,11 @@
           "type": "string"
         },
         {
+          "const": "E753",
+          "description": "Word consists only of a repetition segment: every material part\nsits inside `↫...↫` (U+21AB) segment-repetition delimiters with no\nstem outside. The notation marks a repeated segment OF a word, so\na fully wrapped word asserts a repetition of nothing. Adopted from\nGUI CLAN CHECK error 151 as a chatter-authority rule; a\nword-category prefix marker (`&-` filler etc.) counts as a stem.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

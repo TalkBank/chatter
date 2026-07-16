@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments |
 | W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
 
 ## Common Errors and Fixes
@@ -199,6 +199,16 @@ timing bullets if the transcript is genuinely unlinked). Completes the
 media-consistency family: E544 covers declared linkage without timing,
 E552 covers a declared `unlinked` contradicted by timing. Mirrors CLAN
 CHECK error 112.
+
+### E753: Word consisting only of a repetition segment
+
+A word whose entire material sits inside segment-repetition delimiters
+(`↫hi↫` with nothing outside the arrows) marks the repetition of a word
+that is not there; attach the repeated segment to its host word
+(`↫p↫parents`) or transcribe a stand-alone fragment as a filler or
+nonword form. Filler and other word-category prefixes (`&-`, `&~`, `0`)
+count as material outside the arrows. Adopted from GUI CLAN CHECK error
+151 as a chatter rule.
 
 ## Generated Error Documentation
 

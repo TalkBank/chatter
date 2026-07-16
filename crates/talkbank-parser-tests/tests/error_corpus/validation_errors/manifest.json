@@ -1619,6 +1619,14 @@
       "source_spec": "spec/errors/E752_timing_without_media.md"
     },
     {
+      "fixture": "E753_Word_consisting_only_of_repetition_segments.cha",
+      "expected_codes": [
+        "E753"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E753_word_only_repetition_segments.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

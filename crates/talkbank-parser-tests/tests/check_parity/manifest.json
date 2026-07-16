@@ -1497,9 +1497,11 @@
    "check_code": 151,
    "check_message": "This word has only repetition segments.",
    "status": "no_obligation",
-   "note": "GUI-only: the emit path sits in/behind the #ifndef UNX CA-character region of check_CheckWords (unix builds compile with -DUNX and exclude it); unix CHECK is the authoritative parity bar. See clan-check-reference/gui-vs-unix-check.md. GUI CHECK flags a word consisting entirely of a repetition segment (U+21AB-wrapped with no material outside); unix CHECK is silent. chatter currently accepts the construct; queued in the adjudication ledger for a possible future chatter-side rule.",
+   "note": "GUI-only: the emit path sits behind the #ifndef UNX CA-character region of check_CheckWords (unix builds compile with -DUNX and exclude it); unix CHECK is the authoritative parity bar and cannot emit it, so no obligation exists. See clan-check-reference/gui-vs-unix-check.md. chatter ADOPTED the rule on its own authority (maintainer ruling 2026-07-15): a fully U+21AB-wrapped word with no stem is rejected as E753 (spec/errors/E753_word_only_repetition_segments.md); word-category prefix markers (&- filler etc.) count as a stem, keeping the wild corpus's 2 filler-wrapped tokens valid.",
    "fixture": "CHECK_151_only_repetition_segments.cha",
-   "expected_chatter_codes": []
+   "expected_chatter_codes": [
+    "E753"
+   ]
   },
   {
    "check_code": 154,
