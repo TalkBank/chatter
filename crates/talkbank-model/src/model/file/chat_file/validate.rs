@@ -18,9 +18,9 @@ use crate::{Header, Line};
 // so `build_validation_context` calls them by their bare names.
 mod checks;
 use checks::{
-    check_cross_header_consistency, check_media_filename_match, check_media_linkage_has_timing,
-    check_media_unlinked_has_no_timing, check_timing_has_media, check_utterance_language_declared,
-    file_uses_ca_mode,
+    check_cross_header_consistency, check_leading_space_on_main_tier, check_media_filename_match,
+    check_media_linkage_has_timing, check_media_unlinked_has_no_timing, check_timing_has_media,
+    check_utterance_language_declared, file_uses_ca_mode,
 };
 
 fn unknown_alignment_warning(
@@ -340,6 +340,13 @@ impl<S: ValidationState> ChatFile<S> {
         // E755: a [- CODE] utterance language must be declared in @Languages
         // (CLAN CHECK 152); word-level @s:CODE deliberately exempt.
         check_utterance_language_declared(self, errors);
+
+        // E758: leading space between the tab and tier content (CLAN CHECK
+        // 123). CA transcripts column-align with spaces, so CA files are
+        // exempt (all 457 wild occurrences declare CA, 2026-07-16 scan).
+        if !context.shared.ca_mode {
+            check_leading_space_on_main_tier(self, errors);
+        }
 
         // E701, E704: Validate temporal constraints on media bullets
         // - E701 (CLAN Error 83): Global timeline monotonicity

@@ -81,6 +81,14 @@
       "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
     },
     {
+      "fixture": "E243_Pipe_character_in_main_tier_word_text.cha",
+      "expected_codes": [
+        "E243"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E243_pipe_in_word.md"
+    },
+    {
       "fixture": "E244_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "E244"
@@ -1665,6 +1673,22 @@
       ],
       "status": "implemented",
       "source_spec": "spec/errors/E756_empty_user_defined_tier.md"
+    },
+    {
+      "fixture": "E757_Bracketed_code_glued_to_the_following_content.cha",
+      "expected_codes": [
+        "E757"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
+    },
+    {
+      "fixture": "E758_Leading_space_before_main_tier_content_in_a_non_CA_file.cha",
+      "expected_codes": [
+        "E758"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
       "fixture": "W108_Auto_generated_from_corpus.cha",

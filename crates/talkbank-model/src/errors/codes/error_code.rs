@@ -850,6 +850,21 @@ pub enum ErrorCode {
     #[code("E756")]
     EmptyUserDefinedTier,
 
+    /// Bracketed code's closing `]` glued to the following content with
+    /// no space (`hello [/]x`). Style rule; the parse is unambiguous but
+    /// codes are free-standing space-delimited items. Matches CLAN CHECK
+    /// error 19.
+    #[code("E757")]
+    CodeGluedToFollowingContent,
+
+    /// Space between the tier's tab delimiter and the first content item
+    /// in a file WITHOUT `@Options: CA` (`*CHI:<tab><space>dog .`). CA
+    /// transcripts legitimately column-align with spaces after the tab
+    /// (all 457 wild occurrences are CA files, 2026-07-16 scan), so the
+    /// CA option exempts the rule. Matches CLAN CHECK error 123.
+    #[code("E758")]
+    LeadingSpaceOnMainTier,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

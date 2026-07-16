@@ -107,6 +107,70 @@ fn report_pause_glued_to_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink)
     }
 }
 
+/// Report E757 for every word token immediately following a retrace
+/// marker token with no whitespace between (`hello [/]x`; CLAN CHECK
+/// 19). Mirrors the model-validation rule
+/// `check_code_glued_to_following_content` (talkbank-model
+/// `validation/utterance/spacing.rs`), which cannot fire on this
+/// parser's output because its retraces carry dummy spans.
+fn report_code_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for pair in tokens.windows(2) {
+        let is_retrace = matches!(
+            pair[0],
+            Token::RetraceComplete(_)
+                | Token::RetracePartial(_)
+                | Token::RetraceMultiple(_)
+                | Token::RetraceReformulation(_)
+        );
+        if is_retrace && matches!(pair[1], Token::Word { .. }) {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::CodeGluedToFollowingContent,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Bracketed code must be separated from the following word by a space".to_owned(),
+            ));
+        }
+    }
+}
+
+/// Report E758 for a main tier whose content starts with a space after
+/// the `:\t` separator, in a file WITHOUT `@Options: CA` (CLAN CHECK
+/// 123). Mirrors the model-validation rule
+/// `check_leading_space_on_main_tier` (talkbank-model
+/// `validate/checks.rs`), which cannot fire on this parser's output
+/// because its speaker spans are dummies. The CA probe scans header
+/// content tokens for the CA option before the tier scan.
+/// Scope note: this token scan keys on literal whitespace after the
+/// `:\t` separator, so it can fire on a line whose first ITEM is
+/// span-less (e.g. `*CHI:<tab><space>+" ...`), where the model-side
+/// check opts out; the model side is the conservative one by design.
+fn report_leading_space_on_main_tier<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    let file_is_ca = tokens.windows(2).any(|pair| {
+        matches!(pair[0], Token::HeaderPrefix(prefix) if prefix.starts_with("@Options"))
+            && matches!(pair[1], Token::HeaderContent(content)
+                if content.split(',').any(|option| option.trim() == "CA"))
+    });
+    if file_is_ca {
+        return;
+    }
+    for window in tokens.windows(4) {
+        if matches!(window[0], Token::Star(_))
+            && matches!(window[1], Token::Speaker(_))
+            && matches!(window[2], Token::TierSep(_))
+            && matches!(window[3], Token::Whitespace(_))
+        {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::LeadingSpaceOnMainTier,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Extra whitespace between the tab and tier content in a non-CA file".to_owned(),
+            ));
+        }
+    }
+}
+
 /// Report E748 for every media-bullet timestamp written with a leading
 /// zero before another digit (`012`); a bare `0` is legal. Mirrors the
 /// tree-sitter parser's check in `media_bullet.rs` (CLAN CHECK 90,
@@ -151,6 +215,8 @@ pub fn parse_file_with_errors<'a>(
     report_comma_glued_to_next_word(tokens, errors);
     report_space_inside_angle_group(tokens, errors);
     report_pause_glued_to_word(tokens, errors);
+    report_code_glued_to_following_content(tokens, errors);
+    report_leading_space_on_main_tier(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
 

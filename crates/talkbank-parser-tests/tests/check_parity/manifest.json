@@ -176,9 +176,11 @@
    "check_code": 19,
    "check_message": "Or a SPACE should be added after it.",
    "fixture": "CHECK_019_code_glued_to_word.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A token (here the retrace code '[/]') is immediately followed by a non-space, non-delimiter character with no space between (check.cpp:4590/4592); also fires for a time bullet glued to a word. Full CLAN message is two lines: 'Illegal use of delimiter in a word.' + 'Or a SPACE should be added after it.(19)'. chatter accepts '[/]x' glued (exit 0). Grounded also with a bullet glued to a word (u019d.cha)."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E757"
+   ],
+   "note": "A token (here the retrace code '[/]') is immediately followed by a non-space, non-delimiter character with no space between (check.cpp:4590/4592); also fires for a time bullet glued to a word. Full CLAN message is two lines: 'Illegal use of delimiter in a word.' + 'Or a SPACE should be added after it.(19)'. chatter accepts '[/]x' glued (exit 0). Grounded also with a bullet glued to a word (u019d.cha). CLOSED 2026-07-16: E757 (CodeGluedToFollowingContent), span-adjacency on the retrace span which now covers the marker brackets. Wild-data impact: zero kept files."
   },
   {
    "check_code": 20,
@@ -389,9 +391,11 @@
    "check_code": 48,
    "check_message": "Illegal character(s) '|' found.",
    "fixture": "CHECK_048_illegal_char_pipe.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "A standalone illegal character on a main tier; '|' between words hits one of the 22 check_err(48,...) sites in the word scanner. chatter accepts '*CHI:\\thello | there .' (exit 0). CLAN also emits (11) on the fixture. 48 has 22 call sites; this grounds only the bare-pipe shape; other illegal chars ('#' inside a word, '}' etc.) also produce (48)."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E243"
+   ],
+   "note": "A standalone illegal character on a main tier; '|' between words hits one of the 22 check_err(48,...) sites in the word scanner. chatter accepts '*CHI:\\thello | there .' (exit 0). CLAN also emits (11) on the fixture. 48 has 22 call sites; this grounds only the bare-pipe shape; other illegal chars ('#' inside a word, '}' etc.) also produce (48). CLOSED 2026-07-16 for the grounded bare-pipe shape: E243 (IllegalCharactersInWord) gains '|' as a reserved tier-delimiter character. Other CHECK-48 shapes remain open per-shape. Wild-data impact: zero kept files."
   },
   {
    "check_code": 50,
@@ -1036,9 +1040,11 @@
    "check_code": 123,
    "check_message": "Illegal character '<space>' found in tier text. If it CA, then add \"@Options: CA\"",
    "fixture": "CHECK_123_tab_space.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "In a non-CA file (no @Options: CA), the tab after the speaker colon is followed by a space (CA-style alignment). GAP: chatter accepts '*CHI:<tab><space>dog .'. Second call site (check.cpp:1673, space at i==1 after leading tab) is logically unreachable (outer guard requires uttline[0] != tab); the live site is 1669."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E758"
+   ],
+   "note": "In a non-CA file (no @Options: CA), the tab after the speaker colon is followed by a space (CA-style alignment). GAP: chatter accepts '*CHI:<tab><space>dog .'. Second call site (check.cpp:1673, space at i==1 after leading tab) is logically unreachable (outer guard requires uttline[0] != tab); the live site is 1669. CLOSED 2026-07-16: E758 (LeadingSpaceOnMainTier), speaker-span arithmetic, gated on !ca_mode (all 457 wild occurrences declare @Options: CA, confirming CHECK's exemption boundary)."
   },
   {
    "check_code": 124,
@@ -1082,7 +1088,7 @@
   },
   {
    "check_code": 128,
-   "check_message": "Unmatched ‹ found on the tier.",
+   "check_message": "Unmatched \u2039 found on the tier.",
    "fixture": "CHECK_128_unmatched_group_start.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1092,7 +1098,7 @@
   },
   {
    "check_code": 129,
-   "check_message": "Unmatched › found on the tier.",
+   "check_message": "Unmatched \u203a found on the tier.",
    "fixture": "CHECK_129_unmatched_group_end.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1103,7 +1109,7 @@
   },
   {
    "check_code": 130,
-   "check_message": "Unmatched 〔 found on the tier.",
+   "check_message": "Unmatched \u3014 found on the tier.",
    "fixture": "CHECK_130_unmatched_sign_group_start.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1113,7 +1119,7 @@
   },
   {
    "check_code": 131,
-   "check_message": "Unmatched 〕 found on the tier.",
+   "check_message": "Unmatched \u3015 found on the tier.",
    "fixture": "CHECK_131_unmatched_sign_group_end.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1164,7 +1170,7 @@
   },
   {
    "check_code": 136,
-   "check_message": "Unmatched “ found on the tier.",
+   "check_message": "Unmatched \u201c found on the tier.",
    "fixture": "CHECK_136_unmatched_open_quote.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1174,14 +1180,14 @@
   },
   {
    "check_code": 137,
-   "check_message": "Unmatched ” found on the tier.",
+   "check_message": "Unmatched \u201d found on the tier.",
    "fixture": "CHECK_137_unmatched_close_quote.cha",
    "status": "parity",
    "expected_chatter_codes": [
     "E242",
     "E305"
    ],
-   "note": "Close curly quote U+201D with no preceding open quote (qt goes negative). Dedicated chatter code: E242 'Unmatched curly quote ” found on the tier'."
+   "note": "Close curly quote U+201D with no preceding open quote (qt goes negative). Dedicated chatter code: E242 'Unmatched curly quote \u201d found on the tier'."
   },
   {
    "check_code": 138,
@@ -1328,7 +1334,7 @@
   },
   {
    "check_code": 156,
-   "check_message": "Please replace ,, with F2-t („) character.",
+   "check_message": "Please replace ,, with F2-t (\u201e) character.",
    "fixture": "CHECK_156_double_comma.cha",
    "status": "parity",
    "expected_chatter_codes": [

@@ -80,6 +80,7 @@ impl Validate for Utterance {
 
         // E751: pause glued to the preceding word (CLAN CHECK 57).
         crate::validation::utterance::check_pause_glued_to_word(self, errors);
+        crate::validation::utterance::check_code_glued_to_following_content(self, errors);
 
         // E401: Validate no duplicate dependent tiers
         crate::validation::utterance::check_no_duplicate_dependent_tiers(self, errors);

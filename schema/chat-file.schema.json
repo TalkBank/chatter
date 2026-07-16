@@ -3311,6 +3311,16 @@
           "type": "string"
         },
         {
+          "const": "E757",
+          "description": "Bracketed code's closing `]` glued to the following content with\nno space (`hello [/]x`). Style rule; the parse is unambiguous but\ncodes are free-standing space-delimited items. Matches CLAN CHECK\nerror 19.",
+          "type": "string"
+        },
+        {
+          "const": "E758",
+          "description": "Space between the tier's tab delimiter and the first content item\nin a file WITHOUT `@Options: CA` (`*CHI:<tab><space>dog .`). CA\ntranscripts legitimately column-align with spaces after the tab\n(all 457 wild occurrences are CA files, 2026-07-16 scan), so the\nCA option exempts the rule. Matches CLAN CHECK error 123.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

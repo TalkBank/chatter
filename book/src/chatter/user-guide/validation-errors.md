@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-16 05:42 EDT
+**Last modified:** 2026-07-16 11:14 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Code glued to following word, E758: Leading space on tier (non-CA) |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -240,6 +240,27 @@ languages, not every language that appears. Mirrors CLAN CHECK error
 A user-defined `%x` tier with empty or whitespace-only content declares
 an annotation that is not there; add the content or remove the line.
 (Formerly W601; renumbered because it always was a hard error.)
+
+### E757: Bracketed code glued to the following word
+
+A bracketed code's closing `]` must be space-delimited from what
+follows: write `hello [/] x`, not `hello [/]x`. The parse is
+unambiguous either way, which is exactly why this is a style rule: the
+corpus stays canonically spaced. Mirrors CLAN CHECK error 19.
+
+### E758: Leading space before tier content in a non-CA file
+
+A space between the tier's tab delimiter and the first content item
+(`*CHI:<tab><space>dog .`) is invalid unless the file declares
+`@Options: CA`; CA transcripts legitimately column-align content with
+spaces after the tab. Mirrors CLAN CHECK error 123.
+
+### E243 addition: the pipe character
+
+`|` is the %mor tier's delimiter and has no meaning in main-tier word
+text; a bare or embedded pipe in a word now reports E243
+(IllegalCharactersInWord). Covers the grounded shape of CLAN CHECK
+error 48.
 
 ## Generated Error Documentation
 

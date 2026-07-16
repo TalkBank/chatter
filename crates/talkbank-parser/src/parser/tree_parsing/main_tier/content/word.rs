@@ -15,6 +15,7 @@ use crate::model::{
 };
 use crate::node_types::{BASE_ANNOTATIONS, REPLACEMENT, STANDALONE_WORD, WHITESPACES};
 use talkbank_model::ParseOutcome;
+use talkbank_model::Span;
 use tree_sitter::Node;
 
 use super::super::annotations::{parse_replacement, parse_scoped_annotations};
@@ -115,8 +116,11 @@ pub(crate) fn parse_word_content(
             if let Some(kind) = retrace_kind {
                 // Replaced word inside a retrace: word [: replacement] [* error] [//]
                 // Wrap the ReplacedWord in a Retrace node so it is excluded from
-                // %mor alignment counting.
-                let span = replaced.span;
+                // %mor alignment counting. The span extends to the enclosing
+                // node's end so it covers the retrace marker brackets (the
+                // group-retrace path already does; E757's glue detection
+                // relies on the span ending at the final `]`).
+                let span = Span::new(replaced.span.start, node.end_byte() as u32);
                 let bracketed =
                     BracketedContent::new(vec![BracketedItem::ReplacedWord(Box::new(replaced))]);
                 let retrace = Retrace::new(bracketed, kind).with_span(span);
@@ -125,8 +129,11 @@ pub(crate) fn parse_word_content(
                 ParseOutcome::parsed(UtteranceContent::ReplacedWord(Box::new(replaced)))
             }
         } else if let Some(kind) = retrace_kind {
-            // Single-word retrace: wrap word in BracketedContent
-            let span = w.span;
+            // Single-word retrace: wrap word in BracketedContent. The span
+            // extends to the enclosing node's end so it covers the retrace
+            // marker brackets (the group-retrace path already does; E757's
+            // glue detection relies on the span ending at the final `]`).
+            let span = Span::new(w.span.start, node.end_byte() as u32);
             let bracketed = BracketedContent::new(vec![BracketedItem::Word(Box::new(w))]);
             let retrace = Retrace::new(bracketed, kind)
                 .with_annotations(annotations)

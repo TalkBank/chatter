@@ -57,6 +57,23 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
         );
     }
 
+    // Check for the %mor tier delimiter `|` (CLAN CHECK 48, bare-pipe shape;
+    // spec E243_pipe_in_word.md): it has no meaning in main-tier word text.
+    if cleaned.contains('|') {
+        errors.report(
+            ParseError::new(
+                ErrorCode::IllegalCharactersInWord,
+                Severity::Error,
+                SourceLocation::new(word.span),
+                ErrorContext::new(cleaned, word.span, cleaned),
+                "Word contains reserved tier-delimiter character '|'",
+            )
+            .with_suggestion(
+                "The pipe character belongs to %mor tier syntax; remove it from main-tier word text.",
+            ),
+        );
+    }
+
     // Check for other control characters (excluding those that are part of CHAT syntax)
     for (idx, ch) in cleaned.char_indices() {
         if ch.is_control() && ch != '\u{0015}' {
