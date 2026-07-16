@@ -640,9 +640,11 @@
    "check_code": 76,
    "check_message": "Only one letter is allowed with '@l'.",
    "fixture": "CHECK_076_multi_letter_at_l.cha",
-   "status": "gap",
-   "expected_chatter_codes": [],
-   "note": "An '@l' letter-marker word whose stem is more than one letter (check.cpp 2532, check_isOneLetter). Fixture 'ab@l .'; chatter accepts (exit 0). The one-letter constraint on @l is a gap."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E754"
+   ],
+   "note": "An '@l' letter-marker word whose stem is more than one letter (check.cpp 2532, check_isOneLetter). Fixture 'ab@l .'; chatter accepts (exit 0). The one-letter constraint on @l is a gap. CLOSED 2026-07-15 per the 2026-07-14 REPLICATE ruling: chatter rejects a multi-character stem under @l as E754 (spec/errors/E754_letter_form_multiple_letters.md); main-tier scope matches CHECK, so the wild multi-letter @l tokens in dependent-tier/gloss contexts stay unflagged; digraph question logged for the corpus authority."
   },
   {
    "check_code": 77,

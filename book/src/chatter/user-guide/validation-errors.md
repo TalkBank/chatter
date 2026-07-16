@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-15 21:03 EDT
+**Last modified:** 2026-07-15 21:26 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form |
 | W1xx-W6xx | Warnings | W108: BOM detected, W601: Empty user-defined tier |
 
 ## Common Errors and Fixes
@@ -209,6 +209,13 @@ that is not there; attach the repeated segment to its host word
 nonword form. Filler and other word-category prefixes (`&-`, `&~`, `0`)
 count as material outside the arrows. Adopted from GUI CLAN CHECK error
 151 as a chatter rule.
+
+### E754: Letter form @l with more than one letter
+
+The `@l` form marks a single spoken letter (`b@l`); use `@k` (letter
+sequence) or `@ls` (letter plural) for multi-letter content. Stuttered
+letters with repetition segments (`↫b^↫b@l`) are fine: repeated-segment
+material does not count toward the stem. Mirrors CLAN CHECK error 76.
 
 ## Generated Error Documentation
 

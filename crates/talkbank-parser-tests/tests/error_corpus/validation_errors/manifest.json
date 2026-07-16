@@ -1627,6 +1627,14 @@
       "source_spec": "spec/errors/E753_word_only_repetition_segments.md"
     },
     {
+      "fixture": "E754_Letter_form_with_more_than_one_letter.cha",
+      "expected_codes": [
+        "E754"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E754_letter_form_multiple_letters.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

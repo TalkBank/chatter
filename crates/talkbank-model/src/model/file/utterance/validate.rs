@@ -61,6 +61,9 @@ impl Validate for Utterance {
         // E753: a word consisting only of a repetition segment (fully
         // ↫...↫-wrapped, no stem) is invalid; see the module docs.
         crate::validation::utterance::check_repetition_segment_has_stem(self, errors);
+        // E754: the @l letter form must carry exactly one letter of stem
+        // (CLAN CHECK 76); see the word_form module docs.
+        crate::validation::utterance::check_letter_form_single_letter(self, errors);
 
         // E373: Validate overlap index values
         // E348: Validate overlap marker pairing

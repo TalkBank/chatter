@@ -826,6 +826,14 @@ pub enum ErrorCode {
     #[code("E753")]
     WordOnlyRepetitionSegments,
 
+    /// The `@l` letter form marks a single spoken letter, but the word's
+    /// stem has more than one character. Sequences belong under `@k`
+    /// (letter sequence) or `@ls` (letter plural). Replicates CLAN CHECK
+    /// error 76 (`check_isOneLetter`); the digraph question (one letter
+    /// orthographically, two characters) is deferred, not decided here.
+    #[code("E754")]
+    LetterFormMultipleLetters,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

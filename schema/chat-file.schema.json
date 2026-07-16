@@ -3301,6 +3301,11 @@
           "type": "string"
         },
         {
+          "const": "E754",
+          "description": "The `@l` letter form marks a single spoken letter, but the word's\nstem has more than one character. Sequences belong under `@k`\n(letter sequence) or `@ls` (letter plural). Replicates CLAN CHECK\nerror 76 (`check_isOneLetter`); the digraph question (one letter\northographically, two characters) is deferred, not decided here.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

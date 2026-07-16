@@ -22,6 +22,11 @@ version and are listed under "Changed" / "Removed".
   rejected; word-category prefixes (`&-` filler, `&~` nonword, `0`
   omission) count as a stem. Adopted from GUI CLAN CHECK error 151 as
   a chatter-authority rule (the unix CHECK build never enforced it).
+- New validation rule E754: the `@l` letter form must carry exactly one
+  letter of stem (`b@l`); multi-letter content belongs under `@k` /
+  `@ls`. Repeated-segment material (`↫b^↫b@l`) does not count toward
+  the stem, matching real CLAN CHECK behavior. Mirrors CLAN CHECK
+  error 76.
 
 <!--
 Deferred to a later release:
