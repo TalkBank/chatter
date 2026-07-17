@@ -44,7 +44,7 @@ jobs:
       # action version + the rust-toolchain.toml channel together
       # when that job goes red.
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.0
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
 

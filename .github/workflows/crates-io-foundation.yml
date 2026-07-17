@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.0
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
