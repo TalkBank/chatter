@@ -9,6 +9,8 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-07-17
+
 ### Fixed
 
 - The Phon `%x`-tier content checks (introduced with the %x fold-in)
