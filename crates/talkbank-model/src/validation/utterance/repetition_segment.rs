@@ -52,10 +52,10 @@ fn classify_repetition_shape(word: &Word) -> Option<RepetitionShape> {
                 inside_span = !inside_span;
                 saw_delimiter = true;
             }
-            WordContent::Text(_) | WordContent::Phonetic(_) | WordContent::Shortening(_) => {
-                if !inside_span {
-                    stem_outside = true;
-                }
+            WordContent::Text(_) | WordContent::Phonetic(_) | WordContent::Shortening(_)
+                if !inside_span =>
+            {
+                stem_outside = true;
             }
             // Prosody/structure modifiers are not word material; an
             // unbalanced-delimiter situation is E-coded separately by the

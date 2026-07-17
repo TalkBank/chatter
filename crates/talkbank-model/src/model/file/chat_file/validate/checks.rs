@@ -132,7 +132,7 @@ pub(super) fn check_timing_has_media<S: ValidationState>(
                     .as_ref()
                     .and_then(|a| a.wor_timings.as_ref())
                     .is_some_and(|w| w.is_positional())
-                    .then(|| utt.main.span.start as usize)
+                    .then_some(utt.main.span.start as usize)
             })
         });
     let Some(offset) = first_timing_offset else {
