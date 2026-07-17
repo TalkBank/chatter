@@ -186,10 +186,21 @@ jobs:
           bundles=(target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz)
           BUNDLE="${bundles[0]}"
           SIG="${BUNDLE}.sig"
+          # Tauri names the updater bundle "Chatter.app.tar.gz" for every
+          # arch, so the two macOS matrix jobs would upload the SAME asset
+          # name to the one release (racing --clobber -> HTTP 404/422, the
+          # observed v0.3.6 failure) AND both darwin entries in latest.json
+          # would resolve to a single URL holding one arch's binary. Give the
+          # bundle a per-arch asset name so uploads never collide and each
+          # platform's updater points at its own binary; write-sidecar records
+          # this basename, so latest.json's URL follows automatically.
+          ARCH_BUNDLE="$RUNNER_TEMP/Chatter-${{ matrix.target }}.app.tar.gz"
+          cp "$BUNDLE" "$ARCH_BUNDLE"
+          cp "$SIG" "${ARCH_BUNDLE}.sig"
           node apps/chatter-desktop/scripts/write-sidecar.mjs \
-            "${{ matrix.target }}" "$BUNDLE" "$SIG" "$RUNNER_TEMP/sidecar"
-          echo "UPDATER_BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
-          echo "UPDATER_SIG=$SIG" >> "$GITHUB_ENV"
+            "${{ matrix.target }}" "$ARCH_BUNDLE" "${ARCH_BUNDLE}.sig" "$RUNNER_TEMP/sidecar"
+          echo "UPDATER_BUNDLE=$ARCH_BUNDLE" >> "$GITHUB_ENV"
+          echo "UPDATER_SIG=${ARCH_BUNDLE}.sig" >> "$GITHUB_ENV"
 
       - name: Attach dmg to the workflow run
         uses: actions/upload-artifact@v7

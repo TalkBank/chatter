@@ -9,6 +9,17 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop release: the macOS updater bundle is now uploaded under a
+  per-arch asset name (`Chatter-<target>.app.tar.gz`). Previously both
+  the aarch64 and x86_64 macOS jobs uploaded the arch-independent
+  `Chatter.app.tar.gz`, which raced on the shared release asset (the
+  v0.3.6 `release-desktop` upload failure) and pointed both darwin
+  entries in `latest.json` at a single URL holding one arch's binary.
+  Fresh `.dmg` downloads were unaffected; the desktop auto-updater is
+  the surface this corrects. (Ships with the next release.)
+
 ## [0.3.6] - 2026-07-17
 
 ### Fixed
