@@ -2,7 +2,10 @@
 
 ## Description
 
-Stripping `:CODE` from each `%xmodsyl` unit must reproduce the corresponding `%mod` word.
+Stripping `:CODE` from each `%xmodsyl` unit must reproduce the
+corresponding `%mod` word. A pause filler (`(.)`, `(..)`, `(...)`) on
+`%xmodsyl` must mirror the same pause token as the `%mod` word at that
+position.
 
 ## Metadata
 
@@ -36,4 +39,7 @@ Stripping `:CODE` from each `%xmodsyl` unit must reproduce the corresponding `%m
 
 ## CHAT Rule
 
-Stripping `:CODE` from each `%xmodsyl` unit must reproduce the corresponding `%mod` word.
+Stripping `:CODE` from each `%xmodsyl` unit must reproduce the
+corresponding `%mod` word. A pause filler (`(.)`, `(..)`, `(...)`) on
+`%xmodsyl` must mirror the same pause token as the `%mod` word at that
+position.

@@ -2,7 +2,17 @@
 
 ## Description
 
-Every `%xmodsyl`/`%xphosyl` unit must be one phone, an ASCII ':', then one constituent code.
+Every `%xmodsyl`/`%xphosyl` unit must be one phone, an ASCII ':', then one
+constituent code.
+
+**Pause-filler exemption.** Phon keeps word-aligned phonology tiers in
+index lockstep with the main tier: when the main tier carries a pause, the
+pause token (`(.)`, `(..)`, `(...)`) is mirrored at the same word position
+on `%mod`, `%pho`, `%xmodsyl`, and `%xphosyl`. Such a filler is a valid
+word on the syllabification tiers and is exempt from the phone:CODE unit
+rule (it must instead mirror the same pause on the source tier; see
+E737/E738). Timed pauses (`(1.5)`) are not accepted as fillers: they are
+unattested on syllabification tiers in the wild corpora.
 
 ## Metadata
 
@@ -36,4 +46,14 @@ Every `%xmodsyl`/`%xphosyl` unit must be one phone, an ASCII ':', then one const
 
 ## CHAT Rule
 
-Every `%xmodsyl`/`%xphosyl` unit must be one phone, an ASCII ':', then one constituent code.
+Every `%xmodsyl`/`%xphosyl` unit must be one phone, an ASCII ':', then one
+constituent code.
+
+**Pause-filler exemption.** Phon keeps word-aligned phonology tiers in
+index lockstep with the main tier: when the main tier carries a pause, the
+pause token (`(.)`, `(..)`, `(...)`) is mirrored at the same word position
+on `%mod`, `%pho`, `%xmodsyl`, and `%xphosyl`. Such a filler is a valid
+word on the syllabification tiers and is exempt from the phone:CODE unit
+rule (it must instead mirror the same pause on the source tier; see
+E737/E738). Timed pauses (`(1.5)`) are not accepted as fillers: they are
+unattested on syllabification tiers in the wild corpora.

@@ -42,6 +42,15 @@ whitespace; words are separated by single spaces. The phone is one IPA phone
 colon, so the `:` separator is unambiguous). A leading stress marker (`ˈ`
 primary, `ˌ` secondary) is part of the phone it precedes.
 
+**Pause fillers.** Phon keeps every word-aligned phonology tier in index
+lockstep with the main tier: when the main tier carries a pause, the pause
+token (`(.)`, `(..)`, `(...)`) is mirrored at the same word position on
+`%mod`, `%pho`, `%xmodsyl`, and `%xphosyl` (and as a `(..)↔(..)` pair on
+`%xphoaln`). A pause filler is a valid word on the syllabification tiers; it
+carries no `phone:CODE` structure and must mirror the same pause token as
+the source-tier word at its position. Timed pauses (`(1.5)`) are not
+accepted as fillers (unattested in the wild corpora).
+
 The constituent code is one character. The legal codes are `O N C L R E A D U`:
 
 | Code | Constituent | Notes |
@@ -120,13 +129,13 @@ tier(s) it depends on):
 
 | Code | Tier | Rule |
 |------|------|------|
-| E735 | xmodsyl/xphosyl | a unit is not a well-formed `phone:CODE` (no `:`, empty phone, or empty code) |
+| E735 | xmodsyl/xphosyl | a non-pause-filler unit is not a well-formed `phone:CODE` (no `:`, empty phone, or empty code) |
 | E736 | xmodsyl/xphosyl | a constituent code is not one of `O N C L R E A D U` |
-| E737 | xmodsyl | stripping codes and concatenating phones does not reproduce the `%mod` word |
-| E738 | xphosyl | stripping codes and concatenating phones does not reproduce the `%pho` word |
+| E737 | xmodsyl | stripping codes and concatenating phones does not reproduce the `%mod` word (a pause filler must mirror the same pause token) |
+| E738 | xphosyl | stripping codes and concatenating phones does not reproduce the `%pho` word (a pause filler must mirror the same pause token) |
 | E739 | xphoaln | a pair is malformed (not exactly one `↔`, an empty side, or `∅↔∅`) |
-| E740 | xphoaln | concatenating the model sides (skipping `∅`, modulo stress) does not reproduce the `%mod` word |
-| E741 | xphoaln | concatenating the actual sides (skipping `∅`, modulo stress) does not reproduce the `%pho` word |
+| E740 | xphoaln | concatenating the model sides (skipping `∅`, modulo stress and `^`/`.` syllable boundaries) does not reproduce the `%mod` word |
+| E741 | xphoaln | concatenating the actual sides (skipping `∅`, modulo stress and `^`/`.` syllable boundaries) does not reproduce the `%pho` word |
 | E742 | xphoint | a bullet has `start >= end` |
 | E743 | xphoint | interval start times are not non-decreasing across the tier |
 | E744 | xphoint | the first start / last end falls outside the record's media bullet (1 ms tolerance) |

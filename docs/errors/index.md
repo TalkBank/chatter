@@ -6,7 +6,7 @@ Status legend: ✅ = active in the validator, ⏳ = documented but not yet enfor
 
 ## internal (E0x)
 
-Internal invariant failure. This error indicates a bug in the parseritself, not in the CHAT input. It cannot be triggered by any CHAT file.
+Internal invariant failure. This error indicates a bug in the parser itself, not in the CHAT input. It cannot be triggered by any CHAT file.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -14,7 +14,7 @@ Internal invariant failure. This error indicates a bug in the parseritself, not 
 
 ## internal (E0x)
 
-Test-only sentinel error code. Used exclusively in the test suite toverify error handling plumbing. Never emitted in production.
+Test-only sentinel error code. Used exclusively in the test suite to verify error handling plumbing. Never emitted in production.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -22,7 +22,7 @@ Test-only sentinel error code. Used exclusively in the test suite toverify error
 
 ## validation (E0x)
 
-The input string is empty. E003 (EmptyString) is the default error code forempty fields during model validation, but an empty filedoes not trigger E003 end-to-end. Instead, the parser produces headervalidation errors (missing @UTF8, @End, @Participants, etc.) and E316(unparsable content) because there are no headers to find.
+The input string is empty. E003 (EmptyString) is the default error code for empty NonEmptyString fields during model validation, but an empty file does not trigger E003 end-to-end. Instead, the parser produces header validation errors (missing @UTF8, @End, @Participants, etc.) and E316 (unparsable content) because there are no headers to find.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -30,7 +30,7 @@ The input string is empty. E003 (EmptyString) is the default error code forempty
 
 ## validation (E1x)
 
-A line in the CHAT file does not match any valid line format (must start with, , , or be a continuation tab). E101 (InvalidLineFormat) is definedas an error code but is not currently emitted by the tree-sitter parser. Theparser produces header validation errors for the missing scaffolding and doesnot reach E101 detection.
+A line in the CHAT file does not match any valid line format (must start with @, *, %, or be a continuation tab). E101 (InvalidLineFormat) is defined as an error code but is not currently emitted by the tree-sitter parser. The parser produces header validation errors for the missing scaffolding and does not reach E101 detection.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -46,7 +46,7 @@ Missing form type after @
 
 ## Word validation (E2x)
 
-A word contains at a position where a form type marker is expected, butno valid form type follows. Tree-sitter produces an ERROR node at the .
+A word contains @ at a position where a form type marker is expected, but no valid form type follows. Tree-sitter produces an ERROR node at the @.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -54,7 +54,7 @@ A word contains at a position where a form type marker is expected, butno valid 
 
 ## validation (E2x)
 
-Word contains an invalid or undeclared form type marker (e.g., has multiple stacked markers).
+Word contains an invalid or undeclared @ form type marker (e.g., dog@b@c has multiple stacked markers).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -78,7 +78,7 @@ Empty replacement
 
 ## validation (E2x)
 
-A word on the main tier consists entirely of shortening notation withno actual spoken material. In CHAT, means the sounds were omitted; itis not the same as the word being spoken. To mark an omitted word, use (zero-word) instead.
+A word on the main tier consists entirely of shortening notation (text) with no actual spoken material. In CHAT, (the) means the sounds were omitted; it is not the same as the word being spoken. To mark an omitted word, use 0the (zero-word) instead.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -86,7 +86,7 @@ A word on the main tier consists entirely of shortening notation withno actual s
 
 ## Word validation (E2x)
 
-Deprecated. This error code was replaced by E387 ().The validation logic now emits E387 instead of E210 for the same condition.
+Deprecated. This error code was replaced by E387 (ReplacementOnFragment). The validation logic now emits E387 instead of E210 for the same condition.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -94,7 +94,7 @@ Deprecated. This error code was replaced by E387 ().The validation logic now emi
 
 ## Word validation (E2x)
 
-A word on the main tier has an invalid format that does not match any recognizedCHAT word structure. The validator reports E212 for specific structuralviolations such as CA omissions used outside CA mode, CA omissions withoutspoken text, or standalone shortenings.
+A word on the main tier has an invalid format that does not match any recognized CHAT word structure. The validator reports E212 for specific structural violations such as CA omissions used outside CA mode, CA omissions without spoken text, or standalone shortenings.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -102,7 +102,7 @@ A word on the main tier has an invalid format that does not match any recognized
 
 ## Word validation (E2x)
 
-Deprecated. This error code was replaced by E391(). The validation logic now emits E391instead of E213 for the same condition.
+Deprecated. This error code was replaced by E391 (ReplacementContainsUntranscribed). The validation logic now emits E391 instead of E213 for the same condition.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -110,7 +110,7 @@ Deprecated. This error code was replaced by E391(). The validation logic now emi
 
 ## validation (E2x)
 
-A scoped annotation (e.g., error annotation , replacement ) hasan empty content list. The validator reports E214 when annotated content haszero scoped annotations attached.
+A scoped annotation (e.g., error annotation [*], replacement [: ...]) has an empty content list. The validator reports E214 when annotated content has zero scoped annotations attached.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -118,7 +118,7 @@ A scoped annotation (e.g., error annotation , replacement ) hasan empty content 
 
 ## Word validation (E2x)
 
-A word on the main tier contains numeric digits in a language context that doesnot permit them. Most natural languages (English, Spanish, French, etc.) do notallow bare digits in words on the main tier. A small set of languages (Chinese,Welsh, Vietnamese, Thai, Cantonese, etc.) permit digits as part of tonenotation or numerals.
+A word on the main tier contains numeric digits in a language context that does not permit them. Most natural languages (English, Spanish, French, etc.) do not allow bare digits in words on the main tier. A small set of languages (Chinese, Welsh, Vietnamese, Thai, Cantonese, etc.) permit digits as part of tone notation or numerals.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -126,7 +126,7 @@ A word on the main tier contains numeric digits in a language context that doesn
 
 ## validation (E2x)
 
-Compound delimiter () is not properly balanced, opening delimiter has no matching closing delimiter.
+Compound delimiter (∆) is not properly balanced, opening delimiter has no matching closing delimiter.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -142,7 +142,7 @@ Auto-generated from corpus
 
 ## validation (E2x)
 
-Compound marker () cannot be at the start of a word. Valid compounds have the form .
+Compound marker (+) cannot be at the start of a word. Valid compounds have the form left+right.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -150,7 +150,7 @@ Compound marker () cannot be at the start of a word. Valid compounds have the fo
 
 ## validation (E2x)
 
-Compound markers () must connect two non-empty parts. Adjacent compound markers() create an empty part between them, which is invalid.
+Compound markers (+) must connect two non-empty parts. Adjacent compound markers (un++do) create an empty part between them, which is invalid.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -188,6 +188,14 @@ Word contains illegal characters such as whitespace, control characters, or bull
 |------|------|----------|--------|
 | [E243](E243.md) | E243: Illegal characters in word | error | ✅ |
 
+## Word structure (E2x)
+
+The | character is the %mor tier's part-of-speech delimiter and has no meaning in main-tier word text; a word consisting of or containing a bare pipe (hello | there) is invalid (CLAN CHECK error 48, "Illegal character(s) '|' found."). This is a trigger shape of the existing E243 (IllegalCharactersInWord) rule, not a new code: the word scanner already rejects whitespace, bullet markers, control characters, and private-use code points; the pipe joins that set as a reserved tier-delimiter character.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E243](E243.md) | tier word text | error | ✅ |
+
 ## validation (E2x)
 
 Auto-generated from corpus
@@ -198,7 +206,7 @@ Auto-generated from corpus
 
 ## validation (E2x)
 
-A primary stress marker () or secondary stress marker appears at the startof a word but is not followed by any spoken material. The marker has nothingto attach to.
+A primary stress marker (ˈ) or secondary stress marker appears at the start of a word but is not followed by any spoken material. The marker has nothing to attach to.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -206,7 +214,7 @@ A primary stress marker () or secondary stress marker appears at the startof a w
 
 ## validation (E2x)
 
-A lengthening marker () appears before any spoken material in a word ratherthan after it. In CHAT, the colon indicates phonological lengthening andmust follow the spoken text it modifies (e.g., is valid, isnot).
+A lengthening marker (:) appears before any spoken material in a word rather than after it. In CHAT, the colon : indicates phonological lengthening and must follow the spoken text it modifies (e.g., hel:o is valid, :hello is not).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -222,19 +230,19 @@ Auto-generated from corpus
 
 ## validation (E2x)
 
-The bare shortcut toggles between the first two languages declared in. When an utterance is scoped to a tertiary language (position3 or later in the list) via , bare is ambiguous,it could mean either the primary or secondary language. The speaker must use anexplicit code (, , etc.) instead.
+The bare @s shortcut toggles between the first two languages declared in @Languages. When an utterance is scoped to a tertiary language (position 3 or later in the @Languages list) via [- code], bare @s is ambiguous, it could mean either the primary or secondary language. The speaker must use an explicit code (@s:eng, @s:spa, etc.) instead.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E248](E248.md) | E248, Bare  shortcut in tertiary language context | error | ✅ |
+| [E248](E248.md) | E248, Bare @s shortcut in tertiary language context | error | ✅ |
 
 ## validation (E2x)
 
-The shortcut means "the other language"; it toggles between the primaryand secondary language declared in . When there is no secondarylanguage (the header lists only one language), has notarget to resolve to. The speaker must use an explicit language code(, , etc.) or add a second language to the header.
+The @s shortcut means "the other language"; it toggles between the primary and secondary language declared in @Languages. When there is no secondary language (the @Languages header lists only one language), @s has no target to resolve to. The speaker must use an explicit language code (@s:spa, @s:zho, etc.) or add a second language to the @Languages header.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E249](E249.md) | E249, Bare  shortcut with no secondary language | error | ✅ |
+| [E249](E249.md) | E249, Bare @s shortcut with no secondary language | error | ✅ |
 
 ## validation (E2x)
 
@@ -246,7 +254,7 @@ Auto-generated from corpus
 
 ## validation (E2x)
 
-A word content text segment (the spoken text portion of a word or the textinside a shortening) is empty. The validator reports E251 when a or element validates to empty via its inner wrapper.
+A word content text segment (the spoken text portion of a word or the text inside a shortening) is empty. The validator reports E251 when a Text or ShorteningText element validates to empty via its inner NonEmptyText wrapper.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -270,7 +278,7 @@ A parsed Word object has empty content, the word node exists in the CST but cont
 
 ## parser (E2x)
 
-A curly single quotation mark (U+2018 or U+2019) is used as a word character.CHAT requires the ASCII apostrophe; the curly form (typically a typographicapostrophe introduced by autocorrect or ASR) is not a legal word character.Mirrors CLAN CHECK errors 138 (U+2019) and 139 (U+2018).
+A curly single quotation mark (U+2018 or U+2019) is used as a word character. CHAT requires the ASCII apostrophe; the curly form (typically a typographic apostrophe introduced by autocorrect or ASR) is not a legal word character. Mirrors CLAN CHECK errors 138 (U+2019) and 139 (U+2018).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -302,7 +310,7 @@ Empty speaker code
 
 ## validation (E3x)
 
-Expected tree-sitter node is missing. E302 (MissingNode) fires whentree-sitter's error recovery inserts a MISSING placeholder node, indicatingthe grammar expected a specific construct that was not found. This is aninternal parser condition triggered by tree-sitter error recovery, not byspecific CHAT syntax patterns. It also fires in speaker code validation forinvalid characters.
+Expected tree-sitter node is missing. E302 (MissingNode) fires when tree-sitter's error recovery inserts a MISSING placeholder node, indicating the grammar expected a specific construct that was not found. This is an internal parser condition triggered by tree-sitter error recovery, not by specific CHAT syntax patterns. It also fires in speaker code validation for invalid characters.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -318,7 +326,7 @@ Unexpected node - helper function
 
 ## Main tier validation (E3x)
 
-Main tier line is missing its speaker code after .
+Main tier line is missing its speaker code after *.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -358,7 +366,7 @@ Invalid speaker format
 
 ## validation (E3x)
 
-Unexpected syntax encountered during parsing. E309 (UnexpectedSyntax) fireswhen the parser encounters an ERROR node from tree-sitter that containsunexpected content. The error is emitted from in.
+Unexpected syntax encountered during parsing. E309 (UnexpectedSyntax) fires when the parser encounters an ERROR node from tree-sitter that contains unexpected content. The error is emitted from make_error_from_node() in helpers.rs.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -366,7 +374,7 @@ Unexpected syntax encountered during parsing. E309 (UnexpectedSyntax) fireswhen 
 
 ## Main tier validation (E3x)
 
-Tree-sitter's internal parser returned (e.g., due to timeout orcancellation) or the parse outcome was rejected with no other errors collected.E310 is a catch-all for complete parse failures where no more specific errorcode applies.
+Tree-sitter's internal parser returned None (e.g., due to timeout or cancellation) or the parse outcome was rejected with no other errors collected. E310 is a catch-all for complete parse failures where no more specific error code applies.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -382,7 +390,7 @@ Failed to parse utterance
 
 ## validation (E3x)
 
-Opening bracket on the main tier has no matching closing bracket .
+Opening bracket [ on the main tier has no matching closing bracket ].
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -414,7 +422,7 @@ Main tier or dependent tier contains an invalid control character (e.g., embedde
 
 ## Dependent tier validation (E3x)
 
-A tier entry contains an angle-bracketed prefix inside the stemposition (e.g., , ). The CHATmanual's %mor grammar uses these separators inside the stem: (feature), (fusion), (prefix), (category), (clitic), (compound). Angle brackets are not valid stemcontent. The parser produces an ERROR node at the and thevalidator reports E316 on the surrounding region.
+A %mor tier entry contains an angle-bracketed prefix inside the stem position (e.g., noun|<sos>tos, sconj|<sos>tos~aux|...). The CHAT manual's %mor grammar uses these separators inside the stem: - (feature), & (fusion), # (prefix), : (category), ~ (clitic), + (compound). Angle brackets are not valid stem content. The parser produces an ERROR node at the < and the validator reports E316 on the surrounding |<stem>~... region.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -430,7 +438,7 @@ Unparsable content
 
 ## parser_recovery (E3x)
 
-A line could not be classified as a header, utterance, or dependent tier.This is a fallback error emitted when tree-sitter produces an ERROR nodefor a line whose children cannot be identified as either a header orutterance context.
+A line could not be classified as a header, utterance, or dependent tier. This is a fallback error emitted when tree-sitter produces an ERROR node for a line whose children cannot be identified as either a header or utterance context.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -438,7 +446,7 @@ A line could not be classified as a header, utterance, or dependent tier.This is
 
 ## parser_recovery (E3x)
 
-A header line (starting with @) could not be parsed. This is a fallbackerror emitted when tree-sitter produces an ERROR node in header context,but the header type is not one of the specifically handled types(@Participants, @Languages, @Date, @Media, @ID).
+A header line (starting with @) could not be parsed. This is a fallback error emitted when tree-sitter produces an ERROR node in header context, but the header type is not one of the specifically handled types (@Participants, @Languages, @Date, @Media, @ID).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -446,7 +454,7 @@ A header line (starting with @) could not be parsed. This is a fallbackerror emi
 
 ## parser_recovery (E3x)
 
-An utterance line (starting with *SPEAKER:) could not be parsed. Theutterance body contains syntax errors that tree-sitter cannot recoverfrom, and the error doesn't match any of the specifically checkedpatterns (missing form type, empty replacement, unknown annotation).
+An utterance line (starting with *SPEAKER:) could not be parsed. The utterance body contains syntax errors that tree-sitter cannot recover from, and the error doesn't match any of the specifically checked patterns (missing form type, empty replacement, unknown annotation).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -454,7 +462,7 @@ An utterance line (starting with *SPEAKER:) could not be parsed. Theutterance bo
 
 ## parser_recovery (E3x)
 
-The main tier speaker prefix has a zero-width (MISSING) colon node.This occurs when tree-sitter synthesizes an empty colon placeholderbecause the speaker code has no colon at all.
+The main tier speaker prefix has a zero-width (MISSING) colon node. This occurs when tree-sitter synthesizes an empty colon placeholder because the speaker code has no colon at all.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -462,7 +470,7 @@ The main tier speaker prefix has a zero-width (MISSING) colon node.This occurs w
 
 ## validation (E3x)
 
-Missing colon after speaker code on main tier. E323 (MissingColonAfterSpeaker)fires in when the tree-sitter grammar parses a main tier but thecolon child node is missing. However, when the colon is absent, the grammartypically fails to match the main tier pattern at all, producing an ERROR node(E316 UnparsableContent) rather than a partial main tier with a missing colon.
+Missing colon after speaker code on main tier. E323 (MissingColonAfterSpeaker) fires in prefix.rs when the tree-sitter grammar parses a main tier but the colon child node is missing. However, when the colon is absent, the grammar typically fails to match the main tier pattern at all, producing an ERROR node (E316 UnparsableContent) rather than a partial main tier with a missing colon.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -478,7 +486,7 @@ Auto-generated from corpus
 
 ## parser_recovery (E3x)
 
-An unexpected child node was found inside a parsed utterance. The CSTcontains a node that is neither the main tier nor a recognized dependenttier kind. This typically indicates a tree-sitter error recovery scenariowhere an unusual node type ends up inside an utterance subtree.
+An unexpected child node was found inside a parsed utterance. The CST contains a node that is neither the main tier nor a recognized dependent tier kind. This typically indicates a tree-sitter error recovery scenario where an unusual node type ends up inside an utterance subtree.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -486,7 +494,7 @@ An unexpected child node was found inside a parsed utterance. The CSTcontains a 
 
 ## parser_recovery (E3x)
 
-A line was classified as an unexpected type during file structure parsing.This covers two sub-cases:
+A line was classified as an unexpected type during file structure parsing. This covers two sub-cases:
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -502,7 +510,7 @@ Auto-generated from corpus
 
 ## parser_recovery (E3x)
 
-A tree-sitter node appeared in a syntactic context where it is not expected. The nodetype itself is valid CHAT syntax, but it occurs at a position in the AST that violatesthe grammar. This error is emitted during tree-sitter error recovery, the parserattempts to continue after encountering invalid syntax, and the recovered structurecontains nodes in unexpected positions.
+A tree-sitter node appeared in a syntactic context where it is not expected. The node type itself is valid CHAT syntax, but it occurs at a position in the AST that violates the grammar. This error is emitted during tree-sitter error recovery, the parser attempts to continue after encountering invalid syntax, and the recovered structure contains nodes in unexpected positions.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -510,7 +518,7 @@ A tree-sitter node appeared in a syntactic context where it is not expected. The
 
 ## parser_recovery (E3x)
 
-Main tier content could not be classified as any known word or constructtype. This fires when a CST node has a child kindthat the Rust parser doesn't recognize, indicating a grammar/parsermismatch (the grammar produces a new node type that the parser hasn'tbeen updated to handle).
+Main tier content could not be classified as any known word or construct type. This fires when a base_content_item CST node has a child kind that the Rust parser doesn't recognize, indicating a grammar/parser mismatch (the grammar produces a new node type that the parser hasn't been updated to handle).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -518,7 +526,7 @@ Main tier content could not be classified as any known word or constructtype. Th
 
 ## cross_utterance (E3x)
 
-A quotation-follows terminator () is used but the next utterancefrom the same speaker does not begin with a quotation precedes linker(). This indicates an unbalanced cross-utterance quotation sequence.
+A quotation-follows terminator (+"/.) is used but the next utterance from the same speaker does not begin with a quotation precedes linker (+"). This indicates an unbalanced cross-utterance quotation sequence.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -534,7 +542,7 @@ Missing required element
 
 ## Main tier structure (E3x)
 
-An angle-bracket group on the main tier must be followed by anannotation (a retrace marker such as , a scope code such as ,an explanation , etc.). A bare group with nothing afterit is malformed CHAT. CLAN's reports it as.
+An angle-bracket group <...> on the main tier must be followed by an annotation (a retrace marker such as [//], a scope code such as [?], an explanation [= ...], etc.). A bare <...> group with nothing after it is malformed CHAT. CLAN's check reports it as expected [ ]; < > should be followed by [ ].
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -542,7 +550,7 @@ An angle-bracket group on the main tier must be followed by anannotation (a retr
 
 ## validation (E3x)
 
-Invalid nesting of scoped annotations (quotation precedes pattern). This is a cross-utterance validator () that is currently DISABLED ().
+Invalid nesting of scoped annotations (quotation precedes pattern). This is a cross-utterance validator (check_quotation_precedes) that is currently DISABLED (enable_quotation_validation: false).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -550,7 +558,7 @@ Invalid nesting of scoped annotations (quotation precedes pattern). This is a cr
 
 ## validation (E3x)
 
-Unmatched scoped annotation end marker ( without matching ). This is a cross-utterance validator () that is currently DISABLED ().
+Unmatched scoped annotation end marker (> without matching <). This is a cross-utterance validator (check_quoted_linker) that is currently DISABLED (enable_quotation_validation: false).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -558,7 +566,7 @@ Unmatched scoped annotation end marker ( without matching ). This is a cross-utt
 
 ## validation (E3x)
 
-An indexed top overlap region (e.g., ) on one speaker has nomatching indexed bottom overlap region () from a different speaker,or vice versa. Reported as a warning because some onset-only markingconventions exist.
+An indexed top overlap region (e.g., ⌈2...⌉2) on one speaker has no matching indexed bottom overlap region (⌊2...⌋2) from a different speaker, or vice versa. Reported as a warning because some onset-only marking conventions exist.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -566,7 +574,7 @@ An indexed top overlap region (e.g., ) on one speaker has nomatching indexed bot
 
 ## validation (E3x)
 
-Reserved for within-utterance overlap pairing violations: a closing marker( or ) without a preceding opening marker ( or ) in the sameutterance, or vice versa.
+Reserved for within-utterance overlap pairing violations: a closing marker (⌉ or ⌋) without a preceding opening marker (⌈ or ⌊) in the same utterance, or vice versa.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -574,7 +582,7 @@ Reserved for within-utterance overlap pairing violations: a closing marker( or )
 
 ## cross_utterance (E3x)
 
-A self-completion linker () was used but there is no prior utterancefrom the same speaker. The linker requires a preceding interruptedutterance from the same speaker to complete.
+A self-completion linker (+,) was used but there is no prior utterance from the same speaker. The +, linker requires a preceding interrupted utterance from the same speaker to complete.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -582,7 +590,7 @@ A self-completion linker () was used but there is no prior utterancefrom the sam
 
 ## cross_utterance (E3x)
 
-A self-completion linker () was used and there IS a prior utterancefrom the same speaker, but that prior utterance did not end with a (interruption) terminator.
+A self-completion linker (+,) was used and there IS a prior utterance from the same speaker, but that prior utterance did not end with a +/. (interruption) terminator.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -590,7 +598,7 @@ A self-completion linker () was used and there IS a prior utterancefrom the same
 
 ## cross_utterance (E3x)
 
-An other-completion linker () was used but it is the very firstutterance in the file. The linker requires a preceding utterance(from a different speaker) to complete.
+An other-completion linker (++) was used but it is the very first utterance in the file. The ++ linker requires a preceding utterance (from a different speaker) to complete.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -598,7 +606,7 @@ An other-completion linker () was used but it is the very firstutterance in the 
 
 ## cross_utterance (E3x)
 
-An other-completion linker () was used and the preceding utterance isfrom a different speaker, but that preceding utterance did not end with (trailing off). The other-completion convention requires theprevious speaker to have trailed off.
+An other-completion linker (++) was used and the preceding utterance is from a different speaker, but that preceding utterance did not end with +... (trailing off). The other-completion convention requires the previous speaker to have trailed off.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -606,7 +614,7 @@ An other-completion linker () was used and the preceding utterance isfrom a diff
 
 ## cross_utterance (E3x)
 
-An other-completion linker () was used but the preceding utterance isfrom the same speaker. The linker is for other-completion(completing a different speaker's utterance). To complete one's ownutterance, use (self-completion) instead.
+An other-completion linker (++) was used but the preceding utterance is from the same speaker. The ++ linker is for other-completion (completing a different speaker's utterance). To complete one's own utterance, use +, (self-completion) instead.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -614,7 +622,7 @@ An other-completion linker () was used but the preceding utterance isfrom the sa
 
 ## underline_balance (E3x)
 
-An underline begin marker was found without a matching underline end markerin the same utterance. Underline markers (used in CA transcription to markstressed syllables) must occur in matched begin/end pairs within a singleutterance.
+An underline begin marker was found without a matching underline end marker in the same utterance. Underline markers (used in CA transcription to mark stressed syllables) must occur in matched begin/end pairs within a single utterance.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -622,7 +630,7 @@ An underline begin marker was found without a matching underline end markerin th
 
 ## underline_balance (E3x)
 
-An underline end marker was found without a preceding underline beginmarker in the same utterance. The end marker has no open underline toclose.
+An underline end marker was found without a preceding underline begin marker in the same utterance. The end marker has no open underline to close.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -686,7 +694,7 @@ Auto-generated from corpus
 
 ## validation (E3x)
 
-Word content is structurally malformed, the parser recognized a word node but its internal structure is invalid (e.g., with instead of a language code).
+Word content is structurally malformed, the parser recognized a word node but its internal structure is invalid (e.g., @s:+ with + instead of a language code).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -694,7 +702,7 @@ Word content is structurally malformed, the parser recognized a word node but it
 
 ## validation (E3x)
 
-A header or tier has content that does not match any recognized CHAT headerstructure. The parser reports E365 when it encounters an unknown node typeduring header dispatch in the CST.
+A header or tier has content that does not match any recognized CHAT header structure. The parser reports E365 when it encounters an unknown node type during header dispatch in the CST.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -718,7 +726,7 @@ Auto-generated from corpus
 
 ## retrace (E3x)
 
-A structural ordering violation in main-tier content. In particular, a retraceor repetition marker (, , ) must be followed by the repeated orcorrected material: per the CHAT manual the marker is necessarily followed by thematerial it retraces. A retrace marker followed only by a terminator (e.g.) has nothing to retrace and is reported as E370.
+A structural ordering violation in main-tier content. In particular, a retrace or repetition marker ([/], [//], [///]) must be followed by the repeated or corrected material: per the CHAT manual the marker is necessarily followed by the material it retraces. A retrace marker followed only by a terminator (e.g. <the> [/] .) has nothing to retrace and is reported as E370.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -742,7 +750,7 @@ Nested quotation
 
 ## overlap (E3x)
 
-An overlap marker has an index value outside the valid range. For CAoverlap brackets (), the index must be 2-9. For scoped overlapannotations (, ), the index must be 1-9.
+An overlap marker has an index value outside the valid range. For CA overlap brackets (⌈⌉⌊⌋), the index must be 2-9. For scoped overlap annotations ([<], [>]), the index must be 1-9.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -758,15 +766,15 @@ Scoped annotation parse error
 
 ## Word annotation (E3x)
 
-A replacement annotation must be preceded by whitespace, exactlylike every other bracketed annotation (the scope codes , , ,, etc., which already requires a space before). Areplacement written with no space, glued directly to the word it replaces(), is invalid CHAT.
+A replacement annotation [: text] must be preceded by whitespace, exactly like every other bracketed annotation (the scope codes [?], [!], [/], [//], etc., which base_annotations already requires a space before). A replacement written with no space, glued directly to the word it replaces (word[: foo]), is invalid CHAT.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E375](E375.md) | E375: Replacement  glued to a word without a preceding space | error | ✅ |
+| [E375](E375.md) | E375: Replacement [: ...] glued to a word without a preceding space | error | ✅ |
 
 ## Word validation (E3x)
 
-Failed to parse replacement annotation content. The replacementannotation contains content that cannot be parsed as valid replacementwords.
+Failed to parse replacement annotation content. The [: replacement annotation contains content that cannot be parsed as valid replacement words.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -790,7 +798,7 @@ Auto-generated from corpus
 
 ## validation (E3x)
 
-Replacement annotation is attached to a non-word element (e.g., a paralinguistic event like ), which cannot be replaced.
+Replacement annotation [: ...] is attached to a non-word element (e.g., a paralinguistic event like &=laugh), which cannot be replaced.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -830,7 +838,7 @@ Duplicate dependent tiers
 
 ## validation (E4x)
 
-A dependent tier (, , etc.) appears before any main tier in thefile. E404 (OrphanedDependentTier) is emitted by inwhen a -prefixed ERROR node appears before any utterance.
+A dependent tier (%mor, %gra, etc.) appears before any main tier in the file. E404 (OrphanedDependentTier) is emitted by report_top_level_dependent_tier_error() in crates/talkbank-parser/src/parser/chat_file_parser/chat_file/helpers.rs when a %-prefixed ERROR node appears before any utterance.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -846,7 +854,7 @@ Auto-generated from corpus
 
 ## validation (E5x)
 
-Every valid CHAT file must end with an header. This error indicates the file is missing , usually because the file is truncated, empty, or was saved incompletely.
+Every valid CHAT file must end with an @End header. This error indicates the file is missing @End, usually because the file is truncated, empty, or was saved incompletely.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -854,7 +862,7 @@ Every valid CHAT file must end with an header. This error indicates the file is 
 
 ## parser (E5x)
 
-When a tier contains invalid content (e.g., an action marker like )AND the %wor line has 7+ words after the error, tree-sitter's error recovery failscatastrophically: instead of isolating the ERROR to the %wor tier, the entire filebecomes one ERROR node. This causes:
+When a %wor tier contains invalid content (e.g., an action marker like &=head:no) AND the %wor line has 7+ words after the error, tree-sitter's error recovery fails catastrophically: instead of isolating the ERROR to the %wor tier, the entire file becomes one ERROR node. This causes:
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -862,7 +870,7 @@ When a tier contains invalid content (e.g., an action marker like )AND the %wor 
 
 ## Header validation (E5x)
 
-Every valid CHAT file must begin with an header as its first line. This error indicates the file is missing , which means the file's character encoding is unspecified. All modern CHAT files are expected to be UTF-8 encoded.
+Every valid CHAT file must begin with an @UTF8 header as its first line. This error indicates the file is missing @UTF8, which means the file's character encoding is unspecified. All modern CHAT files are expected to be UTF-8 encoded.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -950,7 +958,7 @@ Participant entry should have both code and role
 
 ## header_validation (E5x)
 
-The corpus field (2nd field) of an header is blank. The header is, and the corpus nameis required: a blank corpus is invalid.
+The corpus field (2nd field) of an @ID header is blank. The @ID header is lang|corpus|code|age|sex|group|SES|role|education|custom|, and the corpus name is required: a blank corpus is invalid.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -974,11 +982,11 @@ Auto-generated from corpus
 
 ## header_validation (E5x)
 
-The header's fourth field () must conform to one of thethree legal CHAT date patterns defined by CLAN's authoritative:
+The @ID header's fourth field (age) must conform to one of the three legal CHAT date patterns defined by CLAN's authoritative depfile.cut:
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E517](E517.md) | E517:  age field does not match a legal CHAT date pattern | error | ✅ |
+| [E517](E517.md) | E517: @ID age field does not match a legal CHAT date pattern | error | ✅ |
 
 ## validation (E5x)
 
@@ -995,6 +1003,22 @@ Auto-generated from corpus
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E519](E519.md) | generated from corpus | error | ✅ |
+
+## header_validation (E5x)
+
+The @L1 of SPK header names a participant's first language. Wild usage is uniformly ISO 639-3 codes (16 distinct values across 1,158 kept files, all registry-valid), so the field is a language CODE and is held to the same registry rule as @Languages / @ID / word-level switches (maintainer ruling 2026-07-15, part 2).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E519](E519.md) | 3 registry | error | ✅ |
+
+## Main tier words (E5x)
+
+An explicit word-level language switch (word@s:CODE) must name a real ISO 639-3 language. The code needs NO declaration in @Languages (maintainer ruling 2026-07-15, part 1), but it must exist in the registry (same ruling, part 2): registry validation is what actually catches typo'd codes (the historical cye/sp/nle class), and it reuses E519, the same rule that already guards @Languages and @ID.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E519](E519.md) | level language code not in the ISO 639 | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -1078,7 +1102,7 @@ Lazy gem inside background
 
 ## validation (E5x)
 
-The filename in the header does not match the name of the CHAT filebeing parsed (case-insensitive comparison). For example, if contains, E531 is reported because does not match .
+The filename in the @Media header does not match the name of the CHAT file being parsed (case-insensitive comparison). For example, if foo.cha contains @Media: bar, audio, E531 is reported because bar does not match foo.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1102,7 +1126,7 @@ Auto-generated from corpus
 
 ## header_validation (E5x)
 
-An header contains a flag that is not one of the recognized option values. The file parses successfully but the unsupported flag is stored as and flagged during validation.
+An @Options header contains a flag that is not one of the recognized option values. The file parses successfully but the unsupported flag is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1110,7 +1134,7 @@ An header contains a flag that is not one of the recognized option values. The f
 
 ## header_validation (E5x)
 
-An header contains a media type that is not one of the recognized values. The file parses successfully but the unsupported type is stored as and flagged during validation.
+An @Media header contains a media type that is not one of the recognized values. The file parses successfully but the unsupported type is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1118,7 +1142,7 @@ An header contains a media type that is not one of the recognized values. The fi
 
 ## header_validation (E5x)
 
-An header contains a status value that is not one of the recognized values. The file parses successfully but the unsupported status is stored as and flagged during validation.
+An @Media header contains a status value that is not one of the recognized values. The file parses successfully but the unsupported status is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1126,7 +1150,7 @@ An header contains a status value that is not one of the recognized values. The 
 
 ## header_validation (E5x)
 
-An header contains a value that is not one of the recognized number options. The file parses successfully but the unsupported value is stored as and flagged during validation.
+An @Number header contains a value that is not one of the recognized number options. The file parses successfully but the unsupported value is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1134,7 +1158,7 @@ An header contains a value that is not one of the recognized number options. The
 
 ## header_validation (E5x)
 
-An header contains a value that is not one of the recognized quality ratings. The file parses successfully but the unsupported value is stored as and flagged during validation.
+An @Recording Quality header contains a value that is not one of the recognized quality ratings. The file parses successfully but the unsupported value is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1142,7 +1166,7 @@ An header contains a value that is not one of the recognized quality ratings. Th
 
 ## header_validation (E5x)
 
-An header contains a value that is not one of the recognized transcription types. The file parses successfully but the unsupported value is stored as and flagged during validation.
+An @Transcription header contains a value that is not one of the recognized transcription types. The file parses successfully but the unsupported value is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1150,23 +1174,23 @@ An header contains a value that is not one of the recognized transcription types
 
 ## header_validation (E5x)
 
-An header must match one of the three time patternsthat CLAN's authoritative declares legal:
+An @Time Duration header must match one of the three time patterns that CLAN's authoritative depfile.cut declares legal:
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E540](E540.md) | E540:  does not match a legal CLAN time pattern | error | ✅ |
+| [E540](E540.md) | E540: @Time Duration does not match a legal CLAN time pattern | error | ✅ |
 
 ## header_validation (E5x)
 
-An header must match one of the two time patterns thatCLAN's authoritative declares legal:
+An @Time Start header must match one of the two time patterns that CLAN's authoritative depfile.cut declares legal:
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E541](E541.md) | E541:  does not match a legal CLAN time pattern | error | ✅ |
+| [E541](E541.md) | E541: @Time Start does not match a legal CLAN time pattern | error | ✅ |
 
 ## header_validation (E5x)
 
-An header contains a sex field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as and flagged during validation.
+An @ID header contains a sex field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1174,7 +1198,7 @@ An header contains a sex field value that is not one of the recognized values. T
 
 ## header_validation (E5x)
 
-A header appears out of canonical order. For example, or appears before . CHAT headers must follow the canonical ordering: , , , , then other headers like and .
+A header appears out of canonical order. For example, @Options or @ID appears before @Participants. CHAT headers must follow the canonical ordering: @UTF8, @Begin, @Languages, @Participants, then other headers like @Options and @ID.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1182,23 +1206,23 @@ A header appears out of canonical order. For example, or appears before . CHAT h
 
 ## header_validation (E5x)
 
-An header declares a linked media file (no / / status), but the transcript body contains noevidence that any utterance is actually linked to that media. Bythe CHAT manual's semantics, an unqualified declaration isa promise that the transcript is time-linked to the named file;this check catches transcripts that make that promise withoutkeeping it.
+An @Media header declares a linked media file (no unlinked / missing / notrans status), but the transcript body contains no evidence that any utterance is actually linked to that media. By the CHAT manual's @Media semantics, an unqualified declaration is a promise that the transcript is time-linked to the named file; this check catches transcripts that make that promise without keeping it.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E544](E544.md) | E544:  claims linkage but transcript has no timing evidence | error | ✅ |
+| [E544](E544.md) | E544: @Media claims linkage but transcript has no timing evidence | error | ✅ |
 
 ## header_validation (E5x)
 
-An header must carry a date matching CLAN'sauthoritative date template:
+An @Birth of <CODE> header must carry a date matching CLAN's authoritative depfile.cut date template:
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E545](E545.md) | E545:  date does not match a legal CHAT date pattern | error | ✅ |
+| [E545](E545.md) | E545: @Birth of date does not match a legal CHAT date pattern | error | ✅ |
 
 ## header_validation (E5x)
 
-An header contains an SES (socioeconomic status) field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as and flagged during validation.
+An @ID header contains an SES (socioeconomic status) field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as Unsupported(String) and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1206,7 +1230,7 @@ An header contains an SES (socioeconomic status) field value that is not one of 
 
 ## header_validation (E5x)
 
-A constant participant-specific header (, , or) does not immediately follow the block. These headers must comedirectly after the headers, before any changeable header such as, , , or . A changeable header between the block and a constant participant header is an ordering violation.
+A constant participant-specific header (@Birth of, @Birthplace of, or @L1 of) does not immediately follow the @ID block. These headers must come directly after the @ID headers, before any changeable header such as @Comment, @Date, @Situation, or @Types. A changeable header between the @ID block and a constant participant header is an ordering violation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1214,7 +1238,7 @@ A constant participant-specific header (, , or) does not immediately follow the 
 
 ## header_validation (E5x)
 
-An header does not immediately follow the / headers (or another ). The block must come directly after (and the optional ), with no other header in between.A changeable header such as between / andthe block is an ordering violation.
+An @ID header does not immediately follow the @Participants / @Options headers (or another @ID). The @ID block must come directly after @Participants (and the optional @Options), with no other header in between. A changeable header such as @Comment between @Participants/@Options and the @ID block is an ordering violation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1222,7 +1246,7 @@ An header does not immediately follow the / headers (or another ). The block mus
 
 ## header_validation (E5x)
 
-The same speaker code is declared more than once in the header.Each participant must be declared exactly once; a repeated speaker code is adeclaration error.
+The same speaker code is declared more than once in the @Participants header. Each participant must be declared exactly once; a repeated speaker code is a declaration error.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1230,7 +1254,7 @@ The same speaker code is declared more than once in the header.Each participant 
 
 ## header_validation (E5x)
 
-The header ends with a trailing comma: a stray comma after thelast participant, with no participant following it. The participant list iscomma-separated (), so a comma with nothing afterit is a dangling separator. This is distinct from an empty header; the header has participants, it just has an extra comma at the end.
+The @Participants header ends with a trailing comma: a stray comma after the last participant, with no participant following it. The participant list is comma-separated (CHI Target_Child, MOT Mother), so a comma with nothing after it is a dangling separator. This is distinct from an empty @Participants header; the header has participants, it just has an extra comma at the end.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1238,15 +1262,15 @@ The header ends with a trailing comma: a stray comma after thelast participant, 
 
 ## header_validation (E5x)
 
-The header's status declares that the transcript isnot time-aligned to the media file. Timing evidence anywhere in thetranscript contradicts that declaration: either the transcript really isaligned (so must be removed), or the timing tier is stale (soit must be removed). This is the inverse of E544 (declared linkagewithout timing evidence).
+The @Media header's unlinked status declares that the transcript is not time-aligned to the media file. Timing evidence anywhere in the transcript contradicts that declaration: either the transcript really is aligned (so unlinked must be removed), or the timing tier is stale (so it must be removed). This is the inverse of E544 (declared linkage without timing evidence).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E552](E552.md) | E552:  declares  but transcript carries timing | error | ✅ |
+| [E552](E552.md) | E552: @Media declares unlinked but transcript carries timing | error | ✅ |
 
 ## validation (E6x)
 
-A dependent tier (typically ) had parse errors during lenient recovery, so thevalidator cannot verify alignment between tiers. Alignment checks (main↔%mor, %mor↔%gra)are skipped for the affected utterance. This is a warning, not an error, the filestill parses, but alignment correctness is unverified for tainted tiers.
+A dependent tier (typically %mor) had parse errors during lenient recovery, so the validator cannot verify alignment between tiers. Alignment checks (main↔%mor, %mor↔%gra) are skipped for the affected utterance. This is a warning, not an error, the file still parses, but alignment correctness is unverified for tainted tiers.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1270,7 +1294,7 @@ Auto-generated from corpus
 
 ## tier_validation (E6x)
 
-A dependent tier contains content that does not match the expected time format. The tier parses successfully but the invalid content is stored as and flagged during validation.
+A %tim dependent tier contains content that does not match the expected time format. The tier parses successfully but the invalid content is stored as Unsupported and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1294,7 +1318,7 @@ A %gra (grammatical relations) tier appears without a corresponding %mor (morpho
 
 ## tier_validation (E6x)
 
-An utterance contains a dependent tier with a label that is not a standard CHAT tier name and does not follow the user-defined tier naming convention. The file parses successfully but the tier is stored as and flagged during validation.
+An utterance contains a dependent tier with a label that is not a standard CHAT tier name and does not follow the %x user-defined tier naming convention. The file parses successfully but the tier is stored as DependentTier::Unsupported and flagged during validation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1302,7 +1326,7 @@ An utterance contains a dependent tier with a label that is not a standard CHAT 
 
 ## Temporal validation (E7x)
 
-Each utterance's first media bullet must have a start time greater than orequal to the previous utterance's first bullet start time (for the samespeaker). Corresponds to CLAN CHECK Error 83.
+Each utterance's first media bullet must have a start time greater than or equal to the previous utterance's first bullet start time (for the same speaker). Corresponds to CLAN CHECK Error 83.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1318,7 +1342,7 @@ Invalid MOR chunk format - missing |
 
 ## validation (E7x)
 
-A single speaker has consecutive utterances with overlap markers (/) that overlap with each other. Overlap markers should indicate simultaneous speech between different speakers, not self-overlap.
+A single speaker has consecutive utterances with overlap markers (⌈⌉/⌊⌋) that overlap with each other. Overlap markers should indicate simultaneous speech between different speakers, not self-overlap.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1342,7 +1366,7 @@ Mor count mismatch - too many mor items
 
 ## Alignment terminator mismatch (E7x)
 
-The %mor tier has a terminator but the main tier does not, or vice versa.One tier ends with a sentence-final punctuation mark while the other does not.
+The %mor tier has a terminator but the main tier does not, or vice versa. One tier ends with a sentence-final punctuation mark while the other does not.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1350,7 +1374,7 @@ The %mor tier has a terminator but the main tier does not, or vice versa.One tie
 
 ## Dependent tier parsing (E7x)
 
-A grammar relation on the tier is malformed, missing an index, head,or relation label, or containing non-integer values where integers are expected.The tier format is for each word.
+A grammar relation on the %gra tier is malformed, missing an index, head, or relation label, or containing non-integer values where integers are expected. The %gra tier format is index|head|RELATION for each word.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1358,7 +1382,7 @@ A grammar relation on the tier is malformed, missing an index, head,or relation 
 
 ## validation (E7x)
 
-A relation uses an invalid index. indices are 1-indexed: thefirst word is , and is reserved for the ROOT attachment in thedependent slot (). Using in the first (index) slot of arelation triggers E709.
+A %gra relation uses an invalid index. %gra indices are 1-indexed: the first word is 1, and 0 is reserved for the ROOT attachment in the dependent slot (n|0|ROOT). Using 0 in the first (index) slot of a relation triggers E709.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1374,7 +1398,7 @@ Invalid GRA format
 
 ## Mor content validation (E7x)
 
-A %mor word has an empty stem, POS category, prefix, or suffix. Everymorphosyntax item on the %mor tier must have a non-empty POS categoryand a non-empty stem at minimum.
+A %mor word has an empty stem, POS category, prefix, or suffix. Every morphosyntax item on the %mor tier must have a non-empty POS category and a non-empty stem at minimum.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1390,7 +1414,7 @@ Auto-generated from corpus
 
 ## validation (E7x)
 
-A relation has a head index that falls outside the valid range, where is the number of chunks in the utterance. Index is reserved for the ROOT head; otherwise the head index must point toan existing chunk.
+A %gra relation has a head index that falls outside the valid range 0..=N, where N is the number of %mor chunks in the utterance. Index 0 is reserved for the ROOT head; otherwise the head index must point to an existing chunk.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1398,23 +1422,23 @@ A relation has a head index that falls outside the valid range, where is the num
 
 ## Alignment count mismatch (E7x)
 
-The (actual phonology) tier has fewer alignable tokens than the main tier.Each main-tier word must have a corresponding token.
+The %pho (actual phonology) tier has fewer alignable tokens than the main tier. Each main-tier word must have a corresponding %pho token.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E714](E714.md) | E714:  alignment count mismatch, too few tokens | error | ✅ |
+| [E714](E714.md) | E714: %pho alignment count mismatch, too few tokens | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
-The (actual phonology) tier has more alignable tokens than the main tier.Remove the extra tokens so counts match.
+The %pho (actual phonology) tier has more alignable tokens than the main tier. Remove the extra %pho tokens so counts match.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E715](E715.md) | E715:  alignment count mismatch, too many tokens | error | ✅ |
+| [E715](E715.md) | E715: %pho alignment count mismatch, too many tokens | error | ✅ |
 
 ## Alignment terminator mismatch (E7x)
 
-The %mor tier has a terminator that does not match the main tier's terminator.Both tiers have terminators, but they differ (e.g., main tier ends with "?"but %mor ends with "."). This typically indicates stale or incorrectly cachedmorphosyntax data.
+The %mor tier has a terminator that does not match the main tier's terminator. Both tiers have terminators, but they differ (e.g., main tier ends with "?" but %mor ends with "."). This typically indicates stale or incorrectly cached morphosyntax data.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1438,7 +1462,7 @@ Sin count mismatch - too many sin tokens
 
 ## Alignment count mismatch (E7x)
 
-The number of chunks does not equal the number of relationsfor an utterance. aligns 1-to-1 with chunks (not items, a item with post-clitics produces multiple chunks).
+The number of %mor chunks does not equal the number of %gra relations for an utterance. %gra aligns 1-to-1 with %mor chunks (not items, a %mor item with post-clitics produces multiple chunks).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1446,7 +1470,7 @@ The number of chunks does not equal the number of relationsfor an utterance. ali
 
 ## validation (E7x)
 
-tier indices must be sequential (1, 2, 3, ..., N). Non-sequential indices indicate a malformed dependency structure.
+%gra tier indices must be sequential (1, 2, 3, ..., N). Non-sequential indices indicate a malformed dependency structure.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1454,7 +1478,7 @@ tier indices must be sequential (1, 2, 3, ..., N). Non-sequential indices indica
 
 ## validation (E7x)
 
-tier has no ROOT relation. Every tier must have exactly one relation with or (the ROOT of the dependency tree).
+%gra tier has no ROOT relation. Every %gra tier must have exactly one relation with head=0 or head=self (the ROOT of the dependency tree).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1462,7 +1486,7 @@ tier has no ROOT relation. Every tier must have exactly one relation with or (th
 
 ## validation (E7x)
 
-tier has multiple ROOT relations. Every tier should have exactly one ROOT (relation with or ).
+%gra tier has multiple ROOT relations. Every %gra tier should have exactly one ROOT (relation with head=0 or head=self).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1478,7 +1502,7 @@ A %gra tier contains a circular dependency where following parent pointers creat
 
 ## Alignment count mismatch (E7x)
 
-The tier word count does not match the tier word count. Each word-level entry in must correspond one-to-one with a word-level entry in .
+The %xmodsyl tier word count does not match the %mod tier word count. Each word-level entry in %xmodsyl must correspond one-to-one with a word-level entry in %mod.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1486,7 +1510,7 @@ The tier word count does not match the tier word count. Each word-level entry in
 
 ## Alignment count mismatch (E7x)
 
-The tier word count does not match the tier word count. Each word-level entry in must correspond one-to-one with a word-level entry in .
+The %xphosyl tier word count does not match the %pho tier word count. Each word-level entry in %xphosyl must correspond one-to-one with a word-level entry in %pho.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1494,7 +1518,7 @@ The tier word count does not match the tier word count. Each word-level entry in
 
 ## Alignment count mismatch (E7x)
 
-The tier word count does not match the tier word count. Each word-level entry in must correspond one-to-one with a word-level entry in .
+The %xphoaln tier word count does not match the %mod tier word count. Each word-level entry in %xphoaln must correspond one-to-one with a word-level entry in %mod.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1502,7 +1526,7 @@ The tier word count does not match the tier word count. Each word-level entry in
 
 ## Alignment count mismatch (E7x)
 
-The tier word count does not match the tier word count. Each word-level entry in must correspond one-to-one with a word-level entry in .
+The %xphoaln tier word count does not match the %pho tier word count. Each word-level entry in %xphoaln must correspond one-to-one with a word-level entry in %pho.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1510,23 +1534,23 @@ The tier word count does not match the tier word count. Each word-level entry in
 
 ## Alignment count mismatch (E7x)
 
-The (model/target phonology) tier has fewer alignable tokens than themain tier. Each main-tier word must have a corresponding token.
+The %mod (model/target phonology) tier has fewer alignable tokens than the main tier. Each main-tier word must have a corresponding %mod token.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E733](E733.md) | E733:  alignment count mismatch, too few tokens | error | ✅ |
+| [E733](E733.md) | E733: %mod alignment count mismatch, too few tokens | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
-The (model/target phonology) tier has more alignable tokens than themain tier. Remove the extra tokens so counts match.
+The %mod (model/target phonology) tier has more alignable tokens than the main tier. Remove the extra %mod tokens so counts match.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E734](E734.md) | E734:  alignment count mismatch, too many tokens | error | ✅ |
+| [E734](E734.md) | E734: %mod alignment count mismatch, too many tokens | error | ✅ |
 
 ## Phon syllabification content (E7x)
 
-Every / unit must be one phone, an ASCII ':', then one constituent code.
+Every %xmodsyl/%xphosyl unit must be one phone, an ASCII ':', then one constituent code.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1534,7 +1558,7 @@ Every / unit must be one phone, an ASCII ':', then one constituent code.
 
 ## Phon syllabification content (E7x)
 
-Constituent codes on / must be one of O N C L R E A D U.
+Constituent codes on %xmodsyl/%xphosyl must be one of O N C L R E A D U.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1542,7 +1566,7 @@ Constituent codes on / must be one of O N C L R E A D U.
 
 ## Phon syllabification content (E7x)
 
-Stripping from each unit must reproduce the corresponding word.
+Stripping :CODE from each %xmodsyl unit must reproduce the corresponding %mod word. A pause filler ((.), (..), (...)) on %xmodsyl must mirror the same pause token as the %mod word at that position.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1550,7 +1574,7 @@ Stripping from each unit must reproduce the corresponding word.
 
 ## Phon syllabification content (E7x)
 
-Stripping from each unit must reproduce the corresponding word.
+Stripping :CODE from each %xphosyl unit must reproduce the corresponding %pho word. A pause filler ((.), (..), (...)) on %xphosyl must mirror the same pause token as the %pho word at that position.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1558,7 +1582,7 @@ Stripping from each unit must reproduce the corresponding word.
 
 ## Phon phone alignment (E7x)
 
-Every pair has exactly one ↔ with a non-null phone on at least one side.
+Every %xphoaln pair has exactly one ↔ with a non-null phone on at least one side.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1566,7 +1590,7 @@ Every pair has exactly one ↔ with a non-null phone on at least one side.
 
 ## Phon phone alignment (E7x)
 
-Concatenating the model (left) sides of , skipping ∅, must reproduce the word.
+Concatenating the model (left) sides of %xphoaln, skipping ∅, must reproduce the %mod word. The comparison is segment-level: stress markers (\u{02C8}, \u{02CC}) and syllable-boundary notation (Phon's ^, IPA's .) in either string are ignored, since the alignment pairs carry bare segments while the source word may carry suprasegmental and boundary notation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1574,7 +1598,7 @@ Concatenating the model (left) sides of , skipping ∅, must reproduce the word.
 
 ## Phon phone alignment (E7x)
 
-Concatenating the actual (right) sides of , skipping ∅, must reproduce the word.
+Concatenating the actual (right) sides of %xphoaln, skipping ∅, must reproduce the %pho word. The comparison is segment-level: stress markers (\u{02C8}, \u{02CC}) and syllable-boundary notation (Phon's ^, IPA's .) in either string are ignored, since the alignment pairs carry bare segments while the source word may carry suprasegmental and boundary notation.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1582,7 +1606,7 @@ Concatenating the actual (right) sides of , skipping ∅, must reproduce the wor
 
 ## Phon phone interval (E7x)
 
-Each phone interval must have start strictly less than end.
+Each %xphoint phone interval must have start strictly less than end.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1590,7 +1614,7 @@ Each phone interval must have start strictly less than end.
 
 ## Phon phone interval (E7x)
 
-interval start times must be non-decreasing across the tier.
+%xphoint interval start times must be non-decreasing across the tier.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1598,7 +1622,7 @@ interval start times must be non-decreasing across the tier.
 
 ## Phon phone interval (E7x)
 
-The first start and last end of must lie within the media bullet (1 ms tolerance).
+The first start and last end of %xphoint must lie within the *SPK: media bullet (1 ms tolerance).
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1606,7 +1630,7 @@ The first start and last end of must lie within the media bullet (1 ms tolerance
 
 ## Phon phone interval (E7x)
 
-Concatenating a group's phones must reproduce the corresponding word.
+Concatenating a %xphoint group's phones must reproduce the corresponding %pho word.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1614,11 +1638,99 @@ Concatenating a group's phones must reproduce the corresponding word.
 
 ## Phon phone interval (E7x)
 
-must have exactly one ' / '-separated group per word.
+%xphoint must have exactly one ' / '-separated group per %pho word.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E746](E746.md) | E746: Xphoint group count does not match the pho word count | error | ✅ |
+
+## Media bullets (E7x)
+
+A media bullet timestamp is written with a leading zero before another digit (for example 012_200). CHAT bullet times are plain millisecond integers; a leading zero is an illegal time representation (CLAN CHECK error 90, check_getMediaTagInfo res 3). A bare 0 timestamp (for example 0_200) is legal: the rule fires only when a 0 is followed by another digit.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E748](E748.md) | E748: Leading zero in bullet timestamp | error | ✅ |
+
+## Main tier separators (E7x)
+
+A comma on a speaker tier must be followed by a space or end-of-line (CLAN CHECK error 92, "Item ',' must be followed by space or end-of-line.", check.cpp 4309-4320). Writing hey ,you glues the comma to the next word. The rule fires only when the next in-order item is a word starting at the byte immediately after the comma; constructs that put any other character after the comma (group <, overlap marks, CA marks) are not flagged, matching CLAN's CA exemptions conservatively.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E749](E749.md) | E749: Comma glued to the following word | error | ✅ |
+
+## Main tier groups (E7x)
+
+A space directly after the opening < or directly before the closing > of an angle-bracket group (< dog> or <dog >) is invalid (CLAN CHECK error 160, "Space character is not allowed after '<' or before '>' character.", check.cpp 4300/4306). The grammar tolerates the whitespace as an explicit optional whitespaces CST node so the parse recovers, but the construct is invalid CHAT; before this rule the parser silently DROPPED that whitespace, so accepted files were also being silently rewritten on normalize.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E750](E750.md) | bracket group delimiters | error | ✅ |
+
+## Main tier separators (E7x)
+
+A pause marker opening directly attached to the end of a word with no space (hello(.)) is invalid (CLAN CHECK error 57, "Please add space between word and pause symbol: '('.", check.cpp 4437). Pauses are free-standing content items and must be space-delimited from words.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E751](E751.md) | E751: Pause glued to the preceding word | error | ✅ |
+
+## header_validation (E7x)
+
+The transcript carries timing evidence (main-tier bullets, or a positional %wor timing sidecar), but no @Media header declares the media timeline those timestamps index. A timestamp into an undeclared recording fails to make sense: consumers cannot resolve what the offsets refer to. This is the inverse direction of E544 (@Media declares linkage but no timing evidence exists) and corresponds to CLAN CHECK error 112 ("Please add "unlinked" to @Media header.", check.cpp 3927, check_getOLDMediaTagInfo res==6).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E752](E752.md) | E752: Timing bullets without an @Media header | error | ✅ |
+
+## Main tier words (E7x)
+
+A word whose entire spoken material sits inside segment-repetition delimiters (↫...↫, U+21AB) marks the repetition of a segment of a word that is not there: the notation presumes a host word (a stem) outside the repeated span, as in ↫p↫parents ("p-, parents"). A fully wrapped word asserts a repetition of nothing and fails to make sense. Corresponds to CLAN CHECK error 151 ("This word has only repetition segments.", check.cpp check_isThereStem), which only the GUI CLAN build enforces; chatter adopts the rule in its own semantics (maintainer ruling, 2026-07-15).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E753](E753.md) | E753: Word consisting only of repetition segments | error | ✅ |
+
+## Main tier words (E7x)
+
+The @l special form marks a single spoken LETTER (b@l, reading a letter aloud). Multi-character content has its own form, @k (letter sequence) or @ls (letter plural), so a stem of more than one character under @l is a mis-marked form: ab@l should be ab@k. Replicates CLAN CHECK error 76 ("There should be only one letter before @l.", check.cpp check_isOneLetter), per maintainer ruling 2026-07-14: replicate CHECK's one-character rule now; the deeper digraph question (Spanish ch, Dutch ij: one letter orthographically, two characters) is logged for the corpus authority and NOT decided here.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E754](E754.md) | E754: Letter form @l with more than one letter | error | ✅ |
+
+## header_validation (E7x)
+
+A [- CODE] precode marks a whole utterance as being in another language: substantial language presence in the transcript. The @Languages header declares the transcript's substantial languages, so an utterance-level language missing from it leaves the header misrepresenting the transcript. Matches CLAN CHECK error 152 ("Language is not defined on @Languages header tier."). Ruled 2026-07-15 (maintainer decision, docs/design/2026-07-15-at-s-language-declaration-decision.md, part 3): declaration IS required at utterance level, deliberately UNLIKE word-level @s:CODE insertions, which remain free (part 1 of the same ruling; the corpus grounding found 0 of 7,167 precode-bearing files violate this invariant while 854 files legitimately use undeclared word-level codes).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E755](E755.md) | E755: Utterance language not declared in @Languages | error | ✅ |
+
+## Dependent tier validation (E7x)
+
+A user-defined %x tier whose content is empty or whitespace-only declares nothing: the line asserts an annotation that is not there and fails to make sense. Formerly W601, which carried a warning-prefixed code while firing as a hard error (its doc comment even said "intentionally warning-level"); the maintainer ruling of 2026-07-16 resolved the taxonomy contradiction by keeping the rejection and giving it an honest E-number. Real CLAN has no analogue (a truly empty tier draws only structural errors); zero kept files carry the construct, so the rename has no corpus impact. W601 is retired and not reused.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E756](E756.md) | defined tier | error | ✅ |
+
+## Main tier separators (E7x)
+
+A bracketed code's closing ] directly attached to the start of the next word with no space (hello [/]x) is invalid (CLAN CHECK error 19, "Illegal use of delimiter in a word." / "Or a SPACE should be added after it."). Bracketed codes are free-standing items and must be space-delimited from what follows. The parse itself is unambiguous (the retrace closes at ] and x becomes a separate word), which is exactly why this is a STYLE rule: sloppy but readable source that must still be rejected so the corpus stays canonically spaced.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E757](E757.md) | E757: Bracketed code glued to the following content | error | ✅ |
+
+## Main tier structure (E7x)
+
+A space between the tier's tab delimiter and the first content item (*CHI:<tab><space>dog .) is invalid in a file without @Options: CA (CLAN CHECK error 123, "Illegal character '' found in tier text. If it CA, then add "@Options: CA""). CA transcripts use space-based column alignment after the tab, so the rule is exempted there; every wild occurrence of the construct (457 kept files, 2026-07-16 scan) is in a CA file, confirming the boundary.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E758](E758.md) | tier content in a non | error | ✅ |
 
 ## Alignment count mismatch (E9x)
 
@@ -1646,7 +1758,7 @@ Auto-generated from corpus
 
 ## Warnings (W6x)
 
-A user-defined dependent tier () uses a label that matches a knownstandard tier name. For example, should be updated to since is now a recognized standard tier. This is a warning to encouragemigration from legacy experimental naming to the current standard.
+A user-defined dependent tier (%x...) uses a label that matches a known standard tier name. For example, %xpho should be updated to %pho since pho is now a recognized standard tier. This is a warning to encourage migration from legacy experimental naming to the current standard.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|

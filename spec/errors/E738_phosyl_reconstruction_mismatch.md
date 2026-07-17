@@ -2,7 +2,10 @@
 
 ## Description
 
-Stripping `:CODE` from each `%xphosyl` unit must reproduce the corresponding `%pho` word.
+Stripping `:CODE` from each `%xphosyl` unit must reproduce the
+corresponding `%pho` word. A pause filler (`(.)`, `(..)`, `(...)`) on
+`%xphosyl` must mirror the same pause token as the `%pho` word at that
+position.
 
 ## Metadata
 
@@ -36,4 +39,7 @@ Stripping `:CODE` from each `%xphosyl` unit must reproduce the corresponding `%p
 
 ## CHAT Rule
 
-Stripping `:CODE` from each `%xphosyl` unit must reproduce the corresponding `%pho` word.
+Stripping `:CODE` from each `%xphosyl` unit must reproduce the
+corresponding `%pho` word. A pause filler (`(.)`, `(..)`, `(...)`) on
+`%xphosyl` must mirror the same pause token as the `%pho` word at that
+position.

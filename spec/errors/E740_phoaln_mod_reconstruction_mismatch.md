@@ -2,7 +2,11 @@
 
 ## Description
 
-Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must reproduce the `%mod` word.
+Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must
+reproduce the `%mod` word. The comparison is segment-level: stress markers (`\u{02C8}`, `\u{02CC}`)
+and syllable-boundary notation (Phon's `^`, IPA's `.`) in either string are
+ignored, since the alignment pairs carry bare segments while the source
+word may carry suprasegmental and boundary notation.
 
 ## Metadata
 
@@ -37,4 +41,8 @@ Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must reproduce
 
 ## CHAT Rule
 
-Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must reproduce the `%mod` word.
+Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must
+reproduce the `%mod` word. The comparison is segment-level: stress markers (`\u{02C8}`, `\u{02CC}`)
+and syllable-boundary notation (Phon's `^`, IPA's `.`) in either string are
+ignored, since the alignment pairs carry bare segments while the source
+word may carry suprasegmental and boundary notation.

@@ -77,7 +77,7 @@ const E518: &str = include_str!(
     "../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E518_Auto_generated_from_corpus.cha"
 );
 const E517: &str = include_str!(
-    "../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E517_age_field_does_not_match_a_legal_CHAT_date_pattern.cha"
+    "../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern.cha"
 );
 
 /// Parse `input` at the real streaming boundary and return the `Debug` string of

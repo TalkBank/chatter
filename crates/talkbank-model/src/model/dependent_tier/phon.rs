@@ -279,6 +279,40 @@ impl SylWordError {
     }
 }
 
+/// Classification of one whitespace-delimited word on a syllabification tier.
+///
+/// Phon keeps every word-aligned phonology tier in index lockstep with the
+/// main tier. When the main tier carries a pause, Phon mirrors the pause
+/// token at the same word position on `%mod`, `%pho`, `%xmodsyl`, and
+/// `%xphosyl` (and as a `(..)↔(..)` pair on `%xphoaln`). Such a filler is
+/// not a syllabified word and carries no `phone:CODE` structure, so the
+/// classifier recognizes it BEFORE unit tokenization.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SylWordKind {
+    /// A pause filler (`(.)`, `(..)`, `(...)`) mirroring a pause at the same
+    /// word position on the source tier. Timed pauses (`(1.5)`) are not
+    /// accepted: they are unattested on syllabification tiers in the wild
+    /// corpus, and this inventory extends only from attestation.
+    PauseFiller(crate::model::PauseDuration),
+    /// A syllabified word: a sequence of `phone:CODE` units.
+    Units(Vec<SyllableUnit>),
+}
+
+/// Classify one syllabification-tier word: pause filler or `phone:CODE` units.
+///
+/// The pause forms are matched exactly (the serialized forms of the untimed
+/// [`crate::model::PauseDuration`] variants); anything else must tokenize as
+/// units via [`tokenize_syl_word`].
+pub fn classify_syl_word(word: &str) -> Result<SylWordKind, SylWordError> {
+    use crate::model::PauseDuration;
+    match word {
+        "(.)" => Ok(SylWordKind::PauseFiller(PauseDuration::Short)),
+        "(..)" => Ok(SylWordKind::PauseFiller(PauseDuration::Medium)),
+        "(...)" => Ok(SylWordKind::PauseFiller(PauseDuration::Long)),
+        _ => tokenize_syl_word(word).map(SylWordKind::Units),
+    }
+}
+
 /// Tokenize one syllabification word (e.g. `k:Oæ:Nt:C`) into `phone:CODE` units.
 ///
 /// Units concatenate with no internal whitespace; a phone may be any

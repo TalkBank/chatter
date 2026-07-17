@@ -336,13 +336,22 @@ impl ErrorSpec {
     }
 }
 
-/// Extract plain text from all text nodes under this node
+/// Extract plain text from the inline nodes under this node.
+///
+/// Soft/hard line breaks become single spaces (a wrapped source paragraph
+/// must not fuse words), and inline code spans contribute their literal
+/// text (a backticked example must not vanish from the extracted prose).
 fn extract_text_from_children<'a>(node: &'a comrak::nodes::AstNode<'a>) -> String {
     let mut result = String::new();
 
     for child in node.descendants() {
-        if let comrak::nodes::NodeValue::Text(ref text) = child.data.borrow().value {
-            result.push_str(text);
+        match child.data.borrow().value {
+            comrak::nodes::NodeValue::Text(ref text) => result.push_str(text),
+            comrak::nodes::NodeValue::Code(ref code) => result.push_str(&code.literal),
+            comrak::nodes::NodeValue::SoftBreak | comrak::nodes::NodeValue::LineBreak => {
+                result.push(' ');
+            }
+            _ => {}
         }
     }
 

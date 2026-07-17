@@ -531,8 +531,11 @@ impl ErrorCorpusExample {
 fn extract_text_from_children<'a>(node: &'a AstNode<'a>) -> String {
     let mut result = String::new();
     for child in node.descendants() {
-        if let NodeValue::Text(ref text) = child.data.borrow().value {
-            result.push_str(text);
+        match child.data.borrow().value {
+            NodeValue::Text(ref text) => result.push_str(text),
+            NodeValue::Code(ref code) => result.push_str(&code.literal),
+            NodeValue::SoftBreak | NodeValue::LineBreak => result.push(' '),
+            _ => {}
         }
     }
     result

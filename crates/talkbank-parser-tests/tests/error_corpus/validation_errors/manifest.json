@@ -113,7 +113,7 @@
       "source_spec": "spec/errors/E247_auto.md"
     },
     {
-      "fixture": "E248_Bare_shortcut_in_tertiary_language_context.cha",
+      "fixture": "E248_Bare_s_shortcut_in_tertiary_language_context.cha",
       "expected_codes": [
         "E248"
       ],
@@ -121,7 +121,7 @@
       "source_spec": "spec/errors/E248_auto.md"
     },
     {
-      "fixture": "E249_Bare_shortcut_with_no_secondary_language.cha",
+      "fixture": "E249_Bare_s_shortcut_with_no_secondary_language.cha",
       "expected_codes": [
         "E249"
       ],
@@ -706,7 +706,7 @@
       "source_spec": "spec/errors/E508_auto.md"
     },
     {
-      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern.cha",
+      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern.cha",
       "expected_codes": [
         "E517"
       ],
@@ -714,7 +714,7 @@
       "source_spec": "spec/errors/E517_invalid_age_format.md"
     },
     {
-      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_2.cha",
+      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_2.cha",
       "expected_codes": [
         "E517"
       ],
@@ -722,7 +722,7 @@
       "source_spec": "spec/errors/E517_invalid_age_format.md"
     },
     {
-      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_3.cha",
+      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_3.cha",
       "expected_codes": [
         "E517"
       ],
@@ -730,7 +730,7 @@
       "source_spec": "spec/errors/E517_invalid_age_format.md"
     },
     {
-      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_4.cha",
+      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_4.cha",
       "expected_codes": [
         "E517"
       ],
@@ -738,7 +738,7 @@
       "source_spec": "spec/errors/E517_invalid_age_format.md"
     },
     {
-      "fixture": "E517_age_field_does_not_match_a_legal_CHAT_date_pattern_5.cha",
+      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_5.cha",
       "expected_codes": [
         "E517"
       ],
@@ -1011,7 +1011,7 @@
       "source_spec": "spec/errors/E539_unsupported_transcription.md"
     },
     {
-      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern.cha",
+      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern.cha",
       "expected_codes": [
         "E540"
       ],
@@ -1019,7 +1019,7 @@
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern_2.cha",
+      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern_2.cha",
       "expected_codes": [
         "E540"
       ],
@@ -1027,7 +1027,7 @@
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern_3.cha",
+      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern_3.cha",
       "expected_codes": [
         "E540"
       ],
@@ -1035,7 +1035,7 @@
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E540_does_not_match_a_legal_CLAN_time_pattern_4.cha",
+      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern_4.cha",
       "expected_codes": [
         "E540"
       ],
@@ -1043,7 +1043,7 @@
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E541_does_not_match_a_legal_CLAN_time_pattern.cha",
+      "fixture": "E541_Time_Start_does_not_match_a_legal_CLAN_time_pattern.cha",
       "expected_codes": [
         "E541"
       ],
@@ -1051,7 +1051,7 @@
       "source_spec": "spec/errors/E541_invalid_time_start.md"
     },
     {
-      "fixture": "E541_does_not_match_a_legal_CLAN_time_pattern_2.cha",
+      "fixture": "E541_Time_Start_does_not_match_a_legal_CLAN_time_pattern_2.cha",
       "expected_codes": [
         "E541"
       ],
@@ -1059,7 +1059,7 @@
       "source_spec": "spec/errors/E541_invalid_time_start.md"
     },
     {
-      "fixture": "E541_does_not_match_a_legal_CLAN_time_pattern_3.cha",
+      "fixture": "E541_Time_Start_does_not_match_a_legal_CLAN_time_pattern_3.cha",
       "expected_codes": [
         "E541"
       ],
@@ -1083,7 +1083,7 @@
       "source_spec": "spec/errors/E543_header_out_of_order.md"
     },
     {
-      "fixture": "E544_claims_linkage_but_transcript_has_no_timing_evidence.cha",
+      "fixture": "E544_Media_claims_linkage_but_transcript_has_no_timing_evidence.cha",
       "expected_codes": [
         "E544"
       ],
@@ -1091,7 +1091,7 @@
       "source_spec": "spec/errors/E544_media_linkage_without_timing.md"
     },
     {
-      "fixture": "E544_claims_linkage_but_transcript_has_no_timing_evidence_2.cha",
+      "fixture": "E544_Media_claims_linkage_but_transcript_has_no_timing_evidence_2.cha",
       "expected_codes": [
         "E544"
       ],
@@ -1099,7 +1099,7 @@
       "source_spec": "spec/errors/E544_media_linkage_without_timing.md"
     },
     {
-      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern.cha",
+      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern.cha",
       "expected_codes": [
         "E545"
       ],
@@ -1107,7 +1107,7 @@
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern_2.cha",
+      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern_2.cha",
       "expected_codes": [
         "E545"
       ],
@@ -1115,7 +1115,7 @@
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern_3.cha",
+      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern_3.cha",
       "expected_codes": [
         "E545"
       ],
@@ -1123,7 +1123,7 @@
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E545_date_does_not_match_a_legal_CHAT_date_pattern_4.cha",
+      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern_4.cha",
       "expected_codes": [
         "E545"
       ],
@@ -1163,7 +1163,7 @@
       "source_spec": "spec/errors/E549_duplicate_speaker_declaration.md"
     },
     {
-      "fixture": "E552_declares_but_transcript_carries_timing.cha",
+      "fixture": "E552_Media_declares_unlinked_but_transcript_carries_timing.cha",
       "expected_codes": [
         "E552"
       ],
@@ -1171,7 +1171,7 @@
       "source_spec": "spec/errors/E552_media_unlinked_with_timing.md"
     },
     {
-      "fixture": "E552_declares_but_transcript_carries_timing_2.cha",
+      "fixture": "E552_Media_declares_unlinked_but_transcript_carries_timing_2.cha",
       "expected_codes": [
         "E552"
       ],
@@ -1363,7 +1363,7 @@
       "source_spec": "spec/errors/E713_auto.md"
     },
     {
-      "fixture": "E714_alignment_count_mismatch_too_few_tokens.cha",
+      "fixture": "E714_pho_alignment_count_mismatch_too_few_tokens.cha",
       "expected_codes": [
         "E714"
       ],
@@ -1371,7 +1371,7 @@
       "source_spec": "spec/errors/E714_auto.md"
     },
     {
-      "fixture": "E715_alignment_count_mismatch_too_many_tokens.cha",
+      "fixture": "E715_pho_alignment_count_mismatch_too_many_tokens.cha",
       "expected_codes": [
         "E715"
       ],
@@ -1507,7 +1507,7 @@
       "source_spec": "spec/errors/E728_phoaln_pho_count_mismatch.md"
     },
     {
-      "fixture": "E733_alignment_count_mismatch_too_few_tokens.cha",
+      "fixture": "E733_mod_alignment_count_mismatch_too_few_tokens.cha",
       "expected_codes": [
         "E733"
       ],
@@ -1515,7 +1515,7 @@
       "source_spec": "spec/errors/E733_auto.md"
     },
     {
-      "fixture": "E734_alignment_count_mismatch_too_many_tokens.cha",
+      "fixture": "E734_mod_alignment_count_mismatch_too_many_tokens.cha",
       "expected_codes": [
         "E734"
       ],
@@ -1635,7 +1635,7 @@
       "source_spec": "spec/errors/E751_pause_glued_to_word.md"
     },
     {
-      "fixture": "E752_Timing_bullets_without_an_header.cha",
+      "fixture": "E752_Timing_bullets_without_an_Media_header.cha",
       "expected_codes": [
         "E752"
       ],
@@ -1651,7 +1651,7 @@
       "source_spec": "spec/errors/E753_word_only_repetition_segments.md"
     },
     {
-      "fixture": "E754_Letter_form_with_more_than_one_letter.cha",
+      "fixture": "E754_Letter_form_l_with_more_than_one_letter.cha",
       "expected_codes": [
         "E754"
       ],
@@ -1659,7 +1659,7 @@
       "source_spec": "spec/errors/E754_letter_form_multiple_letters.md"
     },
     {
-      "fixture": "E755_Utterance_language_not_declared_in.cha",
+      "fixture": "E755_Utterance_language_not_declared_in_Languages.cha",
       "expected_codes": [
         "E755"
       ],

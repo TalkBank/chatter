@@ -21,7 +21,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Phonology_Tier>
 
 use crate::model::Utterance;
-use crate::model::dependent_tier::{PhoItem, PhoTier, SylTier, tokenize_syl_word};
+use crate::model::dependent_tier::{PhoItem, PhoTier, SylTier, SylWordKind, classify_syl_word};
 use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
 
 /// 1 ms rounding tolerance for the `%xphoint` media-bounds check.
@@ -30,19 +30,31 @@ use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
 /// spec calls this expected, not an error.
 const MEDIA_BOUNDS_TOLERANCE_MS: u64 = 1;
 
-/// Suprasegmental stress markers: primary (ˈ, U+02C8) and secondary (ˌ, U+02CC).
+/// Notation the segment-level reconstruction comparison ignores.
 ///
 /// The `%xphoaln` tier aligns **segments**; its legal elements are phones, not
-/// suprasegmentals. The source `%mod`/`%pho` word, however, may carry stress
-/// (which the syllabification tiers keep attached to a phone unit, e.g.
-/// `ˈa:Np:C`). So the phone-by-phone alignment reconstruction is compared modulo
-/// these markers, otherwise a stressed source word like `ˈap` would never match
-/// its stress-free segmental alignment `a↔…,p↔…`.
-const STRESS_MARKERS: [char; 2] = ['\u{02C8}', '\u{02CC}'];
+/// suprasegmentals or boundary notation. The source `%mod`/`%pho` word,
+/// however, may carry:
+///
+/// - stress: primary (ˈ, U+02C8) and secondary (ˌ, U+02CC), which the
+///   syllabification tiers keep attached to a phone unit (e.g. `ˈa:Np:C`);
+/// - syllable-boundary notation: Phon's `^` (U+005E) between syllables
+///   (e.g. `ˈbɔ^hɔɪ`) and the IPA syllable break `.` (U+002E)
+///   (e.g. `ko.çɔ̃`), both attested at scale in the wild phon corpora.
+///
+/// The phone-by-phone alignment reconstruction is therefore compared modulo
+/// these markers; otherwise a source word like `ˈbɔ^hɔɪ` would never match its
+/// marker-free segmental alignment `b↔…,ɔ↔…,h↔…,ɔɪ↔…`. No phone is itself a
+/// stress or boundary character, so stripping cannot mask a real segment
+/// mismatch.
+const SEGMENT_COMPARISON_IGNORED: [char; 4] = ['\u{02C8}', '\u{02CC}', '\u{005E}', '\u{002E}'];
 
-/// Remove suprasegmental stress markers for segmental reconstruction comparison.
-fn strip_stress(s: &str) -> String {
-    s.chars().filter(|c| !STRESS_MARKERS.contains(c)).collect()
+/// Remove stress and syllable-boundary notation for segmental reconstruction
+/// comparison.
+fn strip_nonsegmental(s: &str) -> String {
+    s.chars()
+        .filter(|c| !SEGMENT_COMPARISON_IGNORED.contains(c))
+        .collect()
 }
 
 /// Validate the content of the four Phon `%x` dependent tiers on one utterance.
@@ -103,8 +115,37 @@ fn validate_syl_tier(
 ) {
     let prefix = syl.prefix();
     for (i, word) in syl.words.iter().enumerate() {
-        match tokenize_syl_word(word.as_str()) {
-            Ok(units) => {
+        match classify_syl_word(word.as_str()) {
+            // A pause filler mirrors a pause at the same word position on the
+            // source tier (Phon keeps word-aligned tiers in index lockstep).
+            // It has no phone:CODE structure to check; the reconstruction
+            // check degenerates to "the source word is the same pause token".
+            Ok(SylWordKind::PauseFiller(_)) => {
+                if !reconstruction_clean {
+                    continue;
+                }
+                if let Some(expected) = source_word(source, i)
+                    && word.as_str() != expected
+                {
+                    errors.report(
+                        ParseError::at_span(
+                            reconstruction_code,
+                            Severity::Error,
+                            syl.span,
+                            format!(
+                                "{prefix} word {} is the pause filler '{}', but the {source_label} word at that position is '{}'",
+                                i + 1,
+                                word.as_str(),
+                                expected
+                            ),
+                        )
+                        .with_suggestion(format!(
+                            "A pause filler on {prefix} must mirror the same pause on {source_label}"
+                        )),
+                    );
+                }
+            }
+            Ok(SylWordKind::Units(units)) => {
                 if !reconstruction_clean {
                     continue;
                 }
@@ -241,7 +282,7 @@ fn check_phoaln_reconstruction(
     errors: &impl ErrorSink,
 ) {
     if let Some(expected) = expected
-        && strip_stress(reconstructed) != strip_stress(expected)
+        && strip_nonsegmental(reconstructed) != strip_nonsegmental(expected)
     {
         errors.report(
             ParseError::at_span(

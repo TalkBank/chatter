@@ -9,6 +9,28 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Fixed
+
+- The Phon `%x`-tier content checks (introduced with the %x fold-in)
+  no longer mass-flag valid Phon exports. Two wild-corpus conventions
+  the original specification never confronted are now accepted:
+  (1) pause fillers (`(.)`, `(..)`, `(...)`) mirrored at the same word
+  position on `%mod`/`%pho`/`%xmodsyl`/`%xphosyl` (and as pause pairs
+  on `%xphoaln`) to keep word-aligned tiers in index lockstep, which
+  E735 previously rejected as malformed `phone:CODE` units (roughly
+  13,000 spurious errors across the PhonBank corpora); and
+  (2) `^` and IPA `.` syllable-boundary notation in `%mod`/`%pho`
+  words, which the segment-level `%xphoaln` reconstruction comparison
+  now ignores exactly as it already ignored stress markers (roughly
+  770 spurious E740/E741). Genuine misalignments (index-shift chains,
+  pause fillers standing in for real words) are still reported. Users
+  who adopted `--suppress xphon` to silence the storm can remove it
+  and regain the genuine `%x`-tier checks.
+- Generated error-documentation pages (`docs/errors/`) no longer fuse
+  words across wrapped spec lines or drop backticked text: the spec
+  text extractor now renders soft line breaks as spaces and includes
+  inline code spans.
+
 ### Added
 
 - New validation rule E752: timing bullets without an `@Media` header.
