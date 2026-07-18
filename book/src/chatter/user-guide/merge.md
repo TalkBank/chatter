@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-07-07 13:40 EDT
+**Last modified:** 2026-07-18 03:14 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -108,7 +108,6 @@ Exit codes:
 | 0 | Merge succeeded |
 | 1 | Invalid input (parse error, missing file, unreadable) |
 | 2 | Semantic precondition violated (e.g. retained speaker missing from File 1, conflicting `@Media`, no time bullets in File 1) |
-| 3 | Internal error |
 
 ## What the merged output guarantees
 
@@ -410,13 +409,15 @@ is the trustworthy alternative there.
 
 ## Implementation notes (for contributors)
 
-- Source: `crates/talkbank-transform/src/transcript_merge/` (proposed
-  layout, see the design plan).
-- CLI surface: `crates/chatter/src/commands/transcript_merge/`.
-- Domain types (`SpeakerCode`, `RetainSet`, `MergeOverride`,
-  `SpeakerMapping`) live in `talkbank-model` so the override-file
-  format is sharable across the speaker-id stage, the orchestrator,
-  and any future adjudication UI.
+- Source: `crates/talkbank-transform/src/transcript_merge.rs`.
+- CLI surface: `crates/chatter/src/commands/transcript_merge.rs`.
+- Domain types: `SpeakerCode` lives in `talkbank-model` (a core model
+  type); the merge/override types (`MergeOverride`, `MappingSpec`) live
+  in `talkbank-transform` (`speaker_id/override_file.rs`,
+  `speaker_id/mapping.rs`) so the override-file format is sharable
+  across the speaker-id stage, the orchestrator, and any future
+  adjudication UI. There is no separate `RetainSet` type: retained
+  speakers are passed as `&[SpeakerCode]`.
 - The merge operates on `talkbank-model::ChatFile`; both inputs are
   parsed via `talkbank-parser`. The byte-preservation guarantee on
   retained-speaker utterances relies on the parser's existing

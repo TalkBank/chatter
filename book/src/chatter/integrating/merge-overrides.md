@@ -1,7 +1,7 @@
 # Merge Override File Format
 
 **Status:** Draft
-**Last updated:** 2026-07-01 21:55 EDT
+**Last updated:** 2026-07-18 03:15 EDT
 
 The merge override file is the typed, human-readable record of
 operator decisions in the `chatter speaker-id` →  `chatter merge`
@@ -101,7 +101,7 @@ omitted; unknown fields cause a parse error.
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `scores` | inline table | `{}` | Per-speaker Jaccard scores recorded at decision time. Keys are speaker codes; values are floats in `[0.0, 1.0]`. Populated when the decision was based on a reference-mode auto attempt (even if the final mode is `"explicit"` because the operator overrode a low-confidence result). |
-| `margin` | float or string | absent | The decisive margin (winner-score / loser-score). Finite values serialize as numbers; the divide-by-zero case (loser score = 0) serializes as the string `"unbounded"`. |
+| `margin` | float | absent | The decisive margin (winner-score / loser-score). Finite values serialize as TOML floats; the winner-takes-all case (loser score = 0, winner > 0) serializes as the TOML float `inf`; when no margin is meaningful (both scores 0) the field is omitted. (The shipped on-disk form is numeric; see `override_file.rs` and the `merge-domain-types` architecture page. Whether to switch the unbounded case to a string sentinel is an open contract question, not current behavior.) |
 | `note` | string | `""` | Free-text operator note. **Strongly recommended** for `"explicit"` and `"override"` modes, captures *why* the operator made the call. |
 | `flags` | array of strings | `[]` | Operator-supplied flags marking unusual situations. Known values listed in "Flag vocabulary" below; unknown strings are preserved verbatim (treated as `Custom`). |
 | `engine` | string enum | `"deterministic"` | Which engine produced the decision. Always written on new entries; absent only in pre-provenance files, which read as `"deterministic"`. One of `"deterministic"` (Jaccard reference-mode, spreadsheet, or operator adjudication) or `"llm"` (language-model judgment). |
@@ -116,7 +116,7 @@ decisions. It is present if and only if `engine = "llm"`.
 |---|---|---|---|
 | `model` | string | yes | Model identifier used for the judgment (e.g. `"deepseek-v4-flash"`). |
 | `endpoint` | string | yes | OpenAI-compatible base URL the judgment was made against. |
-| `prompt_version` | string | yes | Prompt-template version tag (e.g. `"v1"`). Bumping this marks older entries as produced by a prior template. |
+| `prompt_version` | string | yes | Prompt-template version tag (e.g. `"v2"`, the current template). Bumping this marks older entries as produced by a prior template. |
 | `confidence` | inline table | no (omitted when empty) | Per-field model confidence in `[0.0, 1.0]`. Keys are decision field names (e.g. `"mapping"`, `"roles"`, `"merge_applicable"`). Omitted entirely when no confidence values were reported. |
 | `reasoning` | string | yes | One or two sentence model rationale for the decision. |
 
@@ -197,21 +197,20 @@ modifies the list SHOULD deduplicate.
 
 ## Reader semantics
 
-`OverrideFile::read(path)` is the canonical reader. Its behavior:
+`OverrideFile::read_or_default(path)` is the canonical reader (the
+only public reader; used by `chatter speaker-id --write-override`). Its
+behavior:
 
-1. Open `path` UTF-8.
-2. Parse via `toml`.
-3. Refuse if `schema_version` is absent or not equal to the
+1. If `path` does not exist, return `OverrideFile::default()` (empty,
+   current schema version). Otherwise:
+2. Open `path` UTF-8.
+3. Parse via `toml`.
+4. Refuse if `schema_version` is absent or not equal to the
    binary's `CURRENT_SCHEMA_VERSION` (currently `2`). Error:
    `OverrideFileError::UnsupportedSchemaVersion { found, supported }`.
-4. Parse all `[<session_id>]` tables into `MergeOverride` values;
+5. Parse all `[<session_id>]` tables into `MergeOverride` values;
    reject unknown fields.
-5. Return `OverrideFile { schema_version, entries }`.
-
-`OverrideFile::read_or_default(path)` is the variant used by
-`chatter speaker-id --write-override`: if the file does not
-exist, returns `OverrideFile::default()` (empty, current schema
-version); otherwise behaves as `read`.
+6. Return `OverrideFile { schema_version, entries }`.
 
 `OverrideFile::get(&session_id)` retrieves a single entry;
 returns `None` if absent.
