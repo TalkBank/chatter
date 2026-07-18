@@ -63,7 +63,10 @@ pub(super) fn parse_tier_body(
 
     // Optional language-switch token (the `[- code]` precode) plus its source
     // span (opening `[` at `.start`), for source-spacing validation (E758).
-    let (language_code, language_code_span) = parse_optional_langcode(body, source, errors);
+    let ParsedLangcode {
+        code: language_code,
+        span: language_code_span,
+    } = parse_optional_langcode(body, source, errors);
 
     // Content: the `contents` block. `Present` carries a typed `ContentsNode`;
     // `Missing` carries a bare `Node` directly under the NEW closed `NodeSlot`
@@ -150,6 +153,18 @@ pub(super) fn parse_tier_body(
     }
 }
 
+/// The outcome of decoding a tier's optional `[- code]` precode: the parsed
+/// language `code` (absent when there is no precode, OR a precode is present
+/// but malformed) and the precode token's source `span` (present whenever the
+/// token node exists, independent of whether its code parsed, since E758 needs
+/// only its position). The two fields are deliberately independent:
+/// `{ code: None, span: Some(_) }` means "a precode token is present but did
+/// not parse", which is why this is a named struct rather than a tuple.
+struct ParsedLangcode {
+    code: Option<talkbank_model::model::LanguageCode>,
+    span: Option<Span>,
+}
+
 /// Decode the optional `langcode` slot into a language-code string.
 ///
 /// Reproduces the prior `LANGCODE` arm byte-identically for a `Present` token:
@@ -167,13 +182,13 @@ fn parse_optional_langcode(
     body: &TierBodyChildren,
     source: &str,
     errors: &impl ErrorSink,
-) -> (Option<talkbank_model::model::LanguageCode>, Option<Span>) {
+) -> ParsedLangcode {
     let group = match &body.language_code.slot {
         Some(NodeSlot::Present(group)) => group,
         Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
         )
-        | None => return (None, None),
+        | None => return ParsedLangcode { code: None, span: None },
     };
     surface_unexpected(&group.unexpected, source, errors);
 
@@ -184,7 +199,10 @@ fn parse_optional_langcode(
     let node = match &group.child_0.slot {
         NodeSlot::Present(langcode_node) => langcode_node.raw_node(),
         NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
-            return (None, None);
+            return ParsedLangcode {
+                code: None,
+                span: None,
+            };
         }
     };
 
@@ -200,7 +218,10 @@ fn parse_optional_langcode(
     if let Ok(raw) = node.utf8_text(source.as_bytes())
         && let Some(lc) = crate::tokens::parse_langcode_token(raw)
     {
-        return (Some(lc), Some(span));
+        return ParsedLangcode {
+            code: Some(lc),
+            span: Some(span),
+        };
     }
 
     errors.report(ParseError::new(
@@ -210,7 +231,10 @@ fn parse_optional_langcode(
         ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
         "Malformed language code".to_string(),
     ));
-    (None, Some(span))
+    ParsedLangcode {
+        code: None,
+        span: Some(span),
+    }
 }
 
 /// Report the tier-body `StructuralOrderError` "unexpected child" diagnostic.

@@ -48,7 +48,14 @@ fn item_source_start(item: &UtteranceContent) -> Option<u32> {
         | UtteranceContent::NonvocalSimple(_)
         | UtteranceContent::OtherSpokenEvent(_) => return None,
     };
-    (span != crate::Span::DUMMY).then_some(span.start)
+    non_dummy_start(span)
+}
+
+/// The start byte of `span`, or `None` if it is the dummy span. Centralizes
+/// the "a dummy span carries no real position, so opt out" rule shared by the
+/// source-spacing checks (the re2c oracle fills dummy spans).
+fn non_dummy_start(span: crate::Span) -> Option<u32> {
+    (!span.is_dummy()).then_some(span.start)
 }
 
 /// The source start byte of the main tier's FIRST content item, when
@@ -59,7 +66,7 @@ fn item_source_start(item: &UtteranceContent) -> Option<u32> {
 /// whitespace gap (caught by corpus/reference/edge-cases/
 /// special-terminators.cha). A tier starting with a span-less item
 /// simply opts out of the check.
-pub(crate) fn first_content_start(main: &MainTier) -> Option<u32> {
+fn first_content_start(main: &MainTier) -> Option<u32> {
     main.content.content.0.first().and_then(item_source_start)
 }
 
@@ -82,13 +89,8 @@ pub(crate) fn first_element_start(main: &MainTier) -> Option<u32> {
         .0
         .first()
         .map(|linker| linker.span)
-        .filter(|span| *span != crate::Span::DUMMY)
-        .map(|span| span.start);
-    let precode_start = main
-        .content
-        .language_code_span
-        .filter(|span| *span != crate::Span::DUMMY)
-        .map(|span| span.start);
+        .and_then(non_dummy_start);
+    let precode_start = main.content.language_code_span.and_then(non_dummy_start);
     let content_start = first_content_start(main);
     [linker_start, precode_start, content_start]
         .into_iter()
