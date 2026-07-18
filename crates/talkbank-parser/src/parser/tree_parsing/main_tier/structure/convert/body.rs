@@ -20,7 +20,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Terminators>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 use crate::generated_traversal::{AsRawNode, NodeSlot, TierBodyChildren};
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use tree_sitter::Node;
@@ -61,8 +61,9 @@ pub(super) fn parse_tier_body(
         | None => Vec::new(),
     };
 
-    // Optional language-switch token.
-    let language_code = parse_optional_langcode(body, source, errors);
+    // Optional language-switch token (the `[- code]` precode) plus its source
+    // span (opening `[` at `.start`), for source-spacing validation (E758).
+    let (language_code, language_code_span) = parse_optional_langcode(body, source, errors);
 
     // Content: the `contents` block. `Present` carries a typed `ContentsNode`;
     // `Missing` carries a bare `Node` directly under the NEW closed `NodeSlot`
@@ -141,6 +142,7 @@ pub(super) fn parse_tier_body(
     TierBodyData {
         linkers,
         language_code,
+        language_code_span,
         content,
         terminator,
         postcodes,
@@ -165,13 +167,13 @@ fn parse_optional_langcode(
     body: &TierBodyChildren,
     source: &str,
     errors: &impl ErrorSink,
-) -> Option<talkbank_model::model::LanguageCode> {
+) -> (Option<talkbank_model::model::LanguageCode>, Option<Span>) {
     let group = match &body.language_code.slot {
         Some(NodeSlot::Present(group)) => group,
         Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
         )
-        | None => return None,
+        | None => return (None, None),
     };
     surface_unexpected(&group.unexpected, source, errors);
 
@@ -182,9 +184,14 @@ fn parse_optional_langcode(
     let node = match &group.child_0.slot {
         NodeSlot::Present(langcode_node) => langcode_node.raw_node(),
         NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
-            return None;
+            return (None, None);
         }
     };
+
+    // The `langcode` node spans the whole `[- code]` precode (opening `[` at
+    // `.start`); record it for E758 whenever the token is present, independent
+    // of whether the inner code parses, since E758 needs only its position.
+    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
 
     // Valid token: return the parsed code directly (already typed, no
     // String round-trip). Anything else falls through to the "Malformed
@@ -193,7 +200,7 @@ fn parse_optional_langcode(
     if let Ok(raw) = node.utf8_text(source.as_bytes())
         && let Some(lc) = crate::tokens::parse_langcode_token(raw)
     {
-        return Some(lc);
+        return (Some(lc), Some(span));
     }
 
     errors.report(ParseError::new(
@@ -203,7 +210,7 @@ fn parse_optional_langcode(
         ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
         "Malformed language code".to_string(),
     ));
-    None
+    (None, Some(span))
 }
 
 /// Report the tier-body `StructuralOrderError` "unexpected child" diagnostic.

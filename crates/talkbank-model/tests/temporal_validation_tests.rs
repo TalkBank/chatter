@@ -44,6 +44,7 @@ fn main_tier_with_bullet(speaker: &str, start_ms: u64, end_ms: u64) -> MainTier 
             postcodes: Default::default(),
             bullet: Some(Bullet::new(start_ms, end_ms)),
             content_span: None,
+            language_code_span: None,
         },
         span: Span::DUMMY,
         speaker_span: Span::DUMMY,
@@ -64,6 +65,7 @@ fn main_tier_with_untranscribed_www_bullet(speaker: &str, start_ms: u64, end_ms:
             postcodes: Default::default(),
             bullet: Some(Bullet::new(start_ms, end_ms)),
             content_span: None,
+            language_code_span: None,
         },
         span: Span::DUMMY,
         speaker_span: Span::DUMMY,
@@ -294,6 +296,7 @@ fn test_no_bullets_no_errors() {
                     postcodes: Default::default(),
                     bullet: None, // No bullet
                     content_span: None,
+                    language_code_span: None,
                 },
                 span: Span::DUMMY,
                 speaker_span: Span::DUMMY,

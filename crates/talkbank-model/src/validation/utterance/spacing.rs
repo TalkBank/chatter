@@ -63,6 +63,39 @@ pub(crate) fn first_content_start(main: &MainTier) -> Option<u32> {
     main.content.content.0.first().and_then(item_source_start)
 }
 
+/// The source start byte of the main tier's FIRST real element, in document
+/// order: the earliest non-dummy start among the leading discourse linker,
+/// the `[- code]` language precode, and the first content item.
+///
+/// Linkers and the precode are real spanned source tokens (a leading linker or
+/// precode sits between the tab delimiter and the first content item), so a
+/// leading space before ANY of them is measurable: taking the minimum start
+/// makes the earliest source token the anchor regardless of which kind it is.
+/// Returns `None` only when no leading element carries a real span (for
+/// example the re2c oracle's dummy spans, or a content-first tier whose first
+/// item is a span-less variant), in which case the leading-space check opts
+/// out because it has nothing to measure against.
+pub(crate) fn first_element_start(main: &MainTier) -> Option<u32> {
+    let linker_start = main
+        .content
+        .linkers
+        .0
+        .first()
+        .map(|linker| linker.span)
+        .filter(|span| *span != crate::Span::DUMMY)
+        .map(|span| span.start);
+    let precode_start = main
+        .content
+        .language_code_span
+        .filter(|span| *span != crate::Span::DUMMY)
+        .map(|span| span.start);
+    let content_start = first_content_start(main);
+    [linker_start, precode_start, content_start]
+        .into_iter()
+        .flatten()
+        .min()
+}
+
 /// The source end byte of a content item, when the item is a word whose
 /// trailing edge can glue a following pause. Non-word items return
 /// `None`: CHECK 57 fires on the word-then-`(` shape specifically.

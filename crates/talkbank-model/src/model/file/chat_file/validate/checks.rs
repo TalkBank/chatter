@@ -194,25 +194,32 @@ pub(super) fn check_utterance_language_declared<S: ValidationState>(
     }
 }
 
-/// E758: leading space between the tab delimiter and the first content
-/// item of a main tier, in a file WITHOUT `@Options: CA` (CLAN CHECK
+/// E758: leading space between the tab delimiter and the first real
+/// element of a main tier, in a file WITHOUT `@Options: CA` (CLAN CHECK
 /// 123). CA transcripts legitimately column-align content with spaces
 /// after the tab (every wild occurrence, 457 files in the 2026-07-16
 /// scan, declares CA), so the caller gates this on `!ca_mode`.
 ///
-/// Detection is span arithmetic: the speaker span covers the speaker
-/// code, the colon and the single tab follow it, so content is expected
-/// exactly two bytes after the code. A first item starting later means
-/// extra whitespace. Dummy spans skip the check (the re2c oracle
-/// mirrors the rule as a token-stream scan in its own front end).
+/// Detection is exact source-span comparison, the same paradigm the
+/// rest of the source-spacing family (E751 / E757 / comma) uses: the
+/// speaker span covers the speaker code, the colon and the single tab
+/// follow it, so a well-formed line places its first element exactly two
+/// bytes after the code. The first element is the earliest of the
+/// leading discourse linker, the `[- CODE]` precode, or the first
+/// content item ([`first_element_start`]); linkers and the precode now
+/// carry real source spans, so a leading space before them is caught
+/// too (no opt-out). Tiers whose first element has no real span (the
+/// re2c oracle's dummy spans, a span-less content-first item) opt out
+/// because there is nothing to measure against.
 pub(super) fn check_leading_space_on_main_tier<S: ValidationState>(
     file: &ChatFile<S>,
     errors: &impl crate::ErrorSink,
 ) {
+    use crate::validation::utterance::first_element_start;
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation, Span};
 
     /// Bytes between the speaker code's end and the expected first
-    /// content byte: the colon plus the single tab delimiter.
+    /// element byte: the colon plus the single tab delimiter.
     const COLON_AND_TAB: u32 = 2;
 
     for utterance in file.utterances() {
@@ -220,17 +227,7 @@ pub(super) fn check_leading_space_on_main_tier<S: ValidationState>(
         if main.speaker_span == Span::DUMMY {
             continue;
         }
-        // Leading discourse linkers (`+,`, `++`, `+"`, ...) and the
-        // `[- CODE]` utterance-language precode sit between the tab and
-        // the first content item but live as span-less FIELDS, not
-        // content items, so the gap arithmetic cannot tell their bytes
-        // from whitespace; such tiers opt out (caught by
-        // corpus/reference/content/linkers.cha and
-        // corpus/reference/content/language-switching.cha).
-        if !main.content.linkers.0.is_empty() || main.content.language_code.is_some() {
-            continue;
-        }
-        let Some(first_start) = crate::validation::utterance::first_content_start(main) else {
+        let Some(first_start) = first_element_start(main) else {
             continue;
         };
         let expected = main.speaker_span.end + COLON_AND_TAB;

@@ -96,6 +96,7 @@ Some(
                     end: 119,
                 },
             ),
+            language_code_span: None,
         },
         span: Span {
             start: 99,

@@ -1,6 +1,5 @@
 ---
-source: crates/talkbank-tree-sitter-parser/src/parser/chat_file_parser/single_item/tests/utterance.rs
-assertion_line: 14
+source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/utterance.rs
 expression: result
 ---
 Ok(
@@ -68,6 +67,7 @@ Ok(
                         end: 14,
                     },
                 ),
+                language_code_span: None,
             },
             span: Span {
                 start: 0,

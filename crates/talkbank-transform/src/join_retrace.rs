@@ -412,6 +412,7 @@ fn perform_join<S: ValidationState>(
         postcodes: v_postcodes,
         bullet: v_bullet,
         content_span: _,
+        language_code_span: _,
     } = v.main.content;
 
     // Union the main-tier time bullets: start from U, end from V.

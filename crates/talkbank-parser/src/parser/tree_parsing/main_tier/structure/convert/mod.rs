@@ -164,6 +164,10 @@ pub fn convert_main_tier_node(
         main_tier = main_tier.with_language_code(lang_code);
     }
 
+    if let Some(lang_span) = tier.language_code_span {
+        main_tier = main_tier.with_language_code_span(lang_span);
+    }
+
     // Bullet: grammar-routed bullet from utterance_end takes priority.
     if let Some(b) = tier.bullet {
         main_tier = main_tier.with_bullet(b);
@@ -187,6 +191,9 @@ pub(super) struct PrefixData {
 pub(super) struct TierBodyData {
     pub linkers: Vec<Linker>,
     pub language_code: Option<LanguageCode>,
+    /// Source span of the `[- code]` precode token (opening `[` at `.start`),
+    /// when present. Provenance for source-spacing validation (E758).
+    pub language_code_span: Option<Span>,
     pub content: Vec<UtteranceContent>,
     pub terminator: Option<Terminator>,
     pub postcodes: Vec<Postcode>,
@@ -200,6 +207,7 @@ impl TierBodyData {
         Self {
             linkers: Vec::new(),
             language_code: None,
+            language_code_span: None,
             content: Vec::new(),
             terminator: None,
             postcodes: Vec::new(),

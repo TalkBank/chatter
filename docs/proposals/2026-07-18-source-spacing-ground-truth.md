@@ -1,7 +1,7 @@
 # Source-spacing validation on ground truth: removing the E758 constant-offset proxy
 
-**Status:** Draft (proposal, awaiting approval before implementation)
-**Last modified:** 2026-07-18 16:12 EDT
+**Status:** Draft (main-tier phase implemented; header/dependent-tier phase awaiting a design nod)
+**Last modified:** 2026-07-18 18:14 EDT
 
 ## Summary
 
@@ -252,3 +252,93 @@ flowchart TD
   improvement; explicitly not bundled here.
 - No release is triggered by this work (the freeze holds); it lands on
   `main` and ships whenever the next release is cut.
+
+## Implementation status (2026-07-18)
+
+### Phase 1 (main tier): DONE, Option A as recommended
+
+- Linkers carry spans (commit `0a2b0c6a`, `Linker { kind, span }`).
+- The `[- code]` precode carries a span: a new
+  `TierContent::language_code_span: Option<Span>` (serde / schemars /
+  semantic_eq skipped, so the JSON wire and schema are byte-identical),
+  populated in the tree-sitter main-tier body parser from the `langcode`
+  node (whose `.start` is the opening `[`).
+- `check_leading_space_on_main_tier` was rewritten to compare
+  `first_element_start(main)` (the earliest non-dummy start among leading
+  linker, precode, and first content item) against the byte after the tab,
+  and the linker/precode opt-out plus the `COLON_AND_TAB` proxy framing
+  were removed.
+- Verified: `linkers.cha` and `language-switching.cha` (clean
+  linker/precode lines, previously SKIPPED by the opt-out, now CHECKED)
+  stay valid; the main-tier fixture still fires E758.
+
+Empirical refinement to the plan: a leading space directly BEFORE a linker
+or precode (`*CHI:<tab><space>+, ...`, `*CHI:<tab><space>[- spa] ...`) does
+NOT parse as a clean linker/precode; the grammar recovers and surfaces
+**E316** (parse recovery), not E758, for BOTH. So dropping the main-tier
+opt-out is behavior-preserving for reachable cases (the hidden cases were
+already flagged, as E316) and is a pure hack-removal + model-fidelity win.
+Closing the E316 case as E758 needs grammar work to accept leading
+whitespace before a linker/precode; it is deliberately deferred (open
+question for the maintainer: is E316 an acceptable flag there?).
+
+### Phase 2 (headers + `%`-dependent tiers, ruling H.1): DESIGN DECISION PENDING
+
+Extending E758 to `@headers` and `%`-tiers (Example 2 / Example 3 in the
+generalized spec, both currently RED with `got []`, i.e. the grammar
+TOLERATES the leading space and parses clean spans, so this is purely a
+validation gap, no grammar work) needs each dependent-tier line and each
+header to expose two source bytes: the byte after its `label:` colon, and
+the start of its first real content element. The model does NOT expose the
+latter today: every dependent tier stores only a WHOLE-LINE span
+(`DependentTier::span().start` is the `%`), and headers likewise come to
+validation as `(&Header, whole-line Span)` pairs. So Phase 2 requires new
+per-line after-separator span storage.
+
+**The design choice (flagged in the prior handoff as "a real refactor;
+confirm before starting").** Two shapes give every dependent tier a
+uniform after-separator span:
+
+- **(recommended) a line wrapper.** Change the utterance field from
+  `SmallVec<[DependentTier; 3]>` to `SmallVec<[DependentTierEntry; 3]>`
+  where `DependentTierEntry { tier: DependentTier, content_span:
+  Option<Span> }`, with `#[serde(transparent)]` + `#[schemars(transparent)]`
+  over `tier` (content_span serde/schemars/semantic_eq skipped). This is
+  the SAME provenance-only pattern the linker-spans commit used: the JSON
+  wire and the JSON Schema stay byte-identical, so `committed_schema_matches_model`
+  stays green and the entire blast radius is compile-time-checked Rust
+  reader churn, not a data change. One clean span home; mirrors how the
+  main tier carries `content_span` on `TierContent`.
+  - Blast radius (surveyed 2026-07-18): 1 field declaration
+    (`crates/talkbank-model/src/model/file/utterance/core.rs:107`),
+    4 construction sites, ~110 read/iterate sites across talkbank-model
+    (accessors.rs alone is 31 mechanical `entry.tier` unwraps),
+    talkbank-parser (dispatch `push` sites), talkbank-transform,
+    talkbank-lsp, and tests, plus the `replace_or_add_tier` helper whose
+    signature mirrors the field's container type. All mechanical and
+    compiler-enforced.
+
+- **per-type field.** Add a `separator_span` to each of ~20 distinct tier
+  structs (Mor/Gra/Pho/Sin/Wor/Act/Cod, the 7 bullet-tier structs,
+  TextTier, UserDefined, Tim, Syl, Phoaln, Xphoint) plus a
+  `DependentTier::separator_span()` accessor mirroring the existing
+  `DependentTier::span()`. Zero reader churn (enum shape unchanged), but
+  duplicates the field across ~20 types and touches ~15 parser sites.
+
+Both then feed a uniform E758 helper `leading_gap(colon_end,
+first_element_start)`; headers get the same after-separator span in the
+header dispatch (`header_dispatch/parse.rs`).
+
+**Recommendation: the wrapper** (DRY single home, mirrors the
+main-tier/linker patterns, wire/schema unchanged via serde-transparent).
+The per-type alternative avoids reader churn but duplicates the concept
+across ~20 structs, which reads worse against the "one home for a concept"
+house rule.
+
+**Why this phase is not auto-committed here:** it is a core-model field
+change across five crates, it was explicitly flagged for confirmation, and
+it has ZERO current data impact (the 2026-07-18 scan found no non-CA
+leading-space header/`%`-tier files in the kept corpus, so no wild file
+changes verdict either way). It is queued for a design nod rather than
+committed unreviewed; on approval it is a mechanical, well-scoped
+implementation driven by the two RED fixtures.

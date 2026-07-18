@@ -58,6 +58,7 @@ Ok(
                     end: 12,
                 },
             ),
+            language_code_span: None,
         },
         span: Span {
             start: 0,

@@ -41,7 +41,7 @@ pub(crate) use phon_xtier::check_phon_xtiers;
 pub(crate) use quotation::check_quotation_balance;
 pub(crate) use repetition_segment::check_repetition_segment_has_stem;
 pub(crate) use spacing::{
-    check_code_glued_to_following_content, check_pause_glued_to_word, first_content_start,
+    check_code_glued_to_following_content, check_pause_glued_to_word, first_element_start,
 };
 pub(crate) use tiers::check_no_duplicate_dependent_tiers;
 pub(crate) use underline::check_underline_balance;

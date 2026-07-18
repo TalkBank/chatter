@@ -150,6 +150,13 @@ impl MainTier {
         self
     }
 
+    /// Sets the source span of the `[- code]` precode (its opening `[` at
+    /// `.start`). Provenance only; see [`TierContent::language_code_span`].
+    pub fn with_language_code_span(mut self, span: Span) -> Self {
+        self.content = self.content.with_language_code_span(span);
+        self
+    }
+
     /// Replaces postcode list.
     pub fn with_postcodes(mut self, postcodes: Vec<Postcode>) -> Self {
         self.content = self.content.with_postcodes(postcodes);

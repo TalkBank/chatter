@@ -68,6 +68,21 @@ pub struct TierContent {
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub content_span: Option<Span>,
+
+    /// Optional source span of the `[- code]` utterance-language precode.
+    ///
+    /// The precode is a real leading source token whose classification lives
+    /// in [`Self::language_code`] (a shared [`LanguageCode`] newtype also used
+    /// by the `@Languages` / `@ID` headers, where a precode position is
+    /// meaningless), so its POSITION is recorded here at the field level, not
+    /// on the newtype. `.start` is the byte of the opening `[`. Provenance
+    /// only: skipped in serialization, schema, and semantic equality, so the
+    /// wire format is unchanged. Used by source-spacing validation (E758) to
+    /// treat the precode as a first real element (no longer an opt-out).
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[semantic_eq(skip)]
+    pub language_code_span: Option<Span>,
 }
 
 impl TierContent {
@@ -81,6 +96,7 @@ impl TierContent {
             postcodes: TierPostcodes::new(Vec::new()),
             bullet: None,
             content_span: None,
+            language_code_span: None,
         }
     }
 
@@ -101,6 +117,7 @@ impl TierContent {
             postcodes: postcodes.into(),
             bullet,
             content_span: None,
+            language_code_span: None,
         }
     }
 
@@ -113,6 +130,13 @@ impl TierContent {
     /// Sets utterance-scoped language code (`[- code]`).
     pub fn with_language_code(mut self, code: LanguageCode) -> Self {
         self.language_code = Some(code);
+        self
+    }
+
+    /// Sets the source span of the `[- code]` precode (its opening `[` at
+    /// `.start`). Provenance only; see [`Self::language_code_span`].
+    pub fn with_language_code_span(mut self, span: Span) -> Self {
+        self.language_code_span = Some(span);
         self
     }
 
@@ -331,6 +355,7 @@ impl Default for TierContent {
             postcodes: TierPostcodes::new(Vec::new()),
             bullet: None,
             content_span: None,
+            language_code_span: None,
         }
     }
 }
