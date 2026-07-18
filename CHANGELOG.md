@@ -19,6 +19,18 @@ version and are listed under "Changed" / "Removed".
   entries in `latest.json` at a single URL holding one arch's binary.
   Fresh `.dmg` downloads were unaffected; the desktop auto-updater is
   the surface this corrects. (Ships with the next release.)
+- Public API: a downstream crate that depends only on `talkbank-parser`
+  can now name the error type of its parse methods. The six
+  `TreeSitterParser::parse_*` methods return
+  `ParseResult<T> = Result<T, ParseErrors>`, but `ParseErrors` /
+  `ParseResult` were not reachable from the `talkbank-parser` crate root
+  (only via a `pub(crate)` module), forcing consumers to add a separate
+  `talkbank-model` dependency or stringify at the boundary; both are now
+  re-exported. Also re-exported `talkbank_model::SylWordError` (the error
+  of `classify_syl_word` / `tokenize_syl_word`), which was omitted from
+  the model root while its sibling phon parse-error types were present.
+  Completes the BUG-3 audit: a compile-test now names every public
+  fallible constructor's error type so this class cannot regress.
 
 ## [0.3.6] - 2026-07-17
 

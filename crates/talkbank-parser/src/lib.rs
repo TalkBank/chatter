@@ -121,7 +121,13 @@ pub(crate) mod parser;
 
 /// Main parser type and initialization error.
 pub use parser::{ParserInitError, TreeSitterParser};
-pub use talkbank_model::FragmentSemanticContext;
+/// The error type (and its `Result` alias) that every public
+/// `TreeSitterParser::parse_*` method returns. Re-exported from
+/// `talkbank-model` so a crate depending only on `talkbank-parser` can name
+/// the error of a method it calls without adding a separate `talkbank-model`
+/// dependency (BUG-3, 2026-07-08: a public method's error type must be
+/// nameable from this crate's own root).
+pub use talkbank_model::{FragmentSemanticContext, ParseErrors, ParseResult};
 
 /// Convenience re-exports for dependent-tier parsing APIs.
 pub use api::{dependent_tier::parse_dependent_tier, tiers};

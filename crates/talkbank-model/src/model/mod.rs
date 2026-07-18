@@ -271,6 +271,10 @@ pub use dependent_tier::{
     SinToken,
     SitTier,
     SpaTier,
+    // Public fallible-parse error type (classify_syl_word /
+    // tokenize_syl_word); nameable downstream per BUG-3, same as its
+    // PhoalnParseError / XphointParseError siblings above.
+    SylWordError,
     TextTier,
     UserDefinedDependentTier,
     WorTier,
