@@ -21,25 +21,35 @@ pub(super) fn parse_linkers(
 ) -> Vec<crate::model::Linker> {
     let mut linkers = Vec::new();
     let child_count = node.child_count();
-    let make_linker = |kind: &str| -> Option<crate::model::Linker> {
+    // Map a linker node kind string to its `LinkerKind`; the caller pairs it
+    // with the token's source span so E758 can detect a leading space before
+    // the linker.
+    let make_linker_kind = |kind: &str| -> Option<crate::model::LinkerKind> {
         match kind {
-            LINKER_LAZY_OVERLAP => Some(crate::model::Linker::LazyOverlapPrecedes),
-            LINKER_QUICK_UPTAKE => Some(crate::model::Linker::OtherCompletion), // ++ is "other completion" not "quick uptake" (+^ is quick uptake)
-            LINKER_QUICK_UPTAKE_OVERLAP => Some(crate::model::Linker::QuickUptakeOverlap),
-            LINKER_QUOTATION_FOLLOWS => Some(crate::model::Linker::QuotationFollows),
-            LINKER_SELF_COMPLETION => Some(crate::model::Linker::SelfCompletion),
-            CA_TECHNICAL_BREAK_LINKER => Some(crate::model::Linker::TcuContinuation),
-            CA_NO_BREAK_LINKER => Some(crate::model::Linker::NoBreakTcuContinuation),
+            LINKER_LAZY_OVERLAP => Some(crate::model::LinkerKind::LazyOverlapPrecedes),
+            LINKER_QUICK_UPTAKE => Some(crate::model::LinkerKind::OtherCompletion), // ++ is "other completion" not "quick uptake" (+^ is quick uptake)
+            LINKER_QUICK_UPTAKE_OVERLAP => Some(crate::model::LinkerKind::QuickUptakeOverlap),
+            LINKER_QUOTATION_FOLLOWS => Some(crate::model::LinkerKind::QuotationFollows),
+            LINKER_SELF_COMPLETION => Some(crate::model::LinkerKind::SelfCompletion),
+            CA_TECHNICAL_BREAK_LINKER => Some(crate::model::LinkerKind::TcuContinuation),
+            CA_NO_BREAK_LINKER => Some(crate::model::LinkerKind::NoBreakTcuContinuation),
             _ => None,
         }
+    };
+    // Build a spanned `Linker` from a token node and its decoded kind.
+    let spanned = |kind: crate::model::LinkerKind, token: &Node| -> crate::model::Linker {
+        crate::model::Linker::new(
+            kind,
+            talkbank_model::Span::new(token.start_byte() as u32, token.end_byte() as u32),
+        )
     };
 
     for idx in 0..child_count {
         if let Some(child) = node.child(idx as u32) {
             if child.kind() == LINKER {
                 if let Some(linker_child) = child.child(0u32) {
-                    if let Some(linker) = make_linker(linker_child.kind()) {
-                        linkers.push(linker);
+                    if let Some(kind) = make_linker_kind(linker_child.kind()) {
+                        linkers.push(spanned(kind, &linker_child));
                     } else {
                         errors.report(ParseError::new(
                             ErrorCode::StructuralOrderError,
@@ -51,8 +61,8 @@ pub(super) fn parse_linkers(
                     }
                 }
             } else if is_linker(child.kind()) {
-                if let Some(linker) = make_linker(child.kind()) {
-                    linkers.push(linker);
+                if let Some(kind) = make_linker_kind(child.kind()) {
+                    linkers.push(spanned(kind, &child));
                 } else {
                     errors.report(ParseError::new(
                         ErrorCode::StructuralOrderError,

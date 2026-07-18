@@ -49,7 +49,7 @@
 //! `test_parse_health_recovery.rs::missing_speaker_does_not_create_empty_speaker_utterance`
 //! (R5: reused, not duplicated here).
 
-use talkbank_model::model::Linker;
+use talkbank_model::model::LinkerKind;
 
 mod common;
 use common::parse_utterances_and_diags;
@@ -113,21 +113,24 @@ fn valid_single_linkers_decode_to_expected_variants() {
     //   6 *MOT: +^ yes he did .
     //   7 *CHI: so I went home .
     //   8 *MOT: +< and then what .
-    let expectations: &[(usize, Linker)] = &[
-        (2, Linker::SelfCompletion),
-        (4, Linker::OtherCompletion),
-        (6, Linker::QuickUptakeOverlap),
-        (8, Linker::LazyOverlapPrecedes),
+    let expectations: &[(usize, LinkerKind)] = &[
+        (2, LinkerKind::SelfCompletion),
+        (4, LinkerKind::OtherCompletion),
+        (6, LinkerKind::QuickUptakeOverlap),
+        (8, LinkerKind::LazyOverlapPrecedes),
     ];
 
-    for (index, expected_linker) in expectations {
+    for (index, expected_kind) in expectations {
         let utt = utterances
             .get(*index)
             .unwrap_or_else(|| panic!("utterance index {index} present"));
+        // Compare linker KINDS: spans are position provenance, not part of
+        // the decode expectation.
+        let kinds: Vec<LinkerKind> = utt.main.content.linkers.iter().map(|l| l.kind).collect();
         assert_eq!(
-            utt.main.content.linkers.as_slice(),
-            std::slice::from_ref(expected_linker),
-            "utterance at index {index} must decode to exactly one {expected_linker:?} linker"
+            kinds.as_slice(),
+            std::slice::from_ref(expected_kind),
+            "utterance at index {index} must decode to exactly one {expected_kind:?} linker"
         );
     }
 }
@@ -147,9 +150,10 @@ fn valid_multiple_linkers_on_one_utterance_preserve_document_order() {
         .iter()
         .find(|u| u.main.speaker.as_str() == "CHI")
         .expect("CHI utterance present");
+    let chi_kinds: Vec<LinkerKind> = chi.main.content.linkers.iter().map(|l| l.kind).collect();
     assert_eq!(
-        chi.main.content.linkers.as_slice(),
-        &[Linker::LazyOverlapPrecedes, Linker::SelfCompletion],
+        chi_kinds.as_slice(),
+        &[LinkerKind::LazyOverlapPrecedes, LinkerKind::SelfCompletion],
         "two linkers on one utterance must decode in document order"
     );
 
@@ -158,9 +162,10 @@ fn valid_multiple_linkers_on_one_utterance_preserve_document_order() {
         .iter()
         .find(|u| u.main.speaker.as_str() == "SIS")
         .expect("SIS utterance present");
+    let sis_kinds: Vec<LinkerKind> = sis.main.content.linkers.iter().map(|l| l.kind).collect();
     assert_eq!(
-        sis.main.content.linkers.as_slice(),
-        &[Linker::SelfCompletion, Linker::OtherCompletion],
+        sis_kinds.as_slice(),
+        &[LinkerKind::SelfCompletion, LinkerKind::OtherCompletion],
         "two linkers on one utterance must decode in document order"
     );
 }

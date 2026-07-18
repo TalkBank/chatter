@@ -5,7 +5,7 @@
 
 use super::helpers::{check_cross_utterance_patterns, make_utterance};
 use crate::Span;
-use crate::model::{Linker, Terminator};
+use crate::model::{Linker, LinkerKind, Terminator};
 
 /// Valid other-completion sequence emits no errors.
 ///
@@ -22,7 +22,7 @@ fn test_other_completion_valid() {
         make_utterance(
             "WIN",
             vec!["he", "would", "have", "come"],
-            vec![Linker::OtherCompletion],
+            vec![Linker::from(LinkerKind::OtherCompletion)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];
@@ -43,7 +43,7 @@ fn test_e353_other_completion_no_preceding() {
     let utterances = vec![make_utterance(
         "WIN",
         vec!["he", "would", "have", "come"],
-        vec![Linker::OtherCompletion],
+        vec![Linker::from(LinkerKind::OtherCompletion)],
         Terminator::Period { span: Span::DUMMY },
     )];
 
@@ -68,7 +68,7 @@ fn test_e354_other_completion_wrong_terminator() {
         make_utterance(
             "WIN",
             vec!["he", "would", "have", "come"],
-            vec![Linker::OtherCompletion],
+            vec![Linker::from(LinkerKind::OtherCompletion)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];
@@ -95,7 +95,7 @@ fn test_e355_other_completion_same_speaker() {
         make_utterance(
             "CHI",
             vec!["he", "would", "have", "come"],
-            vec![Linker::OtherCompletion],
+            vec![Linker::from(LinkerKind::OtherCompletion)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];

@@ -224,16 +224,23 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
 /// Every content item type has a proper model representation.
 /// Convert a linker token to a model Linker.
 pub(crate) fn linker_token_to_model(tok: &Token<'_>) -> Option<Linker> {
-    match tok {
-        Token::LinkerLazyOverlap(_) => Some(Linker::LazyOverlapPrecedes),
-        Token::LinkerQuickUptake(_) => Some(Linker::OtherCompletion),
-        Token::LinkerQuickUptakeOverlap(_) => Some(Linker::QuickUptakeOverlap),
-        Token::LinkerQuotationFollows(_) => Some(Linker::QuotationFollows),
-        Token::LinkerSelfCompletion(_) => Some(Linker::SelfCompletion),
-        Token::CaNoBreakLinker(_) => Some(Linker::NoBreakTcuContinuation),
-        Token::CaTechnicalBreakLinker(_) => Some(Linker::TcuContinuation),
-        _ => None,
-    }
+    // re2c tokens carry only the matched text slice, not an absolute source
+    // offset, so linkers get Span::DUMMY here, matching this converter's
+    // convention for every other token (see the separator converter below).
+    // Source-spacing rules (E758) are span-arithmetic gated on non-dummy
+    // spans in the model path; the re2c oracle mirrors them via its own
+    // token-stream scan, so a dummy span is correct here.
+    let kind = match tok {
+        Token::LinkerLazyOverlap(_) => LinkerKind::LazyOverlapPrecedes,
+        Token::LinkerQuickUptake(_) => LinkerKind::OtherCompletion,
+        Token::LinkerQuickUptakeOverlap(_) => LinkerKind::QuickUptakeOverlap,
+        Token::LinkerQuotationFollows(_) => LinkerKind::QuotationFollows,
+        Token::LinkerSelfCompletion(_) => LinkerKind::SelfCompletion,
+        Token::CaNoBreakLinker(_) => LinkerKind::NoBreakTcuContinuation,
+        Token::CaTechnicalBreakLinker(_) => LinkerKind::TcuContinuation,
+        _ => return None,
+    };
+    Some(Linker::new(kind, Span::DUMMY))
 }
 
 pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {

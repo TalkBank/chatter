@@ -5,7 +5,7 @@
 
 use super::helpers::{check_cross_utterance_patterns, make_utterance};
 use crate::Span;
-use crate::model::{Linker, Terminator};
+use crate::model::{Linker, LinkerKind, Terminator};
 
 /// Valid self-completion sequence emits no cross-utterance errors.
 ///
@@ -28,7 +28,7 @@ fn test_self_completion_valid() {
         make_utterance(
             "CHI",
             vec!["I", "go", "straight", "ahead"],
-            vec![Linker::SelfCompletion],
+            vec![Linker::from(LinkerKind::SelfCompletion)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];
@@ -49,7 +49,7 @@ fn test_e351_self_completion_no_preceding_utterance() {
     let utterances = vec![make_utterance(
         "CHI",
         vec!["I", "go", "ahead"],
-        vec![Linker::SelfCompletion],
+        vec![Linker::from(LinkerKind::SelfCompletion)],
         Terminator::Period { span: Span::DUMMY },
     )];
 
@@ -92,7 +92,7 @@ fn test_e352_self_completion_wrong_terminator() {
         make_utterance(
             "CHI",
             vec!["I", "go", "ahead"],
-            vec![Linker::SelfCompletion],
+            vec![Linker::from(LinkerKind::SelfCompletion)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];

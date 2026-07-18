@@ -16,7 +16,7 @@ use super::*;
 pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
     use std::collections::HashMap;
 
-    use talkbank_model::model::{Line, Linker, Terminator};
+    use talkbank_model::model::{Line, Linker, LinkerKind, Terminator};
 
     let mut anomaly_writer: Option<std::io::BufWriter<std::fs::File>> = anomalies_path.map(|p| {
         let file = std::fs::File::create(p).unwrap_or_else(|e| {
@@ -183,20 +183,20 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
 
             for linker in linkers {
                 file_has_linker = true;
-                let label = match linker {
-                    Linker::LazyOverlapPrecedes => {
+                let label = match linker.kind {
+                    LinkerKind::LazyOverlapPrecedes => {
                         has_lazy = true;
                         "+<"
                     }
-                    Linker::OtherCompletion => "++",
-                    Linker::QuickUptakeOverlap => "+^",
-                    Linker::QuotationFollows => "+\"",
-                    Linker::SelfCompletion => "+,",
-                    Linker::TcuContinuation => "+≋",
-                    Linker::NoBreakTcuContinuation => "+≈",
+                    LinkerKind::OtherCompletion => "++",
+                    LinkerKind::QuickUptakeOverlap => "+^",
+                    LinkerKind::QuotationFollows => "+\"",
+                    LinkerKind::SelfCompletion => "+,",
+                    LinkerKind::TcuContinuation => "+≋",
+                    LinkerKind::NoBreakTcuContinuation => "+≈",
                 };
                 *linker_totals.entry(label).or_default() += 1;
-                if !matches!(linker, Linker::LazyOverlapPrecedes) {
+                if !matches!(linker.kind, LinkerKind::LazyOverlapPrecedes) {
                     has_other_linker = true;
                 }
             }
@@ -215,7 +215,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
 
             // ── ++ pairing ─────────────────────────────────────────
-            if linkers.iter().any(|l| matches!(l, Linker::OtherCompletion)) {
+            if linkers.iter().any(|l| matches!(l.kind, LinkerKind::OtherCompletion)) {
                 if idx == 0 {
                     pp_first += 1;
                     file_anomalies += 1;
@@ -283,7 +283,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
 
             // ── +, pairing ─────────────────────────────────────────
-            if linkers.iter().any(|l| matches!(l, Linker::SelfCompletion)) {
+            if linkers.iter().any(|l| matches!(l.kind, LinkerKind::SelfCompletion)) {
                 match last_term_by_speaker.get(speaker) {
                     None => {
                         sc_no_prior += 1;
@@ -334,7 +334,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             // ── +" pairing ─────────────────────────────────────────
             if linkers
                 .iter()
-                .any(|l| matches!(l, Linker::QuotationFollows))
+                .any(|l| matches!(l.kind, LinkerKind::QuotationFollows))
             {
                 match last_term_by_speaker.get(speaker) {
                     None => {
@@ -361,7 +361,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                         if last_linker_by_speaker
                             .get(speaker)
                             .and_then(|l| *l)
-                            .is_some_and(|l| matches!(l, Linker::QuotationFollows))
+                            .is_some_and(|l| matches!(l.kind, LinkerKind::QuotationFollows))
                         {
                             qf_chained += 1;
                         } else {
@@ -427,7 +427,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             // ── +^ ─────────────────────────────────────────────────
             if linkers
                 .iter()
-                .any(|l| matches!(l, Linker::QuickUptakeOverlap))
+                .any(|l| matches!(l.kind, LinkerKind::QuickUptakeOverlap))
             {
                 if prev_speaker.is_some_and(|ps| ps == speaker) {
                     qu_same += 1;
@@ -437,7 +437,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
 
             // ── +≋/+≈ ─────────────────────────────────────────────
-            if linkers.iter().any(|l| matches!(l, Linker::TcuContinuation)) {
+            if linkers.iter().any(|l| matches!(l.kind, LinkerKind::TcuContinuation)) {
                 if prev_speaker.is_some_and(|ps| ps == speaker) {
                     tcu_tech_same += 1;
                 } else {
@@ -446,7 +446,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
             if linkers
                 .iter()
-                .any(|l| matches!(l, Linker::NoBreakTcuContinuation))
+                .any(|l| matches!(l.kind, LinkerKind::NoBreakTcuContinuation))
             {
                 if prev_speaker.is_some_and(|ps| ps == speaker) {
                     tcu_nb_same += 1;
@@ -468,12 +468,12 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                 if is_trailing_off(pt)
                     && linkers
                         .iter()
-                        .any(|l| matches!(l, Linker::OtherCompletion | Linker::SelfCompletion))
+                        .any(|l| matches!(l.kind, LinkerKind::OtherCompletion | LinkerKind::SelfCompletion))
                 {
                     trailing_off_followed += 1;
                 }
                 if is_interruption(pt)
-                    && linkers.iter().any(|l| matches!(l, Linker::SelfCompletion))
+                    && linkers.iter().any(|l| matches!(l.kind, LinkerKind::SelfCompletion))
                 {
                     interruption_followed += 1;
                 }
@@ -488,7 +488,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
             let primary_linker = linkers
                 .iter()
-                .find(|l| !matches!(l, Linker::LazyOverlapPrecedes));
+                .find(|l| !matches!(l.kind, LinkerKind::LazyOverlapPrecedes));
             last_linker_by_speaker.insert(speaker, primary_linker);
         }
 

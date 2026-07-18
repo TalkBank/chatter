@@ -4725,7 +4725,11 @@
       ]
     },
     "Linker": {
-      "description": "Cross-utterance linker token.\n\nLinkers appear at the start of an utterance to indicate its relationship\nto the previous utterance(s).\n\n# CHAT Format Examples\n\n```text\n*MOT: are you ready ?\n*CHI: +< yes .          Lazy overlap (started before previous finished)\n*MOT: what do you want ?\n*CHI: ++ cookie !       Quick uptake (no gap)\n*MOT: she said +\".      Quotation follows\n*CHI: I'm hungry +\".\n```\n\n# References\n\n- [Utterance Linkers](https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers)",
+      "$ref": "#/$defs/LinkerKind",
+      "description": "A cross-utterance linker token with its source position.\n\nPairs the linker [`LinkerKind`] with the byte [`Span`] it occupied in the\nsource. The span is provenance only (`#[serde(skip)]`, `#[schemars(skip)]`,\n`#[semantic_eq(skip)]`): the serialized form is transparently that of\n[`LinkerKind`], so the JSON and schema are unchanged by carrying a span, and\nsemantic equality ignores position."
+    },
+    "LinkerKind": {
+      "description": "Which cross-utterance linker a token is (its classification, not its\nposition).\n\nLinkers appear at the start of an utterance to indicate its relationship\nto the previous utterance(s). The serialized form (`{\"type\": \"...\"}`) is\nthe stable wire contract; [`Linker`] is transparent over this type, so the\nJSON of a linker is exactly this enum's tagged representation.\n\n# CHAT Format Examples\n\n```text\n*MOT: are you ready ?\n*CHI: +< yes .          Lazy overlap (started before previous finished)\n*MOT: what do you want ?\n*CHI: ++ cookie !       Quick uptake (no gap)\n*MOT: she said +\".      Quotation follows\n*CHI: I'm hungry +\".\n```\n\n# References\n\n- [Utterance Linkers](https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers)",
       "oneOf": [
         {
           "description": "`+<` lazy-overlap-precedes linker.\nReference: <https://talkbank.org/0info/manuals/CHAT.html#LazyOverlap_Linker>",

@@ -6,7 +6,8 @@ use quick_xml::events::{BytesEnd, BytesStart, Event};
 use talkbank_model::alignment::TierDomain;
 use talkbank_model::alignment::helpers::counts_for_tier;
 use talkbank_model::model::{
-    Action, Annotated, BracketedItem, Event as CEvent, Linker, OverlapPointKind, ReplacedWord,
+    Action, Annotated, BracketedItem, Event as CEvent, Linker, LinkerKind, OverlapPointKind,
+    ReplacedWord,
     Word, WordContent,
 };
 
@@ -162,14 +163,14 @@ impl XmlEmitter {
     /// written. Staged variants (`+<` lazy-overlap, `++` completion)
     /// fail loud so each missing mapping shows up in the harness.
     pub(crate) fn emit_linker(&mut self, linker: &Linker) -> Result<(), XmlWriteError> {
-        let ty = match linker {
-            Linker::QuotationFollows => "quoted utterance next",
-            Linker::QuickUptakeOverlap => "quick uptake",
-            Linker::LazyOverlapPrecedes => "lazy overlap mark",
-            Linker::SelfCompletion => "self completion",
-            Linker::OtherCompletion => "other completion",
-            Linker::TcuContinuation => "technical break TCU completion",
-            Linker::NoBreakTcuContinuation => "no break TCU completion",
+        let ty = match linker.kind {
+            LinkerKind::QuotationFollows => "quoted utterance next",
+            LinkerKind::QuickUptakeOverlap => "quick uptake",
+            LinkerKind::LazyOverlapPrecedes => "lazy overlap mark",
+            LinkerKind::SelfCompletion => "self completion",
+            LinkerKind::OtherCompletion => "other completion",
+            LinkerKind::TcuContinuation => "technical break TCU completion",
+            LinkerKind::NoBreakTcuContinuation => "no break TCU completion",
         };
         let mut tag = BytesStart::new("linker");
         tag.push_attribute(("type", ty));

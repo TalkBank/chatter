@@ -28,7 +28,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SelfCompletion_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
-use crate::model::{Linker, Terminator, Utterance};
+use crate::model::{LinkerKind, Terminator, Utterance};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use std::collections::HashMap;
 
@@ -138,7 +138,7 @@ fn has_self_completion_linker_internal(utterance: &Utterance) -> bool {
         .content
         .linkers
         .iter()
-        .any(|linker| matches!(linker, Linker::SelfCompletion))
+        .any(|linker| matches!(linker.kind, LinkerKind::SelfCompletion))
 }
 
 /// Validate one `++` other-completion linker usage.

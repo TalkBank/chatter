@@ -5,7 +5,7 @@
 
 use super::helpers::{check_cross_utterance_patterns, make_utterance};
 use crate::Span;
-use crate::model::{Linker, Terminator};
+use crate::model::{Linker, LinkerKind, Terminator};
 
 /// Pattern B quotation-precedes sequence validates cleanly.
 ///
@@ -16,7 +16,7 @@ fn test_quotation_precedes_valid() {
         make_utterance(
             "CHI",
             vec!["please", "give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
         make_utterance(
@@ -40,13 +40,13 @@ fn test_quotation_precedes_multiple_quotes() {
         make_utterance(
             "CHI",
             vec!["please", "give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
         make_utterance(
             "CHI",
             vec!["I'll", "carry", "you"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
         make_utterance(
@@ -98,7 +98,7 @@ fn test_e346_quoted_linker_missing_terminator() {
         make_utterance(
             "CHI",
             vec!["please", "give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
         make_utterance(

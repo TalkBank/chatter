@@ -5,7 +5,7 @@
 
 use super::helpers::{check_cross_utterance_patterns, make_utterance};
 use crate::Span;
-use crate::model::{Linker, Terminator};
+use crate::model::{Linker, LinkerKind, Terminator};
 
 /// Pattern A quotation-following sequence validates cleanly.
 ///
@@ -22,7 +22,7 @@ fn test_quotation_follows_valid() {
         make_utterance(
             "CHI",
             vec!["please", "give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];
@@ -46,13 +46,13 @@ fn test_quotation_follows_multiple_quotes() {
         make_utterance(
             "CHI",
             vec!["please", "give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
         make_utterance(
             "CHI",
             vec!["I'll", "carry", "you"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];
@@ -143,13 +143,13 @@ fn test_e341_mixed_quotation_patterns() {
         make_utterance(
             "CHI",
             vec!["give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
         make_utterance(
             "CHI",
             vec!["I'll", "carry", "you"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::QuotedPeriodSimple { span: Span::DUMMY },
         ),
     ];

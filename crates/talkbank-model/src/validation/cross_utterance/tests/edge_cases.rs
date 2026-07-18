@@ -5,7 +5,7 @@
 
 use super::helpers::{check_cross_utterance_patterns, make_utterance};
 use crate::Span;
-use crate::model::{Linker, Terminator};
+use crate::model::{Linker, LinkerKind, Terminator};
 
 /// Quotation linkage tolerates intervening utterances from other speakers.
 ///
@@ -28,7 +28,7 @@ fn test_quotation_with_intervening_speakers() {
         make_utterance(
             "CHI",
             vec!["please", "give", "me", "honey"],
-            vec![Linker::QuotationFollows],
+            vec![Linker::from(LinkerKind::QuotationFollows)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];
@@ -63,7 +63,7 @@ fn test_multiple_validation_errors() {
         make_utterance(
             "EXP",
             vec!["continue"],
-            vec![Linker::SelfCompletion],
+            vec![Linker::from(LinkerKind::SelfCompletion)],
             Terminator::Period { span: Span::DUMMY },
         ),
     ];

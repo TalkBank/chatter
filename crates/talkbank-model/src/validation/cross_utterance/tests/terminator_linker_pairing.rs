@@ -5,7 +5,7 @@
 
 use super::helpers::{check_cross_utterance_patterns, make_utterance};
 use crate::Span;
-use crate::model::{Linker, Terminator};
+use crate::model::{Linker, LinkerKind, Terminator};
 
 /// Quoted terminator without prior quotation linker triggers `E344` (currently ignored).
 ///
@@ -38,7 +38,7 @@ fn test_quoted_linker_wrong_terminator() {
     let utterances = vec![make_utterance(
         "CHI",
         vec!["hello", "there"],
-        vec![Linker::QuotationFollows],
+        vec![Linker::from(LinkerKind::QuotationFollows)],
         Terminator::Period { span: Span::DUMMY },
     )];
 

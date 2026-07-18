@@ -167,6 +167,7 @@ pub use content::{
     Freecode,
     Group,
     Linker,
+    LinkerKind,
     LongFeatureBegin,
     LongFeatureEnd,
     // Labels and markers

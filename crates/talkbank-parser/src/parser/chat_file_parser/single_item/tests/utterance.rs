@@ -3,7 +3,7 @@
 //! These tests document expected behavior and regressions.
 
 use super::{parse_main_tier, parse_utterance, with_snapshot_settings};
-use crate::model::{DependentTier, Linker, Separator, Terminator, UtteranceContent};
+use crate::model::{DependentTier, LinkerKind, Separator, Terminator, UtteranceContent};
 
 // ✅ SUCCESS CASE - Simplest valid utterance
 /// Parses the minimal valid main tier (`*SPK:\tword .`) and snapshots the structured result.
@@ -31,7 +31,7 @@ fn characterization_rich_valid_main_tier() {
 
     // The `++` linker decodes to OtherCompletion.
     assert_eq!(main_tier.content.linkers.len(), 1);
-    assert_eq!(main_tier.content.linkers[0], Linker::OtherCompletion);
+    assert_eq!(main_tier.content.linkers[0].kind, LinkerKind::OtherCompletion);
 
     // No utterance-scoped language code on this line.
     assert!(main_tier.content.language_code.is_none());
