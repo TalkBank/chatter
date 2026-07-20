@@ -81,6 +81,14 @@
       "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
     },
     {
+      "fixture": "E242_Unbalanced_quotation_marks.cha",
+      "expected_codes": [
+        "E242"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E242_auto.md"
+    },
+    {
       "fixture": "E243_Pipe_character_in_main_tier_word_text.cha",
       "expected_codes": [
         "E243"
@@ -298,14 +306,6 @@
       "source_spec": "spec/errors/E373_auto.md"
     },
     {
-      "fixture": "E316_Unbalanced_quotation_marks.cha",
-      "expected_codes": [
-        "E316"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E242_auto.md"
-    },
-    {
       "fixture": "E326_UnexpectedLineType.cha",
       "expected_codes": [
         "E326"
@@ -328,14 +328,6 @@
       ],
       "status": "not_implemented",
       "source_spec": "spec/errors/E341_auto.md"
-    },
-    {
-      "fixture": "E342_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E342"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/W601_auto.md"
     },
     {
       "fixture": "E342_Participants_header_cannot_be_empty.cha",
@@ -1683,7 +1675,39 @@
       "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
     },
     {
-      "fixture": "E758_Leading_space_before_main_tier_content_in_a_non_CA_file.cha",
+      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file.cha",
+      "expected_codes": [
+        "E758"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
+    },
+    {
+      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_2.cha",
+      "expected_codes": [
+        "E758"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
+    },
+    {
+      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_3.cha",
+      "expected_codes": [
+        "E758"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
+    },
+    {
+      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_4.cha",
+      "expected_codes": [
+        "E758"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
+    },
+    {
+      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_5.cha",
       "expected_codes": [
         "E758"
       ],

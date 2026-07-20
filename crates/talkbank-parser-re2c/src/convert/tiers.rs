@@ -96,7 +96,12 @@ pub fn utterance_to_model(u: &ast::Utterance<'_>) -> talkbank_model::model::Utte
     talkbank_model::model::Utterance {
         preceding_headers: Default::default(),
         main,
-        dependent_tiers: dep_tiers.into(),
+        // re2c does not yet parse E758 separator provenance (Task 3 gives
+        // every dependent tier a `DependentTierEntry`; the separator itself
+        // stays a follow-up for the re2c oracle, tracked with the rest of
+        // the E758 CA-gated rewrite). CLEAN is correct today: re2c reports
+        // no illegal trailing space for any dependent tier.
+        dependent_tiers: dep_tiers.into_iter().map(DependentTierEntry::new).collect(),
         alignments: None,
         alignment_diagnostics: Vec::new(),
         // re2c's lexer never fails and this runs on a fully-parsed AST utterance;
@@ -326,6 +331,7 @@ impl<'a> From<&ast::ChatFile<'a>> for talkbank_model::model::ChatFile {
                 ast::Line::Header(h) => talkbank_model::model::Line::Header {
                     header: Box::new(crate::convert::header_to_model(h)),
                     span: Span::DUMMY,
+                    separator: TierSeparator::CLEAN,
                 },
                 ast::Line::Utterance(u) => {
                     talkbank_model::model::Line::Utterance(Box::new(utterance_to_model(u.as_ref())))

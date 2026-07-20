@@ -1,5 +1,5 @@
 ================================================================================
-interrupted_question_terminator - Main tier ending with interrupted-question terminator .
+interrupted_question_terminator - Main tier ending with interrupted-question terminator +/?.
 ================================================================================
 *CHI:	hello +/?
 

@@ -1,5 +1,5 @@
 ================================================================================
-sin_zero_marker - Zero marker in %sin tier, verifies parses as (not ERROR).
+sin_zero_marker - Zero marker in %sin tier, verifies 0 parses as sin_word > zero (not ERROR).
 ================================================================================
 *CHI:	hello .
 %sin:	0

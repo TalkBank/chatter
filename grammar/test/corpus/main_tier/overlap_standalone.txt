@@ -1,5 +1,5 @@
 ================================================================================
-overlap_standalone - Standalone overlap markers (space-separated from words) parse as content items, not as part of a word. Verifies theGLR conflict resolves correctly whenoverlap markers are whitespace-delimited.
+overlap_standalone - Standalone overlap markers (space-separated from words) parse as overlap_point content items, not as part of a word. Verifies the GLR conflict [$.contents, $.word_body] resolves correctly when overlap markers are whitespace-delimited.
 ================================================================================
 *CHI:	⌈ hello ⌉ .
 

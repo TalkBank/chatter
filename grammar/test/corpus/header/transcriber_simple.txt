@@ -1,5 +1,5 @@
 ================================================================================
-transcriber_simple - header with free-text value.
+transcriber_simple - @Transcriber header with free-text value.
 ================================================================================
 @Transcriber:	J Doe
 

@@ -15,7 +15,15 @@ Auto-generated from corpus
 
 **Source**: `error_corpus/E7xx_tier_parsing/E704_empty_mor_pos.cha`
 **Trigger**: %mor chunk with empty part-of-speech before pipe
-**Expected Error Codes**: E316, E702
+**Expected Error Codes**: E316
+
+<!-- The earlier expectation also listed E702, but E702 is
+InvalidMorphologyFormat ("missing pipe separator"), which does not apply to
+this fixture: `|hello` HAS a pipe, its part-of-speech is empty. Chatter
+correctly rejects the malformed mor content with E316 (unparsable). A
+dedicated "empty %mor part-of-speech" code does not exist yet (parity gap,
+tracked); until then E316 is the correct rejection. -->
+
 
 ```chat
 @UTF8

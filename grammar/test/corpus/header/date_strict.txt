@@ -1,5 +1,5 @@
 ================================================================================
-date_strict - header using strict format.
+date_strict - @Date header using strict DD-MMM-YYYY format.
 ================================================================================
 @Date:	04-JAN-2020
 

@@ -88,14 +88,18 @@ impl Validate for Utterance {
         // E604: `%gra` requires `%mor`.
         // Skip when `%mor` is parse-tainted: parser recovery may have dropped `%mor`
         // from the AST while still reporting the root parse issue elsewhere.
-        let has_gra = self
-            .dependent_tiers
-            .iter()
-            .any(|tier| matches!(tier, crate::model::dependent_tier::DependentTier::Gra(_)));
-        let has_mor = self
-            .dependent_tiers
-            .iter()
-            .any(|tier| matches!(tier, crate::model::dependent_tier::DependentTier::Mor(_)));
+        let has_gra = self.dependent_tiers.iter().any(|entry| {
+            matches!(
+                &entry.tier,
+                crate::model::dependent_tier::DependentTier::Gra(_)
+            )
+        });
+        let has_mor = self.dependent_tiers.iter().any(|entry| {
+            matches!(
+                &entry.tier,
+                crate::model::dependent_tier::DependentTier::Mor(_)
+            )
+        });
         let mor_tainted = self
             .parse_health
             .is_tier_tainted(crate::model::ParseHealthTier::Mor);
@@ -128,16 +132,16 @@ impl Validate for Utterance {
         // downstream graph-structure checks. Otherwise we emit misleading
         // cascades like E713 + E722 for the same malformed relation set.
         if !gra_alignment_blocks_structure {
-            for tier in &self.dependent_tiers {
-                if let DependentTier::Gra(marker) = tier {
+            for entry in &self.dependent_tiers {
+                if let DependentTier::Gra(marker) = &entry.tier {
                     marker.validate_structure(errors);
                 }
             }
         }
 
         // E711: `%mor` content validation (stems/suffixes/POS categories).
-        for tier in &self.dependent_tiers {
-            if let DependentTier::Mor(marker) = tier {
+        for entry in &self.dependent_tiers {
+            if let DependentTier::Mor(marker) = &entry.tier {
                 marker.validate_content(errors);
             }
         }
@@ -152,8 +156,8 @@ impl Validate for Utterance {
         }
 
         // Validate user-defined dependent tiers (e.g., `%xfoo`, `%xbar`).
-        for tier in &self.dependent_tiers {
-            if let DependentTier::UserDefined(tier) = tier {
+        for entry in &self.dependent_tiers {
+            if let DependentTier::UserDefined(tier) = &entry.tier {
                 crate::validation::check_user_defined_tier_content(
                     &tier.label,
                     &tier.content,
@@ -164,8 +168,8 @@ impl Validate for Utterance {
         }
 
         // E603: Validate %tim tier content format.
-        for tier in &self.dependent_tiers {
-            if let DependentTier::Tim(tim_tier) = tier
+        for entry in &self.dependent_tiers {
+            if let DependentTier::Tim(tim_tier) = &entry.tier
                 && tim_tier.has_validation_issue()
             {
                 check_tim_tier_format(tim_tier.as_str(), tim_tier.span(), errors);
@@ -183,8 +187,8 @@ impl Validate for Utterance {
         // UD `%mor` tier; CLAN still accepts `%grt`/`%tra`/`%trn`, so chatter is
         // intentionally stricter there (a documented divergence, see the book's
         // "Dependent Tiers" page). `%x*` user-defined tiers never reach here.
-        for tier in &self.dependent_tiers {
-            if let DependentTier::Unsupported(t) = tier {
+        for entry in &self.dependent_tiers {
+            if let DependentTier::Unsupported(t) = &entry.tier {
                 errors.report(
                     crate::ParseError::new(
                         crate::ErrorCode::UnsupportedDependentTier,

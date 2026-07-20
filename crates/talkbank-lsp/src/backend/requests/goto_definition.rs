@@ -320,7 +320,7 @@ fn utterance_contains_offset(utterance: &talkbank_model::model::Utterance, offse
         || utterance
             .dependent_tiers
             .iter()
-            .any(|tier| span_contains(tier.span()))
+            .any(|tier| span_contains(tier.tier.span()))
 }
 
 #[cfg(test)]

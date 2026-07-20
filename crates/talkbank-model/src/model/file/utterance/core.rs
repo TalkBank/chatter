@@ -4,7 +4,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Line>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::model::dependent_tier::DependentTier;
+use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -90,8 +90,10 @@ pub struct Utterance {
     /// Keeping tiers in one ordered collection avoids hard-coding one slot per
     /// tier kind and preserves unusual-but-valid tier layouts.
     ///
-    /// Uses `SmallVec<[DependentTier; 3]>` to avoid heap allocation for common
-    /// short tier lists.
+    /// Uses `SmallVec<[DependentTierEntry; 3]>` to avoid heap allocation for
+    /// common short tier lists. Each entry pairs the tier with its source
+    /// separator (`colon tab trailing_space?`); the wire format stays exactly
+    /// that of `DependentTier` (`DependentTierEntry` is serde-transparent).
     ///
     /// Common tier types:
     /// - **%mor**: Morphological analysis
@@ -104,7 +106,7 @@ pub struct Utterance {
     /// See: [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)
     #[serde(skip_serializing_if = "SmallVec::is_empty", default)]
     #[schemars(with = "Vec<DependentTier>")]
-    pub dependent_tiers: SmallVec<[DependentTier; 3]>,
+    pub dependent_tiers: SmallVec<[DependentTierEntry; 3]>,
 
     /// Alignment metadata (computed during validation).
     ///

@@ -56,7 +56,7 @@ fn filter_by_speakers(chat_file: &ChatFile, text: &str, selected: &HashSet<&str>
                     .dependent_tiers
                     .last()
                     .and_then(|dt| {
-                        let span = dt.span();
+                        let span = dt.tier.span();
                         if span.is_dummy() {
                             None
                         } else {

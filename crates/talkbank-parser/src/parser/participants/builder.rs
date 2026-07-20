@@ -201,7 +201,7 @@ pub fn build_participants_from_lines(
     let header_lines: Vec<(&Header, Span)> = lines
         .iter()
         .filter_map(|line| match line {
-            Line::Header { header, span } => Some((header.as_ref(), *span)),
+            Line::Header { header, span, .. } => Some((header.as_ref(), *span)),
             _ => None,
         })
         .collect();

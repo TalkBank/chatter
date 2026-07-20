@@ -60,7 +60,9 @@ use crate::generated_traversal::{
 };
 use crate::model::{Header, Line};
 use crate::node_types::{BLANK_LINE, PRE_BEGIN_HEADER, UNSUPPORTED_LINE};
-use crate::parser::chat_file_parser::header_parser::{handle_pre_begin_header, parse_header_node};
+use crate::parser::chat_file_parser::header_parser::{
+    handle_pre_begin_header, helpers::header_separator, parse_header_node,
+};
 use crate::parser::chat_file_parser::utterance_parser::parse_utterance_node;
 use crate::parser::tree_parsing::parser_helpers::{
     analyze_error_node, analyze_line_error, collect_recovery_nodes, is_pre_begin_header,
@@ -326,7 +328,8 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     ///   (34 concrete header subtypes, named after its first alternative), NOT a
     ///   `LineChoice::Header(node)`. The concrete header raw node is reached via
     ///   `AsRawNode::raw_node`, delegated to `parse_header_node`, and pushed as a
-    ///   `Line::header_with_span` on `Parsed`.
+    ///   `Line::header_with_separator` (with the `header_sep`'s E758
+    ///   trailing-space provenance, see [`header_separator`]) on `Parsed`.
     /// - `Present(Utterance(_))`: delegates to `parse_utterance_node` and pushes
     ///   `Line::utterance` on `Parsed`.
     /// - `Present(UnsupportedLine(_))`: reports E326 `UnexpectedLineType`
@@ -359,7 +362,9 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                     parse_header_node(node, self.source, self.errors)
                 {
                     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-                    self.lines.push(Line::header_with_span(header, span));
+                    let separator = header_separator(node);
+                    self.lines
+                        .push(Line::header_with_separator(header, span, separator));
                 }
             }
             NodeSlot::Present(LineChoice::Utterance(utterance)) => {

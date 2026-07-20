@@ -1,5 +1,5 @@
 ================================================================================
-media_audio - header with filename and media type.
+media_audio - @Media header with filename and media type.
 ================================================================================
 @Media:	sample, audio
 

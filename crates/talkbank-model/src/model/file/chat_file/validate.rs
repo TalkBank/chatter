@@ -18,8 +18,8 @@ use crate::{Header, Line};
 // so `build_validation_context` calls them by their bare names.
 mod checks;
 use checks::{
-    check_cross_header_consistency, check_leading_space_on_main_tier, check_media_filename_match,
-    check_media_linkage_has_timing, check_media_unlinked_has_no_timing, check_timing_has_media,
+    check_cross_header_consistency, check_media_filename_match, check_media_linkage_has_timing,
+    check_media_unlinked_has_no_timing, check_separator_trailing_space, check_timing_has_media,
     check_utterance_language_declared, file_uses_ca_mode,
 };
 
@@ -345,7 +345,7 @@ impl<S: ValidationState> ChatFile<S> {
         // 123). CA transcripts column-align with spaces, so CA files are
         // exempt (all 457 wild occurrences declare CA, 2026-07-16 scan).
         if !context.shared.ca_mode {
-            check_leading_space_on_main_tier(self, errors);
+            check_separator_trailing_space(self, errors);
         }
 
         // E701, E704: Validate temporal constraints on media bullets

@@ -588,7 +588,7 @@ fn study_retrace_cha_dep_tiers() {
             let dep_types: Vec<_> = u
                 .dependent_tiers
                 .iter()
-                .map(|d| format!("{:?}", std::mem::discriminant(d)))
+                .map(|d| format!("{:?}", std::mem::discriminant(&d.tier)))
                 .collect();
             eprintln!("Line {i}: {} deps: {dep_types:?}", u.dependent_tiers.len());
         }

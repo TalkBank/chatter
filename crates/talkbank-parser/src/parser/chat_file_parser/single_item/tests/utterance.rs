@@ -31,7 +31,10 @@ fn characterization_rich_valid_main_tier() {
 
     // The `++` linker decodes to OtherCompletion.
     assert_eq!(main_tier.content.linkers.len(), 1);
-    assert_eq!(main_tier.content.linkers[0].kind, LinkerKind::OtherCompletion);
+    assert_eq!(
+        main_tier.content.linkers[0].kind,
+        LinkerKind::OtherCompletion
+    );
 
     // No utterance-scoped language code on this line.
     assert!(main_tier.content.language_code.is_none());
@@ -117,7 +120,7 @@ fn preserves_dependent_tiers() {
 
     assert_eq!(utterance.dependent_tiers.len(), 1);
     assert!(matches!(
-        utterance.dependent_tiers[0],
+        utterance.dependent_tiers[0].tier,
         DependentTier::Mor(_)
     ));
 }
@@ -132,7 +135,7 @@ fn preserves_main_and_dependent_bullets() {
 
     assert!(utterance.main.content.bullet.is_some());
     assert_eq!(utterance.dependent_tiers.len(), 1);
-    match &utterance.dependent_tiers[0] {
+    match &utterance.dependent_tiers[0].tier {
         DependentTier::Cod(tier) => assert!(
             tier.content
                 .segments

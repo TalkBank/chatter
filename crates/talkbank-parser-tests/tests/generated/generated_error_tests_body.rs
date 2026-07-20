@@ -1301,7 +1301,7 @@ fn test_e382_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
         Err(errors) => errors,
     };
 
-    let expected_codes = vec!["E316", "E702"];
+    let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
         let has_expected = errors.errors.iter().any(|err| err.code == expected);

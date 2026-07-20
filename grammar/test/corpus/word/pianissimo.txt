@@ -1,5 +1,5 @@
 ================================================================================
-pianissimo - Word wrapped in double CA delimiter (pianissimo, very soft voice).This is a stacked marker: two identical tokens before thetext, two after. Tests that repeated delimiters parse without ERROR nodes.
+pianissimo - Word wrapped in double CA delimiter °° (pianissimo, very soft voice). This is a stacked marker: two identical ca_delimiter tokens before the text, two after. Tests that repeated delimiters parse without ERROR nodes.
 ================================================================================
 *CHI:	°°hello°° .
 

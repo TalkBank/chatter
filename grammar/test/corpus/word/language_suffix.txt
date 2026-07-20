@@ -1,5 +1,5 @@
 ================================================================================
-language_suffix - Word with language suffix, or .
+language_suffix - Word with language suffix, @s:code or @s:code1+code2.
 ================================================================================
 *CHI:	hao3@s:eng+zho .
 

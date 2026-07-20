@@ -124,7 +124,7 @@ fn parse_text_tiers_and_diags(input: &str) -> (Vec<(&'static str, Vec<String>)>,
     for line in &chat.lines.0 {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
-                if let Some(entry) = text_tier(dt) {
+                if let Some(entry) = text_tier(&dt.tier) {
                     tiers.push(entry);
                 }
             }

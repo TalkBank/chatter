@@ -82,7 +82,7 @@ fn parse_mor(input: &str) -> (Vec<String>, bool, Vec<Diag>) {
     for line in &chat.lines.0 {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
-                if let DependentTier::Mor(t) = dt {
+                if let DependentTier::Mor(t) = &dt.tier {
                     saw_mor_tier = true;
                     tiers.push(t.to_content());
                 }

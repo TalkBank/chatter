@@ -26,9 +26,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{AsRawNode, UtteranceChild1Choice};
+use crate::generated_traversal::{
+    AsRawNode, UtteranceChild1Choice, extract_act_dependent_tier, extract_add_dependent_tier,
+    extract_cod_dependent_tier, extract_com_dependent_tier, extract_exp_dependent_tier,
+    extract_gpx_dependent_tier, extract_int_dependent_tier, extract_sit_dependent_tier,
+    extract_spa_dependent_tier,
+};
 use crate::model::Utterance;
-use crate::model::dependent_tier::DependentTier;
+use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::node_types::*;
 use crate::parser::tier_parsers::act::parse_act_tier;
 use crate::parser::tier_parsers::cod::parse_cod_tier;
@@ -65,40 +70,112 @@ pub(crate) fn parse_and_attach_dependent_tier(
         C::WorDependentTier(n) => parsed::attach_wor(n, &mut utterance, input, errors),
         // Bullet/text tiers: parse directly, no `has_error` gate (unchanged).
         C::ComDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_com_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_com_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Com(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Com(tier),
+                    separator,
+                ));
         }
         C::ExpDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_exp_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_exp_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Exp(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Exp(tier),
+                    separator,
+                ));
         }
         C::AddDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_add_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_add_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Add(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Add(tier),
+                    separator,
+                ));
         }
         C::SpaDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_spa_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_spa_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Spa(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Spa(tier),
+                    separator,
+                ));
         }
         C::SitDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_sit_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_sit_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Sit(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Sit(tier),
+                    separator,
+                ));
         }
         C::IntDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_int_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_int_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Int(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Int(tier),
+                    separator,
+                ));
         }
         C::GpxDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_gpx_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_gpx_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Gpx(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Gpx(tier),
+                    separator,
+                ));
         }
         C::CodDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_cod_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_cod_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Cod(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Cod(tier),
+                    separator,
+                ));
         }
         C::ActDependentTier(n) => {
+            let separator = super::helpers::dependent_tier_separator(
+                &extract_act_dependent_tier(n).child_1.slot,
+            );
             let tier = parse_act_tier(n.raw_node(), input, errors);
-            utterance.dependent_tiers.push(DependentTier::Act(tier));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Act(tier),
+                    separator,
+                ));
         }
         // Raw text tiers: the `raw` applier keyed on the concrete kind CONST
         // taken from the typed variant (not `node.kind()`).

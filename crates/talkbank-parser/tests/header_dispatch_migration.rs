@@ -241,7 +241,7 @@ fn headers_comments_fixture_parses_with_zero_diagnostics() {
         r#"Media(MediaHeader { filename: MediaFilename("headers-comments"), media_type: Video, status: Some(Unlinked) })"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Comment and warning headers with multi-line continuation" })]) } }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: comment_header, warning_header, anything," }), Continuation, Text(BulletContentText { text: "text_with_bullets_and_pics, continuation, rest_of_line" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI points to the shelf " }), Bullet(MediaTiming { start_ms: 1234, end_ms: 1567 })]) } }"#,
+        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI points to the shelf" }), Bullet(MediaTiming { start_ms: 1234, end_ms: 1567 })]) } }"#,
         r#"Warning { text: WarningText("audio quality degrades after minute 15") }"#,
         r#"Utterance"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI is pointing at the bookshelf while asking" }), Continuation, Text(BulletContentText { text: "this question, looking at MOT" })]) } }"#,

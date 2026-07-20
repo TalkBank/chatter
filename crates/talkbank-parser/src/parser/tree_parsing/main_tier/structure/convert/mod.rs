@@ -18,10 +18,11 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, MainTierNode, NodeSlot, TierBodyNode, extract_main_tier, extract_tier_body,
+    AsRawNode, MainTierNode, NodeSlot, SepTrailingSpaceNode, TierBodyNode, extract_main_tier,
+    extract_tier_body,
 };
 use crate::model::{
-    Bullet, LanguageCode, Linker, MainTier, Postcode, Terminator, UtteranceContent,
+    Bullet, LanguageCode, Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent,
 };
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use talkbank_model::ParseOutcome;
@@ -36,9 +37,9 @@ mod prefix;
 
 /// Positional label for the `tier_body` slot, used by the unreachable
 /// no-`tier_body` recovery arm's `StructuralOrderError` diagnostic. Mirrors the
-/// child cursor the previous positional walk reached after the four prefix
-/// positions (star=0, speaker=1, colon=2, tab=3, tier_body=4).
-const TIER_BODY_POSITION: usize = 4;
+/// child cursor the positional walk reaches after the five prefix positions
+/// (star=0, speaker=1, colon=2, tab=3, sep_trailing_space=4, tier_body=5).
+const TIER_BODY_POSITION: usize = 5;
 
 /// Convert a `main_tier` CST node into the typed `MainTier` domain model.
 ///
@@ -55,13 +56,50 @@ pub fn convert_main_tier_node(
     original_input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<MainTier> {
-    // Speaker prefix slots (`star`, `speaker`, `colon`, `tab`) and the
-    // `tier_body` slot, read from the generated typed visitor. Every field is
-    // `Positioned<..>`: read `.slot`.
+    // Speaker prefix slots (`star`, `speaker`, `colon`, `tab`), the optional
+    // `sep_trailing_space` (E758 provenance), and the `tier_body` slot, read
+    // from the generated typed visitor. Every field is `Positioned<..>`: read
+    // `.slot`.
     let main = extract_main_tier(MainTierNode(node));
 
     // Speaker prefix (`* speaker : tab`).
     let prefix = prefix::parse_prefix(&main, source, original_input, errors);
+
+    // The optional trailing separator space after the tab, before tier_body
+    // (E758 provenance): `main.child_4.slot` is `Option<NodeSlot<..>>`. Only
+    // `Present` carries a real span; every other outer/inner state (grammar
+    // omits the node entirely, or it recovers as Missing/Error/Unexpected/
+    // Absent) means no illegal trailing space was captured, mirroring how
+    // `body.linkers.slot` is read for the other optional single-symbol slot.
+    let separator = sep_from_slot(&main.child_4.slot);
+
+    // Robustness for a recovery ERROR produced by malformed content right after
+    // the tab (a bare `&` -> E207, a retrace/bracket code at tier start -> E747,
+    // an italic control byte, ...). Before the `sep_trailing_space` slot existed
+    // the grammar was `seq(star, speaker, colon, tab, tier_body)`, so that ERROR
+    // landed in the `tier_body` slot and was classified by `analyze_word_error`.
+    // With `optional(sep_trailing_space)` now between tab and tier_body, the ERROR
+    // can land in EITHER position depending on the shape: a bare `&` (no trailing
+    // space) fills the `sep_trailing_space` slot itself as `NodeSlot::Error`,
+    // while a retrace/bracket followed by a space (`[/] world`) leaves the real
+    // `sep_trailing_space` in its slot and the ERROR as a SEPARATE sibling node.
+    // Checking only one slot missed the second shape and downgraded the specific
+    // diagnostic to a generic whole-tree-backstop E316 (the "never silently drop
+    // a recovery node" rule). So classify EVERY direct ERROR child of the main
+    // tier here, skipping the one the `tier_body` (child_5) Error arm below
+    // classifies itself, to avoid a duplicate. The whole-tree backstop still
+    // emits E316 for coverage; the richer specific code coexists with it.
+    let tier_body_error_span = match &main.child_5.slot {
+        NodeSlot::Error(error_node) => Some((error_node.start_byte(), error_node.end_byte())),
+        _ => None,
+    };
+    let mut error_cursor = node.walk();
+    for child in node.children(&mut error_cursor) {
+        if child.is_error() && Some((child.start_byte(), child.end_byte())) != tier_body_error_span
+        {
+            errors.report(analyze_word_error(child, source));
+        }
+    }
 
     // tier_body (linkers / langcode / contents / utterance_end). `Present`
     // carries a typed `TierBodyNode`; `Missing` carries a bare `Node` directly
@@ -73,7 +111,7 @@ pub fn convert_main_tier_node(
     // required child that recovers as Present/MISSING) and route to the
     // missing-main-tier recovery, surfacing any stray node. Matched
     // EXHAUSTIVELY so no recovery node is silently dropped.
-    let tier = match &main.child_4.slot {
+    let tier = match &main.child_5.slot {
         NodeSlot::Present(tier_body) => {
             let tier_body_children = extract_tier_body(TierBodyNode(tier_body.raw_node()));
             body::parse_tier_body(&tier_body_children, source, original_input, errors)
@@ -151,7 +189,8 @@ pub fn convert_main_tier_node(
         .with_span(span)
         .with_speaker_span(prefix.speaker_span)
         .with_linkers(tier.linkers)
-        .with_postcodes(tier.postcodes);
+        .with_postcodes(tier.postcodes)
+        .with_separator(separator);
 
     // Extract a terminal bullet that the greedy contents rule left in content.
     main_tier.content.extract_terminal_bullet();
@@ -213,6 +252,29 @@ impl TierBodyData {
             postcodes: Vec::new(),
             bullet: None,
         }
+    }
+}
+
+/// Decode the optional `sep_trailing_space` slot into a [`TierSeparator`]
+/// (E758 provenance). Mirrors the `body.linkers.slot` read pattern for the
+/// other optional single-symbol slot (see `body.rs`): only `Present` carries
+/// a real span; the outer `None` and every inner non-`Present` state
+/// (Missing/Error/Unexpected/Absent) mean no illegal trailing space was
+/// captured, and map to a clean separator with no diagnostic (the E758 check
+/// itself is a later validation pass over this provenance, not parse-time).
+fn sep_from_slot(slot: &Option<NodeSlot<'_, SepTrailingSpaceNode<'_>>>) -> TierSeparator {
+    match slot {
+        Some(NodeSlot::Present(sep_node)) => {
+            let node = sep_node.raw_node();
+            TierSeparator::with_trailing_space(Span::new(
+                node.start_byte() as u32,
+                node.end_byte() as u32,
+            ))
+        }
+        Some(
+            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
+        )
+        | None => TierSeparator::CLEAN,
     }
 }
 

@@ -215,7 +215,10 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
 
             // ── ++ pairing ─────────────────────────────────────────
-            if linkers.iter().any(|l| matches!(l.kind, LinkerKind::OtherCompletion)) {
+            if linkers
+                .iter()
+                .any(|l| matches!(l.kind, LinkerKind::OtherCompletion))
+            {
                 if idx == 0 {
                     pp_first += 1;
                     file_anomalies += 1;
@@ -283,7 +286,10 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
 
             // ── +, pairing ─────────────────────────────────────────
-            if linkers.iter().any(|l| matches!(l.kind, LinkerKind::SelfCompletion)) {
+            if linkers
+                .iter()
+                .any(|l| matches!(l.kind, LinkerKind::SelfCompletion))
+            {
                 match last_term_by_speaker.get(speaker) {
                     None => {
                         sc_no_prior += 1;
@@ -437,7 +443,10 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
 
             // ── +≋/+≈ ─────────────────────────────────────────────
-            if linkers.iter().any(|l| matches!(l.kind, LinkerKind::TcuContinuation)) {
+            if linkers
+                .iter()
+                .any(|l| matches!(l.kind, LinkerKind::TcuContinuation))
+            {
                 if prev_speaker.is_some_and(|ps| ps == speaker) {
                     tcu_tech_same += 1;
                 } else {
@@ -466,14 +475,19 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             }
             if let Some(pt) = prev_term {
                 if is_trailing_off(pt)
-                    && linkers
-                        .iter()
-                        .any(|l| matches!(l.kind, LinkerKind::OtherCompletion | LinkerKind::SelfCompletion))
+                    && linkers.iter().any(|l| {
+                        matches!(
+                            l.kind,
+                            LinkerKind::OtherCompletion | LinkerKind::SelfCompletion
+                        )
+                    })
                 {
                     trailing_off_followed += 1;
                 }
                 if is_interruption(pt)
-                    && linkers.iter().any(|l| matches!(l.kind, LinkerKind::SelfCompletion))
+                    && linkers
+                        .iter()
+                        .any(|l| matches!(l.kind, LinkerKind::SelfCompletion))
                 {
                     interruption_followed += 1;
                 }

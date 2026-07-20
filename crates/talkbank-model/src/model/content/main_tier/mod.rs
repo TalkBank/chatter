@@ -41,8 +41,8 @@ mod tests;
 mod wor;
 
 use super::{
-    Bullet, LanguageCode, Linker, Postcode, SpeakerCode, Terminator, TierContent, UtteranceContent,
-    WriteChat,
+    Bullet, LanguageCode, Linker, Postcode, SpeakerCode, Terminator, TierContent, TierSeparator,
+    UtteranceContent, WriteChat,
 };
 use crate::alignment::helpers::{WordItem, walk_words};
 use crate::model::content::word::Word;
@@ -96,6 +96,12 @@ pub struct MainTier {
     #[serde(skip)]
     #[schemars(skip)]
     pub speaker_span: Span,
+    /// The `colon tab trailing_space?` separator between the speaker token
+    /// and the tier content. Provenance only: E758 (illegal trailing space)
+    /// is detected from this field; the JSON wire and schema are unchanged.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub separator: TierSeparator,
 }
 
 impl MainTier {
@@ -117,6 +123,7 @@ impl MainTier {
             ),
             span: Span::DUMMY,
             speaker_span: Span::DUMMY,
+            separator: TierSeparator::CLEAN,
         }
     }
 
@@ -129,6 +136,12 @@ impl MainTier {
     /// Sets speaker-token source span metadata.
     pub fn with_speaker_span(mut self, speaker_span: Span) -> Self {
         self.speaker_span = speaker_span;
+        self
+    }
+
+    /// Sets the label-to-content separator (E758 provenance).
+    pub fn with_separator(mut self, separator: TierSeparator) -> Self {
+        self.separator = separator;
         self
     }
 

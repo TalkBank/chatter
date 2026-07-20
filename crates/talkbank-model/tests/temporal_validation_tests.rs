@@ -22,7 +22,8 @@ use talkbank_model::Span;
 use talkbank_model::content::TierContentItems;
 use talkbank_model::model::{
     Bullet, ChatFile, Header, Line, MainTier, ParseHealthState, SpeakerCode, Terminator,
-    TierContent, Utterance, UtteranceContent, UtteranceLanguage, UtteranceLanguageMetadata, Word,
+    TierContent, TierSeparator, Utterance, UtteranceContent, UtteranceLanguage,
+    UtteranceLanguageMetadata, Word,
 };
 
 /// Helper to create a simple ChatFile for testing
@@ -48,6 +49,7 @@ fn main_tier_with_bullet(speaker: &str, start_ms: u64, end_ms: u64) -> MainTier 
         },
         span: Span::DUMMY,
         speaker_span: Span::DUMMY,
+        separator: TierSeparator::CLEAN,
     }
 }
 
@@ -69,6 +71,7 @@ fn main_tier_with_untranscribed_www_bullet(speaker: &str, start_ms: u64, end_ms:
         },
         span: Span::DUMMY,
         speaker_span: Span::DUMMY,
+        separator: TierSeparator::CLEAN,
     }
 }
 
@@ -300,6 +303,7 @@ fn test_no_bullets_no_errors() {
                 },
                 span: Span::DUMMY,
                 speaker_span: Span::DUMMY,
+                separator: TierSeparator::CLEAN,
             },
             dependent_tiers: Default::default(),
             alignments: None,

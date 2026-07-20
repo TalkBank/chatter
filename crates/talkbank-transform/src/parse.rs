@@ -177,7 +177,11 @@ mod tests {
             "malformed %gra should be ignored in lenient parse"
         );
         let utterance = chat_file.utterances().next().expect("utterance");
-        let tiers: Vec<_> = utterance.dependent_tiers.iter().collect();
+        let tiers: Vec<_> = utterance
+            .dependent_tiers
+            .iter()
+            .map(|entry| &entry.tier)
+            .collect();
         assert!(
             matches!(tiers.first(), Some(talkbank_model::model::DependentTier::Gra(g)) if g.relations().is_empty()),
             "malformed %gra should remain as an empty placeholder in its original slot"

@@ -87,6 +87,7 @@
 mod act;
 mod bullet_content;
 mod cod;
+mod entry;
 mod gra;
 mod kind;
 pub mod mor;
@@ -101,6 +102,7 @@ pub mod wor;
 pub use act::*;
 pub use bullet_content::*;
 pub use cod::*;
+pub use entry::DependentTierEntry;
 pub use gra::*;
 pub use mor::*;
 pub use pho::*;

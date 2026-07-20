@@ -86,7 +86,7 @@ pub use word::{LanguageResolutionOutcome, resolve_word_language};
 pub(crate) use bullet::check_bullet;
 pub use bullet::check_bullet_monotonicity;
 pub(crate) use speaker::has_invalid_speaker_chars;
-pub(crate) use unparsed_tier::check_user_defined_tier_content;
+pub use unparsed_tier::check_user_defined_tier_content;
 
 // Re-export tests if they exist
 #[cfg(test)]

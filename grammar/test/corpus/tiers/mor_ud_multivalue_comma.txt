@@ -1,5 +1,5 @@
 ================================================================================
-mor_ud_multivalue_comma - UD multi-value features: commas separate multiple values within a single feature(e.g., is one feature value, not two separate features). This followsUniversal Dependencies conventions.
+mor_ud_multivalue_comma - UD multi-value features: commas separate multiple values within a single feature (e.g., Int,Rel is one feature value, not two separate features). This follows Universal Dependencies conventions.
 ================================================================================
 %mor:	PRON|what-Acc-Int,Rel .
 

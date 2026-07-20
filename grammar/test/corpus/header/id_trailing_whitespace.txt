@@ -1,5 +1,5 @@
 ================================================================================
-id_trailing_whitespace - @ID header with trailing whitespace in the custom field (10th field).Trailing whitespace must be trimmed; it is not semantically meaningful.
+id_trailing_whitespace - @ID header with trailing whitespace in the custom field (10th field). Trailing whitespace must be trimmed; it is not semantically meaningful.
 ================================================================================
 @ID:	eng|corpus|PAR|43;|male|Broca||Participant||73.9 |
 

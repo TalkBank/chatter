@@ -194,57 +194,62 @@ pub(super) fn check_utterance_language_declared<S: ValidationState>(
     }
 }
 
-/// E758: leading space between the tab delimiter and the first real
-/// element of a main tier, in a file WITHOUT `@Options: CA` (CLAN CHECK
-/// 123). CA transcripts legitimately column-align content with spaces
-/// after the tab (every wild occurrence, 457 files in the 2026-07-16
-/// scan, declares CA), so the caller gates this on `!ca_mode`.
+/// E758: illegal trailing space between a source line's tab delimiter
+/// and its content, in a file WITHOUT `@Options: CA` (CLAN CHECK 123).
+/// CA transcripts legitimately column-align content with spaces after
+/// the tab (every wild occurrence, 457 files in the 2026-07-16 scan,
+/// declares CA), so the caller gates this on `!ca_mode`.
 ///
-/// Detection is exact source-span comparison, the same paradigm the
-/// rest of the source-spacing family (E751 / E757 / comma) uses: the
-/// speaker span covers the speaker code, the colon and the single tab
-/// follow it, so a well-formed line places its first element exactly two
-/// bytes after the code. The first element is the earliest of the
-/// leading discourse linker, the `[- CODE]` precode, or the first
-/// content item ([`first_element_start`]); linkers and the precode now
-/// carry real source spans, so a leading space before them is caught
-/// too (no opt-out). Tiers whose first element has no real span (the
-/// re2c oracle's dummy spans, a span-less content-first item) opt out
-/// because there is nothing to measure against.
-pub(super) fn check_leading_space_on_main_tier<S: ValidationState>(
+/// Detection reads the [`crate::model::TierSeparator`] every source
+/// line carries (`colon tab trailing_space?`), captured once by the
+/// parser at the line's home: [`crate::model::MainTier::separator`] for
+/// main tiers, [`crate::model::DependentTierEntry::separator`] for
+/// dependent tiers, and the `separator` field of
+/// [`crate::model::Line::Header`] for header lines. A separator with no
+/// trailing space is clean and contributes nothing; one with a trailing
+/// space reports E758 at that exact span. This is uniform across all
+/// three line kinds, unlike the superseded main-tier-only
+/// `first_element_start` reconstruction: the re2c oracle's parser
+/// produces clean separators everywhere, so it simply reports no E758.
+pub(super) fn check_separator_trailing_space<S: ValidationState>(
     file: &ChatFile<S>,
     errors: &impl crate::ErrorSink,
 ) {
-    use crate::validation::utterance::first_element_start;
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation, Span};
 
-    /// Bytes between the speaker code's end and the expected first
-    /// element byte: the colon plus the single tab delimiter.
-    const COLON_AND_TAB: u32 = 2;
+    /// Reports one E758 at the illegal trailing-space `span`.
+    fn report_trailing_space(span: Span, errors: &impl crate::ErrorSink) {
+        errors.report(
+            ParseError::new(
+                ErrorCode::LeadingSpaceOnMainTier,
+                Severity::Error,
+                SourceLocation::new(span),
+                ErrorContext::new(" ", span, " "),
+                "Extra whitespace between the tab and tier content in a non-CA file",
+            )
+            .with_suggestion(
+                "Remove the leading space, or declare '@Options: CA' if this is a CA transcript",
+            ),
+        );
+    }
 
-    for utterance in file.utterances() {
-        let main = &utterance.main;
-        if main.speaker_span == Span::DUMMY {
-            continue;
-        }
-        let Some(first_start) = first_element_start(main) else {
-            continue;
-        };
-        let expected = main.speaker_span.end + COLON_AND_TAB;
-        if first_start > expected {
-            let gap = Span::new(expected, first_start);
-            errors.report(
-                ParseError::new(
-                    ErrorCode::LeadingSpaceOnMainTier,
-                    Severity::Error,
-                    SourceLocation::new(gap),
-                    ErrorContext::new(" ", gap, " "),
-                    "Extra whitespace between the tab and tier content in a non-CA file",
-                )
-                .with_suggestion(
-                    "Remove the leading space, or declare '@Options: CA' if this is a CA transcript",
-                ),
-            );
+    for line in file.lines.iter() {
+        match line {
+            crate::Line::Header { separator, .. } => {
+                if let Some(span) = separator.trailing_space() {
+                    report_trailing_space(span, errors);
+                }
+            }
+            crate::Line::Utterance(utterance) => {
+                if let Some(span) = utterance.main.separator.trailing_space() {
+                    report_trailing_space(span, errors);
+                }
+                for entry in &utterance.dependent_tiers {
+                    if let Some(span) = entry.separator.trailing_space() {
+                        report_trailing_space(span, errors);
+                    }
+                }
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 ================================================================================
-lengthening_between_segments - Colon between word segments (no spaces) is prosodic lengthening, not aseparator. is ONE word with lengthening after the first segment.
+lengthening_between_segments - Colon between word segments (no spaces) is prosodic lengthening, not a separator. a:b is ONE word with lengthening after the first segment.
 ================================================================================
 *CHI:	a:b .
 

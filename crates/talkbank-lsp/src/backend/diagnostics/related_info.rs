@@ -86,7 +86,7 @@ pub fn compute_related_information(
 /// Finds header span.
 fn find_header_span(chat_file: &ChatFile, predicate: impl Fn(&Header) -> bool) -> Option<Span> {
     for line in &chat_file.lines {
-        if let Line::Header { header, span } = line
+        if let Line::Header { header, span, .. } = line
             && predicate(header)
         {
             return Some(*span);

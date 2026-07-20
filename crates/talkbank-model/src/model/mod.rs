@@ -195,6 +195,7 @@ pub use content::{
     SinGroup,
     Terminator,
     TierContent,
+    TierSeparator,
     UnderlineMarker,
     UtteranceContent,
     // Word types
@@ -239,6 +240,8 @@ pub use dependent_tier::{
     ComTier,
     // Dependent tier enum
     DependentTier,
+    // Dependent-tier line wrapper (tier + separator)
+    DependentTierEntry,
     ExpTier,
     GpxTier,
     GraTier,

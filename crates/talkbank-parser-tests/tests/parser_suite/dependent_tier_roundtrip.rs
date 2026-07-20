@@ -44,7 +44,12 @@ fn collect_reference_files() -> Result<Vec<PathBuf>, TestError> {
 fn collect_dependent_tiers(file: &talkbank_model::ChatFile) -> Vec<DependentTier> {
     let mut tiers = Vec::new();
     for utterance in file.utterances() {
-        tiers.extend(utterance.dependent_tiers.iter().cloned());
+        tiers.extend(
+            utterance
+                .dependent_tiers
+                .iter()
+                .map(|entry| entry.tier.clone()),
+        );
     }
     tiers
 }

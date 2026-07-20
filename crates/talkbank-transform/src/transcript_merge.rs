@@ -348,7 +348,11 @@ pub fn merge_chats(
 
     for (i, line) in f1.lines.0.iter().enumerate() {
         match line {
-            Line::Header { header, span } => {
+            Line::Header {
+                header,
+                span,
+                separator,
+            } => {
                 if matches!(header.as_ref(), Header::End) {
                     end_marker = Some(line.clone());
                 } else if let Header::Participants { entries } = header.as_ref() {
@@ -360,6 +364,7 @@ pub fn merge_chats(
                     pre_end_headers.push(Line::Header {
                         header: Box::new(merged_header),
                         span: *span,
+                        separator: *separator,
                     });
                 } else {
                     pre_end_headers.push(line.clone());
@@ -399,7 +404,7 @@ pub fn merge_chats(
             let mut cloned = u.as_ref().clone();
             cloned
                 .dependent_tiers
-                .retain(|t| !strip_tiers.iter().any(|s| s == t.kind()));
+                .retain(|t| !strip_tiers.iter().any(|s| s == t.tier.kind()));
             inserted_utts.push(Line::Utterance(Box::new(cloned)));
         }
     }

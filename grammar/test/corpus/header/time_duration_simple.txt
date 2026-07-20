@@ -1,5 +1,5 @@
 ================================================================================
-time_duration_simple - header with strict time syntax.
+time_duration_simple - @Time Duration header with strict time syntax.
 ================================================================================
 @Time Duration:	17:30-18:00
 

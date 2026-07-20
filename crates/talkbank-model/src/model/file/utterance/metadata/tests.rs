@@ -457,7 +457,7 @@ fn compute_alignments_produces_wor_alignment_with_inline_bullets() -> Result<(),
     let wor_words: Vec<&Word> = utterance
         .dependent_tiers
         .iter()
-        .filter_map(|dt| match dt {
+        .filter_map(|dt| match &dt.tier {
             DependentTier::Wor(wor) => Some(wor.words()),
             _ => None,
         })

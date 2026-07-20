@@ -1,5 +1,5 @@
 ================================================================================
-group_multiple_annotations - Angle bracket group with multiple space-separated scoped annotations.All annotations must be collected as part of the same group, not splitinto separate content items.
+group_multiple_annotations - Angle bracket group with multiple space-separated scoped annotations. All annotations must be collected as part of the same group, not split into separate content items.
 ================================================================================
 *CHI:	<really> [?] [<] .
 

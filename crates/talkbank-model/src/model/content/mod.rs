@@ -55,6 +55,7 @@ mod retrace;
 mod separator;
 mod terminator;
 mod tier_content;
+mod tier_separator;
 mod utterance_content;
 
 pub use action::*;
@@ -75,6 +76,7 @@ pub use retrace::*;
 pub use separator::*;
 pub use terminator::*;
 pub use tier_content::*;
+pub use tier_separator::TierSeparator;
 pub use utterance_content::*;
 
 // Re-export word types at content level

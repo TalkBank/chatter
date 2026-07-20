@@ -78,10 +78,10 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
     // We prioritize extracting the tier even if there were some parsing errors,
     // since the tier content itself may have parsed successfully.
     if let Some(utterance) = file.utterances().next() {
-        if let Some(tier) = utterance.dependent_tiers.first() {
+        if let Some(entry) = utterance.dependent_tiers.first() {
             // Tier was extracted successfully
             // Adjust spans: remove wrapper offset so spans are relative to input (0-based)
-            let mut adjusted_tier = tier.clone();
+            let mut adjusted_tier = entry.tier.clone();
             let prefix_len = prefix.len();
             adjusted_tier.shift_spans_after(0, -(prefix_len as i32));
 

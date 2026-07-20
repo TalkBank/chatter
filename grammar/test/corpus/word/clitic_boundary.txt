@@ -1,5 +1,5 @@
 ================================================================================
-clitic_boundary - Clitic boundary within a word: (Arabic clitic attachment).
+clitic_boundary - Clitic boundary ~ within a word: le~ha (Arabic clitic attachment).
 ================================================================================
 *CHI:	le~ha .
 

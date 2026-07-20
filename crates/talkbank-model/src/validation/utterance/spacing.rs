@@ -8,95 +8,18 @@
 //! Dummy (0,0) spans are skipped: the re2c oracle fills dummy spans and
 //! mirrors each rule as a token-stream scan in its own front end.
 //!
+//! E758 (leading/trailing space between a tab delimiter and tier
+//! content) used to live here as a main-tier-only span reconstruction
+//! (`first_element_start`); it is now read uniformly from every source
+//! line's [`crate::model::TierSeparator`] (main tier, dependent tiers,
+//! and headers alike), so that reconstruction was deleted.
+//!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Pauses>
 
 use crate::alignment::helpers::{ContentItem, walk_content};
-use crate::model::{MainTier, Utterance, UtteranceContent};
+use crate::model::{Utterance, UtteranceContent};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-
-/// The source start byte of a top-level content item, for variants that
-/// carry a real span. Variants without a span field (or with a dummy
-/// span, as the re2c oracle produces) return `None`.
-fn item_source_start(item: &UtteranceContent) -> Option<u32> {
-    let span = match item {
-        UtteranceContent::Word(word) => word.span,
-        UtteranceContent::AnnotatedWord(annotated) => annotated.inner.span,
-        UtteranceContent::ReplacedWord(replaced) => replaced.word.span,
-        UtteranceContent::Pause(pause) => pause.span,
-        UtteranceContent::Retrace(retrace) => retrace.span,
-        UtteranceContent::Freecode(freecode) => freecode.span,
-        UtteranceContent::Quotation(quotation) => quotation.span,
-        UtteranceContent::AnnotatedAction(annotated) => annotated.span,
-        // No span field on these variants; a tier starting with one of
-        // them simply opts out of span-arithmetic checks.
-        UtteranceContent::Event(_)
-        | UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Group(_)
-        | UtteranceContent::AnnotatedGroup(_)
-        | UtteranceContent::PhoGroup(_)
-        | UtteranceContent::SinGroup(_)
-        | UtteranceContent::Separator(_)
-        | UtteranceContent::OverlapPoint(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => return None,
-    };
-    non_dummy_start(span)
-}
-
-/// The start byte of `span`, or `None` if it is the dummy span. Centralizes
-/// the "a dummy span carries no real position, so opt out" rule shared by the
-/// source-spacing checks (the re2c oracle fills dummy spans).
-fn non_dummy_start(span: crate::Span) -> Option<u32> {
-    (!span.is_dummy()).then_some(span.start)
-}
-
-/// The source start byte of the main tier's FIRST content item, when
-/// that item carries a real span (used by E758's leading-whitespace
-/// arithmetic). Deliberately looks at the first item only: skipping
-/// past a span-less leading item (e.g. the `+"` quotation linker) to a
-/// later word would measure the linker's own width as a false
-/// whitespace gap (caught by corpus/reference/edge-cases/
-/// special-terminators.cha). A tier starting with a span-less item
-/// simply opts out of the check.
-fn first_content_start(main: &MainTier) -> Option<u32> {
-    main.content.content.0.first().and_then(item_source_start)
-}
-
-/// The source start byte of the main tier's FIRST real element, in document
-/// order: the earliest non-dummy start among the leading discourse linker,
-/// the `[- code]` language precode, and the first content item.
-///
-/// Linkers and the precode are real spanned source tokens (a leading linker or
-/// precode sits between the tab delimiter and the first content item), so a
-/// leading space before ANY of them is measurable: taking the minimum start
-/// makes the earliest source token the anchor regardless of which kind it is.
-/// Returns `None` only when no leading element carries a real span (for
-/// example the re2c oracle's dummy spans, or a content-first tier whose first
-/// item is a span-less variant), in which case the leading-space check opts
-/// out because it has nothing to measure against.
-pub(crate) fn first_element_start(main: &MainTier) -> Option<u32> {
-    let linker_start = main
-        .content
-        .linkers
-        .0
-        .first()
-        .map(|linker| linker.span)
-        .and_then(non_dummy_start);
-    let precode_start = main.content.language_code_span.and_then(non_dummy_start);
-    let content_start = first_content_start(main);
-    [linker_start, precode_start, content_start]
-        .into_iter()
-        .flatten()
-        .min()
-}
 
 /// The source end byte of a content item, when the item is a word whose
 /// trailing edge can glue a following pause. Non-word items return

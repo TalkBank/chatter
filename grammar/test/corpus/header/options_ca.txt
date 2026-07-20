@@ -1,5 +1,5 @@
 ================================================================================
-options_ca - header with a known option token.
+options_ca - @Options header with a known option token.
 ================================================================================
 @Options:	CA
 

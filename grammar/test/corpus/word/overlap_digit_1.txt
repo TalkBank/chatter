@@ -1,5 +1,5 @@
 ================================================================================
-overlap_digit_1 - Overlap marker with digit 1 (⌊1) must parse as a single token, not as + . The digit is partof the overlap marker notation.
+overlap_digit_1 - Overlap marker with digit 1 (⌊1) must parse as a single overlap_point token, not as overlap_point(⌊) + word_segment(1). The digit is part of the overlap marker notation.
 ================================================================================
 *CHI:	⌊1hello .
 

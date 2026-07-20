@@ -1,5 +1,5 @@
 ================================================================================
-compound_marker - Compound word with joining segments: .
+compound_marker - Compound word with + joining segments: ice+cream.
 ================================================================================
 *CHI:	ice+cream .
 

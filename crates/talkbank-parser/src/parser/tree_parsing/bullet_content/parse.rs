@@ -89,11 +89,26 @@ pub fn parse_bullet_content(node: Node, source: &str, errors: &impl ErrorSink) -
 
         match child_kind {
             TEXT_SEGMENT => {
-                // Extract plain text from text_segment node
+                // Extract plain text and canonicalize its spacing: spaces in a
+                // free-text tier are delimiters, not content, so runs of spaces
+                // collapse to one and leading/trailing spaces are dropped
+                // (mirroring the main tier, which stores no spaces at all). The
+                // separator owns any leading space (E758) and the bullet owns
+                // its trailing space, so the delimiters between segments are
+                // re-inserted by the serializer.
                 let text = extract_utf8_text(child, source, errors, "text_segment", "");
+                let text = normalize_free_text_spacing(&text);
                 if !text.is_empty() {
                     segments.push(BulletContentSegment::text(text));
                 }
+                idx += 1;
+            }
+
+            SPACE => {
+                // A bullet/pic owns its trailing spaces (grammar:
+                // `seq($.bullet, repeat($.space))`). Those spaces are canonical
+                // delimiters, not content: skip them here; the serializer
+                // re-inserts a single space between segments.
                 idx += 1;
             }
 
@@ -139,4 +154,32 @@ pub fn parse_bullet_content(node: Node, source: &str, errors: &impl ErrorSink) -
     }
 
     BulletContent::new(segments.into_vec())
+}
+
+/// Collapse runs of ASCII spaces to a single space and trim leading/trailing
+/// spaces from one free-text run.
+///
+/// In a free-text dependent tier, spaces are word delimiters, not content
+/// (the corpus shows deliberate multi-spaces do not occur: multi-space runs
+/// are 0.1% and are typos or structured-coding artifacts). Canonicalizing to
+/// single spaces here makes the model match the main tier, which stores no
+/// spaces and re-inserts single delimiters on serialization. Only spaces are
+/// collapsed; any tab or other character inside the run is preserved.
+fn normalize_free_text_spacing(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut prev_space = false;
+    for ch in text.chars() {
+        if ch == ' ' {
+            // Defer emitting a space until a non-space follows, so runs
+            // collapse and a trailing run is dropped.
+            prev_space = true;
+            continue;
+        }
+        if prev_space && !out.is_empty() {
+            out.push(' ');
+        }
+        prev_space = false;
+        out.push(ch);
+    }
+    out
 }

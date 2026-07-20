@@ -374,6 +374,7 @@ impl_inspect_leaf!(
     SelfInterruptedQuestionNode,
     SelfInterruptionNode,
     SemicolonNode,
+    SepTrailingSpaceNode,
     SeparatorNode,
     SesCodeValueNode,
     SesCombinedNode,
@@ -1348,7 +1349,11 @@ impl_inspect_struct!(GroupWithAnnotationsChildren {
 });
 impl_inspect_struct!(HeaderChildren { content });
 impl_inspect_struct!(HeaderGapChildren { child_0, child_1 });
-impl_inspect_struct!(HeaderSepChildren { child_0, child_1 });
+impl_inspect_struct!(HeaderSepChildren {
+    child_0,
+    child_1,
+    child_2
+});
 impl_inspect_struct!(IdAgeChildren { content });
 impl_inspect_struct!(IdContentsChildren {
     child_0,
@@ -1465,7 +1470,8 @@ impl_inspect_struct!(MainTierChildren {
     speaker,
     child_2,
     child_3,
-    child_4
+    child_4,
+    child_5
 });
 impl_inspect_struct!(MediaContentsChild4Children {
     child_0,
@@ -1759,7 +1765,13 @@ impl_inspect_struct!(TapeLocationHeaderChildren {
     child_3
 });
 impl_inspect_struct!(TerminatorChildren { content });
+impl_inspect_struct!(TextWithBulletsChild0BulletChildren { child_0, child_1 });
+impl_inspect_struct!(TextWithBulletsChild1BulletChildren { child_0, child_1 });
 impl_inspect_struct!(TextWithBulletsChildren { child_0, child_1 });
+impl_inspect_struct!(TextWithBulletsAndPicsChild0BulletChildren { child_0, child_1 });
+impl_inspect_struct!(TextWithBulletsAndPicsChild0InlinePicChildren { child_0, child_1 });
+impl_inspect_struct!(TextWithBulletsAndPicsChild1BulletChildren { child_0, child_1 });
+impl_inspect_struct!(TextWithBulletsAndPicsChild1InlinePicChildren { child_0, child_1 });
 impl_inspect_struct!(TextWithBulletsAndPicsChildren { child_0, child_1 });
 impl_inspect_struct!(ThumbnailHeaderChildren {
     child_0,
@@ -1774,7 +1786,11 @@ impl_inspect_struct!(TierBodyChildren {
     content_2,
     ending
 });
-impl_inspect_struct!(TierSepChildren { child_0, child_1 });
+impl_inspect_struct!(TierSepChildren {
+    child_0,
+    child_1,
+    child_2
+});
 impl_inspect_struct!(TimDependentTierChildren {
     child_0,
     child_1,

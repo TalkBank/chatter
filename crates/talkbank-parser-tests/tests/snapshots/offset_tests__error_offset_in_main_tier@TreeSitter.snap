@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/tests/offset_tests.rs
+assertion_line: 226
 expression: "(main, error_vec)"
 ---
 (
@@ -66,6 +67,7 @@ expression: "(main, error_vec)"
                         end: 410,
                     },
                 ),
+                language_code_span: None,
             },
             span: Span {
                 start: 399,
@@ -74,6 +76,9 @@ expression: "(main, error_vec)"
             speaker_span: Span {
                 start: 400,
                 end: 403,
+            },
+            separator: TierSeparator {
+                trailing_space: None,
             },
         },
     ),

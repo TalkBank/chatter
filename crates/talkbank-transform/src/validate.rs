@@ -213,8 +213,8 @@ fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>)
             let word_count = extracted.len();
 
             // Count %mor items
-            for tier in &utt.dependent_tiers {
-                if let talkbank_model::model::DependentTier::Mor(mor_tier) = tier {
+            for entry in &utt.dependent_tiers {
+                if let talkbank_model::model::DependentTier::Mor(mor_tier) = &entry.tier {
                     let mor_count = mor_tier.items().len();
                     if word_count != mor_count {
                         let speaker = utt.main.speaker.as_str();

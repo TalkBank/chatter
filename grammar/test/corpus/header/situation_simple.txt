@@ -1,5 +1,5 @@
 ================================================================================
-situation_simple - header with free-text scene description.
+situation_simple - @Situation header with free-text scene description.
 ================================================================================
 @Situation:	free play at table
 

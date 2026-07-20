@@ -150,7 +150,7 @@ fn parse_wor(input: &str) -> WorParse {
     for line in &chat.lines.0 {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
-                if let DependentTier::Wor(t) = dt {
+                if let DependentTier::Wor(t) = &dt.tier {
                     saw_wor_tier = true;
                     language_code = t.language_code.as_ref().map(|lc| lc.to_string());
                     items.extend(t.items.iter().map(item_repr));

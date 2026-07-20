@@ -58,9 +58,10 @@ pub fn sanitize(
                     sanitize_content_item(item, &mut state);
                 });
 
-                utt.dependent_tiers.retain(|tier| keep_dependent_tier(tier));
-                for tier in utt.dependent_tiers.iter_mut() {
-                    sanitize_dependent_tier(tier, &mut state);
+                utt.dependent_tiers
+                    .retain(|entry| keep_dependent_tier(&entry.tier));
+                for entry in utt.dependent_tiers.iter_mut() {
+                    sanitize_dependent_tier(&mut entry.tier, &mut state);
                 }
             }
         }

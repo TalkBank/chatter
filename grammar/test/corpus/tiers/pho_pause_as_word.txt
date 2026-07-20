@@ -1,5 +1,5 @@
 ================================================================================
-pho_pause_as_word - In %pho and %mod tiers, is a phonological word, NOT a pause.The regex in grammar.js includes parentheses and dots in itscharacter class. Pauses are main-tier constructs only.
+pho_pause_as_word - In %pho and %mod tiers, (..) is a phonological word, NOT a pause. The pho_word regex in grammar.js includes parentheses and dots in its character class. Pauses are main-tier constructs only.
 ================================================================================
 *CHI:	hello there .
 %pho:	wow (..) kijz .

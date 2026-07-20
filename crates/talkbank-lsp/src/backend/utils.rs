@@ -182,10 +182,9 @@ pub fn find_utterance_at_position<'a>(
 /// Returns whether the offset falls within the utterance main/dependent-tier spans.
 fn utterance_contains_offset(utterance: &Utterance, offset: u32) -> bool {
     span_contains(utterance.main.span, offset)
-        || utterance
-            .dependent_tiers
-            .iter()
-            .any(|tier| dependent_tier_span(tier).is_some_and(|span| span_contains(span, offset)))
+        || utterance.dependent_tiers.iter().any(|entry| {
+            dependent_tier_span(&entry.tier).is_some_and(|span| span_contains(span, offset))
+        })
 }
 
 /// Returns the source span for a dependent-tier variant.

@@ -215,7 +215,10 @@ export default grammar({
 
     // Text segment that doesn't contain bullet markers or newlines
     // Used in text_with_bullets for content between bullets
-    text_segment: $ => /[^\u0015\r\n]+/,
+    // Cannot START with a space: a space right after the tier separator is
+    // trailing separator whitespace (grabbed by `sep_trailing_space`, flagged
+    // E758), never content. Interior/trailing spaces within the text are fine.
+    text_segment: $ => /[^ \u0015\r\n][^\u0015\r\n]*/,
 
     // Media bullet: \u0015START_END\u0015 or \u0015START_END-\u0015 (skip)
     //
@@ -258,8 +261,13 @@ export default grammar({
     // Includes continuation lines (\n\t) to handle multi-line tiers
     text_with_bullets_and_pics: $ => repeat1(choice(
       $.text_segment,
-      $.bullet,
-      $.inline_pic,
+      // A bullet/pic owns its trailing spaces: CLAN CHECK requires a space
+      // after a bullet, and the corpus has zero bullets not followed by a
+      // space or newline. Consuming them here keeps `text_segment` (which
+      // cannot start with a space) valid for the following run, and the
+      // spaces are canonical delimiters the serializer re-inserts.
+      seq($.bullet, repeat($.space)),
+      seq($.inline_pic, repeat($.space)),
       $.continuation
     )),
 
@@ -269,7 +277,8 @@ export default grammar({
     // Includes continuation lines (\n\t) to handle multi-line tiers
     text_with_bullets: $ => repeat1(choice(
       $.text_segment,
-      $.bullet,
+      // A bullet owns its trailing spaces (see text_with_bullets_and_pics).
+      seq($.bullet, repeat($.space)),
       $.continuation
     )),
 
@@ -728,6 +737,7 @@ export default grammar({
       field('speaker', $.speaker),
       $.colon,
       $.tab,
+      optional($.sep_trailing_space),
       $.tier_body
     ),
 
@@ -1565,7 +1575,13 @@ export default grammar({
     x_dependent_tier: $ => seq(
       alias(token(prec(1, /%x[a-zA-Z][a-zA-Z0-9]*/)), $.x_tier_prefix),
       $.tier_sep,
-      $.text_with_bullets,
+      // Body is optional ONLY for user-defined tiers: the separator can absorb
+      // a lone trailing space, leaving an empty body. An empty %x tier is a
+      // real (if invalid) construct that must lower to an empty user-defined
+      // tier and flag E756, not recover via a spurious E342/E330. The shared
+      // text_with_bullets rule stays repeat1 (so empty @Comment/%com/%mor do
+      // NOT parse); only this rule makes the body optional.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -2233,9 +2249,17 @@ export default grammar({
     // This token matches one or more spaces or continuation sequences.
     whitespaces: $ => token(repeat1(choice(' ', /[\r\n]+\t/))),
 
-    // Header and tier separators: ":" plus a single tab.
-    header_sep: $ => seq($.colon, $.tab),
-    tier_sep: $ => seq($.colon, $.tab),
+    // Trailing separator whitespace: any run of spaces after the required
+    // tab. It is NEVER content; a non-CA file with it present is E758, and
+    // roundtrip canonicalizes it away. `prec` lets it win the lexer over the
+    // interspersed `whitespaces` / word content at the post-tab position.
+    sep_trailing_space: $ => token(prec(2, / +/)),
+
+    // Header and tier separators: ":" plus a single tab plus any illegal
+    // trailing spaces (E758). The trailing spaces are held as a distinct
+    // node so the validator can flag them and serialization can drop them.
+    header_sep: $ => seq($.colon, $.tab, optional($.sep_trailing_space)),
+    tier_sep: $ => seq($.colon, $.tab, optional($.sep_trailing_space)),
     header_gap: $ => repeat1(choice($.space, $.tab)),
 
     // ============================================================================

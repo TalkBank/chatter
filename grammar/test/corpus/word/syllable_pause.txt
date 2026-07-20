@@ -1,5 +1,5 @@
 ================================================================================
-syllable_pause - Syllable pause marker between syllables within a word: .
+syllable_pause - Syllable pause marker ^ between syllables within a word: ja^ja^ja@o.
 ================================================================================
 *CHI:	ja^ja^ja@o .
 

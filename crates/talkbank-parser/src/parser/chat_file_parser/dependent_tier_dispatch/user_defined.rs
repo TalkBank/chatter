@@ -8,7 +8,7 @@ use crate::generated_traversal::{
     AsRawNode, NodeSlot, UnsupportedDependentTierNode, XDependentTierNode,
     extract_unsupported_dependent_tier, extract_x_dependent_tier,
 };
-use crate::model::dependent_tier::DependentTier;
+use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::model::{NonEmptyString, Utterance};
 use crate::node_types::{
     TEXT_WITH_BULLETS, UNSUPPORTED_DEPENDENT_TIER, UNSUPPORTED_TIER_PREFIX, X_DEPENDENT_TIER,
@@ -76,6 +76,7 @@ fn apply_x_tier(
     // Grammar: x_dependent_tier = x_tier_prefix, tier_sep, text_with_bullets, newline
     // x_tier_prefix is a single token matching /%x[a-zA-Z][a-zA-Z0-9]*/
     let children = extract_x_dependent_tier(XDependentTierNode(tier_node));
+    let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
     surface_unexpected(&children.unexpected, input, errors);
 
     let full_prefix = match found_node(&children.child_0.slot) {
@@ -107,7 +108,34 @@ fn apply_x_tier(
     // Extract label by stripping "%x" prefix (e.g. "%xfoo" → "foo")
     let tier_label = full_prefix.strip_prefix("%x").unwrap_or(full_prefix);
 
-    let content_text = match found_node(&children.child_2.slot) {
+    // Empty user-defined tier (E756). The grammar makes ONLY this rule's body
+    // optional (see grammar.js `x_dependent_tier`), so the generated visitor
+    // types the body slot as `Option<NodeSlot<..>>`: when a `%xLABEL:` line
+    // carries nothing but a trailing space, the separator absorbs that space
+    // and NO `text_with_bullets` child is produced, so the body slot is
+    // `None`. This is a real (if invalid) construct that must lower to an
+    // empty user-defined tier and flag E756, not recover via a spurious
+    // E342/E330. Route it through the shared empty-tier check so the parse
+    // path and the validation path emit the identical E756 diagnostic. The
+    // label carries the leading 'x' (a `%xtst` tier validates as "xtst"),
+    // matching the label stored on a pushed `UserDefined` tier below.
+    let body_slot = match children.child_2.slot.as_ref() {
+        Some(slot) => slot,
+        None => {
+            let span =
+                crate::error::Span::new(tier_node.start_byte() as u32, tier_node.end_byte() as u32);
+            let e756_label = format!("x{}", tier_label);
+            talkbank_model::validation::check_user_defined_tier_content(
+                &e756_label,
+                "",
+                span,
+                errors,
+            );
+            return true;
+        }
+    };
+
+    let content_text = match found_node(body_slot) {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => text,
             Err(_) => {
@@ -157,24 +185,33 @@ fn apply_x_tier(
     match tier_label {
         "modsyl" => {
             let words = parse_syl_content(content.as_str());
-            utterance.dependent_tiers.push(DependentTier::Modsyl(
-                SylTier::new(SylTierType::Modsyl, words).with_span(span),
-            ));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Modsyl(SylTier::new(SylTierType::Modsyl, words).with_span(span)),
+                    separator,
+                ));
             return true;
         }
         "phosyl" => {
             let words = parse_syl_content(content.as_str());
-            utterance.dependent_tiers.push(DependentTier::Phosyl(
-                SylTier::new(SylTierType::Phosyl, words).with_span(span),
-            ));
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Phosyl(SylTier::new(SylTierType::Phosyl, words).with_span(span)),
+                    separator,
+                ));
             return true;
         }
         "phoaln" => {
             match parse_phoaln_content(content.as_str()) {
                 Ok(words) => {
-                    utterance.dependent_tiers.push(DependentTier::Phoaln(
-                        PhoalnTier::new(words).with_span(span),
-                    ));
+                    utterance
+                        .dependent_tiers
+                        .push(DependentTierEntry::with_separator(
+                            DependentTier::Phoaln(PhoalnTier::new(words).with_span(span)),
+                            separator,
+                        ));
                 }
                 Err(e) => {
                     errors.report(ParseError::new(
@@ -205,7 +242,9 @@ fn apply_x_tier(
         span,
     });
 
-    utterance.dependent_tiers.push(tier);
+    utterance
+        .dependent_tiers
+        .push(DependentTierEntry::with_separator(tier, separator));
     true
 }
 
@@ -232,6 +271,7 @@ fn apply_unsupported_tier(
     errors: &impl ErrorSink,
 ) -> bool {
     let children = extract_unsupported_dependent_tier(UnsupportedDependentTierNode(tier_node));
+    let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
     surface_unexpected(&children.unexpected, input, errors);
 
     // Extract the tier prefix (e.g. "%custom") from the unsupported_tier_prefix child.
@@ -303,6 +343,8 @@ fn apply_unsupported_tier(
         span,
     });
 
-    utterance.dependent_tiers.push(tier);
+    utterance
+        .dependent_tiers
+        .push(DependentTierEntry::with_separator(tier, separator));
     true
 }

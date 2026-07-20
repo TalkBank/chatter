@@ -65,7 +65,7 @@ impl Utterance {
     ///
     /// Ordering is significant for roundtrip fidelity and duplicate-tier diagnostics.
     pub fn add_dependent_tier(mut self, tier: DependentTier) -> Self {
-        self.dependent_tiers.push(tier);
+        self.dependent_tiers.push(tier.into());
         self
     }
 

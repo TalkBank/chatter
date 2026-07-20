@@ -100,8 +100,8 @@ fn book_working_with_the_model() -> Result<(), PipelineError> {
 
     let mut saw_mor_item = false;
     for utt in chat_file.utterances() {
-        for tier in &utt.dependent_tiers {
-            if let DependentTier::Mor(mor_tier) = tier {
+        for entry in &utt.dependent_tiers {
+            if let DependentTier::Mor(mor_tier) = &entry.tier {
                 for item in mor_tier.items() {
                     let _pos = format!("{}", item.main.pos);
                     let _lemma = format!("{}", item.main.lemma);

@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/tests/offset_tests.rs
+assertion_line: 267
 expression: "(is_semantically_equal, main1, main2)"
 ---
 (
@@ -97,6 +98,7 @@ expression: "(is_semantically_equal, main1, main2)"
                     end: 19,
                 },
             ),
+            language_code_span: None,
         },
         span: Span {
             start: 0,
@@ -105,6 +107,9 @@ expression: "(is_semantically_equal, main1, main2)"
         speaker_span: Span {
             start: 0,
             end: 3,
+        },
+        separator: TierSeparator {
+            trailing_space: None,
         },
     },
     MainTier {
@@ -200,6 +205,7 @@ expression: "(is_semantically_equal, main1, main2)"
                     end: 19,
                 },
             ),
+            language_code_span: None,
         },
         span: Span {
             start: 0,
@@ -208,6 +214,9 @@ expression: "(is_semantically_equal, main1, main2)"
         speaker_span: Span {
             start: 0,
             end: 3,
+        },
+        separator: TierSeparator {
+            trailing_space: None,
         },
     },
 )

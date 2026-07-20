@@ -54,7 +54,7 @@ impl<S: ValidationState> ChatFile<S> {
     /// and their byte locations in the source transcript.
     pub fn headers_with_spans(&self) -> impl Iterator<Item = (&Header, crate::Span)> {
         self.lines.iter().filter_map(|line| match line {
-            crate::model::Line::Header { header, span } => Some((header.as_ref(), *span)),
+            crate::model::Line::Header { header, span, .. } => Some((header.as_ref(), *span)),
             _ => None,
         })
     }

@@ -1,5 +1,5 @@
 ================================================================================
-xgco_example_1 - User-defined dependent tier seen in real corpora.
+xgco_example_1 - User-defined %x... dependent tier seen in real corpora.
 ================================================================================
 *CHI:	that one .
 %xgco:	gesture coded outcome

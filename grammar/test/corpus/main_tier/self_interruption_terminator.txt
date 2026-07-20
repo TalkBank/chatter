@@ -1,5 +1,5 @@
 ================================================================================
-self_interruption_terminator - Main tier ending with self-interruption terminator .
+self_interruption_terminator - Main tier ending with self-interruption terminator +//.'.
 ================================================================================
 *CHI:	hello +//.
 

@@ -1,5 +1,5 @@
 ================================================================================
-ca_no_break_separator - CA no-break remains a separator at the end of a main tier rather than anutterance terminator. Based on .
+ca_no_break_separator - CA no-break ≈ remains a separator at the end of a main tier rather than an utterance terminator. Based on corpus/reference/ca/intonation.cha.
 ================================================================================
 *SPK:	no break continuation ⇘ ≈
 

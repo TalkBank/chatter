@@ -1,5 +1,5 @@
 ================================================================================
-activities_simple - header with simple free-text content.
+activities_simple - @Activities header with simple free-text content.
 ================================================================================
 @Activities:	play
 

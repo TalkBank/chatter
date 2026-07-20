@@ -1,5 +1,5 @@
 ================================================================================
-form_marker - Word with form type marker, suffix indicating word form.
+form_marker - Word with form type marker, @letter suffix indicating word form.
 ================================================================================
 *CHI:	doggie@c .
 

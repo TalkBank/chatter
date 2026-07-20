@@ -177,7 +177,7 @@ fn extract_participant_entries(chat_file: &ChatFile, text: &str) -> Vec<Particip
         .lines
         .iter()
         .filter_map(|line| match line {
-            Line::Header { header, span } => match header.as_ref() {
+            Line::Header { header, span, .. } => match header.as_ref() {
                 Header::ID(id) => {
                     let line_number = if span.is_dummy() {
                         0

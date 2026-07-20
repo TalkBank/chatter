@@ -174,7 +174,11 @@ pub(crate) fn wrapper_parse_generic_tier(
     // Extract and return the first dependent tier
     for line in chat_file.lines {
         if let Line::Utterance(utterance) = line
-            && let Some(mut tier) = utterance.dependent_tiers.into_iter().next()
+            && let Some(mut tier) = utterance
+                .dependent_tiers
+                .into_iter()
+                .next()
+                .map(|entry| entry.tier)
         {
             tier.shift_spans_after(0, -(prefix_len as i32) + offset as i32);
             return ParseOutcome::parsed(tier);
@@ -209,7 +213,11 @@ fn strip_one_trailing_newline(input: &str) -> &str {
 fn extract_first_dependent_tier(chat_file: ChatFile) -> Option<DependentTier> {
     for line in chat_file.lines {
         if let Line::Utterance(utterance) = line {
-            return utterance.dependent_tiers.into_iter().next();
+            return utterance
+                .dependent_tiers
+                .into_iter()
+                .next()
+                .map(|entry| entry.tier);
         }
     }
     None

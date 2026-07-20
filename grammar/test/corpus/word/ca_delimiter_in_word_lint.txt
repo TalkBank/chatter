@@ -1,5 +1,5 @@
 ================================================================================
-ca_delimiter_in_word_lint - Word wrapped in CA delimiter markers (voice quality), verifies at word boundaries parses correctly despite prec non-propagation.
+ca_delimiter_in_word_lint - Word wrapped in CA delimiter markers (voice quality), verifies ca_delimiter at word boundaries parses correctly despite prec non-propagation.
 ================================================================================
 *CHI:	°soft° .
 

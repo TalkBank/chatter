@@ -1,5 +1,5 @@
 ================================================================================
-trailing_off_question_terminator - Main tier ending with trailing-off question terminator .
+trailing_off_question_terminator - Main tier ending with trailing-off question terminator +..?.
 ================================================================================
 *CHI:	hello +..?
 

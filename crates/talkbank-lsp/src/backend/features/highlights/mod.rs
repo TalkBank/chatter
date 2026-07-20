@@ -58,6 +58,7 @@ fn find_dependent_tier_at_offset(
     utterance
         .dependent_tiers
         .iter()
+        .map(|entry| &entry.tier)
         .find(|tier| dependent_tier_span(tier).is_some_and(|span| span_contains(span, offset)))
 }
 

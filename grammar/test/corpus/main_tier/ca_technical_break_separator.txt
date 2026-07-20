@@ -1,5 +1,5 @@
 ================================================================================
-ca_technical_break_separator - CA technical-break remains a separator at the end of a main tier ratherthan an utterance terminator. Based on .
+ca_technical_break_separator - CA technical-break ≋ remains a separator at the end of a main tier rather than an utterance terminator. Based on corpus/reference/ca/intonation.cha.
 ================================================================================
 *SPK:	technical break continuation ⇗ ≋
 

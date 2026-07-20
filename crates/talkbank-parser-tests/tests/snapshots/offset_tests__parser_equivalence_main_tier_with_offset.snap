@@ -106,5 +106,8 @@ Some(
             start: 100,
             end: 103,
         },
+        separator: TierSeparator {
+            trailing_space: None,
+        },
     },
 )

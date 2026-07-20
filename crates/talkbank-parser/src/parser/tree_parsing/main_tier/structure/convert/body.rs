@@ -20,7 +20,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Terminators>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::error::{
+    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+};
 use crate::generated_traversal::{AsRawNode, NodeSlot, TierBodyChildren};
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use tree_sitter::Node;
@@ -188,7 +190,12 @@ fn parse_optional_langcode(
         Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
         )
-        | None => return ParsedLangcode { code: None, span: None },
+        | None => {
+            return ParsedLangcode {
+                code: None,
+                span: None,
+            };
+        }
     };
     surface_unexpected(&group.unexpected, source, errors);
 

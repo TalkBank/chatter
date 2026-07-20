@@ -1785,6 +1785,10 @@
           "named": true
         },
         {
+          "type": "sep_trailing_space",
+          "named": true
+        },
+        {
           "type": "tab",
           "named": true
         }
@@ -2334,6 +2338,10 @@
       "types": [
         {
           "type": "colon",
+          "named": true
+        },
+        {
+          "type": "sep_trailing_space",
           "named": true
         },
         {
@@ -3992,6 +4000,10 @@
           "named": true
         },
         {
+          "type": "space",
+          "named": true
+        },
+        {
           "type": "text_segment",
           "named": true
         }
@@ -4016,6 +4028,10 @@
         },
         {
           "type": "inline_pic",
+          "named": true
+        },
+        {
+          "type": "space",
           "named": true
         },
         {
@@ -4112,6 +4128,10 @@
       "types": [
         {
           "type": "colon",
+          "named": true
+        },
+        {
+          "type": "sep_trailing_space",
           "named": true
         },
         {
@@ -5497,6 +5517,10 @@
   },
   {
     "type": "semicolon",
+    "named": true
+  },
+  {
+    "type": "sep_trailing_space",
     "named": true
   },
   {

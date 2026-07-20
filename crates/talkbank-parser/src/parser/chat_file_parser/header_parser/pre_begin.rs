@@ -11,6 +11,7 @@ use crate::error::{
 use crate::model::{self, Header, Line};
 use crate::node_types::*;
 
+use super::helpers::header_separator;
 use crate::parser::tree_parsing::header::parse_pid_header;
 
 /// Build `Header::Unknown` from a malformed pre-begin header node.
@@ -44,12 +45,14 @@ pub fn handle_pre_begin_header(
             let header_errors = ErrorCollector::new();
             let header = parse_pid_header(node, input, &header_errors);
             errors.report_all(header_errors.into_vec());
-            lines.push(Line::header_with_span(header, span));
+            let separator = header_separator(node);
+            lines.push(Line::header_with_separator(header, span, separator));
         }
         WINDOW_HEADER => {
             // Grammar: seq(prefix, header_sep, window_geometry, newline)
             // Child layout: [0]=prefix, [1]=sep, [2]=geometry, [3]=newline
             // Content at position 2
+            let separator = header_separator(node);
             let geometry = match node
                 .child(2u32)
                 .and_then(|child| child.utf8_text(input.as_bytes()).ok().map(str::to_string))
@@ -63,24 +66,27 @@ pub fn handle_pre_begin_header(
                         ErrorContext::new(input, node.start_byte()..node.end_byte(), WINDOW_HEADER),
                         "Missing or invalid @Window geometry",
                     ));
-                    lines.push(Line::header_with_span(
+                    lines.push(Line::header_with_separator(
                         unknown_header_from_node(node, input, "Malformed @Window header"),
                         span,
+                        separator,
                     ));
                     return;
                 }
             };
-            lines.push(Line::header_with_span(
+            lines.push(Line::header_with_separator(
                 Header::Window {
                     geometry: model::WindowGeometry::new(geometry),
                 },
                 span,
+                separator,
             ));
         }
         COLOR_WORDS_HEADER => {
             // Grammar: seq(prefix, header_sep, color_word_list, newline)
             // Child layout: [0]=prefix, [1]=sep, [2]=color_word_list, [3]=newline
             // Content at position 2
+            let separator = header_separator(node);
             let colors = match node
                 .child(2u32)
                 .and_then(|child| child.utf8_text(input.as_bytes()).ok().map(str::to_string))
@@ -98,24 +104,27 @@ pub fn handle_pre_begin_header(
                         ),
                         "Missing or invalid @Color words content",
                     ));
-                    lines.push(Line::header_with_span(
+                    lines.push(Line::header_with_separator(
                         unknown_header_from_node(node, input, "Malformed @Color words header"),
                         span,
+                        separator,
                     ));
                     return;
                 }
             };
-            lines.push(Line::header_with_span(
+            lines.push(Line::header_with_separator(
                 Header::ColorWords {
                     colors: model::ColorWordList::new(colors),
                 },
                 span,
+                separator,
             ));
         }
         FONT_HEADER => {
             // Grammar: seq(prefix, header_sep, font_spec, newline)
             // Child layout: [0]=prefix, [1]=sep, [2]=font_spec, [3]=newline
             // Content at position 2
+            let separator = header_separator(node);
             let font = match node
                 .child(2u32)
                 .and_then(|child| child.utf8_text(input.as_bytes()).ok().map(str::to_string))
@@ -129,18 +138,20 @@ pub fn handle_pre_begin_header(
                         ErrorContext::new(input, node.start_byte()..node.end_byte(), FONT_HEADER),
                         "Missing or invalid @Font content",
                     ));
-                    lines.push(Line::header_with_span(
+                    lines.push(Line::header_with_separator(
                         unknown_header_from_node(node, input, "Malformed @Font header"),
                         span,
+                        separator,
                     ));
                     return;
                 }
             };
-            lines.push(Line::header_with_span(
+            lines.push(Line::header_with_separator(
                 Header::Font {
                     font: model::FontSpec::new(font),
                 },
                 span,
+                separator,
             ));
         }
         unknown => {

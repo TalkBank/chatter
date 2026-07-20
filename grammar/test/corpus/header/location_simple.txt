@@ -1,5 +1,5 @@
 ================================================================================
-location_simple - header with free-text location value.
+location_simple - @Location header with free-text location value.
 ================================================================================
 @Location:	lab room 1
 

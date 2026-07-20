@@ -49,10 +49,15 @@ pub fn apply_mapping_chat(chat: &ChatFile, mapping: &MappingSpec) -> String {
                 }
                 None => new_lines.push(line.clone()),
             },
-            Line::Header { header, span } => match rewrite_header(header.as_ref(), mapping) {
+            Line::Header {
+                header,
+                span,
+                separator,
+            } => match rewrite_header(header.as_ref(), mapping) {
                 HeaderRewrite::Keep(h) => new_lines.push(Line::Header {
                     header: Box::new(h),
                     span: *span,
+                    separator: *separator,
                 }),
                 HeaderRewrite::Drop => { /* skip */ }
             },

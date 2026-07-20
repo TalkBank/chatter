@@ -175,7 +175,7 @@ fn insert_pho_tiers_from_chat(chat: &ChatFile, collector: &mut BTreeSet<String>,
                 }
 
                 // Extract PhoTier from DependentTier variants that use PhoTier
-                let pho_tier_content = match dependent {
+                let pho_tier_content = match &dependent.tier {
                     DependentTier::Pho(tier) => Some(pho_items_content(&tier.items)),
                     DependentTier::Mod(tier) => Some(pho_items_content(&tier.items)),
                     _ => None,

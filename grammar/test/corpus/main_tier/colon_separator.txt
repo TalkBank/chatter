@@ -1,5 +1,5 @@
 ================================================================================
-colon_separator - Standalone colon between words must parse as , not as inside a word. The DFA produces (prec 5) for but the parser rejects it as word_body start; it falls through to.
+colon_separator - Standalone colon between words must parse as separator(colon), not as lengthening inside a word. The DFA produces lengthening (prec 5) for : but the parser rejects it as word_body start; it falls through to separator(colon).
 ================================================================================
 *CHI:	hello : world .
 

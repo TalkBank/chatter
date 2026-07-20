@@ -3,6 +3,6 @@
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	 dog .
-@Comment:	ERROR: space after the tab in a non-CA file
+*CHI:	dog .
+%mor:	 n|dog .
 @End

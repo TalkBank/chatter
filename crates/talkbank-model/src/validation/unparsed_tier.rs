@@ -18,7 +18,7 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 ///
 /// `label` is the tier label as parsed, INCLUDING the `x` prefix (a
 /// `%xtst:` tier arrives as `xtst`).
-pub(crate) fn check_user_defined_tier_content(
+pub fn check_user_defined_tier_content(
     label: &str,
     content: &str,
     span: Span,

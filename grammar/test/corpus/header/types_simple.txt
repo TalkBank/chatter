@@ -1,5 +1,5 @@
 ================================================================================
-types_simple - header with language and activity entries.
+types_simple - @Types header with language and activity entries.
 ================================================================================
 @Types:	cross, narrative, TD
 

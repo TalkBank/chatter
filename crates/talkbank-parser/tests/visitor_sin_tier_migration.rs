@@ -107,7 +107,7 @@ fn parse_sin(input: &str) -> SinParse {
     for line in &chat.lines.0 {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
-                if let DependentTier::Sin(t) = dt {
+                if let DependentTier::Sin(t) = &dt.tier {
                     saw_sin_tier = true;
                     items.extend(t.items.iter().map(item_repr));
                 }

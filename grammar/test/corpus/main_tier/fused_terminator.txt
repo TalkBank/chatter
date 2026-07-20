@@ -1,5 +1,5 @@
 ================================================================================
-fused_terminator - Fused word+terminator without space: should parse as word followedby trailing_off terminator . CHAT requires a space before terminators, butin practice this pattern appears in real-world files. The grammar should recoverby treating as the start of a terminator rather than a compound marker whenthe characters following form a valid terminator.
+fused_terminator - Fused word+terminator without space: to+... should parse as word to followed by trailing_off terminator +.... CHAT requires a space before terminators, but in practice this pattern appears in real-world files. The grammar should recover by treating + as the start of a terminator rather than a compound marker when the characters following + form a valid terminator.
 ================================================================================
 *CHI:	trying to+...
 

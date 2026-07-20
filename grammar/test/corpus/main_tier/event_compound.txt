@@ -1,5 +1,5 @@
 ================================================================================
-event_compound - Compound event with colon separator ().The colon is part of the event segment text, not a structural delimiter.
+event_compound - Compound event with colon separator (&=clears:throat). The colon is part of the event segment text, not a structural delimiter.
 ================================================================================
 *CHI:	&=clears:throat .
 

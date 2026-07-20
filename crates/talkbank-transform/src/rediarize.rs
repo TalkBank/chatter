@@ -28,7 +28,7 @@ use std::collections::HashSet;
 
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::model::header::{Header, ParticipantEntries, ParticipantEntry};
-use talkbank_model::model::{ChatFile, Line, SpeakerCode};
+use talkbank_model::model::{ChatFile, Line, SpeakerCode, TierSeparator};
 
 use crate::PipelineError;
 use crate::pipeline::parse_and_validate;
@@ -389,7 +389,11 @@ fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Ve
 
     for line in lines {
         match line {
-            Line::Header { header, span } => match *header {
+            Line::Header {
+                header,
+                span,
+                separator,
+            } => match *header {
                 Header::Participants { entries } => {
                     let mut kept: Vec<ParticipantEntry> = entries
                         .iter()
@@ -415,6 +419,7 @@ fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Ve
                             entries: ParticipantEntries::new(kept),
                         }),
                         span,
+                        separator,
                     });
                 }
                 Header::ID(id) => {
@@ -423,6 +428,7 @@ fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Ve
                         result.push(Line::Header {
                             header: Box::new(Header::ID(id)),
                             span,
+                            separator,
                         });
                     }
                     // else: drop the @ID row for an unused track.
@@ -430,6 +436,7 @@ fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Ve
                 other => result.push(Line::Header {
                     header: Box::new(other),
                     span,
+                    separator,
                 }),
             },
             other => result.push(other),
@@ -454,6 +461,7 @@ fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Ve
                 Line::Header {
                     header: Box::new(Header::ID(new_id)),
                     span: talkbank_model::Span::DUMMY,
+                    separator: TierSeparator::CLEAN,
                 }
             })
             .collect();

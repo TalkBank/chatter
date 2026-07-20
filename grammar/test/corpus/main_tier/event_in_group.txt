@@ -1,5 +1,5 @@
 ================================================================================
-event_in_group - Event () inside an angle bracket group with overlap annotation.The closing must NOT be part of the event description text.
+event_in_group - Event (&=action) inside an angle bracket group <...> with overlap annotation. The closing > must NOT be part of the event description text.
 ================================================================================
 *CHI:	<&=laughs> [<] .
 

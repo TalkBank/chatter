@@ -15,7 +15,8 @@ use std::collections::HashSet;
 pub(crate) fn check_no_duplicate_dependent_tiers(utterance: &Utterance, errors: &impl ErrorSink) {
     let mut seen_tiers: HashSet<&str> = HashSet::new();
 
-    for tier in &utterance.dependent_tiers {
+    for entry in &utterance.dependent_tiers {
+        let tier = &entry.tier;
         let kind = tier.kind();
 
         if !seen_tiers.insert(kind) {

@@ -95,7 +95,9 @@ impl WriteChat for LinkerKind {
 /// `#[semantic_eq(skip)]`): the serialized form is transparently that of
 /// [`LinkerKind`], so the JSON and schema are unchanged by carrying a span, and
 /// semantic equality ignores position.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift,
+)]
 #[serde(transparent)]
 #[schemars(transparent)]
 pub struct Linker {

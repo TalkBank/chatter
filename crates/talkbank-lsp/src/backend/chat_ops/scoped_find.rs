@@ -158,7 +158,8 @@ fn find_in_scoped_tiers(
         }
 
         if search_dependent {
-            for dt in &utterance.dependent_tiers {
+            for entry in &utterance.dependent_tiers {
+                let dt = &entry.tier;
                 let tier_label = dt.kind();
                 if scope != "all" && tier_label != scope {
                     continue;

@@ -16,10 +16,12 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
     AsRawNode, GraDependentTierNode, ModDependentTierNode, MorDependentTierNode,
-    PhoDependentTierNode, SinDependentTierNode, WorDependentTierNode,
+    PhoDependentTierNode, SinDependentTierNode, WorDependentTierNode, extract_gra_dependent_tier,
+    extract_mod_dependent_tier, extract_mor_dependent_tier, extract_pho_dependent_tier,
+    extract_sin_dependent_tier, extract_wor_dependent_tier,
 };
 use crate::model::Utterance;
-use crate::model::dependent_tier::DependentTier;
+use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::parser::tier_parsers::gra::parse_gra_tier;
 use crate::parser::tier_parsers::mor::parse_mor_tier;
 use crate::parser::tier_parsers::pho::{parse_mod_tier, parse_pho_tier};
@@ -41,20 +43,33 @@ pub(super) fn attach_mor(
     errors: &impl ErrorSink,
 ) {
     let tier_node = n.raw_node();
+    let separator =
+        super::helpers::dependent_tier_separator(&extract_mor_dependent_tier(n).child_1.slot);
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "mor", errors);
         utterance
             .dependent_tiers
-            .push(DependentTier::Mor(empty_mor_placeholder()));
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Mor(empty_mor_placeholder()),
+                separator,
+            ));
     } else {
         match parse_mor_tier(tier_node, input, errors) {
             talkbank_model::ParseOutcome::Parsed(tier) => {
-                utterance.dependent_tiers.push(DependentTier::Mor(tier));
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Mor(tier),
+                        separator,
+                    ));
             }
             talkbank_model::ParseOutcome::Rejected => {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Mor(empty_mor_placeholder()));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Mor(empty_mor_placeholder()),
+                        separator,
+                    ));
             }
         }
     }
@@ -69,14 +84,24 @@ pub(super) fn attach_gra(
     errors: &impl ErrorSink,
 ) {
     let tier_node = n.raw_node();
+    let separator =
+        super::helpers::dependent_tier_separator(&extract_gra_dependent_tier(n).child_1.slot);
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "gra", errors);
         utterance
             .dependent_tiers
-            .push(DependentTier::Gra(empty_gra_placeholder()));
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Gra(empty_gra_placeholder()),
+                separator,
+            ));
     } else {
         let tier = parse_gra_tier(tier_node, input, errors);
-        utterance.dependent_tiers.push(DependentTier::Gra(tier));
+        utterance
+            .dependent_tiers
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Gra(tier),
+                separator,
+            ));
     }
 }
 
@@ -92,8 +117,15 @@ pub(super) fn attach_pho(
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "pho", errors);
     } else {
+        let separator =
+            super::helpers::dependent_tier_separator(&extract_pho_dependent_tier(n).child_1.slot);
         let tier = parse_pho_tier(tier_node, input, errors);
-        utterance.dependent_tiers.push(DependentTier::Pho(tier));
+        utterance
+            .dependent_tiers
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Pho(tier),
+                separator,
+            ));
     }
 }
 
@@ -108,8 +140,15 @@ pub(super) fn attach_mod(
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "mod", errors);
     } else {
+        let separator =
+            super::helpers::dependent_tier_separator(&extract_mod_dependent_tier(n).child_1.slot);
         let tier = parse_mod_tier(tier_node, input, errors);
-        utterance.dependent_tiers.push(DependentTier::Mod(tier));
+        utterance
+            .dependent_tiers
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Mod(tier),
+                separator,
+            ));
     }
 }
 
@@ -124,8 +163,15 @@ pub(super) fn attach_sin(
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "sin", errors);
     } else {
+        let separator =
+            super::helpers::dependent_tier_separator(&extract_sin_dependent_tier(n).child_1.slot);
         let tier = parse_sin_tier(tier_node, input, errors);
-        utterance.dependent_tiers.push(DependentTier::Sin(tier));
+        utterance
+            .dependent_tiers
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Sin(tier),
+                separator,
+            ));
     }
 }
 
@@ -143,8 +189,15 @@ pub(super) fn attach_wor(
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "wor", errors);
     } else {
+        let separator =
+            super::helpers::dependent_tier_separator(&extract_wor_dependent_tier(n).child_1.slot);
         let tier = parse_wor_tier(tier_node, input, errors);
-        utterance.dependent_tiers.push(DependentTier::Wor(tier));
+        utterance
+            .dependent_tiers
+            .push(DependentTierEntry::with_separator(
+                DependentTier::Wor(tier),
+                separator,
+            ));
     }
 }
 

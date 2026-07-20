@@ -166,7 +166,7 @@ fn insert_com_tiers_from_chat(chat: &ChatFile, collector: &mut BTreeSet<String>,
                     break;
                 }
 
-                if let DependentTier::Com(com_tier) = tier {
+                if let DependentTier::Com(com_tier) = &tier.tier {
                     let content = com_tier_content(com_tier);
                     if !content.is_empty() {
                         collector.insert(content);

@@ -26,7 +26,7 @@
 
 use super::Utterance;
 use crate::Span;
-use crate::{Header, WriteChat};
+use crate::{Header, TierSeparator, WriteChat};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -110,6 +110,13 @@ pub enum Line {
         #[serde(skip)]
         #[schemars(skip)]
         span: Span,
+
+        /// The header's `colon tab trailing_space?` separator (E758
+        /// provenance; not serialized). `TierSeparator::CLEAN` for a
+        /// well-formed single-tab separator.
+        #[serde(skip)]
+        #[schemars(skip)]
+        separator: TierSeparator,
     },
 
     /// Utterance line (main tier + dependent tiers).
@@ -127,6 +134,7 @@ impl Line {
         Line::Header {
             header: Box::new(header),
             span: Span::DUMMY,
+            separator: TierSeparator::CLEAN,
         }
     }
 
@@ -137,6 +145,19 @@ impl Line {
         Line::Header {
             header: Box::new(header),
             span,
+            separator: TierSeparator::CLEAN,
+        }
+    }
+
+    /// Build a header line with explicit source span and separator metadata.
+    ///
+    /// Parser-produced headers that capture the `header_sep`'s trailing-space
+    /// provenance (E758) should prefer this over [`Self::header_with_span`].
+    pub fn header_with_separator(header: Header, span: Span, separator: TierSeparator) -> Self {
+        Line::Header {
+            header: Box::new(header),
+            span,
+            separator,
         }
     }
 

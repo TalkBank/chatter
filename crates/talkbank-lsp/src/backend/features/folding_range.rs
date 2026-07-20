@@ -118,7 +118,7 @@ fn utterance_block_end(utterance: &talkbank_model::model::Utterance) -> u32 {
     utterance
         .dependent_tiers
         .iter()
-        .map(|t| t.span().end)
+        .map(|t| t.tier.span().end)
         .max()
         .unwrap_or(utterance.main.span.end)
 }

@@ -50,7 +50,7 @@ fn extract_utterances(
                 let has_cod = utterance
                     .dependent_tiers
                     .iter()
-                    .any(|dt| matches!(dt, DependentTier::Cod(_)));
+                    .any(|dt| matches!(&dt.tier, DependentTier::Cod(_)));
 
                 Some(UtteranceInfo {
                     line: main_line,

@@ -1,5 +1,5 @@
 ================================================================================
-interruption_terminator - Main tier ending with interrupted terminator .
+interruption_terminator - Main tier ending with interrupted terminator +/.'.
 ================================================================================
 *CHI:	hello +/.
 

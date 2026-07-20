@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
@@ -121,7 +122,7 @@ expression: snapshot
             "content": {
               "segments": [
                 {
-                  "text": "this is junk ",
+                  "text": "this is junk",
                   "type": "text"
                 },
                 {
@@ -180,7 +181,7 @@ expression: snapshot
             "content": {
               "segments": [
                 {
-                  "text": "foo ",
+                  "text": "foo",
                   "type": "text"
                 },
                 {
@@ -189,7 +190,7 @@ expression: snapshot
                   "type": "bullet"
                 },
                 {
-                  "text": " bar ",
+                  "text": "bar",
                   "type": "text"
                 },
                 {
@@ -207,7 +208,7 @@ expression: snapshot
             "content": {
               "segments": [
                 {
-                  "text": "pic002 ",
+                  "text": "pic002",
                   "type": "text"
                 },
                 {

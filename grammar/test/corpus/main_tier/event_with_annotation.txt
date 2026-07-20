@@ -1,5 +1,5 @@
 ================================================================================
-event_with_annotation - Event with scoped annotations. Events () can carry contentannotations like , , , but retrace markers (,) are silently dropped (retraces are not applicable to events).
+event_with_annotation - Event with scoped annotations. Events (&=action) can carry content annotations like [*], [=! text], [>], but retrace markers ([/], [//]) are silently dropped (retraces are not applicable to events).
 ================================================================================
 *CHI:	one &=ges [//] the computer do it .
 

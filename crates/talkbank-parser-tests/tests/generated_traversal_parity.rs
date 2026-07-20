@@ -102,9 +102,14 @@ fn test_main_tier_all_fields_present() {
                 c.child_3.slot
             );
             assert!(
-                matches!(c.child_4.slot, NodeSlot::Present(_)),
-                "tier_body: {:?}",
+                c.child_4.slot.is_none(),
+                "sep_trailing_space (clean tab, no illegal trailing space): {:?}",
                 c.child_4.slot
+            );
+            assert!(
+                matches!(c.child_5.slot, NodeSlot::Present(_)),
+                "tier_body: {:?}",
+                c.child_5.slot
             );
 
             if let NodeSlot::Present(spk) = &c.speaker.slot {

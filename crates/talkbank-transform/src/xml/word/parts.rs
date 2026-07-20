@@ -7,8 +7,7 @@ use talkbank_model::alignment::TierDomain;
 use talkbank_model::alignment::helpers::counts_for_tier;
 use talkbank_model::model::{
     Action, Annotated, BracketedItem, Event as CEvent, Linker, LinkerKind, OverlapPointKind,
-    ReplacedWord,
-    Word, WordContent,
+    ReplacedWord, Word, WordContent,
 };
 
 use super::super::error::XmlWriteError;

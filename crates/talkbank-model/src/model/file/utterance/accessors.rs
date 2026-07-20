@@ -21,7 +21,7 @@ use super::Utterance;
 impl Utterance {
     /// Return the first `%mor` tier, if present.
     pub fn mor_tier(&self) -> Option<&MorTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Mor(tier) => Some(tier),
             _ => None,
         })
@@ -29,15 +29,17 @@ impl Utterance {
 
     /// Return the first mutable `%mor` tier, if present.
     pub fn mor_tier_mut(&mut self) -> Option<&mut MorTier> {
-        self.dependent_tiers.iter_mut().find_map(|t| match t {
-            DependentTier::Mor(tier) => Some(tier),
-            _ => None,
-        })
+        self.dependent_tiers
+            .iter_mut()
+            .find_map(|t| match &mut t.tier {
+                DependentTier::Mor(tier) => Some(tier),
+                _ => None,
+            })
     }
 
     /// Return the first `%gra` tier, if present.
     pub fn gra_tier(&self) -> Option<&GraTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Gra(tier) => Some(tier),
             _ => None,
         })
@@ -45,7 +47,7 @@ impl Utterance {
 
     /// Return the first `%wor` tier, if present.
     pub fn wor_tier(&self) -> Option<&crate::model::dependent_tier::WorTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Wor(tier) => Some(tier),
             _ => None,
         })
@@ -53,7 +55,7 @@ impl Utterance {
 
     /// Return the first `%pho` tier, if present.
     pub fn pho_tier(&self) -> Option<&PhoTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Pho(tier) => Some(tier),
             _ => None,
         })
@@ -63,7 +65,7 @@ impl Utterance {
     ///
     /// `%mod` uses the same concrete type as `%pho` in the current model.
     pub fn mod_tier(&self) -> Option<&PhoTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Mod(tier) => Some(tier),
             _ => None,
         })
@@ -71,7 +73,7 @@ impl Utterance {
 
     /// Return the first `%sin` tier, if present.
     pub fn sin_tier(&self) -> Option<&SinTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Sin(tier) => Some(tier),
             _ => None,
         })
@@ -99,7 +101,7 @@ impl Utterance {
 
     /// Return the first `%act` tier, if present.
     pub fn act(&self) -> Option<&ActTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Act(a) => Some(a),
             _ => None,
         })
@@ -107,7 +109,7 @@ impl Utterance {
 
     /// Return the first `%cod` tier, if present.
     pub fn cod(&self) -> Option<&CodTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Cod(c) => Some(c),
             _ => None,
         })
@@ -115,7 +117,7 @@ impl Utterance {
 
     /// Return the first `%com` tier, if present.
     pub fn com(&self) -> Option<&crate::model::dependent_tier::ComTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Com(tier) => Some(tier),
             _ => None,
         })
@@ -123,7 +125,7 @@ impl Utterance {
 
     /// Return the first `%exp` tier, if present.
     pub fn exp(&self) -> Option<&crate::model::dependent_tier::ExpTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Exp(tier) => Some(tier),
             _ => None,
         })
@@ -131,7 +133,7 @@ impl Utterance {
 
     /// Return the first `%add` tier, if present.
     pub fn add(&self) -> Option<&crate::model::dependent_tier::AddTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Add(tier) => Some(tier),
             _ => None,
         })
@@ -139,7 +141,7 @@ impl Utterance {
 
     /// Return the first `%spa` tier, if present.
     pub fn spa(&self) -> Option<&crate::model::dependent_tier::SpaTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Spa(tier) => Some(tier),
             _ => None,
         })
@@ -147,7 +149,7 @@ impl Utterance {
 
     /// Return the first `%sit` tier, if present.
     pub fn sit(&self) -> Option<&crate::model::dependent_tier::SitTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Sit(tier) => Some(tier),
             _ => None,
         })
@@ -155,7 +157,7 @@ impl Utterance {
 
     /// Return the first `%gpx` tier, if present.
     pub fn gpx(&self) -> Option<&crate::model::dependent_tier::GpxTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Gpx(tier) => Some(tier),
             _ => None,
         })
@@ -163,7 +165,7 @@ impl Utterance {
 
     /// Return the first `%int` tier, if present.
     pub fn int(&self) -> Option<&crate::model::dependent_tier::IntTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Int(tier) => Some(tier),
             _ => None,
         })
@@ -171,7 +173,7 @@ impl Utterance {
 
     /// Return the first `%ort` tier payload, if present.
     pub fn ort(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Ort(s) => Some(s.as_str()),
             _ => None,
         })
@@ -179,7 +181,7 @@ impl Utterance {
 
     /// Return the first `%eng` tier payload, if present.
     pub fn eng(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Eng(s) => Some(s.as_str()),
             _ => None,
         })
@@ -187,7 +189,7 @@ impl Utterance {
 
     /// Return the first `%gls` tier payload, if present.
     pub fn gls(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Gls(s) => Some(s.as_str()),
             _ => None,
         })
@@ -195,7 +197,7 @@ impl Utterance {
 
     /// Return the first `%alt` tier payload, if present.
     pub fn alt(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Alt(s) => Some(s.as_str()),
             _ => None,
         })
@@ -203,7 +205,7 @@ impl Utterance {
 
     /// Return the first `%coh` tier payload, if present.
     pub fn coh(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Coh(s) => Some(s.as_str()),
             _ => None,
         })
@@ -211,7 +213,7 @@ impl Utterance {
 
     /// Return the first `%def` tier payload, if present.
     pub fn def(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Def(s) => Some(s.as_str()),
             _ => None,
         })
@@ -219,7 +221,7 @@ impl Utterance {
 
     /// Return the first `%err` tier payload, if present.
     pub fn err(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Err(s) => Some(s.as_str()),
             _ => None,
         })
@@ -227,7 +229,7 @@ impl Utterance {
 
     /// Return the first `%fac` tier payload, if present.
     pub fn fac(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Fac(s) => Some(s.as_str()),
             _ => None,
         })
@@ -235,7 +237,7 @@ impl Utterance {
 
     /// Return the first `%flo` tier payload, if present.
     pub fn flo(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Flo(s) => Some(s.as_str()),
             _ => None,
         })
@@ -243,7 +245,7 @@ impl Utterance {
 
     /// Return the first `%par` tier payload, if present.
     pub fn par(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Par(s) => Some(s.as_str()),
             _ => None,
         })
@@ -251,7 +253,7 @@ impl Utterance {
 
     /// Return the first `%tim` tier payload, if present.
     pub fn tim(&self) -> Option<&str> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Tim(s) => Some(s.as_str()),
             _ => None,
         })
@@ -259,7 +261,7 @@ impl Utterance {
 
     /// Return the first `%modsyl` / `%xmodsyl` tier, if present.
     pub fn modsyl_tier(&self) -> Option<&SylTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Modsyl(tier) => Some(tier),
             _ => None,
         })
@@ -267,7 +269,7 @@ impl Utterance {
 
     /// Return the first `%phosyl` / `%xphosyl` tier, if present.
     pub fn phosyl_tier(&self) -> Option<&SylTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Phosyl(tier) => Some(tier),
             _ => None,
         })
@@ -275,7 +277,7 @@ impl Utterance {
 
     /// Return the first `%phoaln` / `%xphoaln` tier, if present.
     pub fn phoaln_tier(&self) -> Option<&PhoalnTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Phoaln(tier) => Some(tier),
             _ => None,
         })
@@ -283,7 +285,7 @@ impl Utterance {
 
     /// Return the first `%xphoint` tier, if present.
     pub fn xphoint_tier(&self) -> Option<&XphointTier> {
-        self.dependent_tiers.iter().find_map(|t| match t {
+        self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Xphoint(tier) => Some(tier),
             _ => None,
         })

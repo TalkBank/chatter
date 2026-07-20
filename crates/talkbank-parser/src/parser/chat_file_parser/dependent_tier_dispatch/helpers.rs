@@ -3,9 +3,11 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, NodeSlot};
-use crate::model::NonEmptyString;
+use crate::error::{
+    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+};
+use crate::generated_traversal::{AsRawNode, NodeSlot, TierSepNode, extract_tier_sep};
+use crate::model::{NonEmptyString, TierSeparator};
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
@@ -110,5 +112,40 @@ fn decode_body_text(
             ));
             ParseOutcome::rejected()
         }
+    }
+}
+
+/// Decode a dependent tier's `tier_sep` slot (E758 provenance) into a
+/// [`TierSeparator`].
+///
+/// Every dependent-tier grammar shape is `seq(<x>_tier_prefix, tier_sep,
+/// <body>, newline)`, so `tier_sep` is always positional child 1 of the
+/// generated `<Kind>DependentTierChildren` carrier; callers pass that
+/// carrier's `child_1.slot`. Mirrors the main-tier `sep_from_slot` helper
+/// (`main_tier/structure/convert/mod.rs`) one level deeper: first unwrap the
+/// `tier_sep` node itself, then read its own optional `sep_trailing_space`
+/// child (`extract_tier_sep(..).child_2.slot`). Only a `Present` trailing-space
+/// node carries a real span; every other outer/inner recovery state
+/// (Missing/Error/Unexpected/Absent, or an absent `tier_sep` itself) means no
+/// illegal trailing space was captured, and maps to a clean separator (the
+/// E758 check itself is a later validation pass over this provenance, not
+/// parse-time).
+pub(crate) fn dependent_tier_separator(slot: &NodeSlot<'_, TierSepNode<'_>>) -> TierSeparator {
+    let NodeSlot::Present(tier_sep) = slot else {
+        return TierSeparator::CLEAN;
+    };
+    let trailing = extract_tier_sep(*tier_sep).child_2.slot;
+    match trailing {
+        Some(NodeSlot::Present(sep_node)) => {
+            let node = sep_node.raw_node();
+            TierSeparator::with_trailing_space(Span::new(
+                node.start_byte() as u32,
+                node.end_byte() as u32,
+            ))
+        }
+        Some(
+            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
+        )
+        | None => TierSeparator::CLEAN,
     }
 }

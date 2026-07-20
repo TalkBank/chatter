@@ -83,7 +83,7 @@ fn parse_tiers(input: &str) -> (Vec<Pair>, Vec<Pair>) {
     for line in &chat.lines.0 {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
-                tiers.push(describe_tier(dt));
+                tiers.push(describe_tier(&dt.tier));
             }
         }
     }

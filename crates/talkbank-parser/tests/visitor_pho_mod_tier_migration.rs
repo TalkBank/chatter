@@ -111,7 +111,7 @@ fn parse_pho(input: &str) -> PhoParse {
     for line in &chat.lines.0 {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
-                match dt {
+                match &dt.tier {
                     DependentTier::Pho(t) | DependentTier::Mod(t) => {
                         saw_pho_tier = true;
                         items.extend(t.items.iter().map(item_repr));

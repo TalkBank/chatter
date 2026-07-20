@@ -247,7 +247,8 @@ pub(super) fn collect_utterance_tiers(
         sin: None,
         side_tiers: Vec::new(),
     };
-    for tier in utterance.dependent_tiers.iter() {
+    for entry in utterance.dependent_tiers.iter() {
+        let tier = &entry.tier;
         match tier {
             // Text-content tiers with a known TalkBank XML shape
             // (`<a type="…">`) collect into `side_tiers`; emission

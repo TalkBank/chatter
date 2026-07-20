@@ -1,5 +1,5 @@
 ================================================================================
-id_single - Minimal header with identity fields populated.
+id_single - Minimal @ID header with identity fields populated.
 ================================================================================
 @ID:	eng|corpus|CHI|||||Target_Child|||
 

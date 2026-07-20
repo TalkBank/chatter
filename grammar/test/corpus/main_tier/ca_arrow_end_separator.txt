@@ -1,5 +1,5 @@
 ================================================================================
-ca_arrow_end_separator - CA intonation arrows remain separators even when they appear at the end of amain tier in CA mode. This pattern is covered by .
+ca_arrow_end_separator - CA intonation arrows remain separators even when they appear at the end of a main tier in CA mode. This pattern is covered by corpus/reference/ca/intonation.cha.
 ================================================================================
 *SPK:	level pitch →
 

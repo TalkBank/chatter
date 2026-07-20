@@ -1,5 +1,5 @@
 ================================================================================
-x_tier_with_bullets - User-defined dependent tier containing media bullet timing markers.The NAK-delimited timing () must be preserved asinline bullets, not consumed as plain text.
+x_tier_with_bullets - User-defined %x... dependent tier containing media bullet timing markers. The NAK-delimited timing (\u0015start_end\u0015) must be preserved as inline bullets, not consumed as plain text.
 ================================================================================
 *SLP:	0 .
 %xs1:	swallow 3093_4877

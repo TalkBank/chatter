@@ -143,7 +143,7 @@ fn header_comment_with_bullet() {
             assert_eq!(content.segments.len(), 2, "expected text + bullet segments");
             assert!(matches!(
                 &content.segments[0],
-                BulletContentSegment::Text(text) if text.text == "This is timed "
+                BulletContentSegment::Text(text) if text.text == "This is timed"
             ));
             assert!(matches!(
                 &content.segments[1],

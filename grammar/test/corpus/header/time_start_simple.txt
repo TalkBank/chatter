@@ -1,5 +1,5 @@
 ================================================================================
-time_start_simple - header with strict time syntax.
+time_start_simple - @Time Start header with strict time syntax.
 ================================================================================
 @Time Start:	17:30-18:00
 

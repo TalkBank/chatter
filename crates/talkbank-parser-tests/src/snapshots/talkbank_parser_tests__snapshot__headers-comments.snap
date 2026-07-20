@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
@@ -120,7 +121,7 @@ expression: snapshot
         "content": {
           "segments": [
             {
-              "text": "CHI points to the shelf ",
+              "text": "CHI points to the shelf",
               "type": "text"
             },
             {

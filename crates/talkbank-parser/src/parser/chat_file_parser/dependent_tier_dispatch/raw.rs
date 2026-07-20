@@ -17,7 +17,7 @@ use crate::generated_traversal::{
     extract_ort_dependent_tier, extract_par_dependent_tier, extract_phoaln_dependent_tier,
     extract_phosyl_dependent_tier, extract_tim_dependent_tier, extract_xphoint_dependent_tier,
 };
-use crate::model::dependent_tier::DependentTier;
+use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::model::{TextTier, Utterance};
 use crate::node_types::*;
 use talkbank_model::ParseOutcome;
@@ -59,6 +59,7 @@ pub(super) fn apply_raw_tier(
     match tier_kind {
         ORT_DEPENDENT_TIER => {
             let children = extract_ort_dependent_tier(OrtDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -68,11 +69,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Ort(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Ort(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         ENG_DEPENDENT_TIER => {
             let children = extract_eng_dependent_tier(EngDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -82,11 +87,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Eng(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Eng(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         GLS_DEPENDENT_TIER => {
             let children = extract_gls_dependent_tier(GlsDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -96,11 +105,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Gls(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Gls(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         ALT_DEPENDENT_TIER => {
             let children = extract_alt_dependent_tier(AltDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -110,11 +123,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Alt(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Alt(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         COH_DEPENDENT_TIER => {
             let children = extract_coh_dependent_tier(CohDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -124,11 +141,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Coh(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Coh(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         DEF_DEPENDENT_TIER => {
             let children = extract_def_dependent_tier(DefDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -138,11 +159,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Def(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Def(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         ERR_DEPENDENT_TIER => {
             let children = extract_err_dependent_tier(ErrDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -152,11 +177,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Err(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Err(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         FAC_DEPENDENT_TIER => {
             let children = extract_fac_dependent_tier(FacDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -166,11 +195,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Fac(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Fac(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         FLO_DEPENDENT_TIER => {
             let children = extract_flo_dependent_tier(FloDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -180,11 +213,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Flo(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Flo(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         PAR_DEPENDENT_TIER => {
             let children = extract_par_dependent_tier(ParDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -194,11 +231,15 @@ pub(super) fn apply_raw_tier(
             ) {
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Par(TextTier::new(content).with_span(span)));
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Par(TextTier::new(content).with_span(span)),
+                        separator,
+                    ));
             }
         }
         TIM_DEPENDENT_TIER => {
             let children = extract_tim_dependent_tier(TimDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -206,13 +247,20 @@ pub(super) fn apply_raw_tier(
                 input,
                 errors,
             ) {
-                utterance.dependent_tiers.push(DependentTier::Tim(
-                    crate::model::dependent_tier::TimTier::from_text(content).with_span(span),
-                ));
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Tim(
+                            crate::model::dependent_tier::TimTier::from_text(content)
+                                .with_span(span),
+                        ),
+                        separator,
+                    ));
             }
         }
         MODSYL_DEPENDENT_TIER => {
             let children = extract_modsyl_dependent_tier(ModsylDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -221,13 +269,19 @@ pub(super) fn apply_raw_tier(
                 errors,
             ) {
                 let words = parse_syl_content(content.as_str());
-                utterance.dependent_tiers.push(DependentTier::Modsyl(
-                    SylTier::new(SylTierType::Modsyl, words).with_span(span),
-                ));
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Modsyl(
+                            SylTier::new(SylTierType::Modsyl, words).with_span(span),
+                        ),
+                        separator,
+                    ));
             }
         }
         PHOSYL_DEPENDENT_TIER => {
             let children = extract_phosyl_dependent_tier(PhosylDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -236,13 +290,19 @@ pub(super) fn apply_raw_tier(
                 errors,
             ) {
                 let words = parse_syl_content(content.as_str());
-                utterance.dependent_tiers.push(DependentTier::Phosyl(
-                    SylTier::new(SylTierType::Phosyl, words).with_span(span),
-                ));
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Phosyl(
+                            SylTier::new(SylTierType::Phosyl, words).with_span(span),
+                        ),
+                        separator,
+                    ));
             }
         }
         PHOALN_DEPENDENT_TIER => {
             let children = extract_phoaln_dependent_tier(PhoalnDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -252,9 +312,12 @@ pub(super) fn apply_raw_tier(
             ) {
                 match parse_phoaln_content(content.as_str()) {
                     Ok(words) => {
-                        utterance.dependent_tiers.push(DependentTier::Phoaln(
-                            PhoalnTier::new(words).with_span(span),
-                        ));
+                        utterance
+                            .dependent_tiers
+                            .push(DependentTierEntry::with_separator(
+                                DependentTier::Phoaln(PhoalnTier::new(words).with_span(span)),
+                                separator,
+                            ));
                     }
                     Err(e) => {
                         errors.report(ParseError::new(
@@ -277,6 +340,7 @@ pub(super) fn apply_raw_tier(
         }
         XPHOINT_DEPENDENT_TIER => {
             let children = extract_xphoint_dependent_tier(XphointDependentTierNode(tier_node));
+            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
                 children.child_2.slot,
@@ -286,9 +350,12 @@ pub(super) fn apply_raw_tier(
             ) {
                 match parse_xphoint_content(content.as_str()) {
                     Ok(groups) => {
-                        utterance.dependent_tiers.push(DependentTier::Xphoint(
-                            XphointTier::new(groups).with_span(span),
-                        ));
+                        utterance
+                            .dependent_tiers
+                            .push(DependentTierEntry::with_separator(
+                                DependentTier::Xphoint(XphointTier::new(groups).with_span(span)),
+                                separator,
+                            ));
                     }
                     Err(e) => {
                         errors.report(ParseError::new(

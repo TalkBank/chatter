@@ -1,6 +1,6 @@
 # E242: Unbalanced quotation marks
 
-**Last updated:** 2026-04-04 08:15 EDT
+**Last updated:** 2026-07-19 08:30 EDT
 
 ## Description
 
@@ -16,8 +16,8 @@ Quotation marks must be balanced within an utterance.
 ## Example 1
 
 **Source**: `error_corpus/validation_errors/E242_unbalanced_quotation.cha`
-**Trigger**: Unbalanced opening quote, tree-sitter absorbs into ERROR node before quotation validation runs
-**Expected Error Codes**: E316
+**Trigger**: Unbalanced opening quote; improved recovery now surfaces the quotation-balance check directly
+**Expected Error Codes**: E242
 
 ```chat
 @UTF8
@@ -33,7 +33,11 @@ Quotation marks must be balanced within an utterance.
 
 ## Expected Behavior
 
-The parser should reject this CHAT input and report a parse error at the location of the invalid syntax.
+The validator rejects this CHAT input and reports E242 "Unbalanced quotation
+in word content" at the unbalanced opening quote. On this malformed line the
+tree-sitter recovery also surfaces incidental recovery-noise diagnostics
+(E305 missing terminator, E306, E342 missing-required-via-recovery); the
+characterizing, semantically meaningful code for the construct is E242.
 
 **Trigger**: See example above
 
@@ -44,5 +48,5 @@ See CHAT manual sections on word-level syntax and special markers. The CHAT manu
 ## Notes
 
 - Auto-generated from error corpus
-- This error code is emitted during utterance quotation validation (model layer) and cannot currently be triggered by standalone CHAT input. Tree-sitter's grammar cannot parse an unbalanced `"hello` and produces E316 (generic unparsable content) before quotation validation can run. The E242 check exists in `quotation.rs` and fires when the model detects unmatched quotation begin/end markers.
+- E242 is emitted during utterance quotation validation (model layer). Historically this fixture could NOT trigger E242 from standalone CHAT input: tree-sitter absorbed the unbalanced `"hello` into a single ERROR node and produced E316 (generic unparsable content) before quotation validation ran, so E316 was the recorded expectation. The TierSeparator refactor (2026-07-19) improved recovery so the malformed line recovers more granularly and the quotation-balance check in `quotation.rs` now fires directly, yielding E242 (plus incidental recovery noise: E305, E306, E342). E316 is no longer emitted on this fixture. The observed code set is {E242, E305, E306, E342}; E242 is the characterizing expectation. This E316 -> E242 reclassification was accepted by maintainer ruling (recovery is not to be dampened).
 - Review and enhance this specification as needed

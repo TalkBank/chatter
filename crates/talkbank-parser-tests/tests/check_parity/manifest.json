@@ -425,10 +425,9 @@
    "fixture": "CHECK_052_retrace_without_text.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316",
-    "E747"
+    "E375"
    ],
-   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). E747 (retrace marker without preceding material) is the direct equivalent."
+   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). Chatter rejects it via E375 (scoped-annotation parse failure); it has no dedicated code for a bracketed/retrace annotation as the first item of an utterance (parity gap, tracked). NOTE: the earlier expectation cited E747 as the equivalent, but E747 is BlankLineNotAllowed, not a retrace code; that was a mislabel."
   },
   {
    "check_code": 53,
@@ -624,10 +623,9 @@
    "fixture": "CHECK_073_bracket_first.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E375",
-    "E747"
+    "E375"
    ],
-   "note": "A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects (E375 repetition-count parse). CLAN additionally emits (11)."
+   "note": "A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E375 (scoped-annotation parse failure). CLAN additionally emits (11). (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.)"
   },
   {
    "check_code": 75,
@@ -799,10 +797,9 @@
    "fixture": "CHECK_093_bracket_no_space.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316",
-    "E747"
+    "E316"
    ],
-   "note": "'[' immediately preceded by '>' or ']' with no space (check.cpp 4469/4472; CA start-marks site 3179 is #ifndef UNX). Fixture '<hey>[/] hey .'; CLAN also emits (161). chatter rejects."
+   "note": "'[' immediately preceded by '>' or ']' with no space (check.cpp 4469/4472; CA start-marks site 3179 is #ifndef UNX). Fixture '<hey>[/] hey .'; CLAN also emits (161). chatter rejects via E316. (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.)"
   },
   {
    "check_code": 94,
@@ -861,8 +858,7 @@
    "fixture": "CHECK_102_italics.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316",
-    "E747"
+    "E316"
    ],
    "note": "Any character carrying the italic text attribute, encoded in the file as ATTMARKER 0x02 + 0x03 (italic start) / 0x02 + 0x04 (italic end) (check.cpp: multiple is_italic() sites, e.g. 4289/4433). Fixture embeds raw bytes \\x02\\x03hey\\x02\\x04; CLAN emits (102) twice (once per attributed char run). chatter rejects the control bytes as unparsable, so legacy attribute encoding cannot pass."
   },

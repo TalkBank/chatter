@@ -1,5 +1,7 @@
 # E756: Empty user-defined tier
 
+**Last updated:** 2026-07-19 08:30 EDT
+
 ## Description
 
 A user-defined `%x` tier whose content is empty or whitespace-only
@@ -40,9 +42,12 @@ not reused.
 
 ## Expected Behavior
 
-- **Parser**: Succeeds; the user-defined tier parses with whitespace
-  content.
-- **Validator**: Reports E756 at the tier.
+- **Parser**: Succeeds. Under the TierSeparator model the tier separator
+  absorbs the lone trailing space, so the `%x` tier body canonicalizes to
+  empty (no `text_with_bullets` child). The grammar makes ONLY the
+  user-defined tier's body optional, so this parses cleanly as an empty
+  user-defined tier rather than recovering with spurious E342/E330.
+- **Validator**: Reports E756 at the tier (the sole emitted code).
 
 ## CHAT Rule
 

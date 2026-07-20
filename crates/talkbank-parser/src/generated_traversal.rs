@@ -1,5 +1,5 @@
 //! Generator: tree-sitter-node-types 0.1.0 (generate_typed_traversal)
-//! Source grammar digest (sha256): grammar.json=d8da54cc3d5cc443fb64c6cc3a7a36fa6c48d70b464cd70f415ee797e4be70ef node-types.json=0771ebbeac85cf0729151f5119105eaaa40ca3a6367fb4205f6ca2991ea4a1af
+//! Source grammar digest (sha256): grammar.json=129e2d931f05f69718c5f282e0ccd1db457b9d910c3132cd8da45fbc32bb5318 node-types.json=37ad5c58000ee592720a859d78615dd155f6a0dc1ab2c7c0e1a6a8a344301837
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -3664,6 +3664,15 @@ impl<'tree> AsRawNode<'tree> for SelfInterruptionNode<'tree> {
 #[derive(Debug, Clone, Copy)]
 pub struct SemicolonNode<'tree>(pub tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SemicolonNode<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        self.0
+    }
+}
+/// Typed wrapper for `sep_trailing_space` nodes (kind verified at construction).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct SepTrailingSpaceNode<'tree>(pub tree_sitter::Node<'tree>);
+impl<'tree> AsRawNode<'tree> for SepTrailingSpaceNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
@@ -12958,6 +12967,8 @@ pub struct HeaderSepChildren<'tree> {
     pub child_0: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<'tree, NodeSlot<'tree, TabNode<'tree>>>,
+    /// Positional member 2.
+    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13020,6 +13031,42 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
                 slot,
             }
         };
+        let child_2 = {
+            let leading_extras = __cur.take_leading_extras();
+            let slot = if optional_split_inner(
+                &ReconShape::Kind("sep_trailing_space"),
+                &cont_of(&[]),
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0
+            {
+                Some(if let Some(__c) = __cur.peek() {
+                    if __c.is_error() {
+                        __cur.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "sep_trailing_space" {
+                        __cur.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(SepTrailingSpaceNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                })
+            } else {
+                None
+            };
+            Positioned {
+                leading_extras,
+                slot,
+            }
+        };
         let mut trailing_extras: Vec<Extra<'tree>> = Vec::new();
         let mut unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
         for __leftover in __cur.rest() {
@@ -13032,6 +13079,7 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
         HeaderSepChildren {
             child_0,
             child_1,
+            child_2,
             trailing_extras,
             unexpected,
         }
@@ -17815,7 +17863,9 @@ pub struct MainTierChildren<'tree> {
     /// Positional member 3.
     pub child_3: Positioned<'tree, NodeSlot<'tree, TabNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, TierBodyNode<'tree>>>,
+    pub child_4: Positioned<'tree, Option<NodeSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
+    /// Positional member 5.
+    pub child_5: Positioned<'tree, NodeSlot<'tree, TierBodyNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17934,6 +17984,42 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         };
         let child_4 = {
             let leading_extras = __cur.take_leading_extras();
+            let slot = if optional_split_inner(
+                &ReconShape::Kind("sep_trailing_space"),
+                &cont_of(&[ReconShape::Kind("tier_body")]),
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0
+            {
+                Some(if let Some(__c) = __cur.peek() {
+                    if __c.is_error() {
+                        __cur.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "sep_trailing_space" {
+                        __cur.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(SepTrailingSpaceNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                })
+            } else {
+                None
+            };
+            Positioned {
+                leading_extras,
+                slot,
+            }
+        };
+        let child_5 = {
+            let leading_extras = __cur.take_leading_extras();
             let slot = if let Some(__c) = __cur.peek() {
                 if __c.is_error() {
                     __cur.advance();
@@ -17971,6 +18057,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
             child_2,
             child_3,
             child_4,
+            child_5,
             trailing_extras,
             unexpected,
         }
@@ -29436,40 +29523,48 @@ pub fn extract_terminator<'tree>(node: tree_sitter::Node<'tree>) -> TerminatorCh
 
 // Task 7 extract contract: pub fn extract_text_with_bullets<'tree>(node: TextWithBulletsNode<'tree>) -> TextWithBulletsChildren<'tree>
 #[derive(Debug, Clone)]
+pub struct TextWithBulletsChild0BulletChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> TextWithBulletsChild0BulletChildren<'tree> {}
+#[derive(Debug, Clone)]
 pub enum TextWithBulletsChild0Choice<'tree> {
     /// Alternative `TextSegment`.
     TextSegment(TextSegmentNode<'tree>),
     /// Alternative `Bullet`.
-    Bullet(BulletNode<'tree>),
+    Bullet(TextWithBulletsChild0BulletChildren<'tree>),
     /// Alternative `Continuation`.
     Continuation(ContinuationNode<'tree>),
 }
-impl<'tree> AsRawNode<'tree> for TextWithBulletsChild0Choice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            TextWithBulletsChild0Choice::TextSegment(inner) => inner.raw_node(),
-            TextWithBulletsChild0Choice::Bullet(inner) => inner.raw_node(),
-            TextWithBulletsChild0Choice::Continuation(inner) => inner.raw_node(),
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct TextWithBulletsChild1BulletChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
 }
+impl<'tree> TextWithBulletsChild1BulletChildren<'tree> {}
 #[derive(Debug, Clone)]
 pub enum TextWithBulletsChild1Choice<'tree> {
     /// Alternative `TextSegment`.
     TextSegment(TextSegmentNode<'tree>),
     /// Alternative `Bullet`.
-    Bullet(BulletNode<'tree>),
+    Bullet(TextWithBulletsChild1BulletChildren<'tree>),
     /// Alternative `Continuation`.
     Continuation(ContinuationNode<'tree>),
-}
-impl<'tree> AsRawNode<'tree> for TextWithBulletsChild1Choice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            TextWithBulletsChild1Choice::TextSegment(inner) => inner.raw_node(),
-            TextWithBulletsChild1Choice::Bullet(inner) => inner.raw_node(),
-            TextWithBulletsChild1Choice::Continuation(inner) => inner.raw_node(),
-        }
-    }
 }
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsChildren<'tree> {
@@ -29511,12 +29606,18 @@ pub fn extract_text_with_bullets<'tree>(
                     match choice_split_inner(
                         &[
                             ReconShape::Kind("text_segment"),
-                            ReconShape::Kind("bullet"),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("bullet"),
+                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                            ]),
                             ReconShape::Kind("continuation"),
                         ],
                         &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
                             ReconShape::Kind("text_segment"),
-                            ReconShape::Kind("bullet"),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("bullet"),
+                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                            ]),
                             ReconShape::Kind("continuation"),
                         ]))]),
                         __cur.all(),
@@ -29533,7 +29634,115 @@ pub fn extract_text_with_bullets<'tree>(
                             }
                         }
                         Some((1, _)) => {
-                            if let Some(__v) = __cur.take_if_kind("bullet").map(BulletNode) {
+                            if let Some(__v) = if shape_match_inner(
+                                &ReconShape::Seq(&[
+                                    ReconShape::Kind("bullet"),
+                                    ReconShape::Repeat(&ReconShape::Kind("space")),
+                                ]),
+                                &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
+                                    ReconShape::Kind("text_segment"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Kind("continuation"),
+                                ]))]),
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
+                            )
+                            .is_some()
+                            {
+                                Some({
+                                    let child_0 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "bullet" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(BulletNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let child_1 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let __count = repeat_split_inner(
+                                            &ReconShape::Kind("space"),
+                                            &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(
+                                                &[
+                                                    ReconShape::Kind("text_segment"),
+                                                    ReconShape::Seq(&[
+                                                        ReconShape::Kind("bullet"),
+                                                        ReconShape::Repeat(&ReconShape::Kind(
+                                                            "space",
+                                                        )),
+                                                    ]),
+                                                    ReconShape::Kind("continuation"),
+                                                ],
+                                            ))]),
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
+                                        )
+                                        .0;
+                                        let mut __items = Vec::new();
+                                        for _ in 0..__count {
+                                            __items.push({
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "space" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(SpaceNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            });
+                                        }
+                                        Positioned {
+                                            leading_extras,
+                                            slot: __items,
+                                        }
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    TextWithBulletsChild0BulletChildren {
+                                        child_0,
+                                        child_1,
+                                        trailing_extras,
+                                        unexpected,
+                                    }
+                                })
+                            } else {
+                                None
+                            } {
                                 NodeSlot::Present(TextWithBulletsChild0Choice::Bullet(__v))
                             } else {
                                 NodeSlot::Absent
@@ -29562,7 +29771,10 @@ pub fn extract_text_with_bullets<'tree>(
             let __count = repeat_split_inner(
                 &ReconShape::Choice(&[
                     ReconShape::Kind("text_segment"),
-                    ReconShape::Kind("bullet"),
+                    ReconShape::Seq(&[
+                        ReconShape::Kind("bullet"),
+                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                    ]),
                     ReconShape::Kind("continuation"),
                 ]),
                 &cont_of(&[]),
@@ -29588,12 +29800,18 @@ pub fn extract_text_with_bullets<'tree>(
                             match choice_split_inner(
                                 &[
                                     ReconShape::Kind("text_segment"),
-                                    ReconShape::Kind("bullet"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
                                     ReconShape::Kind("continuation"),
                                 ],
                                 &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
                                     ReconShape::Kind("text_segment"),
-                                    ReconShape::Kind("bullet"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
                                     ReconShape::Kind("continuation"),
                                 ]))]),
                                 __cur.all(),
@@ -29612,8 +29830,119 @@ pub fn extract_text_with_bullets<'tree>(
                                     }
                                 }
                                 Some((1, _)) => {
-                                    if let Some(__v) = __cur.take_if_kind("bullet").map(BulletNode)
+                                    if let Some(__v) = if shape_match_inner(
+                                        &ReconShape::Seq(&[
+                                            ReconShape::Kind("bullet"),
+                                            ReconShape::Repeat(&ReconShape::Kind("space")),
+                                        ]),
+                                        &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
+                                            ReconShape::Kind("text_segment"),
+                                            ReconShape::Seq(&[
+                                                ReconShape::Kind("bullet"),
+                                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                                            ]),
+                                            ReconShape::Kind("continuation"),
+                                        ]))]),
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .is_some()
                                     {
+                                        Some({
+                                            let child_0 = {
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "bullet" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(BulletNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            };
+                                            let child_1 = {
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let __count = repeat_split_inner(
+                                                    &ReconShape::Kind("space"),
+                                                    &cont_of(&[ReconShape::Repeat(
+                                                        &ReconShape::Choice(&[
+                                                            ReconShape::Kind("text_segment"),
+                                                            ReconShape::Seq(&[
+                                                                ReconShape::Kind("bullet"),
+                                                                ReconShape::Repeat(
+                                                                    &ReconShape::Kind("space"),
+                                                                ),
+                                                            ]),
+                                                            ReconShape::Kind("continuation"),
+                                                        ]),
+                                                    )]),
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
+                                                )
+                                                .0;
+                                                let mut __items = Vec::new();
+                                                for _ in 0..__count {
+                                                    __items.push({
+                                                        let leading_extras =
+                                                            __cur.take_leading_extras();
+                                                        let slot = if let Some(__c) = __cur.peek() {
+                                                            if __c.is_error() {
+                                                                __cur.advance();
+                                                                NodeSlot::Error(__c)
+                                                            } else if __c.kind() == "space" {
+                                                                __cur.advance();
+                                                                if __c.is_missing() {
+                                                                    NodeSlot::Missing(__c)
+                                                                } else {
+                                                                    NodeSlot::Present(SpaceNode(
+                                                                        __c,
+                                                                    ))
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            }
+                                                        } else {
+                                                            NodeSlot::Absent
+                                                        };
+                                                        Positioned {
+                                                            leading_extras,
+                                                            slot,
+                                                        }
+                                                    });
+                                                }
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot: __items,
+                                                }
+                                            };
+                                            let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                            let unexpected: Vec<tree_sitter::Node<'tree>> =
+                                                Vec::new();
+                                            TextWithBulletsChild1BulletChildren {
+                                                child_0,
+                                                child_1,
+                                                trailing_extras,
+                                                unexpected,
+                                            }
+                                        })
+                                    } else {
+                                        None
+                                    } {
                                         NodeSlot::Present(TextWithBulletsChild1Choice::Bullet(__v))
                                     } else {
                                         NodeSlot::Absent
@@ -29665,46 +29994,78 @@ pub fn extract_text_with_bullets<'tree>(
 
 // Task 7 extract contract: pub fn extract_text_with_bullets_and_pics<'tree>(node: TextWithBulletsAndPicsNode<'tree>) -> TextWithBulletsAndPicsChildren<'tree>
 #[derive(Debug, Clone)]
+pub struct TextWithBulletsAndPicsChild0BulletChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> TextWithBulletsAndPicsChild0BulletChildren<'tree> {}
+#[derive(Debug, Clone)]
+pub struct TextWithBulletsAndPicsChild0InlinePicChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, InlinePicNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> TextWithBulletsAndPicsChild0InlinePicChildren<'tree> {}
+#[derive(Debug, Clone)]
 pub enum TextWithBulletsAndPicsChild0Choice<'tree> {
     /// Alternative `TextSegment`.
     TextSegment(TextSegmentNode<'tree>),
     /// Alternative `Bullet`.
-    Bullet(BulletNode<'tree>),
+    Bullet(TextWithBulletsAndPicsChild0BulletChildren<'tree>),
     /// Alternative `InlinePic`.
-    InlinePic(InlinePicNode<'tree>),
+    InlinePic(TextWithBulletsAndPicsChild0InlinePicChildren<'tree>),
     /// Alternative `Continuation`.
     Continuation(ContinuationNode<'tree>),
 }
-impl<'tree> AsRawNode<'tree> for TextWithBulletsAndPicsChild0Choice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            TextWithBulletsAndPicsChild0Choice::TextSegment(inner) => inner.raw_node(),
-            TextWithBulletsAndPicsChild0Choice::Bullet(inner) => inner.raw_node(),
-            TextWithBulletsAndPicsChild0Choice::InlinePic(inner) => inner.raw_node(),
-            TextWithBulletsAndPicsChild0Choice::Continuation(inner) => inner.raw_node(),
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct TextWithBulletsAndPicsChild1BulletChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
 }
+impl<'tree> TextWithBulletsAndPicsChild1BulletChildren<'tree> {}
+#[derive(Debug, Clone)]
+pub struct TextWithBulletsAndPicsChild1InlinePicChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, InlinePicNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> TextWithBulletsAndPicsChild1InlinePicChildren<'tree> {}
 #[derive(Debug, Clone)]
 pub enum TextWithBulletsAndPicsChild1Choice<'tree> {
     /// Alternative `TextSegment`.
     TextSegment(TextSegmentNode<'tree>),
     /// Alternative `Bullet`.
-    Bullet(BulletNode<'tree>),
+    Bullet(TextWithBulletsAndPicsChild1BulletChildren<'tree>),
     /// Alternative `InlinePic`.
-    InlinePic(InlinePicNode<'tree>),
+    InlinePic(TextWithBulletsAndPicsChild1InlinePicChildren<'tree>),
     /// Alternative `Continuation`.
     Continuation(ContinuationNode<'tree>),
-}
-impl<'tree> AsRawNode<'tree> for TextWithBulletsAndPicsChild1Choice<'tree> {
-    fn raw_node(&self) -> tree_sitter::Node<'tree> {
-        match self {
-            TextWithBulletsAndPicsChild1Choice::TextSegment(inner) => inner.raw_node(),
-            TextWithBulletsAndPicsChild1Choice::Bullet(inner) => inner.raw_node(),
-            TextWithBulletsAndPicsChild1Choice::InlinePic(inner) => inner.raw_node(),
-            TextWithBulletsAndPicsChild1Choice::Continuation(inner) => inner.raw_node(),
-        }
-    }
 }
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsAndPicsChildren<'tree> {
@@ -29746,14 +30107,26 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                     match choice_split_inner(
                         &[
                             ReconShape::Kind("text_segment"),
-                            ReconShape::Kind("bullet"),
-                            ReconShape::Kind("inline_pic"),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("bullet"),
+                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                            ]),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("inline_pic"),
+                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                            ]),
                             ReconShape::Kind("continuation"),
                         ],
                         &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
                             ReconShape::Kind("text_segment"),
-                            ReconShape::Kind("bullet"),
-                            ReconShape::Kind("inline_pic"),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("bullet"),
+                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                            ]),
+                            ReconShape::Seq(&[
+                                ReconShape::Kind("inline_pic"),
+                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                            ]),
                             ReconShape::Kind("continuation"),
                         ]))]),
                         __cur.all(),
@@ -29772,14 +30145,250 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                             }
                         }
                         Some((1, _)) => {
-                            if let Some(__v) = __cur.take_if_kind("bullet").map(BulletNode) {
+                            if let Some(__v) = if shape_match_inner(
+                                &ReconShape::Seq(&[
+                                    ReconShape::Kind("bullet"),
+                                    ReconShape::Repeat(&ReconShape::Kind("space")),
+                                ]),
+                                &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
+                                    ReconShape::Kind("text_segment"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("inline_pic"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Kind("continuation"),
+                                ]))]),
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
+                            )
+                            .is_some()
+                            {
+                                Some({
+                                    let child_0 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "bullet" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(BulletNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let child_1 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let __count = repeat_split_inner(
+                                            &ReconShape::Kind("space"),
+                                            &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(
+                                                &[
+                                                    ReconShape::Kind("text_segment"),
+                                                    ReconShape::Seq(&[
+                                                        ReconShape::Kind("bullet"),
+                                                        ReconShape::Repeat(&ReconShape::Kind(
+                                                            "space",
+                                                        )),
+                                                    ]),
+                                                    ReconShape::Seq(&[
+                                                        ReconShape::Kind("inline_pic"),
+                                                        ReconShape::Repeat(&ReconShape::Kind(
+                                                            "space",
+                                                        )),
+                                                    ]),
+                                                    ReconShape::Kind("continuation"),
+                                                ],
+                                            ))]),
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
+                                        )
+                                        .0;
+                                        let mut __items = Vec::new();
+                                        for _ in 0..__count {
+                                            __items.push({
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "space" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(SpaceNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            });
+                                        }
+                                        Positioned {
+                                            leading_extras,
+                                            slot: __items,
+                                        }
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    TextWithBulletsAndPicsChild0BulletChildren {
+                                        child_0,
+                                        child_1,
+                                        trailing_extras,
+                                        unexpected,
+                                    }
+                                })
+                            } else {
+                                None
+                            } {
                                 NodeSlot::Present(TextWithBulletsAndPicsChild0Choice::Bullet(__v))
                             } else {
                                 NodeSlot::Absent
                             }
                         }
                         Some((2, _)) => {
-                            if let Some(__v) = __cur.take_if_kind("inline_pic").map(InlinePicNode) {
+                            if let Some(__v) = if shape_match_inner(
+                                &ReconShape::Seq(&[
+                                    ReconShape::Kind("inline_pic"),
+                                    ReconShape::Repeat(&ReconShape::Kind("space")),
+                                ]),
+                                &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
+                                    ReconShape::Kind("text_segment"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("inline_pic"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Kind("continuation"),
+                                ]))]),
+                                __cur.all(),
+                                __cur.index(),
+                                __cur.memo(),
+                            )
+                            .is_some()
+                            {
+                                Some({
+                                    let child_0 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let slot = if let Some(__c) = __cur.peek() {
+                                            if __c.is_error() {
+                                                __cur.advance();
+                                                NodeSlot::Error(__c)
+                                            } else if __c.kind() == "inline_pic" {
+                                                __cur.advance();
+                                                if __c.is_missing() {
+                                                    NodeSlot::Missing(__c)
+                                                } else {
+                                                    NodeSlot::Present(InlinePicNode(__c))
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        } else {
+                                            NodeSlot::Absent
+                                        };
+                                        Positioned {
+                                            leading_extras,
+                                            slot,
+                                        }
+                                    };
+                                    let child_1 = {
+                                        let leading_extras = __cur.take_leading_extras();
+                                        let __count = repeat_split_inner(
+                                            &ReconShape::Kind("space"),
+                                            &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(
+                                                &[
+                                                    ReconShape::Kind("text_segment"),
+                                                    ReconShape::Seq(&[
+                                                        ReconShape::Kind("bullet"),
+                                                        ReconShape::Repeat(&ReconShape::Kind(
+                                                            "space",
+                                                        )),
+                                                    ]),
+                                                    ReconShape::Seq(&[
+                                                        ReconShape::Kind("inline_pic"),
+                                                        ReconShape::Repeat(&ReconShape::Kind(
+                                                            "space",
+                                                        )),
+                                                    ]),
+                                                    ReconShape::Kind("continuation"),
+                                                ],
+                                            ))]),
+                                            __cur.all(),
+                                            __cur.index(),
+                                            __cur.memo(),
+                                        )
+                                        .0;
+                                        let mut __items = Vec::new();
+                                        for _ in 0..__count {
+                                            __items.push({
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "space" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(SpaceNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            });
+                                        }
+                                        Positioned {
+                                            leading_extras,
+                                            slot: __items,
+                                        }
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    TextWithBulletsAndPicsChild0InlinePicChildren {
+                                        child_0,
+                                        child_1,
+                                        trailing_extras,
+                                        unexpected,
+                                    }
+                                })
+                            } else {
+                                None
+                            } {
                                 NodeSlot::Present(TextWithBulletsAndPicsChild0Choice::InlinePic(
                                     __v,
                                 ))
@@ -29812,8 +30421,14 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
             let __count = repeat_split_inner(
                 &ReconShape::Choice(&[
                     ReconShape::Kind("text_segment"),
-                    ReconShape::Kind("bullet"),
-                    ReconShape::Kind("inline_pic"),
+                    ReconShape::Seq(&[
+                        ReconShape::Kind("bullet"),
+                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                    ]),
+                    ReconShape::Seq(&[
+                        ReconShape::Kind("inline_pic"),
+                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                    ]),
                     ReconShape::Kind("continuation"),
                 ]),
                 &cont_of(&[]),
@@ -29839,14 +30454,26 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                             match choice_split_inner(
                                 &[
                                     ReconShape::Kind("text_segment"),
-                                    ReconShape::Kind("bullet"),
-                                    ReconShape::Kind("inline_pic"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("inline_pic"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
                                     ReconShape::Kind("continuation"),
                                 ],
                                 &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
                                     ReconShape::Kind("text_segment"),
-                                    ReconShape::Kind("bullet"),
-                                    ReconShape::Kind("inline_pic"),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("bullet"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
+                                    ReconShape::Seq(&[
+                                        ReconShape::Kind("inline_pic"),
+                                        ReconShape::Repeat(&ReconShape::Kind("space")),
+                                    ]),
                                     ReconShape::Kind("continuation"),
                                 ]))]),
                                 __cur.all(),
@@ -29865,8 +30492,129 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                     }
                                 }
                                 Some((1, _)) => {
-                                    if let Some(__v) = __cur.take_if_kind("bullet").map(BulletNode)
+                                    if let Some(__v) = if shape_match_inner(
+                                        &ReconShape::Seq(&[
+                                            ReconShape::Kind("bullet"),
+                                            ReconShape::Repeat(&ReconShape::Kind("space")),
+                                        ]),
+                                        &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
+                                            ReconShape::Kind("text_segment"),
+                                            ReconShape::Seq(&[
+                                                ReconShape::Kind("bullet"),
+                                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                                            ]),
+                                            ReconShape::Seq(&[
+                                                ReconShape::Kind("inline_pic"),
+                                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                                            ]),
+                                            ReconShape::Kind("continuation"),
+                                        ]))]),
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .is_some()
                                     {
+                                        Some({
+                                            let child_0 = {
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "bullet" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(BulletNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            };
+                                            let child_1 = {
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let __count = repeat_split_inner(
+                                                    &ReconShape::Kind("space"),
+                                                    &cont_of(&[ReconShape::Repeat(
+                                                        &ReconShape::Choice(&[
+                                                            ReconShape::Kind("text_segment"),
+                                                            ReconShape::Seq(&[
+                                                                ReconShape::Kind("bullet"),
+                                                                ReconShape::Repeat(
+                                                                    &ReconShape::Kind("space"),
+                                                                ),
+                                                            ]),
+                                                            ReconShape::Seq(&[
+                                                                ReconShape::Kind("inline_pic"),
+                                                                ReconShape::Repeat(
+                                                                    &ReconShape::Kind("space"),
+                                                                ),
+                                                            ]),
+                                                            ReconShape::Kind("continuation"),
+                                                        ]),
+                                                    )]),
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
+                                                )
+                                                .0;
+                                                let mut __items = Vec::new();
+                                                for _ in 0..__count {
+                                                    __items.push({
+                                                        let leading_extras =
+                                                            __cur.take_leading_extras();
+                                                        let slot = if let Some(__c) = __cur.peek() {
+                                                            if __c.is_error() {
+                                                                __cur.advance();
+                                                                NodeSlot::Error(__c)
+                                                            } else if __c.kind() == "space" {
+                                                                __cur.advance();
+                                                                if __c.is_missing() {
+                                                                    NodeSlot::Missing(__c)
+                                                                } else {
+                                                                    NodeSlot::Present(SpaceNode(
+                                                                        __c,
+                                                                    ))
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            }
+                                                        } else {
+                                                            NodeSlot::Absent
+                                                        };
+                                                        Positioned {
+                                                            leading_extras,
+                                                            slot,
+                                                        }
+                                                    });
+                                                }
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot: __items,
+                                                }
+                                            };
+                                            let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                            let unexpected: Vec<tree_sitter::Node<'tree>> =
+                                                Vec::new();
+                                            TextWithBulletsAndPicsChild1BulletChildren {
+                                                child_0,
+                                                child_1,
+                                                trailing_extras,
+                                                unexpected,
+                                            }
+                                        })
+                                    } else {
+                                        None
+                                    } {
                                         NodeSlot::Present(
                                             TextWithBulletsAndPicsChild1Choice::Bullet(__v),
                                         )
@@ -29875,9 +30623,129 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                     }
                                 }
                                 Some((2, _)) => {
-                                    if let Some(__v) =
-                                        __cur.take_if_kind("inline_pic").map(InlinePicNode)
+                                    if let Some(__v) = if shape_match_inner(
+                                        &ReconShape::Seq(&[
+                                            ReconShape::Kind("inline_pic"),
+                                            ReconShape::Repeat(&ReconShape::Kind("space")),
+                                        ]),
+                                        &cont_of(&[ReconShape::Repeat(&ReconShape::Choice(&[
+                                            ReconShape::Kind("text_segment"),
+                                            ReconShape::Seq(&[
+                                                ReconShape::Kind("bullet"),
+                                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                                            ]),
+                                            ReconShape::Seq(&[
+                                                ReconShape::Kind("inline_pic"),
+                                                ReconShape::Repeat(&ReconShape::Kind("space")),
+                                            ]),
+                                            ReconShape::Kind("continuation"),
+                                        ]))]),
+                                        __cur.all(),
+                                        __cur.index(),
+                                        __cur.memo(),
+                                    )
+                                    .is_some()
                                     {
+                                        Some({
+                                            let child_0 = {
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let slot = if let Some(__c) = __cur.peek() {
+                                                    if __c.is_error() {
+                                                        __cur.advance();
+                                                        NodeSlot::Error(__c)
+                                                    } else if __c.kind() == "inline_pic" {
+                                                        __cur.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(InlinePicNode(__c))
+                                                        }
+                                                    } else {
+                                                        NodeSlot::Absent
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                };
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot,
+                                                }
+                                            };
+                                            let child_1 = {
+                                                let leading_extras = __cur.take_leading_extras();
+                                                let __count = repeat_split_inner(
+                                                    &ReconShape::Kind("space"),
+                                                    &cont_of(&[ReconShape::Repeat(
+                                                        &ReconShape::Choice(&[
+                                                            ReconShape::Kind("text_segment"),
+                                                            ReconShape::Seq(&[
+                                                                ReconShape::Kind("bullet"),
+                                                                ReconShape::Repeat(
+                                                                    &ReconShape::Kind("space"),
+                                                                ),
+                                                            ]),
+                                                            ReconShape::Seq(&[
+                                                                ReconShape::Kind("inline_pic"),
+                                                                ReconShape::Repeat(
+                                                                    &ReconShape::Kind("space"),
+                                                                ),
+                                                            ]),
+                                                            ReconShape::Kind("continuation"),
+                                                        ]),
+                                                    )]),
+                                                    __cur.all(),
+                                                    __cur.index(),
+                                                    __cur.memo(),
+                                                )
+                                                .0;
+                                                let mut __items = Vec::new();
+                                                for _ in 0..__count {
+                                                    __items.push({
+                                                        let leading_extras =
+                                                            __cur.take_leading_extras();
+                                                        let slot = if let Some(__c) = __cur.peek() {
+                                                            if __c.is_error() {
+                                                                __cur.advance();
+                                                                NodeSlot::Error(__c)
+                                                            } else if __c.kind() == "space" {
+                                                                __cur.advance();
+                                                                if __c.is_missing() {
+                                                                    NodeSlot::Missing(__c)
+                                                                } else {
+                                                                    NodeSlot::Present(SpaceNode(
+                                                                        __c,
+                                                                    ))
+                                                                }
+                                                            } else {
+                                                                NodeSlot::Absent
+                                                            }
+                                                        } else {
+                                                            NodeSlot::Absent
+                                                        };
+                                                        Positioned {
+                                                            leading_extras,
+                                                            slot,
+                                                        }
+                                                    });
+                                                }
+                                                Positioned {
+                                                    leading_extras,
+                                                    slot: __items,
+                                                }
+                                            };
+                                            let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                            let unexpected: Vec<tree_sitter::Node<'tree>> =
+                                                Vec::new();
+                                            TextWithBulletsAndPicsChild1InlinePicChildren {
+                                                child_0,
+                                                child_1,
+                                                trailing_extras,
+                                                unexpected,
+                                            }
+                                        })
+                                    } else {
+                                        None
+                                    } {
                                         NodeSlot::Present(
                                             TextWithBulletsAndPicsChild1Choice::InlinePic(__v),
                                         )
@@ -30360,6 +31228,8 @@ pub struct TierSepChildren<'tree> {
     pub child_0: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<'tree, NodeSlot<'tree, TabNode<'tree>>>,
+    /// Positional member 2.
+    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30422,6 +31292,42 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
                 slot,
             }
         };
+        let child_2 = {
+            let leading_extras = __cur.take_leading_extras();
+            let slot = if optional_split_inner(
+                &ReconShape::Kind("sep_trailing_space"),
+                &cont_of(&[]),
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0
+            {
+                Some(if let Some(__c) = __cur.peek() {
+                    if __c.is_error() {
+                        __cur.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "sep_trailing_space" {
+                        __cur.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(SepTrailingSpaceNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                })
+            } else {
+                None
+            };
+            Positioned {
+                leading_extras,
+                slot,
+            }
+        };
         let mut trailing_extras: Vec<Extra<'tree>> = Vec::new();
         let mut unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
         for __leftover in __cur.rest() {
@@ -30434,6 +31340,7 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
         TierSepChildren {
             child_0,
             child_1,
+            child_2,
             trailing_extras,
             unexpected,
         }
@@ -36555,7 +37462,7 @@ pub struct XDependentTierChildren<'tree> {
     /// Positional member 1.
     pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, TextWithBulletsNode<'tree>>>,
+    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
     pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
@@ -36624,22 +37531,34 @@ pub fn extract_x_dependent_tier<'tree>(
         };
         let child_2 = {
             let leading_extras = __cur.take_leading_extras();
-            let slot = if let Some(__c) = __cur.peek() {
-                if __c.is_error() {
-                    __cur.advance();
-                    NodeSlot::Error(__c)
-                } else if __c.kind() == "text_with_bullets" {
-                    __cur.advance();
-                    if __c.is_missing() {
-                        NodeSlot::Missing(__c)
+            let slot = if optional_split_inner(
+                &ReconShape::Kind("text_with_bullets"),
+                &cont_of(&[ReconShape::Kind("newline")]),
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0
+            {
+                Some(if let Some(__c) = __cur.peek() {
+                    if __c.is_error() {
+                        __cur.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "text_with_bullets" {
+                        __cur.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(TextWithBulletsNode(__c))
+                        }
                     } else {
-                        NodeSlot::Present(TextWithBulletsNode(__c))
+                        NodeSlot::Absent
                     }
                 } else {
                     NodeSlot::Absent
-                }
+                })
             } else {
-                NodeSlot::Absent
+                None
             };
             Positioned {
                 leading_extras,

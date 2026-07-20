@@ -1,5 +1,5 @@
 ================================================================================
-user_form - Word with user-defined special form, suffix.
+user_form - Word with user-defined special form, @z:label suffix.
 ================================================================================
 *MOT:	baba@z:m .
 
