@@ -74,6 +74,31 @@ impl BulletContent {
     /// The segment order is preserved exactly so tier writers can reproduce
     /// original timing and media placement without re-tokenization.
     pub fn new(segments: Vec<BulletContentSegment>) -> Self {
+        // Canonicalize free-text spacing AT THE TYPE BOUNDARY (parse, don't
+        // validate): in a free-text tier, spaces are delimiters, not content,
+        // so each text run collapses interior space runs to one and drops
+        // leading/trailing spaces, and a run that normalizes to empty is not
+        // a segment at all. Doing this in the constructor (rather than in
+        // each parser) makes the tree-sitter and re2c parsers produce
+        // identical canonical content BY CONSTRUCTION; the 2026-07-22 re2c
+        // equivalence failure on headers-comments.cha was exactly a missed
+        // parser-side mirror of this rule. The serializer re-inserts single
+        // spaces between segments (see write.rs). Idempotent, so a parser
+        // that pre-normalizes is unaffected.
+        let segments: Vec<BulletContentSegment> = segments
+            .into_iter()
+            .filter_map(|segment| match segment {
+                BulletContentSegment::Text(text) => {
+                    let normalized = normalize_free_text_spacing(text.text.as_str());
+                    if normalized.is_empty() {
+                        None
+                    } else {
+                        Some(BulletContentSegment::text(normalized))
+                    }
+                }
+                other => Some(other),
+            })
+            .collect();
         Self {
             segments: segments.into(),
         }
@@ -185,4 +210,25 @@ impl crate::validation::Validate for BulletContentSegments {
         _errors: &impl crate::ErrorSink,
     ) {
     }
+}
+
+/// Collapse runs of ASCII spaces to a single space and trim leading/trailing
+/// spaces from one free-text run. Spaces in free-text tiers are delimiters,
+/// not content (corpus-grounded, 2026-07-19 canonicalization ruling); only
+/// spaces are touched, tabs and other characters pass through.
+fn normalize_free_text_spacing(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut prev_space = false;
+    for ch in text.chars() {
+        if ch == ' ' {
+            prev_space = true;
+            continue;
+        }
+        if prev_space && !out.is_empty() {
+            out.push(' ');
+        }
+        prev_space = false;
+        out.push(ch);
+    }
+    out
 }
