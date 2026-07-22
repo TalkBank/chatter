@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use super::cache_utils;
 use super::error::CacheError;
+use super::init_lock::InitLock;
 use super::rules_version::RulesVersion;
 use super::types::CacheStats;
 use super::{maintenance_ops, roundtrip_ops, validation_ops};
@@ -100,7 +101,18 @@ impl CachePool {
             .build()
             .map_err(|e| CacheError::Message(format!("failed to create tokio runtime: {e}")))?;
 
+        // Serialize the one-time create + WAL setup + migrate against every
+        // concurrent opener (other threads AND other processes) with an
+        // exclusive advisory file lock beside the database. Exactly one
+        // opener initializes; the rest wait boundedly, then connect to a
+        // ready database where the migrator no-ops. See `init_lock` module
+        // docs for the race this closes and the incident history.
+        let init_lock = InitLock::acquire(&cache_dir)?;
         let pool = rt.block_on(Self::open_file_pool(&db_path))?;
+        // Release before maintenance: the lock guards initialization only.
+        // `clean_expired` is an ordinary write, serialized like any other
+        // by WAL + busy_timeout, and may be slow on a large cache.
+        drop(init_lock);
 
         // Run expired entry cleanup eagerly so DB is ready before worker threads start.
         rt.block_on(Self::clean_expired(&pool))?;
@@ -157,19 +169,22 @@ impl CachePool {
         })
     }
 
-    /// Open a file-backed pool with WAL mode + PRAGMAs, serializing the one-time
-    /// init (create + WAL setup + migrate) against concurrent openers.
+    /// Open a file-backed pool with WAL mode + PRAGMAs, applying migrations.
     ///
     /// Openers racing a FRESH database collide two ways: first-connection WAL
     /// setup (surfacing as `InitDatabase`), and the migration (both apply
-    /// version 1 -> `UNIQUE constraint failed: _sqlx_migrations.version`). WAL +
-    /// `busy_timeout` serialize steady-state reads/writes but NOT this one-time
-    /// init, so a fresh cache dir opened by two parallel `chatter` runs, or by
-    /// many test threads, could break cache init. We serialize by bounded RETRY:
-    /// once the winner has created + migrated the db, a re-attempt connects to a
-    /// ready db and the migration no-ops. A genuine failure surfaces after the
-    /// attempts. The in-memory pool is per-connection and never shared, so it is
-    /// not affected.
+    /// version 1 -> `UNIQUE constraint failed: _sqlx_migrations.version`,
+    /// because sqlx's SQLite migrator has no cross-connection lock). WAL +
+    /// `busy_timeout` serialize steady-state reads/writes but NOT this
+    /// one-time init. The PRIMARY defence is the exclusive advisory
+    /// [`InitLock`] the caller holds around this whole function, which
+    /// serializes initialization across threads and processes. The bounded
+    /// RETRY below is retained as a backstop for openers that do not honor
+    /// the lock protocol (an older build sharing the same cache directory):
+    /// once any winner has created + migrated the db, a re-attempt connects
+    /// to a ready db and the migration no-ops. A genuine failure surfaces
+    /// after the attempts. The in-memory pool is per-connection and never
+    /// shared, so it is not affected.
     async fn open_file_pool(db_path: &Path) -> Result<SqlitePool, CacheError> {
         // Bounded so a persistent (non-race) failure still terminates; the total
         // backoff budget comfortably covers a winner creating + migrating the db.

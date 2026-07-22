@@ -65,6 +65,7 @@ mod types;
 
 // Utility and infrastructure modules
 mod cache_utils;
+mod init_lock;
 mod rules_version;
 mod schema_init;
 

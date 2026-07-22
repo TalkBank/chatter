@@ -1,7 +1,7 @@
 # talkbank-cache
 
 **Status:** Current
-**Last modified:** 2026-06-22 06:48 EDT
+**Last modified:** 2026-07-22 11:19 EDT
 
 SQLite-backed pass/fail cache for CHAT validation and round-trip results.
 
@@ -22,6 +22,12 @@ Key capabilities:
   cache miss instead of being served stale.
 - **Round-trip reuse**: Caches round-trip checks separately from plain
   validation so callers can opt into the more expensive gate.
+- **Concurrency-safe initialization**: An exclusive advisory file lock
+  beside the database serializes first-time create + migrate across
+  threads and processes (sqlx's SQLite migrator has no cross-connection
+  lock of its own), with a bounded wait that fails typed rather than
+  hanging. Steady-state reads and writes are serialized by SQLite WAL
+  mode plus a busy timeout on every connection.
 
 ## Usage
 

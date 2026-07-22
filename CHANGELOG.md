@@ -11,6 +11,23 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Validation cache: initialization is now concurrency-safe across
+  processes, not just threads. Every opener takes an exclusive advisory
+  file lock (`talkbank-cache.init.lock`, beside the database) around
+  first-time create + migrate, so parallel `chatter` runs (or parallel
+  test processes) sharing one cache directory can no longer race sqlx's
+  SQLite migration (`UNIQUE constraint failed: _sqlx_migrations.version`,
+  the 2026-07-13 flake) or collide on first-connection WAL setup. Lock
+  acquisition is bounded: on timeout, opening fails with the new typed
+  `CacheError::InitLockTimeout` and the CLI degrades to running
+  uncached instead of blocking. The 2026-07-13 bounded retry is
+  retained as a backstop for older builds that share the cache
+  directory without honoring the lock protocol. Regression coverage:
+  a cross-process stress test races 8 processes over a fresh cache
+  directory for 4 rounds under a hard deadline, so both failure modes
+  (constraint error and hang) fail the suite instead of flaking or
+  wedging it.
+
 - Desktop release: the macOS updater bundle is now uploaded under a
   per-arch asset name (`Chatter-<target>.app.tar.gz`). Previously both
   the aarch64 and x86_64 macOS jobs uploaded the arch-independent

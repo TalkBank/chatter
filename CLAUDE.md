@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-13 17:08 EDT
+**Last modified:** 2026-07-22 11:19 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -276,9 +276,12 @@ assertions. That flake shipped a red v0.3.3 release commit. CI (`ci.yml`,
 `cross-platform.yml`) was switched from `cargo test` to nextest so it matches
 the runner the tests are designed for, and the gate uses the SAME runner, so
 "green locally" means "green in CI". Corollary: gate and CI must always use the
-same test runner. (Root-cause note: the SQLite cache migration itself is not
-concurrency-safe, a real parallel-`chatter` bug tracked separately; nextest
-only sidesteps it for the test suite.)
+same test runner. (Root-cause note: the underlying bug, concurrent first-open
+of a fresh cache database racing sqlx's SQLite migration, was FIXED on
+2026-07-22 with a cross-process advisory init lock in `talkbank-cache` (see
+`crates/talkbank-cache/src/init_lock.rs` and the cross-process regression test
+`crates/talkbank-cache/tests/concurrent_process_open.rs`). nextest remains the
+required runner because gate and CI must share one runner, not as a workaround.)
 
 Releases are produced by **cargo-dist**. Pushing a `vX.Y.Z` git tag that matches the
 workspace version triggers `.github/workflows/release.yml`, which builds the signed
@@ -792,6 +795,17 @@ through the Known Folder API and ignores `HOME`-style variables.
 Integration tests MUST isolate the cache through the `CliHarness`,
 which sets this variable; `HOME`-based isolation alone is a Windows
 race (cross-platform CI incident, 2026-06-12).
+
+Cache initialization is concurrency-safe across threads AND processes
+(fixed 2026-07-22): every opener takes an exclusive advisory file lock
+(`talkbank-cache.init.lock`, beside the database) around first-time
+create + migrate, so parallel `chatter` runs or parallel test processes
+sharing one cache directory can no longer race sqlx's SQLite migration
+(`UNIQUE constraint failed: _sqlx_migrations.version`) or wedge on a
+half-initialized database. Lock acquisition is bounded (typed
+`InitLockTimeout` error on expiry, and the CLI then degrades to running
+uncached), never an indefinite block. See
+`crates/talkbank-cache/src/init_lock.rs`.
 
 ## Rust Coding Standards
 

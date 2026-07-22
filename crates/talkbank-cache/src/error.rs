@@ -30,6 +30,18 @@ pub enum CacheError {
     /// A database migration failed.
     #[error("Migration error: {0}")]
     Migration(#[from] sqlx::migrate::MigrateError),
+    /// Timed out waiting for the cross-process cache initialization lock.
+    ///
+    /// Another process held the advisory init lock (taken around first-time
+    /// database create + migrate) past the bounded acquisition deadline.
+    /// Initialization deliberately fails typed here rather than blocking
+    /// indefinitely; callers such as [`crate::CachePool::open_or_else`]
+    /// degrade to running uncached.
+    #[error("Timed out waiting for cache initialization lock: {path}")]
+    InitLockTimeout {
+        /// Path to the lockfile beside the cache database.
+        path: String,
+    },
     /// A SQLite query or update failed.
     #[error("Database operation failed")]
     Database {
