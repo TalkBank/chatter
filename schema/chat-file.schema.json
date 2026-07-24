@@ -3321,6 +3321,16 @@
           "type": "string"
         },
         {
+          "const": "E759",
+          "description": "Utterance content begins with a postfix annotation (retrace,\noverlap marker, replacement, or quotation code): the code scopes\nover PRECEDING material, and there is none, so the parse is\ngenuinely broken and the error analysis names it instead of\nfalling through to the E316 catch-all. Matches CLAN CHECK\nerror 52 (\"Item '%s' must be preceded by text.\").",
+          "type": "string"
+        },
+        {
+          "const": "E760",
+          "description": "`%mor` item beginning with the `|` separator (`|we`): the\npart-of-speech field is empty, which is never meaningful %mor\ncontent. Modern reading of CLAN CHECK error 11 (\"Symbol is not\ndeclared in the depfile.\"): the invariant is a non-empty symbol\nbefore the pipe, not the legacy depfile mechanism.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"
