@@ -865,6 +865,23 @@ pub enum ErrorCode {
     #[code("E758")]
     LeadingSpaceOnMainTier,
 
+    /// Utterance content begins with a postfix annotation (retrace,
+    /// overlap marker, replacement, or quotation code): the code scopes
+    /// over PRECEDING material, and there is none, so the parse is
+    /// genuinely broken and the error analysis names it instead of
+    /// falling through to the E316 catch-all. Matches CLAN CHECK
+    /// error 52 ("Item '%s' must be preceded by text.").
+    #[code("E759")]
+    AnnotationAtUtteranceStart,
+
+    /// `%mor` item beginning with the `|` separator (`|we`): the
+    /// part-of-speech field is empty, which is never meaningful %mor
+    /// content. Modern reading of CLAN CHECK error 11 ("Symbol is not
+    /// declared in the depfile."): the invariant is a non-empty symbol
+    /// before the pipe, not the legacy depfile mechanism.
+    #[code("E760")]
+    MorItemEmptyPos,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

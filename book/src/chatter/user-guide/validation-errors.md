@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Code glued to following word, E758: Leading space on tier (non-CA) |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -254,6 +254,20 @@ A space between the tier's tab delimiter and the first content item
 (`*CHI:<tab><space>dog .`) is invalid unless the file declares
 `@Options: CA`; CA transcripts legitimately column-align content with
 spaces after the tab. Mirrors CLAN CHECK error 123.
+
+### E759: Annotation at utterance start
+
+Postfix annotations (retraces `[/]` `[//]`, overlap markers `[<]`
+`[>]`, replacements `[: text]`, the quotation code `["]`) scope over
+the material BEFORE them; an utterance whose content begins with one
+has nothing for the code to attach to. Mirrors CLAN CHECK error 52.
+
+### E760: %mor item with an empty part-of-speech field
+
+A `%mor` item beginning with the `|` separator (`|we`) declares no
+part of speech; every item is `pos|stem` with a non-empty POS. The
+modern reading of CLAN CHECK error 11 (the depfile mechanism is
+legacy; the non-empty-symbol invariant is real).
 
 ### E243 addition: the pipe character
 

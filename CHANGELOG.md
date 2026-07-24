@@ -9,6 +9,18 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Added
+
+- Dedicated error codes for two malformations that previously fell
+  through to the generic E316 unparsable-content catch-all, from the
+  CHECK-parity adjudication of CLAN CHECK errors 52 and 11: E759 (an
+  utterance beginning with a postfix annotation such as `[/]`, `[<]`,
+  or `[: text]`, which has no preceding material to scope over) and
+  E760 (a `%mor` item with an empty part-of-speech field, `|we`). Both
+  are recognized by the tree-sitter front end's error analysis and
+  mirrored in the re2c oracle's front end; both files were already
+  rejected, so no validity verdict changes, only the diagnosis.
+
 ### Fixed
 
 - Validation cache: initialization is now concurrency-safe across

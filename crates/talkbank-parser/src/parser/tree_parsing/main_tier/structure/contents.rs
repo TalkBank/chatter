@@ -144,7 +144,46 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
         // diagnostic at the exact node span (so the whole-tree recovery
         // backstop, which also covers ERROR nodes, dedups on span).
         NodeSlot::Error(error_node) => {
-            if !attach_error_suffix_to_previous_word(error_node, source, content) {
+            // E759: an ERROR fragment that is the FIRST content item and has
+            // the shape of a postfix annotation (retrace / overlap /
+            // replacement / quotation code) is an annotation with nothing to
+            // attach to (CLAN CHECK 52). The emptiness of `content` is the
+            // typed leading-position signal; mid-utterance broken codes fall
+            // through to the ordinary word-error analysis.
+            let leading_annotation = if content.is_empty() {
+                let fragment = error_node.utf8_text(source.as_bytes()).unwrap_or("");
+                crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::leading_postfix_annotation(
+                    fragment.trim_start(),
+                )
+                .map(|code_token| (code_token.to_string(), fragment.to_string()))
+            } else {
+                None
+            };
+            if let Some((code_token, fragment)) = leading_annotation {
+                errors.report(
+                    crate::error::ParseError::new(
+                        crate::error::ErrorCode::AnnotationAtUtteranceStart,
+                        crate::error::Severity::Error,
+                        crate::error::SourceLocation::from_offsets(
+                            error_node.start_byte(),
+                            error_node.end_byte(),
+                        ),
+                        crate::error::ErrorContext::new(
+                            source,
+                            error_node.start_byte()..error_node.end_byte(),
+                            &fragment,
+                        ),
+                        format!(
+                            "Annotation '{code_token}' at utterance start has no content to attach to"
+                        ),
+                    )
+                    .with_suggestion(
+                        "Retraces, overlap markers, replacements, and quotation codes scope \
+                         over the material BEFORE them; put the annotated content first, or \
+                         remove the code",
+                    ),
+                );
+            } else if !attach_error_suffix_to_previous_word(error_node, source, content) {
                 errors.report(analyze_word_error(error_node, source));
             }
         }

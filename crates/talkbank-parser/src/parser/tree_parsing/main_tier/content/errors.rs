@@ -284,6 +284,32 @@ pub(crate) fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     // guess the diagnostic is the banned anti-pattern (see the root CLAUDE.md
     // "CST Traversal Rules"); this diagnostic was re-homed onto structure + typed model.
 
+    // E759: the fragment IS a postfix annotation (retrace / overlap /
+    // replacement / quotation code) sitting at the very START of the main
+    // tier's content: nothing precedes it for the code to scope over
+    // (CLAN CHECK 52). Positional check is derived from the source line
+    // because this analyzer receives only the fragment node. Must run
+    // BEFORE the glued-annotation branch below, which matches the same
+    // token shapes for the after-a-word case.
+    {
+        use crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated;
+        if let Some(code_token) = dedicated::leading_postfix_annotation(error_text.trim_start())
+            && dedicated::at_main_tier_content_start(source, error_node.start_byte())
+        {
+            return ParseError::new(
+                ErrorCode::AnnotationAtUtteranceStart,
+                Severity::Error,
+                SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
+                ErrorContext::new(error_text, 0..error_text.len(), error_text),
+                format!("Annotation '{code_token}' at utterance start has no content to attach to"),
+            )
+            .with_suggestion(
+                "Retraces, overlap markers, replacements, and quotation codes scope over the \
+                 material BEFORE them; put the annotated content first, or remove the code",
+            );
+        }
+    }
+
     // Missing space before bracket annotation, "[/]" attached to word
     if error_text.trim_start().starts_with("[/]")
         || error_text.trim_start().starts_with("[//]")

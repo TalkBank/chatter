@@ -113,6 +113,80 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
         let end = node.end_byte();
         let text = node.utf8_text(source.as_bytes()).unwrap_or("");
         let first_line = text.lines().next().unwrap_or(text).trim();
+
+        // Dedicated-code classification before the generic E316 catch-all
+        // (same pure rules as the region analyzers; see
+        // `error_analysis::dedicated`).
+        //
+        // E760: the ERROR sits inside a `%mor` tier (typed ancestor check,
+        // or the whole line is the ERROR and carries the prefix) and holds
+        // an item with an empty part-of-speech field.
+        let in_mor_tier = {
+            let mut ancestor = node.parent();
+            let mut found = false;
+            while let Some(candidate) = ancestor {
+                if candidate.kind() == MOR_DEPENDENT_TIER {
+                    found = true;
+                    break;
+                }
+                ancestor = candidate.parent();
+            }
+            found || text.contains("%mor:")
+        };
+        if in_mor_tier
+            && let Some(item) = super::error_analysis::dedicated::mor_item_with_empty_pos(
+                text,
+                super::error_analysis::dedicated::at_item_boundary(source, start),
+            )
+        {
+            let (item_start, item_end) = match text.find(item) {
+                Some(offset) => (start + offset, start + offset + item.len()),
+                None => (start, end),
+            };
+            out.push(
+                ParseError::new(
+                    ErrorCode::MorItemEmptyPos,
+                    Severity::Error,
+                    SourceLocation::from_offsets(item_start, item_end),
+                    ErrorContext::new(source, item_start..item_end, item),
+                    format!("MOR item '{item}' has an empty part-of-speech field"),
+                )
+                .with_suggestion(
+                    "Every %mor item is pos|stem with a non-empty part of speech before the \
+                     pipe (e.g., pro|we, v|go)",
+                ),
+            );
+            return;
+        }
+
+        // E759: the ERROR is a whole main-tier line whose content begins
+        // with a postfix annotation (CLAN CHECK 52); fragment-level leading
+        // annotations are classified positionally in the contents loop.
+        if text.starts_with('*')
+            && let Some(sep) = text.find(":\t")
+            && let Some(code_token) = super::error_analysis::dedicated::leading_postfix_annotation(
+                text[sep + 2..].trim_start(),
+            )
+        {
+            out.push(
+                ParseError::new(
+                    ErrorCode::AnnotationAtUtteranceStart,
+                    Severity::Error,
+                    SourceLocation::from_offsets(start, end),
+                    ErrorContext::new(source, start..end, text),
+                    format!(
+                        "Annotation '{code_token}' at utterance start has no content to attach to"
+                    ),
+                )
+                .with_suggestion(
+                    "Retraces, overlap markers, replacements, and quotation codes scope over \
+                     the material BEFORE them; put the annotated content first, or remove the \
+                     code",
+                ),
+            );
+            return;
+        }
+
         out.push(
             ParseError::new(
                 ErrorCode::UnparsableContent,

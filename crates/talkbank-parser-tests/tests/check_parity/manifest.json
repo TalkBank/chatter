@@ -425,9 +425,9 @@
    "fixture": "CHECK_052_retrace_without_text.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E375"
+    "E759"
    ],
-   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). Chatter rejects it via E375 (scoped-annotation parse failure); it has no dedicated code for a bracketed/retrace annotation as the first item of an utterance (parity gap, tracked). NOTE: the earlier expectation cited E747 as the equivalent, but E747 is BlankLineNotAllowed, not a retrace code; that was a mislabel."
+   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). PARITY CLOSED 2026-07-24: chatter now has the dedicated code E759 (AnnotationAtUtteranceStart, spec E759_annotation_at_utterance_start.md), replacing the former E375 scoped-annotation catch-all routing (and the still-earlier E747 mislabel)."
   },
   {
    "check_code": 53,

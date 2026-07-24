@@ -1724,13 +1724,29 @@ A bracketed code's closing ] directly attached to the start of the next word wit
 |------|------|----------|--------|
 | [E757](E757.md) | E757: Bracketed code glued to the following content | error | ✅ |
 
-## Main tier structure (E7x)
+## Tier structure (E7x)
 
-A space between the tier's tab delimiter and the first content item (*CHI:<tab><space>dog .) is invalid in a file without @Options: CA (CLAN CHECK error 123, "Illegal character '' found in tier text. If it CA, then add "@Options: CA""). CA transcripts use space-based column alignment after the tab, so the rule is exempted there; every wild occurrence of the construct (457 kept files, 2026-07-16 scan) is in a CA file, confirming the boundary.
+Every CHAT line has the shape label:<tab>content, where the separator between the label and the content is a colon and exactly one tab. Any further whitespace after that tab is not content: it is trailing whitespace of the separator. In a file without @Options: CA, a trailing space there is invalid (CLAN CHECK error 123, "Illegal character '' found in tier text. If it CA, then add "@Options: CA"").
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E758](E758.md) | tier content in a non | error | ✅ |
+| [E758](E758.md) | CA file) | error | ✅ |
+
+## Main tier annotations (E7x)
+
+Postfix annotations (retraces [/] [//] [///] [/-], overlap markers [<] [>] and their indexed forms, replacements [: text], and the quotation marker ["]) scope over the material that PRECEDES them. An utterance whose content BEGINS with one of these codes (*CHI: [/] we go home .) is malformed: the annotation has no host item, so its meaning is undefined. This matches CLAN CHECK error 52 ("Item '%s' must be preceded by text."), whose trigger set is exactly a leading bracket code starting with <, >, :, /, or ".
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E759](E759.md) | E759: Annotation at utterance start has nothing to attach to | error | ✅ |
+
+## Dependent tier validation (E7x)
+
+A %mor item is pos|stem (with optional prefixes, clitics, and suffixes). An item that BEGINS with the | separator (|we) declares no part of speech at all: the field before the pipe is empty, which is never meaningful %mor content. CLAN CHECK rejects it as error 11 ("Symbol is not declared in the depfile."): in depfile-era terms the empty symbol is undeclared; the modern reading is simply that the POS field is required.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E760](E760.md) | of | error | ✅ |
 
 ## Alignment count mismatch (E9x)
 
@@ -1747,14 +1763,6 @@ Auto-generated from corpus
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [W108](W108.md) | generated from corpus | error | ✅ |
-
-## Warnings (W6x)
-
-Auto-generated from corpus
-
-| Code | Name | Severity | Status |
-|------|------|----------|--------|
-| [W601](W601.md) | generated from corpus | error | ✅ |
 
 ## Warnings (W6x)
 

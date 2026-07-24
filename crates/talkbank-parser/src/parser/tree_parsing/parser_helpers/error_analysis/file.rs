@@ -252,6 +252,34 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
         let content_start = error_text.find(":\t").unwrap_or(0) + 2;
         let content = error_text[content_start..].trim();
 
+        // E759: utterance content begins with a postfix annotation
+        // (retrace / overlap / replacement / quotation). These codes scope
+        // over the material that PRECEDES them, so a leading one has no
+        // host and the parse is genuinely broken; name it instead of
+        // falling through to the generic E316. Trigger set mirrors CLAN
+        // CHECK error 52: a leading bracket code whose first inner
+        // character is one of `/`, `<`, `>`, `:`, `"`. Legal leading
+        // codes (`[- lang]` precodes, `[^ ...]`) parse normally and never
+        // reach this analysis.
+        if let Some(code_token) = super::dedicated::leading_postfix_annotation(content) {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::AnnotationAtUtteranceStart,
+                    Severity::Error,
+                    SourceLocation::from_offsets(start + content_start, end),
+                    ErrorContext::new(source, start..end, error_text),
+                    format!(
+                        "Annotation '{code_token}' at utterance start has no content to attach to"
+                    ),
+                )
+                .with_suggestion(
+                    "Retraces, overlap markers, replacements, and quotation codes scope over the \
+                     material BEFORE them; put the annotated content first, or remove the code",
+                ),
+            );
+            return;
+        }
+
         // [%add: ...] or similar inline dependent tier annotation
         if content.starts_with("[%") {
             errors.report(

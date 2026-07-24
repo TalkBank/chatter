@@ -6,6 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+pub(crate) mod dedicated;
 mod dependent_tier;
 mod file;
 mod header;

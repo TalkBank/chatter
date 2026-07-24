@@ -331,6 +331,15 @@ pub fn parse_file_with_errors<'a>(
                     .into_result()
                 {
                     Ok(main_tier) => {
+                        // Recovery is not validity: this front end parses a
+                        // LEADING postfix annotation (retrace / overlap /
+                        // replacement) as a standalone `Annotation` item, but
+                        // those codes scope over PRECEDING material, so an
+                        // utterance that BEGINS with one is malformed (CLAN
+                        // CHECK 52, "Item '%s' must be preceded by text.").
+                        // Report E759 here, mirroring the tree-sitter error
+                        // analysis; the AST is kept (recovery policy).
+                        report_annotation_at_utterance_start(&main_tier.tier_body.contents, errors);
                         // Recovery is not validity: a `<...>` group with no
                         // following annotation only parses via a synthesized
                         // retrace (Retrace::synthesized_missing_annotation). CLAN
@@ -476,13 +485,51 @@ fn parse_dependent_tiers<'a>(
             {
                 Ok(tier) => dep_tiers.push(DependentTierParsed::Mor(tier)),
                 Err(_) => {
-                    report_error(
-                        errors,
-                        talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                        talkbank_model::Severity::Error,
-                        tier_tokens,
-                        &format!("failed to parse {prefix_text} tier content"),
-                    );
+                    // E760: a mor item whose part-of-speech field is empty
+                    // (an item beginning with the `|` separator, `|we`).
+                    // More specific than the generic unparsable fallback;
+                    // mirrors the tree-sitter dependent-tier error analysis
+                    // (modern reading of CLAN CHECK error 11). On a mor
+                    // lex/parse failure the token stream degrades toward
+                    // character-level tokens, so the tier text is
+                    // reconstructed by concatenation (tokens carry their
+                    // exact source slices, including whitespace) and the
+                    // item rule is applied to the whitespace-split items,
+                    // identically to the tree-sitter side.
+                    let tier_text: String = tier_tokens.iter().map(Token::text).collect();
+                    // Tier text reconstruction starts at the tier's content
+                    // boundary, so the first whitespace item is a genuine
+                    // item (no split-tail hazard as in the tree-sitter
+                    // fragment case); items whose leading pipe follows a
+                    // non-space character inside the SAME whitespace token
+                    // (two-pipe/compound malformations) do not match the
+                    // starts_with test at all.
+                    if let Some(item) = tier_text
+                        .split_whitespace()
+                        .find(|text| text.starts_with('|') && text.len() > 1)
+                    {
+                        errors.report(
+                            ParseError::new(
+                                talkbank_model::errors::codes::ErrorCode::MorItemEmptyPos,
+                                talkbank_model::Severity::Error,
+                                talkbank_model::SourceLocation::new(Span::DUMMY),
+                                None,
+                                format!("MOR item '{item}' has an empty part-of-speech field"),
+                            )
+                            .with_suggestion(
+                                "Every %mor item is pos|stem with a non-empty part of speech \
+                                 before the pipe (e.g., pro|we, v|go)",
+                            ),
+                        );
+                    } else {
+                        report_error(
+                            errors,
+                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
+                            talkbank_model::Severity::Error,
+                            tier_tokens,
+                            &format!("failed to parse {prefix_text} tier content"),
+                        );
+                    }
                     dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
                 }
             }
@@ -587,6 +634,44 @@ fn parse_dependent_tiers<'a>(
 /// lacked a following annotation, recursing into nested groups, quotations, and
 /// retraces. Used to surface the MISSING-annotation diagnostic (E342) that the
 /// chumsky combinators cannot emit themselves (no ErrorSink access).
+/// E759: the utterance's FIRST content item is a postfix annotation
+/// (retrace, overlap marker, or replacement), which has no preceding
+/// material to scope over. Trigger set mirrors CLAN CHECK error 52 and
+/// the tree-sitter error analysis; ordinary leading items (words,
+/// events, groups, precodes) never match. The `["]` quotation-marker
+/// case of CHECK 52 has no token variant in this front end and is
+/// covered by the tree-sitter side only.
+fn report_annotation_at_utterance_start(items: &[ContentItem<'_>], errors: &impl ErrorSink) {
+    let offending = match items.first() {
+        Some(ContentItem::Annotation(token)) => match token {
+            Token::RetraceComplete(s)
+            | Token::RetracePartial(s)
+            | Token::RetraceMultiple(s)
+            | Token::RetraceReformulation(s)
+            | Token::OverlapPrecedes(s)
+            | Token::OverlapFollows(s)
+            | Token::Replacement(s) => Some(*s),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some(code_text) = offending {
+        errors.report(
+            ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::AnnotationAtUtteranceStart,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                format!("Annotation '{code_text}' at utterance start has no content to attach to"),
+            )
+            .with_suggestion(
+                "Retraces, overlap markers, replacements, and quotation codes scope over the \
+                 material BEFORE them; put the annotated content first, or remove the code",
+            ),
+        );
+    }
+}
+
 fn has_synthesized_missing_annotation(items: &[ContentItem<'_>]) -> bool {
     items.iter().any(|item| match item {
         ContentItem::Retrace(r) => {
