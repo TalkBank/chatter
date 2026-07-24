@@ -1,0 +1,736 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "eng"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "pid": "11312/c-00000000-0",
+        "type": "pid"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "eng"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": "Narrator",
+            "role": "Investigator",
+            "speaker_code": "NAR"
+          },
+          {
+            "name": null,
+            "role": "Target_Child",
+            "speaker_code": "CHI"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "jabberwocky",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "NAR",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "jabberwocky",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "speaker": "CHI",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "date": "03-MAR-1992",
+        "type": "date"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "filename": "phon-intervals",
+        "media_type": "audio",
+        "type": "media"
+      },
+      "line_type": "header"
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              "twaz",
+              "bɹɪlɪɡ",
+              "ænd",
+              "ðə",
+              "slaɪði",
+              "toʊvz"
+            ],
+            "tier_type": "Mod"
+          },
+          "type": "Mod"
+        },
+        {
+          "data": {
+            "tier_type": "Modsyl",
+            "words": [
+              "t:Ow:Oa:Nz:C",
+              "b:Oɹ:Oɪ:Nl:Oɪ:Nɡ:C",
+              "æ:Nn:Cd:C",
+              "ð:Oə:N",
+              "s:Ll:Oa:Dɪ:Dð:Oi:N",
+              "t:Oo:Dʊ:Dv:Cz:R"
+            ]
+          },
+          "type": "Modsyl"
+        },
+        {
+          "data": {
+            "items": [
+              "twʌ̾z",
+              "bɹɪlɪɡ",
+              "ænd",
+              "ðə",
+              "slaɪði",
+              "toʊvz"
+            ],
+            "tier_type": "Pho"
+          },
+          "type": "Pho"
+        },
+        {
+          "data": {
+            "tier_type": "Phosyl",
+            "words": [
+              "t:Ow:Oʌ̾:Nz:C",
+              "b:Oɹ:Oɪ:Nl:Oɪ:Nɡ:C",
+              "æ:Nn:Cd:C",
+              "ð:Oə:N",
+              "s:Ll:Oa:Dɪ:Dð:Oi:N",
+              "t:Oo:Dʊ:Dv:Cz:R"
+            ]
+          },
+          "type": "Phosyl"
+        },
+        {
+          "data": {
+            "words": [
+              {
+                "pairs": [
+                  {
+                    "source": "t",
+                    "target": "t"
+                  },
+                  {
+                    "source": "w",
+                    "target": "w"
+                  },
+                  {
+                    "source": "a",
+                    "target": "ʌ̾"
+                  },
+                  {
+                    "source": "z",
+                    "target": "z"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "b",
+                    "target": "b"
+                  },
+                  {
+                    "source": "ɹ",
+                    "target": "ɹ"
+                  },
+                  {
+                    "source": "ɪ",
+                    "target": "ɪ"
+                  },
+                  {
+                    "source": "l",
+                    "target": "l"
+                  },
+                  {
+                    "source": "ɪ",
+                    "target": "ɪ"
+                  },
+                  {
+                    "source": "ɡ",
+                    "target": "ɡ"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "æ",
+                    "target": "æ"
+                  },
+                  {
+                    "source": "n",
+                    "target": "n"
+                  },
+                  {
+                    "source": "d",
+                    "target": "d"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "ð",
+                    "target": "ð"
+                  },
+                  {
+                    "source": "ə",
+                    "target": "ə"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "s",
+                    "target": "s"
+                  },
+                  {
+                    "source": "l",
+                    "target": "l"
+                  },
+                  {
+                    "source": "a",
+                    "target": "a"
+                  },
+                  {
+                    "source": "ɪ",
+                    "target": "ɪ"
+                  },
+                  {
+                    "source": "ð",
+                    "target": "ð"
+                  },
+                  {
+                    "source": "i",
+                    "target": "i"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "t",
+                    "target": "t"
+                  },
+                  {
+                    "source": "o",
+                    "target": "o"
+                  },
+                  {
+                    "source": "ʊ",
+                    "target": "ʊ"
+                  },
+                  {
+                    "source": "v",
+                    "target": "v"
+                  },
+                  {
+                    "source": "z",
+                    "target": "z"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Phoaln"
+        },
+        {
+          "data": {
+            "bullet": null,
+            "items": [
+              {
+                "cleaned_text": "'Twas",
+                "content": [
+                  {
+                    "content": "'Twas",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 440,
+                  "start_ms": 0
+                },
+                "kind": "word",
+                "raw_text": "'Twas"
+              },
+              {
+                "cleaned_text": "brillig",
+                "content": [
+                  {
+                    "content": "brillig",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 880,
+                  "start_ms": 440
+                },
+                "kind": "word",
+                "raw_text": "brillig"
+              },
+              {
+                "kind": "separator",
+                "text": ","
+              },
+              {
+                "cleaned_text": "and",
+                "content": [
+                  {
+                    "content": "and",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 1320,
+                  "start_ms": 880
+                },
+                "kind": "word",
+                "raw_text": "and"
+              },
+              {
+                "cleaned_text": "the",
+                "content": [
+                  {
+                    "content": "the",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 1760,
+                  "start_ms": 1320
+                },
+                "kind": "word",
+                "raw_text": "the"
+              },
+              {
+                "cleaned_text": "slithy",
+                "content": [
+                  {
+                    "content": "slithy",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 2200,
+                  "start_ms": 1760
+                },
+                "kind": "word",
+                "raw_text": "slithy"
+              },
+              {
+                "cleaned_text": "toves",
+                "content": [
+                  {
+                    "content": "toves",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 2640,
+                  "start_ms": 2200
+                },
+                "kind": "word",
+                "raw_text": "toves"
+              }
+            ],
+            "language_code": null,
+            "terminator": {
+              "type": "break_for_coding"
+            }
+          },
+          "type": "Wor"
+        },
+        {
+          "data": {
+            "groups": [
+              {
+                "phones": [
+                  {
+                    "bullet": {
+                      "end_ms": 110,
+                      "start_ms": 0
+                    },
+                    "phone": "t"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 220,
+                      "start_ms": 110
+                    },
+                    "phone": "w"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 330,
+                      "start_ms": 220
+                    },
+                    "phone": "ʌ̾"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 440,
+                      "start_ms": 330
+                    },
+                    "phone": "z"
+                  }
+                ]
+              },
+              {
+                "phones": [
+                  {
+                    "bullet": {
+                      "end_ms": 513,
+                      "start_ms": 440
+                    },
+                    "phone": "b"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 587,
+                      "start_ms": 513
+                    },
+                    "phone": "ɹ"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 660,
+                      "start_ms": 587
+                    },
+                    "phone": "ɪ"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 733,
+                      "start_ms": 660
+                    },
+                    "phone": "l"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 807,
+                      "start_ms": 733
+                    },
+                    "phone": "ɪ"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 880,
+                      "start_ms": 807
+                    },
+                    "phone": "ɡ"
+                  }
+                ]
+              },
+              {
+                "phones": [
+                  {
+                    "bullet": {
+                      "end_ms": 1027,
+                      "start_ms": 880
+                    },
+                    "phone": "æ"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 1173,
+                      "start_ms": 1027
+                    },
+                    "phone": "n"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 1320,
+                      "start_ms": 1173
+                    },
+                    "phone": "d"
+                  }
+                ]
+              },
+              {
+                "phones": [
+                  {
+                    "bullet": {
+                      "end_ms": 1540,
+                      "start_ms": 1320
+                    },
+                    "phone": "ð"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 1760,
+                      "start_ms": 1540
+                    },
+                    "phone": "ə"
+                  }
+                ]
+              },
+              {
+                "phones": [
+                  {
+                    "bullet": {
+                      "end_ms": 1833,
+                      "start_ms": 1760
+                    },
+                    "phone": "s"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 1907,
+                      "start_ms": 1833
+                    },
+                    "phone": "l"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 1980,
+                      "start_ms": 1907
+                    },
+                    "phone": "a"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2053,
+                      "start_ms": 1980
+                    },
+                    "phone": "ɪ"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2127,
+                      "start_ms": 2053
+                    },
+                    "phone": "ð"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2200,
+                      "start_ms": 2127
+                    },
+                    "phone": "i"
+                  }
+                ]
+              },
+              {
+                "phones": [
+                  {
+                    "bullet": {
+                      "end_ms": 2288,
+                      "start_ms": 2200
+                    },
+                    "phone": "t"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2376,
+                      "start_ms": 2288
+                    },
+                    "phone": "o"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2464,
+                      "start_ms": 2376
+                    },
+                    "phone": "ʊ"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2552,
+                      "start_ms": 2464
+                    },
+                    "phone": "v"
+                  },
+                  {
+                    "bullet": {
+                      "end_ms": 2640,
+                      "start_ms": 2552
+                    },
+                    "phone": "z"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Xphoint"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "bullet": {
+            "end_ms": 2640,
+            "start_ms": 0
+          },
+          "content": [
+            {
+              "cleaned_text": "'Twas",
+              "content": [
+                {
+                  "content": "'Twas",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "'Twas",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "brillig",
+              "content": [
+                {
+                  "content": "brillig",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "brillig",
+              "type": "word"
+            },
+            {
+              "kind": "comma",
+              "type": "separator"
+            },
+            {
+              "cleaned_text": "and",
+              "content": [
+                {
+                  "content": "and",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "and",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "the",
+              "content": [
+                {
+                  "content": "the",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "the",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "slithy",
+              "content": [
+                {
+                  "content": "slithy",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "slithy",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "toves",
+              "content": [
+                {
+                  "content": "toves",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "toves",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "break_for_coding"
+          }
+        },
+        "speaker": "NAR"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "media": {
+    "filename": "phon-intervals",
+    "media_type": "audio"
+  },
+  "options": [],
+  "participants": {
+    "CHI": {
+      "birth_date": null,
+      "code": "CHI",
+      "id": {
+        "corpus": "jabberwocky",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "speaker": "CHI"
+      },
+      "name": null,
+      "role": "Target_Child"
+    },
+    "NAR": {
+      "birth_date": null,
+      "code": "NAR",
+      "id": {
+        "corpus": "jabberwocky",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "NAR"
+      },
+      "name": "Narrator",
+      "role": "Investigator"
+    }
+  }
+}

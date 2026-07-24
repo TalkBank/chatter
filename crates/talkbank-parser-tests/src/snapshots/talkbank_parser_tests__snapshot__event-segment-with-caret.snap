@@ -1,0 +1,326 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "eng"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "eng"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": null,
+            "role": "Investigator",
+            "speaker_code": "INV"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Event segment (&=...) bodies that contain `^`, `{`, `}`, or `$` —",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "all four are allowed inside event_segment per grammar.js's",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "EVENT_SEGMENT_FORBIDDEN (none of them appear in the forbidden",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "set). One wild-corpus example exists in shaddend.cha as",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "`&=reads:boardLas^_Palmas`. The re2c lexer's `ev_char` was",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "over-restrictive (forbade all four), splitting otherwise-whole",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "events into separate event + word tokens. Found by the re2c",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "parity oracle on 2026-04-30; lexer aligned to grammar.js.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "event_type": "reads:boardLas^_Palmas",
+              "type": "event"
+            }
+          ],
+          "linkers": [
+            {
+              "type": "lazy_overlap_precedes"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "INV"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "event_type": "points^upward",
+              "type": "event"
+            },
+            {
+              "cleaned_text": "yes",
+              "content": [
+                {
+                  "content": "yes",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "yes",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "INV"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "event_type": "foo{bar}",
+              "type": "event"
+            },
+            {
+              "cleaned_text": "ok",
+              "content": [
+                {
+                  "content": "ok",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "ok",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "INV"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "event_type": "baz}qux",
+              "type": "event"
+            },
+            {
+              "cleaned_text": "ok",
+              "content": [
+                {
+                  "content": "ok",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "ok",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "INV"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "event_type": "name$suffix",
+              "type": "event"
+            },
+            {
+              "cleaned_text": "done",
+              "content": [
+                {
+                  "content": "done",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "done",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "INV"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "options": [],
+  "participants": {
+    "INV": {
+      "birth_date": null,
+      "code": "INV",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV"
+      },
+      "name": null,
+      "role": "Investigator"
+    }
+  }
+}

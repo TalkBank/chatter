@@ -1,0 +1,772 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "eng"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "eng"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": null,
+            "role": "Target_Child",
+            "speaker_code": "CHI"
+          },
+          {
+            "name": null,
+            "role": "Mother",
+            "speaker_code": "MOT"
+          },
+          {
+            "name": null,
+            "role": "Investigator",
+            "speaker_code": "INV"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "age": "1;10.07",
+        "corpus": "corpus",
+        "group": "TD",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "ses": "MC",
+        "sex": "female",
+        "speaker": "CHI",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Mother",
+        "sex": "female",
+        "speaker": "MOT",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "lemma": "baby",
+                  "pos": "noun"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 0,
+                "index": 1,
+                "relation": "ROOT"
+              },
+              {
+                "head": 1,
+                "index": 2,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "baby",
+              "content": [
+                {
+                  "content": "baby",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "baby",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "lemma": "here",
+                  "pos": "adv"
+                },
+                "post_clitics": [
+                  {
+                    "features": [
+                      "Fin",
+                      "Ind",
+                      "Pres",
+                      "S3"
+                    ],
+                    "lemma": "be",
+                    "pos": "aux"
+                  }
+                ]
+              },
+              {
+                "main": {
+                  "lemma": "baby",
+                  "pos": "noun"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 0,
+                "index": 1,
+                "relation": "ROOT"
+              },
+              {
+                "head": 1,
+                "index": 2,
+                "relation": "COP"
+              },
+              {
+                "head": 1,
+                "index": 3,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 1,
+                "index": 4,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "here's",
+              "content": [
+                {
+                  "content": "here's",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "here's",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "baby",
+              "content": [
+                {
+                  "content": "baby",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "baby",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Acc",
+                    "S3"
+                  ],
+                  "lemma": "it",
+                  "pos": "pron"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 0,
+                "index": 1,
+                "relation": "ROOT"
+              },
+              {
+                "head": 1,
+                "index": 2,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "it",
+              "content": [
+                {
+                  "content": "it",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "it",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "xxx",
+              "content": [
+                {
+                  "content": "xxx",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "xxx",
+              "type": "word",
+              "untranscribed": "unintelligible"
+            },
+            {
+              "cleaned_text": "xxx",
+              "content": [
+                {
+                  "content": "xxx",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "xxx",
+              "type": "word",
+              "untranscribed": "unintelligible"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Nom",
+                    "S3"
+                  ],
+                  "lemma": "it",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "Ind",
+                    "Pres",
+                    "S3"
+                  ],
+                  "lemma": "fit",
+                  "pos": "verb"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 2,
+                "index": 1,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 0,
+                "index": 2,
+                "relation": "ROOT"
+              },
+              {
+                "head": 2,
+                "index": 3,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "it",
+              "content": [
+                {
+                  "content": "it",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "it",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "fit",
+              "content": [
+                {
+                  "content": "fit",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "fit",
+              "scoped_annotations": [
+                {
+                  "code": "fit-0es",
+                  "type": "error"
+                },
+                {
+                  "code": null,
+                  "type": "error"
+                }
+              ],
+              "type": "annotated_word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "lemma": "baby",
+                  "pos": "noun"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "S"
+                  ],
+                  "lemma": "will",
+                  "pos": "aux"
+                },
+                "post_clitics": [
+                  {
+                    "lemma": "not",
+                    "pos": "part"
+                  }
+                ]
+              },
+              {
+                "main": {
+                  "features": [
+                    "Inf",
+                    "S"
+                  ],
+                  "lemma": "fit",
+                  "pos": "verb"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "question"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 4,
+                "index": 1,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 4,
+                "index": 2,
+                "relation": "AUX"
+              },
+              {
+                "head": 4,
+                "index": 3,
+                "relation": "ADVMOD"
+              },
+              {
+                "head": 0,
+                "index": 4,
+                "relation": "ROOT"
+              },
+              {
+                "head": 4,
+                "index": 5,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "baby",
+              "content": [
+                {
+                  "content": "baby",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "baby",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "willn't",
+              "content": [
+                {
+                  "content": "willn't",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "willn't",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "fit",
+              "content": [
+                {
+                  "content": "fit",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "fit",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "Ind",
+                    "Pres",
+                    "S3"
+                  ],
+                  "lemma": "be",
+                  "pos": "aux"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Nom",
+                    "S3"
+                  ],
+                  "lemma": "it",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "too",
+                  "pos": "adv"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "S1"
+                  ],
+                  "lemma": "big",
+                  "pos": "adj"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "question"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 4,
+                "index": 1,
+                "relation": "COP"
+              },
+              {
+                "head": 4,
+                "index": 2,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 4,
+                "index": 3,
+                "relation": "ADVMOD"
+              },
+              {
+                "head": 0,
+                "index": 4,
+                "relation": "ROOT"
+              },
+              {
+                "head": 4,
+                "index": 5,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "is",
+              "content": [
+                {
+                  "content": "is",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "is",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "it",
+              "content": [
+                {
+                  "content": "it",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "it",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "too",
+              "content": [
+                {
+                  "content": "too",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "too",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "big",
+              "content": [
+                {
+                  "content": "big",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "big",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "options": [],
+  "participants": {
+    "CHI": {
+      "birth_date": null,
+      "code": "CHI",
+      "id": {
+        "age": "1;10.07",
+        "corpus": "corpus",
+        "group": "TD",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "ses": "MC",
+        "sex": "female",
+        "speaker": "CHI"
+      },
+      "name": null,
+      "role": "Target_Child"
+    },
+    "INV": {
+      "birth_date": null,
+      "code": "INV",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV"
+      },
+      "name": null,
+      "role": "Investigator"
+    },
+    "MOT": {
+      "birth_date": null,
+      "code": "MOT",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Mother",
+        "sex": "female",
+        "speaker": "MOT"
+      },
+      "name": null,
+      "role": "Mother"
+    }
+  }
+}

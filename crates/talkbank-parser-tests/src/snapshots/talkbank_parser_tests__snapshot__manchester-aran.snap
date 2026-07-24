@@ -1,0 +1,988 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "eng"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "eng"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": null,
+            "role": "Target_Child",
+            "speaker_code": "CHI"
+          },
+          {
+            "name": null,
+            "role": "Mother",
+            "speaker_code": "MOT"
+          },
+          {
+            "name": null,
+            "role": "Investigator",
+            "speaker_code": "INV"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "age": "1;11.12",
+        "corpus": "corpus",
+        "group": "TD",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "ses": "MC",
+        "sex": "male",
+        "speaker": "CHI",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Mother",
+        "sex": "female",
+        "speaker": "MOT",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Dem",
+                    "S1"
+                  ],
+                  "lemma": "there",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "duck",
+                  "pos": "noun"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 2,
+                "index": 1,
+                "relation": "EXPL"
+              },
+              {
+                "head": 0,
+                "index": 2,
+                "relation": "ROOT"
+              },
+              {
+                "head": 2,
+                "index": 3,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "replacement": {
+                "words": [
+                  {
+                    "cleaned_text": "there",
+                    "content": [
+                      {
+                        "content": "there",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "there"
+                  }
+                ]
+              },
+              "type": "replaced_word",
+              "word": {
+                "cleaned_text": "dere",
+                "content": [
+                  {
+                    "content": "dere",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "dere"
+              }
+            },
+            {
+              "category": "omission",
+              "cleaned_text": "aux",
+              "content": [
+                {
+                  "content": "aux",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "0aux",
+              "scoped_annotations": [
+                {
+                  "code": null,
+                  "type": "error"
+                }
+              ],
+              "type": "annotated_word"
+            },
+            {
+              "category": "omission",
+              "cleaned_text": "det",
+              "content": [
+                {
+                  "content": "det",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "0det",
+              "scoped_annotations": [
+                {
+                  "code": null,
+                  "type": "error"
+                }
+              ],
+              "type": "annotated_word"
+            },
+            {
+              "cleaned_text": "duck",
+              "content": [
+                {
+                  "content": "duck",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "duck",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Int",
+                    "S1"
+                  ],
+                  "lemma": "what",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "Ind",
+                    "Pres",
+                    "S2"
+                  ],
+                  "lemma": "have",
+                  "pos": "aux"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Nom",
+                    "S2"
+                  ],
+                  "lemma": "you",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Part",
+                    "Past",
+                    "S",
+                    "irr"
+                  ],
+                  "lemma": "get",
+                  "pos": "verb"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "here",
+                  "pos": "adv"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "question"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 4,
+                "index": 1,
+                "relation": "OBJ"
+              },
+              {
+                "head": 4,
+                "index": 2,
+                "relation": "AUX"
+              },
+              {
+                "head": 4,
+                "index": 3,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 0,
+                "index": 4,
+                "relation": "ROOT"
+              },
+              {
+                "head": 4,
+                "index": 5,
+                "relation": "ADVMOD"
+              },
+              {
+                "head": 4,
+                "index": 6,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "what",
+              "content": [
+                {
+                  "content": "what",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "what",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "have",
+              "content": [
+                {
+                  "content": "have",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "have",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "you",
+              "content": [
+                {
+                  "content": "you",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "you",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "got",
+              "content": [
+                {
+                  "content": "got",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "got",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "here",
+              "content": [
+                {
+                  "content": "here",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "here",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Int",
+                    "S1"
+                  ],
+                  "lemma": "what",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "Ind",
+                    "Pres",
+                    "S2"
+                  ],
+                  "lemma": "have",
+                  "pos": "aux"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Nom",
+                    "S2"
+                  ],
+                  "lemma": "you",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Part",
+                    "Past",
+                    "S",
+                    "irr"
+                  ],
+                  "lemma": "get",
+                  "pos": "verb"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "question"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 4,
+                "index": 1,
+                "relation": "OBJ"
+              },
+              {
+                "head": 4,
+                "index": 2,
+                "relation": "AUX"
+              },
+              {
+                "head": 4,
+                "index": 3,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 0,
+                "index": 4,
+                "relation": "ROOT"
+              },
+              {
+                "head": 4,
+                "index": 5,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "category": "nonword",
+              "cleaned_text": "ah",
+              "content": [
+                {
+                  "content": "a",
+                  "type": "text"
+                },
+                {
+                  "content": {
+                    "span": {
+                      "end": 549,
+                      "start": 548
+                    }
+                  },
+                  "type": "lengthening"
+                },
+                {
+                  "content": "h",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "&~a:h",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "what",
+              "content": [
+                {
+                  "content": "what",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "what",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "have",
+              "content": [
+                {
+                  "content": "have",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "have",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "you",
+              "content": [
+                {
+                  "content": "you",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "you",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "got",
+              "content": [
+                {
+                  "content": "got",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "got",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "lemma": "hm",
+                  "pos": "intj"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "question"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 0,
+                "index": 1,
+                "relation": "ROOT"
+              },
+              {
+                "head": 1,
+                "index": 2,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "hm",
+              "content": [
+                {
+                  "content": "hm",
+                  "type": "text"
+                },
+                {
+                  "content": {
+                    "span": {
+                      "end": 726,
+                      "start": 725
+                    }
+                  },
+                  "type": "lengthening"
+                }
+              ],
+              "raw_text": "hm:",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "Ind",
+                    "Pres",
+                    "S2"
+                  ],
+                  "lemma": "be",
+                  "pos": "aux"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Nom",
+                    "S2"
+                  ],
+                  "lemma": "you",
+                  "pos": "pron"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Part",
+                    "Pres",
+                    "S"
+                  ],
+                  "lemma": "go",
+                  "pos": "verb"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "to",
+                  "pos": "part"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Inf",
+                    "S"
+                  ],
+                  "lemma": "tell",
+                  "pos": "verb"
+                }
+              },
+              {
+                "main": {
+                  "features": [
+                    "Prs",
+                    "Acc",
+                    "S1"
+                  ],
+                  "lemma": "I",
+                  "pos": "pron"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "question"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 3,
+                "index": 1,
+                "relation": "AUX"
+              },
+              {
+                "head": 3,
+                "index": 2,
+                "relation": "NSUBJ"
+              },
+              {
+                "head": 0,
+                "index": 3,
+                "relation": "ROOT"
+              },
+              {
+                "head": 5,
+                "index": 4,
+                "relation": "MARK"
+              },
+              {
+                "head": 3,
+                "index": 5,
+                "relation": "XCOMP"
+              },
+              {
+                "head": 5,
+                "index": 6,
+                "relation": "IOBJ"
+              },
+              {
+                "head": 3,
+                "index": 7,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "are",
+              "content": [
+                {
+                  "content": "are",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "are",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "you",
+              "content": [
+                {
+                  "content": "you",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "you",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "going",
+              "content": [
+                {
+                  "content": "going",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "going",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "to",
+              "content": [
+                {
+                  "content": "to",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "to",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "tell",
+              "content": [
+                {
+                  "content": "tell",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "tell",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "me",
+              "content": [
+                {
+                  "content": "me",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "me",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "features": [
+                    "Fin",
+                    "Imp",
+                    "S"
+                  ],
+                  "lemma": "get",
+                  "pos": "verb"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "down",
+                  "pos": "adv"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 0,
+                "index": 1,
+                "relation": "ROOT"
+              },
+              {
+                "head": 1,
+                "index": 2,
+                "relation": "ADVMOD"
+              },
+              {
+                "head": 1,
+                "index": 3,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "get",
+              "content": [
+                {
+                  "content": "get",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "get",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "down",
+              "content": [
+                {
+                  "content": "down",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "down",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "options": [],
+  "participants": {
+    "CHI": {
+      "birth_date": null,
+      "code": "CHI",
+      "id": {
+        "age": "1;11.12",
+        "corpus": "corpus",
+        "group": "TD",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "ses": "MC",
+        "sex": "male",
+        "speaker": "CHI"
+      },
+      "name": null,
+      "role": "Target_Child"
+    },
+    "INV": {
+      "birth_date": null,
+      "code": "INV",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV"
+      },
+      "name": null,
+      "role": "Investigator"
+    },
+    "MOT": {
+      "birth_date": null,
+      "code": "MOT",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Mother",
+        "sex": "female",
+        "speaker": "MOT"
+      },
+      "name": null,
+      "role": "Mother"
+    }
+  }
+}

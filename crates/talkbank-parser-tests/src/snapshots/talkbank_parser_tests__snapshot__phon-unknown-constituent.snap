@@ -1,0 +1,363 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "eng"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "eng"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": null,
+            "role": "Target_Child",
+            "speaker_code": "CHI"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "speaker": "CHI",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Phon %x tiers: U (Unknown) constituent code with an untranscribed * word",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Trimmed from real data (Goad/Julia 30305.cha); main-tier media bullet removed",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              "*",
+              "juw",
+              "mij",
+              "ʃow",
+              "juw"
+            ],
+            "tier_type": "Mod"
+          },
+          "type": "Mod"
+        },
+        {
+          "data": {
+            "items": [
+              "ə",
+              "jɑ",
+              "mij",
+              "ʃɔ",
+              "ij"
+            ],
+            "tier_type": "Pho"
+          },
+          "type": "Pho"
+        },
+        {
+          "data": {
+            "content": {
+              "segments": [
+                {
+                  "text": "Not sure what the input is.",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "type": "Com"
+        },
+        {
+          "data": {
+            "tier_type": "Modsyl",
+            "words": [
+              "*:U",
+              "j:Ou:Nw:C",
+              "m:Oi:Nj:C",
+              "ʃ:Oo:Nw:C",
+              "j:Ou:Nw:C"
+            ]
+          },
+          "type": "Modsyl"
+        },
+        {
+          "data": {
+            "tier_type": "Phosyl",
+            "words": [
+              "ə:N",
+              "j:Oɑ:N",
+              "m:Oi:Nj:C",
+              "ʃ:Oɔ:N",
+              "i:Nj:C"
+            ]
+          },
+          "type": "Phosyl"
+        },
+        {
+          "data": {
+            "words": [
+              {
+                "pairs": [
+                  {
+                    "source": "*",
+                    "target": null
+                  },
+                  {
+                    "source": null,
+                    "target": "ə"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "j",
+                    "target": "j"
+                  },
+                  {
+                    "source": "u",
+                    "target": "ɑ"
+                  },
+                  {
+                    "source": "w",
+                    "target": null
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "m",
+                    "target": "m"
+                  },
+                  {
+                    "source": "i",
+                    "target": "i"
+                  },
+                  {
+                    "source": "j",
+                    "target": "j"
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "ʃ",
+                    "target": "ʃ"
+                  },
+                  {
+                    "source": "o",
+                    "target": "ɔ"
+                  },
+                  {
+                    "source": "w",
+                    "target": null
+                  }
+                ]
+              },
+              {
+                "pairs": [
+                  {
+                    "source": "j",
+                    "target": null
+                  },
+                  {
+                    "source": "u",
+                    "target": "i"
+                  },
+                  {
+                    "source": "w",
+                    "target": "j"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Phoaln"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "yyy",
+              "content": [
+                {
+                  "content": "yyy",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "yyy",
+              "type": "word",
+              "untranscribed": "phonetic"
+            },
+            {
+              "cleaned_text": "you",
+              "content": [
+                {
+                  "content": "you",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "you",
+              "type": "word"
+            },
+            {
+              "category": "omission",
+              "cleaned_text": "don't",
+              "content": [
+                {
+                  "content": "don't",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "0don't",
+              "type": "word"
+            },
+            {
+              "category": "omission",
+              "cleaned_text": "want",
+              "content": [
+                {
+                  "content": "want",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "0want",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "me",
+              "content": [
+                {
+                  "content": "me",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "me",
+              "type": "word"
+            },
+            {
+              "category": "omission",
+              "cleaned_text": "to",
+              "content": [
+                {
+                  "content": "to",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "0to",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "show",
+              "content": [
+                {
+                  "content": "show",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "show",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "you",
+              "content": [
+                {
+                  "content": "you",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "you",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "options": [],
+  "participants": {
+    "CHI": {
+      "birth_date": null,
+      "code": "CHI",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Target_Child",
+        "speaker": "CHI"
+      },
+      "name": null,
+      "role": "Target_Child"
+    }
+  }
+}

@@ -1,0 +1,564 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "eng"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "eng"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": null,
+            "role": "Participant",
+            "speaker_code": "PAR"
+          },
+          {
+            "name": null,
+            "role": "Investigator",
+            "speaker_code": "INV"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Participant",
+        "speaker": "PAR",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Other spoken event (&*SPK:word) variants the re2c parser must",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "tokenize the same way TreeSitter does:",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "1. word followed by terminator with NO space (oh_hm. ah! mhm?):",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "terminator stays separate, not absorbed into OSE text;",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "2. word with lengthening colons (ah: a:h u:hhum): colons stay",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "INSIDE the OSE word body since they mark vowel lengthening.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Both variants are real wild-corpus shapes flagged by the re2c parity",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "oracle on 2026-04-30. The narrow w_text fix regressed (1) without",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "(2) so the right body production is `w_body` (the same one",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "standalone_word uses), which stops at terminators but admits",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "lengthening colons and CA word-internal markers.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "easy",
+              "content": [
+                {
+                  "content": "easy",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "easy",
+              "type": "word"
+            },
+            {
+              "category": "filler",
+              "cleaned_text": "you_know",
+              "content": [
+                {
+                  "content": "you_know",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "&-you_know",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "oh_hm",
+              "type": "other_spoken_event"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "yeah",
+              "content": [
+                {
+                  "content": "yeah",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "yeah",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "sure",
+              "content": [
+                {
+                  "content": "sure",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "sure",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "ah",
+              "type": "other_spoken_event"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "correct",
+              "content": [
+                {
+                  "content": "correct",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "correct",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "yeah_mhm",
+              "type": "other_spoken_event"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "ok",
+              "content": [
+                {
+                  "content": "ok",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "ok",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "mhm",
+              "type": "other_spoken_event"
+            }
+          ],
+          "terminator": {
+            "type": "question"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "wow",
+              "content": [
+                {
+                  "content": "wow",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "wow",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "oh",
+              "type": "other_spoken_event"
+            }
+          ],
+          "terminator": {
+            "type": "exclamation"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "what",
+              "content": [
+                {
+                  "content": "what",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "what",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "ah:",
+              "type": "other_spoken_event"
+            },
+            {
+              "cleaned_text": "I",
+              "content": [
+                {
+                  "content": "I",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "I",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "see",
+              "content": [
+                {
+                  "content": "see",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "see",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "the",
+              "content": [
+                {
+                  "content": "the",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "the",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "a:h",
+              "type": "other_spoken_event"
+            },
+            {
+              "cleaned_text": "yeah",
+              "content": [
+                {
+                  "content": "yeah",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "yeah",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "right",
+              "content": [
+                {
+                  "content": "right",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "right",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "hm:",
+              "type": "other_spoken_event"
+            },
+            {
+              "cleaned_text": "indeed",
+              "content": [
+                {
+                  "content": "indeed",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "indeed",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "options": [],
+  "participants": {
+    "INV": {
+      "birth_date": null,
+      "code": "INV",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Investigator",
+        "speaker": "INV"
+      },
+      "name": null,
+      "role": "Investigator"
+    },
+    "PAR": {
+      "birth_date": null,
+      "code": "PAR",
+      "id": {
+        "corpus": "corpus",
+        "language": [
+          "eng"
+        ],
+        "role": "Participant",
+        "speaker": "PAR"
+      },
+      "name": null,
+      "role": "Participant"
+    }
+  }
+}

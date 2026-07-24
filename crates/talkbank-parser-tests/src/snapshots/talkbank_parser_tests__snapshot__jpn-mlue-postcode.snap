@@ -1,0 +1,358 @@
+---
+source: crates/talkbank-parser-tests/src/snapshot.rs
+expression: snapshot
+---
+{
+  "languages": [
+    "jpn"
+  ],
+  "lines": [
+    {
+      "header": {
+        "type": "utf8"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "pid": "11312/a-00013825-1",
+        "type": "pid"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "type": "begin"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "codes": [
+          "jpn"
+        ],
+        "type": "languages"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "entries": [
+          {
+            "name": "Taachan",
+            "role": "Target_Child",
+            "speaker_code": "CHI"
+          }
+        ],
+        "type": "participants"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "age": "3;07.",
+        "corpus": "corpus",
+        "language": [
+          "jpn"
+        ],
+        "role": "Target_Child",
+        "sex": "male",
+        "speaker": "CHI",
+        "type": "id"
+      },
+      "line_type": "header"
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "lemma": "shi",
+                  "pos": "n:let"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "u",
+                  "pos": "n:let"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 2,
+                "index": 1,
+                "relation": "DEP"
+              },
+              {
+                "head": 0,
+                "index": 2,
+                "relation": "ROOT"
+              },
+              {
+                "head": 2,
+                "index": 3,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "shi",
+              "content": [
+                {
+                  "content": "shi",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "shi@k",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "u",
+              "content": [
+                {
+                  "content": "u",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "u@k",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "items": [
+              {
+                "main": {
+                  "lemma": "yo",
+                  "pos": "n:let"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "u",
+                  "pos": "n:let"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "bu",
+                  "pos": "n:let"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "shi",
+                  "pos": "n:let"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "yo",
+                  "pos": "n:let"
+                }
+              },
+              {
+                "main": {
+                  "lemma": "u",
+                  "pos": "n:let"
+                }
+              }
+            ],
+            "terminator": {
+              "type": "period"
+            },
+            "tier_type": "Mor"
+          },
+          "type": "Mor"
+        },
+        {
+          "data": {
+            "relations": [
+              {
+                "head": 6,
+                "index": 1,
+                "relation": "DEP"
+              },
+              {
+                "head": 6,
+                "index": 2,
+                "relation": "DEP"
+              },
+              {
+                "head": 6,
+                "index": 3,
+                "relation": "DEP"
+              },
+              {
+                "head": 6,
+                "index": 4,
+                "relation": "DEP"
+              },
+              {
+                "head": 6,
+                "index": 5,
+                "relation": "DEP"
+              },
+              {
+                "head": 0,
+                "index": 6,
+                "relation": "ROOT"
+              },
+              {
+                "head": 6,
+                "index": 7,
+                "relation": "PUNCT"
+              }
+            ],
+            "tier_type": "Gra"
+          },
+          "type": "Gra"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "yo",
+              "content": [
+                {
+                  "content": "yo",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "yo@k",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "u",
+              "content": [
+                {
+                  "content": "u",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "u@k",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "bu",
+              "content": [
+                {
+                  "content": "bu",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "bu@k",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "shi",
+              "content": [
+                {
+                  "content": "shi",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "shi@k",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "yo",
+              "content": [
+                {
+                  "content": "yo",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "yo@k",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "u",
+              "content": [
+                {
+                  "content": "u",
+                  "type": "text"
+                }
+              ],
+              "form_type": "k",
+              "raw_text": "u@k",
+              "type": "word"
+            }
+          ],
+          "postcodes": [
+            {
+              "text": "mlue"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
+        "type": "end"
+      },
+      "line_type": "header"
+    }
+  ],
+  "options": [],
+  "participants": {
+    "CHI": {
+      "birth_date": null,
+      "code": "CHI",
+      "id": {
+        "age": "3;07.",
+        "corpus": "corpus",
+        "language": [
+          "jpn"
+        ],
+        "role": "Target_Child",
+        "sex": "male",
+        "speaker": "CHI"
+      },
+      "name": "Taachan",
+      "role": "Target_Child"
+    }
+  }
+}
