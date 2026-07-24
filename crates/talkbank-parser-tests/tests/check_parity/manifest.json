@@ -106,7 +106,7 @@
    "fixture": "CHECK_011_undeclared_symbol_pct_fac.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
+   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts. FACET SPLIT (2026-07-24): CHECK 11's EMPTY-symbol facet (a %mor item with an empty POS, `|we`) now has the dedicated chatter code E760 (spec E760_mor_item_empty_pos.md), grounded as parity; the general undeclared-symbol-membership facet remains this documented divergence."
   },
   {
    "check_code": 12,
@@ -679,7 +679,17 @@
     "E306",
     "E342"
    ],
-   "note": "A speaker tier containing no text word (only delimiters/pauses/brackets and not the '0' placeholder) at tier end (check.cpp 4984, isTextFound never set). Fixture '*CHI:\\t.'; chatter rejects with three codes including E306 (no meaningful content)."
+   "note": "A speaker tier containing no text word (only delimiters/pauses/brackets and not the '0' placeholder) at tier end (check.cpp 4984, isTextFound never set). Fixture '*CHI:\\t.'; chatter rejects with three codes including E306 (no meaningful content). SCOPE (2026-07-24, empirically verified live): CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances; both validators ACCEPT those shapes, so the old 'pause-only utterance' policy-gap framing was wrong."
+  },
+  {
+   "check_code": 70,
+   "check_message": "Expected either text or \"0\" on this tier.",
+   "fixture": "CHECK_070_annotation_only_utterance.cha",
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E306"
+   ],
+   "note": "Utterance whose content is ONLY a scoped annotation ([=! laughs] .). Empirically grounded 2026-07-24: real CLAN emits (73)+(70); chatter rejects (E306 empty-utterance core, with E305/E342/E375 cascade). IMPORTANT adjudicated scope: CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances (both validators ACCEPT those; verified live), so the old 'pause-only utterance' framing of this gap was wrong."
   },
   {
    "check_code": 71,
