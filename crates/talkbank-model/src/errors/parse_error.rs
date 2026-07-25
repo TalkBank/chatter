@@ -77,7 +77,9 @@ impl miette::SourceCode for SourceCodeWithOffset {
 /// Structured parse/validation diagnostic with optional source-backed context.
 #[derive(Error, Serialize, Deserialize, JsonSchema)]
 pub struct ParseError {
-    /// Error code (e.g., "E001", "W042")
+    /// Typed error code identifying the rule that fired (an
+    /// [`ErrorCode`] enum variant such as `ErrorCode::UnparsableContent`,
+    /// rendered as `E316` in output).
     pub code: ErrorCode,
     /// Error severity
     pub severity: Severity,

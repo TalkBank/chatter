@@ -22,10 +22,12 @@ pub enum AgeValue {
         /// Years component.
         #[span_shift(skip)]
         years: u16,
-        /// Months component (0-11).
+        /// Months component. Conventionally 0-11, but NOT range-checked
+        /// at parse time: the raw parsed value is preserved.
         #[span_shift(skip)]
         months: Option<u8>,
-        /// Days component (0-30).
+        /// Days component. Conventionally 0-30, but NOT range-checked
+        /// at parse time: the raw parsed value is preserved.
         #[span_shift(skip)]
         days: Option<u8>,
         /// Original text preserved for exact roundtrip.

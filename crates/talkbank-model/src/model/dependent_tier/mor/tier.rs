@@ -151,7 +151,7 @@ impl MorTier {
 
     /// Mutably borrows the list of morphological items.
     ///
-    /// # Safety
+    /// # Invariants
     ///
     /// Callers must ensure that any mutations to the items do not change their
     /// chunk counts (e.g., by adding or removing post-clitics), or that the

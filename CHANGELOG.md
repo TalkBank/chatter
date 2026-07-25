@@ -34,6 +34,13 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- `ErrorCollector::is_empty()` violated the standard Rust contract
+  `len() == 0 <=> is_empty()`: it answered "is the internal buffer
+  unallocated?", so a collector created with `with_capacity` (which
+  pre-allocates) reported non-empty while holding zero errors. Found
+  by the 1.0 contract-set API audit; now implemented as `len() == 0`
+  with a regression test.
+
 - `TreeSitterParser::parse_gra_relation_fragment` (and the trait's
   `parse_gra_relation`) rejected EVERY bare `%gra` relation and leaked
   a spurious E709 diagnostic into the caller's sink, because the

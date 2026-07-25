@@ -128,7 +128,7 @@ impl GraTier {
 
     /// Mutably borrows the list of grammatical relations.
     ///
-    /// # Safety
+    /// # Invariants
     ///
     /// Callers must ensure that mutations do not break index sequentiality
     /// or other structural invariants.

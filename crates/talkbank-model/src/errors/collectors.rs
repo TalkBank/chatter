@@ -110,8 +110,12 @@ impl ErrorCollector {
     }
 
     /// Check if no errors have been collected.
+    ///
+    /// Always agrees with [`len`](Self::len): a collector whose buffer
+    /// was pre-allocated by [`with_capacity`](Self::with_capacity) but
+    /// never reported into is empty, even though its buffer exists.
     pub fn is_empty(&self) -> bool {
-        self.errors.lock().is_none()
+        self.len() == 0
     }
 
     /// Check if any errors (not warnings) have been collected.
@@ -156,5 +160,22 @@ impl ErrorSink for ErrorCollector {
     /// Append one error to the internal buffer.
     fn report(&self, error: ParseError) {
         self.errors.lock().get_or_insert_with(Vec::new).push(error);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression (2026-07-25): `with_capacity` stores `Some(empty vec)`,
+    /// and `is_empty()` answered "is the buffer unallocated?" instead of
+    /// "are there zero errors?", so a fresh `with_capacity` collector
+    /// reported `is_empty() == false` while `len() == 0`. The standard
+    /// Rust contract `len() == 0  <=>  is_empty()` must always hold.
+    #[test]
+    fn is_empty_agrees_with_len_for_with_capacity() {
+        let collector = ErrorCollector::with_capacity(4);
+        assert_eq!(collector.len(), 0);
+        assert!(collector.is_empty());
     }
 }
