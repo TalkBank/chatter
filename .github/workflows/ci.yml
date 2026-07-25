@@ -114,6 +114,32 @@ jobs:
       - name: cargo clippy (single pass; red only on panic-policy denies)
         run: cargo clippy --workspace --all-targets --locked
 
+  # Pins the wasm-cleanliness contract: talkbank-model and the pure-Rust
+  # re2c parser must keep compiling for wasm32 (no C toolchain, no
+  # tree-sitter runtime). External consumers depend on exactly this
+  # split to run CHAT parsing under Pyodide/emscripten, selecting the
+  # re2c backend through the shared ChatParser trait on wasm targets.
+  wasm:
+    name: wasm32 check (model + re2c parser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same lockstep pin as the rust job above.
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-job
+
+      - name: Check wasm32 compilation
+        run: cargo check -p talkbank-model -p talkbank-parser-re2c --target wasm32-unknown-unknown --locked
+
   book:
     name: mdBook build
     runs-on: ubuntu-latest

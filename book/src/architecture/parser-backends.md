@@ -52,7 +52,9 @@ fn analyze<P: ChatParser>(parser: &P, text: &str) { /* ... */ }
 selects the backend with one generic bound, including cross-target setups
 (tree-sitter natively, pure-Rust re2c on wasm, where compiling
 tree-sitter's C runtime is undesirable). No facade or cfg-gated dispatch
-module is needed on the consumer side.
+module is needed on the consumer side. The wasm half of that contract is
+pinned in CI: the `wasm` job in `ci.yml` checks `talkbank-model` and
+`talkbank-parser-re2c` for `wasm32-unknown-unknown` on every push.
 
 Two notes on the trait's shape:
 
