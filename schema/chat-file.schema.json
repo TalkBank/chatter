@@ -5252,7 +5252,7 @@
           "description": "Source location"
         },
         "message": {
-          "description": "Human-readable error message (plain language)",
+          "description": "Human-readable error message (plain language).\n\nDownstream tools consume this text programmatically and surface it\nto their own users (e.g. Python bindings mapping diagnostics into\ntheir own structures), so message WORDING is part of the observable\nbehavior of a release: rewording a message is a behavior change to\nnote in the changelog, even though the type surface is unchanged.\nMatch on [`code`](Self::code), never on this text.",
           "type": "string"
         },
         "severity": {

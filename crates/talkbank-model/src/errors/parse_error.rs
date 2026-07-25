@@ -91,7 +91,14 @@ pub struct ParseError {
     /// Optional secondary labels for multi-span diagnostics
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub labels: Vec<ErrorLabel>,
-    /// Human-readable error message (plain language)
+    /// Human-readable error message (plain language).
+    ///
+    /// Downstream tools consume this text programmatically and surface it
+    /// to their own users (e.g. Python bindings mapping diagnostics into
+    /// their own structures), so message WORDING is part of the observable
+    /// behavior of a release: rewording a message is a behavior change to
+    /// note in the changelog, even though the type surface is unchanged.
+    /// Match on [`code`](Self::code), never on this text.
     pub message: String,
     /// Optional suggestion for how to fix
     #[serde(skip_serializing_if = "Option::is_none")]

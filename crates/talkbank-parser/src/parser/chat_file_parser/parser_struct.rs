@@ -41,6 +41,14 @@ impl TreeSitterParser {
     /// Returns [`ParserInitError::SetLanguage`] if the tree-sitter-talkbank grammar
     /// cannot be loaded (e.g., ABI version mismatch between the grammar and the
     /// tree-sitter runtime).
+    ///
+    /// In practice this cannot fail: the bundled `tree-sitter-talkbank`
+    /// grammar and the `tree-sitter` runtime are compiled together and
+    /// version-locked by Cargo, so the ABI mismatch the C runtime checks
+    /// for at run time cannot arise. The fallible signature exists because
+    /// the runtime reports the check's result; treating construction as
+    /// infallible at an application boundary (an `expect` in `main`-adjacent
+    /// setup code) is reasonable.
     /// **Prefer the free functions** (`parse_chat_file`, `parse_chat_file_streaming`,
     /// `parse_word`) which use a thread-local parser pool
     /// and avoid per-call allocation.
