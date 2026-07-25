@@ -5220,7 +5220,7 @@
       "properties": {
         "code": {
           "$ref": "#/$defs/ErrorCode",
-          "description": "Error code (e.g., \"E001\", \"W042\")"
+          "description": "Typed error code identifying the rule that fired (an\n[`ErrorCode`] enum variant such as `ErrorCode::UnparsableContent`,\nrendered as `E316` in output)."
         },
         "context": {
           "anyOf": [
