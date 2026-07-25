@@ -21,7 +21,11 @@ syn = { workspace = true }
 
 [dev-dependencies]
 trybuild = { workspace = true }
-talkbank-model = { workspace = true }
+# Path-only (no version) ON PURPOSE: cargo strips version-less dev-deps
+# from the published manifest, so this intentional test-only cycle onto a
+# sibling not yet on the registry cannot block `cargo publish`. Gated by
+# scripts/release/check-foundation-publication-readiness.sh.
+talkbank-model = { path = "../talkbank-model" }
 serde = { workspace = true }
 schemars = { workspace = true }
 

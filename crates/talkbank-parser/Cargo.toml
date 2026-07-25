@@ -22,7 +22,11 @@ tree-sitter = { workspace = true }
 tree-sitter-talkbank = { workspace = true }
 
 [dev-dependencies]
-talkbank-parser-tests = { workspace = true }
+# Path-only (no version) ON PURPOSE: talkbank-parser-tests is never
+# published, so a versioned dev-dep would block `cargo publish`; cargo
+# strips version-less dev-deps from the published manifest. Gated by
+# scripts/release/check-foundation-publication-readiness.sh.
+talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 divan = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }

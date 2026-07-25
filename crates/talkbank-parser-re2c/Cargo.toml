@@ -36,7 +36,11 @@ divan = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
-talkbank-parser = { workspace = true }
+# Path-only (no version) ON PURPOSE: cargo strips version-less dev-deps
+# from the published manifest, so this equivalence-testing edge cannot
+# block `cargo publish` regardless of wave order. Gated by
+# scripts/release/check-foundation-publication-readiness.sh.
+talkbank-parser = { path = "../talkbank-parser" }
 walkdir = { workspace = true }
 
 [features]

@@ -1,6 +1,6 @@
 # crates.io Publication Plan (v1.0.0)
 
-**Last modified:** 2026-07-17 23:20 EDT
+**Last modified:** 2026-07-25 01:41 EDT
 
 Worked plan for publishing chatter's library crates to crates.io,
 simultaneous with the v1.0.0 release (release-board precondition P2).
@@ -87,6 +87,19 @@ items 1 and 2 execute in order on the release.
    test, per the readiness script's own note). Flagged as a hazard to
    validate, not a confirmed blocker: it cannot be dry-run-tested
    locally because of the chicken-and-egg with unpublished siblings.
+   **RESOLVED 2026-07-25, in advance of publish day.** The readiness
+   check now inspects dev-dependencies too and requires every
+   first-wave dev-dep on a workspace crate to be path-only (metadata
+   req `*`); running the extended check found FOUR versioned dev edges,
+   two more than inventoried above (`talkbank-parser-re2c` ->
+   `talkbank-parser` and `talkbank-transform` -> `talkbank-model`
+   test-utils, both technically resolvable by wave order, made
+   path-only anyway for a uniform invariant). All four are converted to
+   path-only in their crate manifests with in-manifest rationale
+   comments, the check passes, and the stripping was verified
+   empirically: `cargo package -p talkbank-derive` produces a manifest
+   with no `talkbank-model` dev-dependency. Publish-day step 2 below
+   reduces to re-running the readiness check.
 3. **rustdoc completeness: DONE, enforced.** crates.io publishes
    rustdoc to docs.rs; the house rule is that a reader understands the
    domain from type definitions alone. Verified 2026-07-17: all seven

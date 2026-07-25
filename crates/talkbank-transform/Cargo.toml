@@ -38,7 +38,11 @@ insta = { workspace = true }
 # Enables `ChatCleanedText::test_unchecked` for test fixture
 # construction. Production builds of this crate cannot reach the
 # escape hatch.
-talkbank-model = { workspace = true, features = ["test-utils"] }
+# Path-only (no version) ON PURPOSE: cargo strips version-less dev-deps
+# from the published manifest, so this test-utils edge cannot block
+# `cargo publish` regardless of wave order. Gated by
+# scripts/release/check-foundation-publication-readiness.sh.
+talkbank-model = { path = "../talkbank-model", features = ["test-utils"] }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

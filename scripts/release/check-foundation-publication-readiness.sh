@@ -89,6 +89,34 @@ for package_name in first_wave:
                 f"{package_name} has a runtime dependency on held-back/internal crate {dep_name}",
             )
 
+# Dev-dependency-on-unpublished-crate hazard: `cargo publish` keeps a
+# dev-dependency in the published manifest whenever it carries a version
+# requirement, and the registry must then resolve it at publish time.
+# For first-wave crates that edge can point at a sibling that is not on
+# the registry yet (talkbank-derive dev-depends on talkbank-model, the
+# intentional test-only cycle) or never will be (talkbank-parser
+# dev-depends on talkbank-parser-tests), which fails the publish.
+# Path-only dev-dependencies (no version; metadata reports req "*") are
+# stripped from the published manifest, so they are the required shape
+# for EVERY first-wave dev-dependency on a workspace crate.
+for package_name in first_wave:
+    package = packages.get(package_name)
+    if package is None:
+        continue
+    for dependency in package["dependencies"]:
+        if (
+            dependency.get("kind") == "dev"
+            and dependency.get("path")
+            and dependency["name"] in workspace_names
+        ):
+            require(
+                dependency["req"] == "*",
+                f"{package_name} has a VERSIONED dev-dependency on workspace crate "
+                f"{dependency['name']} (req {dependency['req']}); cargo publish keeps that "
+                "edge in the published manifest and it cannot resolve at publish time. "
+                "Declare it path-only (no version) in the crate manifest.",
+            )
+
 for package_name in held_back:
     package = packages.get(package_name)
     require(package is not None, f"missing held-back package {package_name}")
