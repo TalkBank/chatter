@@ -10,6 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+mod chat_parser_impl;
 pub mod dependent_tier;
 mod parser_api;
 mod parser_impl;

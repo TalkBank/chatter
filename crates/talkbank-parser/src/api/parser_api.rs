@@ -42,6 +42,45 @@ fn report_parse_errors(errors: ParseErrors, sink: &impl ErrorSink) {
 
 const PARTICIPANTS_HEADER_PREFIX: &str = "@Participants:\t";
 
+/// Synthetic terminator relation appended when parsing a single `%gra`
+/// relation fragment: a bare relation is not a complete `%gra` tier, so
+/// the wrapper supplies a terminator to satisfy tier structure. It must
+/// itself be parse-clean CHAT (index 1-based, any head), because
+/// `wrapper_parse_tier` rejects the WHOLE fragment if any diagnostic
+/// fires anywhere in the wrapped tier: the previous scaffold `0|0|PUNCT`
+/// tripped E709 (0 is not a valid 1-based index), which both leaked a
+/// scaffold diagnostic to the caller and rejected every single-relation
+/// fragment outright (caught 2026-07-24 by the `ChatParser` trait
+/// conformance test; the re2c backend parses the same fragment cleanly).
+const GRA_RELATION_SCAFFOLD_SUFFIX: &str = "2|1|PUNCT";
+
+/// An `ErrorSink` adapter that drops diagnostics located entirely inside
+/// synthetic scaffolding appended AFTER the caller's fragment.
+///
+/// Fragment wrappers sometimes extend the caller's input with synthetic
+/// material (e.g. the `%gra` relation wrapper appends a terminator
+/// relation). Diagnostics against that synthetic region describe the
+/// wrapper's own scaffolding, not the caller's input, and must never
+/// leak into the caller's sink: the re2c parser reports nothing for the
+/// same fragment, and trait-level parser interchangeability requires
+/// the tree-sitter side to match. Diagnostics at or past
+/// `scaffold_start` (in caller coordinates, i.e. offset-adjusted) are
+/// discarded; everything before it passes through untouched.
+struct ScaffoldRegionFilter<'a, S: ErrorSink> {
+    /// The caller's sink receiving all non-scaffold diagnostics.
+    inner: &'a S,
+    /// First byte position (caller coordinates) of the synthetic region.
+    scaffold_start: u32,
+}
+
+impl<S: ErrorSink> ErrorSink for ScaffoldRegionFilter<'_, S> {
+    fn report(&self, error: ParseError) {
+        if error.location.span.start < self.scaffold_start {
+            self.inner.report(error);
+        }
+    }
+}
+
 fn report_context_dependent_main_tier_error(
     errors: &impl ErrorSink,
     input: &str,
@@ -336,8 +375,19 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<GrammaticalRelation> {
+        // Diagnostics against the appended scaffold terminator are the
+        // wrapper's private business; only input-region diagnostics may
+        // reach the caller.
+        let scaffold_sink = ScaffoldRegionFilter {
+            inner: errors,
+            scaffold_start: (offset + input.len()) as u32,
+        };
         let Some(tier) = self
-            .parse_gra_tier_fragment(&format!("{} 0|0|PUNCT", input), offset, errors)
+            .parse_gra_tier_fragment(
+                &format!("{input} {GRA_RELATION_SCAFFOLD_SUFFIX}"),
+                offset,
+                &scaffold_sink,
+            )
             .into_option()
         else {
             return ParseOutcome::rejected();

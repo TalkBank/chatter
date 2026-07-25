@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last modified:** 2026-06-13 22:40 EDT
+**Last modified:** 2026-07-24 23:27 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -31,6 +31,38 @@ flowchart TD
 place that constructs the chosen backend from a `ParserKind`; both variants
 wrap a `ChatParser` implementor, so the validation runner never branches on
 backend again.
+
+## The shared `ChatParser` trait
+
+Both backends implement `talkbank_model::ChatParser` directly (the
+tree-sitter impl landed 2026-07-24 in
+`talkbank-parser/src/api/chat_parser_impl.rs`; the re2c impl has carried it
+from the start). The trait is the parser-agnostic API for every
+granularity: whole files, headers, utterances, main tiers, `%mor`/`%gra`
+and the other dependent tiers, down to single words and relations. Each
+method takes `(input, offset, errors)` and returns a `ParseOutcome`;
+diagnostics stream through the caller's `ErrorSink`.
+
+Downstream consumers should bind on the trait, not on a concrete backend:
+
+```rust,ignore
+fn analyze<P: ChatParser>(parser: &P, text: &str) { /* ... */ }
+```
+
+selects the backend with one generic bound, including cross-target setups
+(tree-sitter natively, pure-Rust re2c on wasm, where compiling
+tree-sitter's C runtime is undesirable). No facade or cfg-gated dispatch
+module is needed on the consumer side.
+
+Two notes on the trait's shape:
+
+- The trait has generic methods (`errors: &impl ErrorSink`), so it is not
+  dyn-compatible; runtime backend selection uses a small enum such as
+  `ParserDispatch` rather than `Box<dyn ChatParser>`.
+- On `TreeSitterParser`, every trait method delegates to the matching
+  inherent `parse_*_fragment` method, so trait-path and inherent-path
+  behavior are identical by construction. The conformance gate is
+  `talkbank-parser/tests/chat_parser_trait.rs`.
 
 ## TreeSitterParser (default)
 

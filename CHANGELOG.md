@@ -11,6 +11,17 @@ version and are listed under "Changed" / "Removed".
 
 ### Added
 
+- `TreeSitterParser` now implements the shared `ChatParser` trait
+  (`talkbank_model::ChatParser`), making the two parser backends
+  interchangeable behind one generic bound at every granularity (file,
+  header, utterance, tier, word, relation). Previously only
+  `Re2cParser` implemented the trait, so consumers selecting a backend
+  per target (tree-sitter natively, pure-Rust re2c on wasm) had to
+  hand-roll a cfg-gated facade. Every trait method delegates to the
+  matching inherent `parse_*_fragment` method, so trait-path and
+  inherent-path behavior are identical; conformance is pinned by
+  `talkbank-parser/tests/chat_parser_trait.rs`.
+
 - Dedicated error codes for two malformations that previously fell
   through to the generic E316 unparsable-content catch-all, from the
   CHECK-parity adjudication of CLAN CHECK errors 52 and 11: E759 (an
@@ -22,6 +33,18 @@ version and are listed under "Changed" / "Removed".
   rejected, so no validity verdict changes, only the diagnosis.
 
 ### Fixed
+
+- `TreeSitterParser::parse_gra_relation_fragment` (and the trait's
+  `parse_gra_relation`) rejected EVERY bare `%gra` relation and leaked
+  a spurious E709 diagnostic into the caller's sink, because the
+  wrapper appended a scaffold terminator with the never-valid index 0
+  (`0|0|PUNCT`) and the tier wrapper rejects on any internal
+  diagnostic. The scaffold is now valid CHAT (`2|1|PUNCT`), and a
+  scaffold-region filter guarantees diagnostics against wrapper
+  scaffolding can never reach the caller. The re2c backend was
+  unaffected (it parses the relation directly); the fix restores
+  backend agreement. Caught by the new `ChatParser` trait conformance
+  test.
 
 - Validation cache: initialization is now concurrency-safe across
   processes, not just threads. Every opener takes an exclusive advisory
