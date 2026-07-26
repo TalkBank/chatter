@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-07-25 22:19 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -150,7 +150,7 @@ From the chatter repo root:
 ```sh
 cargo check -p talkbank-parser-re2c
 cargo nextest run -p talkbank-parser-re2c     # prefer nextest for speed
-cargo test -p talkbank-parser-re2c --jobs 1   # fallback
+cargo nextest run -p talkbank-parser-re2c -j 1   # fallback
 ```
 
 Requires `re2rust` (part of re2c) on PATH: `brew install re2c`.

@@ -173,7 +173,7 @@ cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_spe
 | `validate_spec` | Validates spec format integrity (no output) |
 | `corpus_node_coverage` | Reports which grammar node types are exercised by `corpus/reference/` |
 | `coverage` | Reports spec coverage and error-code coverage |
-| `corpus_to_specs` | Mines real `.cha` files into candidate specs |
+| `corpus_to_specs` | Migrates legacy `tests/error_corpus/` fixtures into spec format |
 
 ## Cross-Spec Consistency
 

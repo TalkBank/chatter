@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-22 11:19 EDT
+**Last modified:** 2026-07-25 22:19 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when
 working in this repository (`TalkBank/chatter`).
@@ -267,7 +267,7 @@ Clippy is CI's job on push (see the clippy policy section).
 
 **Tests run under `cargo nextest run --workspace --locked` in BOTH CI and the
 local gate, plus a separate `cargo test --doc --workspace --locked` (nextest
-does not run doctests). NEVER `cargo test` for the main suite (2026-07-13
+does not run doctests). NEVER bare `cargo test` for the main suite (2026-07-13
 incident).** nextest isolates each test in its OWN PROCESS; `cargo test` runs
 the whole binary as ONE process with many threads, and then the cache tests
 race the shared SQLite validation-cache migration (`UNIQUE constraint failed:
@@ -310,7 +310,7 @@ ship in that same release, so the CLI and desktop move together.
 background reference for the transcript format. **Authority ordering
 (Franklin, 2026-07-10): the manual is dated; when it and this project
 diverge, trust `spec/`, the grammar, and above all the actual corpus
-data (`~/0tb/data`, mirrored in the data-json mirror). Data grounds
+data (the operators' wild-corpus tree of real TalkBank data). Data grounds
 what constructs are real, spec/grammar define what we accept, the
 manual is context. Never reintroduce a legacy construct that has been
 removed from the data and from chatter, whatever the manual or CLAN
@@ -426,7 +426,7 @@ run this full sequence:
    `crates/talkbank-parser/src/generated_traversal.rs`. It self-formats
    via rustfmt, so there is NO separate `cargo fmt` step; pass
    `--edition 2024 --toolchain <the repo's rust-toolchain.toml pin,
-   currently 1.97.0>` so the output matches CI's rustfmt byte-for-byte.
+   see rust-toolchain.toml for the current pin>` so the output matches CI's rustfmt byte-for-byte.
    Staleness guard: `generated_traversal_is_current`. The generator's
    output is commit-ready as-is: it is em-dash-free, carries its own
    `#![allow(...)]` for the lints normal in generated code, and stamps a
@@ -646,7 +646,7 @@ serialization, or roundtrip logic:
 
 ### Pre-Push Gate: CI must be green before announcing
 
-Until a workspace-level `make verify` recipe exists, the pre-push
+Until a single `just verify` gate recipe exists, the pre-push
 gate is **GitHub Actions CI green on the pushed commit** (Rust +
 book, plus the cross-platform workflow on `main`). The CI badges in
 `README.md` are the canonical signal; don't claim a push is done
@@ -721,7 +721,7 @@ covers. Do not remove it.
 and the `GrammarTraversal` visitor were created on 2026-03-23 specifically to end
 the recurring failure of the parser dropping ERROR/MISSING nodes. But the visitor
 was NEVER wired into the production parser: across every commit in every repo of
-the lineage (talkbank-utils-private -> talkbank-tools -> chatter), the only
+the lineage (this repo's private predecessors), the only
 `impl GrammarTraversal` that ever existed was a test stub
 (`impl GrammarTraversal for TestTraversal`). The production parser hand-walked
 `node.kind()` string dispatch the whole time and shipped public (v0.1.0) still

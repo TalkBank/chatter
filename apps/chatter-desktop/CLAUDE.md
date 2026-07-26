@@ -1,7 +1,7 @@
 # CLAUDE.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-07-13 15:47 EDT
+**Last updated:** 2026-07-25 22:19 EDT
 
 ## Overview
 
@@ -111,7 +111,7 @@ apps/chatter-desktop/
 ### Key design decisions
 
 - **Direct Rust linking**: both `validate_directory_streaming()` and `validate_files_streaming()` from `talkbank-transform` are called directly (the latter for single-file targets, mirroring the CLI's own dispatch), not shelling out to the CLI. Streaming events over crossbeam channels → Tauri emit.
-- **Lock-free concurrency**: `ArcSwapOption` for the cancel sender, no mutex. See the [mutex policy](../book/src/architecture/concurrency.md).
+- **Lock-free concurrency**: `ArcSwapOption` for the cancel sender, no mutex. See the [mutex policy](../../../book/src/chatter/user-guide/desktop-app.md).
 - **Centralized protocol contracts**: Tauri command/event names and transport payload types live in `src-tauri/src/protocol.rs` and `src/protocol/desktopProtocol.ts`.
 - **serde camelCase bridge**: Rust structs use snake_case with `#[serde(rename_all = "camelCase")]` so JSON matches TypeScript types. The Rust integration tests verify the serialized JSON shape. **Every enum variant with fields needs its own `#[serde(rename_all = "camelCase")]`**, not just the enum-level one (the enum-level attribute only renames the `type` tag, not field names): a missing per-variant attribute on `FrontendFileStatus::Valid` silently shipped `cache_hit` instead of `cacheHit` until caught by the 2026-07-06 cache regression test.
 - **Single-target contract**: desktop validation accepts one `.cha` file or one folder at a time. Native drag/drop must use Tauri's webview drag-drop API, not browser file-name placeholders.

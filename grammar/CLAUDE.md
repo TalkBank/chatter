@@ -1,6 +1,6 @@
 # Grammar, Tree-sitter Grammar for CHAT
 
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-07-25 22:19 EDT
 
 ## Overview
 Tree-sitter grammar definition for CHAT (`grammar.js`) plus generated parser and corpus tests.
@@ -11,7 +11,7 @@ If `grammar.js` is modified, always do this before debugging parser behavior or 
 1. `tree-sitter generate`
 2. `tree-sitter test`
 3. Re-run relevant Rust-side checks:
-   - `cargo test -p talkbank-parser`
+   - `cargo nextest run -p talkbank-parser`
    - `cargo nextest run -p talkbank-parser-tests`
 4. Re-run real-file CLI validation for the affected syntax path
 
@@ -62,8 +62,8 @@ Run in this order after any `grammar.js` change:
 
 1. `cd grammar && tree-sitter generate`
 2. `cd grammar && tree-sitter test`
-3. `cargo test -p talkbank-parser`
-4. `cargo test -p talkbank-parser-tests`
+3. `cargo nextest run -p talkbank-parser`
+4. `cargo nextest run -p talkbank-parser-tests`
 
 If any step fails, stop and fix the underlying issue before continuing. Do not auto-update expectations to force green tests.
 
@@ -106,7 +106,7 @@ shapes are documented at the top of `talkbank-parser`'s `lib.rs`):
 
 The `generate_typed_traversal` example (with NO `--skip` flag: the
 self-contained backend models grammar extras explicitly, so the skip is
-obviated; `--edition 2024 --toolchain 1.96.1`) into
+obviated; `--edition 2024 --toolchain <the rust-toolchain.toml channel>`) into
 `crates/talkbank-parser/src/generated_traversal.rs`. This is the single
 canonical generated module (the 2026-07 migration onto the self-contained
 backend is complete; the OLD `generate_traversal` module was retired and this
@@ -114,7 +114,7 @@ one, formerly `generated_traversal_typed`, took the canonical name).
 
 **It is a single command; there is no separate `cargo fmt` step.** The wrapper
 runs `rustfmt` on its own output before emitting it, so the file it writes is
-already fmt-clean. The `--edition 2024 --toolchain 1.96.1` flags pin that
+already fmt-clean. The `--edition 2024 --toolchain <the rust-toolchain.toml channel>` flags pin that
 `rustfmt` to this repo's edition and `rust-toolchain.toml` pin, so the emitted
 file is byte-identical to what CI's `rustfmt` would produce. CI's
 `cargo fmt --all -- --check` still guards the committed file as defense in depth
@@ -170,7 +170,7 @@ generic_option_name: $ => /[^\s,\r\n\t]+/,
 **Key pitfall:** When adding a catch-all, also audit error specs (`spec/errors/`) that referenced E316 (parse error) for the field. Those examples will now parse successfully, so:
 1. Remove them from E316_auto.md
 2. Move them to the field-specific error spec (e.g., E518_auto.md) with `Layer: validation`
-3. Update `tests/error_corpus/expectations.json` divergence entries
+3. Update the relevant `tests/error_corpus/` expectations (parse_errors/ / validation_errors/ / warnings/)
 4. Re-run the relevant `spec/tools` generators to regenerate
 
 ## Design Documentation

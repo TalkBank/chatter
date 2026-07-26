@@ -1,7 +1,7 @@
 # `talkbank-lsp`, Language Server
 
 **Status:** Current
-**Last updated:** 2026-07-07 21:17 EDT
+**Last updated:** 2026-07-25 22:19 EDT
 
 Guidance for Claude Code when working inside `crates/talkbank-lsp/`. Read the
 workspace-level `CLAUDE.md` (at the chatter repo root) first; this file layers
@@ -73,7 +73,7 @@ it never recomputes it.
   `.is_positional()` / `.positional_count()` before any positional zip;
   treat `Drifted { .. }` as "no timing recovery available," not as an
   error. Do not reach for `%mor`/`%pho`-style alignment helpers here.
-  See KIB-016.
+
 
 If you find yourself needing a chunk primitive the model doesn't expose,
 add it in `crates/talkbank-model/src/model/dependent_tier/mor/chunk.rs`

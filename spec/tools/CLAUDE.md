@@ -59,8 +59,6 @@ cargo test
 
 `spec/runtime-tools` owns the tools that need the live Rust parser/model crates:
 - `validate_error_specs`
-- `bootstrap`
-- `bootstrap_tiers`
 - `extract_corpus_candidates`
 
 ## Architecture

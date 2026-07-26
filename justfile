@@ -30,7 +30,8 @@ build-release:
 
 # Run the full workspace test suite via cargo.
 test:
-    cargo test --workspace
+    cargo nextest run --workspace
+    cargo test --doc --workspace
 
 # Line/region/function coverage over the whole workspace via cargo-llvm-cov,
 # using the nextest runner (matches the project's test convention). Prints a
@@ -65,8 +66,9 @@ doc-check:
 # Production code (lib + bins) is held strict; test targets get the panic /
 # unwrap / expect lints relaxed, since tests may unwrap fixtures by convention.
 # A single --all-targets pass would deny expect/unwrap in tests and diverge
-# from CI (producing false positives), so this mirrors the two-pass split. The
-# pre-push hook calls this, so `just clippy` and CI stay identical.
+# from CI (producing false positives), so this mirrors the two-pass split.
+# CI owns clippy (see CLAUDE.md clippy policy); run locally only when
+# working ON clippy findings.
 clippy:
     # Single pass: production strictness lives in the workspace [lints]
     # table; test relaxation lives in-source (crate-root cfg_attr +
