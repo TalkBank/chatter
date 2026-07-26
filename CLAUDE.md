@@ -1,1232 +1,258 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-25 22:19 EDT
+**Last modified:** 2026-07-25 22:32 EDT
 
-This file provides guidance to Claude Code (claude.ai/code) when
-working in this repository (`TalkBank/chatter`).
+Guidance for Claude Code when working in this repository
+(`TalkBank/chatter`). This file carries invariants, danger rules, and
+an index; procedures live in the book (`book/src/`) and per-module
+CLAUDE.md files. The pre-2026-07-25 long form is in git history; its
+content was moved, not deleted (see `book/src/contributing/` and the
+module files below).
 
 ## Repo positioning (read before doing anything)
 
-This repository is the standalone, canonical home of the TalkBank
-CHAT format authority and the `chatter` tool family. **It is the
-source of truth for the `chatter` binary.** The CHAT-format core is
+This repository is the standalone, canonical home of the TalkBank CHAT
+format authority and the `chatter` tool family. **It is the source of
+truth for the `chatter` binary.** The CHAT-format core is
 self-contained; it builds and runs with no external TalkBank
 repository, so downstream consumers (including the Batchalign ML
-pipeline) depend on its crates directly.
+pipeline and external crates) depend on its crates directly.
 
-**Scope: general-purpose CHAT tooling only.** Everything in this
-repository, every subcommand, module, flag, and fixture, must be
-useful to CHAT users in general, not specific to one corpus, one
-data provider, or one workflow. Corpus-specific tooling belongs in
-downstream projects that consume chatter. Where a general capability
-needs per-corpus input, it takes a documented corpus-agnostic form,
-for example the `--session-context` JSON input that supplies session
-metadata to the holistic speaker-id judgment; producing that JSON
-from corpus-specific sources is a downstream concern.
+**Scope: general-purpose CHAT tooling only.** Everything here must be
+useful to CHAT users in general, never specific to one corpus, one
+data provider, or one workflow. Where a general capability needs
+per-corpus input, it takes a documented corpus-agnostic form (e.g. the
+`--session-context` JSON seam); producing that input from
+corpus-specific sources is a downstream concern.
 
 **Git hygiene.** Never `git push --force` and never `--no-verify`.
-Do not change repository visibility or push to shared branches
-without maintainer sign-off. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
-for the content-hygiene expectations (no secrets, internal paths, or
-personal data in commits).
-
-## Cross-Cutting Design Rules
-
-These rules matter because contributors often read code before they
-read docs.
-
-1. **Types are the first layer of documentation.** Prefer named
-   structs, enums, traits, and newtypes over raw primitives when the
-   value has stable meaning.
-2. **No primitive obsession at stable boundaries.** Do not introduce
-   raw strings, integers, or booleans for domain concepts such as
-   CHAT text, language IDs, spans, indices, counts, parser modes,
-   recovery modes, or parse-health states.
-3. **No tuple-packed domain seams.** If a pair or tuple has stable
-   field meaning, name it with a struct or newtype.
-4. **Avoid boolean blindness.** Use enums or state types when there
-   are multiple meaningful states or invalid state combinations.
-5. **No panic-based control flow in long-lived logic.** Do not add
-   `unwrap()`, `expect()`, or equivalent panics in parser, model,
-   validation, CLI, LSP, or background-tooling paths that should
-   report typed failures.
-6. **Use real domain errors.** Prefer `thiserror`-based error types
-   and diagnostics over stringly failures.
-7. **Keep modules browseable.** Split catch-all modules when they
-   start combining unrelated concerns. Code organization should help
-   a contributor find parser, validation, alignment, or spec logic
-   quickly.
-8. **Use methods when they clarify ownership.** Behavior that
-   depends on a type's invariants should usually live with that
-   type. Keep free functions for symmetric transforms, adapters, or
-   orchestration glue.
-9. **Touched docs need timestamps.** Any documentation file changed
-   in a patch must update its `Last modified` field with date and
-   time. **Always run `date '+%Y-%m-%d %H:%M %Z'` to get the actual
-   system time**, do not guess, hardcode, or use the conversation
-   date.
-10. **Do not write new logic against historical CHAT options.** In
-    the current grammar/model, the structured `@Options` names are
-    `CA` and `NoAlign`; do not add code or tests that depend on a
-    removed `dummy` option.
-11. **Stack discipline: the program runs on an explicitly sized
-    thread.** `chatter`'s `main()` spawns the whole program onto a
-    16 MiB thread (`PROGRAM_STACK_BYTES`) because the Windows main
-    thread gets only 1 MiB and debug-build clap construction outgrew
-    it (2026-06-12 incident). Never move program logic back onto the
-    bare OS main thread, and size any recursion-heavy worker threads
-    explicitly. Details: the "CLI Startup and the Program Stack"
-    architecture page; regression gate:
-    `crates/chatter/tests/stack_limit_tests.rs`.
-12. **Keep the book current with every change.** Updating `book/` is
-    part of the change, not a follow-up. Any change that alters
-    observable behavior (a CLI flag, a validation rule, an install
-    step, a shipped artifact, the architecture, a release) MUST update
-    the matching book page in the same commit; a book that has drifted
-    from the code is a defect. Full per-surface mapping and the
-    decision test: "The unified mdBook" section below.
-
-## Overview
-
-Standalone TalkBank CHAT toolchain: tree-sitter grammar, Rust crates
-(parsing, data model, validation, transformation), CLI (`chatter`),
-LSP server, desktop app, and FFI bindings.
-
-**Supported platforms:** Windows, macOS, and Linux. All code must
-build and run correctly on all three platforms. CI tests on Ubuntu;
-the cross-platform CI workflow exercises Ubuntu + macOS + Windows on
-push to `main` and daily. Release builds will eventually target all
-three (macOS ARM + Intel, Linux x86 + ARM, Windows x86), see
-[`docs/strategy/distribution-and-signing.md`](docs/strategy/distribution-and-signing.md).
-
-Data flows: **spec** (source of truth) → **grammar** (`grammar/`) →
-**crates** (parsers, model, transform, cli, lsp).
-
-## Running in Development
-
-The CLI binary is called `chatter` (package `chatter`).
-
-```bash
-# Run chatter directly (debug build, recompiles as needed)
-cargo run -p chatter -- validate path/to/file.cha
-cargo run -p chatter -- to-json path/to/file.cha
-cargo run -p chatter -- normalize path/to/file.cha
-
-# Release build for large-scale work (much faster runtime)
-cargo run --release -p chatter -- validate path/to/corpus/ --force
-
-# Build the release binary once, then run it directly
-cargo build --release -p chatter
-./target/release/chatter validate path/to/file.cha
-```
-
-No special setup beyond a working Rust toolchain. `cargo run` handles
-incremental compilation automatically.
-
-## Build, Test, and Lint
-
-```bash
-# Rust workspace
-cargo fmt
-cargo check --workspace --all-targets
-cargo build --workspace --all-targets --locked
-cargo nextest run --workspace                # Preferred: parallel per-test
-cargo nextest run -p talkbank-model          # Single crate
-# clippy runs in CI, not locally (see the clippy policy section)
-
-# Single test by name
-cargo nextest run -E 'test(test_name)'
-
-# Parser equivalence
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-
-# Doctests (nextest can't run these)
-cargo test --doc
-
-# Tree-sitter grammar (intra-repo)
-cd grammar && tree-sitter generate
-cd grammar && tree-sitter test
-cd grammar && tree-sitter parse path/to/file.cha
-
-# Spec tools (SEPARATE Cargo workspace, must cd)
-cd spec/tools && cargo test
-cd spec/tools && cargo check --all-targets
-
-# Desktop app (Tauri v2)
-cd apps/chatter-desktop && npm install && cargo tauri dev   # dev mode with hot reload
-cd apps/chatter-desktop && cargo tauri build                # distributable app bundle
-
-# Shell scripts: every tracked shell script must pass shellcheck at its
-# default (strictest) severity. CI enforces this (the `shellcheck` job in
-# ci.yml runs the runner below); run it locally the same way:
-bash scripts/lint/shellcheck-all.sh
-```
-
-### Never Run Concurrent Cargo Invocations Against This Workspace
-
-**Cargo serializes all access to a shared `target/` directory through a file
-lock; only one `cargo`/`just`/`cargo nextest` process can hold it at a time.**
-Launching a second cargo-family command against this workspace before an
-earlier one has actually finished does not run in parallel: the second
-command silently prints `Blocking waiting for file lock on build directory`
-and queues behind the first. Wall-clock time for a queued command can balloon
-to many multiples of its real compute time, and looks indistinguishable from
-"the build is incredibly slow" unless you notice that specific line in its
-output.
-
-**Incident (2026-07-06).** While diagnosing why an evening session's cargo
-commands each seemed to take 15-30 minutes, a "no-op" `cargo check
--p chatter-desktop` (no source changes since the prior successful check) was
-timed at `real 17m27s` but only `user 5.73s` + `sys 60.72s` of actual CPU
-work, under 70 seconds total. The other ~16 minutes was spent blocked on the
-target-directory lock held by an earlier background cargo/nextest invocation
-that had been launched (via an agent's `run_in_background`) before confirming
-the previous one had completed. The machine itself was fine throughout: 82%
-CPU idle, minimal swap, plenty of free RAM. Every long "build" that evening
-was substantially inflated the same way; only one at any given moment was
-ever actually compiling.
-
-**The rule.** Run ONE cargo-family invocation at a time against this
-workspace (`chatter/` root workspace, or `spec/tools`'s separate workspace).
-Wait for it to actually complete (confirm completion, do not just fire off
-the next command hoping it queues acceptably) before starting another. Do not
-launch a second `cargo check`/`clippy`/`build`/`nextest run`/`test` "just to
-also check X" while an earlier one against this same workspace might still be
-running. If a cargo command's wall-clock time looks unexpectedly long, check
-its output for `Blocking waiting for file lock` before concluding the
-compiler itself is slow, that line means the clock is measuring queue time,
-not compile time. If two cargo operations against this workspace are
-genuinely both needed right now, give the second one its own
-`CARGO_TARGET_DIR` (e.g. `CARGO_TARGET_DIR=/tmp/chatter-target-2 cargo ...`)
-rather than assuming they will interleave gracefully against the same
-`target/` directory.
-
-### Clippy Policy: CI Owns It; Locally It Is Never Run Routinely
-
-**Unified 2026-07-08 (Franklin's direction), replacing the earlier
-two-pass pre-push ritual.** The policy, in full:
-
-- **Severity is two-tier and lives entirely in source.** The workspace
-  `[lints.clippy]` table holds the six panic-family lints (`unwrap_used`,
-  `expect_used`, `panic`, `unreachable`, `todo`, `unimplemented`) at
-  `deny`: these enforce the no-panics house rule and are the ONLY thing
-  that can fail a clippy run. Every other lint is advisory. Test code
-  relaxes the panic family in source (a `cfg_attr(test, allow(...))` at
-  each crate root for unit tests; an `#![allow(...)]` header at the top
-  of each `tests/*.rs` / bench / example). A missing test header fails
-  STRICTER, never looser.
-- **One pass, no flags.** The canonical invocation is
-  `cargo clippy --workspace --all-targets --locked` (the `just clippy`
-  recipe). No `-D`/`-A` flags anywhere: flag soup is what created the
-  old three-layer incoherence and a second full build profile.
-- **CI is where clippy runs.** The `ci.yml` clippy job runs the single
-  pass on every push. It goes red ONLY on a panic-policy violation;
-  style lints surface as warning annotations to triage at leisure.
-  Drift pulse: the weekly `clippy-rolling.yml` job plus opportunistic
-  session sweeps (advisory lint once rotted to ~100 warnings,
-  2026-05-29; leisure needs a pulse, not a blocker).
-- **Locally: never run clippy as a habit, a gate, or a check.** The
-  inner loop is `cargo check -p <crate>` + scoped tests; the pre-push
-  gate (justfile `push`) is fmt + sync-checks + tests, clippy removed.
-  Run clippy locally only when actively working ON clippy findings.
-- **History:** the two-pass ritual (strict `-D warnings` on lib/bins,
-  relaxed `-A` list on tests) was scaffolding for the panic-audit ramp,
-  which completed; it cost 71 minutes on the v0.3.1 release gate and
-  repeatedly caused pointless CI churn. Do not reintroduce it.
-
-**Shell scripts must pass `shellcheck` (strictest).** The `shellcheck` CI job
-runs `scripts/lint/shellcheck-all.sh` over every tracked `*.sh` and shebang
-script at the default severity (no `--severity` floor). Write scripts in
-`bash`/`sh`, not `zsh`. Fix findings properly; only for a genuinely intentional
-pattern add a line-scoped `# shellcheck disable=SCxxxx` with a reason (never a
-blanket file-top disable). A comment must not begin with the word "shellcheck".
-
-`justfile` recipes wrap the most common entry points
-(`just build`, `just test`, `just clippy`, `just fmt`).
-
-## Releases and Versioning
-
-The version is the single `Cargo.toml [workspace.package] version`; every crate
-inherits it with `version.workspace = true`, so `chatter --version` and the crates all
-report the same number. Bumping it (with a matching `CHANGELOG.md` entry: the project
-follows Keep a Changelog and SemVer) is the first step of any release.
-
-**Gate the content, not the bump (Franklin, 2026-07-08).** A version
-bump invalidates every workspace crate's build fingerprint, so a gate
-run on the bump commit is always a full multi-profile rebuild (the
-v0.3.1 gate measured 2h19m). The release flow is therefore: run the
-FULL local gate (fmt, tests, doctests, book, spec) on the CONTENT
-commit, where builds are incremental; then make the version-bump
-commit (workspace version, pins, CHANGELOG section, sync-app-version,
-BOTH lockfiles refreshed, spec/Cargo.lock included, else fleet builds
-describe as dirty) and validate the bump commit with
-`cargo check --workspace` ONLY, which is exactly the check that
-catches the one thing a metadata bump can break (version-requirement
-resolution, as the 0.3.0 caret-pin incident proved); then push + tag.
-Clippy is CI's job on push (see the clippy policy section).
-
-**Tests run under `cargo nextest run --workspace --locked` in BOTH CI and the
-local gate, plus a separate `cargo test --doc --workspace --locked` (nextest
-does not run doctests). NEVER bare `cargo test` for the main suite (2026-07-13
-incident).** nextest isolates each test in its OWN PROCESS; `cargo test` runs
-the whole binary as ONE process with many threads, and then the cache tests
-race the shared SQLite validation-cache migration (`UNIQUE constraint failed:
-_sqlx_migrations.version`), which breaks cache init and flakes cache-hit
-assertions. That flake shipped a red v0.3.3 release commit. CI (`ci.yml`,
-`cross-platform.yml`) was switched from `cargo test` to nextest so it matches
-the runner the tests are designed for, and the gate uses the SAME runner, so
-"green locally" means "green in CI". Corollary: gate and CI must always use the
-same test runner. (Root-cause note: the underlying bug, concurrent first-open
-of a fresh cache database racing sqlx's SQLite migration, was FIXED on
-2026-07-22 with a cross-process advisory init lock in `talkbank-cache` (see
-`crates/talkbank-cache/src/init_lock.rs` and the cross-process regression test
-`crates/talkbank-cache/tests/concurrent_process_open.rs`). nextest remains the
-required runner because gate and CI must share one runner, not as a workaround.)
-
-Releases are produced by **cargo-dist**. Pushing a `vX.Y.Z` git tag that matches the
-workspace version triggers `.github/workflows/release.yml`, which builds the signed
-cross-platform CLI and desktop artifacts and creates the GitHub Release from the matching
-`CHANGELOG.md` section. The desktop app (macOS signed `.dmg`, Windows, Linux) and the
-self-update channels (`chatter update` for the CLI, the Tauri updater for the desktop app)
-ship in that same release, so the CLI and desktop move together.
-
-- **`release.yml` is generated by cargo-dist; do not hand-edit it.** Change release
-  behavior in `dist-workspace.toml` and regenerate. Hand-edits are overwritten and have
-  produced broken releases.
-- **The desktop version has a single source of truth: the workspace version.**
-  `apps/chatter-desktop/src-tauri/Cargo.toml` inherits it via `version.workspace = true`, and
-  `apps/chatter-desktop/src-tauri/tauri.conf.json` deliberately carries NO `version` field, so
-  Tauri falls back to the crate's `Cargo.toml` version (documented Tauri v2 behavior: "If
-  removed the version number from `Cargo.toml` is used"). The `.dmg` and the Tauri updater
-  therefore track the workspace version automatically; there is nothing to bump in lockstep.
-  Do NOT re-add a literal `"version"` to `tauri.conf.json` (that reintroduces the drift this
-  removal fixed).
-- Signing and notarization details:
-  [`docs/strategy/distribution-and-signing.md`](docs/strategy/distribution-and-signing.md).
-
-## Architecture
-
-**CHAT manual:** https://talkbank.org/0info/manuals/CHAT.html, the
-background reference for the transcript format. **Authority ordering
-(Franklin, 2026-07-10): the manual is dated; when it and this project
-diverge, trust `spec/`, the grammar, and above all the actual corpus
-data (the operators' wild-corpus tree of real TalkBank data). Data grounds
-what constructs are real, spec/grammar define what we accept, the
-manual is context. Never reintroduce a legacy construct that has been
-removed from the data and from chatter, whatever the manual or CLAN
-still say about it.**
-
-```
-grammar/        Tree-sitter grammar for CHAT format
-  grammar.js      Grammar definition (edit this)
-  src/            Generated C parser (do not edit)
-  test/corpus/    Generated corpus tests (do not edit)
-
-spec/           Source of truth: CHAT specification
-  constructs/     Valid CHAT examples
-  errors/         Invalid CHAT examples
-  symbols/        Shared symbol registry (JSON + generators)
-  tools/          Generators (separate Cargo workspace)
-
-crates/         All Rust crates (see below)
-corpus/         Reference corpus (must pass 100%)
-  reference/      Sacred reference set
-tests/          Integration tests and fixtures
-schema/         JSON Schema for ChatFile AST
-apps/chatter-desktop/   Desktop validation app (Tauri v2, React + TypeScript)
-book/           Unified mdBook (user + developer + architecture docs)
-docs/           Strategy, proposals, investigations (this repo only)
-```
-
-### Crate Dependency Flow
-
-```mermaid
-flowchart TD
-    model["talkbank-model\nData model, validation, alignment, errors"]
-    derive["talkbank-derive\nProc macros"]
-    cache["talkbank-cache\nSQLite pass/fail cache"]
-    parser["talkbank-parser\nCanonical parser (tree-sitter)"]
-    re2c["talkbank-parser-re2c\nAlternate parser (equivalence oracle)"]
-    tests["talkbank-parser-tests\nEquivalence tests"]
-    transform["talkbank-transform\nPipelines, CHAT↔JSON, normalize"]
-    cli["chatter\nCLI: validate, normalize, convert"]
-    lsp["talkbank-lsp\nLanguage Server Protocol"]
-    s2c["send2clan\nCLAN app bindings"]
-    desktop["chatter-desktop\nDesktop validation app (Tauri)"]
-
-    derive --> model
-    model --> parser
-    model --> re2c
-    parser --> transform
-    re2c --> transform
-    cache --> transform
-    transform --> cli & lsp & desktop
-    s2c --> cli & desktop
-    parser --> tests
-    re2c --> tests
-```
-
-### Crate Summaries
-
-| Crate | Key Modules | Purpose |
-|-------|-------------|---------|
-| `talkbank-model` | `model/`, `validation/`, `alignment/` | Data types, WriteChat, Validate trait, tier alignment, content walker |
-| `talkbank-derive` | `semantic_eq.rs`, `span_shift.rs`, `error_code_enum.rs` | SemanticEq, SpanShift, ValidationTagged, error_code_enum proc macros |
-| `talkbank-cache` | SQLite-backed validation + roundtrip cache | Extracted from `talkbank-transform/unified_cache/` during Session 1 |
-| `talkbank-parser` | `api/`, `parser/` | CST-to-model conversion via tree-sitter |
-| `talkbank-parser-re2c` | `re2c/`, `lexer.rs`, `parser.rs` | Alternate parser using re2c lexer (equivalence oracle for tree-sitter parser) |
-| `talkbank-parser-tests` | golden word lists, `generated/` | Parser equivalence, roundtrip, property tests |
-| `talkbank-transform` | pipelines, serialization, JSON | Parse+validate pipeline, CHAT↔JSON roundtrip |
-| `chatter` | `cli/`, `commands/`, `ui/` | `chatter` binary: validate, normalize, to-json, merge |
-| `talkbank-lsp` | `backend/`, `alignment/`, `graph/` | LSP server with tree-sitter incremental parsing |
-| `send2clan` | `ffi.rs`, `api/` | Rust bindings around the CLAN app bridge (macOS Apple Events, Windows WM_APP) |
-| `chatter-desktop` | `commands.rs`, `events.rs` | Native desktop validation app (Tauri v2, React) |
-
-### Two Cargo Workspaces
-
-1. **Root workspace** (`Cargo.toml`), all Rust crates under
-   `crates/` + `apps/chatter-desktop/src-tauri`.
-2. **Spec workspace** (`spec/Cargo.toml`), `spec/tools` for core
-   generation and `spec/runtime-tools` for runtime-aware spec tooling.
-
-Use the relevant manifest path for spec tooling:
-- `spec/tools/Cargo.toml` for generation
-- `spec/runtime-tools/Cargo.toml` for bootstrap/mining/runtime validation
-
-### Shared Symbol Registry
-
-Symbols (language codes, error markers, etc.) are defined once in
-`spec/symbols/symbol_registry.json` and generated into grammar JS
-and Rust code via the spec/tools generators.
-
-## Grammar Change Workflow (Required)
-
-**CRITICAL: `src/parser.c` (in `grammar/`) is a GENERATED artifact.**
-Produced by `tree-sitter generate` from `grammar.js`. Never edit
-`parser.c` directly.
-
-**`tree-sitter test` does NOT detect stale parser.c**: it
-regenerates before testing. Only `cargo test`/`cargo build` will
-exhibit bugs from a stale parser.c.
-
-When any grammar source changes (especially `grammar/grammar.js`),
-run this full sequence:
-
-1. `cd grammar && tree-sitter generate`, **MANDATORY after every
-   grammar.js edit, including reverts**
-2. `cd grammar && tree-sitter test`
-3. Regenerate the typed CST traversal module, requires a local
-   checkout of the `tree-sitter-grammar-utils` repository. There is a
-   SINGLE generated module now (the 2026-07 migration onto the
-   self-contained backend is complete and the OLD `generate_traversal`
-   module was retired): the `generate_typed_traversal` example, pointed
-   at this repo's `grammar/src/grammar.json` +
-   `grammar/src/node-types.json`, with NO `--skip` flag (the backend
-   models grammar extras explicitly), redirected into
-   `crates/talkbank-parser/src/generated_traversal.rs`. It self-formats
-   via rustfmt, so there is NO separate `cargo fmt` step; pass
-   `--edition 2024 --toolchain <the repo's rust-toolchain.toml pin,
-   see rust-toolchain.toml for the current pin>` so the output matches CI's rustfmt byte-for-byte.
-   Staleness guard: `generated_traversal_is_current`. The generator's
-   output is commit-ready as-is: it is em-dash-free, carries its own
-   `#![allow(...)]` for the lints normal in generated code, and stamps a
-   deterministic provenance header (generator identity + SHA-256 digests
-   of the two input files, NO wall-clock timestamp). **Never hand-edit
-   the generated file** (no dash-stripping, no adding allows): if the
-   output is wrong, fix the generator in `tree-sitter-grammar-utils` as
-   a GENERAL change and regenerate. See the crate's `lib.rs`
-   doc-comment for the exact command shape. The staleness guard
-   recomputes the embedded digests from the committed grammar JSON, so
-   a forgotten regeneration fails the test suite instead of shipping
-   silently.
-4. Regenerate corpus tests and error tests from specs (via the spec
-   tooling, see `spec/CLAUDE.md` for the current command).
-5. `cargo nextest run -p talkbank-parser && cargo nextest run -p talkbank-parser-tests`
-6. Re-run at least one real-file CLI validation command covering
-   the changed syntax path.
-
-Rules:
-- Do not trust parser/validator debugging output until step 1 is
-  complete.
-- **After reverting a grammar.js change**, you MUST re-run
-  `tree-sitter generate`.
-- Do not regenerate corpus expectations blindly; review failures
-  first.
-- `cargo nextest run -p talkbank-parser-tests` is a required
-  compatibility gate.
-
-### Grammar Design: Strict + Catch-All Pattern
-
-For header fields with a closed set of valid values, the grammar
-uses the **strict + catch-all** pattern ("parse, don't validate"):
-known values as named nodes (syntax highlighting), generic catch-all
-for unknown values (flagged by the Rust validator). Used by
-`option_name`, `media_type`, `id_sex`, `id_ses`, and similar header
-rules. See `grammar/CLAUDE.md` for details.
-
-## Spec Change Workflow
-
-After modifying specs in `spec/constructs/` or `spec/errors/`, run
-the regeneration step described in `spec/CLAUDE.md` and then run
-the parser-equivalence and reference-corpus regression gates below.
-
-## JSON Schema Regeneration (Required)
-
-**The canonical CHAT JSON Schema (`schema/chat-file.schema.json`) is
-generated from the `talkbank-model` types and embedded into the binary
-at compile time (`talkbank_transform::SCHEMA_JSON` via `include_str!`).
-It does NOT regenerate itself.** Whenever you change the SHAPE of any
-`ChatFile` model type, a field, a new enum variant (e.g. a new
-`DependentTier`), a renamed field, a changed `#[serde]` attribute, or a
-`#[doc]` comment that feeds schemars, you MUST regenerate it in the same
-change, or `chatter to-json` (which validates its own output against the
-embedded schema) will reject perfectly valid files with a confusing
-"does not conform to schema / not valid under oneOf" error.
-
-```bash
-cargo test -p talkbank-transform --test generate_schema   # rewrites schema/chat-file.schema.json
-cargo build -p chatter                                # REBUILD: the schema is include_str!-embedded
-```
-
-The rebuild is not optional: because the schema is embedded at compile
-time, a stale binary keeps validating against the OLD schema until it is
-rebuilt. Commit the regenerated `schema/chat-file.schema.json` alongside
-the model change.
-
-**Decision test:** "Did I change a model type's shape, fields, serde, or
-doc comments?" If yes, regenerate the schema and rebuild before trusting
-`to-json`. This is as mandatory as `tree-sitter generate` is after a
-`grammar.js` edit.
-
-**Automated guard:** the `committed_schema_matches_model` test (in
-`crates/talkbank-transform/tests/generate_schema/generate.rs`) rebuilds the
-schema from the live model and asserts it equals the committed file, so a
-forgotten regeneration fails the test suite instead of shipping silently.
-
-## Critical Policies
-
-### Always Fix Root Causes, Never Symptoms
-
-When a bug is found, trace it to its architectural origin and fix
-it there. Do not add workarounds, "pragmatic" patches, or band-aids
-that mask the real problem. "Pragmatic" is banned as a justification
-for incomplete fixes.
-
-When you discover a wrong architecture, fix it, do not perpetuate
-it. If a bug reveals an incorrect architectural assumption, note the
-flaw explicitly, then fix the architecture. A detection/workaround
-that prevents a crash is not a fix; it is evidence the architecture
-needs changing.
-
-### Red/Green TDD: Start at the Top, Drill Down
-
-**Every new feature and bug fix starts with a failing test, and the
-first failing test MUST be the highest-level integration test you
-can write for the actual boundary the bug or feature lives at.**
-Unit tests on internal helpers are *additional* regression guards,
-never substitutes for the top-level test.
-
-**What counts as "highest level" depends on the bug's seam:**
-
-| Bug lives at... | Top-level test invokes... |
-|-----------------|---------------------------|
-| CLI argument parsing | `Command::new("chatter")` subprocess test |
-| Grammar / parser | A real CHAT fragment through `talkbank-parser::parse_*` |
-| Validation rule | A real `.cha` fixture through `chatter validate` |
-| LSP behavior | A real LSP request/response through the LSP backend |
-
-**Drill down only after the top-level test is committed and failing.**
-If the top-level test cannot pin the behavior precisely (e.g.
-asserts the *outcome* but not which internal path produced it), add
-unit tests as supplements. They are never the starter.
-
-**The discipline:** if you find yourself writing a unit test for a
-helper function as your first test, stop and ask "what's the
-user-visible seam this fix sits behind?" That seam is where the
-starter test goes.
-
-### Test Failures Are Bugs Until Proven Otherwise
-
-**When a test fails, STOP and ask the user.** Do not assume the
-test expectation is wrong. Do not update test expectations to match
-new behavior without explicit approval.
-
-CHAT semantics are subtle and domain-specific. The grammar, parser,
-and model encode years of decisions about how overlap markers,
-lengthening, CA notation, zero-words, and other CHAT constructs
-interact. An LLM cannot reliably judge whether a behavioral change
-is correct by reading code alone.
-
-**The rule:**
-1. If a test fails after your change, report the failure with the
-   exact `left`/`right` values and the test name.
-2. Explain what your change did and why you think the behavior
-   changed.
-3. **Ask the user** whether the old expectation or the new behavior
-   is correct. Do not guess.
-4. Only update the test after the user confirms the new behavior
-   is intended.
-
-This applies especially to:
-- `cleaned_text()` expectations (what counts as "spoken text")
-- Overlap marker handling (⌈⌉⌊⌋, structural vs content)
-- CA notation (°, ↑, ↓, ∆, etc.)
-- Lengthening vs colon disambiguation
-- Zero-word and omission semantics
-- Any grammar change that alters the CST structure
-
-### Grammar/Parser Bug Fixes Require Specs and Reference Corpus
-
-**Every grammar or parser bug fix MUST be TDD'd with specs and
-reference corpus entries based on actual data.** This prevents
-regressions and documents the fix for successors.
-
-**The workflow:**
-1. Find the bug (error in corpus data, failing parse, wrong CST)
-2. **RED:** Add a spec in `spec/constructs/` or `spec/errors/` that
-   captures the exact input pattern. Add a reference corpus file in
-   `corpus/reference/` using real data from the affected corpus.
-3. Regenerate the test (see `spec/CLAUDE.md`). Verify it fails (or
-   would fail without the fix).
-4. **GREEN:** Fix the grammar/parser. Run `tree-sitter generate`,
-   `tree-sitter test`, then the specific Rust parser test.
-5. **REFACTOR:** Clean up. Run the full reference-corpus regression
-   gate as a final check.
-
-**Specs are permanent regression gates.** A bug that has a spec can
-never silently regress. A bug fixed without a spec WILL regress
-eventually.
-
-### Exhaustive Match on Content Types
-
-Every `match` on `UtteranceContent` or `BracketedItem` must
-explicitly list all variants, no `_ =>` catch-alls that silently
-discard unhandled content types. All group types must recurse into
-their `BracketedContent`.
-
-### "Consecutive" Means In-Order Traversal
-
-When CHAT rules refer to "consecutive", "sequential", or "adjacent"
-items on the main tier, this ALWAYS means **document order via
-recursive traversal**, NOT adjacent indices in the flat
-`Vec<UtteranceContent>`. Items inside groups (`<...>`, `"..."`,
-etc.) are part of the sequence. Always use `walk_words` or
-equivalent in-order walker, never raw index adjacency.
-
-### Reference Corpus (a regression signal, NOT a validity authority)
-
-`corpus/reference/` is a **synthesized** set of fixtures built to
-exercise CHAT constructs. It is NOT real data and NOT an authority on
-what is valid CHAT: any fixture in it can be wrong, including being
-invalid CHAT mistakenly committed as valid. So when a parser/validation
-change causes a reference file to be rejected, do NOT reflexively treat
-that as a regression to suppress. Adjudicate the file against the real
-authorities (CLAN `check` as a strict lower bound, plus our spec/grammar
-and the wild corpus data; the CHAT manual is dated background only);
-if the file is in fact invalid, FIX THE DATA (correct it, or move it to
-`spec/errors/` as an invalid example), do not weaken the parser to keep
-it passing. The intent is still that every file currently in
-`corpus/reference/` be valid CHAT, so the roundtrip gate stays green:
-
-```bash
-cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
-```
-
-but "the gate went red" is a prompt to check the data, not proof the
-change is wrong.
-
-### Mandatory Regression Gate (Parser/Model/Alignment)
-
-For any change touching parser, data model, validation, alignment,
-serialization, or roundtrip logic:
-
-1. `cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'`
-2. `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus`
-3. Both must pass before any commit.
-
-### Pre-Push Gate: CI must be green before announcing
-
-Until a single `just verify` gate recipe exists, the pre-push
-gate is **GitHub Actions CI green on the pushed commit** (Rust +
-book, plus the cross-platform workflow on `main`). The CI badges in
-`README.md` are the canonical signal; don't claim a push is done
-until both workflows have completed.
-
-### Parser Recovery and Data Integrity
-
-- Do not fabricate dummy model values during parser recovery.
-- On malformed input, report diagnostics and mark parse-taint
-  (`ParseHealth`).
-- **Recovery is not validity.** The tree-sitter parser recovers from
-  malformed input by inserting `ERROR` / `MISSING` CST nodes and
-  continuing, so the LSP and downstream repair always get an AST. But a
-  document that NEEDED a recovery node did not conform to the grammar
-  and is invalid: a whole-tree backstop in `parse_lines_with_old_tree`
-  surfaces every surviving recovery node not already covered by a
-  per-region diagnostic (`ERROR` -> `UnparsableContent`/E316, `MISSING`
-  -> `MissingRequiredElement`/E342). Never silently drop a recovery
-  node; the AST is still produced (recovery preserved), only the
-  diagnostic is added. This whole-tree backstop is a deliberate
-  COMPLEMENT to the per-position `NodeSlot` recovery handling in the
-  generated visitor (see "CST Traversal Rules"), NOT redundant with it:
-  per-position handling catches recovery at positions the grammar models;
-  the backstop catches recovery nodes that land where no rule models a
-  slot. It is empirically load-bearing (2026-07-04): with it removed,
-  `chatter_matches_check` (CHECK parity) and
-  `no_recovery_node_in_accepted_file` both fail. The re2c oracle must
-  mirror this (emit a matching diagnostic on the same input), per its
-  MISSING-Token Recovery Policy.
-- Lenient recovery must not fail fast on malformed existing `%mor`
-  / `%gra` tiers. If the source contains a `%mor` or `%gra` line,
-  the recovered AST must preserve that tier slot in place even when
-  the tier contents are malformed, so downstream repair/regeneration
-  can mutate in place without reordering against later dependent
-  tiers such as `%wor`.
-- Alignment/validation must honor parse-taint and skip
-  mismatched-domain checks.
-- Prefer cheap byte-oriented prefix dispatch before heavier parser
-  machinery.
-- Prefer shared diagnostic constructors over ad hoc
-  `ParseError::new(...)`.
-
-### CST Traversal Rules (talkbank-parser): drive parsing from the generated visitor
-
-**The production parser MUST be driven by the generated, exhaustive, typed CST
-traversal module (`generated_traversal`: free `extract_*` functions over a closed
-`NodeSlot` enum, generated by `tree-sitter-grammar-utils` from
-`grammar/src/grammar.json` + `node-types.json`). Hand-walking the tree-sitter CST
-with `node.kind() == "..."` / `match child.kind()` string dispatch is BANNED.**
-The generated visitor exposes every child position as a `NodeSlot`
-(`Present` / `Missing` / `Error` / `Unexpected` / `Absent`), so a consumer CANNOT
-silently drop a recovery node: ERROR and MISSING are explicit slot variants that
-every call site must handle. Because structure comes from typed node dispatch,
-there is NO place for text-hacking, classifying the *text* of an ERROR node to
-guess what was malformed (the `analyze_word_error` / `analyze_error_node`
-anti-pattern) is likewise BANNED. Recovery handling (ERROR -> E316,
-MISSING -> E342) is expressed PRIMARILY through `NodeSlot` variants at each
-modeled position, so a consumer cannot silently drop a recovery node at a
-position the grammar models. A whole-tree recovery backstop is deliberately
-RETAINED as a complementary second layer (see "Parser Recovery and Data
-Integrity"): it surfaces recovery nodes that land where no grammar rule models a
-slot (top-level junk, deeply-recovered structures), which per-position handling
-structurally cannot reach. The anti-pattern the visitor ends is the hand-walk
-DROPPING nodes, NOT the backstop; the two layers are complementary and both are
-required. Empirically confirmed load-bearing (2026-07-04): deleting the backstop
-regresses `chatter_matches_check` (CHECK parity) and
-`no_recovery_node_in_accepted_file` (recovery-is-not-validity), because recovery
-diagnostics on malformed input land at positions no per-region `NodeSlot`
-covers. Do not remove it.
-
-**Why this rule exists (do not repeat the mistake).** `tree-sitter-grammar-utils`
-and the `GrammarTraversal` visitor were created on 2026-03-23 specifically to end
-the recurring failure of the parser dropping ERROR/MISSING nodes. But the visitor
-was NEVER wired into the production parser: across every commit in every repo of
-the lineage (this repo's private predecessors), the only
-`impl GrammarTraversal` that ever existed was a test stub
-(`impl GrammarTraversal for TestTraversal`). The production parser hand-walked
-`node.kind()` string dispatch the whole time and shipped public (v0.1.0) still
-doing so, which is the root cause of the recurring missing-node bugs and the
-ERROR-text text-hacking. (The whole-tree recovery backstop was the MITIGATION that
-kept those dropped nodes from vanishing silently; per-position `NodeSlot` handling
-now prevents the drop at every modeled position, and the backstop is deliberately
-RETAINED as the whole-tree safety net for the unmodeled positions per-position
-handling cannot reach, see the reframed note above and "Parser Recovery and Data
-Integrity".) The parser was re-founded on the visitor in the 2026-07 migration
-(every consumer cluster flipped off `node.kind()` dispatch); NEW parser code must
-not add hand-walk dispatch or ERROR-text classification.
-
-- `WHITESPACES` nodes: skip with a comment explaining no semantic content.
-- Unrecognized / unexpected node kinds: surfaced as `NodeSlot::Unexpected` and
-  reported via `ErrorSink`; never silently ignored.
-- Group / nested content: dispatched through the generated typed methods, all
-  variants exhaustive; no `_ =>` catch-all that discards content.
-
-### Test File Policy
-
-Never create ad hoc `.cha` test files. Use existing files from
-`corpus/reference/` or ask the user to provide test files.
-
-### Error Code Testing Policy
-
-All error code tests flow through `spec/errors/`. Every error code
-MUST have a spec in `spec/errors/E###_*.md`. Tests are GENERATED
-via the spec tooling, never hand-written.
-
-### %mor Syntax: UD Only
-
-**This project supports Universal Dependencies (UD) syntax for
-`%mor` tiers; we deliberately do not support legacy CLAN mor
-syntax.** In particular:
-
-- **Fusional-suffix marker `&`** (as in `aux|be&PRES`,
-  `verb|break&PAST`) is a CLAN mor convention. It is **not**
-  parsed. If it appears in input, the `&X` portion ends up as part
-  of the lemma string, that's a silent degradation, not a feature.
-- All morphological features are hyphen-separated:
-  `verb|break-Past`, not `verb|break&PAST`.
-- Feature casing is sentence-case UD: `Past`, `Pres`, `Fin`, `Ind`,
-  plus canonical combined tags like `S3` for person+number. Not
-  all-caps.
-- Reference corpus files must use UD syntax. Any `%mor` line with
-  `&` is a fixture bug, fix it, do not introduce CLAN-mor handling
-  to accommodate it.
-
-**Rationale.** Actual TalkBank/CHILDES data in current use is
-UD-tagged. CLAN mor is legacy. Our XML golden-parity target is UD
-behavior on real data, not syntax-space coverage of legacy CLAN mor.
-Maintaining two %mor syntaxes would double surface area for no
-downstream benefit.
-
-**Legacy CLAN-mor `&` handling.** In legacy CLAN mor, `&` is a
-fusional-suffix marker that maps to an `<mk type="sfxf">PRES</mk>`
-element in TalkBank XML. Rust emits nothing (the `&PRES` is already
-absorbed into the lemma). This is an intentional divergence from the
-legacy convention; do not "fix" Rust to reintroduce `&` handling.
-
-### Cache Policy
-
-The validation cache lives in the OS cache directory
-(`~/Library/Caches/talkbank-chat/` on macOS, `~/.cache/talkbank-chat/`
-on Linux, `%LocalAppData%\talkbank-chat\` on Windows). Use `--force`
-to refresh specific paths. The `TALKBANK_CHAT_CACHE_DIR` environment
-variable relocates the cache root (used verbatim, no suffix); it is
-the only effective override on Windows, where the default resolves
-through the Known Folder API and ignores `HOME`-style variables.
-Integration tests MUST isolate the cache through the `CliHarness`,
-which sets this variable; `HOME`-based isolation alone is a Windows
-race (cross-platform CI incident, 2026-06-12).
-
-Cache initialization is concurrency-safe across threads AND processes
-(fixed 2026-07-22): every opener takes an exclusive advisory file lock
-(`talkbank-cache.init.lock`, beside the database) around first-time
-create + migrate, so parallel `chatter` runs or parallel test processes
-sharing one cache directory can no longer race sqlx's SQLite migration
-(`UNIQUE constraint failed: _sqlx_migrations.version`) or wedge on a
-half-initialized database. Lock acquisition is bounded (typed
-`InitLockTimeout` error on expiry, and the CLI then degrades to running
-uncached), never an indefinite block. See
-`crates/talkbank-cache/src/init_lock.rs`.
-
-## Rust Coding Standards
-
-### Edition and Tooling
-
-- Rust **2024 edition**.
-- `cargo fmt` before committing. Use `cargo fmt` (not standalone
-  `rustfmt`) for workspace-consistent formatting.
-- **Prefer `cargo nextest run`** for faster parallel-per-test
-  execution. Use `cargo test --doc` for doctests (nextest can't run
-  those).
-- CI runs **single-pass clippy** (`--workspace --all-targets`, no
-  flags): the workspace `[lints]` table denies the panic family in
-  production code; test code relaxes it via in-source attributes. Red
-  means a panic-policy violation, nothing else. See the clippy policy
-  section above.
-
-### Error Handling
-
-- **No panics for recoverable conditions.** Use typed errors
-  (`thiserror`); use `miette` for rich diagnostics where appropriate.
-- **No silent swallowing.** Every unexpected condition must be
-  handled with explicit error reporting, no `.ok()`,
-  `.unwrap_or_default()`, or silent fallbacks that hide bugs.
-
-### Output and Logging
-
-- **Library crates:** `tracing` macros (`tracing::info!`,
-  `tracing::warn!`, etc.), never `println!`/`eprintln!`.
-- **CLI binaries:** `println!`/`eprintln!` for user-facing output;
-  `tracing` for debug logging.
-- **Test code:** `println!` is acceptable (cargo captures it).
-
-### Lazy Initialization
-
-- `LazyLock<Regex>` (from `std::sync`) for constant regex patterns.
-  Never call `Regex::new()` inside functions or loops.
-- `OnceLock` for per-instance memoization of runtime-determined
-  values.
-- Prefer `const` when possible (even better than lazy).
-- All lazy init via `std::sync`, no external crate dependencies
-  needed.
-
-### Type Design
-
-- **No boolean blindness.** Enums over bools for anything beyond
-  simple on/off. This is a hard rule.
-  - **Banned:** 2+ bool parameters on a function, 2+ related bool
-    fields on a struct, opposite bool pairs (`foo`/`no_foo`), bool
-    return where meaning is unclear without reading docs.
-  - `#[derive(Default, clap::ValueEnum)]` enum with named variants.
-    For clap CLI args, use `#[arg(value_enum)]` instead of
-    `--flag`/`--no-flag` pairs.
-  - **OK as bool:** `verbose`, `force`, `quiet`, `dry_run`, single
-    `include_*`/`skip_*` flags, anything where the parameter name
-    fully communicates what `true` means.
-- **`BTreeMap` for deterministic JSON** in tests and snapshot tests
-  (not `HashMap`). Ensures consistent, reviewable diffs.
-- Prefer explicit enums over ambiguous `Option` when there are
-  multiple meaningful states.
-
-### Newtypes Over Primitives
-
-- **No primitive obsession.** Domain values must have domain types.
-  Function signatures should be self-documenting through type
-  names, not parameter names.
-- Use newtype structs (e.g., `struct TimestampMs(u64)`,
-  `struct SpeakerId(String)`) or the `interned_newtype!` /
-  `string_newtype!` macros from `talkbank-model`. Newtypes should
-  implement `Display`, `From`/`Into` for the underlying type, and
-  derive `Clone`, `Debug`, `PartialEq`, `Eq` as appropriate.
-- **Scope:** Applies to public API boundaries, struct fields, and
-  function signatures. Local variables inside a function body may
-  use bare primitives when the context is unambiguous.
-- **Parsing boundaries:** Parse raw strings into newtypes at the
-  boundary (file I/O, CLI args, IPC). Interior code should never
-  handle raw strings for typed values.
-- **No ad-hoc format parsing.** Use real parsers (XML: `quick-xml`,
-  JSON: `serde_json`, etc.) not regex or string splitting for
-  structured formats. Regex is appropriate only for flat text
-  pattern matching (search, normalization, validation of simple
-  formats).
-
-### Integer Discipline
-
-- **Distinguish meaning.** Not all `usize` values are
-  interchangeable. Separate:
-  - **Index**: position into a collection (`UtteranceIndex`,
-    `GraIndex`)
-  - **Count**: accumulated quantity (`WordCount`,
-    `UtteranceCount`)
-  - **Limit**: upper bound for iteration or reporting
-    (`UtteranceLimit`, `WordLimit`)
-  - **Threshold**: minimum value for inclusion
-    (`FrequencyThreshold`)
-  - **ID**: opaque identifier (`NodeId`, `SpeakerIndex`)
-- Non-negative quantities use unsigned types; newtypes enforce
-  domain semantics.
-- **No bare numeric literals** except `0`, `1`, and simple loop
-  bounds. All other numbers must be named constants. Assess whether
-  each constant should be configurable.
-
-### Closed-Set Strings and Constants
-
-- **Closed sets must be enums.** If a string value comes from a
-  known finite set (tier labels, command names, output formats),
-  represent it as an `enum` with a `FromStr` parser and `Display`
-  serializer. Use `Other(String)` escape hatch only when the set is
-  genuinely extensible.
-- **All remaining string literals must be defined constants.** No
-  scattered `"mor"` or `"cod"` strings, use `TierKind::Mor` or
-  `const DEFAULT_TIER: &str = "cod"`.
-- **Config defaults:** Use `const` values or enum variants in
-  `Default` impls, not `"string".to_owned()` (avoids runtime
-  allocation, makes the default visible at the type level).
-
-### File Path Discipline
-
-- File paths use `PathBuf`/`&Path`, never `String`. Convert to
-  strings only at display/serialization boundaries via `.display()`
-  or `.to_string_lossy()`.
-- Distinguish base filename (e.g., `MediaFilename` newtype, no
-  extension) from full filesystem path (`PathBuf`).
-- Use `.display()` for user-facing output; `.to_string_lossy()`
-  only for cache keys or hashing.
-
-### Configurability
-
-- Hardcoded thresholds and limits belong in config struct fields
-  with documented defaults.
-- If a default is useful to change per-invocation → CLI flag.
-- If a default is useful to change per-user → future `defaults.toml`
-  file (not yet implemented).
-- Config structs must be constructible in tests without filesystem
-  or network access.
-
-### Rustdoc as Primary Documentation
-
-- **Types are the primary documentation layer.** A reader of
-  crates.io rustdocs should understand the domain by reading type
-  definitions alone.
-- Every `pub` type and function must have a doc comment explaining
-  role, ownership, invariants, and CHAT manual references where
-  applicable.
-- Newtypes must document valid values, units, and meaningful
-  operations.
-- Enum variants must document when each variant applies.
-
-### File Size Limits
-
-- **Recommended:** ≤400 lines per file.
-- **Hard limit:** ≤800 lines per file (must be split).
-
-### Testability
-
-- **No global mutable state.** All command state flows through
-  explicit `State` types (the `AnalysisCommand` trait pattern).
-  Enforce this going forward.
-- Config structs must be constructible in tests without filesystem,
-  network, or environment setup.
-- Stateful resources (caches, pools, registries) must accept
-  injected dependencies for test control.
-
-### Refactoring Triggers
-
-Stop and refactor when you see:
-
-- `x: i32, y: i32` for domain data → use domain structs
-- `start_ms: u64, end_ms: u64` → use `TimestampMs` newtype or
-  `TimeSpan` struct
-- `fn foo(lang: &str, speaker: &str, path: &str)` → use
-  `LanguageCode`, `SpeakerId`, typed path
-- Multiple booleans for state → use enum with variants
-- `fn foo(a: bool, b: bool)` or `--flag`/`--no-flag` pairs → use
-  enum with `clap::ValueEnum`
-- `fn parse() -> Option<T>` where failure reason matters → use
-  `Result<T, ParseError>`
-- `match s { "win" => ... }` on raw strings → parse to `enum` at
-  boundary
-- `"mor"` or `"cod"` string literals → use `TierKind::Mor` or
-  `TierKind::Cod`
-- `limit: usize` or `max_X: usize` → use domain-specific newtype
-  (`UtteranceLimit`, `WordLimit`)
-- Bare `0.5` or `60` in logic → named constant or config field
-- Regex or `split()`/`find()` on XML, JSON, or other structured
-  formats → use a proper parser
-
-### Diagram Authoring Rules
-
-**Architecture and design documentation MUST include Mermaid
-diagrams.** GitHub renders Mermaid natively; all mdBook builds have
-`mdbook-mermaid` enabled.
-
-#### When to Create a Diagram
-
-Add a diagram when documenting:
-- Data flow pipelines (how data transforms through stages)
-- Architecture boundaries (what owns what, who calls whom)
-- State machines and lifecycles (valid transitions, terminal
-  states)
-- Decision trees (option routing, fallback paths)
-- Type relationships (trait hierarchies, enum variants, ownership)
-- Protocols (request/response sequences, IPC message flows)
-
-**If a page describes a pipeline, boundary, or decision flow in
-prose without a diagram, the page is incomplete.**
-
-#### Diagram Type Selection
-
-| Situation | Use | Not |
-|-----------|-----|-----|
-| Data flows through stages | `flowchart TD` or `flowchart LR` | `sequenceDiagram` (no named participants) |
-| Request/response between components | `sequenceDiagram` | `flowchart` (hides back-and-forth) |
-| Type hierarchies, trait impls | `classDiagram` | `flowchart` (wrong semantics) |
-| State transitions, lifecycles | `stateDiagram-v2` | `flowchart` (no state semantics) |
-| Decision trees, option routing | `flowchart TD` with diamond nodes | Text lists (hard to follow branches) |
-
-#### The Seven Diagram Rules
-
-These rules exist because a successor who has never met the team
-will read these diagrams to understand the system. Every rule
-directly addresses a documented failure mode that produces
-misleading diagrams.
-
-1. **Name every resource.** Every node must have a specific name
-   AND its type/role. Not `"Cache"`, use
-   `"SQLite cache\n(talkbank-cache crate)"`. A reader must be able
-   to grep the codebase for the node label and find it.
-2. **One concept per diagram.** Each diagram tells one coherent
-   story. When in doubt, split.
-3. **No conveyor belts for interactive flows.** If two components
-   exchange messages (request/response, IPC, HTTP), use
-   `sequenceDiagram`. Reserve `flowchart` for genuinely
-   one-directional data pipelines.
-4. **Show real decision points.** Decision diamonds must use real
-   function names, flag names, and condition expressions, not
-   `"check condition"`.
-5. **Include error and fallback paths.** Every decision node must
-   show what happens on failure. Mark optional paths with dashed
-   lines (`-.->`).
-6. **Anchor to source locations.** Architecture diagram nodes
-   should include the crate, module, or file path in the label or
-   in prose immediately below.
-7. **Never generate diagrams from source code without
-   verification.** Read the actual source files for every entity
-   in the diagram; verify every node corresponds to a real module,
-   function, or type; if you cannot verify a connection, omit it,
-   gaps are better than lies.
-
-#### Formatting Standards
-
-- **Node labels:** `["Name\n(role or path)"]` for multi-line
-- **Decision nodes:** `{"condition?\ndetail"}` diamond syntax
-- **Edge labels:** `-->|"label"| target` for all non-trivial edges
-- **Colors/styles:** Do not use custom colors. Default Mermaid
-  themes ensure consistent rendering across GitHub and mdBook
-- **Size limit:** Keep diagrams under about 30 nodes. If larger,
-  split into focused diagrams.
-- **Angle bracket escaping:** Raw angle brackets in Mermaid labels
-  (`Arc<str>`, `Cow<str>`, `&str`) trigger mdBook "unclosed HTML
-  tag" warnings. Escape as `&lt;str&gt;` inside labels.
-
-#### Placement
-
-- Place each diagram **inline**, immediately after the prose
-  paragraph that introduces the concept it illustrates.
-- Every diagram must have a prose introduction explaining what it
-  shows and why the reader should care.
-
-### Git
-
-Conventional Commits format: `<type>[scope]: <description>`
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
-`build`, `ci`, `chore`.
-
-### Content Walker (shared primitive)
-
-`talkbank-model` exports `walk_words()` / `walk_words_mut()`,
-closure-based walkers that centralize the recursive traversal of
-`UtteranceContent` and `BracketedItem` variants. Callers provide
-only a leaf-handling closure receiving `WordItem` or `WordItemMut`
-(Word, ReplacedWord, or Separator). Domain-aware gating is built
-in: `Some(Mor)` skips retrace groups, `Some(Pho|Sin)` skips
-PhoGroup/SinGroup, `None` recurses everything.
+Do not change repository visibility or push to shared branches without
+maintainer sign-off. Never push to the `archive` remote. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for content hygiene (no secrets,
+internal paths, or personal data in commits).
 
 ## CHAT-validity authority
 
-**`chatter validate` is the authority on whether a given byte
-sequence is valid CHAT.** When chatter rejects a file, the file is
-invalid; the right response is to clean the data, not weaken the
-parser.
+**`chatter validate` is the authority on whether a byte sequence is
+valid CHAT.** When chatter rejects a file, the file is invalid; the
+right response is to clean the data, not weaken the parser.
 
-## LSP Reliability Rules
+**Authority ordering:** the CHAT manual
+(https://talkbank.org/0info/manuals/CHAT.html) is dated background;
+when it and this project diverge, trust `spec/`, the grammar, and
+above all real corpus data. Never reintroduce a legacy construct that
+has been removed from the data and from chatter, whatever the manual
+or CLAN still say.
 
-- Backend initialization failures must surface as diagnostics, not
-  panics.
-- Request handlers should degrade gracefully when parser services
-  are unavailable.
-- Keep LSP diagnostics aligned with parser parse-health semantics.
+## Danger rules (each has burned a session; no exceptions)
 
-## Large-Scale Corpus Validation
+1. **Tests run under `cargo nextest run`, never bare `cargo test`,**
+   in CI, the gate, and locally (`just test` does this). `cargo test`
+   runs one process and races the shared cache migration. Doctests
+   are separate: `cargo test --doc --workspace`.
+2. **Never run two cargo-family commands concurrently against one
+   workspace** (this root workspace or `spec/`'s). The target-dir
+   lock silently queues them; wall clock explodes. If both are truly
+   needed, give the second its own `CARGO_TARGET_DIR`.
+3. **`grammar/src/parser.c` is GENERATED.** After ANY `grammar.js`
+   edit (including reverts): `tree-sitter generate` is mandatory
+   before trusting any parser behavior. `tree-sitter test` does NOT
+   detect a stale parser.c. Full sequence: the Grammar Change
+   Workflow below.
+4. **The JSON Schema is embedded at compile time.** Any change to a
+   ChatFile model type's shape, fields, serde attributes, or doc
+   comments requires regenerating `schema/chat-file.schema.json` AND
+   rebuilding, in the same change:
+   `cargo test -p talkbank-transform --test generate_schema`, then
+   `cargo build -p chatter`. Guard: `committed_schema_matches_model`.
+5. **`release.yml` is generated by cargo-dist; never hand-edit.**
+   Change `dist-workspace.toml` and regenerate.
+6. **Corpus differential gate:** any change touching the grammar,
+   parser lowering, or serialization must pass the operator's
+   corpus-differential gate before push (a tripwire demanding
+   adjudication of every delta, not an absolute blocker).
+7. **Test failures are bugs until proven otherwise: STOP and ask.**
+   Never update a test expectation to match new behavior without
+   explicit approval. Applies doubly to `cleaned_text()`, overlap
+   markers, CA notation, lengthening, zero-words, and any grammar
+   change that alters CST structure.
+8. **No panics in long-lived code** (parser, model, validation, CLI,
+   LSP, background tooling): typed errors, no `unwrap`/`expect`.
+   The workspace `[lints.clippy]` table denies the panic family;
+   test code relaxes it in source.
+9. **Never create ad hoc `.cha` test files**; use `corpus/reference/`
+   or ask. Every error code tests through `spec/errors/` (generated,
+   never hand-written).
+10. **Program stack discipline:** `main()` spawns the program onto a
+    16 MiB thread; never move program logic back onto the bare OS
+    main thread (Windows 1 MiB incident). Gate:
+    `crates/chatter/tests/stack_limit_tests.rs`.
 
-```bash
-chatter validate path/to/corpus/ --force             # Validation only
-chatter validate path/to/corpus/ --roundtrip --force  # + roundtrip check
-chatter validate path/to/corpus/ --skip-alignment     # Faster (skip tier alignment)
-```
+## Cross-cutting design rules
 
-Key flags: `--roundtrip`, `--force`, `--skip-alignment`,
-`--max-errors N`, `--jobs N`, `--quiet`, `--format json`.
+1. Types are the first layer of documentation; newtypes over raw
+   primitives at stable boundaries; no tuple-packed domain seams; no
+   boolean blindness (enums over 2+ bools).
+2. Real domain errors (`thiserror`), streaming diagnostics via
+   `ErrorSink`, `ParseOutcome` for parse results; no silent
+   swallowing (`.ok()`, `.unwrap_or_default()`).
+3. Exhaustive matches on `UtteranceContent`/`BracketedItem`: no
+   `_ =>` catch-alls that discard content; all group types recurse.
+4. "Consecutive/adjacent" on the main tier ALWAYS means in-order
+   recursive traversal (`walk_words`), never flat-index adjacency.
+5. Parse, don't validate: strict + catch-all grammar pattern for
+   closed header-value sets (see `grammar/CLAUDE.md`).
+6. **The production parser is driven by the generated typed CST
+   traversal (`generated_traversal`, `NodeSlot`); hand-walking
+   `node.kind()` and classifying ERROR-node text are BANNED.** The
+   whole-tree recovery backstop is deliberately RETAINED alongside
+   per-position handling; both are load-bearing. Full doctrine +
+   history: `book/src/architecture/parsing.md`.
+7. **Recovery is not validity:** a document that needed a recovery
+   node is invalid; never silently drop a recovery node; never
+   fabricate dummy model values during recovery; parse-taint
+   (`ParseHealth`) gates alignment/validation; lenient recovery
+   preserves malformed `%mor`/`%gra` tier slots in place.
+8. Fix root causes, never symptoms; "pragmatic" is banned as a
+   justification for a band-aid; a workaround that prevents a crash
+   is evidence the architecture needs changing.
+9. **Red/green TDD, top-down:** the FIRST failing test is the
+   highest-level test at the bug's real boundary (CLI subprocess /
+   real fragment through `parse_*` / `.cha` through validate / LSP
+   request). Unit tests supplement, never substitute. Grammar/parser
+   fixes also require a spec + reference-corpus entry (permanent
+   regression gates; a bug fixed without a spec WILL regress).
+10. **%mor is UD-only.** Legacy CLAN-mor (`&` fusional suffixes) is
+    deliberately unsupported; hyphen-separated sentence-case UD
+    features only; never reintroduce `&` handling.
+11. Touched docs update their `Last modified` from real `date`
+    output; keep the book current in the SAME commit as any behavior
+    change (decision test: "would a book reader now believe
+    something untrue?").
+12. Architecture docs use Mermaid, per the canonical diagram rules:
+    `book/src/contributing/documentation-architecture.md`.
+13. No historical CHAT options in new logic: structured `@Options`
+    names are `CA` and `NoAlign` only.
 
-## Re2c Parser Parity Testing
+## Building, testing, releasing (pointers)
 
-The `talkbank-parser-re2c` crate is an independent CHAT parser used
-as a **specification oracle**. Its purpose is to find gaps in specs
-and reference corpus, every divergence between re2c and TreeSitter
-is a missing test.
+- Dev commands, corpus validation, and gates:
+  `book/src/contributing/dev-checks.md` and the `justfile`
+  (`just test`, `just book`, `just fmt-check`). Mandatory
+  parser/model regression gates before any commit touching parser,
+  model, validation, alignment, serialization, or roundtrip:
+  `cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'`
+  and `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus`.
+- Pre-push gate: CI green on the pushed commit; the README badges are
+  the canonical signal.
+- Clippy: CI owns it (single pass, no flags; red means a panic-policy
+  violation, nothing else). Never run locally as a habit.
+- Releases: cargo-dist on `vX.Y.Z` tags matching the single workspace
+  version; gate the CONTENT commit fully, validate the bump commit
+  with `cargo check --workspace` only; refresh BOTH lockfiles
+  (root + spec). Full story:
+  `book/src/contributing/ci-and-release.md`. The desktop version has
+  a single source of truth (the workspace version; `tauri.conf.json`
+  deliberately carries NO `version` key, do not re-add one).
+- Release freeze status and fleet coupling are operator concerns
+  tracked outside this repo; when in doubt whether a release may be
+  cut, ask the maintainer.
 
-**The parser is the testing tool. Specs are the output.**
+## Grammar Change Workflow (mandatory sequence)
 
-### Workflow
+On any grammar-source change: (1) `cd grammar && tree-sitter
+generate`; (2) `tree-sitter test`; (3) regenerate the typed traversal
+module (exact command shape: `crates/talkbank-parser/src/lib.rs` doc
+comment; never hand-edit the generated file; staleness guard
+`generated_traversal_is_current`); (4) regenerate corpus/error tests
+from specs (`spec/CLAUDE.md`); (5) `cargo nextest run -p
+talkbank-parser -p talkbank-parser-tests`; (6) one real-file CLI
+validation over the changed syntax path. Do not regenerate corpus
+expectations blindly; review failures first. Full workflow:
+`book/src/contributing/grammar-workflow.md` and `grammar/CLAUDE.md`.
+Spec changes: regenerate per `spec/CLAUDE.md`, then run the
+equivalence + reference-corpus gates.
 
-1. Run the full corpus comparison (release mode; can take many
-   minutes):
-   ```bash
-   cargo test -p talkbank-parser-re2c --test full_corpus_parse_test --release -- --ignored --nocapture
-   ```
-2. Categorize divergences:
-   ```bash
-   cargo test -p talkbank-parser-re2c --test categorize_divergences --release -- --ignored --nocapture
-   ```
-3. For each divergence category, find a representative file, add a
-   construct spec, add or update a reference corpus file,
-   regenerate tests, fix the re2c parser to match.
-4. Re-run the corpus comparison to verify reduction.
+## Architecture (index)
 
-### Reports
+Data flows: **spec** (source of truth) → **grammar** → **crates**
+(parsers, model, transform, cli, lsp).
 
-Corpus tests write to `/tmp/re2c_*.json`. Always check timestamps.
-Do NOT pipe corpus test output through grep, run directly and
-tail the output file.
+| Crate | Purpose |
+|-------|---------|
+| `talkbank-model` | Typed CHAT AST, WriteChat, validation, alignment, `walk_words` walkers, `ChatParser` trait |
+| `talkbank-derive` | SemanticEq / SpanShift / error-code proc macros |
+| `talkbank-cache` | SQLite validation/roundtrip cache (cross-process-safe init) |
+| `talkbank-parser` | Canonical tree-sitter parser (implements `ChatParser`) |
+| `talkbank-parser-re2c` | Independent re2c parser: spec oracle + wasm-clean backend (implements `ChatParser`) |
+| `talkbank-parser-tests` | Equivalence, roundtrip, golden, property tests |
+| `talkbank-transform` | Pipelines, CHAT↔JSON, normalize, merge |
+| `chatter` | The CLI |
+| `talkbank-lsp` | LSP server (tree-sitter only; needs incremental parsing) |
+| `send2clan` | CLAN app bridge bindings |
+| `chatter-desktop` | Tauri v2 desktop app |
 
-### CLI Integration
+Two Cargo workspaces: the root, and `spec/` (`spec/tools`,
+`spec/runtime-tools`); use the right manifest path for spec tooling.
+Shared symbols generate from `spec/symbols/symbol_registry.json`.
+Parser-backend selection, the shared `ChatParser` trait, equivalence
+testing, and the re2c oracle workflow:
+`book/src/architecture/parser-backends.md` and
+`crates/talkbank-parser-re2c/CLAUDE.md`.
 
-```bash
-chatter validate --parser re2c corpus/reference/   # Validate with re2c parser
-chatter validate --parser re2c --roundtrip corpus/  # + roundtrip test
-```
+**Reference corpus** (`corpus/reference/`) is a synthesized regression
+signal, NOT a validity authority: when a change rejects a reference
+file, adjudicate the FILE against the real authorities and fix the
+data (or move it to `spec/errors/`) rather than weaken the parser; the
+roundtrip gate stays green either way.
 
-TreeSitterParser is the default. Re2c is opt-in via
-`--parser re2c`. LSP always uses TreeSitterParser (needs
-incremental parsing).
+## Cache policy
 
-## Status and Limitations
+The validation cache lives in the OS cache directory; `--force`
+refreshes specific paths; `TALKBANK_CHAT_CACHE_DIR` relocates the root
+(the only effective override on Windows). Integration tests isolate
+the cache through `CliHarness`, never `HOME` tricks (Windows race).
+Initialization is concurrency-safe across threads AND processes
+(advisory init lock; bounded, typed timeout). Never delete a user's
+cache without an explicit request.
 
-- Specs are the source of truth; regenerate tests/docs after spec
-  changes.
-- Generated artifacts should not be edited by hand.
-- Tree-sitter parser is the default. Re2c parser available via
-  `--parser re2c`.
-- Do not delete the validation cache
-  (`~/Library/Caches/talkbank-chat/` on macOS,
-  `~/.cache/talkbank-chat/` on Linux,
-  `%LocalAppData%\talkbank-chat\` on Windows) without explicit
-  request.
-- Rust edition 2024.
+## Coding standards
 
-## Sub-Project CLAUDE.md Files
+Full canonical charter (newtypes, integer discipline, closed-set
+enums, string-literal policy, path discipline, configurability,
+rustdoc-as-primary-documentation, file-size limits ≤400 recommended /
+≤800 hard, testability, refactoring triggers):
+`book/src/contributing/coding-standards.md` and
+`coding-standards-extended.md`. The highest-frequency rules are the
+design-rules list above. Conventional Commits for messages.
+
+## LSP reliability
+
+Backend init failures surface as diagnostics, not panics; handlers
+degrade gracefully; diagnostics align with parse-health semantics.
+Everything else: `crates/talkbank-lsp/CLAUDE.md` (alignment lives in
+the model; three index spaces).
+
+## Sub-project CLAUDE.md files
 
 | File | Scope |
 |------|-------|
-| `grammar/CLAUDE.md` | Tree-sitter grammar design, 4-step verification, strict+catch-all pattern |
-| `spec/CLAUDE.md` | Specification structure, templates, regeneration workflow |
-| `spec/tools/CLAUDE.md` | Spec generator binaries, spec/runtime-tools sibling crate |
-| `crates/talkbank-lsp/CLAUDE.md` | LSP crate: **alignment lives in `talkbank-model`, do not reimplement**; three `%mor`/`%gra` index spaces; RPC and feature handler rules |
-| `crates/talkbank-parser-re2c/CLAUDE.md` | Re2c parser crate (alternate parser / spec oracle) |
-| `apps/chatter-desktop/CLAUDE.md` | Desktop app (Tauri v2, React), **mandates TUI parity** |
+| `grammar/CLAUDE.md` | Grammar design, verification sequence, strict+catch-all |
+| `spec/CLAUDE.md` + `spec/tools/CLAUDE.md` | Spec structure, generators, regeneration |
+| `crates/talkbank-lsp/CLAUDE.md` | LSP: model-owned alignment; index spaces; reliability |
+| `crates/talkbank-parser-re2c/CLAUDE.md` | Re2c parser + oracle workflow |
+| `apps/chatter-desktop/CLAUDE.md` | Desktop app; TUI parity mandate |
 
-## The unified mdBook (in this repo)
+## The book
 
-The single book at `book/` is the canonical user / developer
-documentation for the toolchain, chatter, CHAT format, architecture,
-and contributing guides all live there.
+`book/` is the canonical user/developer documentation (CI builds it
+with a lychee link-check; verify locally with `just book`). One
+top-level README.md for the landing page; everything else is a book
+chapter, never parallel GUIDE/DEVELOPER files. Release notes ARE
+`CHANGELOG.md` via include, never a drifting copy. Keeping the book
+current is part of every behavior-changing commit (design rule 11).
 
-| Path | Title | Sections |
-|------|-------|----------|
-| `book/` | Chatter, TalkBank CHAT Toolchain | `chatter/`, `chat-format/`, `architecture/`, `contributing/` |
+## Relationship to batchalign
 
-**Policy.** The book is the canonical user / developer documentation.
-Keep only one top-level `README.md` per repo (for the marketplace /
-GitHub landing page); everything else lives in the book. Do not add
-parallel `GUIDE.md` / `DEVELOPER.md` / similar, if the book
-doesn't yet cover a topic, add a book chapter.
-
-**Keep the book current with every change (mandatory).** The book is
-not documentation to update "later"; updating it is part of the change,
-the same way regenerating `parser.c` is part of a `grammar.js` edit. Any
-change that alters observable behavior MUST update the book in the SAME
-commit. The book silently drifting from the code is treated as a defect,
-not a backlog item.
-
-Decision test: "Would a reader of the book now believe something untrue
-after this change?" If yes, the change is incomplete until the relevant
-page is updated. Concretely, update the book when you:
-
-- add / rename / remove a CLI subcommand or flag: `book/src/chatter/user-guide/cli-reference.md` plus the affected guide page.
-- add / change / remove a validation rule or error code: `book/src/chatter/user-guide/validation-errors.md`.
-- change how any tool is installed, or ship a new artifact (a new binary, the desktop app, the standalone `talkbank-lsp` server): `book/src/install/index.md` and the per-tool installation page.
-- cut a release: the running release notes live at `book/src/release-notes.md`, which is `{{#include ../../CHANGELOG.md}}` of the repo-root `CHANGELOG.md`. Edit `CHANGELOG.md` (Keep a Changelog + SemVer); never paste release notes into the book by hand, and never let the book carry a separate, drifting copy.
-- change the architecture, a data flow, or a crate boundary: the matching `book/src/architecture/` page, with its Mermaid diagram (see the Diagram Authoring Rules).
-- change a config default, the cache location, or the supported platforms: the page that documents it.
-
-Every touched book page updates its `Last modified` header (run
-`date '+%Y-%m-%d %H:%M %Z'`, per design rule 9). The book is gated in CI
-(the `book` job builds it and lychee link-checks the output), and a
-broken `{{#include}}` or internal link fails that job, so verify locally
-with `just book` before pushing.
-
-## Relationship to batchalign3
-
-For the batchalign3 ML pipeline (ASR, forced alignment, neural
-morphotag), see the separate `TalkBank/batchalign3` repo. This repo
-does not contain Batchalign code; downstream consumers (including
-batchalign3) depend on chatter's crates directly.
+This repo contains no Batchalign code; the ML pipeline consumes
+chatter's crates from its own repository.

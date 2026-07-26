@@ -68,3 +68,85 @@ under `book/src/`:
 
 One `book.toml` and one `SUMMARY.md` for the whole tree. Cross-section
 links resolve as ordinary in-book paths.
+
+## Diagram Authoring Rules (canonical)
+
+**Architecture and design documentation MUST include Mermaid
+diagrams.** GitHub renders Mermaid natively; all mdBook builds have
+`mdbook-mermaid` enabled.
+
+#### When to Create a Diagram
+
+Add a diagram when documenting:
+- Data flow pipelines (how data transforms through stages)
+- Architecture boundaries (what owns what, who calls whom)
+- State machines and lifecycles (valid transitions, terminal
+  states)
+- Decision trees (option routing, fallback paths)
+- Type relationships (trait hierarchies, enum variants, ownership)
+- Protocols (request/response sequences, IPC message flows)
+
+**If a page describes a pipeline, boundary, or decision flow in
+prose without a diagram, the page is incomplete.**
+
+#### Diagram Type Selection
+
+| Situation | Use | Not |
+|-----------|-----|-----|
+| Data flows through stages | `flowchart TD` or `flowchart LR` | `sequenceDiagram` (no named participants) |
+| Request/response between components | `sequenceDiagram` | `flowchart` (hides back-and-forth) |
+| Type hierarchies, trait impls | `classDiagram` | `flowchart` (wrong semantics) |
+| State transitions, lifecycles | `stateDiagram-v2` | `flowchart` (no state semantics) |
+| Decision trees, option routing | `flowchart TD` with diamond nodes | Text lists (hard to follow branches) |
+
+#### The Seven Diagram Rules
+
+These rules exist because a successor who has never met the team
+will read these diagrams to understand the system. Every rule
+directly addresses a documented failure mode that produces
+misleading diagrams.
+
+1. **Name every resource.** Every node must have a specific name
+   AND its type/role. Not `"Cache"`, use
+   `"SQLite cache\n(talkbank-cache crate)"`. A reader must be able
+   to grep the codebase for the node label and find it.
+2. **One concept per diagram.** Each diagram tells one coherent
+   story. When in doubt, split.
+3. **No conveyor belts for interactive flows.** If two components
+   exchange messages (request/response, IPC, HTTP), use
+   `sequenceDiagram`. Reserve `flowchart` for genuinely
+   one-directional data pipelines.
+4. **Show real decision points.** Decision diamonds must use real
+   function names, flag names, and condition expressions, not
+   `"check condition"`.
+5. **Include error and fallback paths.** Every decision node must
+   show what happens on failure. Mark optional paths with dashed
+   lines (`-.->`).
+6. **Anchor to source locations.** Architecture diagram nodes
+   should include the crate, module, or file path in the label or
+   in prose immediately below.
+7. **Never generate diagrams from source code without
+   verification.** Read the actual source files for every entity
+   in the diagram; verify every node corresponds to a real module,
+   function, or type; if you cannot verify a connection, omit it,
+   gaps are better than lies.
+
+#### Formatting Standards
+
+- **Node labels:** `["Name\n(role or path)"]` for multi-line
+- **Decision nodes:** `{"condition?\ndetail"}` diamond syntax
+- **Edge labels:** `-->|"label"| target` for all non-trivial edges
+- **Colors/styles:** Do not use custom colors. Default Mermaid
+  themes ensure consistent rendering across GitHub and mdBook
+- **Size limit:** Keep diagrams under about 30 nodes. If larger,
+  split into focused diagrams.
+- **Angle bracket escaping:** Raw angle brackets in Mermaid labels
+  (`Arc<str>`, `Cow<str>`, `&str`) trigger mdBook "unclosed HTML
+  tag" warnings. Escape as `&lt;str&gt;` inside labels.
+
+#### Placement
+
+- Place each diagram **inline**, immediately after the prose
+  paragraph that introduces the concept it illustrates.
+- Every diagram must have a prose introduction explaining what it
+  shows and why the reader should care.
