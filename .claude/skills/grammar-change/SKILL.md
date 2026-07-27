@@ -25,7 +25,7 @@ edit (including reverts), run in order:
    first. Note: the spec generator can overwrite hand-derived corpus
    files (e.g. `grammar/test/corpus/word_markers/marker_density.txt`);
    restore such files via `git checkout` if clobbered.
-5. `cargo nextest run -p talkbank-parser -p talkbank-parser-tests`
+5. `cargo test -p talkbank-parser -p talkbank-parser-tests`
    (equivalence + roundtrip gates are mandatory before commit).
 6. One real-file CLI validation over the changed syntax path.
 

@@ -7,7 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
-## [Unreleased]
+## [0.4.0] - 2026-07-27
 
 ### Added
 
@@ -95,6 +95,25 @@ version and are listed under "Changed" / "Removed".
   a syntax.
 
 ### Fixed
+
+- **Word validation now reaches words nested inside groups.** Main-tier
+  validation iterated content items flatly and matched only `Word`,
+  `AnnotatedWord` and `ReplacedWord`, with a catch-all that silently
+  discarded every container, so a word inside a retrace, a reformulation,
+  an angle group or a quotation was never word-validated at all.
+
+  The symptom: the identical token was rejected outside a group and
+  accepted inside one. In English `hello3 dog .` was invalid (E220) while
+  `hello3 [/] hello dog .` was valid, on every release up to this one.
+  Every word-level rule inherited the hole, so E220 has carried it for as
+  long as the rule has existed; the newer prefix-marker rules inherited it
+  on arrival.
+
+  Corpus impact, measured over all 106,158 files: 341 to 348 invalid files,
+  8 new error instances across 7 files (E241 x2, E252 x4, E248 x1,
+  E763 x1), each a pre-existing data defect that had been hiding inside a
+  group rather than any change in what counts as valid CHAT.
+
 
 - `ErrorCollector::is_empty()` violated the standard Rust contract
   `len() == 0 <=> is_empty()`: it answered "is the internal buffer

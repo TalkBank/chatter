@@ -17,7 +17,7 @@
 //! ## Usage
 //!
 //! ```bash
-//! cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
+//! cargo test -p talkbank-parser-tests parser_equivalence
 //! ```
 
 use std::path::PathBuf;

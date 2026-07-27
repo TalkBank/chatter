@@ -19,7 +19,7 @@ SEPARATE workspace; use its manifest path):
 2. Beware: gen_rust_tests with a defaulted output path can create a
    stray root-level generated tree; check `git status` for
    unexpected new directories before committing.
-3. `cargo nextest run -p talkbank-parser -p talkbank-parser-tests`
+3. `cargo test -p talkbank-parser -p talkbank-parser-tests`
    (equivalence + roundtrip reference corpus are the mandatory
    gates).
 4. If the grammar also changed, the grammar-change skill's sequence

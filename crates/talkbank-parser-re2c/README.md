@@ -126,7 +126,7 @@ Requires `re2rust` (part of re2c) on PATH: `brew install re2c`.
 
 ```bash
 cargo check -p talkbank-parser-re2c
-cargo nextest run -p talkbank-parser-re2c
+cargo test -p talkbank-parser-re2c
 cargo bench -p talkbank-parser-re2c --bench parse_comparison
 ```
 

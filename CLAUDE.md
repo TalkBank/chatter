@@ -46,23 +46,10 @@ or CLAN still say.
 
 ## Danger rules (each has burned a session; no exceptions)
 
-1. **CI runs `cargo nextest run`; LOCAL runs plain `cargo test`**
-   (`just test` does this). Reversed 2026-07-27. nextest execs every
-   test binary up front to enumerate them (~56 here); on macOS that
-   burst wedges `syspolicyd`, after which NO new binary can start on
-   the machine until `sudo killall syspolicyd` or a reboot. Franklin,
-   2026-07-27, correcting an undercount: this has degraded EVERY
-   session for months, not a few isolated incidents, and the lost time
-   dwarfs anything nextest's parallelism ever saved.
-   `cargo test` runs binaries one at a time,
-   a trickle the serial assessor absorbs. CI is unaffected (Linux has
-   no syspolicyd), so it keeps nextest and per-test isolation.
-   The original reason for mandating nextest, that `cargo test` races
-   the shared cache migration in one process, is FIXED: cache init now
-   takes an exclusive advisory lock across threads AND processes.
-   Narrow `cargo nextest run -p X --test Y` stays fine locally; it is
-   whole-crate and whole-workspace nextest that bursts.
-   Doctests are separate: `cargo test --doc --workspace`.
+1. **Tests run under `cargo test`** (`just test`), locally and in CI.
+   Doctests are separate: `cargo test --doc --workspace`. Workspace-scope
+   `cargo test` is OOM-gated by the operator's pre-exec guard; prefer
+   `-p <crate>` while iterating.
 2. **Never run two cargo-family commands concurrently against one
    workspace** (this root workspace or `spec/`'s). The target-dir
    lock silently queues them; wall clock explodes. If both are truly
@@ -154,8 +141,8 @@ or CLAN still say.
   (`just test`, `just book`, `just fmt-check`). Mandatory
   parser/model regression gates before any commit touching parser,
   model, validation, alignment, serialization, or roundtrip:
-  `cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'`
-  and `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus`.
+  `cargo test -p talkbank-parser-tests parser_equivalence`
+  and `cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus`.
 - Pre-push gate: CI green on the pushed commit; the README badges are
   the canonical signal.
 - Clippy: CI owns it (single pass, no flags; red means a panic-policy
@@ -178,7 +165,7 @@ generate`; (2) `tree-sitter test`; (3) regenerate the typed traversal
 module (exact command shape: `crates/talkbank-parser/src/lib.rs` doc
 comment; never hand-edit the generated file; staleness guard
 `generated_traversal_is_current`); (4) regenerate corpus/error tests
-from specs (`spec/CLAUDE.md`); (5) `cargo nextest run -p
+from specs (`spec/CLAUDE.md`); (5) `cargo test -p
 talkbank-parser -p talkbank-parser-tests`; (6) one real-file CLI
 validation over the changed syntax path. Do not regenerate corpus
 expectations blindly; review failures first. Full workflow:

@@ -426,7 +426,7 @@ fn corpus_full_files_sample() {
 }
 
 /// Lex ALL .cha files in ALL corpus dirs. Run with --ignored for the full sweep.
-/// cargo nextest run -p talkbank-parser-re2c --test corpus_lex_tests -E 'test(corpus_full_sweep)' --run-ignored ignored-only --nocapture
+/// cargo test -p talkbank-parser-re2c --test corpus_lex_tests -E 'test(corpus_full_sweep)' --run-ignored ignored-only --nocapture
 #[test]
 #[ignore]
 fn corpus_full_sweep() {

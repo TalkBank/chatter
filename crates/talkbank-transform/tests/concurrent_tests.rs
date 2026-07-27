@@ -19,7 +19,7 @@
 //!   cancellation
 //!
 //! Tests marked `#[ignore]` are stress tests that take longer to run.
-//! Run them explicitly with `cargo nextest run --test concurrent_tests -- --ignored`.
+//! Run them explicitly with `cargo test --test concurrent_tests -- --ignored`.
 
 use std::io::Write as _;
 use std::path::Path;

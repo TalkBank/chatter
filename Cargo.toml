@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.3.6"
+version = "0.4.0"
 edition = "2024"
 authors = ["Franklin Chen <franklinchen@franklinchen.com>"]
 license = "MIT OR Apache-2.0"
@@ -72,7 +72,7 @@ sha2 = "0.11"
 
 # Serialization, schema, error reporting
 csv = "1"
-jsonschema = { version = "0.47", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.49", default-features = false, features = ["resolve-file"] }
 miette = { version = "7.6.0", features = ["derive"] }
 schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
@@ -80,17 +80,17 @@ serde_json = "1.0"
 smallvec = { version = "1.15", features = ["serde", "union", "const_generics"] }
 smol_str = { version = "0.3", features = ["serde"] }
 text-size = "1.1"
-thiserror = "^2.0.18"
-toml = "^1.1.2"
+thiserror = "^2.0.19"
+toml = "^1.1.3"
 
 # Proc-macro infrastructure
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+syn = { version = "3.0", features = ["full", "parsing", "extra-traits"] }
 
 # Async runtime + SQLite cache
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate"] }
-tokio = { version = "1.52", features = ["full"] }
+tokio = { version = "1.53", features = ["full"] }
 
 # Tree-sitter parsing
 tree-sitter = "0.26.11"
@@ -134,24 +134,24 @@ tower-lsp = "0.20"
 tree-sitter-highlight = "0.26.11"
 
 # C compiler driver for send2clan
-cc = "1.2"
+cc = "1.4"
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # TalkBank crates, path for local dev, version for crates.io publishing
-send2clan = { path = "crates/send2clan", version = "0.3.2" }
-talkbank-cache = { path = "crates/talkbank-cache", version = "0.3.2" }
-chatter = { path = "crates/chatter", version = "0.3.2" }
-talkbank-derive = { path = "crates/talkbank-derive", version = "0.3.2" }
-talkbank-llm = { path = "crates/talkbank-llm", version = "0.3.2" }
-talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.3.2" }
-talkbank-model = { path = "crates/talkbank-model", version = "0.3.2" }
-talkbank-parser = { path = "crates/talkbank-parser", version = "0.3.2" }
-talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.3.2" }
-talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.3.2" }
-talkbank-transform = { path = "crates/talkbank-transform", version = "0.3.2" }
+send2clan = { path = "crates/send2clan", version = "0.4.0" }
+talkbank-cache = { path = "crates/talkbank-cache", version = "0.4.0" }
+chatter = { path = "crates/chatter", version = "0.4.0" }
+talkbank-derive = { path = "crates/talkbank-derive", version = "0.4.0" }
+talkbank-llm = { path = "crates/talkbank-llm", version = "0.4.0" }
+talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.4.0" }
+talkbank-model = { path = "crates/talkbank-model", version = "0.4.0" }
+talkbank-parser = { path = "crates/talkbank-parser", version = "0.4.0" }
+talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.4.0" }
+talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.4.0" }
+talkbank-transform = { path = "crates/talkbank-transform", version = "0.4.0" }
 
 # Testing
 assert_cmd = "2.2"

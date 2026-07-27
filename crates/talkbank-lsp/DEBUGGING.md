@@ -100,10 +100,10 @@ cache logic, verify the following scenarios in VS Code with a `.cha` file open.
 
 ```bash
 # All LSP tests (60 tests)
-cargo nextest run -p talkbank-lsp
+cargo test -p talkbank-lsp
 
 # Splice detection tests only
-cargo nextest run -p talkbank-lsp -- detect_splice
+cargo test -p talkbank-lsp -- detect_splice
 
 # Clippy
 cargo clippy -p talkbank-lsp --all-targets -- -D warnings

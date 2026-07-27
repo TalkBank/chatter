@@ -59,7 +59,7 @@ reference. This page covers the practical workflow.
 
 6. **Run tests**:
    ```bash
-   cargo nextest run -p talkbank-parser-tests --release
+   cargo test -p talkbank-parser-tests --release
    ```
 
 ## Common Mistakes

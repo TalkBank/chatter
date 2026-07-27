@@ -6,7 +6,7 @@
 
 **Architecture:** Three independently committable phases, in ascending order of blast radius. Phase 1 and 2 are precondition/algorithm changes confined to one function in `crates/talkbank-transform/src/transcript_merge.rs`. Phase 3 threads a new `adult_roles: BTreeMap<String, InsertedRoleSpec>` shape through six files (judgment consumption, the pending-adjudication schema, the on-disk override/replay format, the CLI's operator-decision types, the writers, and the interactive/scripted rendering), replacing the current single `inserted_role: InsertedRoleSpec` field everywhere it appears.
 
-**Tech Stack:** Rust 2024, `thiserror` for error types, `serde`/`toml` for on-disk formats, `cargo nextest` for the test runner.
+**Tech Stack:** Rust 2024, `thiserror` for error types, `serde`/`toml` for on-disk formats, `cargo test` for the test runner.
 
 **Approved design:** `docs/superpowers/specs/2026-07-01-merge-robustness-design.md` (this repo, commit `7fa0b49`). Read it before starting Phase 3 for the "why," not just the "what."
 
@@ -18,12 +18,12 @@
 - File-size targets: ≤400 lines recommended, ≤800 hard limit per file. None of the files touched here are near the hard limit; do not split unless a task explicitly says to.
 - **Mandatory regression gate** for any change touching the data model (`talkbank-model`) or transform pipeline (`talkbank-transform`), run before every phase's final commit:
   ```bash
-    cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-  cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+    cargo test -p talkbank-parser-tests parser_equivalence
+  cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
   ```
 - Every book page touched in a phase updates its `**Last modified:**` header via `date '+%Y-%m-%d %H:%M %Z'` (never guessed/hardcoded), in the same commit as the code change.
 - Test-first, red before green, for every step marked "Write the failing test."
-- Use `cargo nextest run -p talkbank-transform --lib` / `-p talkbank-transform --test <name>` / `-p chatter --test <name>` for fast, scoped iteration; do not run bare `cargo test` (blocked by a pre-exec hook workspace-wide) or the full workspace suite mid-task.
+- Use `cargo test -p talkbank-transform --lib` / `-p talkbank-transform --test <name>` / `-p chatter --test <name>` for fast, scoped iteration; do not run bare `cargo test` (blocked by a pre-exec hook workspace-wide) or the full workspace suite mid-task.
 - Never git push; local commits only, one per task, Franklin pushes when ready.
 
 ---
@@ -126,7 +126,7 @@ fn merge_dedupes_vestigial_participant_declaration() {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_dedupes_vestigial_participant_declaration)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_dedupes_vestigial_participant_declaration)'
 ```
 
 Expected: FAIL. Today's code has no dedupe check, so file1's `INV` `@Participants` row and the donor's `INV` `@Participants` row are both emitted, and `participants_count` will still be 1 (both are concatenated into the SAME `@Participants:` header line since File 1's header gets rewritten with `combined` entries per lines 284-293 of the current file). The actual failure surfaces on `inv_id_count`: today emits 2 `@ID:` lines for INV (one from file1, one appended from file2), so that assertion fails with `2 != 1`. Confirm the actual failure message names `inv_id_count`.
@@ -275,7 +275,7 @@ to:
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_dedupes_vestigial_participant_declaration)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_dedupes_vestigial_participant_declaration)'
 ```
 
 Expected: PASS.
@@ -393,7 +393,7 @@ fn merge_refuses_on_nonvestigial_declared_participant() {
 - [ ] **Step 2: Run both tests**
 
 ```bash
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_refuses_on_role_conflicting_declared_participant) or test(merge_refuses_on_nonvestigial_declared_participant)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_refuses_on_role_conflicting_declared_participant) or test(merge_refuses_on_nonvestigial_declared_participant)'
 ```
 
 Expected: both PASS immediately (Task 1's implementation already covers both branches). If either fails, the Task 1 implementation has a bug, fix it there before proceeding, do not weaken these tests to match.
@@ -430,8 +430,8 @@ Use the exact output to update the touched file's `**Last modified:**` line.
 - [ ] **Step 3: Run the mandatory regression gate**
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
 cargo fmt -p talkbank-transform -- --check
 cargo clippy -p talkbank-transform --all-targets -- -D warnings
 ```
@@ -516,7 +516,7 @@ fn merge_succeeds_when_donor_languages_are_a_subset_of_reference() {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_succeeds_when_donor_languages_are_a_subset_of_reference)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_succeeds_when_donor_languages_are_a_subset_of_reference)'
 ```
 
 Expected: FAIL with `LanguageMismatch` (today's exact-equality check rejects `[eng, spa] != [eng]`).
@@ -570,8 +570,8 @@ Update the `LanguageMismatch` variant's `#[error(...)]` message (current lines 6
 - [ ] **Step 4: Run test to verify it passes, plus the pre-existing exact-match test still passes**
 
 ```bash
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_succeeds_when_donor_languages_are_a_subset_of_reference)'
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_retained_speakers_byte_stable)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_succeeds_when_donor_languages_are_a_subset_of_reference)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_retained_speakers_byte_stable)'
 ```
 
 Expected: both PASS (the second test uses matching `eng`/`eng` on both sides, exercised as a regression check that exact-match still works under the new subset logic).
@@ -617,7 +617,7 @@ fn merge_refuses_when_donor_languages_exceed_reference() {
 Note: this reuses `FIX_DONOR_MONOLINGUAL_ENG` as file1 (retain `INV`, its only speaker) and `FIX_REF_BILINGUAL` as file2, purely to get an `[eng]` vs `[eng, spa]` pairing without a fifth fixture; the speaker/retain choice is incidental to what's under test.
 
 ```bash
-cargo nextest run -p talkbank-transform --test transcript_merge_tests -E 'test(merge_refuses_when_donor_languages_exceed_reference)'
+cargo test -p talkbank-transform --test transcript_merge_tests -E 'test(merge_refuses_when_donor_languages_exceed_reference)'
 ```
 
 Expected: PASS immediately (Task 4's implementation already covers this branch).
@@ -633,8 +633,8 @@ Update any matched prose describing "exact match required" to describe the subse
 - [ ] **Step 3: Regression gate**
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
 cargo fmt -p talkbank-transform -- --check
 cargo clippy -p talkbank-transform --all-targets -- -D warnings
 ```
@@ -762,7 +762,7 @@ mod tests {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(rename_with_specific_role_sets_participant_name)'
+cargo test -p talkbank-transform --lib -E 'test(rename_with_specific_role_sets_participant_name)'
 ```
 
 Expected: FAIL to compile (`SpeakerAssignment::Rename` has no `specific_role` field yet).
@@ -842,13 +842,13 @@ Also update `apply_mapping_chat`'s utterance-rewrite match arm (current line 45,
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(rename_with_specific_role_sets_participant_name) or test(rename_without_specific_role_preserves_donor_name)'
+cargo test -p talkbank-transform --lib -E 'test(rename_with_specific_role_sets_participant_name) or test(rename_without_specific_role_preserves_donor_name)'
 ```
 
 Expected: PASS. Also re-run the full `speaker_id` module's existing tests to confirm the field addition didn't break anything else:
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'package(talkbank-transform)'
+cargo test -p talkbank-transform --lib -E 'package(talkbank-transform)'
 ```
 
 - [ ] **Step 5: Commit**
@@ -903,7 +903,7 @@ tag = "Investigator""#)
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(inserted_role_spec_specific_role_defaults_to_none_and_round_trips)'
+cargo test -p talkbank-transform --lib -E 'test(inserted_role_spec_specific_role_defaults_to_none_and_round_trips)'
 ```
 
 Expected: FAIL to compile (`specific_role` field doesn't exist; also `InsertedRoleSpec` needs `PartialEq` for the `assert_eq!`, confirm it already derives it, current derive list is `Debug, Clone, PartialEq, Eq, Serialize, Deserialize`, so this is already present).
@@ -957,7 +957,7 @@ impl InsertedRoleSpec {
 - [ ] **Step 4: Run test to verify it passes, plus the whole crate still builds**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(inserted_role_spec_specific_role_defaults_to_none_and_round_trips)'
+cargo test -p talkbank-transform --lib -E 'test(inserted_role_spec_specific_role_defaults_to_none_and_round_trips)'
 cargo check -p talkbank-transform -p chatter --all-targets
 ```
 
@@ -1202,7 +1202,7 @@ Rename the test itself from `merge_not_applicable_with_no_adult_uses_placeholder
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(two_adults_with_different_roles_both_map_to_rename) or test(two_adults_with_same_role_auto_disambiguate) or test(adult_verdict_becomes_rename_child_and_drop_become_drop) or test(merge_not_applicable_with_no_adult_yields_empty_adult_roles)'
+cargo test -p talkbank-transform --lib -E 'test(two_adults_with_different_roles_both_map_to_rename) or test(two_adults_with_same_role_auto_disambiguate) or test(adult_verdict_becomes_rename_child_and_drop_become_drop) or test(merge_not_applicable_with_no_adult_yields_empty_adult_roles)'
 ```
 
 Expected: FAIL to compile (`judgment_to_pending` still builds the old single `inserted_role` field and still has the `MultipleAdults` refusal).
@@ -1331,7 +1331,7 @@ If any match outside `consume.rs` references `MultipleAdults`, update it in this
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(two_adults_with_different_roles_both_map_to_rename) or test(two_adults_with_same_role_auto_disambiguate) or test(adult_verdict_becomes_rename_child_and_drop_become_drop) or test(merge_not_applicable_with_no_adult_yields_empty_adult_roles) or test(adult_without_role_is_error) or test(merge_applicable_true_without_adult_is_error)'
+cargo test -p talkbank-transform --lib -E 'test(two_adults_with_different_roles_both_map_to_rename) or test(two_adults_with_same_role_auto_disambiguate) or test(adult_verdict_becomes_rename_child_and_drop_become_drop) or test(merge_not_applicable_with_no_adult_yields_empty_adult_roles) or test(adult_without_role_is_error) or test(merge_applicable_true_without_adult_is_error)'
 ```
 
 Expected: all PASS (the last two are pre-existing tests unaffected by this change; confirm they still pass since `NoAdultButMergeApplicable`'s check moved from "adult.is_none()" to "adults.is_empty()", equivalent condition).
@@ -1454,7 +1454,7 @@ This introduces a test-only helper `PendingAdjudications::read_from_str_for_test
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(read_refuses_wrong_schema_version) or test(legacy_pending_toml_without_engine_defaults_to_deterministic)'
+cargo test -p talkbank-transform --lib -E 'test(read_refuses_wrong_schema_version) or test(legacy_pending_toml_without_engine_defaults_to_deterministic)'
 ```
 
 Expected: FAIL to compile (`AdjudicationError::UnsupportedSchemaVersion` doesn't exist; `CURRENT_SCHEMA_VERSION` const doesn't exist; `read_from_str_for_test` doesn't exist).
@@ -1569,8 +1569,8 @@ Replace each match's `schema_version: 1` with `schema_version: PendingAdjudicati
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(read_refuses_wrong_schema_version) or test(legacy_pending_toml_without_engine_defaults_to_deterministic) or test(deterministic_entry_omits_engine_field_on_serialize)'
-cargo nextest run -p talkbank-transform --lib -E 'package(talkbank-transform)'
+cargo test -p talkbank-transform --lib -E 'test(read_refuses_wrong_schema_version) or test(legacy_pending_toml_without_engine_defaults_to_deterministic) or test(deterministic_entry_omits_engine_field_on_serialize)'
+cargo test -p talkbank-transform --lib -E 'package(talkbank-transform)'
 ```
 
 Expected: all PASS.
@@ -1660,7 +1660,7 @@ Add to `override_file.rs`'s test module (from Task 7):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(to_mapping_spec_applies_distinct_roles_per_speaker)'
+cargo test -p talkbank-transform --lib -E 'test(to_mapping_spec_applies_distinct_roles_per_speaker)'
 ```
 
 Expected: FAIL to compile (`MergeOverride.adult_roles` doesn't exist yet; `to_mapping_spec()` still applies one shared role).
@@ -1782,7 +1782,7 @@ Update the two constructors (`auto_decision`, current lines 108-128, and `operat
 - [ ] **Step 4: Run test to verify it passes; confirm remaining call sites are left broken for later tasks**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(to_mapping_spec_applies_distinct_roles_per_speaker)'
+cargo test -p talkbank-transform --lib -E 'test(to_mapping_spec_applies_distinct_roles_per_speaker)'
 cargo check -p talkbank-transform -p chatter --all-targets 2>&1 | grep -c error
 ```
 
@@ -1863,7 +1863,7 @@ Add to `adjudication.rs`'s test module:
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(apply_decision_accept_suggested_preserves_full_adult_roles_map)'
+cargo test -p talkbank-transform --lib -E 'test(apply_decision_accept_suggested_preserves_full_adult_roles_map)'
 ```
 
 Expected: FAIL to compile (`apply_decision` is private to `adjudication.rs`, confirm the test module is inside the same file with `use super::*` so it has access; `OperatorDecision`/the match arms still reference `inserted_role`).
@@ -2027,7 +2027,7 @@ Make `apply_decision` visible to the test module (it's currently a private `fn`,
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'test(apply_decision_accept_suggested_preserves_full_adult_roles_map)'
+cargo test -p talkbank-transform --lib -E 'test(apply_decision_accept_suggested_preserves_full_adult_roles_map)'
 cargo check -p talkbank-transform -p chatter --all-targets 2>&1 | grep "error\[" | sort -u
 ```
 
@@ -2298,8 +2298,8 @@ Fix any surviving hit before proceeding.
 - [ ] **Step 4: Run the full speaker-id/adjudication test suite**
 
 ```bash
-cargo nextest run -p talkbank-transform --lib -E 'package(talkbank-transform)'
-cargo nextest run -p chatter --lib -E 'package(chatter)'
+cargo test -p talkbank-transform --lib -E 'package(talkbank-transform)'
+cargo test -p chatter --lib -E 'package(chatter)'
 ```
 
 Expected: all green.
@@ -2308,8 +2308,8 @@ Expected: all green.
 
 ```bash
 cargo check -p talkbank-transform -p chatter --all-targets
-cargo nextest run -p talkbank-transform --lib -E 'package(talkbank-transform)'
-cargo nextest run -p chatter --lib -E 'package(chatter)'
+cargo test -p talkbank-transform --lib -E 'package(talkbank-transform)'
+cargo test -p chatter --lib -E 'package(chatter)'
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 ```
@@ -2349,7 +2349,7 @@ Add a subprocess-level test (using whatever harness helper the existing file use
 - [ ] **Step 3: Run the new test, confirm it passes (or fails correctly first if a genuine red step is possible given the harness)**
 
 ```bash
-cargo nextest run -p chatter --test adjudication_tests -E 'test(<new_test_name>)'
+cargo test -p chatter --test adjudication_tests -E 'test(<new_test_name>)'
 ```
 
 - [ ] **Step 4: Commit**
@@ -2392,11 +2392,11 @@ Any existing `pending.toml` written by a pre-Task-8-Part-3 binary (`schema_versi
 - [ ] **Step 5: Full Phase 3 regression gate**
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
-cargo nextest run -p talkbank-transform -p chatter --lib
+cargo test -p talkbank-transform -p chatter --lib
 just book   # or: cd book && mdbook build && mdbook-mermaid install .
 ```
 

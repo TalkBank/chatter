@@ -116,7 +116,7 @@ Core local sweep:
 ```bash
 cargo fmt --all -- --check
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 cargo test --doc
 ```
 
@@ -127,9 +127,9 @@ changed:
 - spec tools: `cargo build --manifest-path spec/tools/Cargo.toml` and
   `cargo build --manifest-path spec/runtime-tools/Cargo.toml`
 - parser / model / alignment / serialization:
-  `cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'`
+  `cargo test -p talkbank-parser-tests parser_equivalence`
   and
-  `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus`
+  `cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus`
 
 The reference corpus at `corpus/reference/` remains the sacred semantic target.
 Historical labels like `G0-G14` are useful for older design notes, but they are

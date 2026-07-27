@@ -55,7 +55,7 @@ name = "parse_comparison"
 harness = false
 
 [build-dependencies]
-syn = { version = "2.0", features = ["full"] }
+syn = { version = "3.0", features = ["full"] }
 quote = "1.0"
 
 [package.metadata.docs.rs]

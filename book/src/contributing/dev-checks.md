@@ -17,7 +17,7 @@ Run this from the repository root before opening or merging substantial changes:
 cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 cargo test --doc
 ```
 
@@ -41,8 +41,8 @@ Add the checks that match the surface you changed:
 - **Parser / model / alignment / serialization changes**
 
   ```bash
-  cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-  cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+  cargo test -p talkbank-parser-tests parser_equivalence
+  cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
   ```
 
 See [Setup](setup.md) and [Spec Workflow](spec-workflow.md) for the
@@ -60,7 +60,7 @@ surface-specific regeneration guidance.
 Run these in addition to the core sweep when touching parser/model code:
 
 1. `cargo test -p talkbank-parser --test test_parse_health_recovery`
-2. `cargo nextest run -p talkbank-parser-tests --test parser_equivalence_files`
+2. `cargo test -p talkbank-parser-tests --test parser_equivalence_files`
 
 These protect against regressions in:
 
@@ -88,7 +88,7 @@ For grammar-only edits, prefer the smallest relevant loop first:
 
 ```bash
 cd grammar && tree-sitter test
-cargo nextest run -p talkbank-parser
+cargo test -p talkbank-parser
 ```
 
 Only reach for spec/symbol regeneration when the change truly affects generated

@@ -24,8 +24,8 @@
 //! ## Usage
 //!
 //! ```bash
-//! cargo nextest run -p talkbank-parser-tests -E 'test(roundtrip_reference)'
-//! cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+//! cargo test -p talkbank-parser-tests roundtrip_reference
+//! cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
 //! ```
 
 use std::path::PathBuf;

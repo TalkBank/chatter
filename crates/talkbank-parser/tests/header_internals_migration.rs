@@ -31,9 +31,9 @@
 //! verbatim from `corpus/reference/core/` like the B2a dispatch fixtures.
 //! Every MALFORMED fixture below is a minimal hand-written snippet (not a new
 //! `.cha` file). Every diagnostic and model value pinned here was captured by
-//! RUNNING the pre-migration (OLD-API) parser (`cargo nextest run -p
+//! RUNNING the pre-migration (OLD-API) parser (`cargo test -p
 //! talkbank-parser --test header_internals_migration --no-capture
-//! --no-fail-fast`), not guessed. Several of the malformed fixtures turned
+//!`), not guessed. Several of the malformed fixtures turned
 //! out empirically to make the WHOLE header fail tree-sitter's structural
 //! parse (becoming a document-level ERROR handled by the already-migrated
 //! Task B1 entry point, not a clean header node with an internally-Missing

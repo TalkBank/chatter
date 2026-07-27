@@ -36,7 +36,7 @@
 //! hand-written fixture.
 //!
 //! Every diagnostic and model value pinned here was captured by RUNNING the
-//! pre-migration (OLD-API) parser (`cargo nextest run -p talkbank-parser
+//! pre-migration (OLD-API) parser (`cargo test -p talkbank-parser
 //! --test header_dispatch_migration --no-capture`), not guessed. In
 //! particular, running the malformed fixture below first showed that
 //! `unsupported_header` (`simple::unsupported`) reports NO diagnostic (only

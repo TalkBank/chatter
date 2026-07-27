@@ -30,7 +30,7 @@
 //!
 //! ## Usage
 //! ```bash
-//! cargo nextest run -p talkbank-parser-tests -E 'test(validation_errors_detected)'
+//! cargo test -p talkbank-parser-tests validation_errors_detected
 //! ```
 
 use std::fs;

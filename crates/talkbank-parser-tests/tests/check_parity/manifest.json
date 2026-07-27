@@ -697,9 +697,11 @@
    "check_code": 71,
    "check_message": "Item '[/]' must be before pause (#).",
    "fixture": "CHECK_071_retrace_after_pause.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "Documented divergence (Franklin, 2026-07-12): the ordering rule keys on the # pause marker, which is legacy CLAN and not a live construct in chatter (chatter uses (.)/(..)/(...)); the rule references a construct chatter does not have. chatter deliberately accepts."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E762"
+   ],
+   "note": "INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 71 enforces an ORDERING between [/] and the legacy # pause marker, a construct chatter does not have (chatter uses (.)/(..)/(...)), so chatter does not implement that ordering rule and never will. What changed is this FIXTURE. Its main tier is `he # [/] he .`, where the standalone # sits inside the retrace scope, and E762 rejects a word that is nothing but the prefix marker in any language. Same verdict as CHECK on this input, unrelated grounds. Note the fixture only started failing once word validation began recursing into retraces (chatter 3304799e); before that the # inside the retrace was never validated at all, which is why this row read as a clean divergence for months."
   },
   {
    "check_code": 72,

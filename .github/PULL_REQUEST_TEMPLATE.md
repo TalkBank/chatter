@@ -23,7 +23,7 @@ Closes #
       first, then the fix (see CONTRIBUTING.md).
 - [ ] `cargo fmt --all -- --check` passes.
 - [ ] `cargo clippy` (the two-pass CI lint) passes.
-- [ ] `cargo nextest run --workspace` passes (or I describe what cannot
+- [ ] `cargo test --workspace` passes (or I describe what cannot
       run locally and why).
 - [ ] For grammar/parser/model changes: the parser-equivalence,
       roundtrip, and reference-corpus gates pass.

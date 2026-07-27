@@ -22,7 +22,7 @@
 //! %wor-only timing (grounded 2026-07-07), so this case is chatter-stricter
 //! modernization and its message must carry the explanation on its own.
 //!
-//! Run with: `cargo nextest run -p talkbank-transform --test e552_message_quality`
+//! Run with: `cargo test -p talkbank-transform --test e552_message_quality`
 
 use std::fs;
 use std::path::PathBuf;

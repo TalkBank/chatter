@@ -60,20 +60,20 @@
 //! # Running the tests
 //!
 //! ```bash
-//! # All tests in this crate (nextest-compatible, parallel per-test)
-//! cargo nextest run -p talkbank-parser-tests
+//! # All tests in this crate
+//! cargo test -p talkbank-parser-tests
 //!
 //! # Parser equivalence only (73 per-file tests)
-//! cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
+//! cargo test -p talkbank-parser-tests parser_equivalence
 //!
 //! # A single reference file
-//! cargo nextest run -p talkbank-parser-tests -E 'test(some_filename)'
+//! cargo test -p talkbank-parser-tests some_filename
 //!
 //! # Golden word round-trip
-//! cargo nextest run -p talkbank-parser-tests -E 'test(golden_words)'
+//! cargo test -p talkbank-parser-tests golden_words
 //!
 //! # Show output on failure
-//! cargo nextest run -p talkbank-parser-tests --no-capture
+//! cargo test -p talkbank-parser-tests --no-capture
 //! ```
 //!
 //! # Module map

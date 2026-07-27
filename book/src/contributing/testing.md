@@ -55,7 +55,7 @@ Testing is organized in layers, from fastest to most comprehensive.
 
 ```mermaid
 flowchart TD
-    unit["Unit + Integration Tests\n(cargo nextest run)"]
+    unit["Unit + Integration Tests\n(cargo test)"]
     specgen["Spec-Generated Tests\n(spec/tools generators)\nParser + validation layer"]
     grammar["Grammar Corpus\n(tree-sitter test)"]
     ref["Reference Corpus\n(corpus/reference/, 100% required)"]
@@ -77,10 +77,10 @@ to quietly update.
 
 | Gate | Command | What it protects |
 |------|---------|------------------|
-| Parser equivalence | `cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'` | The re2c oracle parser and the tree-sitter parser agree on every reference file. A divergence means one parser is wrong, or a construct spec is missing. |
-| Roundtrip idempotency | `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for every reference file. Catches any model or `WriteChat` change that silently loses information. |
+| Parser equivalence | `cargo test -p talkbank-parser-tests parser_equivalence` | The re2c oracle parser and the tree-sitter parser agree on every reference file. A divergence means one parser is wrong, or a construct spec is missing. |
+| Roundtrip idempotency | `cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for every reference file. Catches any model or `WriteChat` change that silently loses information. |
 | Reference corpus 100% | (the same `roundtrip_reference_corpus` test) | Every file under `corpus/reference/` parses and roundtrips with zero failures. The reference corpus is the ultimate arbiter of full-file correctness; it must be 100%, never "mostly". |
-| Error-code spec tests | `cargo nextest run -p talkbank-parser-tests --test generated_tests --test validation_error_corpus --test error_coverage` | Every error spec under `spec/errors/` still fires its expected code: parser-layer errors reject as designed, validation-layer errors are detected, and every `ErrorCode` has a backing spec. These tests are generated from specs, never hand-written. |
+| Error-code spec tests | `cargo test -p talkbank-parser-tests --test generated_tests --test validation_error_corpus --test error_coverage` | Every error spec under `spec/errors/` still fires its expected code: parser-layer errors reject as designed, validation-layer errors are detected, and every `ErrorCode` has a backing spec. These tests are generated from specs, never hand-written. |
 
 Two of the four share one test: `roundtrip_reference_corpus` enforces both
 roundtrip idempotency and the reference-corpus 100% guarantee, because it
@@ -88,31 +88,31 @@ iterates every reference file (the coverage guarantee) and checks roundtrip
 semantic equality on each (the idempotency guarantee).
 
 All four also run as part of the full workspace sweep
-(`cargo nextest run --workspace`), so a complete local run before committing
+(`cargo test --workspace`), so a complete local run before committing
 covers them. The per-gate commands above are the fast, targeted way to
 re-check one surface during the inner development loop. The sections below
 describe each layer in more detail.
 
-### Unit Tests (nextest)
+### Unit Tests
 
 ```bash
-cargo nextest run
+cargo test
 ```
 
 Runs all unit and integration tests across all crates (~2300+ tests). These test individual functions, serialization roundtrips, and model invariants.
 
-`cargo nextest` does not run doctests. Keep `cargo test --doc` as a separate
+`cargo test` does not run doctests. Keep `cargo test --doc` as a separate
 verification step when you change public API examples or doc comments.
 
 ### Parser Equivalence
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
+cargo test -p talkbank-parser-tests parser_equivalence
 ```
 
 Runs the parser on each file in the `corpus/reference/` tree and validates
 results. Each `.cha` file is its own test, enabling per-file parallelism and
-failure isolation via nextest. The exact file count is whatever
+per-file failure isolation. The exact file count is whatever
 `find corpus/reference -name '*.cha' -type f | wc -l` reports, do not
 hard-code it here.
 
@@ -189,7 +189,7 @@ Core local sweep:
 ```bash
 cargo fmt --all -- --check
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 cargo test --doc
 ```
 
@@ -199,24 +199,24 @@ Then add the surface-specific checks that match your change:
 - spec-tool changes: `cargo build --manifest-path spec/tools/Cargo.toml` and
   `cargo build --manifest-path spec/runtime-tools/Cargo.toml`
 - parser / model / alignment / serialization changes:
-  `cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'`
+  `cargo test -p talkbank-parser-tests parser_equivalence`
   and
-  `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus`
+  `cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus`
 
 ## Running Specific Tests
 
 ```bash
 # Single test by name
-cargo nextest run test_name
+cargo test test_name
 
 # Tests in a specific crate
-cargo nextest run -p talkbank-model
+cargo test -p talkbank-model
 
 # Tests matching a pattern
-cargo nextest run -- mor
+cargo test -- mor
 
 # With output
-cargo nextest run --no-capture
+cargo test --no-capture
 ```
 
 ## What to Run When
@@ -224,10 +224,10 @@ cargo nextest run --no-capture
 | What you changed | Run |
 |-----------------|-----|
 | Grammar (`grammar.js`) | `cd grammar && tree-sitter generate && tree-sitter test`, then the relevant parser/spec-generator commands |
-| Parser (CST-to-model) | `cargo nextest run -p talkbank-parser` |
-| Model (types, validation, alignment) | `cargo nextest run -p talkbank-model` |
-| CLI (chatter args, dispatch) | `cargo nextest run -p chatter` |
-| LSP | `cargo nextest run -p talkbank-lsp` |
+| Parser (CST-to-model) | `cargo test -p talkbank-parser` |
+| Model (types, validation, alignment) | `cargo test -p talkbank-model` |
+| CLI (chatter args, dispatch) | `cargo test -p chatter` |
+| LSP | `cargo test -p talkbank-lsp` |
 | Spec files | Run the relevant `gen_*` commands from `spec/tools`, then the local verification sweep from `dev-checks.md` |
 | Pre-merge (any change) | The local verification sweep from `dev-checks.md` plus surface-specific additions |
 | Pre-push (quick) | Re-run the narrowest commands that cover the surfaces you touched; there is no repo-local `make ci-local` wrapper |

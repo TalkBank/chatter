@@ -137,7 +137,7 @@ cd chatter
 cargo build --workspace --all-targets --locked
 
 # Run the full workspace test suite (cargo test --workspace also works)
-cargo nextest run --workspace
+cargo test --workspace
 
 # Try the chatter binary
 ./target/debug/chatter --help

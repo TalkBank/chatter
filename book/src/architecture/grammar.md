@@ -66,7 +66,7 @@ After any change to `grammar.js`:
 1. `cd grammar && tree-sitter generate`
 2. `tree-sitter test` (160 tests)
 3. `cargo test -p talkbank-parser`
-4. `cargo nextest run -p talkbank-parser-tests` (reference corpus equivalence, per-file)
+4. `cargo test -p talkbank-parser-tests` (reference corpus equivalence, per-file)
 5. Verify the 78-file reference corpus passes at 100%
 
 ## Conflict Resolution

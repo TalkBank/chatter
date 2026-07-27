@@ -11,7 +11,7 @@ Use the concrete local verification commands from [Setup](setup.md) and
 ```bash
 cargo fmt --all -- --check
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 cargo test --doc
 ```
 

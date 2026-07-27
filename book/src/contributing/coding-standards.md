@@ -51,7 +51,7 @@ Preferred crates:
 ## Testing
 
 - Prefer spec-driven tests over hand-written tests for parser behavior
-- Use `cargo nextest run` for unit tests (except doctests)
+- Use `cargo test` for unit tests (except doctests)
 - Snapshot tests with `insta` for complex output comparisons
 
 ## Generated Files
@@ -71,8 +71,8 @@ Always regenerate from source inputs.
 - Rust **2024 edition**.
 - `cargo fmt` before committing. Use `cargo fmt` (not standalone
   `rustfmt`) for workspace-consistent formatting.
-- **Prefer `cargo nextest run`** for faster parallel-per-test
-  execution. Use `cargo test --doc` for doctests (nextest can't run
+- **Prefer `cargo test`** for faster parallel-per-test
+  execution. Use `cargo test --doc` for doctests (they are not part of the normal run
   those).
 - CI runs **single-pass clippy** (`--workspace --all-targets`, no
   flags): the workspace `[lints]` table denies the panic family in

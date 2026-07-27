@@ -126,7 +126,7 @@ After generating tests:
 1. Run tests to verify they fail (TDD red phase):
    ```bash
    cd ..
-   cargo nextest run -p talkbank-parser-tests -E 'test(validation_tests)'
+   cargo test -p talkbank-parser-tests validation_tests
    ```
 
 2. Implement the validator in the appropriate module:
@@ -155,13 +155,13 @@ After generating tests:
 
 4. Run tests to verify they pass (TDD green phase):
    ```bash
-   cargo nextest run -p talkbank-parser-tests -E 'test(validation_tests)'
+   cargo test -p talkbank-parser-tests validation_tests
    ```
 
 5. Verify no regressions on reference corpus:
    ```bash
-   cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-   cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+   cargo test -p talkbank-parser-tests parser_equivalence
+   cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
    ```
 
 ## Tools

@@ -11,8 +11,8 @@ If `grammar.js` is modified, always do this before debugging parser behavior or 
 1. `tree-sitter generate`
 2. `tree-sitter test`
 3. Re-run relevant Rust-side checks:
-   - `cargo nextest run -p talkbank-parser`
-   - `cargo nextest run -p talkbank-parser-tests`
+   - `cargo test -p talkbank-parser`
+   - `cargo test -p talkbank-parser-tests`
 4. Re-run real-file CLI validation for the affected syntax path
 
 Do not draw conclusions from parser output until regeneration has been done.
@@ -27,7 +27,7 @@ Do not draw conclusions from parser output until regeneration has been done.
 ### Stop Conditions
 - If `tree-sitter test` fails, stop and triage diffs before continuing.
 - If Rust parser tests fail, stop and fix parser/model drift before continuing.
-- If `cargo nextest run -p talkbank-parser-tests` fails, stop and fix parser-equivalence drift before continuing.
+- If `cargo test -p talkbank-parser-tests` fails, stop and fix parser-equivalence drift before continuing.
 - Do not update corpus expectations automatically; only update after confirming intended behavior.
 - Keep `grammar.js` and generated artifacts (`src/parser.c`, `grammar.json`, `node-types.json`) synchronized in the same change.
 
@@ -62,8 +62,8 @@ Run in this order after any `grammar.js` change:
 
 1. `cd grammar && tree-sitter generate`
 2. `cd grammar && tree-sitter test`
-3. `cargo nextest run -p talkbank-parser`
-4. `cargo nextest run -p talkbank-parser-tests`
+3. `cargo test -p talkbank-parser`
+4. `cargo test -p talkbank-parser-tests`
 
 If any step fails, stop and fix the underlying issue before continuing. Do not auto-update expectations to force green tests.
 

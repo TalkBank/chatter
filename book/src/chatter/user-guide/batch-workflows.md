@@ -97,10 +97,10 @@ This repository includes a reference corpus at
 handle every file in this corpus at 100%:
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
+cargo test -p talkbank-parser-tests parser_equivalence
 ```
 
-This runs the parser equivalence test, each `.cha` file is its own test, so nextest runs them in parallel and reports individual failures.
+This runs the parser equivalence test; each `.cha` file is its own test, so reports individual failures.
 
 ## Integration with batchalign
 

@@ -516,9 +516,9 @@ If you add a new structural marker to the grammar:
 4. Run the full verification sequence:
    ```bash
    cd grammar && tree-sitter generate && tree-sitter test
-   cargo nextest run -p talkbank-parser
-   cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-   cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+   cargo test -p talkbank-parser
+   cargo test -p talkbank-parser-tests parser_equivalence
+   cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
    ```
 
 ## Key Source Files

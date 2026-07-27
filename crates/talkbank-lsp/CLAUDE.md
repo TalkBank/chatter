@@ -168,16 +168,16 @@ cargo build -p talkbank-lsp
 # Build (release)
 cargo build --release -p talkbank-lsp
 
-# Run all crate tests via nextest (preferred)
-cargo nextest run -p talkbank-lsp
+# Run all crate tests
+cargo test -p talkbank-lsp
 
 # A focused test
-cargo nextest run -p talkbank-lsp -E 'test(gra_word_label_with_post_clitic)'
+cargo test -p talkbank-lsp gra_word_label_with_post_clitic
 
 # Regression gates after any alignment-touching change (mandatory):
-cargo nextest run -p talkbank-model
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
-cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-model
+cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
 ```
 
 ## Related documentation

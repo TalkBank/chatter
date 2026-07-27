@@ -328,7 +328,7 @@ fn generate_dashboard(
     output.push_str("**To update implementation status**:\n");
     output.push_str("1. Implement validation rule in `talkbank-model/src/validation/`\n");
     output.push_str(
-        "2. Verify test passes: `cargo nextest run -p talkbank-parser-tests -E 'test(validation_tests)'`\n",
+        "2. Verify test passes: `cargo test -p talkbank-parser-tests validation_tests`\n",
     );
     output.push_str("3. Update `get_implemented_error_codes()` in `gen_coverage_dashboard.rs`\n");
     output.push_str("4. Regenerate dashboard\n\n");

@@ -42,7 +42,7 @@ verify the JSON shape, field names, event ordering, and stats consistency.
 cd apps/chatter-desktop && npm run test:unit
 
 # Rust contract/integration tests
-cargo nextest run -p chatter-desktop --test validation_bridge
+cargo test -p chatter-desktop --test validation_bridge
 ```
 
 ### What they cover
@@ -235,7 +235,7 @@ Add to the existing CI workflow:
 ```yaml
 # Rust integration tests (fast, always run)
 - name: Desktop integration tests
-  run: cargo nextest run -p chatter-desktop --test validation_bridge
+  run: cargo test -p chatter-desktop --test validation_bridge
 
 # E2E tests (slow, release branches only)
 - name: Build desktop app

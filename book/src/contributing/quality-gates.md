@@ -15,7 +15,7 @@ contract is the command set documented in [Setup](setup.md) and
 ```bash
 cargo fmt --all -- --check
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 cargo test --doc
 ```
 

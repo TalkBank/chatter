@@ -137,7 +137,7 @@ cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
 
 cd grammar && tree-sitter test
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 ```
 
 ## Key Commands

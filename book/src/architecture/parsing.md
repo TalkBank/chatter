@@ -110,10 +110,10 @@ This allows the parser to skip individual malformed elements while continuing to
 The 78-file reference corpus is the primary correctness guarantee:
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
+cargo test -p talkbank-parser-tests parser_equivalence
 ```
 
-Each `.cha` file is its own test, nextest runs them in parallel and reports individual failures.
+Each `.cha` file is its own test, so failures are reported per file.
 
 ## TreeSitterParser API
 

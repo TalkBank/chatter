@@ -81,7 +81,7 @@ verification commands from the repo guidance:
 cargo fmt
 cargo check --workspace --all-targets
 cargo build --workspace --all-targets --locked
-cargo nextest run --workspace
+cargo test --workspace
 cargo test --doc
 ```
 

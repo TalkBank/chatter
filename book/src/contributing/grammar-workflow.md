@@ -64,10 +64,10 @@ This verifies the Rust parser wrapper handles all CST nodes correctly.
 ### 5. Run Parser Equivalence
 
 ```bash
-cargo nextest run -p talkbank-parser-tests -E 'test(parser_equivalence)'
+cargo test -p talkbank-parser-tests parser_equivalence
 ```
 
-Every file in the reference corpus must parse correctly. Each `.cha` file is its own test, nextest runs them in parallel and reports individual failures.
+Every file in the reference corpus must parse correctly. Each `.cha` file is its own test, so failures are reported per file.
 
 ### 6. Regenerate Spec Tests
 

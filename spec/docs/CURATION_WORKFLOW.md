@@ -54,7 +54,7 @@ cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
 
 ```bash
 cd grammar && tree-sitter test --overview-only
-cargo nextest run -p talkbank-parser-tests
+cargo test -p talkbank-parser-tests
 ```
 
 ## Staging vs release

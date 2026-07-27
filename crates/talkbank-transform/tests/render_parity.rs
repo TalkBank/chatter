@@ -25,7 +25,7 @@
 //! tier on line 8) through the real parse+validate pipeline, then renders each
 //! enhanced error both ways and asserts both reference the error's true line.
 //!
-//! Run with: `cargo nextest run -p talkbank-transform --test render_parity`
+//! Run with: `cargo test -p talkbank-transform --test render_parity`
 
 use std::fs;
 use std::path::PathBuf;
