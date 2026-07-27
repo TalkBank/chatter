@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-16 11:14 EDT
+**Last modified:** 2026-07-26 23:12 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -268,6 +268,36 @@ A `%mor` item beginning with the `|` separator (`|we`) declares no
 part of speech; every item is `pos|stem` with a non-empty POS. The
 modern reading of CLAN CHECK error 11 (the depfile mechanism is
 legacy; the non-empty-symbol invariant is real).
+
+### E761: %gra relation head is not a Universal Dependencies relation
+
+A `%gra` label is `HEAD` or `HEAD-SUBTYPE`. UD fixes the head set at 37
+universal relations and defines subtypes as language-specific and
+open-ended, so only the head is checked; a subtype such as `NMOD-POSS`
+or `ACL-RELCL` passes untouched. Nothing validated relation labels
+before, in chatter or in CLAN CHECK, so a typo like `PUNCTT` for
+`PUNCT` rode silently into every analysis that reads the dependency
+graph. Common causes: truncation (`IOB` for `IOBJ`), typos, and the
+retired TalkBank labels (`SUBJ`, `JCT`, `POBJ`, `INCROOT`), none of
+which occurs in the corpora any more.
+
+### E762: prefix marker `#` stands alone or opens a word
+
+The prefix marker separates a bound prefix from its stem and attaches
+to the END of the prefix, which is a word of its own (Hebrew
+`ha# kelev`, "the dog"). So a word that is nothing but `#`, or one that
+opens with it (`#dog`), cannot be that construct in any language. This
+covers CLAN CHECK 71 and the `#`-undeclared facet of CHECK 11.
+
+### E763: prefix marker `#` in a language that does not use it
+
+Languages that write the marker are `heb` and `ara`; anywhere else it
+is a stray character, usually a typo or a conversion artifact. The gate
+reads the WORD's resolved language, not the file's `@Languages` header,
+exactly as the digits rule (E220) does, so a code-switched word marked
+`@s:heb` inside an English file is accepted. Word-internal markers
+(`mi#ha#shuk`) stay legal wherever the language allows the marker at
+all.
 
 ### E243 addition: the pipe character
 

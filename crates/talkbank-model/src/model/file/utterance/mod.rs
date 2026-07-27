@@ -13,7 +13,7 @@
 //! ```text
 //! *CHI: I want cookie .
 //! %mor: pro:sub|I v|want n|cookie .
-//! %gra: 1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+//! %gra: 1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 //! %com: reaches for cookie jar
 //! ```
 

@@ -1,6 +1,6 @@
 //! `%gra` hover resolver, shows the grammatical relation with dependency context.
 //!
-//! Resolves the `%gra` relation under the cursor (e.g. `1|2|SUBJ`), then looks
+//! Resolves the `%gra` relation under the cursor (e.g. `1|2|NSUBJ`), then looks
 //! up the aligned `%mor` item and main-tier word to provide a rich hover card
 //! showing the full dependency triple alongside the word and its morphology.
 

@@ -17,7 +17,7 @@
 //! Where:
 //! - **word_index**: Position in %mor tier (1-indexed)
 //! - **head_index**: Position of syntactic parent (0 = ROOT of sentence)
-//! - **relation_type**: Universal Dependencies relation (e.g., SUBJ, OBJ, ROOT)
+//! - **relation_type**: Universal Dependencies relation (e.g., NSUBJ, OBJ, ROOT)
 //!
 //! # Dependency Structure
 //!
@@ -44,7 +44,7 @@
 //! ```text
 //! *CHI: I eat cookies .
 //! %mor: pro:sub|I v|eat n|cookie-PL .
-//! %gra: 1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+//! %gra: 1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 //! ```
 //!
 //! This represents the dependency tree:
@@ -53,7 +53,7 @@
 //!       /   |   \
 //!      /    |    \
 //!   I(1) cookies(3) .(4)
-//!  SUBJ    OBJ     PUNCT
+//!  NSUBJ    OBJ     PUNCT
 //! ```
 
 mod relation;

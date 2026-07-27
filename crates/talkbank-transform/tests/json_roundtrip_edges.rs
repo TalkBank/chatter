@@ -101,7 +101,7 @@ fn roundtrip_every_tier_type_present() {
 @ID:\teng|corpus|CHI|||||Child|||
 *CHI:\thello world .
 %mor:\tco|hello n|world .
-%gra:\t1|2|COM 2|0|INCROOT 3|2|PUNCT
+%gra:\t1|2|COM 2|0|ROOT 3|2|PUNCT
 %pho:\thɛloʊ wɝld
 %wor:\thello world .
 %sin:\t0 0

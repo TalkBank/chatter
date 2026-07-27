@@ -11,6 +11,35 @@ version and are listed under "Changed" / "Removed".
 
 ### Added
 
+- Three validation rules that catch real, previously-invisible defects in
+  transcript data. All three live entirely in the validator: the grammar,
+  the model's serialized shape, and roundtrip behavior are untouched.
+
+  - **E761, `%gra` relation head is not a Universal Dependencies
+    relation.** A `%gra` label is `HEAD` or `HEAD-SUBTYPE`; UD fixes the
+    head set at 37 universal relations and leaves subtypes open and
+    language-specific, so the head is checked against that closed set and
+    the subtype is never checked. Nothing validated relation labels before,
+    in chatter or in CLAN CHECK, so a corrupted label rode silently into
+    every downstream analysis that reads the dependency graph. Grounded in
+    a survey of the entire corpus (138,565,864 relation instances across
+    106,158 files): all 37 universal heads are attested, 150 distinct
+    labels occur, and exactly three heads fall outside the set, all of them
+    defects (`IOB` for `IOBJ`, `PAD`, `PUNCTT` for `PUNCT`).
+
+  - **E762, the prefix marker `#` stands alone as a word or opens one.**
+    The marker attaches to the END of the prefix it marks, and the prefix
+    is a word of its own (Hebrew `ha# kelev`), so neither shape can be that
+    construct in any language. Language-independent, and zero-attested
+    corpus-wide.
+
+  - **E763, prefix marker in a language that does not use it.** Gated on
+    the WORD's resolved language rather than the file's `@Languages`
+    header, exactly as the digits rule (E220) is, so a code-switched word
+    brings its own rules with it. Languages that write the marker: `heb`,
+    `ara`. Word-internal markers stay legal wherever the language allows
+    the marker at all.
+
 - `TreeSitterParser` now implements the shared `ChatParser` trait
   (`talkbank_model::ChatParser`), making the two parser backends
   interchangeable behind one generic bound at every granularity (file,
@@ -31,6 +60,21 @@ version and are listed under "Changed" / "Removed".
   are recognized by the tree-sitter front end's error analysis and
   mirrored in the re2c oracle's front end; both files were already
   rejected, so no validity verdict changes, only the diagnosis.
+
+### Changed
+
+- The `%gra` documentation, examples, reference corpus, and error-spec
+  fixtures no longer use retired TalkBank relation labels (`SUBJ`, `JCT`,
+  `POBJ`, `COM`, `VOC`, `MOD`, `NEG`, `PRED`, `COMP`, `ADV`, `INCROOT`,
+  `QUANT`, `LINK`), which E761 now rejects. None of them occurs anywhere in
+  the real corpora; they were fixture inventions that would have taught
+  readers of the API docs a vocabulary the validator rejects. Replaced
+  throughout by the UD relations the corpora actually use (`NSUBJ`, `OBL`,
+  `CASE`, `DISCOURSE`, `VOCATIVE`, `AMOD`, `ADVMOD-NEG`, `CCOMP`, `EXPL`,
+  `DET`, `DEP`). The `gra_incroot` grammar construct deliberately keeps
+  `INCROOT`: it pins the property that relation labels are open text at the
+  grammar layer, which is why the vocabulary is a validation policy and not
+  a syntax.
 
 ### Fixed
 

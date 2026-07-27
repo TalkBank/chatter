@@ -7,9 +7,12 @@
 //!
 //! `structure` covers token-internal form constraints, while `language` handles
 //! language-marker resolution and language-dependent policies (such as digit
-//! allowance checks).
+//! allowance checks). `prefix_marker` spans both: the marker's POSITION in a
+//! word is language-independent, while its PRESENCE is language-gated, and the
+//! module keeps those two rules separate.
 
 pub mod language;
+pub(crate) mod prefix_marker;
 pub mod structure;
 
 #[cfg(test)]

@@ -85,6 +85,11 @@ impl Validate for Utterance {
         // E401: Validate no duplicate dependent tiers
         crate::validation::utterance::check_no_duplicate_dependent_tiers(self, errors);
 
+        // E761: `%gra` relation heads must be UD universal relations.
+        // Independent of the structural and alignment checks below: a label's
+        // legality does not depend on tree shape or on `%mor` cardinality.
+        crate::validation::utterance::check_gra_relation_vocabulary(self, errors);
+
         // E604: `%gra` requires `%mor`.
         // Skip when `%mor` is parse-tainted: parser recovery may have dropped `%mor`
         // from the AST while still reporting the root parse issue elsewhere.

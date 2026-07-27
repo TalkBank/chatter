@@ -51,7 +51,7 @@ impl crate::validation::Validate for Word {
     /// Validates structural, language, and mode-specific invariants for one parsed word token.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
         use crate::validation::word::language::LanguageResolutionOutcome;
-        use crate::validation::word::{language, resolve_word_language, structure};
+        use crate::validation::word::{language, prefix_marker, resolve_word_language, structure};
 
         // E243: Check for illegal characters (whitespace, bullets, control chars)
         // This must run FIRST to catch parser bugs
@@ -68,6 +68,12 @@ impl crate::validation::Validate for Word {
 
         // E244-E247, E250: Check prosodic marker placement and semantics
         structure::check_prosodic_markers(self, errors);
+
+        // E762: the prefix marker `#` may not stand alone or open a word.
+        // Language-independent, so it runs outside the language block below:
+        // requiring a resolved language would let a file with no @Languages
+        // header carry these shapes silently.
+        prefix_marker::check_prefix_marker_position(self, errors);
 
         // Validate word content elements via WordContents (text/shortenings)
         self.content.validate(
@@ -96,13 +102,15 @@ impl crate::validation::Validate for Word {
             );
         }
 
-        // E220: Language-specific word validation (numeric digits)
+        // E220/E763: Language-specific word validation (numeric digits, and
+        // the prefix marker). Both gate on the WORD's resolved language, not
+        // on the file header, so they share one resolution.
         let tier_language = context
             .tier_language
             .as_ref()
             .or(context.shared.default_language.as_ref());
 
-        // Only validate digits if we have real language context
+        // Only run language-gated checks if we have real language context
         if tier_language.is_some() {
             let LanguageResolutionOutcome {
                 resolution,
@@ -111,6 +119,7 @@ impl crate::validation::Validate for Word {
             errors.report_all(diagnostics);
 
             language::check_word_digits_multi(self, &resolution, errors);
+            prefix_marker::check_prefix_marker_language(self, &resolution, errors);
         }
 
         // CA omission handling

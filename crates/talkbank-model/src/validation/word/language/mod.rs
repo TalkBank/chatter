@@ -16,4 +16,5 @@ mod resolve;
 mod tests;
 
 pub(crate) use digits::check_word_digits_multi;
+pub(crate) use helpers::mixed_language_allows_prefix_marker;
 pub use resolve::{LanguageResolution, LanguageResolutionOutcome, resolve_word_language};

@@ -33,7 +33,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// ```text
 /// *CHI: I eat cookies .
 /// %mor: pro:sub|I v|eat n|cookie-PL .
-/// %gra: 1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+/// %gra: 1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 /// ```
 ///
 /// # References

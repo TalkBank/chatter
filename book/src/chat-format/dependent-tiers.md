@@ -34,7 +34,7 @@ The `%gra` tier encodes dependency syntax using Universal Dependencies relation 
 ```chat
 *CHI:	I want cookies .
 %mor:	PRON|I VERB|want NOUN|cookie-Plur .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 ```
 
 The `%gra` tier aligns with `%mor` chunks (clitics expand into multiple chunks). Validation checks sequential indices (E721), ROOT structure (E722 missing root, E723 multiple roots), and circular dependencies (E724).

@@ -41,7 +41,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// Subject relation:
 /// ```text
-/// 1|2|SUBJ
+/// 1|2|NSUBJ
 /// ```
 /// Word 1 is the subject of word 2.
 ///
@@ -61,18 +61,17 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// ```text
 /// *CHI: the dog barks .
 /// %mor: det:art|the n|dog v|bark-3S .
-/// %gra: 1|2|DET 2|3|SUBJ 3|0|ROOT 4|3|PUNCT
+/// %gra: 1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|PUNCT
 /// ```
 ///
 /// Dependency tree visualization:
 /// ```text
 ///        barks (3, ROOT)
-///       /    |    \
-///      /     |     \
-///   dog(2) SUBJ   .(4)
-///    |            PUNCT
-///  the(1)
-///  DET
+///       /           \
+///      /             \
+///   dog(2) NSUBJ     .(4) PUNCT
+///    |
+///  the(1) DET
 /// ```
 ///
 /// # References
@@ -93,15 +92,19 @@ pub struct GrammaticalRelation {
     /// - Otherwise, points to the index of the parent word
     pub head: usize,
 
-    /// Relation type (e.g., "SUBJ", "OBJ", "ROOT", "DET", "PUNCT")
+    /// Relation type (e.g., "NSUBJ", "OBJ", "ROOT", "DET", "PUNCT")
     ///
     /// Common Universal Dependencies relations:
     /// - ROOT: root of sentence
-    /// - SUBJ: subject
+    /// - NSUBJ: nominal subject
     /// - OBJ: object
     /// - DET: determiner
     /// - PUNCT: punctuation
-    /// - MOD: modifier
+    /// - NMOD: nominal modifier
+    ///
+    /// The label is `HEAD` or `HEAD-SUBTYPE`. The model stores it as
+    /// open text; the closed head vocabulary is enforced by validation
+    /// (`E761`), never at construction.
     pub relation: GrammaticalRelationType,
 }
 
@@ -124,7 +127,7 @@ impl GrammaticalRelation {
     /// A relation is considered a root if ANY of these conditions hold:
     /// 1. **Self-referential**: head == index (structural root, any label)
     /// 2. **ROOT label**: Relation labeled "ROOT" (standard UD)
-    /// 3. **INCROOT label**: Relation labeled "INCROOT" (incomplete utterances)
+    /// 3. **INCROOT label**: the retired TalkBank "incomplete root" label
     ///
     /// ## Rationale
     ///
@@ -136,8 +139,14 @@ impl GrammaticalRelation {
     /// We accept all patterns. Self-referential structure (head == index) is
     /// the most reliable indicator of root status.
     ///
-    /// This intentionally favors compatibility with observed corpora over strict
-    /// theoretical constraints at construction time.
+    /// This is a question about TREE SHAPE, not about label legality, and the
+    /// two must not be conflated. `INCROOT` is extinct in the corpora (zero
+    /// occurrences in 138,565,864 relation instances, full-corpus survey
+    /// 2026-07-26) and validation now rejects it as a non-UD head (`E761`).
+    /// It is still honored here deliberately: a file that carries one should
+    /// report exactly that one label defect, not a cascade of "and also this
+    /// tier has no root". Recognizing the label costs nothing and keeps the
+    /// diagnostic pointed at the thing the transcriber has to fix.
     pub fn is_root(&self) -> bool {
         // Structural root: head points to self
         self.head == self.index
@@ -193,10 +202,10 @@ mod tests {
     /// This guards the basic data contract before tree-level validation.
     #[test]
     fn test_grammatical_relation_new() {
-        let rel = GrammaticalRelation::new(1, 2, "SUBJ");
+        let rel = GrammaticalRelation::new(1, 2, "NSUBJ");
         assert_eq!(rel.index, 1);
         assert_eq!(rel.head, 2);
-        assert_eq!(rel.relation, "SUBJ".into());
+        assert_eq!(rel.relation, "NSUBJ".into());
         assert!(!rel.is_root());
     }
 
@@ -212,9 +221,11 @@ mod tests {
         assert!(rel.is_root());
     }
 
-    /// `INCROOT` is treated as a root marker for incomplete utterances.
+    /// `INCROOT` is still treated as a root marker for tree-shape purposes.
     ///
-    /// This matches observed corpus conventions.
+    /// The label is retired and validation rejects it (`E761`); recognizing
+    /// its tree role anyway is what keeps a file carrying one from reporting
+    /// a spurious "no ROOT" alongside the real defect. See `is_root`.
     #[test]
     fn test_grammatical_relation_incroot() {
         let rel = GrammaticalRelation::new(1, 0, "INCROOT");
@@ -242,7 +253,7 @@ mod tests {
     /// This keeps dependent edges distinct from sentence roots.
     #[test]
     fn test_grammatical_relation_not_root() {
-        let rel = GrammaticalRelation::new(1, 2, "SUBJ");
+        let rel = GrammaticalRelation::new(1, 2, "NSUBJ");
         assert!(!rel.is_root()); // Neither self-referential nor ROOT/INCROOT
     }
 

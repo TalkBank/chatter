@@ -1,7 +1,7 @@
 //! Interned grammatical-relation labels used by `%gra`.
 //!
 //! Relation labels are interned because `%gra` tiers repeat a small vocabulary
-//! (`SUBJ`, `OBJ`, `ROOT`, etc.) across large corpora.
+//! (`NSUBJ`, `OBJ`, `ROOT`, etc.) across large corpora.
 //! Interning keeps these comparisons pointer-equality cheap during alignment and
 //! serialization passes.
 //!
@@ -24,7 +24,7 @@ interned_newtype!(
     ///
     /// **Core arguments:**
     /// - **ROOT**: Root of the sentence (head = 0)
-    /// - **SUBJ**: Subject (nominal subject)
+    /// - **NSUBJ**: Subject (nominal subject)
     /// - **OBJ**: Direct object
     /// - **IOBJ**: Indirect object
     /// - **CSUBJ**: Clausal subject
@@ -54,7 +54,7 @@ interned_newtype!(
     /// ```text
     /// *CHI: I eat cookies .
     /// %mor: pro:sub|I v|eat det:art|the n|cookie-PL .
-    /// %gra: 1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+    /// %gra: 1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
     /// ```
     ///
     /// # References
@@ -90,12 +90,12 @@ mod tests {
     #[test]
     fn test_gra_type_different_values() {
         let root = GrammaticalRelationType::new("ROOT");
-        let subj = GrammaticalRelationType::new("SUBJ");
+        let subj = GrammaticalRelationType::new("NSUBJ");
 
         // Different values - different Arcs
         assert!(!Arc::ptr_eq(&root.0, &subj.0));
         assert_eq!(root.as_str(), "ROOT");
-        assert_eq!(subj.as_str(), "SUBJ");
+        assert_eq!(subj.as_str(), "NSUBJ");
     }
 
     /// Display output preserves the original relation label text.

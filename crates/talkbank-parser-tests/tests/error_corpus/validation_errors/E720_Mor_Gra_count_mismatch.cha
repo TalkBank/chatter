@@ -6,6 +6,6 @@
 @Comment:	Note: %gra aligns to %mor chunks, not items!
 *CHI:	I want cookie .
 %mor:	pro|I v|want n|cookie .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|4|EXTRA 5|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|4|DEP 5|2|PUNCT
 @Comment:	ERROR: %mor has 4 chunks (3 words + terminator) but %gra has 5 relations
 @End

@@ -30,14 +30,18 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// Uses Universal Dependencies relation types including:
 /// - **ROOT**: Main predicate of sentence (head = 0)
-/// - **SUBJ**: Subject
+/// - **NSUBJ**: Nominal subject
 /// - **OBJ**: Direct object
 /// - **IOBJ**: Indirect object
 /// - **DET**: Determiner
-/// - **ADJ**: Adjective modifier
-/// - **ADV**: Adverb modifier
+/// - **AMOD**: Adjectival modifier
+/// - **ADVMOD**: Adverbial modifier
 /// - **PUNCT**: Punctuation
-/// - And many more...
+///
+/// A label is a UD universal relation, optionally followed by a
+/// language-specific subtype (`NMOD-POSS`, `ACL-RELCL`). The head is a
+/// closed set of 37 and is enforced by validation (`E761`); subtypes are
+/// open by UD's own design and are not checked.
 ///
 /// # CHAT Manual Reference
 ///
@@ -55,7 +59,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// // Create a %gra tier
 /// let gra = GraTier::new_gra(vec![
-///     GrammaticalRelation::new(1, 2, "SUBJ"),   // Word 1 is subject of word 2
+///     GrammaticalRelation::new(1, 2, "NSUBJ"),   // Word 1 is subject of word 2
 ///     GrammaticalRelation::new(2, 0, "ROOT"),   // Word 2 is root
 ///     GrammaticalRelation::new(3, 2, "OBJ"),    // Word 3 is object of word 2
 ///     GrammaticalRelation::new(4, 2, "PUNCT"),  // Terminator
@@ -457,7 +461,7 @@ mod tests {
     #[test]
     fn test_gra_tier_new() {
         let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "SUBJ"),
+            GrammaticalRelation::new(1, 2, "NSUBJ"),
             GrammaticalRelation::new(2, 0, "ROOT"),
             GrammaticalRelation::new(3, 2, "OBJ"),
         ]);
@@ -483,7 +487,7 @@ mod tests {
         // TalkBank convention: ROOT head points to self
         let tier = GraTier::new_gra(vec![
             GrammaticalRelation::new(1, 2, "DET"),
-            GrammaticalRelation::new(2, 3, "SUBJ"),
+            GrammaticalRelation::new(2, 3, "NSUBJ"),
             GrammaticalRelation::new(3, 3, "ROOT"),
             GrammaticalRelation::new(4, 3, "PUNCT"),
         ]);
@@ -496,7 +500,7 @@ mod tests {
     #[test]
     fn test_validate_structure_non_sequential() {
         let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 3, "SUBJ"),
+            GrammaticalRelation::new(1, 3, "NSUBJ"),
             GrammaticalRelation::new(3, 3, "ROOT"), // gap: expected 2
             GrammaticalRelation::new(2, 3, "OBJ"),
         ]);
@@ -514,7 +518,7 @@ mod tests {
     fn test_validate_structure_circular_dependency_warns() {
         // ROOT validation enabled - circular dependencies produce warnings
         let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "SUBJ"),
+            GrammaticalRelation::new(1, 2, "NSUBJ"),
             GrammaticalRelation::new(2, 1, "OBJ"), // Circular: 1→2, 2→1
             GrammaticalRelation::new(3, 2, "PUNCT"),
         ]);
@@ -553,7 +557,7 @@ mod tests {
     fn test_validate_structure_root_head_zero_allowed() {
         // UD convention: ROOT head=0 is now allowed (no warning)
         let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "SUBJ"),
+            GrammaticalRelation::new(1, 2, "NSUBJ"),
             GrammaticalRelation::new(2, 0, "ROOT"),
             GrammaticalRelation::new(3, 2, "OBJ"),
         ]);

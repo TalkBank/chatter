@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the dog .
+%mor:	det|the-Def-Art noun|dog .
+%gra:	1|2|DET 2|0|ROOT 3|2|PUNCTT
+@Comment:	ERROR: PUNCTT is a typo for the universal relation PUNCT
+@End

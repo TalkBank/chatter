@@ -1,11 +1,11 @@
 # gra_complex
 
-Example %gra tier with complex structure (SUBJ, ROOT, OBJ, PUNCT)
+Example %gra tier with complex structure (NSUBJ, ROOT, OBJ, PUNCT)
 
 ## Input
 
 ```gra_dependent_tier
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 ```
 
 ## Expected CST

@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I want cookies .
+%mor:	pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres noun|cookie-Plur .
+%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+@Comment:	ERROR: SUBJ is the retired TalkBank label; UD writes NSUBJ
+@End

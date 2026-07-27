@@ -4,5 +4,5 @@
 @Participants:	CHI Target_Child
 *CHI:	the cat sat .
 %mor:	det|the n|cat v|sit .
-%gra:	1|2|DET 2|3|SUBJ 3|0|ROOT
+%gra:	1|2|DET 2|3|NSUBJ 3|0|ROOT
 @End

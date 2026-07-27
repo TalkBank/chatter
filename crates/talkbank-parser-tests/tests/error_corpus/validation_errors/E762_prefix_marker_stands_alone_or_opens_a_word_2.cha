@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the #dog .
+@Comment:	ERROR: the marker attaches to the end of a prefix, not the start of a stem
+@End

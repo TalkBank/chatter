@@ -13,6 +13,7 @@
 
 mod ca_delimiter;
 mod comma;
+mod gra_relation_vocabulary;
 mod overlap;
 mod phon_xtier;
 mod quotation;
@@ -34,6 +35,7 @@ pub(crate) use ca_delimiter::check_ca_delimiter_balance;
 pub(crate) use comma::{
     check_comma_after_non_spoken, check_comma_glued_to_next, check_consecutive_commas,
 };
+pub(crate) use gra_relation_vocabulary::check_gra_relation_vocabulary;
 #[cfg(test)]
 pub(crate) use overlap::check_overlap_index_values;
 pub(crate) use overlap::check_overlap_markers;

@@ -1,5 +1,5 @@
 ================================================================================
-gra_incroot - Example %gra tier with INCROOT pattern
+gra_incroot - The grammar accepts any relation label, here the retired INCROOT.
 ================================================================================
 %gra:	1|0|INCROOT 2|1|PUNCT
 

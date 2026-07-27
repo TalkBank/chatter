@@ -18,10 +18,10 @@ Every CHAT file follows this structure:
 @ID:	eng|corpus|MOT|||||Mother|||
 *MOT:	what do you want ?
 %mor:	ADV|what AUX|do PRON|you VERB|want ?
-%gra:	1|4|LINK 2|4|AUX 3|4|SUBJ 4|0|ROOT 5|4|PUNCT
+%gra:	1|4|OBJ 2|4|AUX 3|4|NSUBJ 4|0|ROOT 5|4|PUNCT
 *CHI:	I want cookie .
 %mor:	PRON|I VERB|want NOUN|cookie .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 @End
 ```
 

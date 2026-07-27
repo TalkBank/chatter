@@ -57,7 +57,7 @@ type Diag = (String, u32, u32, String);
 /// A valid `%gra` line with five `index|head|relation` triples on a single
 /// utterance. Exercises the reachable path: a `Present` `gra_contents` body slot
 /// and five `Present` relation slots, each decoded by `parse_gra_relation`.
-const VALID_MULTI_RELATION: &str = "@UTF8\n@Begin\n*CHI:\tI go home now .\n%gra:\t1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|ADV 5|2|PUNCT\n@End\n";
+const VALID_MULTI_RELATION: &str = "@UTF8\n@Begin\n*CHI:\tI go home now .\n%gra:\t1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|ADVMOD 5|2|PUNCT\n@End\n";
 
 /// A structurally valid `%gra` line whose single relation is SEMANTICALLY
 /// invalid (index 0; indices are 1-indexed). This reaches `parse_gra_tier`

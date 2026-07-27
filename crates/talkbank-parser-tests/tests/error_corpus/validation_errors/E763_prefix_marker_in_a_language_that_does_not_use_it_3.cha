@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	heb, eng
+@Participants:	CHI Target_Child
+@ID:	heb, eng|corpus|CHI|||||Target_Child|||
+*CHI:	ha#@s:eng kelev .
+@Comment:	ERROR: the word resolves to eng, which does not use the marker
+@End

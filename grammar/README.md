@@ -30,7 +30,7 @@ The official CHAT manual is the authoritative reference for the transcription fo
 @Date:	12-SEP-1962
 *CHI:	want more cookie .          <- main tier (speaker + utterance + terminator)
 %mor:	v|want qn|more n|cookie     <- morphology tier
-%gra:	1|0|ROOT 2|3|QUANT 3|1|OBJ  <- grammatical relations tier
+%gra:	1|0|ROOT 2|3|DET 3|1|OBJ  <- grammatical relations tier
 *MOT:	here you go .
 @End
 ```

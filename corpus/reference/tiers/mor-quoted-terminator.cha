@@ -9,8 +9,8 @@
 @Comment:	Source: word-features/1082.cha
 *CHI:	see it say +".
 %mor:	verb|see pron|it verb|say +".
-%gra:	1|0|ROOT 2|1|OBJ 3|1|COMP 4|3|PUNCT
+%gra:	1|0|ROOT 2|1|OBJ 3|1|CCOMP 4|3|PUNCT
 *MOT:	the bear said +"/.
 %mor:	det|the noun|bear verb|say-Past +"/.
-%gra:	1|2|DET 2|0|ROOT 3|2|COMP 4|3|PUNCT
+%gra:	1|2|DET 2|0|ROOT 3|2|CCOMP 4|3|PUNCT
 @End

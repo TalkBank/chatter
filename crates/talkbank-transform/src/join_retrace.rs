@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn drops_dependent_tiers_and_flags_remorphotag() {
         let input = doc(
-            "*CHI:\t<the dog> [/] .\n%mor:\tdet:art|the noun|dog .\n%gra:\t1|2|DET 2|0|ROOT 3|2|PUNCT\n*CHI:\tthe dog runs .\n%mor:\tdet:art|the noun|dog verb|run-3S .\n%gra:\t1|2|DET 2|3|SUBJ 3|0|ROOT 4|3|PUNCT\n",
+            "*CHI:\t<the dog> [/] .\n%mor:\tdet:art|the noun|dog .\n%gra:\t1|2|DET 2|0|ROOT 3|2|PUNCT\n*CHI:\tthe dog runs .\n%mor:\tdet:art|the noun|dog verb|run-3S .\n%gra:\t1|2|DET 2|3|NSUBJ 3|0|ROOT 4|3|PUNCT\n",
         );
         let (out, stats) = join(&input);
         assert_eq!(stats.joined_utterances, 1);

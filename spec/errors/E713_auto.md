@@ -29,7 +29,7 @@ cardinalities match)
 @Comment:	ERROR: head index 9 is out of range for 3 mor chunks
 *CHI:	I want .
 %mor:	pro|I v|want .
-%gra:	1|2|SUBJ 2|0|ROOT 3|9|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|9|PUNCT
 @End
 ```
 

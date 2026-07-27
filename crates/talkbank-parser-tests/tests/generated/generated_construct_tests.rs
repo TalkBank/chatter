@@ -496,7 +496,7 @@ fn test_gpx_example_1() -> Result<(), talkbank_parser_tests::test_error::TestErr
 /// Tests expected behavior.
 fn test_gra_complex() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword .\n%gra:\t1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT\n@End")?;
+    let _parsed = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword .\n%gra:\t1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT\n@End")?;
 
     Ok(())
 }

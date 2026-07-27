@@ -35,6 +35,28 @@ pub fn language_allows_numbers(lang: &str) -> bool {
     LANGUAGES_ALLOWING_NUMBERS.contains(&lang)
 }
 
+/// Languages that write the prefix marker (`#`) inside word tokens.
+///
+/// The marker separates a bound prefix from its stem in languages whose
+/// orthography glues them together, so a transcriber can annotate morphology
+/// on the main tier (`ha# kelev`, "the dog"). It is used by `E763` after
+/// language resolution, exactly as [`LANGUAGES_ALLOWING_NUMBERS`] is used by
+/// `E220`.
+///
+/// Derived from the data, not from a manual: a typed survey over every
+/// `#`-bearing corpus file (2026-07-26) found 70,654 of 70,668 attestations
+/// in these two languages, the remaining 14 being isolated strays across
+/// seven unrelated languages.
+const LANGUAGES_ALLOWING_PREFIX_MARKER: &[&str] = &[
+    "heb", // Hebrew
+    "ara", // Arabic
+];
+
+/// Returns whether a language code permits the prefix marker inside words.
+pub fn language_allows_prefix_marker(lang: &str) -> bool {
+    LANGUAGES_ALLOWING_PREFIX_MARKER.contains(&lang)
+}
+
 /// Returns whether the text contains at least one ASCII digit.
 ///
 /// Digit policy intentionally targets ASCII `0-9` because CHAT language code

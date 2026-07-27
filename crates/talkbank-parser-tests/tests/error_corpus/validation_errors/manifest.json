@@ -1715,6 +1715,78 @@
       "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
+      "fixture": "E761_gra_relation_head_is_not_a_Universal_Dependencies_relation.cha",
+      "expected_codes": [
+        "E761"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E761_gra_relation_head_not_universal.md"
+    },
+    {
+      "fixture": "E761_gra_relation_head_is_not_a_Universal_Dependencies_relation_2.cha",
+      "expected_codes": [
+        "E761"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E761_gra_relation_head_not_universal.md"
+    },
+    {
+      "fixture": "E761_gra_relation_head_is_not_a_Universal_Dependencies_relation_3.cha",
+      "expected_codes": [
+        "E761"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E761_gra_relation_head_not_universal.md"
+    },
+    {
+      "fixture": "E762_prefix_marker_stands_alone_or_opens_a_word.cha",
+      "expected_codes": [
+        "E762"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E762_prefix_marker_illegal_position.md"
+    },
+    {
+      "fixture": "E762_prefix_marker_stands_alone_or_opens_a_word_2.cha",
+      "expected_codes": [
+        "E762"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E762_prefix_marker_illegal_position.md"
+    },
+    {
+      "fixture": "E762_prefix_marker_stands_alone_or_opens_a_word_3.cha",
+      "expected_codes": [
+        "E762"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E762_prefix_marker_illegal_position.md"
+    },
+    {
+      "fixture": "E763_prefix_marker_in_a_language_that_does_not_use_it.cha",
+      "expected_codes": [
+        "E763"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
+    },
+    {
+      "fixture": "E763_prefix_marker_in_a_language_that_does_not_use_it_2.cha",
+      "expected_codes": [
+        "E763"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
+    },
+    {
+      "fixture": "E763_prefix_marker_in_a_language_that_does_not_use_it_3.cha",
+      "expected_codes": [
+        "E763"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

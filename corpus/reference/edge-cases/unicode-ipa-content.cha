@@ -14,9 +14,9 @@
 *CHI:	baby sleeping .
 %pho:	ˈbeɪbi ˈsliːpɪŋ
 %mor:	noun|baby part|sleep-PROG .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|PUNCT
 *MOT:	beautiful butterfly .
 %pho:	ˈbjuːtɪfəl ˈbʌtɚflaɪ
 %mor:	adj|beautiful noun|butterfly .
-%gra:	1|2|MOD 2|0|ROOT 3|2|PUNCT
+%gra:	1|2|AMOD 2|0|ROOT 3|2|PUNCT
 @End

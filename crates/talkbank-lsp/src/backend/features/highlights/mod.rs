@@ -180,7 +180,7 @@ mod tests {
     /// ```text
     /// *CHI:   it's cookies .
     /// %mor:   pron|it~aux|be n|cookie .
-    /// %gra:   1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+    /// %gra:   1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
     /// ```
     ///
     /// the relation `2|0|ROOT` refers to chunk 1 (the `aux|be` post-clitic

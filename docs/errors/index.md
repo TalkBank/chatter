@@ -1748,6 +1748,30 @@ A %mor item is pos|stem (with optional prefixes, clitics, and suffixes). An item
 |------|------|----------|--------|
 | [E760](E760.md) | of | error | ✅ |
 
+## Dependent tier validation (E7x)
+
+A %gra relation label is HEAD or HEAD-SUBTYPE. Universal Dependencies fixes the HEAD set at 37 universal relations and deliberately defines SUBTYPES as language-specific and open-ended, so the head is the only part of a label that can be checked against a closed vocabulary. This rule checks the head and never the subtype.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E761](E761.md) | E761: %gra relation head is not a Universal Dependencies relation | error | ✅ |
+
+## Word validation (E7x)
+
+The prefix marker # separates a bound prefix from its stem in languages whose orthography glues the two together, letting a transcriber keep the morphology visible on the main tier. The marker attaches to the END of the prefix, and the prefix is a word of its own:
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E762](E762.md) | E762: prefix marker stands alone or opens a word | error | ✅ |
+
+## Word validation (E7x)
+
+The prefix marker # separates a bound prefix from its stem (Hebrew ha# kelev, Arabic l# walad). A legally-positioned marker is only meaningful in a language whose orthography glues prefixes to stems; elsewhere it is a stray character, usually a typo or a conversion artifact.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E763](E763.md) | E763: prefix marker in a language that does not use it | error | ✅ |
+
 ## Alignment count mismatch (E9x)
 
 Unknown error

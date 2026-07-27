@@ -24,7 +24,7 @@ Empty GRA relation
 @Participants:	CHI Child
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello world .
-%gra:	1|2|SUBJ  2|0|ROOT
+%gra:	1|2|NSUBJ  2|0|ROOT
 @End
 ```
 

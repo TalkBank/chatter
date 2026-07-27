@@ -5,5 +5,5 @@
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	I want .
 %mor:	pro|I v|want .
-%gra:	1|2|SUBJ 2|3|OBJ 3|0|PUNCT
+%gra:	1|2|NSUBJ 2|3|OBJ 3|0|PUNCT
 @End

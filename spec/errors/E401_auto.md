@@ -28,8 +28,8 @@ Duplicate dependent tiers
 %mor:	pro|I v|want n|cookie .
 @Comment:	ERROR: Duplicate %mor tier for the same utterance
 *CHI:	you have ball .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 @Comment:	ERROR: Duplicate %gra tier for the same utterance
 @End
 ```

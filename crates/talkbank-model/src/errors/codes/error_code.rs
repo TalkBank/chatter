@@ -882,6 +882,55 @@ pub enum ErrorCode {
     #[code("E760")]
     MorItemEmptyPos,
 
+    /// `%gra` relation label whose HEAD is not one of Universal
+    /// Dependencies' 37 universal relations (`13|3|PUNCTT`, `4|2|IOB`).
+    ///
+    /// A label is `HEAD` or `HEAD-SUBTYPE`. UD fixes the head set and
+    /// deliberately leaves subtypes open and language-specific, so the
+    /// head is the only part of a label checkable against a closed
+    /// vocabulary; subtypes are never checked.
+    ///
+    /// Nothing validated relation labels before, in chatter or in CLAN
+    /// CHECK, so a corrupted label rode silently into every downstream
+    /// analysis. Grounding for the closed set (full-corpus survey,
+    /// 2026-07-26, 106,158 files, 138,565,864 relation instances): all
+    /// 37 universal heads are attested, 150 distinct labels occur, and
+    /// exactly three heads fall outside the set, `IOB` (146, a
+    /// truncation of `IOBJ`), `PAD` (5), and `PUNCTT` (1). Every
+    /// language-specific subtype passes untouched.
+    #[code("E761")]
+    GraRelationHeadNotUniversal,
+
+    /// The prefix marker `#` stands alone as a main-tier word, or opens
+    /// one (`# dog`, `#dog`).
+    ///
+    /// The marker attaches to the END of the prefix it marks (`ha# kelev`),
+    /// so neither position can be that construct, and `#` is not a word.
+    /// Language-independent: no language writes either shape. Zero
+    /// attestations corpus-wide (typed survey, 2026-07-26, over every
+    /// `#`-bearing file), so nothing legitimate is affected.
+    #[code("E762")]
+    PrefixMarkerIllegalPosition,
+
+    /// Legally-positioned prefix marker `#` on a word whose RESOLVED
+    /// language does not use the marker (`sun#`, `sun#shine` in an
+    /// English utterance).
+    ///
+    /// What is gated is the marker's PRESENCE in the word, not its
+    /// position, exactly as the digits rule (`E220`) gates the presence
+    /// of a digit. Position is [`PrefixMarkerIllegalPosition`]'s
+    /// concern, and a word rejected there is not reported here too.
+    ///
+    /// Gated on the word's own computed language, again like `E220`,
+    /// never on the file's `@Languages` header: a language-marked word
+    /// carries its own language. Grounding (typed survey, 2026-07-26):
+    /// 70,654 of 70,668 attestations are Hebrew or Arabic; the
+    /// remaining 14 are strays in seven other languages.
+    ///
+    /// [`PrefixMarkerIllegalPosition`]: Self::PrefixMarkerIllegalPosition
+    #[code("E763")]
+    PrefixMarkerLanguageNotAllowed,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================
