@@ -98,6 +98,32 @@ pub fn initialize_cache() -> Option<Arc<UnifiedCache>> {
     })
 }
 
+/// Open the validation cache rooted at an explicit directory.
+///
+/// [`initialize_cache`] resolves the cache root from the platform default
+/// (or the `TALKBANK_CHAT_CACHE_DIR` override), which is right for the
+/// shipping app: there is exactly one cache and the user does not choose
+/// where it lives.
+///
+/// In-process callers that need their OWN cache root, notably tests that
+/// must not touch the developer's real cache and must not collide with
+/// each other, take this instead. Before it existed the only lever was
+/// mutating `TALKBANK_CHAT_CACHE_DIR` with `unsafe { set_var }`, which is
+/// a process global: two tests in one binary overwrote each other's root,
+/// and the `unsafe` was only sound under a one-process-per-test runner.
+/// Passing the directory removes both problems, and the environment
+/// variable goes back to its legitimate job of configuring CHILD
+/// processes (the CLI subprocess tests set it via `Command::env`).
+pub fn initialize_cache_at(cache_dir: PathBuf) -> Option<Arc<UnifiedCache>> {
+    match UnifiedCache::with_directory(cache_dir) {
+        Ok(cache) => Some(Arc::new(cache)),
+        Err(error) => {
+            eprintln!("Warning: Failed to initialize validation cache: {error}");
+            None
+        }
+    }
+}
+
 fn bridge_validation_events(
     validation_rx: Receiver<ValidationEvent>,
     root: PathBuf,

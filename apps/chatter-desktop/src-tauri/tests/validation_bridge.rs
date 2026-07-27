@@ -17,7 +17,7 @@
 //! verify the `FrontendEvent` serialization matches what the React frontend
 //! expects.
 //!
-//! Run with: `cargo nextest run -p chatter-desktop --test validation_bridge`
+//! Run with: `cargo test -p chatter-desktop --test validation_bridge`
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -28,14 +28,16 @@ use chatter_desktop_lib::protocol;
 use chatter_desktop_lib::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ValidateRequest,
 };
-use chatter_desktop_lib::validation::{initialize_cache, validate_target_streaming_with_config};
+use chatter_desktop_lib::validation::{
+    initialize_cache, initialize_cache_at, validate_target_streaming_with_config,
+};
 use crossbeam_channel::{Receiver, Sender};
 use talkbank_transform::validation_runner::ValidationConfig;
 
 /// Test-only convenience wrapper: production always threads an explicit
 /// config and an app-lifetime cache (see `ValidationState` in `commands.rs`),
 /// but most tests here don't care about either, so this opens a fresh cache
-/// (isolated per-process by `cargo nextest`) and uses `ValidationConfig::default()`.
+/// (isolated per-process by `cargo test`) and uses `ValidationConfig::default()`.
 fn validate_target_streaming(
     target: PathBuf,
 ) -> Result<(Receiver<FrontendEvent>, Sender<()>), String> {
@@ -83,6 +85,27 @@ fn reference_corpus_cha_count() -> usize {
 fn collect_events(target: &Path) -> Vec<FrontendEvent> {
     let (rx, _cancel_tx) =
         validate_target_streaming(target.to_path_buf()).expect("desktop validation should start");
+
+    let mut events = Vec::new();
+    while let Ok(event) = rx.recv() {
+        events.push(event);
+    }
+    events
+}
+
+/// Collect events from a run whose cache is rooted at an explicit directory.
+///
+/// The cache tests need a cache root of their own: one that is not the
+/// developer's real cache, and not shared with the other cache test in this
+/// binary. Passing the directory is what makes that possible without touching
+/// process-global state.
+fn collect_events_with_cache(target: &Path, cache_dir: &Path) -> Vec<FrontendEvent> {
+    let (rx, _cancel_tx) = validate_target_streaming_with_config(
+        target.to_path_buf(),
+        ValidationConfig::default(),
+        initialize_cache_at(cache_dir.to_path_buf()),
+    )
+    .expect("desktop validation should start");
 
     let mut events = Vec::new();
     while let Ok(event) = rx.recv() {
@@ -723,9 +746,10 @@ fn desktop_bridge_renders_error_at_true_line() {
 
 /// REGRESSION GUARD: the desktop's single-file validation path must hit the
 /// same on-disk validation cache the CLI and the desktop's own directory path
-/// use, not silently skip caching. Isolates the cache to a per-process temp
-/// directory via `TALKBANK_CHAT_CACHE_DIR` (see `chatter/CLAUDE.md` "Cache
-/// Policy"); safe because `cargo nextest` runs each test in its own process.
+/// use, not silently skip caching. Isolates the cache by passing this test's
+/// own temp directory to `initialize_cache_at`, so it neither touches the
+/// developer's real cache nor collides with the other cache test in this
+/// binary.
 #[test]
 fn single_file_validation_hits_cache_on_second_run() {
     let cache_dir = std::env::temp_dir().join(format!(
@@ -737,11 +761,6 @@ fn single_file_validation_hits_cache_on_second_run() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&cache_dir).unwrap();
-    // SAFETY: this test process runs alone under `cargo nextest` (one process
-    // per test), so no other thread in this process reads/writes this env var.
-    unsafe {
-        std::env::set_var("TALKBANK_CHAT_CACHE_DIR", &cache_dir);
-    }
 
     let file = workspace_root().join("corpus/reference/core/basic-conversation.cha");
     assert!(file.exists(), "fixture missing: {}", file.display());
@@ -759,13 +778,13 @@ fn single_file_validation_hits_cache_on_second_run() {
             .expect("single-file run should produce one FileComplete with a cacheHit field")
     };
 
-    let first_run = collect_events(&file);
+    let first_run = collect_events_with_cache(&file, &cache_dir);
     assert!(
         !cache_hit_flag(&first_run),
         "first validation of a fresh cache must be a cache miss"
     );
 
-    let second_run = collect_events(&file);
+    let second_run = collect_events_with_cache(&file, &cache_dir);
     assert!(
         cache_hit_flag(&second_run),
         "second validation of the same unchanged file must hit the cache, \
@@ -861,8 +880,8 @@ fn single_file_gate_matches_shared_chat_transcript_predicate() {
 /// `validation_runner/worker.rs`: `CacheOutcome::Valid` is written only when
 /// `errors.is_empty()`). On warning-heavy real corpora this means most files
 /// re-validate every run, which is the true root of "it does not use the cache."
-/// Cache isolated per-process via `TALKBANK_CHAT_CACHE_DIR` (safe because
-/// `cargo nextest` runs each test alone).
+/// Cache isolated by passing this test's own directory to
+/// `initialize_cache_at`, so it shares no state with any other test.
 #[test]
 fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
     let cache_dir = std::env::temp_dir().join(format!(
@@ -874,11 +893,6 @@ fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&cache_dir).unwrap();
-    // SAFETY: one process per test under `cargo nextest`; no other thread here
-    // reads or writes this env var.
-    unsafe {
-        std::env::set_var("TALKBANK_CHAT_CACHE_DIR", &cache_dir);
-    }
 
     let corpus = reference_corpus();
     if !corpus.exists() {
@@ -909,14 +923,14 @@ fn directory_cache_serves_clean_files_and_rechecks_warned_files() {
             .collect()
     };
 
-    let first_run = collect_events(&corpus);
+    let first_run = collect_events_with_cache(&corpus, &cache_dir);
     let diag_files = files_with_diagnostics(&first_run);
     assert!(
         cache_hit_files(&first_run).is_empty(),
         "first validation against a fresh cache must be all misses"
     );
 
-    let second_run = collect_events(&corpus);
+    let second_run = collect_events_with_cache(&corpus, &cache_dir);
     let mut completed = 0usize;
     for event in &second_run {
         if let FrontendEvent::FileComplete { file, status } = event {

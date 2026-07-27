@@ -137,7 +137,7 @@ Three tiers, see [Desktop App Testing](../book/src/contributing/desktop-testing.
 cd apps/chatter-desktop && npm run test:unit
 
 # Tier 2: Rust integration tests (fast, run always)
-cargo nextest run -p chatter-desktop --test validation_bridge
+cargo test -p chatter-desktop --test validation_bridge
 
 # Tier 3: E2E smoke tests (slow, Linux/Windows only)
 tauri-driver &
