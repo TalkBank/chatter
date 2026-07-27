@@ -18,7 +18,7 @@
 //! This crate exposes many leaf modules, but the crate root keeps a smaller
 //! convenience surface for the most common pipeline entry points. Specialized
 //! behavior continues to live in its owning module namespace (`json`,
-//! `corpus`, `validation_runner`, `xml`, and so on).
+//! `corpus`, `validation_runner`, and so on).
 //!
 //! # Start here
 //!
@@ -26,7 +26,7 @@
 //! - [`parse_and_validate_with_parser`] is the same pipeline when you already
 //!   have a reusable [`talkbank_parser::TreeSitterParser`]
 //! - [`normalize_chat`] is the common root helper for normalized CHAT output
-//! - [`json`] and [`xml`] own the format-conversion APIs
+//! - [`json`] owns the format-conversion APIs
 //! - [`corpus`] and [`validation_runner`] own discovery, caching, and
 //!   directory-scale validation
 //!
@@ -45,7 +45,7 @@
 //!
 //! - Root re-exports such as [`parse_and_validate`] and [`normalize_chat`] are
 //!   the common one-shot pipeline helpers.
-//! - [`json`] and [`xml`] own the format-conversion surfaces.
+//! - [`json`] owns the format-conversion surfaces.
 //! - [`corpus`] and [`validation_runner`] own discovery,
 //!   caching, and directory-scale validation workflows.
 //!
@@ -90,8 +90,6 @@ pub mod transcript_merge;
 
 // Format bridges and serialization boundaries.
 pub mod json;
-// CHAT → TalkBank XML emission (Rust emitter for the TalkBank XML format).
-pub mod xml;
 
 // Corpus-scale orchestration namespaces.
 pub mod corpus;

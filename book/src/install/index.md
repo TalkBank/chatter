@@ -55,7 +55,7 @@ a Linux ARM build.)
 ## `chatter`, the command-line tool (for programmers and automation)
 
 If you are comfortable in a terminal, the `chatter` CLI validates, normalizes,
-converts (JSON / XML), lints, watches, and batch-processes CHAT files, and is
+converts (JSON), lints, watches, and batch-processes CHAT files, and is
 the right tool for scripting and CI.
 
 macOS / Linux:

@@ -4,7 +4,6 @@
 //! - `validate` - File and directory validation
 //! - `normalize` - CHAT normalization
 //! - `json` - JSON conversion (to-json, from-json)
-//! - `xml` - XML export (to-xml)
 //! - `alignment` - Alignment visualization
 //! - `watch` - Continuous validation on file changes
 //! - `lint` - Auto-fixable issue detection and repair
@@ -44,7 +43,6 @@ pub mod update;
 pub mod validate;
 pub mod validate_parallel;
 pub mod watch;
-pub mod xml;
 
 pub use alignment::show_alignment;
 pub use clean::clean_file;
@@ -60,4 +58,3 @@ pub use validate_parallel::{
     AlignmentValidationMode, CacheRefreshMode, RoundtripValidationMode, ValidationInterface,
 };
 pub use watch::watch_files;
-pub use xml::chat_to_xml;

@@ -79,8 +79,7 @@ Two implementation routes therefore exist:
 
 1. **Grammar route**: finish the custody enumeration. Honest estimate:
    a multi-week grammar project, followed by AST migration across the
-   model, the generated visitor, the second (oracle) parser, and the
-   XML emitter.
+   model, the generated visitor, and the second (oracle) parser.
 2. **Conversion route (recommended by the experiment)**: keep the
    shipping grammar, and re-associate edge-bound overlap points to top
    level during CST-to-model conversion. At that point the CA layers

@@ -96,7 +96,6 @@ fn talkbank_transform_constructor_error_types_are_nameable() {
     assert_nameable::<talkbank_transform::JsonError>();
     assert_nameable::<talkbank_transform::ManifestError>();
     assert_nameable::<talkbank_transform::build_chat::BuildChatError>();
-    assert_nameable::<talkbank_transform::xml::XmlWriteError>();
     assert_nameable::<talkbank_transform::validate::ValidationError>();
     assert_nameable::<talkbank_transform::adjudication::AdjudicationError>();
     assert_nameable::<talkbank_transform::rediarize::InvertedSpan>();

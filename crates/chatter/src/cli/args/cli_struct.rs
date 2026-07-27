@@ -31,7 +31,6 @@ Getting started:
   chatter validate myfile.cha          Validate a CHAT file
   chatter validate corpus/             Validate an entire corpus
   chatter to-json myfile.cha           Convert to JSON
-  chatter to-xml myfile.cha            Export TalkBank XML
 
 Exit codes:
   0    All files valid / command succeeded

@@ -13,7 +13,7 @@ use super::validate::{
 };
 use super::{
     AlignmentValidationMode, CacheRefreshMode, RoundtripValidationMode, ValidationInterface,
-    chat_to_json, chat_to_xml, clean_file, create_new_file, json_to_chat, lint_files,
+    chat_to_json, clean_file, create_new_file, json_to_chat, lint_files,
     normalize_chat, run_schema, run_update, show_alignment, watch_files,
 };
 
@@ -75,7 +75,6 @@ impl Commands {
             | Self::Lint { .. } => CommandFamily::Validation,
             Self::Normalize { .. }
             | Self::ToJson { .. }
-            | Self::ToXml { .. }
             | Self::FromJson { .. }
             | Self::Clean { .. }
             | Self::NewFile { .. }
@@ -404,11 +403,6 @@ impl CommandFamilyService for UtilityCommandService {
                 }
             }
             Commands::FromJson { input, output } => json_to_chat(&input, output.as_ref()),
-            Commands::ToXml {
-                input,
-                output,
-                skip_alignment,
-            } => chat_to_xml(&input, output.as_ref(), skip_alignment),
             Commands::Clean {
                 path,
                 diff_only,

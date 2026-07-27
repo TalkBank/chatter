@@ -140,8 +140,8 @@ Always regenerate from source inputs.
 - **Parsing boundaries:** Parse raw strings into newtypes at the
   boundary (file I/O, CLI args, IPC). Interior code should never
   handle raw strings for typed values.
-- **No ad-hoc format parsing.** Use real parsers (XML: `quick-xml`,
-  JSON: `serde_json`, etc.) not regex or string splitting for
+- **No ad-hoc format parsing.** Use real parsers (JSON:
+  `serde_json`, etc.) not regex or string splitting for
   structured formats. Regex is appropriate only for flat text
   pattern matching (search, normalization, validation of simple
   formats).

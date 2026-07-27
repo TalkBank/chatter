@@ -580,24 +580,6 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// Export CHAT file to TalkBank XML
-    #[command(long_about = "Export one CHAT transcript to TalkBank XML.\n\n\
-        This uses the Rust XML writer in talkbank-transform and validates the \
-        input transcript before emitting XML.\n\n\
-        XML ingest is not implemented, so there is no `from-xml` command.")]
-    ToXml {
-        /// Input CHAT file path
-        input: PathBuf,
-
-        /// Output XML file path (if not specified, prints to stdout)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-
-        /// Disable tier alignment validation during export
-        #[arg(long = "skip-alignment")]
-        skip_alignment: bool,
-    },
-
     /// Show alignment visualization for debugging
     ShowAlignment {
         /// Input CHAT file path

@@ -118,6 +118,5 @@ authoritative current list):
   boundaries layered on top of the CHAT core.
 - [Memory and Ownership](memory-and-ownership.md), Type-Driven Design
   (lands during M11 errors-and-validation work).
-- [XML Emitter](xml-emitter.md): projection.
 
 For per-crate summaries see [Crate Reference](crate-reference.md).

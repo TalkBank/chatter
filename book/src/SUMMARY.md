@@ -56,7 +56,6 @@
 - [Merge Pipeline, Test Plan](architecture/merge-test-plan.md)
 - [Merge Pipeline, Crate Architecture](architecture/merge-architecture.md)
 - [Merge Pipeline, Adjudication Workflow](architecture/adjudication-workflow.md)
-- [XML Emitter](architecture/xml-emitter.md)
 - [Errors, CHAT core](architecture/errors-and-validation/chat-core-errors.md)
 - [Validation](architecture/errors-and-validation/validation.md)
 - [CHECK Parity Audit](architecture/errors-and-validation/check-parity-audit.md)

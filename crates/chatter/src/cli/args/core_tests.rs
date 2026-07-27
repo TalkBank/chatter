@@ -20,35 +20,23 @@ fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
     }
 }
 
+/// The CLI offers no XML command in either direction.
+///
+/// TalkBank stopped generating TalkBank XML on 2025-10-29, when the last
+/// consumer said he no longer used it, and the emitter was removed from
+/// chatter on 2026-07-27. This test replaces the former
+/// `help_shows_to_xml_and_not_from_xml`, which asserted the opposite for
+/// `to-xml`; it is kept as a removal guard so the surface cannot quietly
+/// come back.
 #[test]
-fn to_xml_parses_output_flag() {
-    run_with_large_stack(|| {
-        let parsed = Cli::parse_from(["chatter", "to-xml", "sample.cha", "--output", "sample.xml"]);
-
-        let Commands::ToXml {
-            input,
-            output,
-            skip_alignment,
-        } = parsed.command
-        else {
-            panic!("expected to-xml command");
-        };
-
-        assert_eq!(input, PathBuf::from("sample.cha"));
-        assert_eq!(output, Some(PathBuf::from("sample.xml")));
-        assert!(!skip_alignment);
-    });
-}
-
-#[test]
-fn help_shows_to_xml_and_not_from_xml() {
+fn help_offers_no_xml_command() {
     run_with_large_stack(|| {
         let mut command = Cli::command();
         let mut help = Vec::new();
         command.write_long_help(&mut help).expect("render help");
         let rendered = String::from_utf8(help).expect("utf8 help");
 
-        assert!(rendered.contains("to-xml"));
+        assert!(!rendered.contains("to-xml"));
         assert!(!rendered.contains("from-xml"));
     });
 }

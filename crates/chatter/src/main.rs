@@ -31,7 +31,6 @@
 //! | `normalize`        | Re-serialize a CHAT file in canonical formatting            |
 //! | `to-json`          | Convert CHAT to JSON (conforming to the CHAT JSON Schema)  |
 //! | `from-json`        | Convert JSON back to CHAT                                  |
-//! | `to-xml`           | Export one CHAT file to TalkBank XML                       |
 //! | `show-alignment`   | Visualize main-tier / dependent-tier alignment              |
 //! | `watch`            | Re-validate on every file save (uses `notify` file watcher)|
 //! | `lint`             | Detect and optionally auto-fix common issues               |
@@ -96,7 +95,6 @@
 //! │   ├── validate/    ← single-file and directory validation
 //! │   ├── validate_parallel.rs ← parallel directory validation with progress
 //! │   ├── json.rs      ← to-json / from-json conversion
-//! │   ├── xml.rs       ← to-xml export
 //! │   ├── normalize.rs ← canonical re-serialization
 //! │   ├── watch.rs     ← file-watcher continuous validation
 //! │   ├── lint.rs      ← auto-fixable issue detection

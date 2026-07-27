@@ -61,6 +61,24 @@ version and are listed under "Changed" / "Removed".
   mirrored in the re2c oracle's front end; both files were already
   rejected, so no validity verdict changes, only the diagnosis.
 
+### Removed
+
+- **TalkBank XML support, in full.** The `to-xml` command, the
+  `talkbank_transform::xml` emitter, the `corpus/reference-xml/` golden
+  corpus, the `xml_golden` and `xml_schema_validate` suites, the bundled
+  `talkbank.xsd`/`xml.xsd` schemas, the XML Emitter book chapter, and the
+  `quick-xml` dependency.
+
+  TalkBank stopped generating TalkBank XML on 2025-10-29, when its last
+  consumer said he no longer used it, and the published `data-xml/`
+  distribution has been offline since. Phon moved off the format some time
+  ago. Nothing produced by this emitter had a consumer.
+
+  **Breaking:** `chatter to-xml` no longer exists and there is no
+  replacement. Use `chatter to-json`, which is the format the toolchain
+  actually maintains. `talkbank_transform::xml::XmlWriteError` is gone from
+  the public API surface.
+
 ### Changed
 
 - The `%gra` documentation, examples, reference corpus, and error-spec

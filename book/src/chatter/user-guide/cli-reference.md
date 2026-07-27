@@ -41,7 +41,6 @@ chatter validate PATH...
 chatter normalize INPUT
 chatter to-json INPUT
 chatter from-json INPUT
-chatter to-xml INPUT
 chatter show-alignment INPUT
 chatter watch PATH
 chatter lint PATH
@@ -159,28 +158,6 @@ with the same relative path. **Incremental by default**: skips files whose JSON 
 already newer than the source. Use `--force` to rebuild all. Use `--prune` to remove
 `.json` files with no matching `.cha` (handles renames/deletions). Use `--jobs N` for
 parallel conversion (defaults to number of CPUs).
-
-## `to-xml`
-
-Export one CHAT transcript to TalkBank XML. The transcript is validated
-before any XML is emitted, so an invalid input fails (exit 1) and writes
-nothing to stdout; a failed export never leaves a partial document. This
-command is export-only: XML ingest is not implemented, so there is no
-`from-xml`.
-
-```bash
-chatter to-xml input.cha                  # XML to stdout
-chatter to-xml input.cha -o output.xml    # XML to a file
-chatter to-xml input.cha --skip-alignment # skip dependent-tier alignment checks
-```
-
-The output is TalkBank XML in the `http://www.talkbank.org/ns/talkbank`
-namespace (referencing `talkbank.xsd`). Writing to `--output` prints a
-one-line `✓ Converted ... to ...` confirmation on stderr; writing to
-stdout prints only the XML.
-
-Flags: `-o, --output <PATH>` (stdout if omitted); `--skip-alignment`
-(disable dependent-tier alignment validation during export).
 
 ## Editing and Inspection Commands
 

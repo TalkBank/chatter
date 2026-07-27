@@ -48,7 +48,7 @@ impl PosCategory {
     /// refinements (`n:prop`, `det:art`, `pro:poss:det`); the model
     /// stores the full tag as one interned string and consumers
     /// decompose it where the boundary matters (UD UPOS mapping,
-    /// TalkBank XML `<pos><c>head</c><s>sub</s>…</pos>` emission).
+    /// the head/subtype split that downstream consumers rely on).
     /// For an unrefined tag (`n`) this returns the whole tag.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Part_of_Speech>
@@ -379,7 +379,7 @@ mod tests {
 
     /// A colon-refined tag splits into head + one subcategory.
     ///
-    /// Drives the TalkBank XML `<pos><c>n</c><s>let</s></pos>` shape.
+    /// Drives the head/subtype split of a compound part of speech.
     #[test]
     fn test_pos_category_single_subcategory() {
         let pos = PosCategory::new("n:let");

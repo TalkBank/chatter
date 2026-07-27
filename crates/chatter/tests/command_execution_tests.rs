@@ -15,7 +15,7 @@
 //! `command_surface_manifest.rs` proves every published subcommand is
 //! listed in `--help`, but that is only a help-contract check: several
 //! shipping subcommands had no test that actually RAN them against real
-//! input. The gap (confirmed 2026-06-13) covered `to-xml`, `clean`,
+//! input. The gap (confirmed 2026-06-13) covered `clean`,
 //! `lint`, `new-file`, `schema`, `validate-utseg`, and `watch`.
 //!
 //! This file closes the gap with subprocess-level characterization tests
@@ -153,74 +153,15 @@ fn new_file_output_is_valid_chat() -> Result<(), TestError> {
 }
 
 // ============================================================================
-// to-xml
+// to-xml: REMOVED 2026-07-27
 // ============================================================================
-
-/// `chatter to-xml` emits TalkBank XML to stdout for a valid transcript.
-#[test]
-fn to_xml_emits_xml_to_stdout() -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    harness
-        .chatter_cmd()
-        .arg("to-xml")
-        .arg(reference_fixture(CONVERSATION_FIXTURE))
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-        ))
-        .stdout(predicate::str::contains("<CHAT"))
-        .stdout(predicate::str::contains("www.talkbank.org/ns/talkbank"));
-    Ok(())
-}
-
-/// `chatter to-xml --output` writes the XML to a file (which begins with
-/// the XML declaration) and reports success.
-#[test]
-fn to_xml_writes_output_file() -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    let dir = tempdir()?;
-    let out = dir.path().join("out.xml");
-
-    harness
-        .chatter_cmd()
-        .arg("to-xml")
-        .arg(reference_fixture(CONVERSATION_FIXTURE))
-        .arg("--output")
-        .arg(&out)
-        .assert()
-        .success()
-        // The XML goes to the file, not stdout; the confirmation is on stderr.
-        .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("Converted"));
-
-    let body = fs::read_to_string(&out)?;
-    assert!(body.starts_with("<?xml"), "output is not XML:\n{body}");
-    Ok(())
-}
-
-/// `chatter to-xml` validates the input before emitting: an invalid
-/// transcript fails (exit 1) and produces NO XML on stdout, so a failed
-/// export never leaves a partial document behind.
-#[test]
-fn to_xml_rejects_invalid_input_without_emitting() -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    let dir = tempdir()?;
-    let bad = dir.path().join("invalid.cha");
-    fs::write(&bad, INVALID_CHAT_MISSING_END)?;
-
-    let output = harness.chatter_cmd().arg("to-xml").arg(&bad).output()?;
-    assert!(
-        !output.status.success(),
-        "to-xml should fail on invalid input"
-    );
-    assert!(
-        output.stdout.is_empty(),
-        "to-xml emitted XML despite invalid input:\n{}",
-        String::from_utf8_lossy(&output.stdout)
-    );
-    Ok(())
-}
+//
+// `chatter to-xml` and the whole XML surface were removed. TalkBank stopped
+// generating TalkBank XML on 2025-10-29, when the last consumer said he no
+// longer used it. Three `to_xml_*` tests lived here; the
+// removal is guarded instead by `help_offers_no_xml_command` in
+// `cli/args/core_tests.rs`, which asserts the CLI offers no XML command in
+// either direction.
 
 // ============================================================================
 // clean
