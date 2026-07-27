@@ -29,8 +29,17 @@ build-release:
     cargo build --workspace --release
 
 # Run the full workspace test suite via cargo.
+# Local test runner is PLAIN cargo test, not nextest. nextest execs every
+# test binary up front to enumerate (~56 here), and on macOS that burst
+# wedges syspolicyd, after which no new binary can start on the machine
+# until `sudo killall syspolicyd`. It has degraded every session for
+# months. cargo test runs binaries one at a time, which the serial assessor
+# absorbs fine. CI still uses nextest: it runs on Linux, where there is no
+# syspolicyd and the burst is free. The race that originally mandated
+# nextest (shared cache migration) is fixed: cache init now takes an
+# exclusive advisory lock across threads AND processes.
 test:
-    cargo nextest run --workspace
+    cargo test --workspace
     cargo test --doc --workspace
 
 # Line/region/function coverage over the whole workspace via cargo-llvm-cov,

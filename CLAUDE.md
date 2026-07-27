@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-25 22:32 EDT
+**Last modified:** 2026-07-27 16:01 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -46,10 +46,23 @@ or CLAN still say.
 
 ## Danger rules (each has burned a session; no exceptions)
 
-1. **Tests run under `cargo nextest run`, never bare `cargo test`,**
-   in CI, the gate, and locally (`just test` does this). `cargo test`
-   runs one process and races the shared cache migration. Doctests
-   are separate: `cargo test --doc --workspace`.
+1. **CI runs `cargo nextest run`; LOCAL runs plain `cargo test`**
+   (`just test` does this). Reversed 2026-07-27. nextest execs every
+   test binary up front to enumerate them (~56 here); on macOS that
+   burst wedges `syspolicyd`, after which NO new binary can start on
+   the machine until `sudo killall syspolicyd` or a reboot. Franklin,
+   2026-07-27, correcting an undercount: this has degraded EVERY
+   session for months, not a few isolated incidents, and the lost time
+   dwarfs anything nextest's parallelism ever saved.
+   `cargo test` runs binaries one at a time,
+   a trickle the serial assessor absorbs. CI is unaffected (Linux has
+   no syspolicyd), so it keeps nextest and per-test isolation.
+   The original reason for mandating nextest, that `cargo test` races
+   the shared cache migration in one process, is FIXED: cache init now
+   takes an exclusive advisory lock across threads AND processes.
+   Narrow `cargo nextest run -p X --test Y` stays fine locally; it is
+   whole-crate and whole-workspace nextest that bursts.
+   Doctests are separate: `cargo test --doc --workspace`.
 2. **Never run two cargo-family commands concurrently against one
    workspace** (this root workspace or `spec/`'s). The target-dir
    lock silently queues them; wall clock explodes. If both are truly
