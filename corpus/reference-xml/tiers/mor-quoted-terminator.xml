@@ -28,14 +28,14 @@
   <u who="CHI" uID="u0">
     <w>see<mor type="mor"><mw><pos><c>verb</c></pos><stem>see</stem></mw><gra type="gra" index="1" head="0" relation="ROOT"/></mor></w>
     <w>it<mor type="mor"><mw><pos><c>pron</c></pos><stem>it</stem></mw><gra type="gra" index="2" head="1" relation="OBJ"/></mor></w>
-    <w>say<mor type="mor"><mw><pos><c>verb</c></pos><stem>say</stem></mw><gra type="gra" index="3" head="1" relation="COMP"/></mor></w>
+    <w>say<mor type="mor"><mw><pos><c>verb</c></pos><stem>say</stem></mw><gra type="gra" index="3" head="1" relation="CCOMP"/></mor></w>
     <t type="quotation precedes"><mor type="mor"><mt type="quotation precedes"/><gra type="gra" index="4" head="3" relation="PUNCT"/></mor></t>
 
   </u>
   <u who="MOT" uID="u1">
     <w>the<mor type="mor"><mw><pos><c>det</c></pos><stem>the</stem></mw><gra type="gra" index="1" head="2" relation="DET"/></mor></w>
     <w>bear<mor type="mor"><mw><pos><c>noun</c></pos><stem>bear</stem></mw><gra type="gra" index="2" head="0" relation="ROOT"/></mor></w>
-    <w>said<mor type="mor"><mw><pos><c>verb</c></pos><stem>say</stem><mk type="sfx">Past</mk></mw><gra type="gra" index="3" head="2" relation="COMP"/></mor></w>
+    <w>said<mor type="mor"><mw><pos><c>verb</c></pos><stem>say</stem><mk type="sfx">Past</mk></mw><gra type="gra" index="3" head="2" relation="CCOMP"/></mor></w>
     <t type="quotation next line"><mor type="mor"><mt type="quotation next line"/><gra type="gra" index="4" head="3" relation="PUNCT"/></mor></t>
 
   </u>

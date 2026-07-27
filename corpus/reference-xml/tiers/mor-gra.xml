@@ -33,7 +33,7 @@
 
   </u>
   <u who="MOT" uID="u1">
-    <w>Mommy<mor type="mor"><mw><pos><c>propn</c></pos><stem>Mommy</stem></mw><gra type="gra" index="1" head="3" relation="SUBJ"/></mor></w>
+    <w>Mommy<mor type="mor"><mw><pos><c>propn</c></pos><stem>Mommy</stem></mw><gra type="gra" index="1" head="3" relation="NSUBJ"/></mor></w>
     <w>will<mor type="mor"><mw><pos><c>aux</c></pos><stem>will</stem></mw><gra type="gra" index="2" head="3" relation="AUX"/></mor></w>
     <w>get<mor type="mor"><mw><pos><c>verb</c></pos><stem>get</stem><mk type="sfx">Inf</mk></mw><gra type="gra" index="3" head="0" relation="ROOT"/></mor></w>
     <w>them<mor type="mor"><mw><pos><c>pron</c></pos><stem>they</stem><mk type="sfx">Prs</mk><mk type="sfx">Acc</mk><mk type="sfx">Plur</mk></mw><gra type="gra" index="4" head="3" relation="OBJ"/></mor></w>

@@ -220,7 +220,7 @@ expression: snapshot
               {
                 "head": 2,
                 "index": 1,
-                "relation": "SUBJ"
+                "relation": "NSUBJ"
               },
               {
                 "head": 0,
@@ -313,7 +313,7 @@ expression: snapshot
               {
                 "head": 2,
                 "index": 1,
-                "relation": "MOD"
+                "relation": "AMOD"
               },
               {
                 "head": 0,

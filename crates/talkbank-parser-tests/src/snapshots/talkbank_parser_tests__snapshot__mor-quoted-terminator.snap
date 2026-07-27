@@ -160,7 +160,7 @@ expression: snapshot
               {
                 "head": 1,
                 "index": 3,
-                "relation": "COMP"
+                "relation": "CCOMP"
               },
               {
                 "head": 3,
@@ -268,7 +268,7 @@ expression: snapshot
               {
                 "head": 2,
                 "index": 3,
-                "relation": "COMP"
+                "relation": "CCOMP"
               },
               {
                 "head": 3,

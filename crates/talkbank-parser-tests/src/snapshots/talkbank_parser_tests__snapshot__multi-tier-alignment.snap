@@ -142,7 +142,7 @@ expression: snapshot
               {
                 "head": 2,
                 "index": 1,
-                "relation": "VOC"
+                "relation": "VOCATIVE"
               },
               {
                 "head": 0,
@@ -150,14 +150,14 @@ expression: snapshot
                 "relation": "ROOT"
               },
               {
-                "head": 2,
+                "head": 4,
                 "index": 3,
-                "relation": "JCT"
+                "relation": "CASE"
               },
               {
-                "head": 3,
+                "head": 2,
                 "index": 4,
-                "relation": "POBJ"
+                "relation": "OBL"
               },
               {
                 "head": 2,
@@ -346,12 +346,12 @@ expression: snapshot
               {
                 "head": 3,
                 "index": 1,
-                "relation": "COM"
+                "relation": "DISCOURSE"
               },
               {
                 "head": 3,
                 "index": 2,
-                "relation": "SUBJ"
+                "relation": "NSUBJ"
               },
               {
                 "head": 0,

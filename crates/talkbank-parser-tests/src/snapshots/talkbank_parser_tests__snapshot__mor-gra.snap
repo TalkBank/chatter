@@ -328,7 +328,7 @@ expression: snapshot
               {
                 "head": 3,
                 "index": 1,
-                "relation": "SUBJ"
+                "relation": "NSUBJ"
               },
               {
                 "head": 3,

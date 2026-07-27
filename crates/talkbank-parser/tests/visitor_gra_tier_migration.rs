@@ -131,7 +131,7 @@ fn valid_multi_relation_gra_parses_byte_identical_with_zero_diagnostics() {
             (1, 2, "NSUBJ".to_string()),
             (2, 0, "ROOT".to_string()),
             (3, 2, "OBJ".to_string()),
-            (4, 2, "ADV".to_string()),
+            (4, 2, "ADVMOD".to_string()),
             (5, 2, "PUNCT".to_string()),
         ],
         "every relation must decode to its exact index|head|relation, in order"

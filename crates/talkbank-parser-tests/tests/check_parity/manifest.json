@@ -355,9 +355,11 @@
    "check_code": 37,
    "check_message": "Undeclared prefix.",
    "fixture": "CHECK_037_undeclared_prefix.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
+   "status": "parity",
+   "expected_chatter_codes": [
+    "E763"
+   ],
+   "note": "INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 37 is a depfile-membership check, a token undeclared in a corpus depfile is not universally invalid CHAT, and chatter never validates external-config membership. What changed is this FIXTURE. Its word `a+un#go` carries a word-internal prefix marker in an English utterance, and E763 rejects the marker in any language that does not use it (heb, ara). Same verdict as CHECK on this input, different and independent grounds. A depfile-undeclared prefix in Hebrew or Arabic would still be accepted, which is the divergence the 2026-07-12 ruling protects."
   },
   {
    "check_code": 38,
