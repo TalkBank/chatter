@@ -6,6 +6,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Overlaps>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters>
 
+mod word_recursion;
+
+pub(crate) use word_recursion::validate_words_at_every_depth;
+
 use crate::model::{BracketedItem, MainTier, UtteranceContent};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 

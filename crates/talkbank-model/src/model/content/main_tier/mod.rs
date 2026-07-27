@@ -383,22 +383,20 @@ impl crate::validation::Validate for MainTier {
             .or_else(|| context.shared.default_language.clone());
         let word_context = context.clone().with_tier_language(tier_language);
 
-        // Validate all content items with the appropriate language
-        for content_item in content_items.iter() {
-            match content_item {
-                UtteranceContent::Word(word) => {
-                    word.validate(&word_context, errors);
-                }
-                UtteranceContent::AnnotatedWord(annotated_word) => {
-                    annotated_word.validate(&word_context, errors);
-                }
-                UtteranceContent::ReplacedWord(replaced_word) => {
-                    replaced_word.validate(&word_context, errors);
-                }
-                // Future: Validate other content types (events, pauses, groups, etc.)
-                _ => {}
-            }
-        }
+        // Validate every word at EVERY depth with the appropriate language.
+        //
+        // This iterated flatly until 2026-07-27, matching only the three
+        // word-like variants with a `_ => {}` catch-all swallowing every
+        // container. Words nested in a retrace, a reformulation, or an angle
+        // group were therefore never word-validated at all: not for digits,
+        // not for illegal characters, not for anything. The same token was
+        // rejected outside a group and accepted inside one, and E220 carried
+        // that hole for as long as the rule has existed.
+        crate::validation::main_tier::validate_words_at_every_depth(
+            content_items,
+            &word_context,
+            errors,
+        );
 
         // Validate bullet if present
         if let Some(bullet) = &tier_content.bullet {
