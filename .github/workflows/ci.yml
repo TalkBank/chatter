@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # Pinned in lockstep with rust-toolchain.toml (channel =
-      # "1.96.1"). Drift against latest-stable is caught by the
+      # "1.97.1"). Drift against latest-stable is caught by the
       # weekly .github/workflows/clippy-rolling.yml job; bump this
       # action version + the rust-toolchain.toml channel together
       # when that job goes red.
@@ -212,3 +212,103 @@ jobs:
       # every *.sh plus shebang scripts via git ls-files. See CLAUDE.md.
       - name: shellcheck all shell scripts
         run: bash scripts/lint/shellcheck-all.sh
+
+  grammar:
+    name: Grammar (generate staleness, tree-sitter test, queries)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: grammar
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: grammar/.nvmrc
+
+      # Install ONLY the tree-sitter CLI, not the package's full dev tree.
+      # `npm ci` here would also build the `tree-sitter` Node BINDING, whose
+      # postinstall runs `node-gyp-build` and needs a native toolchain; that
+      # binding is only used by the Node-binding tests, which this job does not
+      # run. Installing the CLI alone removes a compile step and a whole class
+      # of CI-only failure.
+      #
+      # The version range is read out of `grammar/package.json` rather than
+      # written here, so the manifest stays the single source of truth and this
+      # job cannot silently drift onto a different generator than developers
+      # use. Verified 2026-07-26: the declared `^0.26.11` resolves to 0.26.11,
+      # which is what the local CLI runs. A generator skew would make the
+      # staleness check below emit spurious diffs, so this matters.
+      - name: Install pinned tree-sitter CLI
+        run: |
+          version=$(node -p "require('./package.json').devDependencies['tree-sitter-cli']")
+          echo "installing tree-sitter-cli@${version}"
+          npm install -g "tree-sitter-cli@${version}"
+          tree-sitter --version
+
+      # DANGER RULE 3 (CLAUDE.md), now actually enforced. `src/parser.c` is
+      # GENERATED from `grammar.js`, and a stale parser.c is invisible to every
+      # other gate we have: the Rust build compiles whatever parser.c is on
+      # disk, so the entire Rust suite happily tests the OLD grammar and passes.
+      # `tree-sitter test` does not catch it either. Until 2026-07-26 nothing in
+      # the CI that actually runs checked this at all; the check existed only in
+      # `grammar/.github/workflows/ci.yml`, which GitHub never executes because
+      # workflows are read solely from the repository root. Verified in sync at
+      # the time this job was added.
+      - name: Generated parser is in sync with grammar.js
+        run: |
+          tree-sitter generate
+          git diff --exit-code src/parser.c src/grammar.json src/node-types.json
+
+      # The grammar's own corpus, including the wild-data-derived
+      # marker-density tests under test/corpus/word_markers/ that exist because
+      # of the v0.3.3 word-fragmentation regression. 199 parses at time of
+      # wiring.
+      - name: tree-sitter test
+        run: tree-sitter test
+
+      # Editor queries reference grammar node types by name, so they rot
+      # silently whenever a node is renamed or removed: nothing else reads them.
+      # `tree-sitter query` fails if a pattern does not compile against the
+      # grammar, which is the property being gated. All four were valid when
+      # this job was added.
+      - name: Validate highlight and editor queries
+        run: |
+          for query_file in queries/*.scm; do
+            echo "checking $query_file"
+            tree-sitter query "$query_file" \
+              ../corpus/reference/edge-cases/postcodes-and-gems.cha >/dev/null
+          done
+
+  dependency-audit:
+    name: Dependency policy (cargo-deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # `deny.toml` has existed since the v0.1.0 release prep but nothing ever
+      # ran it, so the license + advisory policy was decorative for months.
+      # Wired up 2026-07-26. This matters more here than in most repos: these
+      # crates are published to crates.io as libraries, so a
+      # license-incompatible or advisory-bearing dependency propagates to every
+      # downstream consumer rather than staying our problem.
+      #
+      # `cargo deny check` runs all four gates (advisories, bans, licenses,
+      # sources) and needs only the manifests and the lockfile, not a build, so
+      # this job stays fast and needs no cargo cache.
+      #
+      # Pinned to the floating major `v2` (verified to resolve 2026-07-26;
+      # latest release was v2.85.2). The sibling repo uses the tool-named ref
+      # `@cargo-deny`; the `@v2` + `tool:` form is the documented one and pins
+      # to a real major rather than a moving per-tool ref.
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      # `--locked` is a TOP-LEVEL cargo-deny option, not a `check` subcommand
+      # flag: `cargo deny check --locked` fails to parse.
+      - name: cargo deny check
+        run: cargo deny --locked check

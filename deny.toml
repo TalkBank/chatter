@@ -43,13 +43,16 @@ confidence-threshold = 0.93
 # RUSTSEC-2025-0141).
 unmaintained = "workspace"
 # RUSTSEC advisories with no fixed upstream release, ignored with a documented
-# reason and revisited periodically.
-ignore = [
-    # rsa: "Marvin Attack" potential key recovery via timing sidechannels
-    # (RUSTSEC-2023-0071). No patched upstream release exists; the crate is a
-    # transitive dependency and is not on a latency-sensitive chatter path.
-    "RUSTSEC-2023-0071",
-]
+# reason and revisited periodically. Each entry must carry the advisory id, the
+# crate, why no fix is available, and why it is safe for us.
+#
+# EMPTY as of 2026-07-26. The sole prior entry, RUSTSEC-2023-0071 (rsa, "Marvin
+# Attack" timing sidechannel), was removed because `cargo deny check` reports
+# `advisory-not-detected` for it: rsa is no longer anywhere in the dependency
+# tree, so the exception was granting a standing waiver for a risk we do not
+# carry. A stale ignore is worse than no ignore, because it silently pre-approves
+# the advisory should a future dependency reintroduce the crate.
+ignore = []
 
 [bans]
 # The dependency tree legitimately carries multiple major versions of some

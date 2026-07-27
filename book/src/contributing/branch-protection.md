@@ -1,7 +1,7 @@
 # Branch Protection and Required CI Checks
 
 **Status:** Current
-**Last updated:** 2026-06-15 15:00 EDT
+**Last updated:** 2026-07-26 20:04 EDT
 
 This page defines the required status checks and protection policy for `main`.
 
@@ -16,10 +16,27 @@ Enable branch protection for `main` with:
 ## Required Status Checks
 Configure these CI checks as required. The names are the GitHub check names,
 which come from each job's `name:` in `.github/workflows/ci.yml`; that
-workflow runs on every pull request to `main`:
+workflow runs on every pull request to `main`. This is every job that
+workflow defines, so the required set and the workflow do not drift apart:
+
 - `Rust build + test`
+- `wasm32 check (model + re2c parser)`
 - `mdBook build`
 - `Rust version pins in sync`
+- `App version in sync`
+- `Shell scripts (shellcheck, strictest)`
+- `Grammar (generate staleness, tree-sitter test, queries)`
+- `Dependency policy (cargo-deny)`
+
+This list had drifted: until 2026-07-26 it named only the first, third and
+fourth, having been written before the wasm, app-version-sync and shellcheck
+jobs existed. A required-check list that silently omits jobs is worse than no
+list, because it reads as a deliberate selection rather than an oversight.
+**When you add a job to `ci.yml`, add it here in the same commit.**
+
+Note that this page states the INTENDED required set; the live setting lives
+in the repository's branch-protection configuration on GitHub and is changed
+there by a maintainer, not by editing this file.
 
 One other workflow is deliberately NOT in the required set:
 - `cross-platform.yml` (the Ubuntu + macOS + Windows matrix) runs on push to
