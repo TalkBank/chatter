@@ -134,14 +134,20 @@ fn report_if_not_universal(
         None => format!("\"{label}\""),
     };
 
+    // The span covers the whole tier, so the message carries the relation's
+    // own triple. A tier can hold dozens of relations and a corpus editor
+    // fixing these by hand needs to know WHICH one, not just that one of them
+    // is wrong.
+    let triple = format!("{}|{}|{}", relation.index, relation.head, label);
+
     errors.report(
         ParseError::at_span(
             ErrorCode::GraRelationHeadNotUniversal,
             Severity::Error,
             span,
             format!(
-                "%gra relation {what} is not a Universal Dependencies relation: \
-                 \"{head}\" is not one of the 37 universal relations"
+                "%gra relation {triple}: {what} is not a Universal Dependencies \
+                 relation, \"{head}\" is not one of the 37 universal relations"
             ),
         )
         .with_suggestion(
