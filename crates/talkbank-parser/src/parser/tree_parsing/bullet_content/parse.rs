@@ -97,7 +97,7 @@ pub fn parse_bullet_content(node: Node, source: &str, errors: &impl ErrorSink) -
                 // its trailing space, so the delimiters between segments are
                 // re-inserted by the serializer.
                 let text = extract_utf8_text(child, source, errors, "text_segment", "");
-                let text = normalize_free_text_spacing(&text);
+                let text = normalize_free_text_spacing(text);
                 if !text.is_empty() {
                     segments.push(BulletContentSegment::text(text));
                 }

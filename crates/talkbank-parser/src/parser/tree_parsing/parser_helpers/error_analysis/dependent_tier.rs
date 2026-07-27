@@ -52,32 +52,31 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
     // is the ERROR node (then the `%mor:` prefix is in the text, same
     // convention as the `%gra:` branch above). The span is narrowed to
     // the offending item.
-    if tier_type == Some("mor")
+    if (tier_type == Some("mor")
         || error_text.contains("%mor:")
-        || super::dedicated::on_mor_tier_line(source, start)
-    {
-        if let Some(item) = super::dedicated::mor_item_with_empty_pos(
+        || super::dedicated::on_mor_tier_line(source, start))
+        && let Some(item) = super::dedicated::mor_item_with_empty_pos(
             error_text,
             super::dedicated::at_item_boundary(source, start),
-        ) {
-            // Narrow the span to the item; `find` re-locates the same
-            // first occurrence `split_whitespace` matched.
-            let (item_start, item_end) = match error_text.find(item) {
-                Some(offset) => (start + offset, start + offset + item.len()),
-                None => (start, end),
-            };
-            return ParseError::new(
-                ErrorCode::MorItemEmptyPos,
-                Severity::Error,
-                SourceLocation::from_offsets(item_start, item_end),
-                ErrorContext::new(source, item_start..item_end, item),
-                format!("MOR item '{item}' has an empty part-of-speech field"),
-            )
-            .with_suggestion(
-                "Every %mor item is pos|stem with a non-empty part of speech before the pipe \
-                 (e.g., pro|we, v|go)",
-            );
-        }
+        )
+    {
+        // Narrow the span to the item; `find` re-locates the same
+        // first occurrence `split_whitespace` matched.
+        let (item_start, item_end) = match error_text.find(item) {
+            Some(offset) => (start + offset, start + offset + item.len()),
+            None => (start, end),
+        };
+        return ParseError::new(
+            ErrorCode::MorItemEmptyPos,
+            Severity::Error,
+            SourceLocation::from_offsets(item_start, item_end),
+            ErrorContext::new(source, item_start..item_end, item),
+            format!("MOR item '{item}' has an empty part-of-speech field"),
+        )
+        .with_suggestion(
+            "Every %mor item is pos|stem with a non-empty part of speech before the pipe \
+             (e.g., pro|we, v|go)",
+        );
     }
 
     // E702: Invalid %mor format - missing pipe (ERROR within mor_word)
