@@ -1,7 +1,7 @@
 # Pre-Release Audit Backlog
 
 **Status:** Current
-**Last updated:** 2026-06-15 15:05 EDT
+**Last updated:** 2026-07-28 09:28 EDT
 
 P2 (non-release-blocking) findings deferred from the v0.1.0 audit
 passes, plus the security-advisory triage. P0/P1 items are fixed in
@@ -51,6 +51,36 @@ and the chatter-desktop installers.
   `npm audit fix --force` wdio/mocha bump. Not worth forcing for an
   experimental app's test harness at v0.1.0. Defer to a focused wdio
   upgrade.
+
+## Re-triage 2026-07-28 (post v0.4.1)
+
+Four open alerts. Same organizing question: does it reach a shipped artifact?
+**None do, and none has an upstream fix.**
+
+| Advisory | Severity | Path | Shipped? | Patched version |
+|---|---|---|---|---|
+| `fast-xml-parser` | high | `@wdio/cli` -> `@wdio/utils` -> `edgedriver` | No | none |
+| `js-yaml` | high | `@wdio/mocha-framework` -> `mocha` | No | none |
+| `brace-expansion` | high | `@wdio/cli` -> `glob` -> `minimatch` | No | none |
+| `glib` 0.18.5 | medium | transitive Tauri GTK (Linux) | No (not in macOS builds) | none |
+
+All three npm advisories arrive through `@wdio/*`, which `package.json` lists
+under `devDependencies`: the WebdriverIO E2E harness. It is not bundled into
+the desktop app, so the DoS vectors (entity expansion, quadratic YAML merge
+keys, exponential brace expansion) are reachable only by someone running our
+own test suite against hostile input they supplied themselves.
+
+`glib` is an unsoundness in `Iterator`/`DoubleEndedIterator` impls, reached
+transitively through Tauri's Linux GTK stack, and is not compiled into the
+macOS artifacts at all.
+
+**Action: none available.** Every advisory reports `first_patched_version:
+none`, so there is nothing to bump to. Re-check when upstream ships fixes;
+these will keep appearing in the public Dependabot tab until then, which is
+expected rather than neglected.
+
+Verified with `gh api repos/TalkBank/chatter/dependabot/alerts` and
+`npm ls <pkg>` in `apps/chatter-desktop`, 2026-07-28.
 
 ### Note for the cutover
 
