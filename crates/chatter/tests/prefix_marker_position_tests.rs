@@ -103,7 +103,11 @@ fn validate_rejects_a_word_opening_with_the_prefix_marker() -> Result<(), TestEr
 /// pass the two tests above, which would leave the actual invariant unstated.
 #[test]
 fn validate_rejects_a_standalone_prefix_marker_in_hebrew_too() -> Result<(), TestError> {
-    assert_validation("standalone_heb.cha", &chat_file("heb", "ha# # kelev"), false)
+    assert_validation(
+        "standalone_heb.cha",
+        &chat_file("heb", "ha# # kelev"),
+        false,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +135,11 @@ fn validate_rejects_a_word_final_prefix_marker_in_english() -> Result<(), TestEr
 /// contain a Hebrew word, and that word brings its own rules with it.
 #[test]
 fn validate_accepts_a_hebrew_marked_word_inside_an_english_file() -> Result<(), TestError> {
-    assert_validation("switch.cha", &chat_file("eng, heb", "the ha#@s:heb kelev@s:heb"), true)
+    assert_validation(
+        "switch.cha",
+        &chat_file("eng, heb", "the ha#@s:heb kelev@s:heb"),
+        true,
+    )
 }
 
 /// The converse of the previous test, and a real corpus case.
@@ -143,7 +151,11 @@ fn validate_accepts_a_hebrew_marked_word_inside_an_english_file() -> Result<(), 
 #[test]
 fn validate_rejects_a_marker_word_tagged_as_a_switch_to_a_language_without_the_marker()
 -> Result<(), TestError> {
-    assert_validation("mistagged.cha", &chat_file("heb, eng", "ha#@s:eng kelev"), false)
+    assert_validation(
+        "mistagged.cha",
+        &chat_file("heb, eng", "ha#@s:eng kelev"),
+        false,
+    )
 }
 
 /// Word-INTERNAL markers remain legal in Hebrew.

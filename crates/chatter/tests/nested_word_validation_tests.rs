@@ -93,12 +93,20 @@ fn a_digit_bearing_word_is_rejected_inside_a_retrace() -> Result<(), TestError> 
 
 #[test]
 fn a_digit_bearing_word_is_rejected_inside_a_reformulation() -> Result<(), TestError> {
-    assert_validation("reformulation.cha", &chat_file("hello3 [//] hello dog"), false)
+    assert_validation(
+        "reformulation.cha",
+        &chat_file("hello3 [//] hello dog"),
+        false,
+    )
 }
 
 #[test]
 fn a_digit_bearing_word_is_rejected_inside_an_angle_group() -> Result<(), TestError> {
-    assert_validation("group.cha", &chat_file("<hello3 there> [/] hello there dog"), false)
+    assert_validation(
+        "group.cha",
+        &chat_file("<hello3 there> [/] hello there dog"),
+        false,
+    )
 }
 
 /// The prefix-marker rule gets the same guarantee, so a language-gated check

@@ -32,8 +32,8 @@
 //! what licenses treating the universal set as closed rather than as a
 //! recommendation.
 
-use crate::model::{GrammaticalRelation, Utterance};
 use crate::model::dependent_tier::DependentTier;
+use crate::model::{GrammaticalRelation, Utterance};
 use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// Separates a Universal Dependencies head from its language-specific subtype.
@@ -54,14 +54,46 @@ const SUBTYPE_SEPARATOR: char = '\u{2D}';
 /// be diffed against that page by eye.
 const UNIVERSAL_RELATIONS: [&str; 37] = [
     // Core arguments
-    "NSUBJ", "OBJ", "IOBJ", "CSUBJ", "CCOMP", "XCOMP",
+    "NSUBJ",
+    "OBJ",
+    "IOBJ",
+    "CSUBJ",
+    "CCOMP",
+    "XCOMP",
     // Non-core dependents
-    "OBL", "VOCATIVE", "EXPL", "DISLOCATED", "ADVCL", "ADVMOD", "DISCOURSE", "AUX", "COP", "MARK",
+    "OBL",
+    "VOCATIVE",
+    "EXPL",
+    "DISLOCATED",
+    "ADVCL",
+    "ADVMOD",
+    "DISCOURSE",
+    "AUX",
+    "COP",
+    "MARK",
     // Nominal dependents
-    "NMOD", "APPOS", "NUMMOD", "ACL", "AMOD", "DET", "CLF", "CASE",
+    "NMOD",
+    "APPOS",
+    "NUMMOD",
+    "ACL",
+    "AMOD",
+    "DET",
+    "CLF",
+    "CASE",
     // Coordination, multiword expressions, headless, loose, special, other
-    "CONJ", "CC", "FIXED", "FLAT", "COMPOUND", "LIST", "PARATAXIS", "ORPHAN", "GOESWITH",
-    "REPARANDUM", "PUNCT", "ROOT", "DEP",
+    "CONJ",
+    "CC",
+    "FIXED",
+    "FLAT",
+    "COMPOUND",
+    "LIST",
+    "PARATAXIS",
+    "ORPHAN",
+    "GOESWITH",
+    "REPARANDUM",
+    "PUNCT",
+    "ROOT",
+    "DEP",
 ];
 
 /// Split a relation label into its head and optional subtype.
@@ -167,12 +199,11 @@ mod tests {
     fn universal_set_holds_exactly_thirty_seven_distinct_relations() {
         let mut sorted = UNIVERSAL_RELATIONS;
         sorted.sort_unstable();
-        let distinct = sorted.len()
-            - sorted
-                .windows(2)
-                .filter(|pair| pair[0] == pair[1])
-                .count();
-        assert_eq!(distinct, 37, "the universal set must hold 37 distinct heads");
+        let distinct = sorted.len() - sorted.windows(2).filter(|pair| pair[0] == pair[1]).count();
+        assert_eq!(
+            distinct, 37,
+            "the universal set must hold 37 distinct heads"
+        );
     }
 
     /// `HEAD-SUBTYPE` splits into its two documented parts.

@@ -77,8 +77,7 @@ const CHAT_WITH_LANGUAGE_SPECIFIC_SUBTYPE: &str = r#"@UTF8
 "#;
 
 #[test]
-fn validate_rejects_a_gra_relation_head_outside_the_ud_universal_set()
--> Result<(), TestError> {
+fn validate_rejects_a_gra_relation_head_outside_the_ud_universal_set() -> Result<(), TestError> {
     let dir = tempdir()?;
     let file_path = dir.path().join("unknown_relation_head.cha");
     fs::write(&file_path, CHAT_WITH_UNKNOWN_RELATION_HEAD)?;
@@ -93,8 +92,7 @@ fn validate_rejects_a_gra_relation_head_outside_the_ud_universal_set()
 }
 
 #[test]
-fn validate_accepts_the_same_file_with_a_correctly_spelled_head()
--> Result<(), TestError> {
+fn validate_accepts_the_same_file_with_a_correctly_spelled_head() -> Result<(), TestError> {
     let dir = tempdir()?;
     let file_path = dir.path().join("valid_relations.cha");
     fs::write(&file_path, CHAT_WITH_VALID_RELATIONS)?;
