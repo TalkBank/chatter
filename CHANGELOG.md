@@ -7,6 +7,28 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
+## [0.4.1] - 2026-07-27
+
+### Fixed
+
+- **`talkbank_transform::dependent_tiers::replace_or_add_tier` could not be
+  called on an utterance.** It still took `SmallVec<[DependentTier; 3]>` after
+  `DependentTierEntry` was introduced and `Utterance::dependent_tiers` became
+  `SmallVec<[DependentTierEntry; 3]>`, so the one thing the helper exists to do
+  no longer type-checked. It shipped in this state in 0.3.6 and 0.4.0.
+
+  It compiled because it was internally consistent, and no test caught it
+  because this workspace has no callers of it: the helper is public API for
+  downstream consumers, and the only one was pinned to an older release. The
+  regression guard added with the fix is a compile-time function taking
+  `&mut Utterance`, so any future drift between the signature and the field
+  fails the build rather than passing silently.
+
+  On replace, the existing entry's `TierSeparator` is preserved (only the
+  payload is regenerated, and the separator is the provenance E758 is detected
+  from); on append the new entry is `CLEAN`. Serialization canonicalizes to a
+  single tab either way, so this affects diagnostics, not output.
+
 ## [0.4.0] - 2026-07-27
 
 ### Added
