@@ -1,7 +1,7 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-06-16 20:33 EDT
+**Last modified:** 2026-07-29 09:36 EDT
 
 ## How This Works
 
@@ -10,8 +10,8 @@ tests, and error documentation. You never hand-edit generated test files.
 
 ```
 spec/constructs/*.md  ─┐
-                      ├──► spec/tools generators ──► grammar/test/corpus/*.txt
-spec/errors/*.md      ─┤                            ──► crates/talkbank-parser-tests/tests/generated/*.rs (parser tests)
+                      ├──► spec/tools generators ──► grammar/test/corpus/generated/*.txt
+spec/errors/*.md      ─┤                            ──► crates/talkbank-parser-tests/tests/integration/generated/*.rs (parser tests)
                       │                            ──► crates/talkbank-parser-tests/tests/error_corpus/validation_errors/ + manifest.json (validation)
                       │                            ──► docs/errors/*.md
 spec/tools/templates/ ─┘
@@ -19,10 +19,32 @@ spec/tools/templates/ ─┘
 
 This repo does **not** currently have the predecessor workspace's root
 `make test-gen` wrapper. Run the relevant `spec/tools` binaries directly.
-Those generators wipe and recreate their output directories, so if you
-hand-edit a file in `grammar/test/corpus/` or
-`crates/talkbank-parser-tests/tests/generated/`, it will be deleted the next
-time that generator runs.
+
+### Generated and hand-maintained tests live in SEPARATE trees
+
+```
+grammar/test/corpus/
+├── generated/   owned by gen_tree_sitter_tests; DELETED IN FULL every run
+└── manual/      hand-maintained; no generator writes here
+```
+
+`tree-sitter test` recurses, and test names come from each file's `====`
+header rather than its path, so the split costs nothing and renames nothing.
+
+This is organization, not a rule to remember. The generator wipes its own
+directory wholesale, which is safe precisely because nothing else is in it,
+and it **refuses to clear any directory lacking its `.generated-output-dir`
+marker**. Pointing `--output-dir` at a shared or hand-maintained tree fails
+loudly instead of deleting work. The marker file says the same thing in situ,
+so a reader who finds the directory does not need this page.
+
+Until 2026-07-29 both kinds of file shared one tree and were indistinguishable
+by content (both are `====`-headed corpus files), so "delete stale output"
+could only be implemented as "delete everything". That destroyed
+`manual/word_markers/marker_density.txt`, 1,468 lines mined from wild corpus
+data, twice in three days; both times it was caught only because a human read
+the diff. **Never hand-edit anything under `generated/`**, and put new
+hand-maintained tests in `manual/`.
 
 ## Spec Locations
 
@@ -30,8 +52,9 @@ time that generator runs.
 |----------|---------|
 | `spec/constructs/` | Valid CHAT examples with expected CSTs |
 | `spec/errors/` | Invalid CHAT examples with expected error codes |
-| → `grammar/test/corpus/` | Generated tree-sitter tests |
-| → `crates/talkbank-parser-tests/tests/generated/` | Generated Rust parser tests |
+| → `grammar/test/corpus/generated/` | Generated tree-sitter tests (wiped each run) |
+| `grammar/test/corpus/manual/` | Hand-maintained tree-sitter tests (never generated) |
+| → `crates/talkbank-parser-tests/tests/integration/generated/` | Generated Rust parser tests |
 | → `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | Validation fixtures + `manifest.json` (data-driven runner) |
 | → `docs/errors/` | Optional locally generated error-reference pages |
 
@@ -126,11 +149,11 @@ Example (`spec/tools/templates/main_tier.tera`):
 
 ```bash
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus \
+  --output-dir grammar/test/corpus/generated \
   --template-dir spec/tools/templates
 
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/generated
+  --output-dir crates/talkbank-parser-tests/tests/integration/generated
 
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
   --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
@@ -145,12 +168,12 @@ cargo test --workspace
 ```bash
 # Regenerate grammar corpus tests
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus \
+  --output-dir grammar/test/corpus/generated \
   --template-dir spec/tools/templates
 
 # Regenerate generated Rust tests
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/generated
+  --output-dir crates/talkbank-parser-tests/tests/integration/generated
 
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
   --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
@@ -166,8 +189,8 @@ cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_spe
 
 | Binary | What it generates |
 |--------|-------------------|
-| `gen_tree_sitter_tests` | `grammar/test/corpus/*.txt` from constructs + errors |
-| `gen_rust_tests` | `crates/talkbank-parser-tests/tests/generated/*.rs` from constructs + errors |
+| `gen_tree_sitter_tests` | `grammar/test/corpus/generated/*.txt` from constructs + errors |
+| `gen_rust_tests` | `crates/talkbank-parser-tests/tests/integration/generated/*.rs` from constructs + errors |
 | `gen_validation_corpus` | Validation fixture corpus + `manifest.json` from `spec/errors/` (one fixture per example, asserting that example's own Expected Error Codes) |
 | `gen_error_docs` | `docs/errors/*.md` from errors |
 | `validate_spec` | Validates spec format integrity (no output) |

@@ -9,14 +9,15 @@ use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use talkbank_model::model::BulletContent;
 use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
 };
 use tree_sitter::Node;
 
-/// Compute the source span for an entire tier node.
-pub(super) fn tier_span(node: Node) -> Span {
-    Span::new(node.start_byte() as u32, node.end_byte() as u32)
-}
+/// Byte span of an entire tier node.
+///
+/// Re-exported for the seven text-tier parsers that reach for it through this
+/// module; the conversion lives in [`crate::parser::node_span`].
+pub(super) use crate::parser::node_span::span_of;
 
 /// Parse the text/bullet payload of a text-like dependent tier from the tier's
 /// already-extracted body slot (`child_2` of `extract_<tier>_dependent_tier`)

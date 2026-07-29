@@ -14,7 +14,7 @@ integrations consume a stable contract without re-deriving the shapes by hand.
 
 | Schema | Canonical URL | Repository | Generator |
 |----------|------------|------------|------------|
-| `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schema/chat-file.schema.json` | `cargo test --test generate_schema` |
+| `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schema/chat-file.schema.json` | `cargo test -p talkbank-transform --tests generate_schema` |
 
 The generated schema declares both `$schema` (JSON Schema 2020-12) and `$id`
 (the canonical URL above). External consumers that want to track the
@@ -104,7 +104,7 @@ After changing transcript-model types in `talkbank-model`:
 
 ```bash
 cd chatter
-cargo test --test generate_schema
+cargo test -p talkbank-transform --tests generate_schema
 ```
 
 This writes the checked-in schema artifact in `schema/`. CI already checks that

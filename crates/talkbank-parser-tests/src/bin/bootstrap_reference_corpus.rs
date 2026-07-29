@@ -62,7 +62,7 @@ fn main() -> Result<(), TestError> {
     println!("Found {} .cha files", cha_files.len());
 
     // Generate test file with rstest parameterization
-    let generated_dir = Path::new("crates/talkbank-parser-tests/tests/generated");
+    let generated_dir = Path::new("crates/talkbank-parser-tests/tests/integration/generated");
     fs::create_dir_all(generated_dir)?;
 
     generate_reference_corpus_test(generated_dir, &cha_files)?;

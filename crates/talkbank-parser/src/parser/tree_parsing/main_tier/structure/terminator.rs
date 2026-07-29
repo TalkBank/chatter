@@ -13,8 +13,6 @@ use crate::generated_traversal::{
     WorTierBodyChild2Choice,
 };
 use crate::model::Terminator;
-use talkbank_model::Span;
-use tree_sitter::Node;
 
 /// A NEW-backend `terminator` supertype choice, unified across the distinct
 /// per-embedding-position enum names the generator mangles for it.
@@ -105,12 +103,9 @@ pub(crate) fn terminator_from_new_choice<'tree, C: NewTerminatorChoice<'tree>>(
     choice.to_terminator()
 }
 
-/// Byte span of a CST node, matching the `Span::new(start as u32, end as u32)` form
-/// the terminator / bullet conversion code uses.
+/// Byte span of a CST node.
 ///
-/// Shared by [`terminator_from_new_choice`] (via [`NewTerminatorChoice`]) and by
-/// `convert/ending.rs` (for the trailing media bullet span), so the span
-/// computation exists exactly once.
-pub(crate) fn span_of(node: Node<'_>) -> Span {
-    Span::new(node.start_byte() as u32, node.end_byte() as u32)
-}
+/// Re-exported here because [`terminator_from_new_choice`] and
+/// `convert/ending.rs` both reach for it under this path; the conversion itself
+/// lives in [`crate::parser::node_span`], which is the single home for it.
+pub(crate) use crate::parser::node_span::span_of;

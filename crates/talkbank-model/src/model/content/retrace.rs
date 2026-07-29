@@ -76,7 +76,11 @@ impl Retrace {
             kind,
             is_group: false,
             annotations: Vec::new(),
-            span: Span::default(),
+            // No source location yet: callers that have one attach it with
+            // `with_span`. Spelled out rather than defaulted, because this
+            // sentinel makes `check_code_glued_to_following_content` skip the
+            // retrace entirely.
+            span: Span::DUMMY,
         }
     }
 

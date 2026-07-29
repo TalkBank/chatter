@@ -129,7 +129,7 @@ changed:
 - parser / model / alignment / serialization:
   `cargo test -p talkbank-parser-tests parser_equivalence`
   and
-  `cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus`
+  `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus`
 
 The reference corpus at `corpus/reference/` remains the sacred semantic target.
 Historical labels like `G0-G14` are useful for older design notes, but they are

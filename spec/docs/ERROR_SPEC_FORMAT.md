@@ -375,11 +375,11 @@ normalized during comparison.
 
    ```bash
    cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-     --output-dir grammar/test/corpus \
+     --output-dir grammar/test/corpus/generated \
      --template-dir spec/tools/templates
 
    cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-     --output-dir crates/talkbank-parser-tests/tests/generated
+     --output-dir crates/talkbank-parser-tests/tests/integration/generated
    ```
 
 4. `cd grammar && tree-sitter test`, verify grammar corpus tests

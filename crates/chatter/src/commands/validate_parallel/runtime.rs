@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::commands::validate::cache::initialize_validation_cache;
-use crate::commands::validate_parallel::renderer::create_renderer;
+use crate::commands::validate_parallel::renderer::create_presentation_renderer;
 use crate::commands::validate_parallel::shared::empty_stats;
 use crate::commands::validate_parallel::{
     ValidateDirectoryOptions, ValidationPresentation, ValidationTraversalMode,
@@ -37,21 +37,20 @@ pub fn run_validation_runtime(
         presentation,
         suppress,
     } = options;
-    // Routing invariant: `cli/dispatch.rs` extracts the audit
-    // presentation variant before forwarding to the runtime
-    // entrypoint, so reaching this `else` branch is impossible by
-    // construction.
-    #[allow(clippy::unreachable)]
-    let ValidationPresentation::Streaming(output) = presentation else {
-        unreachable!("audit presentation is handled before the runtime entrypoint");
-    };
-
     let suppress_set: std::collections::HashSet<String> = suppress.into_iter().collect();
 
     let config = ValidationConfig {
         check_alignment: rules.alignment.enabled(),
         jobs: execution.jobs,
-        cache: CacheMode::Enabled,
+        // An audit is a REPORTING sweep: it may benefit from cached work but
+        // must not rewrite shared cache state as a side effect of producing a
+        // report. That contract predates this runtime (the old standalone
+        // audit pipeline read the cache and never wrote it) and is asserted by
+        // the `..._without_cache_writes` tests.
+        cache: match presentation {
+            ValidationPresentation::Audit { .. } => CacheMode::ReadOnly,
+            ValidationPresentation::Streaming(_) => CacheMode::Enabled,
+        },
         directory: match traversal {
             ValidationTraversalMode::Recursive => DirectoryMode::Recursive,
             ValidationTraversalMode::SingleFile => DirectoryMode::SingleFile,
@@ -63,23 +62,36 @@ pub fn run_validation_runtime(
 
     let cache = initialize_validation_cache(&summary_label, execution.cache_refresh);
 
-    if output.interface.uses_tui() {
+    // The TUI is a streaming-only surface: audit mode writes a file and has no
+    // interactive presentation to hand a terminal.
+    if let ValidationPresentation::Streaming(output) = &presentation
+        && output.interface.uses_tui()
+    {
         return run_tui_loop(
             files,
             &summary_label,
             &config,
             cache,
-            output.theme,
+            output.theme.clone(),
             &suppress_set,
         );
     }
+
+    // Build the renderer BEFORE starting the worker pool. Audit mode creates
+    // its output file here, and creating it after `validate_files_streaming`
+    // means an unwritable `--audit` path is only discovered once real parsing
+    // is already under way.
+    //
+    // Renderer choice is the ONLY thing audit mode changes; everything else in
+    // this function is shared, which is what keeps `--suppress`, `--parser`,
+    // `--strict-linkers`, `--roundtrip`, `--jobs` and `--max-errors` working
+    // identically in both modes.
+    let mut renderer = create_presentation_renderer(&presentation);
 
     let (events_rx, cancel_tx) = validate_files_streaming(files, &config, cache.clone());
     let (filtered_rx, files_fully_suppressed) = filter_suppressed_events(events_rx, &suppress_set);
     install_ctrlc_handler(&cancel_tx);
 
-    let json_mode = matches!(output.format, crate::cli::OutputFormat::Json);
-    let mut renderer = create_renderer(json_mode, output.quiet);
     let mut final_stats = None;
     let mut error_count = 0usize;
     let mut files_completed = 0usize;

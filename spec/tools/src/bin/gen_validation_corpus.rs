@@ -15,6 +15,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use generators::spec::error_corpus::{ErrorCorpusExample, ErrorCorpusSpec, Status};
+use generators::owned_output::clear_owned;
 use generators::spec::validation_manifest::{
     FixtureName, ValidationFixtureEntry, ValidationManifest,
 };
@@ -61,9 +62,11 @@ fn main() -> Result<()> {
 
     let planned = plan_fixtures(&validation_specs);
 
-    // Wipe stale top-level fixtures + manifest, preserving any subdir (e.g.
-    // `not_implemented/`), then write the spec-derived fixtures.
-    prepare_corpus_dir(&args.corpus_dir)?;
+    // Claim and clear the corpus directory, then write the spec-derived
+    // fixtures into it. Clearing is wholesale, which is safe only because the
+    // directory holds nothing but this generator's output; `clear_owned`
+    // refuses any directory that has not been marked as such.
+    clear_owned(&args.corpus_dir)?;
     for fixture in &planned {
         // The input was already stripped of its trailing newline when the chat
         // block was captured in parse_markdown, so write it verbatim.
@@ -150,19 +153,6 @@ fn unique_fixture_name(used: &mut HashSet<String>, base: &str) -> String {
         n += 1;
     }
     candidate
-}
-
-/// Remove every top-level file in the corpus dir (stale fixtures + manifest),
-/// leaving subdirectories untouched. Creates the dir if missing.
-fn prepare_corpus_dir(dir: &Path) -> Result<()> {
-    fs::create_dir_all(dir)?;
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-        if path.is_file() {
-            fs::remove_file(&path)?;
-        }
-    }
-    Ok(())
 }
 
 /// Sanitize an example name for use in a fixture filename: non-alphanumerics

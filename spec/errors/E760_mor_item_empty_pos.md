@@ -78,4 +78,4 @@ interpreted into modern semantics (the depfile mechanism is legacy;
 the invariant it enforced here, a declared symbol before `|`, is
 real). A bare `|` inside a stem is a different construct and is not
 covered by this spec. Wild-data impact at adoption: zero kept files
-carry an empty-POS mor item (2026-07-23 rg scan over ~/0tb/data).
+carry an empty-POS mor item (2026-07-23 scan over the full wild corpus).

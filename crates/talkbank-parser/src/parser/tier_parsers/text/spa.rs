@@ -11,7 +11,7 @@ use tree_sitter::Node;
 
 use crate::generated_traversal::{SpaDependentTierNode, extract_spa_dependent_tier};
 
-use super::helpers::{parse_text_tier_content, tier_span};
+use super::helpers::{parse_text_tier_content, span_of};
 
 /// Converts one `%spa` tier node.
 ///
@@ -25,7 +25,7 @@ use super::helpers::{parse_text_tier_content, tier_span};
 /// [`parse_text_tier_content`], which also surfaces the carrier's `unexpected`
 /// sink (R2).
 pub fn parse_spa_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SpaTier {
-    let span = tier_span(node);
+    let span = span_of(node);
     let children = extract_spa_dependent_tier(SpaDependentTierNode(node));
     let content = parse_text_tier_content(
         node,

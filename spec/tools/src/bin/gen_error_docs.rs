@@ -3,6 +3,7 @@
 //! Reads error specs and generates publishable documentation.
 
 use clap::Parser;
+use generators::owned_output::clear_owned;
 use generators::output::markdown;
 use generators::spec::ErrorSpec;
 use std::path::PathBuf;
@@ -35,21 +36,10 @@ fn main() -> anyhow::Result<()> {
 
     println!("Loaded {} error specifications", specs.len());
 
-    // ALWAYS clean generated markdown files before regenerating to prevent stale docs
-    if args.output_dir.exists() {
-        println!("Cleaning old generated documentation files...");
-        if let Ok(entries) = std::fs::read_dir(&args.output_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "md") {
-                    let _ = std::fs::remove_file(&path);
-                }
-            }
-        }
-    }
-
-    // Ensure output directory exists
-    std::fs::create_dir_all(&args.output_dir)?;
+    // Clear stale docs. Previously this swept `*.md` with `let _ =`, so a
+    // hand-written note in the output directory was destroyed silently and a
+    // failed delete was not reported at all.
+    clear_owned(&args.output_dir)?;
 
     // Generate index page
     let index = markdown::generate_error_index(&specs);

@@ -1,0 +1,9 @@
+================================================================================
+com_continuation_leading_space - Dependent tier continued onto a second line whose tab is followed by an incidental space. The space is absorbed by the continuation token and is not content.
+================================================================================
+%com:	Mot und Cla reden .
+	 00:45:00
+
+--------------------------------------------------------------------------------
+
+(source_file (com_dependent_tier (com_tier_prefix) (tier_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment) (continuation) (text_segment)) (newline)))

@@ -28,14 +28,39 @@ impl ParserKind {
     }
 }
 
-/// Whether the validation cache is enabled.
+/// How a validation run may use the cache.
+///
+/// Reads and writes are separate permissions because bulk audit runs need
+/// exactly one of them. An audit is a reporting sweep over a whole corpus: it
+/// should benefit from work already cached, but must not rewrite shared cache
+/// state as a side effect of producing a report. Before this was modelled
+/// here, audit mode was a separate pipeline that achieved read-without-write
+/// by hand, calling the getter and simply never calling the setter, so the
+/// contract lived in one function body instead of in the type. Folding audit
+/// onto the shared runtime silently turned the writes back on, which the
+/// `..._without_cache_writes` tests caught.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CacheMode {
-    /// Cache validation and roundtrip results (default).
+    /// Read cached results and record new ones (default).
     #[default]
     Enabled,
+    /// Read cached results, but never write. For reporting runs that must not
+    /// mutate shared state.
+    ReadOnly,
     /// Skip all cache lookups and writes.
     Disabled,
+}
+
+impl CacheMode {
+    /// May this run consult cached results?
+    pub fn allows_reads(self) -> bool {
+        matches!(self, Self::Enabled | Self::ReadOnly)
+    }
+
+    /// May this run record results for later runs?
+    pub fn allows_writes(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
 }
 
 /// Whether to recurse into subdirectories when collecting .cha files.

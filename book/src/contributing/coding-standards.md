@@ -59,7 +59,7 @@ Preferred crates:
 Never hand-edit generated artifacts:
 - `parser.c`: generated from `grammar.js`
 - `grammar/test/corpus/`: generated from specs
-- `crates/talkbank-parser-tests/tests/generated/`: generated from specs
+- `crates/talkbank-parser-tests/tests/integration/generated/`: generated from specs
 - `crates/talkbank-model/src/generated/symbol_sets.rs`: generated from symbol registry
 
 Always regenerate from source inputs.

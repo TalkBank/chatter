@@ -27,7 +27,7 @@ flowchart LR
 
     subgraph outputs["Generated Outputs (DO NOT EDIT)"]
         ts_tests["grammar/test/corpus/\n(tree-sitter tests)"]
-        rust_tests["crates/talkbank-parser-tests/tests/generated/\n(Rust tests)"]
+        rust_tests["crates/talkbank-parser-tests/tests/integration/generated/\n(Rust tests)"]
         val_corpus["crates/talkbank-parser-tests/tests/error_corpus/validation_errors/\n(.cha fixtures + manifest.json)"]
         error_docs["docs/errors/\n(local generated error pages)"]
     end
@@ -128,11 +128,11 @@ Common entrypoints from the repository root:
 
 ```bash
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus \
+  --output-dir grammar/test/corpus/generated \
   --template-dir spec/tools/templates
 
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/generated
+  --output-dir crates/talkbank-parser-tests/tests/integration/generated
 
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
   --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
@@ -164,7 +164,7 @@ tree-sitter test
 ```
 
 Verifies the grammar produces correct CSTs for known inputs. The
-actual test count comes from `ls grammar/test/corpus/*.txt | wc -l`;
+actual test count comes from `ls grammar/test/corpus/generated/**/*.txt grammar/test/corpus/manual/**/*.txt | wc -l`;
 do not hard-code it.
 
 ## Reference Corpus

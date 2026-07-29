@@ -1,5 +1,5 @@
 //! Generator for the mechanical conformance inventory
-//! (`tests/generated_traversal_conformance/inventory.rs`).
+//! (`tests/integration/generated_traversal_conformance/inventory.rs`).
 //!
 //! The inventory is derived, byte-for-byte, from two committed inputs:
 //!
@@ -523,6 +523,7 @@ pub fn node_types_json_path() -> PathBuf {
 pub fn inventory_path() -> PathBuf {
     crate_dir()
         .join("tests")
+        .join("integration")
         .join("generated_traversal_conformance")
         .join("inventory.rs")
 }

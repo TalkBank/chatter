@@ -10,17 +10,21 @@ manual's %mor grammar uses these separators inside the stem:
 content.** The parser produces an ERROR node at the `<` and the
 validator reports E316 on the surrounding `|<stem>~...` region.
 
-This pattern is a data error. It is observed across the CHILDES Finnish
-Kirjavainen-MPI corpus (18 files as of 2026-04-14) where an annotator
-introduced `<sos>` as a non-standard annotation prefix on a specific
-Finnish stem. No other bank in the public corpus uses it. CLAN's
-`check` behavior on this pattern should be consulted before any
+This pattern is a data error. It WAS observed across the CHILDES Finnish
+Kirjavainen-MPI corpus (18 files as of 2026-04-14), where an annotator had
+introduced `<sos>` as a non-standard annotation prefix on a specific Finnish
+stem; no other bank used it. Those files have since been cleaned, and a
+re-check on 2026-07-29 over all 106,158 files of the wild corpus found ZERO
+remaining instances. The rule is therefore now guarded only by synthesized
+fixtures, not by corpus attestation.
+
+CLAN's `check` behavior on this pattern should be consulted before any
 grammar change; this spec locks in the current-correct rejection so
 the parser cannot silently start accepting invalid CHAT later.
 
 ## Metadata
 - **Status**: implemented
-- **Last updated**: 2026-04-14 22:00 EDT
+- **Last updated**: 2026-07-29 14:56 EDT
 
 - **Error Code**: E316
 - **Category**: Dependent tier validation

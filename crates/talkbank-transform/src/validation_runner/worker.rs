@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use super::config::{CacheMode, ParserKind, ValidationConfig};
+use super::config::{ParserKind, ValidationConfig};
 use super::roundtrip;
 use super::types::{
     ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, ValidationEvent, ValidationStats,
@@ -93,7 +93,7 @@ pub(super) fn worker_loop<C>(
             Ok(file_path) => {
                 // Attempt to serve from cache before touching the filesystem.
                 // CacheOutcome::Valid = cached valid; Invalid = cached invalid (re-validate for errors).
-                if config.cache == CacheMode::Enabled
+                if config.cache.allows_reads()
                     && let Some(CacheOutcome::Valid) = cache
                         .as_ref()
                         .and_then(|cache_ref| cache_ref.get(&file_path, config.check_alignment))
@@ -216,7 +216,7 @@ pub(super) fn worker_loop<C>(
                 } else {
                     CacheOutcome::Invalid
                 };
-                if config.cache == CacheMode::Enabled
+                if config.cache.allows_writes()
                     && let Some(cache_ref) = cache.as_ref()
                     && let Err(e) =
                         cache_ref.set(&file_path, config.check_alignment, validation_outcome)
@@ -276,7 +276,7 @@ where
     C: ValidationCache + Send + Sync,
 {
     // Check roundtrip cache first
-    if config.cache == CacheMode::Enabled
+    if config.cache.allows_reads()
         && let Some(rt_outcome) = cache.as_ref().and_then(|c| {
             c.get_roundtrip(
                 file_path,
@@ -318,7 +318,7 @@ where
     } else {
         CacheOutcome::Invalid
     };
-    if config.cache == CacheMode::Enabled
+    if config.cache.allows_writes()
         && let Some(cache_ref) = cache.as_ref()
         && let Err(e) = cache_ref.set_roundtrip(
             file_path,

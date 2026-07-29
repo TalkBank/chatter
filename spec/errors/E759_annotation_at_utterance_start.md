@@ -95,4 +95,4 @@ first word has been found and the bracket item starts with `<`, `>`,
 `:`, `/`, or `"`). Distinct from E757 (code glued to following
 content) and from CHECK 73 (other leading codes), which is not covered
 by this spec. Wild-data impact at adoption: zero kept files match a
-leading postfix annotation (2026-07-23 rg scan over ~/0tb/data).
+leading postfix annotation (2026-07-23 scan over the full wild corpus).

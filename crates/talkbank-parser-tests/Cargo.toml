@@ -38,3 +38,94 @@ talkbank-transform = { workspace = true }
 
 [lints]
 workspace = true
+
+# These binaries are analysis and audit TOOLS, not tests. Without
+# `test = false` cargo builds and LAUNCHES each one during `cargo test`
+# purely to run zero tests, which on macOS also pays a per-binary
+# first-execution assessment. Declared explicitly so the cost is visible.
+# `bootstrap_spec_examples` is omitted deliberately: it DOES carry tests.
+
+[[bin]]
+name = "audit_check_parity"
+path = "src/bin/audit_check_parity.rs"
+test = false
+
+[[bin]]
+name = "audit_error_codes"
+path = "src/bin/audit_error_codes.rs"
+test = false
+
+[[bin]]
+name = "audit_golden_words"
+path = "src/bin/audit_golden_words.rs"
+test = false
+
+[[bin]]
+name = "bootstrap_reference_corpus"
+path = "src/bin/bootstrap_reference_corpus.rs"
+test = false
+
+[[bin]]
+name = "compare_parsers"
+path = "src/bin/compare_parsers.rs"
+test = false
+
+[[bin]]
+name = "generate_error_corpus"
+path = "src/bin/generate_error_corpus.rs"
+test = false
+
+[[bin]]
+name = "generate_error_words"
+path = "src/bin/generate_error_words.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_com_tiers"
+path = "src/bin/generate_golden_com_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_gra_tiers"
+path = "src/bin/generate_golden_gra_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_main_tiers"
+path = "src/bin/generate_golden_main_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_mor_tiers"
+path = "src/bin/generate_golden_mor_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_pho_tiers"
+path = "src/bin/generate_golden_pho_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_sin_tiers"
+path = "src/bin/generate_golden_sin_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_wor_tiers"
+path = "src/bin/generate_golden_wor_tiers.rs"
+test = false
+
+[[bin]]
+name = "generate_golden_words"
+path = "src/bin/generate_golden_words.rs"
+test = false
+
+[[bin]]
+name = "validate_golden_words"
+path = "src/bin/validate_golden_words.rs"
+test = false
+
+[[bin]]
+name = "verify_error_coverage"
+path = "src/bin/verify_error_coverage.rs"
+test = false

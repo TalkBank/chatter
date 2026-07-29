@@ -480,7 +480,7 @@ markers from grammar through model.
 The purity invariant, each structural marker produces a separate CST
 child rather than being consumed by `word_segment`, is enforced by a
 group of tree-sitter corpus tests under
-`grammar/test/corpus/word/`. Each `*_in_word_lint.txt` file embeds a
+`grammar/test/corpus/generated/word/`. Each `*_in_word_lint.txt` file embeds a
 structural marker inside a word and asserts the CST splits the word
 appropriately:
 
@@ -511,14 +511,14 @@ If you add a new structural marker to the grammar:
    word; regenerate the affected grammar/parser fixtures with the
    current `spec/tools` commands from
    [Spec Workflow](../contributing/spec-workflow.md) so a
-   per-construct test fixture is created in `grammar/test/corpus/word/`.
+   per-construct test fixture is created in `grammar/test/corpus/generated/word/`.
    Verify the CST output names each marker as its own child.
 4. Run the full verification sequence:
    ```bash
    cd grammar && tree-sitter generate && tree-sitter test
    cargo test -p talkbank-parser
    cargo test -p talkbank-parser-tests parser_equivalence
-   cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+   cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
    ```
 
 ## Key Source Files
@@ -527,7 +527,7 @@ If you add a new structural marker to the grammar:
 |---|---|
 | `grammar/grammar.js` | search for `standalone_word`, `word_body`, `word_segment`, `_word_marker` |
 | `grammar/src/generated_symbol_sets.js` | Character exclusion sets (generated, do not edit) |
-| `grammar/test/corpus/word/*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` | Per-construct purity-invariant gate tests (replaced the consolidated `word_segment_purity.txt` retired in `fdceeac2`) |
+| `grammar/test/corpus/generated/word/*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` | Per-construct purity-invariant gate tests (replaced the consolidated `word_segment_purity.txt` retired in `fdceeac2`) |
 | `grammar/docs/tokenization-rules.md` | The 6 tokenization ambiguities with full examples |
 | `grammar/docs/precedence-decisions.md` | Precedence proofs (zero, colon, purity invariant) |
 | `grammar/docs/pre-coarsening-grammar.js.reference` | Historical: the grammar before coarsening |

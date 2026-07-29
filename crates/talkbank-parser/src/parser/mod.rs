@@ -25,6 +25,9 @@ pub mod participants;
 pub mod tier_parsers;
 pub mod tree_parsing;
 
+/// The one `Node` to [`talkbank_model::Span`] conversion, shared by every region.
+mod node_span;
+
 /// Region-neutral typed-CST seam shared by every parser region: the single
 /// content-child decode helper (`decode_present_child`). Structure now comes
 /// from the NEW backend's free `extract_*` functions, not a trait receiver.

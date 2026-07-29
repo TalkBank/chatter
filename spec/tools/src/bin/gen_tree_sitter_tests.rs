@@ -5,7 +5,9 @@
 
 use clap::Parser;
 use generators::output::tree_sitter;
+use generators::owned_output::clear_owned;
 use generators::spec::{ConstructSpec, ErrorSpec};
+
 use std::path::PathBuf;
 
 /// CLI arguments: construct/error spec directories, output corpus directory, and template directory.
@@ -22,8 +24,8 @@ struct Args {
     error_dir: PathBuf,
 
     /// Output directory for generated test files (e.g., path/to/tree-sitter-talkbank/test/corpus)
-    /// WARNING: Generated test files in this directory will be removed before regenerating
-    /// to ensure no stale tests remain when specs are deleted
+    /// WARNING: this directory is DELETED IN FULL on every run. It must contain
+    /// nothing but generated output; hand-maintained tests go in a sibling dir.
     #[arg(short, long)]
     output_dir: PathBuf,
 
@@ -80,15 +82,10 @@ fn main() -> anyhow::Result<()> {
     let construct_count = construct_files.len();
     let error_count = error_files.len();
 
-    // ALWAYS clean before regenerating to prevent stale test files
-    // (when specs are deleted, their corresponding test files should also be deleted)
-    if args.output_dir.exists() {
-        println!("Cleaning old generated test files...");
-        std::fs::remove_dir_all(&args.output_dir)?;
-    }
-
-    // Ensure output directory exists
-    std::fs::create_dir_all(&args.output_dir)?;
+    // Clearing the whole directory is how stale tests disappear when their
+    // spec is deleted. It is safe because this directory is ours alone; the
+    // check enforces that.
+    clear_owned(&args.output_dir)?;
 
     // Write all files (creating parent directories as needed)
     let all_files = construct_files.into_iter().chain(error_files);

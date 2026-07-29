@@ -151,7 +151,7 @@ affects them.
 
 ## Common Mistakes
 
-- **Editing generated files**: never edit `grammar/test/corpus/` or `crates/talkbank-parser-tests/tests/generated/` by hand
+- **Editing generated files**: never edit `grammar/test/corpus/` or `crates/talkbank-parser-tests/tests/integration/generated/` by hand
 - **Regenerating reflexively**: use regeneration when generated artifacts
   changed, not as a substitute for thinking about what kind of test authority
   the change really needs

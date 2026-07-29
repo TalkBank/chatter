@@ -77,7 +77,7 @@ jobs:
 
       - name: cargo test --workspace
         timeout-minutes: 30
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --tests --locked
 
       - name: cargo test --doc --workspace
         run: cargo test --doc --workspace --locked

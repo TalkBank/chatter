@@ -81,7 +81,7 @@ jobs:
       # hung process cannot outlive the job.
       - name: cargo test --workspace
         timeout-minutes: 30
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --tests --locked
 
       - name: cargo test --doc --workspace
         timeout-minutes: 15
@@ -256,7 +256,7 @@ jobs:
           git diff --exit-code src/parser.c src/grammar.json src/node-types.json
 
       # The grammar's own corpus, including the wild-data-derived
-      # marker-density tests under test/corpus/word_markers/ that exist because
+      # marker-density tests under test/corpus/manual/word_markers/ that exist because
       # of the v0.3.3 word-fragmentation regression. 199 parses at time of
       # wiring.
       - name: tree-sitter test

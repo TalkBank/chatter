@@ -1,11 +1,12 @@
 //! Parallel directory validation with streaming progress and caching.
 //!
 //! This module is split into:
-//! - [`runtime`] for the standard streamed validation flow
-//! - [`audit`] for JSONL audit sweeps
+//! - [`runtime`] for the single streamed validation flow
+//! - [`renderer`] for text/JSON presentation of streamed events
+//! - [`audit_renderer`] for JSONL audit sweeps, a renderer over that same flow
 //! - [`shared`] for cache and fallback helpers
 
-mod audit;
+mod audit_renderer;
 mod renderer;
 mod runtime;
 mod shared;
@@ -140,7 +141,10 @@ pub struct StreamingValidationOutput {
 pub enum ValidationPresentation {
     /// Stream events through text, JSON, or TUI output.
     Streaming(StreamingValidationOutput),
-    /// Write a JSONL audit file without cache writes for new results.
+    /// Write a JSONL audit file instead of streaming to the terminal.
+    ///
+    /// Audit runs read the validation cache but never write it
+    /// (`CacheMode::ReadOnly`): a reporting sweep must not mutate shared state.
     Audit {
         /// Output path for JSONL audit records.
         output_path: PathBuf,
@@ -204,19 +208,7 @@ pub fn validate_paths_parallel(
     summary_label: PathBuf,
     options: ValidateDirectoryOptions,
 ) -> ValidationStatsSnapshot {
-    if let ValidationPresentation::Audit { output_path } = &options.presentation {
-        // Audit mode is currently directory-oriented; its file walk
-        // logic is in `audit::run_audit_mode` which expects a path,
-        // not a file list. Route via the summary label so audit
-        // continues to work for the directory case (its only real
-        // caller). Multi-file audit is out of scope for this fix.
-        return audit::run_audit_mode(
-            &summary_label,
-            output_path,
-            options.rules.alignment.enabled(),
-            options.execution.cache_refresh,
-        );
-    }
-
+    // Every presentation, INCLUDING audit, goes through this one flow; see
+    // `audit_renderer` for why audit is a renderer rather than a pipeline.
     runtime::run_validation_runtime(files, summary_label, options)
 }

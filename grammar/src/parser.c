@@ -6532,6 +6532,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       END_STATE();
     case 223:
       ACCEPT_TOKEN(sym_continuation);
+      if (lookahead == ' ') ADVANCE(223);
       END_STATE();
     case 224:
       ACCEPT_TOKEN(sym_newline);

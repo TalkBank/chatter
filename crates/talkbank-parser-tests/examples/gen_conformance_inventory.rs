@@ -11,7 +11,7 @@
 )]
 
 //! Regenerate the mechanical conformance inventory
-//! (`tests/generated_traversal_conformance/inventory.rs`) from the committed
+//! (`tests/integration/generated_traversal_conformance/inventory.rs`) from the committed
 //! typed CST traversal and tree-sitter node-types.
 //!
 //! This is the committed replacement for the former uncommitted scratch script.

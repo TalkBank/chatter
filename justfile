@@ -30,7 +30,16 @@ build-release:
 
 # Run the full workspace test suite via cargo.
 test:
-    cargo test --workspace
+    cargo test --workspace --tests
+
+# Compiled tests AND doctests. What CI runs; use before pushing.
+#
+# `--tests` above restricts the first pass to compiled test targets, because a
+# bare `cargo test` ALSO runs doctests: without it, `test` and this recipe both
+# ran the whole doctest suite twice over. Doctests are merged into one binary
+# per crate (edition 2024), so they are cheap to RUN; the cost is the rustdoc
+# compile, which is what the inner loop skips.
+test-all: test
     cargo test --doc --workspace
 
 # Line/region/function coverage over the whole workspace via cargo-llvm-cov,

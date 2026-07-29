@@ -9,16 +9,61 @@ use indicatif::ProgressStyle;
 
 use crate::output::{CASCADING_HINT, print_errors, should_show_cascading_hint};
 use crate::progress::ProgressThrottle;
+use super::ValidationPresentation;
 use talkbank_transform::validation_runner::{
     ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, ValidationStatsSnapshot,
 };
 
-/// Build the non-interactive renderer appropriate for the requested output mode.
-pub fn create_renderer(json_mode: bool, quiet: bool) -> Box<dyn ValidationRenderer> {
-    if json_mode {
-        Box::new(JsonRenderer)
-    } else {
-        Box::new(TextRenderer::new(quiet))
+/// Build the renderer for a presentation mode.
+///
+/// Renderer construction lives here rather than in the runtime loop so that
+/// the runtime has one line where presentation matters, and so every renderer
+/// (text, JSON, audit) is created through a single seam.
+///
+/// Audit construction creates its output file, so a failure here means the
+/// user asked for an unwritable `--audit` path. That is fatal and reported
+/// before any validation work begins.
+///
+/// # Terminates the process on an unwritable audit path
+///
+/// This calls [`std::process::exit`], which the return type does not show. It
+/// is inherited behaviour (the exit previously sat in the runtime loop) kept
+/// here so the failure still happens before any parsing starts. The honest
+/// signature is `Result<Box<dyn ValidationRenderer>, _>` with the CLI boundary
+/// owning termination, which needs `run_validation_runtime` and
+/// `validate_paths_parallel` to return `Result` too; left for that change.
+pub fn create_presentation_renderer(
+    presentation: &ValidationPresentation,
+) -> Box<dyn ValidationRenderer> {
+    match presentation {
+        ValidationPresentation::Streaming(output) => match output.format {
+            crate::cli::OutputFormat::Json => Box::new(JsonRenderer),
+            crate::cli::OutputFormat::Text => Box::new(TextRenderer::new(output.quiet)),
+        },
+        ValidationPresentation::Audit { output_path } => {
+            match super::audit_renderer::AuditRenderer::new(output_path) {
+                Ok(renderer) => Box::new(renderer),
+                Err(error) => {
+                    eprintln!("Error creating audit output file: {}", error);
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+}
+
+/// Does this file status represent a file that failed in some way?
+///
+/// Shared by the text renderer's progress bar and the audit renderer's file
+/// accounting so the classification exists once: a new `FileStatus` variant is
+/// then one edit, not two that can disagree.
+pub(super) fn status_is_error(status: &FileStatus) -> bool {
+    match status {
+        FileStatus::Valid { .. } => false,
+        FileStatus::Invalid { .. }
+        | FileStatus::RoundtripFailed { .. }
+        | FileStatus::ParseError { .. }
+        | FileStatus::ReadError { .. } => true,
     }
 }
 
@@ -141,13 +186,7 @@ impl ValidationRenderer for TextRenderer {
         let cache_hit = status_is_cache_hit(&file_event.status);
 
         if let Some(ref mut progress_bar) = self.progress_bar {
-            let is_error = matches!(
-                file_event.status,
-                FileStatus::Invalid { .. }
-                    | FileStatus::RoundtripFailed { .. }
-                    | FileStatus::ParseError { .. }
-                    | FileStatus::ReadError { .. }
-            );
+            let is_error = status_is_error(&file_event.status);
             if is_error {
                 progress_bar.bar().set_position(files_completed as u64);
                 let filename = file_event

@@ -22,6 +22,7 @@ use crate::generated_traversal::{
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
+use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::gra::parse_gra_tier;
 use crate::parser::tier_parsers::mor::parse_mor_tier;
 use crate::parser::tier_parsers::pho::{parse_mod_tier, parse_pho_tier};
@@ -45,12 +46,13 @@ pub(super) fn attach_mor(
     let tier_node = n.raw_node();
     let separator =
         super::helpers::dependent_tier_separator(&extract_mor_dependent_tier(n).child_1.slot);
+    let tier_span = span_of(tier_node);
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "mor", errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
-                DependentTier::Mor(empty_mor_placeholder()),
+                DependentTier::Mor(empty_mor_placeholder(tier_span)),
                 separator,
             ));
     } else {
@@ -67,7 +69,7 @@ pub(super) fn attach_mor(
                 utterance
                     .dependent_tiers
                     .push(DependentTierEntry::with_separator(
-                        DependentTier::Mor(empty_mor_placeholder()),
+                        DependentTier::Mor(empty_mor_placeholder(tier_span)),
                         separator,
                     ));
             }
@@ -86,12 +88,13 @@ pub(super) fn attach_gra(
     let tier_node = n.raw_node();
     let separator =
         super::helpers::dependent_tier_separator(&extract_gra_dependent_tier(n).child_1.slot);
+    let tier_span = span_of(tier_node);
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "gra", errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
-                DependentTier::Gra(empty_gra_placeholder()),
+                DependentTier::Gra(empty_gra_placeholder(tier_span)),
                 separator,
             ));
     } else {
@@ -221,15 +224,24 @@ fn report_tier_parse_error(tier_node: Node, input: &str, tier_name: &str, errors
     }
 }
 
-fn empty_mor_placeholder() -> MorTier {
-    MorTier::new_mor(
-        Vec::new(),
-        Terminator::Period {
-            span: talkbank_model::Span::DUMMY,
-        },
-    )
+
+
+/// Empty `%mor` standing in for a tier that failed to parse.
+///
+/// The span is the REAL tier span, not `Span::DUMMY`. A placeholder is still a
+/// tier that exists at a place in the file, and everything downstream reads its
+/// span: a diagnostic's reported location, an LSP position, `SpanShift` during
+/// an edit. `DUMMY` is `0..0`, so all of those pointed at the start of the file
+/// instead of at the offending tier.
+///
+/// This is design rule 7: lenient recovery preserves malformed tier slots IN
+/// PLACE and never fabricates dummy model values.
+fn empty_mor_placeholder(span: talkbank_model::Span) -> MorTier {
+    MorTier::new_mor(Vec::new(), Terminator::Period { span }).with_span(span)
 }
 
-fn empty_gra_placeholder() -> GraTier {
-    GraTier::new_gra(Vec::new())
+/// Empty `%gra` standing in for a tier that failed to parse. See
+/// [`empty_mor_placeholder`] for why the span must be real.
+fn empty_gra_placeholder(span: talkbank_model::Span) -> GraTier {
+    GraTier::new_gra(Vec::new()).with_span(span)
 }

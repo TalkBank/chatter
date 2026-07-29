@@ -1,0 +1,1291 @@
+// Test code: the panic-family clippy lints are relaxed by policy
+// (assertions and fixture unwraps are the testing idiom); the
+// workspace [lints] table holds production code to deny.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented
+)]
+
+//! CLI integration tests
+//!
+//! These tests exercise the CLI commands end-to-end using assert_cmd.
+
+use predicates::prelude::*;
+use std::fs;
+use talkbank_parser_tests::test_error::TestError;
+use tempfile::{NamedTempFile, tempdir};
+
+// ============================================================================
+// Test Fixtures
+// ============================================================================
+
+const VALID_CHAT: &str = r#"@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:	hello world .
+%mor:	n|hello n|world .
+@End
+"#;
+
+const INVALID_CHAT_MISSING_END: &str = r#"@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*CHI:	hello .
+"#;
+
+const INVALID_CHAT_SYNTAX_ERROR: &str = r#"@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*CHI:	hello@ world .
+@End
+"#;
+
+const CHAT_WITH_ALIGNMENT_ERROR: &str = r#"@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:	I want cookie .
+%mor:	pro|I v|want .
+@Comment:	ERROR: Missing n|cookie in %mor
+@End
+"#;
+
+// A file intended to carry ONLY warning-severity diagnostics. Valid CHAT:
+// warnings do not make a file invalid, so its per-file headline must be
+// advisory, not an error. NOTE: this fixture rode on the E254
+// undeclared-@s:CODE warning, retired 2026-07-15 (an undeclared word-level
+// language override is now silently valid), and no default-config construct
+// currently produces a warning-severity diagnostic through `chatter
+// validate`, so the subprocess test below is ignored until one exists again
+// (candidate: the W601/W602 severity-taxonomy adjudication). The headline
+// logic itself is pinned by unit tests on `has_hard_error` in
+// `src/output.rs`.
+const WARNINGS_ONLY_CHAT: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:\thello hola@s:spa .
+@End
+";
+
+// ============================================================================
+// Validate Command Tests
+// ============================================================================
+
+/// Tests validate valid file.
+#[test]
+fn test_validate_valid_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("valid.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Total files: 1"))
+        .stdout(predicate::str::contains("Valid: 1"))
+        .stdout(predicate::str::contains("Invalid: 0"));
+    Ok(())
+}
+
+/// Tests validate invalid file missing end.
+#[test]
+fn test_validate_invalid_file_missing_end() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("invalid.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .failure();
+    Ok(())
+}
+
+/// Multi-file `validate` must process EVERY file passed on the command
+/// line, even when an earlier file in the list is invalid. The early-exit
+/// regression (fixed 2026-05-03) caused `chatter validate bad.cha good.cha`
+/// to terminate after `bad.cha` and never visit `good.cha`.
+#[test]
+fn test_validate_multi_file_processes_every_argument() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let bad = dir.path().join("aa_invalid.cha");
+    let good = dir.path().join("zz_valid.cha");
+    fs::write(&bad, INVALID_CHAT_MISSING_END)?;
+    fs::write(&good, VALID_CHAT)?;
+
+    // Process exits non-zero (the bad file is invalid) and the summary
+    // accounts for both files, proving the run did not bail out after the
+    // first failure.
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&bad)
+        .arg(&good)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("aa_invalid.cha"))
+        .stdout(predicate::str::contains("Total files: 2"))
+        .stdout(predicate::str::contains("Valid: 1"))
+        .stdout(predicate::str::contains("Invalid: 1"));
+    Ok(())
+}
+
+/// Tests text-mode validation keeps human diagnostics on stderr.
+#[test]
+fn test_validate_invalid_file_text_mode_uses_stderr_for_diagnostics() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("invalid.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Total files: 1"))
+        .stdout(predicate::str::contains("Invalid: 1"))
+        .stderr(predicate::str::contains("✗ Errors found in"))
+        .stderr(predicate::str::contains("invalid.cha"))
+        .stderr(predicate::str::contains(
+            "Missing @End header at end of file",
+        ));
+    Ok(())
+}
+
+/// A warnings-only file is valid CHAT, so it must NOT be headlined as an error.
+///
+/// Regression for the per-file headline keying on "has any diagnostic" instead
+/// of "has any hard error": a file whose sole diagnostic is a warning was
+/// printed as `✗ Errors found in <file>` and given the "fix the structural
+/// errors first" cascading hint, while the summary correctly reported it Valid.
+/// The headline must instead read `⚠ Warnings in <file>`, the cascading hint
+/// (which is about hard structural errors tainting the parse) must not fire,
+/// and the run must succeed with `Valid: 1`.
+#[test]
+#[ignore = "no default-config construct currently produces a warning-severity \
+            diagnostic (E254 retired 2026-07-15); re-enable with a real \
+            warnings-only fixture once one exists (see WARNINGS_ONLY_CHAT \
+            note). The headline logic is unit-pinned in src/output.rs."]
+fn test_validate_warnings_only_file_not_headlined_as_error() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("warnings_only.cha");
+    fs::write(&file_path, WARNINGS_ONLY_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Valid: 1"))
+        .stdout(predicate::str::contains("Invalid: 0"))
+        // The warning itself must still be shown to the user.
+        .stderr(predicate::str::contains("⚠ Warnings in"))
+        .stderr(predicate::str::contains("warnings_only.cha"))
+        // But it must NOT be framed as an error, nor pointed at nonexistent
+        // structural errors.
+        .stderr(predicate::str::contains("✗ Errors found in").not())
+        .stderr(predicate::str::contains("Fix the structural errors first").not());
+    Ok(())
+}
+
+/// Tests validate invalid file syntax error.
+#[test]
+fn test_validate_invalid_file_syntax_error() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("syntax_error.cha");
+    fs::write(&file_path, INVALID_CHAT_SYNTAX_ERROR)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .failure();
+    Ok(())
+}
+
+/// Tests JSON validation keeps machine-readable output off stderr.
+#[test]
+fn test_validate_invalid_file_json_mode_keeps_stderr_clean() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("invalid.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg("--format")
+        .arg("json")
+        .arg(&file_path)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("\"status\":\"invalid\""))
+        .stdout(predicate::str::contains("\"type\":\"summary\""))
+        .stdout(predicate::str::contains("\"file\":\""))
+        .stdout(predicate::str::contains(
+            "Missing @End header at end of file",
+        ))
+        .stderr(predicate::str::is_empty());
+    Ok(())
+}
+
+/// Tests validate file not found.
+#[test]
+fn test_validate_file_not_found() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg("/nonexistent/file.cha")
+        .assert()
+        .failure();
+}
+
+/// Tests validate quiet mode success.
+#[test]
+fn test_validate_quiet_mode_success() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("valid.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .arg("--quiet")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty().or(predicate::str::contains("valid.cha")));
+    Ok(())
+}
+
+/// Tests validate quiet mode failure.
+#[test]
+fn test_validate_quiet_mode_failure() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("invalid.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .arg("--quiet")
+        .assert()
+        .failure();
+    Ok(())
+}
+
+/// Tests validate skip alignment.
+#[test]
+fn test_validate_skip_alignment() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("alignment_issue.cha");
+    fs::write(&file_path, CHAT_WITH_ALIGNMENT_ERROR)?;
+
+    // With alignment checking (default): should detect error
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .failure();
+
+    // With --skip-alignment: should pass (only validates structure)
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .arg("--skip-alignment")
+        .assert()
+        .success();
+    Ok(())
+}
+
+/// Tests validate directory recursive.
+#[test]
+fn test_validate_directory_recursive() -> Result<(), TestError> {
+    let dir = tempdir()?;
+
+    // Create files in nested structure
+    fs::write(dir.path().join("root.cha"), VALID_CHAT)?;
+
+    let subdir = dir.path().join("subdir");
+    fs::create_dir(&subdir)?;
+    fs::write(subdir.join("nested.cha"), VALID_CHAT)?;
+
+    // Directories are always validated recursively by default
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Total files: 2")); // Both files validated
+    Ok(())
+}
+
+/// Directory validation ignores macOS AppleDouble sidecars such as `._file.cha`.
+#[test]
+fn test_validate_directory_ignores_appledouble_sidecars() -> Result<(), TestError> {
+    let dir = tempdir()?;
+
+    fs::write(dir.path().join("real.cha"), VALID_CHAT)?;
+    fs::write(dir.path().join("._real.cha"), b"\0\x05AppleDouble metadata")?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(dir.path())
+        .arg("--force")
+        .arg("--tui-mode")
+        .arg("disable")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Total files: 1"))
+        .stdout(predicate::str::contains("Invalid: 0"))
+        .stderr(predicate::str::contains("read error").not());
+    Ok(())
+}
+
+/// Tests validate json output.
+#[test]
+fn test_validate_json_output() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("valid.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .arg("--format")
+        .arg("json")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("{"));
+    Ok(())
+}
+
+// ============================================================================
+// Normalize Command Tests
+// ============================================================================
+
+/// Tests normalize to stdout.
+#[test]
+fn test_normalize_to_stdout() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("input.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("normalize")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("@UTF8"))
+        .stdout(predicate::str::contains("*CHI:"));
+    Ok(())
+}
+
+/// Tests normalize to file.
+#[test]
+fn test_normalize_to_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_path = dir.path().join("input.cha");
+    let output_path = dir.path().join("output.cha");
+
+    fs::write(&input_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("normalize")
+        .arg(&input_path)
+        .arg("--output")
+        .arg(&output_path)
+        .assert()
+        .success();
+
+    // Verify output file was created
+    if !output_path.exists() {
+        return Err(TestError::Failure("Expected output file".to_string()));
+    }
+    let content = fs::read_to_string(&output_path)?;
+    if !content.contains("@UTF8") || !content.contains("*CHI:") {
+        return Err(TestError::Failure(
+            "Normalized output missing expected headers".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Tests normalize with validation.
+#[test]
+fn test_normalize_with_validation() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("invalid.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("normalize")
+        .arg(&file_path)
+        .arg("--validate")
+        .assert()
+        .failure();
+    Ok(())
+}
+
+// ============================================================================
+// ToJson Command Tests
+// ============================================================================
+
+/// Tests to json stdout.
+#[test]
+fn test_to_json_stdout() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("input.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("{"))
+        .stdout(predicate::str::contains("lines"));
+    Ok(())
+}
+
+/// Tests to json file.
+#[test]
+fn test_to_json_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_path = dir.path().join("input.cha");
+    let output_path = dir.path().join("output.json");
+
+    fs::write(&input_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_path)
+        .arg("--output")
+        .arg(&output_path)
+        .assert()
+        .success();
+
+    // Verify JSON file was created and is valid
+    if !output_path.exists() {
+        return Err(TestError::Failure("Expected JSON output file".to_string()));
+    }
+    let content = fs::read_to_string(&output_path)?;
+    let _: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| TestError::Failure(format!("Output should be valid JSON: {err}")))?;
+    Ok(())
+}
+
+/// Tests to json pretty vs compact.
+#[test]
+fn test_to_json_pretty_vs_compact() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("input.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    // Pretty (default)
+    let pretty_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .output()?;
+
+    let pretty_json = String::from_utf8(pretty_output.stdout)
+        .map_err(|err| TestError::Failure(format!("Invalid UTF-8: {err}")))?;
+
+    // Compact
+    let compact_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .arg("--compact")
+        .output()?;
+
+    let compact_json = String::from_utf8(compact_output.stdout)
+        .map_err(|err| TestError::Failure(format!("Invalid UTF-8: {err}")))?;
+
+    // Pretty should have more whitespace
+    if pretty_json.len() <= compact_json.len() {
+        return Err(TestError::Failure(
+            "Pretty JSON should be longer than compact JSON".to_string(),
+        ));
+    }
+    if !pretty_json.contains("  ") {
+        return Err(TestError::Failure(
+            "Pretty JSON should contain indentation".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Tests to json with validation.
+#[test]
+fn test_to_json_with_validation() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("invalid.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .arg("--validate")
+        .assert()
+        .failure();
+    Ok(())
+}
+
+// ============================================================================
+// ToJson Directory Mode Tests
+// ============================================================================
+
+/// Tests to-json directory mode creates JSON files preserving structure.
+#[test]
+fn test_to_json_directory_mode() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    let sub_dir = input_dir.join("sub");
+    fs::create_dir_all(&sub_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+    fs::write(sub_dir.join("b.cha"), VALID_CHAT)?;
+
+    let output_dir = dir.path().join("json");
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("2 converted"));
+
+    // Verify structure preserved
+    assert!(output_dir.join("a.json").exists());
+    assert!(output_dir.join("sub/b.json").exists());
+
+    // Verify valid JSON
+    let content = fs::read_to_string(output_dir.join("a.json"))?;
+    let _: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| TestError::Failure(format!("Invalid JSON: {e}")))?;
+    Ok(())
+}
+
+/// Tests incremental mode skips up-to-date files.
+#[test]
+fn test_to_json_incremental() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+
+    let output_dir = dir.path().join("json");
+
+    // First run: should convert
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("1 converted, 0 up-to-date"));
+
+    // Second run: should skip (up-to-date)
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("0 converted, 1 up-to-date"));
+    Ok(())
+}
+
+/// Tests --force ignores mtime and reconverts all files.
+#[test]
+fn test_to_json_force() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+
+    let output_dir = dir.path().join("json");
+
+    // First run
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .assert()
+        .success();
+
+    // Force run: should reconvert despite up-to-date
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .arg("--force")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("1 converted, 0 up-to-date"));
+    Ok(())
+}
+
+/// Tests --prune removes orphaned .json files.
+#[test]
+fn test_to_json_prune() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+
+    let output_dir = dir.path().join("json");
+
+    // First run: convert
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .assert()
+        .success();
+
+    // Create an orphaned .json file
+    fs::write(output_dir.join("orphan.json"), "{}")?;
+    assert!(output_dir.join("orphan.json").exists());
+
+    // Run with --prune
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .arg("--prune")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("1 pruned"));
+
+    // Orphan should be gone, original should remain
+    assert!(!output_dir.join("orphan.json").exists());
+    assert!(output_dir.join("a.json").exists());
+    Ok(())
+}
+
+/// Tests directory mode requires --output-dir.
+#[test]
+fn test_to_json_directory_requires_output_dir() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&input_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--output-dir"));
+    Ok(())
+}
+
+// ============================================================================
+// FromJson Command Tests
+// ============================================================================
+
+/// Tests from json roundtrip.
+#[test]
+fn test_from_json_roundtrip() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let chat_path = dir.path().join("input.cha");
+    let json_path = dir.path().join("intermediate.json");
+    let output_path = dir.path().join("output.cha");
+
+    fs::write(&chat_path, VALID_CHAT)?;
+
+    // CHAT → JSON
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&chat_path)
+        .arg("--output")
+        .arg(&json_path)
+        .assert()
+        .success();
+
+    // JSON → CHAT
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("from-json")
+        .arg(&json_path)
+        .arg("--output")
+        .arg(&output_path)
+        .assert()
+        .success();
+
+    // Verify output is valid CHAT
+    if !output_path.exists() {
+        return Err(TestError::Failure("Expected output file".to_string()));
+    }
+    let content = fs::read_to_string(&output_path)?;
+    if !content.contains("@UTF8") || !content.contains("*CHI:") {
+        return Err(TestError::Failure(
+            "Output should contain CHAT headers".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Tests from json invalid json.
+#[test]
+fn test_from_json_invalid_json() -> Result<(), TestError> {
+    let json_file = NamedTempFile::new()?;
+    fs::write(json_file.path(), "{ invalid json ")?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("from-json")
+        .arg(json_file.path())
+        .assert()
+        .failure();
+    Ok(())
+}
+
+// ============================================================================
+// ShowAlignment Command Tests
+// ============================================================================
+
+/// Tests show alignment basic.
+#[test]
+fn test_show_alignment_basic() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("aligned.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("show-alignment")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alignment"));
+    Ok(())
+}
+
+/// Tests show alignment specific tier.
+#[test]
+fn test_show_alignment_specific_tier() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("aligned.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("show-alignment")
+        .arg(&file_path)
+        .arg("--tier")
+        .arg("mor")
+        .assert()
+        .success();
+    Ok(())
+}
+
+/// Tests show alignment compact mode.
+#[test]
+fn test_show_alignment_compact_mode() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("aligned.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    let normal_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("show-alignment")
+        .arg(&file_path)
+        .output()?;
+
+    let compact_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("show-alignment")
+        .arg(&file_path)
+        .arg("--compact")
+        .output()?;
+
+    // Compact output should be shorter
+    if compact_output.stdout.len() > normal_output.stdout.len() {
+        return Err(TestError::Failure(
+            "Compact mode should produce less or equal output".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+// ============================================================================
+// Help and Version Tests
+// ============================================================================
+
+/// Tests help command.
+#[test]
+fn test_help_command() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("validate"))
+        .stdout(predicate::str::contains("normalize"))
+        .stdout(predicate::str::contains("to-json"));
+}
+
+/// Tests validate help.
+#[test]
+fn test_validate_help() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--skip-alignment"))
+        .stdout(predicate::str::contains("--force"));
+}
+
+/// Tests no args shows help.
+#[test]
+fn test_no_args_shows_help() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Usage"));
+}
+
+// ============================================================================
+// Error Handling Tests
+// ============================================================================
+
+/// Tests error exit codes.
+#[test]
+fn test_error_exit_codes() -> Result<(), TestError> {
+    let dir = tempdir()?;
+
+    // Valid file: exit code 0
+    let valid_path = dir.path().join("valid.cha");
+    fs::write(&valid_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&valid_path)
+        .assert()
+        .code(0);
+
+    // Invalid file: exit code != 0
+    let invalid_path = dir.path().join("invalid.cha");
+    fs::write(&invalid_path, INVALID_CHAT_MISSING_END)?;
+
+    let assert = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&invalid_path)
+        .assert()
+        .failure();
+
+    // Verify non-zero exit code
+    assert.code(predicate::ne(0));
+    Ok(())
+}
+
+/// Tests missing required argument.
+#[test]
+fn test_missing_required_argument() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("required"));
+}
+
+// ============================================================================
+// Exit Code Contract Tests
+// ============================================================================
+
+/// Exit code 0 for a valid CHAT file (CI contract).
+#[test]
+fn exit_code_zero_for_valid_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file = dir.path().join("valid.cha");
+    fs::write(&file, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .args(["validate", file.to_str().unwrap(), "--tui-mode", "disable"])
+        .assert()
+        .success(); // exit code 0
+    Ok(())
+}
+
+/// Exit code 1 for an invalid CHAT file (CI contract).
+#[test]
+fn exit_code_nonzero_for_invalid_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file = dir.path().join("invalid.cha");
+    fs::write(&file, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .args(["validate", file.to_str().unwrap(), "--tui-mode", "disable"])
+        .assert()
+        .failure(); // exit code != 0
+    Ok(())
+}
+
+/// Exit code 1 for a nonexistent file path (CI contract).
+#[test]
+fn exit_code_nonzero_for_nonexistent_file() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .args([
+            "validate",
+            "/tmp/nonexistent_file_12345.cha",
+            "--tui-mode",
+            "disable",
+        ])
+        .assert()
+        .failure();
+}
+
+/// Exit code 2 for missing required arguments (clap usage error).
+#[test]
+fn exit_code_two_for_usage_error() {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .args(["validate"])
+        .assert()
+        .code(2);
+}
+
+/// Tests that --help includes a Getting Started section for new users.
+#[test]
+fn help_text_includes_getting_started() -> Result<(), TestError> {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Getting started"));
+    Ok(())
+}
+
+// ============================================================================
+// Strict Linkers (--strict-linkers) Tests
+// ============================================================================
+
+/// CHAT file with self-completion linker (+,) and no preceding interrupted
+/// utterance. Without --strict-linkers this should pass; with it, E351 fires.
+const CHAT_WITH_SELF_COMPLETION_ORPHAN: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t+, hello world .\n@End\n";
+
+/// Self-completion orphan passes validation without --strict-linkers.
+#[test]
+fn strict_linkers_off_allows_orphan_self_completion() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("orphan.cha");
+    fs::write(&file_path, CHAT_WITH_SELF_COMPLETION_ORPHAN)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success();
+    Ok(())
+}
+
+// ============================================================================
+// Cascading Error Hint Tests
+// ============================================================================
+
+/// When structural errors (E1xx-E5xx) are present but no alignment errors
+/// (E7xx) were emitted, the validator should hint that alignment checks
+/// may not have run because of the structural errors.
+#[test]
+fn cascading_error_hint_shown_for_structural_errors() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("missing_end.cha");
+    fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "additional checks may not have run",
+        ));
+    Ok(())
+}
+
+/// A valid file should not show any cascading error hint.
+#[test]
+fn no_cascading_hint_for_valid_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("valid.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("additional checks may not have run").not())
+        .stderr(predicate::str::contains("additional checks may not have run").not());
+    Ok(())
+}
+
+// ============================================================================
+// Strict Linkers (--strict-linkers) Tests
+// ============================================================================
+
+/// Self-completion orphan triggers E351 when --strict-linkers is enabled.
+#[test]
+fn strict_linkers_on_rejects_orphan_self_completion() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("orphan.cha");
+    fs::write(&file_path, CHAT_WITH_SELF_COMPLETION_ORPHAN)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg("--strict-linkers")
+        .arg(&file_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("E351"));
+    Ok(())
+}
+
+// ============================================================================
+// CLAN Help Grouping
+// ============================================================================
+
+// ============================================================================
+// --list-checks
+// ============================================================================
+
+/// `chatter validate --list-checks` prints every check and exits 0 without
+/// requiring a path argument. Output must mention both statuses so users know
+/// the column exists.
+#[test]
+fn list_checks_shows_active_and_planned() -> Result<(), TestError> {
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .args(["validate", "--list-checks", "--tui-mode", "disable"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Active"))
+        .stdout(predicate::str::contains("Planned"))
+        // Spot-check a known Active and a known Planned code.
+        .stdout(predicate::str::contains("E305"))
+        .stdout(predicate::str::contains("E321"));
+    Ok(())
+}
+
+// ============================================================================
+// Debug Sanitize Tests (`chatter debug sanitize`)
+// ============================================================================
+
+/// Source words must not appear in sanitize output written to stdout.
+#[test]
+fn test_sanitize_stdout_strips_words() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input = dir.path().join("input.cha");
+    fs::write(&input, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("debug")
+        .arg("sanitize")
+        .arg(&input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hello").not())
+        .stdout(predicate::str::contains("world").not())
+        .stdout(predicate::str::contains("*CHI:"))
+        .stdout(predicate::str::contains("w1"))
+        .stdout(predicate::str::contains("w2"));
+    Ok(())
+}
+
+/// `--output` writes the sanitized result to a file.
+#[test]
+fn test_sanitize_output_file() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input = dir.path().join("input.cha");
+    let output = dir.path().join("sanitized.cha");
+    fs::write(&input, VALID_CHAT)?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("debug")
+        .arg("sanitize")
+        .arg(&input)
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .success();
+
+    let body = fs::read_to_string(&output)?;
+    assert!(
+        !body.contains("hello"),
+        "source word leaked into file:\n{body}"
+    );
+    assert!(
+        !body.contains("world"),
+        "source word leaked into file:\n{body}"
+    );
+    assert!(body.contains("*CHI:"), "speaker code missing:\n{body}");
+    assert!(body.contains("w1"), "placeholder w1 missing:\n{body}");
+    Ok(())
+}
+
+/// A `@u` phonetic form (UNIBET/IPA in a word slot) must validate clean
+/// and must surface in `to-json` as TYPED PHONETIC content, not as an
+/// orthographic text node. The fixture is the real aphasia pattern:
+/// phonetic surface + `[: target]` replacement + `[* code]` error.
+#[test]
+fn test_to_json_types_u_form_content_as_phonetic() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("unibet.cha");
+    fs::write(
+        &file_path,
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+         @ID:\teng|test|CHI|3;|female|||Target_Child|||\n\
+         *CHI:\ts\u{026a}nd\u{259}\u{02de}w\u{0251}n@u [: syndrome] [* n:k] .\n@End\n",
+    )?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success();
+
+    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let doc: serde_json::Value = serde_json::from_slice(&output)
+        .map_err(|e| TestError::Failure(format!("to-json emitted invalid JSON: {e}")))?;
+
+    // Find the @u word node anywhere in the document. Word objects are
+    // not always tagged with "type":"word" (e.g. inside replaced_word),
+    // so the signature is form_type:"u" plus a content array.
+    fn find_u_word(node: &serde_json::Value) -> Option<&serde_json::Value> {
+        match node {
+            serde_json::Value::Object(map) => {
+                if map.get("form_type").and_then(|t| t.as_str()) == Some("u")
+                    && map.get("content").is_some_and(|c| c.is_array())
+                {
+                    return Some(node);
+                }
+                map.values().find_map(find_u_word)
+            }
+            serde_json::Value::Array(items) => items.iter().find_map(find_u_word),
+            _ => None,
+        }
+    }
+    let word = find_u_word(&doc)
+        .ok_or_else(|| TestError::Failure("no @u word in to-json output".to_string()))?;
+
+    // The provenance requirement: the content is a typed phonetic node,
+    // never an orthographic "text" node (the 2026-07-13 UNIBET design,
+    // option B; Franklin's 2026-07-14 ruling: @u only).
+    let content = word["content"]
+        .as_array()
+        .ok_or_else(|| TestError::Failure("@u word has no content array".to_string()))?;
+    let kinds: Vec<&str> = content.iter().filter_map(|c| c["type"].as_str()).collect();
+    if kinds.contains(&"text") {
+        return Err(TestError::Failure(format!(
+            "@u word content is orthographic text, expected typed phonetic: {kinds:?}"
+        )));
+    }
+    if !kinds.contains(&"phonetic") {
+        return Err(TestError::Failure(format!(
+            "@u word content lacks a phonetic node: {kinds:?}"
+        )));
+    }
+    Ok(())
+}
+
+/// A mid-word syllable pause chain (`or^ga^ni^zi^ra`, `rhi^noceros`) is
+/// ONE word and validates clean. Regression: the v0.3.3 overlap-port
+/// grammar (6192c178) weighted interior overlap readings with
+/// prec.dynamic(2) but left `syllable_pause` out of the interior lead
+/// set, so GLR tie-breaking fragmented `or^ga^ni^zi^ra` into `or` +
+/// `^ga^ni^zi^ra`, and E252 then fired on the caret-initial fragment
+/// (2026-07-15 field report from real Croatian aphasia-protocol data).
+#[test]
+fn test_mid_word_syllable_pause_chain_is_one_word_and_valid() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("sylpause.cha");
+    fs::write(
+        &file_path,
+        "@UTF8\n@Begin\n@Languages:\thrv\n@Participants:\tPAR Participant\n\
+         @ID:\thrv|test|PAR|||||Participant|||\n\
+         *PAR:\tneka or^ga^ni^zi^ra ba [///] \u{0161}ta je .\n\
+         *PAR:\trhi^noceros je .\n@End\n",
+    )?;
+
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&file_path)
+        .assert()
+        .success();
+
+    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("to-json")
+        .arg(&file_path)
+        .arg("--skip-validation")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let doc: serde_json::Value = serde_json::from_slice(&output)
+        .map_err(|e| TestError::Failure(format!("to-json emitted invalid JSON: {e}")))?;
+
+    // The multi-caret token must surface as ONE word whose raw_text is the
+    // full chain: fragmentation (a word `or` plus a caret-initial word)
+    // is exactly the regression this test pins.
+    fn collect_words(node: &serde_json::Value, out: &mut Vec<String>) {
+        match node {
+            serde_json::Value::Object(map) => {
+                if map.get("type").and_then(|t| t.as_str()) == Some("word")
+                    && let Some(raw) = map.get("raw_text").and_then(|r| r.as_str())
+                {
+                    out.push(raw.to_string());
+                }
+                map.values().for_each(|v| collect_words(v, out));
+            }
+            serde_json::Value::Array(items) => items.iter().for_each(|v| collect_words(v, out)),
+            _ => {}
+        }
+    }
+    let mut words = Vec::new();
+    collect_words(&doc, &mut words);
+    if !words.iter().any(|w| w == "or^ga^ni^zi^ra") {
+        return Err(TestError::Failure(format!(
+            "or^ga^ni^zi^ra did not survive as one word; words seen: {words:?}"
+        )));
+    }
+    if !words.iter().any(|w| w == "rhi^noceros") {
+        return Err(TestError::Failure(format!(
+            "rhi^noceros did not survive as one word; words seen: {words:?}"
+        )));
+    }
+    Ok(())
+}

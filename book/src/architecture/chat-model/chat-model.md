@@ -326,7 +326,7 @@ For the alignment algorithms themselves, see
 - **JSON**: all model types implement `Serialize`/`Deserialize`. Format
   per the [JSON Schema](../../chatter/integrating/json-schema.md).
 - **JSON Schema**: derived via `JsonSchema`. Run
-  `cargo test --test generate_schema` to regenerate
+  `cargo test -p talkbank-transform --tests generate_schema` to regenerate
   `schema/chat-file.schema.json`.
 
 ## Memory and Interning

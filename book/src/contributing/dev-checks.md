@@ -42,7 +42,7 @@ Add the checks that match the surface you changed:
 
   ```bash
   cargo test -p talkbank-parser-tests parser_equivalence
-  cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+  cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
   ```
 
 See [Setup](setup.md) and [Spec Workflow](spec-workflow.md) for the
@@ -59,8 +59,8 @@ surface-specific regeneration guidance.
 
 Run these in addition to the core sweep when touching parser/model code:
 
-1. `cargo test -p talkbank-parser --test test_parse_health_recovery`
-2. `cargo test -p talkbank-parser-tests --test parser_equivalence_files`
+1. `cargo test -p talkbank-parser --tests test_parse_health_recovery`
+2. `cargo test -p talkbank-parser-tests --tests parser_equivalence_files`
 
 These protect against regressions in:
 

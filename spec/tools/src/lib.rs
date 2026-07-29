@@ -39,7 +39,7 @@
 //! # Rust validation test generation
 //! cargo run --manifest-path spec/tools/Cargo.toml \
 //!     --bin gen_rust_tests -- \
-//!     -o crates/talkbank-parser-tests/tests/generated
+//!     -o crates/talkbank-parser-tests/tests/integration/generated
 //!
 //! # Validation fixture corpus + manifest (validation-layer errors only)
 //! cargo run --manifest-path spec/tools/Cargo.toml \
@@ -131,6 +131,7 @@
 //! ```
 
 pub mod output;
+pub mod owned_output;
 pub mod spec;
 pub mod templates;
 

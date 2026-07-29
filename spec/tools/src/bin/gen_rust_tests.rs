@@ -51,8 +51,18 @@ fn main() -> anyhow::Result<()> {
     );
     println!("Output directory: {}", args.output_dir.display());
 
-    // ALWAYS clean generated_*.rs files before regenerating to prevent stale tests
-    // (when specs are deleted, their corresponding test files should also be deleted)
+    // Clean by NAME ALLOWLIST, deliberately, NOT by owning the directory.
+    //
+    // `tests/integration/generated/` has TWO producers: this generator writes
+    // `generated_*.rs`, and `bootstrap_reference_corpus` writes
+    // `reference_corpus.rs`. A shared directory cannot be claimed with
+    // `owned_output::clear_owned`; doing so deletes the other producer's output
+    // (tried 2026-07-29, broke the build immediately). The allowlist is what
+    // makes two writers into one directory safe.
+    //
+    // Cost of the allowlist, accepted: it cannot remove stale SUBdirectories,
+    // so a deleted spec can leave an orphan behind. Give each producer its own
+    // owned directory if that ever matters.
     if args.output_dir.exists() {
         println!("Cleaning old generated test files...");
         for entry in std::fs::read_dir(&args.output_dir)? {

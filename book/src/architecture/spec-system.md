@@ -113,7 +113,7 @@ For error specs, it captures the actual parse (with ERROR nodes) as the expected
 - Parser-layer error specs become `parser.parse_chat_file()` tests expecting `Err`
 - Validation-layer error specs become parse-then-validate tests
 
-Output: `crates/talkbank-parser-tests/tests/generated/`
+Output: `crates/talkbank-parser-tests/tests/integration/generated/`
 
 The generated suites are useful as grammar/audit support and regression
 coverage, but they are not the sole authority for parser semantics.

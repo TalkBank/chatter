@@ -103,7 +103,7 @@ Most test files are **generated** from specifications in the repository:
 The generation pipeline (from the repo root):
 ```bash
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus \
+  --output-dir grammar/test/corpus/generated \
   --template-dir spec/tools/templates
 ```
 

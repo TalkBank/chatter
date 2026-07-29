@@ -221,12 +221,14 @@ impl<'a> Iterator for Lexer<'a> {
             return None;
         }
 
-        // grammar.js: continuation = /[\r\n]+\t/
-        // Continuation line: newline(s) followed by tab.
+        // grammar.js: continuation = /[\r\n]+\t[ ]*/
+        // Continuation line: newline(s), a tab, and any incidental spaces the
+        // transcriber left after it. Mirrors grammar.js and must stay in step
+        // with it; spaces only, never [\t].
         // CRITICAL: do NOT reset condition, continuation content stays
         // in the same mode as the previous line (e.g., MAIN_CONTENT,
         // MOR_CONTENT, HEADER_CONTENT, etc.)
-        <*> [\r\n]+ [\t] {
+        <*> [\r\n]+ [\t] [ ]* {
             emit!(Continuation);
         }
 

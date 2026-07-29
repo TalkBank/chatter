@@ -19,7 +19,7 @@
 - **Mandatory regression gate** for any change touching the data model (`talkbank-model`) or transform pipeline (`talkbank-transform`), run before every phase's final commit:
   ```bash
     cargo test -p talkbank-parser-tests parser_equivalence
-  cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+  cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
   ```
 - Every book page touched in a phase updates its `**Last modified:**` header via `date '+%Y-%m-%d %H:%M %Z'` (never guessed/hardcoded), in the same commit as the code change.
 - Test-first, red before green, for every step marked "Write the failing test."
@@ -431,7 +431,7 @@ Use the exact output to update the touched file's `**Last modified:**` line.
 
 ```bash
 cargo test -p talkbank-parser-tests parser_equivalence
-cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
 cargo fmt -p talkbank-transform -- --check
 cargo clippy -p talkbank-transform --all-targets -- -D warnings
 ```
@@ -634,7 +634,7 @@ Update any matched prose describing "exact match required" to describe the subse
 
 ```bash
 cargo test -p talkbank-parser-tests parser_equivalence
-cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
 cargo fmt -p talkbank-transform -- --check
 cargo clippy -p talkbank-transform --all-targets -- -D warnings
 ```
@@ -2393,7 +2393,7 @@ Any existing `pending.toml` written by a pre-Task-8-Part-3 binary (`schema_versi
 
 ```bash
 cargo test -p talkbank-parser-tests parser_equivalence
-cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test -p talkbank-transform -p chatter --lib

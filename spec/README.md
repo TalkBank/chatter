@@ -40,12 +40,12 @@ spec/
 # This repo does not have a root `make test-gen` wrapper.
 # Regenerate the tree-sitter corpus tests:
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus \
+  --output-dir grammar/test/corpus/generated \
   --template-dir spec/tools/templates
 
 # Regenerate the generated Rust parser tests (constructs + parser-layer errors):
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/generated
+  --output-dir crates/talkbank-parser-tests/tests/integration/generated
 
 # Regenerate the validation fixture corpus + manifest.json (validation-layer errors):
 cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \

@@ -196,7 +196,19 @@ export default grammar({
     // tabs are all named tokens.
     // ============================================================================
 
-    continuation: $ => /[\r\n]+\t/,  // Multi-line continuation (newline followed by tab)
+    // Multi-line continuation: newline(s), a tab, and any incidental spaces
+    // left after that tab. Spaces only, never `\t`: a second tab is
+    // structural (`tier_sep` is colon plus tab), not incidental whitespace.
+    //
+    // NOTE: `whitespaces` (below) carries its own inline copy of the
+    // `[\r\n]+\t` half of this pattern. It tolerates the trailing space
+    // already, via the `' '` alternative in its `repeat1`, which is why only
+    // the three `$.continuation` rules ever showed this bug. Keep the two in
+    // step.
+    //
+    // Rationale and the adjudication that produced it:
+    // crates/chatter/tests/dependent_tier_continuation_tests.rs
+    continuation: $ => /[\r\n]+\t[ ]*/,
     // A single line break (LF, CRLF, or lone CR). Deliberately NOT `[\r\n]+`:
     // fusing consecutive newlines into one token erased blank lines, so they
     // could never be detected. With a single-break token, a blank line is a
@@ -2247,6 +2259,12 @@ export default grammar({
     // skip whitespace automatically. All whitespace in CHAT must be grammar-visible so that
     // continuation lines (newline + tab for multi-line content) are handled correctly.
     // This token matches one or more spaces or continuation sequences.
+    //
+    // The `/[\r\n]+\t/` here is a SECOND definition of the `continuation`
+    // token above; the two must stay in step. This copy needs no explicit
+    // trailing-space handling because `repeat1` already admits `' '`, which
+    // is why the tiers built on `whitespaces` (`%mor`, `%gra`, `%wor`) never
+    // showed the leading-space bug that the `$.continuation` tiers did.
     whitespaces: $ => token(repeat1(choice(' ', /[\r\n]+\t/))),
 
     // Trailing separator whitespace: any run of spaces after the required

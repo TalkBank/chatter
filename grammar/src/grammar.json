@@ -117,7 +117,7 @@
     },
     "continuation": {
       "type": "PATTERN",
-      "value": "[\\r\\n]+\\t"
+      "value": "[\\r\\n]+\\t[ ]*"
     },
     "newline": {
       "type": "PATTERN",
