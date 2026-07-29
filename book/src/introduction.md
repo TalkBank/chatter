@@ -1,7 +1,7 @@
 # Introduction
 
 **Status:** Current
-**Last modified:** 2026-06-21 21:33 EDT
+**Last modified:** 2026-07-29 18:20 EDT
 
 [TalkBank](https://talkbank.org/) is the world's largest open repository of spoken language data. This repository (`TalkBank/chatter`) is the standalone home of the CHAT format authority and the `chatter` tool family: the `chatter` CLI, the Rust crates for parsing/validation/transformation, the `tree-sitter-talkbank` grammar, the `talkbank-lsp` language server, and the desktop validation app.
 
@@ -50,7 +50,6 @@ apps/           Tauri v2 desktop app (`chatter-desktop`)
 corpus/         Reference corpus (must stay 100% valid under the regression gate)
 schema/         JSON Schema for the CHAT AST
 tests/          Integration tests and fixtures
-fuzz/           Fuzz testing targets (separate Cargo workspace)
 docs/           Strategy docs, proposals, and investigations for this repo
 book/           This documentation (mdBook)
 ```

@@ -1,7 +1,7 @@
 # Repository Architecture and Boundaries
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-07-29 18:20 EDT
 
 ## Top-level layout
 
@@ -24,7 +24,6 @@ apps/                     desktop app (Tauri v2 + React): chatter-desktop
 corpus/                   reference corpus (must pass 100%)
 schema/                   JSON Schema for ChatFile AST
 tests/                    workspace-level integration tests and fixtures
-fuzz/                     fuzz targets (separate Cargo workspace)
 book/                     mdBook documentation source
 docs/                     strategy docs, proposals, and investigations
 ```

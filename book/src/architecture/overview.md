@@ -1,7 +1,7 @@
 # Architecture Overview
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-07-29 18:20 EDT
 
 `TalkBank/chatter` is the standalone home of the TalkBank CHAT specification,
 tree-sitter grammar, Rust crates, `chatter` CLI, LSP server, and desktop app.
@@ -80,27 +80,23 @@ chatter/
 ├── tests/                  Integration tests and fixtures
 ├── schema/                 JSON Schema (auto-generated)
 ├── apps/chatter-desktop/   Desktop validation app (Tauri v2, React)
-├── fuzz/                   cargo-fuzz targets (separate workspace)
 ├── book/                   This documentation
 └── docs/                   Strategy, proposals, investigations
 ```
 
 ## Cargo Workspaces
 
-Three separate Cargo workspaces live here:
+Two separate Cargo workspaces live here:
 
 1. **Root workspace** (`Cargo.toml`), all Rust crates for parsing, model,
    transform, CLI, LSP, and `apps/chatter-desktop/src-tauri`.
 2. **Spec workspace** (`spec/Cargo.toml`), `spec/tools` for core
    generation, `spec/runtime-tools` for runtime-aware spec tooling.
-3. **Fuzz workspace** (`fuzz/Cargo.toml`), cargo-fuzz targets for parser and
-   validation robustness checks.
 
 Use the relevant manifest path for the workspace you mean to operate in:
 
 - `spec/tools/Cargo.toml` for generators
 - `spec/runtime-tools/Cargo.toml` for bootstrap/mining/runtime validation
-- `fuzz/Cargo.toml` for cargo-fuzz targets
 
 ## Where to read next
 

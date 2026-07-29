@@ -18,7 +18,6 @@ members = [
 ]
 exclude = [
     "spec/tools",  # Independent workspace
-    "fuzz",        # cargo-fuzz uses its own nightly toolchain with sanitizer flags
 ]
 
 [workspace.package]
