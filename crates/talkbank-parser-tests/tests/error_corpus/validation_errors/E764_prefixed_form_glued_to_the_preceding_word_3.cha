@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the dog&+fr barked .
+@Comment:	ERROR: the fragment is a word of its own and needs a space
+@End

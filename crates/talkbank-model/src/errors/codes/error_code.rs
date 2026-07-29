@@ -931,6 +931,28 @@ pub enum ErrorCode {
     #[code("E763")]
     PrefixMarkerLanguageNotAllowed,
 
+    /// A `&`-prefixed form runs directly into the preceding word
+    /// (`dog&-um`, `dog&~gaga`, `dog&+fr`).
+    ///
+    /// `&` cannot continue a word, so the shape parses as TWO words: the
+    /// missing space silently manufactures a word boundary that the
+    /// transcriber did not write and no other diagnostic reports. Style
+    /// rule in the [`PauseGluedToWord`] / [`CodeGluedToFollowingContent`]
+    /// family: the parse is unambiguous, which is exactly why the source
+    /// must be canonically spaced.
+    ///
+    /// Glued omission (`dog0is`) is a different shape and is not this
+    /// code: `0` is ordinary word text, so it yields ONE malformed word,
+    /// already rejected by `E220`.
+    ///
+    /// Juxtaposition-matrix cell 6, ruled REJECT 2026-07-18. Zero
+    /// main-tier attestations in the kept corpus at adoption.
+    ///
+    /// [`PauseGluedToWord`]: Self::PauseGluedToWord
+    /// [`CodeGluedToFollowingContent`]: Self::CodeGluedToFollowingContent
+    #[code("E764")]
+    PrefixedFormGluedToPrecedingWord,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

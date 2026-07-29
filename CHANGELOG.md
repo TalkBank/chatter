@@ -7,6 +7,23 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
+## [Unreleased]
+
+### Added
+
+- **E764, a `&`-prefixed form glued to the preceding word** (`dog&-um`,
+  `dog&~gaga`, `dog&+fr`). The shape parses as two words, because `&` cannot
+  continue a word, so a missing space silently manufactures a word boundary
+  that the transcriber did not write and nothing reported. Style rule in the
+  E749/E751/E757 family, detected by span adjacency, mirrored in the re2c
+  front end as a token scan. Glued omission (`dog0is`) is not this code: it
+  yields one malformed word and E220 already rejects it.
+
+  Juxtaposition-matrix cell 6, ruled REJECT 2026-07-18; zero main-tier
+  attestations in the kept corpus at adoption, so no existing file is
+  affected. Validator-only: grammar, model shape, and roundtrip behavior
+  are untouched.
+
 ## [0.4.1] - 2026-07-27
 
 ### Fixed

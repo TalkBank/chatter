@@ -1787,6 +1787,30 @@
       "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
     },
     {
+      "fixture": "E764_prefixed_form_glued_to_the_preceding_word.cha",
+      "expected_codes": [
+        "E764"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
+    },
+    {
+      "fixture": "E764_prefixed_form_glued_to_the_preceding_word_2.cha",
+      "expected_codes": [
+        "E764"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
+    },
+    {
+      "fixture": "E764_prefixed_form_glued_to_the_preceding_word_3.cha",
+      "expected_codes": [
+        "E764"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"

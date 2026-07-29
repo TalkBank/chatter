@@ -116,6 +116,55 @@ pub(crate) fn check_code_glued_to_following_content(
     }
 }
 
+/// The `&`-prefix categories: each introduces a word of its own, so each
+/// needs a space before it. `Omission` (`0word`) and `CAOmission`
+/// (`(word)`) are deliberately excluded: they are not `&` forms, they do
+/// not split a glued token into two words, and the glued shape is already
+/// rejected elsewhere (E220).
+fn is_ampersand_prefixed(word: &crate::model::Word) -> bool {
+    matches!(
+        word.category,
+        Some(
+            crate::model::WordCategory::Filler
+                | crate::model::WordCategory::Nonword
+                | crate::model::WordCategory::PhonologicalFragment
+        )
+    )
+}
+
+/// E764: a `&`-prefixed form must not run directly into the preceding
+/// word (`dog&-um`). Fires when such a word's span starts at the byte
+/// where the previous in-order word's span ends. Mirror of
+/// [`check_pause_glued_to_word`]: same walk, same adjacency test, same
+/// dummy-span opt-out; only the glued item's identity differs.
+pub(crate) fn check_prefixed_form_glued_to_preceding_word(
+    utterance: &Utterance,
+    errors: &impl ErrorSink,
+) {
+    let mut prev_word_end: Option<u32> = None;
+
+    walk_content(&utterance.main.content.content.0, None, &mut |item| {
+        if let ContentItem::Word(word) = &item
+            && word.span != crate::Span::DUMMY
+            && is_ampersand_prefixed(word)
+            && let Some(end) = prev_word_end
+            && word.span.start == end
+        {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::PrefixedFormGluedToPrecedingWord,
+                    Severity::Error,
+                    SourceLocation::new(word.span),
+                    ErrorContext::new("&", word.span, "&"),
+                    "Prefixed form must be separated from the preceding word by a space",
+                )
+                .with_suggestion("Add a space between the word and the prefixed form"),
+            );
+        }
+        prev_word_end = word_end(&item);
+    });
+}
+
 /// E751: a pause must not open directly at the end of a word
 /// (`hello(.)`; CLAN CHECK 57). Fires when a pause's span starts at the
 /// byte where the previous in-order word's span ends.

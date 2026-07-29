@@ -134,6 +134,36 @@ fn report_code_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &imp
     }
 }
 
+/// Report E764 for every `&`-prefixed word token immediately following
+/// another word token with no whitespace between (`dog&-um`). Mirrors the
+/// model-validation rule `check_prefixed_form_glued_to_preceding_word`
+/// (talkbank-model `validation/utterance/spacing.rs`), which cannot fire
+/// on this parser's output because its words carry dummy spans.
+///
+/// The lexer already extracts the category prefix as its own field, so
+/// the test is on that field rather than on the raw text: `0` (omission)
+/// is deliberately not this rule (see the model-side note).
+fn report_prefixed_form_glued_to_preceding_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for pair in tokens.windows(2) {
+        let Token::Word {
+            prefix: Some(prefix),
+            ..
+        } = pair[1]
+        else {
+            continue;
+        };
+        if matches!(pair[0], Token::Word { .. }) && matches!(prefix, "&-" | "&~" | "&+") {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::PrefixedFormGluedToPrecedingWord,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Prefixed form must be separated from the preceding word by a space".to_owned(),
+            ));
+        }
+    }
+}
+
 /// Report E758 for a main tier whose content starts with a space after
 /// the `:\t` separator, in a file WITHOUT `@Options: CA` (CLAN CHECK
 /// 123). Mirrors the model-validation rule
@@ -216,6 +246,7 @@ pub fn parse_file_with_errors<'a>(
     report_space_inside_angle_group(tokens, errors);
     report_pause_glued_to_word(tokens, errors);
     report_code_glued_to_following_content(tokens, errors);
+    report_prefixed_form_glued_to_preceding_word(tokens, errors);
     report_leading_space_on_main_tier(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();

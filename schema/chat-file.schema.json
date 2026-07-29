@@ -3346,6 +3346,11 @@
           "type": "string"
         },
         {
+          "const": "E764",
+          "description": "A `&`-prefixed form runs directly into the preceding word\n(`dog&-um`, `dog&~gaga`, `dog&+fr`).\n\n`&` cannot continue a word, so the shape parses as TWO words: the\nmissing space silently manufactures a word boundary that the\ntranscriber did not write and no other diagnostic reports. Style\nrule in the [`PauseGluedToWord`] / [`CodeGluedToFollowingContent`]\nfamily: the parse is unambiguous, which is exactly why the source\nmust be canonically spaced.\n\nGlued omission (`dog0is`) is a different shape and is not this\ncode: `0` is ordinary word text, so it yields ONE malformed word,\nalready rejected by `E220`.\n\nJuxtaposition-matrix cell 6, ruled REJECT 2026-07-18. Zero\nmain-tier attestations in the kept corpus at adoption.\n\n[`PauseGluedToWord`]: Self::PauseGluedToWord\n[`CodeGluedToFollowingContent`]: Self::CodeGluedToFollowingContent",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"
