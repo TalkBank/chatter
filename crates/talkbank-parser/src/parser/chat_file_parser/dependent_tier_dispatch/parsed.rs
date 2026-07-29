@@ -224,8 +224,6 @@ fn report_tier_parse_error(tier_node: Node, input: &str, tier_name: &str, errors
     }
 }
 
-
-
 /// Empty `%mor` standing in for a tier that failed to parse.
 ///
 /// The span is the REAL tier span, not `Span::DUMMY`. A placeholder is still a

@@ -17,7 +17,6 @@
 
 use std::collections::BTreeSet;
 
-
 use crate::common::{
     CliHarness,
     command_surface::{SURFACE_GROUPS, SurfaceScope},

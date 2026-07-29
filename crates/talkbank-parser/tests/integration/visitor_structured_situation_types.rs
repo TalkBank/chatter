@@ -39,7 +39,8 @@ use talkbank_model::model::{Header, Line};
 use talkbank_parser::TreeSitterParser;
 
 // Existing reference-corpus fixtures (NOT hand-authored).
-const HEADERS_METADATA: &str = include_str!("../../../../corpus/reference/core/headers-metadata.cha");
+const HEADERS_METADATA: &str =
+    include_str!("../../../../corpus/reference/core/headers-metadata.cha");
 const HEADERS_TIME_AND_TYPES: &str =
     include_str!("../../../../corpus/reference/core/headers-time-and-types.cha");
 

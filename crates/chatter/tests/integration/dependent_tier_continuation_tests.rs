@@ -43,7 +43,6 @@
 //! repositories were edited to strip the space before anyone asked whether
 //! chatter was at fault; those edits have been reverted.
 
-
 use crate::common::{CliHarness, stdout_string, write_fixture};
 use talkbank_parser_tests::test_error::TestError;
 

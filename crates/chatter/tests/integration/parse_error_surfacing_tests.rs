@@ -33,7 +33,6 @@ use std::path::PathBuf;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
 
-
 use crate::common::{CliHarness, combined_output, reference_fixture, write_fixture};
 
 /// One committed CHECK-parity fixture (`crates/talkbank-parser-tests/...`).

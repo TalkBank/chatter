@@ -32,7 +32,6 @@
 //! were removed. This test pins that `word [:]` still flags structurally and
 //! does NOT regress to generic E316.
 
-
 /// An empty replacement `word [:]` is detected by the structural replacement
 /// path (E376 `ContentAnnotationParseError`, plus the MISSING-word E342), NOT by
 /// any `[:]` ERROR-text scan, and must NOT regress to a generic E316.
@@ -40,7 +39,8 @@
 fn empty_replacement_detected_structurally_not_e316() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword [:] .\n@End\n";
 
-    let diags = crate::common::parse_validate_and_collect_diagnostics(input, Some("e208_regression"));
+    let diags =
+        crate::common::parse_validate_and_collect_diagnostics(input, Some("e208_regression"));
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(
@@ -59,7 +59,8 @@ fn empty_replacement_detected_structurally_not_e316() {
 fn well_formed_replacement_not_flagged() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword [: corrected] .\n@End\n";
 
-    let diags = crate::common::parse_validate_and_collect_diagnostics(input, Some("e208_regression"));
+    let diags =
+        crate::common::parse_validate_and_collect_diagnostics(input, Some("e208_regression"));
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(

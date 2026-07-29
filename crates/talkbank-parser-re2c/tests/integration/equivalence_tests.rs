@@ -16,7 +16,6 @@
 //! `SemanticEq`. This is the gold standard for validating our parser
 //! as a drop-in replacement.
 
-
 use talkbank_model::errors::ErrorCollector;
 use talkbank_model::{ChatParser, ParseOutcome, SemanticEq};
 use talkbank_parser::TreeSitterParser;

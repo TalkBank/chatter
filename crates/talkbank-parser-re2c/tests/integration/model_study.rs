@@ -15,7 +15,6 @@
 //!
 //! cargo test -p talkbank-parser-re2c --test model_study -- --nocapture --ignored
 
-
 use talkbank_model::{ChatParser, SemanticEq};
 use talkbank_parser::TreeSitterParser;
 

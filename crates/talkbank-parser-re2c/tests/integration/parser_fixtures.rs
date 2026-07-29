@@ -16,7 +16,6 @@
 //! verifies they lex cleanly, then parses them and checks
 //! the resulting AST structure.
 
-
 use crate::fixture_utils::{load_and_verify_lex, load_fixture};
 use insta::assert_yaml_snapshot;
 use talkbank_model::{Separator, UtteranceContent};

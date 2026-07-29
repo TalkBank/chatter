@@ -23,7 +23,6 @@
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
 
-
 use crate::common::{CliHarness, combined_output, write_fixture};
 
 /// A minimal valid preamble plus a `@Media` line and one timing bullet (so the

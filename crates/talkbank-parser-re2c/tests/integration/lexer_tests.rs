@@ -16,7 +16,6 @@
 //! These tests verify the re2c lexer produces the correct token sequence
 //! for each grammar.js construct.
 
-
 use talkbank_parser_re2c::lexer::Lexer;
 use talkbank_parser_re2c::token::Token;
 

@@ -57,11 +57,14 @@ use talkbank_parser::TreeSitterParser;
 
 // Existing reference-corpus fixtures (NOT hand-authored) covering the simple
 // scalar headers across every content node type they decode.
-const HEADERS_METADATA: &str = include_str!("../../../../corpus/reference/core/headers-metadata.cha");
+const HEADERS_METADATA: &str =
+    include_str!("../../../../corpus/reference/core/headers-metadata.cha");
 const HEADERS_RECORDING: &str =
     include_str!("../../../../corpus/reference/core/headers-recording.cha");
-const HEADERS_COMMENTS: &str = include_str!("../../../../corpus/reference/core/headers-comments.cha");
-const HEADERS_EPISODES: &str = include_str!("../../../../corpus/reference/core/headers-episodes.cha");
+const HEADERS_COMMENTS: &str =
+    include_str!("../../../../corpus/reference/core/headers-comments.cha");
+const HEADERS_EPISODES: &str =
+    include_str!("../../../../corpus/reference/core/headers-episodes.cha");
 const HEADERS_TIME_AND_TYPES: &str =
     include_str!("../../../../corpus/reference/core/headers-time-and-types.cha");
 const HEADERS_MEDIA: &str = include_str!("../../../../corpus/reference/core/headers-media.cha");

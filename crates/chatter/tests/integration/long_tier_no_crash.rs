@@ -18,7 +18,6 @@
 //! same root. The validator must instead terminate normally and quickly,
 //! whatever it decides about the file's validity.
 
-
 use crate::common::CliHarness;
 
 /// Build a valid CHAT document whose single utterance has `words` tokens.

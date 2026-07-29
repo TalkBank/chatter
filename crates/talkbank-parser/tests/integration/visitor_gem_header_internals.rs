@@ -48,7 +48,8 @@ use talkbank_parser::TreeSitterParser;
 // WITHOUT a label (optional-absent path), and `@G` WITH a label.
 const POSTCODES_AND_GEMS: &str =
     include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha");
-const HEADERS_EPISODES: &str = include_str!("../../../../corpus/reference/core/headers-episodes.cha");
+const HEADERS_EPISODES: &str =
+    include_str!("../../../../corpus/reference/core/headers-episodes.cha");
 
 /// Whether `h` is one of the 3 GEM header variants migrated in Task 2e.
 fn is_gem(h: &Header) -> bool {

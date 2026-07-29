@@ -15,7 +15,6 @@
 //!
 //! Run: `cargo test -p talkbank-parser-re2c --test quick_divergence_check -- --nocapture`
 
-
 use talkbank_model::{ErrorCollector, SemanticEq};
 use talkbank_parser::TreeSitterParser;
 

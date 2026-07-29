@@ -8,9 +8,7 @@ use crate::parser::tree_parsing::bullet_content::parse_bullet_content;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use talkbank_model::model::BulletContent;
-use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
-};
+use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use tree_sitter::Node;
 
 /// Byte span of an entire tier node.

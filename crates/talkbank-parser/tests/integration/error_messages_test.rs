@@ -14,7 +14,6 @@
 //!
 //! **CRITICAL**: No error message should contain "node 'ERROR'" or expose tree-sitter internals.
 
-
 use crate::common::parse_and_collect_errors;
 
 /// Tests no error node keyword in messages.

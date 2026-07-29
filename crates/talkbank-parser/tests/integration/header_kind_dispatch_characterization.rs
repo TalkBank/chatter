@@ -61,7 +61,8 @@ use talkbank_parser::TreeSitterParser;
 type Diag = (String, u32, u32, String);
 
 /// Existing reference-corpus fixture covering every header dispatch family.
-const HEADERS_EPISODES: &str = include_str!("../../../../corpus/reference/core/headers-episodes.cha");
+const HEADERS_EPISODES: &str =
+    include_str!("../../../../corpus/reference/core/headers-episodes.cha");
 
 /// A stable tag for each `Header` variant present in the fixture, used to assert
 /// line structure without depending on header-payload internals.

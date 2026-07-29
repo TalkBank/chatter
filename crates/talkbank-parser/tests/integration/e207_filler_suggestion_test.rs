@@ -24,7 +24,6 @@
 //! which itself fails to parse, because bare `&uh` is the very pattern E207
 //! rejects. The suggestion contradicted the parser's own behavior.
 
-
 use crate::common::parse_and_collect_errors;
 
 /// Minimal CHAT fragment containing a bare `&um` that E207 rejects.

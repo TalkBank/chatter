@@ -31,7 +31,6 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_Scope>
 
-
 use crate::common::{CliHarness, combined_output, stdout_string, write_fixture};
 use talkbank_parser_tests::test_error::TestError;
 

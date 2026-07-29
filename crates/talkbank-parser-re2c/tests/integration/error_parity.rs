@@ -19,7 +19,6 @@
 //!
 //! Run: `cargo test -p talkbank-parser-re2c --test error_parity -- --nocapture`
 
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -130,7 +129,10 @@ fn collect_error_codes_re2c(input: &str) -> BTreeSet<String> {
 
 #[test]
 fn error_parity_audit() {
-    let spec_dir = format!("{}/spec/errors", crate::fixture_utils::workspace_root().display());
+    let spec_dir = format!(
+        "{}/spec/errors",
+        crate::fixture_utils::workspace_root().display()
+    );
     let spec_path = Path::new(&spec_dir);
     if !spec_path.exists() {
         eprintln!("Spec directory not found: {spec_dir}");
@@ -303,7 +305,10 @@ fn error_parity_audit() {
 /// Every error spec must produce a ChatFile, even if the content is garbage.
 #[test]
 fn re2c_never_panics_on_invalid_input() {
-    let spec_dir = format!("{}/spec/errors", crate::fixture_utils::workspace_root().display());
+    let spec_dir = format!(
+        "{}/spec/errors",
+        crate::fixture_utils::workspace_root().display()
+    );
     let spec_path = std::path::Path::new(&spec_dir);
     if !spec_path.exists() {
         return;

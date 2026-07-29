@@ -19,7 +19,6 @@ use serde_json::Value;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
 
-
 use crate::common::{
     CliHarness, assert_failure, assert_success, parse_json, stderr_string, stdout_string,
     write_fixture,

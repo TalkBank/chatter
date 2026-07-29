@@ -68,7 +68,8 @@ use talkbank_parser::TreeSitterParser;
 /// `SinWord` alternative) interleaved with one bracketed group (`〔c d〕`, the
 /// `SinBeginGroup` seq alternative). Its `%sin` body is
 /// `g:toy:dpoint b 〔c d〕 e`.
-const VALID_SIN_GROUPS: &str = include_str!("../../../../corpus/reference/annotation/groups-sign.cha");
+const VALID_SIN_GROUPS: &str =
+    include_str!("../../../../corpus/reference/annotation/groups-sign.cha");
 
 /// A `%sin:` line with an EMPTY body (tab then newline, no groups). This makes
 /// the tier node `has_error()`, so it is handled by the upstream error path and

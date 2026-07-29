@@ -50,10 +50,12 @@ use talkbank_parser::TreeSitterParser;
 // header shape.
 const HEADERS_SPEAKER_INFO: &str =
     include_str!("../../../../corpus/reference/core/headers-speaker-info.cha");
-const HEADERS_EPISODES: &str = include_str!("../../../../corpus/reference/core/headers-episodes.cha");
+const HEADERS_EPISODES: &str =
+    include_str!("../../../../corpus/reference/core/headers-episodes.cha");
 const HEADERS_RECORDING: &str =
     include_str!("../../../../corpus/reference/core/headers-recording.cha");
-const HEADERS_METADATA: &str = include_str!("../../../../corpus/reference/core/headers-metadata.cha");
+const HEADERS_METADATA: &str =
+    include_str!("../../../../corpus/reference/core/headers-metadata.cha");
 const OPTIONS_LONG_FEATURES: &str =
     include_str!("../../../../corpus/reference/annotation/long-features.cha");
 

@@ -7,9 +7,9 @@ use std::path::Path;
 
 use indicatif::ProgressStyle;
 
+use super::ValidationPresentation;
 use crate::output::{CASCADING_HINT, print_errors, should_show_cascading_hint};
 use crate::progress::ProgressThrottle;
-use super::ValidationPresentation;
 use talkbank_transform::validation_runner::{
     ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, ValidationStatsSnapshot,
 };

@@ -28,14 +28,14 @@
 //! path still flags `@zz`, does NOT regress to generic E316, and does NOT
 //! false-positive on valid markers (`@i`, `@s:eng`).
 
-
 /// An unknown form marker `word@zz` must be flagged E203 via the typed
 /// `form_marker` dispatch, and must NOT regress to a generic E316.
 #[test]
 fn unknown_form_marker_emits_e203_not_e316() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword@zz .\n@End\n";
 
-    let diags = crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
+    let diags =
+        crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(
@@ -54,7 +54,8 @@ fn unknown_form_marker_emits_e203_not_e316() {
 fn valid_builtin_form_marker_not_flagged() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello@i .\n@End\n";
 
-    let diags = crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
+    let diags =
+        crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(
@@ -73,7 +74,8 @@ fn valid_builtin_form_marker_not_flagged() {
 fn valid_language_suffix_not_flagged() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello@s:eng .\n@End\n";
 
-    let diags = crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
+    let diags =
+        crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(

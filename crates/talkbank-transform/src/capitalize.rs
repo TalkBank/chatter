@@ -58,9 +58,7 @@ pub fn capitalize_english(chat: &mut ChatFile) {
 
             // Pronoun "I": whole-token match; only rewrite when the word is a
             // single text segment (no clitics/markers split out).
-            if single_text
-                && let Some(dst) = capitalized_pronoun_i(&cleaned)
-            {
+            if single_text && let Some(dst) = capitalized_pronoun_i(&cleaned) {
                 next = dst.to_string();
             }
 

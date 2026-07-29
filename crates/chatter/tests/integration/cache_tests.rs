@@ -22,7 +22,6 @@ use std::time::Duration;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
 
-
 use crate::common::CliHarness;
 
 // Integration tests for the validation cache, exercised via CLI commands.
