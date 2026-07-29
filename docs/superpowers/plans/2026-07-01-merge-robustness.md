@@ -24,7 +24,7 @@
 - Every book page touched in a phase updates its `**Last modified:**` header via `date '+%Y-%m-%d %H:%M %Z'` (never guessed/hardcoded), in the same commit as the code change.
 - Test-first, red before green, for every step marked "Write the failing test."
 - Use `cargo test -p talkbank-transform --lib` / `-p talkbank-transform --test <name>` / `-p chatter --test <name>` for fast, scoped iteration; do not run bare `cargo test` (blocked by a pre-exec hook workspace-wide) or the full workspace suite mid-task.
-- Never git push; local commits only, one per task, Franklin pushes when ready.
+- Never git push; local commits only, one per task; the maintainer pushes when ready.
 
 ---
 
@@ -2325,7 +2325,7 @@ git commit -m "feat(adjudicate): render and parse per-speaker role tables (SPK:C
 Extends the interactive 'choose'/'override' commands from a single
 CODE TAG pair to one-or-more SPK:CODE:TAG groups, so an operator can
 correct a multi-adult suggestion without re-specifying every speaker.
-This CLI syntax choice was not reviewed with Franklin at the spec
+This CLI syntax choice was not reviewed with the maintainer at the spec
 level; flag for adjustment if a different shape is preferred."
 ```
 

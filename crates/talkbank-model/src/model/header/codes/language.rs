@@ -388,7 +388,7 @@ mod tests {
     /// `Validate` pass flags domain violations (see the companion test below).
     ///
     /// DO NOT "fix" this by giving `LanguageCode` a strict custom `Deserialize`
-    /// that rejects empty: that was tried and reverted (2026-07-04, Franklin's
+    /// that rejects empty: that was tried and reverted (2026-07-04, maintainer
     /// call) as inconsistent with the codebase's serde-boundary convention.
     #[test]
     fn deserialize_empty_is_lenient() {

@@ -4,8 +4,8 @@
 
 Worked plan for publishing chatter's library crates to crates.io,
 simultaneous with the v1.0.0 release (release-board precondition P2).
-This is planning material; the actual publish is gated on Franklin's go
-and the release freeze. Nothing here is executed autonomously.
+This is planning material; the actual publish is gated on the maintainer's
+go and the release freeze. Nothing here is executed autonomously.
 
 ## Current readiness: GREEN foundation
 
@@ -40,7 +40,7 @@ chatter directly.
 ## Held back (publish = false), deliberately
 
 - `chatter` (the CLI): shipped as a signed binary via cargo-dist
-  GitHub Releases, not as a crate. **Open decision (Franklin):** also
+  GitHub Releases, not as a crate. **Open decision (maintainer):** also
   publish the `chatter` crate to crates.io so `cargo install chatter`
   works? That is a separate, later wave if wanted; it is not required
   for the library-consumer goal and adds a maintenance surface.

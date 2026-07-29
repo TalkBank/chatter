@@ -106,7 +106,7 @@
    "fixture": "CHECK_011_undeclared_symbol_pct_fac.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts. FACET SPLIT (2026-07-24): CHECK 11's EMPTY-symbol facet (a %mor item with an empty POS, `|we`) now has the dedicated chatter code E760 (spec E760_mor_item_empty_pos.md), grounded as parity; the general undeclared-symbol-membership facet remains this documented divergence."
+   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts. FACET SPLIT (2026-07-24): CHECK 11's EMPTY-symbol facet (a %mor item with an empty POS, `|we`) now has the dedicated chatter code E760 (spec E760_mor_item_empty_pos.md), grounded as parity; the general undeclared-symbol-membership facet remains this documented divergence."
   },
   {
    "check_code": 12,
@@ -206,7 +206,7 @@
    "fixture": "CHECK_020_undeclared_suffix_compound.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
+   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
   },
   {
    "check_code": 21,
@@ -313,7 +313,7 @@
    "fixture": "CHECK_032_undeclared_dollar_code.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "Documented divergence (Franklin, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
+   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
   },
   {
    "check_code": 33,

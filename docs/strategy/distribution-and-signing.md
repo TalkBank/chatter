@@ -335,7 +335,7 @@ GitHub Release. Integrates with cargo-dist or runs independently.
 
 ## Auto-update
 
-**Decision (Franklin, 2026-06-16): both the `chatter` CLI and the
+**Decision (maintainer, 2026-06-16): both the `chatter` CLI and the
 chatter-desktop app ship an auto-update facility in v0.1.0.** Smooth,
 low-friction updates matter for the target audience: a clinician should
 not have to track releases, re-download, and re-clear Gatekeeper /

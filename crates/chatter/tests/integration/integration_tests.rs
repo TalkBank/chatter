@@ -1203,7 +1203,7 @@ fn test_to_json_types_u_form_content_as_phonetic() -> Result<(), TestError> {
 
     // The provenance requirement: the content is a typed phonetic node,
     // never an orthographic "text" node (the 2026-07-13 UNIBET design,
-    // option B; Franklin's 2026-07-14 ruling: @u only).
+    // option B; the maintainer's 2026-07-14 ruling: @u only).
     let content = word["content"]
         .as_array()
         .ok_or_else(|| TestError::Failure("@u word has no content array".to_string()))?;

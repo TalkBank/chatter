@@ -243,7 +243,7 @@ impl Validate for WordText {
 /// Deliberately does NOT enforce a symbol inventory, matching the stance of
 /// the `%pho` tier's `PhoWord`: IPA, legacy UNIBET (ASCII), and X-SAMPA
 /// notations all pass. Strict phonetic-inventory constraints belong in
-/// corpus- or project-specific validators, never here (Franklin's ruling,
+/// corpus- or project-specific validators, never here (maintainer ruling,
 /// 2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]

@@ -3,8 +3,8 @@
 **Status:** Reference
 **Last updated:** 2026-07-08 12:48 EDT
 
-Policy (Franklin, 2026-07-08): **unix CHECK is the authoritative parity
-bar** (it is what `clan-run.sh` grounds against and what Leonid
+Policy (maintainer ruling, 2026-07-08): **unix CHECK is the authoritative
+parity bar** (it is what `clan-run.sh` grounds against and what upstream
 publishes for scripting). This page documents the difference, because
 "the GUI checks more" is surprising and deserves an explanation.
 

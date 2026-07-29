@@ -14,7 +14,7 @@ correct general mechanism, not a patch scoped to IISRP's specific data.
 
 All three gaps were traced to exact file/line locations in this repo (not
 inferred from the investigation doc's summary), and all three approaches
-below were worked out with Franklin question-by-question before being
+below were worked out with the maintainer question-by-question before being
 written up here.
 
 ## Gap 1: Dedupe-on-insert for already-declared participants
@@ -175,7 +175,7 @@ format, `override_file.rs`) both carry exactly one
 `inserted_role: InsertedRoleSpec` field, applied uniformly to every
 speaker whose action is `Rename`. There is a real, live passing test
 (`multiple_adults_is_error`) pinning today's refusal as intentional;
-it will need to change as part of this work, with Franklin's
+it will need to change as part of this work, with the maintainer's
 awareness (this spec *is* that awareness).
 
 **New behavior.**

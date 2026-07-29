@@ -19,8 +19,8 @@
 //! Here each CLAN CHECK number is grounded against a real `.cha` fixture and the
 //! two validators' behaviour is compared.
 //!
-//! Both sides evolve independently (Leonid maintains CLAN CHECK, we maintain
-//! chatter), so two tests guard the ledger in `check_parity/manifest.json`:
+//! Both sides evolve independently (CLAN CHECK is maintained upstream, we
+//! maintain chatter), so two tests guard the ledger in `check_parity/manifest.json`:
 //!
 //! - [`chatter_matches_check`] (CI, no CLAN needed) asserts chatter's behaviour
 //!   on each fixture matches the manifest `status`. Catches OUR drift, and is the

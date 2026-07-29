@@ -43,7 +43,7 @@
   },
   {
    "code": 101,
-   "reason": "only call path inside #ifndef UNX; compiled out of the unix build (GUI CLANc only); no ASCII trigger path (see gui-vs-unix-check.md; unix CHECK is the authoritative bar per Franklin 2026-07-08)"
+   "reason": "only call path inside #ifndef UNX; compiled out of the unix build (GUI CLANc only); no ASCII trigger path (see gui-vs-unix-check.md; unix CHECK is the authoritative bar per the 2026-07-08 maintainer ruling)"
   },
   {
    "code": 104,
@@ -63,7 +63,7 @@
   },
   {
    "code": 151,
-   "reason": "alive ONLY in GUI CLANc (#ifndef UNX); unix CHECK accepts; chatter also accepts: a gap only if the GUI build defines the bar (open policy question) (see gui-vs-unix-check.md; unix CHECK is the authoritative bar per Franklin 2026-07-08)"
+   "reason": "alive ONLY in GUI CLANc (#ifndef UNX); unix CHECK accepts; chatter also accepts: a gap only if the GUI build defines the bar (open policy question) (see gui-vs-unix-check.md; unix CHECK is the authoritative bar per the 2026-07-08 maintainer ruling)"
   },
   {
    "code": 154,
