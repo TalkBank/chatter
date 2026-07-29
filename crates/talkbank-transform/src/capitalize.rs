@@ -58,10 +58,10 @@ pub fn capitalize_english(chat: &mut ChatFile) {
 
             // Pronoun "I": whole-token match; only rewrite when the word is a
             // single text segment (no clitics/markers split out).
-            if single_text {
-                if let Some(dst) = capitalized_pronoun_i(&cleaned) {
-                    next = dst.to_string();
-                }
+            if single_text
+                && let Some(dst) = capitalized_pronoun_i(&cleaned)
+            {
+                next = dst.to_string();
             }
 
             // Utterance-initial: capitalize the first real word once.
@@ -70,10 +70,10 @@ pub fn capitalize_english(chat: &mut ChatFile) {
                 next = capitalize_first(&next);
             }
 
-            if next != current {
-                if let Some(text) = WordText::new(next) {
-                    word.content.replace_at(idx, WordContent::Text(text));
-                }
+            if next != current
+                && let Some(text) = WordText::new(next)
+            {
+                word.content.replace_at(idx, WordContent::Text(text));
             }
         });
     }

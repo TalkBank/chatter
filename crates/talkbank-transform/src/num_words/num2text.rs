@@ -259,13 +259,11 @@ fn decompose_with_table(mut n: u64, table: &BTreeMap<String, String>) -> Option<
                 let multiplier = n / key_num;
                 let remainder = n % key_num;
                 if multiplier > 1 {
-                    // Recursively expand the multiplier
-                    if let Some(mult_word) = decompose_with_table(multiplier, table) {
-                        parts.push(format!("{mult_word} {word_form}"));
-                    } else {
-                        // Can't expand multiplier, bail
-                        return None;
-                    }
+                    // Recursively expand the multiplier; a multiplier this
+                    // table cannot express means the whole number cannot be
+                    // decomposed, so propagate the None.
+                    let mult_word = decompose_with_table(multiplier, table)?;
+                    parts.push(format!("{mult_word} {word_form}"));
                 } else {
                     parts.push(word_form.to_string());
                 }

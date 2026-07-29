@@ -643,16 +643,15 @@ fn parse_dependent_tiers<'a>(
 /// covered by the tree-sitter side only.
 fn report_annotation_at_utterance_start(items: &[ContentItem<'_>], errors: &impl ErrorSink) {
     let offending = match items.first() {
-        Some(ContentItem::Annotation(token)) => match token {
+        Some(ContentItem::Annotation(
             Token::RetraceComplete(s)
             | Token::RetracePartial(s)
             | Token::RetraceMultiple(s)
             | Token::RetraceReformulation(s)
             | Token::OverlapPrecedes(s)
             | Token::OverlapFollows(s)
-            | Token::Replacement(s) => Some(*s),
-            _ => None,
-        },
+            | Token::Replacement(s),
+        )) => Some(*s),
         _ => None,
     };
     if let Some(code_text) = offending {

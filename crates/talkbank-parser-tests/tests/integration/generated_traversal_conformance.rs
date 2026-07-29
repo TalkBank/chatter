@@ -72,7 +72,7 @@ mod inventory;
 
 /// Which faulty `NodeSlot` state a violation records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum SlotStatus {
+pub(crate) enum SlotStatus {
     /// A real node landed at a position whose declared kind it does not match.
     Unexpected,
     /// A required slot held a MISSING placeholder.

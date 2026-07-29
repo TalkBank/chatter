@@ -133,7 +133,7 @@ mod tests {
         let dirty = TierSeparator::with_trailing_space(Span::new(3, 5));
         let mut tiers = smallvec::smallvec![DependentTierEntry::with_separator(
             DependentTier::Wor(WorTier::default()),
-            dirty.clone(),
+            dirty,
         )];
 
         replace_or_add_tier(&mut tiers, DependentTier::Wor(WorTier::default()));

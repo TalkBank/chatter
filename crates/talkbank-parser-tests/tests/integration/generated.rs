@@ -19,12 +19,7 @@
 // - bootstrap_spec_examples
 // - bootstrap_reference_corpus
 
-// Include all .rs files from the generated directory
-mod generated {
-    // Conditionally include generated test files
-    // Each bootstrapper creates test files here
-    include!("./generated/reference_corpus.rs");
-
-    // Include spec test files dynamically by listing them
-    // For now, we'll use reference_corpus as the main integration test
-}
+// This file IS the `generated` module of the integration binary, so the
+// included tests land directly in it; an inner `mod generated` would only
+// produce `generated::generated::`.
+include!("./generated/reference_corpus.rs");
