@@ -82,32 +82,77 @@ fn word_family_start(item: &UtteranceContent) -> Option<u32> {
     }
 }
 
+/// The source end byte of an item that ENDS with a bracketed code, so
+/// that glued following material is a separate item rather than part of
+/// this one. Two shapes qualify:
+///
+/// - a retrace, whose span covers its content plus the `[...]` marker;
+/// - any annotated item CARRYING scoped annotations (`hello [!]`,
+///   `bobo [= toy]`), whose wrapper span covers the annotations.
+///
+/// An annotated item with no scoped annotations is deliberately excluded:
+/// its wrapper span ends at the payload, and word-glued-to-word is a
+/// different question (`dogdog` is ONE word, by definition).
+fn glued_code_end(item: &UtteranceContent) -> Option<u32> {
+    /// The wrapper span, but only when scoped annotations are present.
+    fn annotated_end<T>(annotated: &crate::model::Annotated<T>) -> Option<u32> {
+        (!annotated.scoped_annotations.is_empty()).then_some(annotated.span.end)
+    }
+    match item {
+        UtteranceContent::Retrace(retrace) => Some(retrace.span.end),
+        UtteranceContent::AnnotatedWord(annotated) => annotated_end(annotated),
+        UtteranceContent::AnnotatedGroup(annotated) => annotated_end(annotated),
+        UtteranceContent::AnnotatedEvent(annotated) => annotated_end(annotated),
+        UtteranceContent::AnnotatedAction(annotated) => annotated_end(annotated),
+        // Not code-terminated: nothing here ends with a `]`.
+        UtteranceContent::Word(_)
+        | UtteranceContent::ReplacedWord(_)
+        | UtteranceContent::Event(_)
+        | UtteranceContent::Pause(_)
+        | UtteranceContent::Group(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::Freecode(_)
+        | UtteranceContent::Separator(_)
+        | UtteranceContent::OverlapPoint(_)
+        | UtteranceContent::InternalBullet(_)
+        | UtteranceContent::LongFeatureBegin(_)
+        | UtteranceContent::LongFeatureEnd(_)
+        | UtteranceContent::UnderlineBegin(_)
+        | UtteranceContent::UnderlineEnd(_)
+        | UtteranceContent::NonvocalBegin(_)
+        | UtteranceContent::NonvocalEnd(_)
+        | UtteranceContent::NonvocalSimple(_)
+        | UtteranceContent::OtherSpokenEvent(_) => None,
+    }
+}
+
 /// E757: a bracketed code's closing `]` must not run directly into the
-/// next word (`hello [/]x`; CLAN CHECK 19). Fires when a retrace's span
-/// ends exactly where the next top-level word-family item starts. The
-/// retrace span covers its content plus the `[...]` marker, so its end
-/// byte is the byte after `]`.
+/// next word (`hello [/]x`, `hello [!]x`; CLAN CHECK 19). Fires when a
+/// code-terminated item's span ends exactly where the next top-level
+/// word-family item starts.
 pub(crate) fn check_code_glued_to_following_content(
     utterance: &Utterance,
     errors: &impl ErrorSink,
 ) {
     for pair in utterance.main.content.content.0.windows(2) {
-        let UtteranceContent::Retrace(retrace) = &pair[0] else {
+        let Some(code_end) = glued_code_end(&pair[0]) else {
             continue;
         };
-        if retrace.span == crate::Span::DUMMY {
+        if code_end == crate::Span::DUMMY.end {
             continue;
         }
         let Some(next_start) = word_family_start(&pair[1]) else {
             continue;
         };
-        if next_start == retrace.span.end {
+        if next_start == code_end {
             errors.report(
                 ParseError::new(
                     ErrorCode::CodeGluedToFollowingContent,
                     Severity::Error,
-                    SourceLocation::new(retrace.span),
-                    ErrorContext::new("]", retrace.span, "]"),
+                    SourceLocation::new(crate::Span::new(code_end, code_end)),
+                    ErrorContext::new("]", crate::Span::new(code_end, code_end), "]"),
                     "Bracketed code must be separated from the following word by a space",
                 )
                 .with_suggestion("Add a space after the closing bracket"),

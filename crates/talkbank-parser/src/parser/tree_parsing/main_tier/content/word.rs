@@ -143,8 +143,17 @@ pub(crate) fn parse_word_content(
             // Bare word
             ParseOutcome::parsed(UtteranceContent::Word(Box::new(w)))
         } else {
-            // Word with non-retrace annotations
-            let annotated = Annotated::new(w).with_scoped_annotations(annotations);
+            // Word with non-retrace annotations. The wrapper span runs from
+            // the word's start to the enclosing node's end, so it covers the
+            // trailing `[...]` codes, exactly as the retrace paths above and
+            // as the annotated event/action/group paths already do. It was
+            // left DUMMY here until 2026-07-29, which made every diagnostic
+            // located on an annotated word point at nothing and kept E757's
+            // glue detection from seeing these shapes at all.
+            let span = Span::new(w.span.start, node.end_byte() as u32);
+            let annotated = Annotated::new(w)
+                .with_scoped_annotations(annotations)
+                .with_span(span);
             ParseOutcome::parsed(UtteranceContent::AnnotatedWord(Box::new(annotated)))
         }
     } else {

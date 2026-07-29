@@ -107,22 +107,26 @@ fn report_pause_glued_to_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink)
     }
 }
 
-/// Report E757 for every word token immediately following a retrace
-/// marker token with no whitespace between (`hello [/]x`; CLAN CHECK
-/// 19). Mirrors the model-validation rule
+/// Report E757 for every word token immediately following a closing
+/// bracket with no whitespace between (`hello [/]x`, `hello [!]x`; CLAN
+/// CHECK 19). Two token shapes carry that closing bracket: the retrace
+/// markers, which lex as one token each, and a bare `RightBracket`,
+/// which is how every other bracketed code ends. Mirrors the
+/// model-validation rule
 /// `check_code_glued_to_following_content` (talkbank-model
 /// `validation/utterance/spacing.rs`), which cannot fire on this
 /// parser's output because its retraces carry dummy spans.
 fn report_code_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
     for pair in tokens.windows(2) {
-        let is_retrace = matches!(
+        let closes_a_code = matches!(
             pair[0],
             Token::RetraceComplete(_)
                 | Token::RetracePartial(_)
                 | Token::RetraceMultiple(_)
                 | Token::RetraceReformulation(_)
+                | Token::RightBracket(_)
         );
-        if is_retrace && matches!(pair[1], Token::Word { .. }) {
+        if closes_a_code && matches!(pair[1], Token::Word { .. }) {
             errors.report(ParseError::new(
                 talkbank_model::errors::codes::ErrorCode::CodeGluedToFollowingContent,
                 talkbank_model::Severity::Error,

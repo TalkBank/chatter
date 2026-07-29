@@ -9,6 +9,27 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Fixed
+
+- **An annotated word's wrapper span was never set**, left `Span::DUMMY` at
+  construction while the annotated event, action, and group paths all set a
+  real one. Two consequences: any diagnostic located on an annotated word
+  pointed at byte zero, and E757 could not see a bracketed code glued to the
+  following word (`hello [!]there`) at all, because its detection is span
+  adjacency. The wrapper now spans the word through the enclosing node's end,
+  covering its trailing `[...]` codes, exactly as the retrace paths do.
+
+### Changed
+
+- **E757 now covers every bracketed code, not only retraces.** `hello [/]x`
+  was rejected; `hello [!]x` and `bobo [= toy]x` were silently accepted,
+  though they are the same defect and the code's own description already said
+  "bracketed code". Juxtaposition-matrix cell 8, ruled REJECT 2026-07-18.
+  Mirrored in the re2c front end, where a bare closing bracket joins the
+  retrace tokens. The 2026-07-18 matrix scan found `][letter` unattested
+  corpus-wide and the differential confirms no new instances, so no kept file
+  is affected.
+
 ### Added
 
 - **E764, a `&`-prefixed form glued to the preceding word** (`dog&-um`,

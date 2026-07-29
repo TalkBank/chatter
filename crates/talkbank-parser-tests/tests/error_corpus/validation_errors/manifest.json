@@ -1675,6 +1675,22 @@
       "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
     },
     {
+      "fixture": "E757_Bracketed_code_glued_to_the_following_content_2.cha",
+      "expected_codes": [
+        "E757"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
+    },
+    {
+      "fixture": "E757_Bracketed_code_glued_to_the_following_content_3.cha",
+      "expected_codes": [
+        "E757"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
+    },
+    {
       "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file.cha",
       "expected_codes": [
         "E758"
