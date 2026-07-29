@@ -10,7 +10,7 @@ Internal invariant failure. This error indicates a bug in the parser itself, not
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E001](E001.md) | E001: InternalError | error | ✅ |
+| [E001](E001.md) | InternalError | error | ✅ |
 
 ## internal (E0x)
 
@@ -18,7 +18,7 @@ Test-only sentinel error code. Used exclusively in the test suite to verify erro
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E002](E002.md) | E002: TestError | error | ✅ |
+| [E002](E002.md) | TestError | error | ✅ |
 
 ## validation (E0x)
 
@@ -26,7 +26,7 @@ The input string is empty. E003 (EmptyString) is the default error code for empt
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E003](E003.md) | E003: Empty string input | error | ⏳ |
+| [E003](E003.md) | Empty string input | error | ⏳ |
 
 ## validation (E1x)
 
@@ -34,7 +34,7 @@ A line in the CHAT file does not match any valid line format (must start with @,
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E101](E101.md) | E101: Invalid line format | error | ⏳ |
+| [E101](E101.md) | Invalid line format | error | ⏳ |
 
 ## Parser error (E2x)
 
@@ -42,7 +42,7 @@ Missing form type after @
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E202](E202.md) | E202: Missing form type after @ | error | ✅ |
+| [E202](E202.md) | Missing form type after @ | error | ✅ |
 
 ## Word validation (E2x)
 
@@ -50,7 +50,7 @@ A word contains @ at a position where a form type marker is expected, but no val
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E202](E202.md) | E202: Missing form type after @ | error | ✅ |
+| [E202](E202.md) | Missing form type after @ | error | ✅ |
 
 ## validation (E2x)
 
@@ -58,7 +58,7 @@ Word contains an invalid or undeclared @ form type marker (e.g., dog@b@c has mul
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E203](E203.md) | E203: Invalid form type marker | error | ✅ |
+| [E203](E203.md) | Invalid form type marker | error | ✅ |
 
 ## Word validation (E2x)
 
@@ -66,7 +66,7 @@ Unknown scoped annotation marker
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E207](E207.md) | E207: Unknown scoped annotation marker | error | ✅ |
+| [E207](E207.md) | Unknown scoped annotation marker | error | ✅ |
 
 ## validation (E2x)
 
@@ -74,7 +74,7 @@ Empty replacement
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E208](E208.md) | E208: Empty replacement | error | ✅ |
+| [E208](E208.md) | Empty replacement | error | ✅ |
 
 ## validation (E2x)
 
@@ -82,7 +82,7 @@ A word on the main tier consists entirely of shortening notation (text) with no 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E209](E209.md) | E209, Word has no spoken content | error | ✅ |
+| [E209](E209.md) | Word has no spoken content | error | ✅ |
 
 ## Word validation (E2x)
 
@@ -90,7 +90,7 @@ Deprecated. This error code was replaced by E387 (ReplacementOnFragment). The va
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E210](E210.md) | E210: Deprecated, replaced by E387 | error | ? |
+| [E210](E210.md) | Deprecated, replaced by E387 | error | ? |
 
 ## Word validation (E2x)
 
@@ -98,7 +98,7 @@ A word on the main tier has an invalid format that does not match any recognized
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E212](E212.md) | E212: Invalid word format | error | ⏳ |
+| [E212](E212.md) | Invalid word format | error | ⏳ |
 
 ## Word validation (E2x)
 
@@ -106,7 +106,7 @@ Deprecated. This error code was replaced by E391 (ReplacementContainsUntranscrib
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E213](E213.md) | E213: Deprecated, replaced by E391 | error | ? |
+| [E213](E213.md) | Deprecated, replaced by E391 | error | ? |
 
 ## validation (E2x)
 
@@ -114,7 +114,7 @@ A scoped annotation (e.g., error annotation [*], replacement [: ...]) has an emp
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E214](E214.md) | E214: Empty scoped annotation content | error | ⏳ |
+| [E214](E214.md) | Empty scoped annotation content | error | ⏳ |
 
 ## Word validation (E2x)
 
@@ -122,7 +122,7 @@ A word on the main tier contains numeric digits in a language context that does 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E220](E220.md) | E220, Illegal digits in word content | error | ✅ |
+| [E220](E220.md) | Illegal digits in word content | error | ✅ |
 
 ## validation (E2x)
 
@@ -130,7 +130,7 @@ Compound delimiter (∆) is not properly balanced, opening delimiter has no matc
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E230](E230.md) | E230: Unbalanced CA delimiter | error | ✅ |
+| [E230](E230.md) | Unbalanced CA delimiter | error | ✅ |
 
 ## validation (E2x)
 
@@ -138,7 +138,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E231](E231.md) | generated from corpus | error | ✅ |
+| [E231](E231.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E2x)
 
@@ -146,7 +146,7 @@ Compound marker (+) cannot be at the start of a word. Valid compounds have the f
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E232](E232.md) | E232: Compound marker at word start | error | ✅ |
+| [E232](E232.md) | Compound marker at word start | error | ✅ |
 
 ## validation (E2x)
 
@@ -154,7 +154,7 @@ Compound markers (+) must connect two non-empty parts. Adjacent compound markers
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E233](E233.md) | E233: Empty compound part | error | ✅ |
+| [E233](E233.md) | Empty compound part | error | ✅ |
 
 ## validation (E2x)
 
@@ -162,7 +162,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E241](E241.md) | generated from corpus | error | ✅ |
+| [E241](E241.md) | Auto-generated from corpus | error | ✅ |
 
 ## word_validation (E2x)
 
@@ -170,7 +170,7 @@ The marker 'xx' is used for untranscribed speech, but this is not allowed in CHA
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E241](E241.md) | E241: Illegal Untranscribed Marker 'xx' | error | ✅ |
+| [E241](E241.md) | Illegal Untranscribed Marker 'xx' | error | ✅ |
 
 ## validation (E2x)
 
@@ -178,7 +178,7 @@ Quotation marks must be balanced within an utterance.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E242](E242.md) | E242: Unbalanced quotation marks | error | ✅ |
+| [E242](E242.md) | Unbalanced quotation marks | error | ✅ |
 
 ## validation (E2x)
 
@@ -186,7 +186,7 @@ Word contains illegal characters such as whitespace, control characters, or bull
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E243](E243.md) | E243: Illegal characters in word | error | ✅ |
+| [E243](E243.md) | Illegal characters in word | error | ✅ |
 
 ## Word structure (E2x)
 
@@ -194,7 +194,7 @@ The | character is the %mor tier's part-of-speech delimiter and has no meaning i
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E243](E243.md) | tier word text | error | ✅ |
+| [E243](E243.md) | Pipe character in main-tier word text | error | ✅ |
 
 ## validation (E2x)
 
@@ -202,7 +202,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E244](E244.md) | generated from corpus | error | ✅ |
+| [E244](E244.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E2x)
 
@@ -210,7 +210,7 @@ A primary stress marker (ˈ) or secondary stress marker appears at the start of 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E245](E245.md) | E245, Stress marker without following spoken material | error | ✅ |
+| [E245](E245.md) | Stress marker without following spoken material | error | ✅ |
 
 ## validation (E2x)
 
@@ -218,7 +218,7 @@ A lengthening marker (:) appears before any spoken material in a word rather tha
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E246](E246.md) | E246: Lengthening marker not after spoken material | error | ⏳ |
+| [E246](E246.md) | Lengthening marker not after spoken material | error | ⏳ |
 
 ## validation (E2x)
 
@@ -226,7 +226,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E247](E247.md) | generated from corpus | error | ✅ |
+| [E247](E247.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E2x)
 
@@ -234,7 +234,7 @@ The bare @s shortcut toggles between the first two languages declared in @Langua
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E248](E248.md) | E248, Bare @s shortcut in tertiary language context | error | ✅ |
+| [E248](E248.md) | Bare @s shortcut in tertiary language context | error | ✅ |
 
 ## validation (E2x)
 
@@ -242,7 +242,7 @@ The @s shortcut means "the other language"; it toggles between the primary and s
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E249](E249.md) | E249, Bare @s shortcut with no secondary language | error | ✅ |
+| [E249](E249.md) | Bare @s shortcut with no secondary language | error | ✅ |
 
 ## validation (E2x)
 
@@ -250,7 +250,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E250](E250.md) | generated from corpus | error | ✅ |
+| [E250](E250.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E2x)
 
@@ -258,7 +258,7 @@ A word content text segment (the spoken text portion of a word or the text insid
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E251](E251.md) | E251: Empty word content text | error | ⏳ |
+| [E251](E251.md) | Empty word content text | error | ⏳ |
 
 ## Prosodic marker placement (E2x)
 
@@ -266,7 +266,7 @@ Syntax error - caret at word start
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E252](E252.md) | caret at word start | error | ✅ |
+| [E252](E252.md) | Syntax error - caret at word start | error | ✅ |
 
 ## validation (E2x)
 
@@ -274,7 +274,7 @@ A parsed Word object has empty content, the word node exists in the CST but cont
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E253](E253.md) | E253: Empty word content | error | ✅ |
+| [E253](E253.md) | Empty word content | error | ✅ |
 
 ## parser (E2x)
 
@@ -282,7 +282,7 @@ A curly single quotation mark (U+2018 or U+2019) is used as a word character. CH
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E256](E256.md) | E256: Illegal curly single quote | error | ✅ |
+| [E256](E256.md) | Illegal curly single quote | error | ✅ |
 
 ## validation (E2x)
 
@@ -290,7 +290,7 @@ Consecutive commas
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E258](E258.md) | E258: Consecutive commas | error | ✅ |
+| [E258](E258.md) | Consecutive commas | error | ✅ |
 
 ## validation (E2x)
 
@@ -298,7 +298,7 @@ Comma without any preceding spoken word in the utterance
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E259](E259.md) | spoken content | error | ✅ |
+| [E259](E259.md) | Comma after non-spoken content | error | ✅ |
 
 ## Main tier validation (E3x)
 
@@ -306,7 +306,7 @@ Empty speaker code
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E301](E301.md) | E301: Empty speaker code | error | ✅ |
+| [E301](E301.md) | Empty speaker code | error | ✅ |
 
 ## validation (E3x)
 
@@ -314,7 +314,7 @@ Expected tree-sitter node is missing. E302 (MissingNode) fires when tree-sitter'
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E302](E302.md) | E302: Missing required node | error | ⏳ |
+| [E302](E302.md) | Missing required node | error | ⏳ |
 
 ## Parser bugs (experimental) (E3x)
 
@@ -322,7 +322,7 @@ Unexpected node - helper function
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E303](E303.md) | helper function | error | ⏳ |
+| [E303](E303.md) | Unexpected node - helper function | error | ⏳ |
 
 ## Main tier validation (E3x)
 
@@ -330,7 +330,7 @@ Main tier line is missing its speaker code after *.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E304](E304.md) | E304: Missing speaker code | error | ⏳ |
+| [E304](E304.md) | Missing speaker code | error | ⏳ |
 
 ## Main tier validation (E3x)
 
@@ -338,7 +338,7 @@ Main tier is missing its required utterance terminator.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E305](E305.md) | E305: Missing terminator | error | ✅ |
+| [E305](E305.md) | Missing terminator | error | ✅ |
 
 ## Main tier validation (E3x)
 
@@ -346,7 +346,7 @@ Utterance has no content
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E306](E306.md) | E306: Utterance has no content | error | ✅ |
+| [E306](E306.md) | Utterance has no content | error | ✅ |
 
 ## validation (E3x)
 
@@ -354,7 +354,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E307](E307.md) | generated from corpus | error | ✅ |
+| [E307](E307.md) | Auto-generated from corpus | error | ✅ |
 
 ## Main tier validation (E3x)
 
@@ -362,7 +362,7 @@ Invalid speaker format
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E308](E308.md) | E308: Invalid speaker format | error | ✅ |
+| [E308](E308.md) | Invalid speaker format | error | ✅ |
 
 ## validation (E3x)
 
@@ -370,7 +370,7 @@ Unexpected syntax encountered during parsing. E309 (UnexpectedSyntax) fires when
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E309](E309.md) | E309: Unexpected syntax | error | ⏳ |
+| [E309](E309.md) | Unexpected syntax | error | ⏳ |
 
 ## Main tier validation (E3x)
 
@@ -378,7 +378,7 @@ Tree-sitter's internal parser returned None (e.g., due to timeout or cancellatio
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E310](E310.md) | E310: Parser failed to produce valid parse tree | error | ⏳ |
+| [E310](E310.md) | Parser failed to produce valid parse tree | error | ⏳ |
 
 ## Main tier validation (E3x)
 
@@ -386,7 +386,7 @@ Failed to parse utterance
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E311](E311.md) | E311: Failed to parse utterance | error | ⏳ |
+| [E311](E311.md) | Failed to parse utterance | error | ⏳ |
 
 ## validation (E3x)
 
@@ -394,7 +394,7 @@ Opening bracket [ on the main tier has no matching closing bracket ].
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E312](E312.md) | E312: Unclosed bracket | error | ⏳ |
+| [E312](E312.md) | Unclosed bracket | error | ⏳ |
 
 ## validation (E3x)
 
@@ -402,7 +402,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E313](E313.md) | generated from corpus | error | ✅ |
+| [E313](E313.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -410,7 +410,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E314](E314.md) | generated from corpus | error | ✅ |
+| [E314](E314.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -418,7 +418,7 @@ Main tier or dependent tier contains an invalid control character (e.g., embedde
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E315](E315.md) | E315: Invalid control character | error | ✅ |
+| [E315](E315.md) | Invalid control character | error | ✅ |
 
 ## Dependent tier validation (E3x)
 
@@ -426,7 +426,7 @@ A %mor tier entry contains an angle-bracketed prefix inside the stem position (e
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E316](E316.md) | bracketed annotation inside %mor stem is invalid | error | ✅ |
+| [E316](E316.md) | Angle-bracketed annotation inside %mor stem is invalid | error | ✅ |
 
 ## Main tier validation (E3x)
 
@@ -434,7 +434,7 @@ Unparsable content
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E316](E316.md) | E316: Unparsable content | error | ✅ |
+| [E316](E316.md) | Unparsable content | error | ✅ |
 
 ## parser_recovery (E3x)
 
@@ -442,7 +442,7 @@ A line could not be classified as a header, utterance, or dependent tier. This i
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E319](E319.md) | E319: UnparsableLine | error | ⏳ |
+| [E319](E319.md) | UnparsableLine | error | ⏳ |
 
 ## parser_recovery (E3x)
 
@@ -450,7 +450,7 @@ A header line (starting with @) could not be parsed. This is a fallback error em
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E320](E320.md) | E320: UnparsableHeader | error | ⏳ |
+| [E320](E320.md) | UnparsableHeader | error | ⏳ |
 
 ## parser_recovery (E3x)
 
@@ -458,7 +458,7 @@ An utterance line (starting with *SPEAKER:) could not be parsed. The utterance b
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E321](E321.md) | E321: UnparsableUtterance | error | ⏳ |
+| [E321](E321.md) | UnparsableUtterance | error | ⏳ |
 
 ## parser_recovery (E3x)
 
@@ -466,7 +466,7 @@ The main tier speaker prefix has a zero-width (MISSING) colon node. This occurs 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E322](E322.md) | E322: EmptyColon | error | ⏳ |
+| [E322](E322.md) | EmptyColon | error | ⏳ |
 
 ## validation (E3x)
 
@@ -474,7 +474,7 @@ Missing colon after speaker code on main tier. E323 (MissingColonAfterSpeaker) f
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E323](E323.md) | E323: Missing colon after speaker code | error | ⏳ |
+| [E323](E323.md) | Missing colon after speaker code | error | ⏳ |
 
 ## validation (E3x)
 
@@ -482,7 +482,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E324](E324.md) | generated from corpus | error | ✅ |
+| [E324](E324.md) | Auto-generated from corpus | error | ✅ |
 
 ## parser_recovery (E3x)
 
@@ -490,7 +490,7 @@ An unexpected child node was found inside a parsed utterance. The CST contains a
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E325](E325.md) | E325: UnexpectedUtteranceChild | error | ⏳ |
+| [E325](E325.md) | UnexpectedUtteranceChild | error | ⏳ |
 
 ## parser_recovery (E3x)
 
@@ -498,7 +498,7 @@ A line was classified as an unexpected type during file structure parsing. This 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E326](E326.md) | E326: UnexpectedLineType | error | ✅ |
+| [E326](E326.md) | UnexpectedLineType | error | ✅ |
 
 ## validation (E3x)
 
@@ -506,7 +506,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E330](E330.md) | generated from corpus | error | ✅ |
+| [E330](E330.md) | Auto-generated from corpus | error | ✅ |
 
 ## parser_recovery (E3x)
 
@@ -514,7 +514,7 @@ A tree-sitter node appeared in a syntactic context where it is not expected. The
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E331](E331.md) | E331: UnexpectedNodeInContext | error | ⏳ |
+| [E331](E331.md) | UnexpectedNodeInContext | error | ⏳ |
 
 ## parser_recovery (E3x)
 
@@ -522,7 +522,7 @@ Main tier content could not be classified as any known word or construct type. T
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E340](E340.md) | E340: UnknownBaseContent | error | ✅ |
+| [E340](E340.md) | UnknownBaseContent | error | ✅ |
 
 ## cross_utterance (E3x)
 
@@ -530,7 +530,7 @@ A quotation-follows terminator (+"/.) is used but the next utterance from the sa
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E341](E341.md) | E341: UnbalancedQuotationCrossUtterance | error | ⏳ |
+| [E341](E341.md) | UnbalancedQuotationCrossUtterance | error | ⏳ |
 
 ## Word validation (E3x)
 
@@ -538,7 +538,7 @@ Missing required element
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E342](E342.md) | E342: Missing required element | error | ⏳ |
+| [E342](E342.md) | Missing required element | error | ⏳ |
 
 ## Main tier structure (E3x)
 
@@ -546,7 +546,7 @@ An angle-bracket group <...> on the main tier must be followed by an annotation 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E342](E342.md) | bracket group with no following annotation is invalid | error | ✅ |
+| [E342](E342.md) | Angle-bracket group with no following annotation is invalid | error | ✅ |
 
 ## validation (E3x)
 
@@ -554,7 +554,7 @@ Invalid nesting of scoped annotations (quotation precedes pattern). This is a cr
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E344](E344.md) | E344: Invalid scoped annotation nesting | error | ⏳ |
+| [E344](E344.md) | Invalid scoped annotation nesting | error | ⏳ |
 
 ## validation (E3x)
 
@@ -562,7 +562,7 @@ Unmatched scoped annotation end marker (> without matching <). This is a cross-u
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E346](E346.md) | E346: Unmatched scoped annotation end | error | ⏳ |
+| [E346](E346.md) | Unmatched scoped annotation end | error | ⏳ |
 
 ## validation (E3x)
 
@@ -570,7 +570,7 @@ An indexed top overlap region (e.g., ⌈2...⌉2) on one speaker has no matching
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E347](E347.md) | speaker overlap (indexed markers) | error | ✅ |
+| [E347](E347.md) | Unbalanced cross-speaker overlap (indexed markers) | error | ✅ |
 
 ## validation (E3x)
 
@@ -578,7 +578,7 @@ Reserved for within-utterance overlap pairing violations: a closing marker (⌉ 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E348](E348.md) | E348, Unpaired overlap marker within utterance | error | ⏳ |
+| [E348](E348.md) | Unpaired overlap marker within utterance | error | ⏳ |
 
 ## cross_utterance (E3x)
 
@@ -586,7 +586,7 @@ A self-completion linker (+,) was used but there is no prior utterance from the 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E351](E351.md) | E351: MissingQuoteBegin | error | ⏳ |
+| [E351](E351.md) | MissingQuoteBegin | error | ⏳ |
 
 ## cross_utterance (E3x)
 
@@ -594,7 +594,7 @@ A self-completion linker (+,) was used and there IS a prior utterance from the s
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E352](E352.md) | E352: MissingQuoteEnd | error | ⏳ |
+| [E352](E352.md) | MissingQuoteEnd | error | ⏳ |
 
 ## cross_utterance (E3x)
 
@@ -602,7 +602,7 @@ An other-completion linker (++) was used but it is the very first utterance in t
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E353](E353.md) | E353: MissingOtherCompletionContext | error | ⏳ |
+| [E353](E353.md) | MissingOtherCompletionContext | error | ⏳ |
 
 ## cross_utterance (E3x)
 
@@ -610,7 +610,7 @@ An other-completion linker (++) was used and the preceding utterance is from a d
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E354](E354.md) | E354: MissingTrailingOffTerminator | error | ⏳ |
+| [E354](E354.md) | MissingTrailingOffTerminator | error | ⏳ |
 
 ## cross_utterance (E3x)
 
@@ -618,7 +618,7 @@ An other-completion linker (++) was used but the preceding utterance is from the
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E355](E355.md) | E355: InterleavedScopedAnnotations | error | ⏳ |
+| [E355](E355.md) | InterleavedScopedAnnotations | error | ⏳ |
 
 ## underline_balance (E3x)
 
@@ -626,7 +626,7 @@ An underline begin marker was found without a matching underline end marker in t
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E356](E356.md) | E356: UnmatchedUnderlineBegin | error | ✅ |
+| [E356](E356.md) | UnmatchedUnderlineBegin | error | ✅ |
 
 ## underline_balance (E3x)
 
@@ -634,7 +634,7 @@ An underline end marker was found without a preceding underline begin marker in 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E357](E357.md) | E357: UnmatchedUnderlineEnd | error | ✅ |
+| [E357](E357.md) | UnmatchedUnderlineEnd | error | ✅ |
 
 ## validation (E3x)
 
@@ -642,7 +642,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E358](E358.md) | generated from corpus | error | ✅ |
+| [E358](E358.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -650,7 +650,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E359](E359.md) | generated from corpus | error | ✅ |
+| [E359](E359.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -658,7 +658,7 @@ Media bullet (timestamp marker) contains malformed content, e.g., non-numeric ch
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E360](E360.md) | E360: Invalid media bullet | error | ⏳ |
+| [E360](E360.md) | Invalid media bullet | error | ⏳ |
 
 ## Main tier validation (E3x)
 
@@ -666,7 +666,7 @@ The media bullet contains a deprecated skip flag (dash before closing NAK delimi
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E360](E360.md) | E360: Deprecated Skip Bullet | error | ⏳ |
+| [E360](E360.md) | Deprecated Skip Bullet | error | ⏳ |
 
 ## validation (E3x)
 
@@ -674,7 +674,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E361](E361.md) | generated from corpus | error | ✅ |
+| [E361](E361.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -682,7 +682,7 @@ Bullet timestamps must be monotonic
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E362](E362.md) | E362: Bullet timestamps must be monotonic | error | ✅ |
+| [E362](E362.md) | Bullet timestamps must be monotonic | error | ✅ |
 
 ## validation (E3x)
 
@@ -690,7 +690,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E363](E363.md) | generated from corpus | error | ✅ |
+| [E363](E363.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -698,7 +698,7 @@ Word content is structurally malformed, the parser recognized a word node but it
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E364](E364.md) | E364: Malformed word content | error | ⏳ |
+| [E364](E364.md) | Malformed word content | error | ⏳ |
 
 ## validation (E3x)
 
@@ -706,7 +706,7 @@ A header or tier has content that does not match any recognized CHAT header stru
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E365](E365.md) | E365: Malformed tier content | error | ⏳ |
+| [E365](E365.md) | Malformed tier content | error | ⏳ |
 
 ## validation (E3x)
 
@@ -714,7 +714,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E367](E367.md) | generated from corpus | error | ✅ |
+| [E367](E367.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -722,7 +722,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E368](E368.md) | generated from corpus | error | ✅ |
+| [E368](E368.md) | Auto-generated from corpus | error | ✅ |
 
 ## retrace (E3x)
 
@@ -730,7 +730,7 @@ A structural ordering violation in main-tier content. In particular, a retrace o
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E370](E370.md) | E370, Structural order error | error | ✅ |
+| [E370](E370.md) | Structural order error | error | ✅ |
 
 ## validation (E3x)
 
@@ -738,7 +738,7 @@ Pause inside phonological group
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E371](E371.md) | E371: Pause inside phonological group | error | ✅ |
+| [E371](E371.md) | Pause inside phonological group | error | ✅ |
 
 ## validation (E3x)
 
@@ -746,7 +746,7 @@ Nested quotation
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E372](E372.md) | E372: Nested quotation | error | ✅ |
+| [E372](E372.md) | Nested quotation | error | ✅ |
 
 ## overlap (E3x)
 
@@ -754,7 +754,7 @@ An overlap marker has an index value outside the valid range. For CA overlap bra
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E373](E373.md) | E373: InvalidOverlapIndex | error | ✅ |
+| [E373](E373.md) | InvalidOverlapIndex | error | ✅ |
 
 ## Parser bugs (experimental) (E3x)
 
@@ -762,7 +762,7 @@ Scoped annotation parse error
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E375](E375.md) | E375: Scoped annotation parse error | error | ✅ |
+| [E375](E375.md) | Scoped annotation parse error | error | ✅ |
 
 ## Word annotation (E3x)
 
@@ -770,7 +770,7 @@ A replacement annotation [: text] must be preceded by whitespace, exactly like e
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E375](E375.md) | E375: Replacement [: ...] glued to a word without a preceding space | error | ✅ |
+| [E375](E375.md) | Replacement [: ...] glued to a word without a preceding space | error | ✅ |
 
 ## Word validation (E3x)
 
@@ -778,7 +778,7 @@ Failed to parse replacement annotation content. The [: replacement annotation co
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E376](E376.md) | E376: Replacement parse error | error | ✅ |
+| [E376](E376.md) | Replacement parse error | error | ✅ |
 
 ## Dependent tier parsing (E3x)
 
@@ -786,7 +786,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E382](E382.md) | generated from corpus | error | ✅ |
+| [E382](E382.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -794,7 +794,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E387](E387.md) | generated from corpus | error | ✅ |
+| [E387](E387.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -802,7 +802,7 @@ Replacement annotation [: ...] is attached to a non-word element (e.g., a parali
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E388](E388.md) | word | error | ✅ |
+| [E388](E388.md) | Replacement on non-word | error | ✅ |
 
 ## validation (E3x)
 
@@ -810,7 +810,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E389](E389.md) | generated from corpus | error | ✅ |
+| [E389](E389.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -818,7 +818,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E390](E390.md) | generated from corpus | error | ✅ |
+| [E390](E390.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E3x)
 
@@ -826,7 +826,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E391](E391.md) | generated from corpus | error | ✅ |
+| [E391](E391.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E4x)
 
@@ -834,7 +834,7 @@ Duplicate dependent tiers
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E401](E401.md) | E401: Duplicate dependent tiers | error | ✅ |
+| [E401](E401.md) | Duplicate dependent tiers | error | ✅ |
 
 ## validation (E4x)
 
@@ -842,7 +842,7 @@ A dependent tier (%mor, %gra, etc.) appears before any main tier in the file. E4
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E404](E404.md) | E404: Orphaned dependent tier | error | ✅ |
+| [E404](E404.md) | Orphaned dependent tier | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -850,7 +850,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E501](E501.md) | generated from corpus | error | ✅ |
+| [E501](E501.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -858,7 +858,7 @@ Every valid CHAT file must end with an @End header. This error indicates the fil
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E502](E502.md) | E502: Missing required @End header | error | ✅ |
+| [E502](E502.md) | Missing required @End header | error | ✅ |
 
 ## parser (E5x)
 
@@ -874,7 +874,7 @@ Every valid CHAT file must begin with an @UTF8 header as its first line. This er
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E503](E503.md) | E503: Missing required @UTF8 header | error | ✅ |
+| [E503](E503.md) | Missing required @UTF8 header | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -882,7 +882,7 @@ Missing required header
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E504](E504.md) | E504: Missing required header | error | ✅ |
+| [E504](E504.md) | Missing required header | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -890,7 +890,7 @@ Invalid @ID format
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E505](E505.md) | E505: Invalid @ID format | error | ✅ |
+| [E505](E505.md) | Invalid @ID format | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -898,7 +898,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E506](E506.md) | generated from corpus | error | ✅ |
+| [E506](E506.md) | Auto-generated from corpus | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -906,7 +906,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E507](E507.md) | E507: @Languages header cannot be empty | error | ✅ |
+| [E507](E507.md) | @Languages header cannot be empty | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -914,7 +914,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E508](E508.md) | E508: @Date header cannot be empty | error | ✅ |
+| [E508](E508.md) | @Date header cannot be empty | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -922,7 +922,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E509](E509.md) | E509: @Media header cannot be empty | error | ✅ |
+| [E509](E509.md) | @Media header cannot be empty | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -930,7 +930,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E510](E510.md) | generated from corpus | error | ✅ |
+| [E510](E510.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -938,7 +938,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E511](E511.md) | generated from corpus | error | ✅ |
+| [E511](E511.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -946,7 +946,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E512](E512.md) | generated from corpus | error | ✅ |
+| [E512](E512.md) | Auto-generated from corpus | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -954,7 +954,7 @@ Participant entry should have both code and role
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E513](E513.md) | E513: Participant entry should have both code and role | error | ✅ |
+| [E513](E513.md) | Participant entry should have both code and role | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -962,7 +962,7 @@ The corpus field (2nd field) of an @ID header is blank. The @ID header is lang|c
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E514](E514.md) | E514: Empty corpus field in @ID | error | ✅ |
+| [E514](E514.md) | Empty corpus field in @ID | error | ✅ |
 
 ## validation (E5x)
 
@@ -970,7 +970,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E515](E515.md) | generated from corpus | error | ✅ |
+| [E515](E515.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -978,7 +978,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E516](E516.md) | generated from corpus | error | ✅ |
+| [E516](E516.md) | Auto-generated from corpus | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -986,7 +986,7 @@ The @ID header's fourth field (age) must conform to one of the three legal CHAT 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E517](E517.md) | E517: @ID age field does not match a legal CHAT date pattern | error | ✅ |
+| [E517](E517.md) | @ID age field does not match a legal CHAT date pattern | error | ✅ |
 
 ## validation (E5x)
 
@@ -994,7 +994,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E518](E518.md) | generated from corpus | error | ✅ |
+| [E518](E518.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -1002,7 +1002,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E519](E519.md) | generated from corpus | error | ✅ |
+| [E519](E519.md) | Auto-generated from corpus | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1010,7 +1010,7 @@ The @L1 of SPK header names a participant's first language. Wild usage is unifor
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E519](E519.md) | 3 registry | error | ✅ |
+| [E519](E519.md) | @L1 of language code not in the ISO 639-3 registry | error | ✅ |
 
 ## Main tier words (E5x)
 
@@ -1018,7 +1018,7 @@ An explicit word-level language switch (word@s:CODE) must name a real ISO 639-3 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E519](E519.md) | level language code not in the ISO 639 | error | ✅ |
+| [E519](E519.md) | Word-level language code not in the ISO 639-3 registry | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -1026,7 +1026,7 @@ An explicit word-level language switch (word@s:CODE) must name a real ISO 639-3 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E522](E522.md) | E522: @Participants header cannot be empty | error | ✅ |
+| [E522](E522.md) | @Participants header cannot be empty | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1034,7 +1034,7 @@ An utterance uses a speaker code that was not defined in the @Participants heade
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E522](E522.md) | E522: Undefined Participant in Utterance | error | ✅ |
+| [E522](E522.md) | Undefined Participant in Utterance | error | ✅ |
 
 ## Participant validation (E5x)
 
@@ -1042,7 +1042,7 @@ Orphan @ID header
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E523](E523.md) | E523: Orphan @ID header | error | ✅ |
+| [E523](E523.md) | Orphan @ID header | error | ✅ |
 
 ## Participant validation (E5x)
 
@@ -1050,7 +1050,7 @@ Orphan @ID header
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E524](E524.md) | E524: @Birth header for unknown participant | error | ✅ |
+| [E524](E524.md) | @Birth header for unknown participant | error | ✅ |
 
 ## validation (E5x)
 
@@ -1058,7 +1058,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E525](E525.md) | generated from corpus | error | ✅ |
+| [E525](E525.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -1066,7 +1066,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E526](E526.md) | generated from corpus | error | ✅ |
+| [E526](E526.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -1074,7 +1074,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E527](E527.md) | generated from corpus | error | ✅ |
+| [E527](E527.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -1082,7 +1082,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E528](E528.md) | generated from corpus | error | ✅ |
+| [E528](E528.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E5x)
 
@@ -1090,7 +1090,7 @@ Nested background with identical label
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E529](E529.md) | E529: Nested background with identical label | error | ✅ |
+| [E529](E529.md) | Nested background with identical label | error | ✅ |
 
 ## validation (E5x)
 
@@ -1098,7 +1098,7 @@ Lazy gem inside background
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E530](E530.md) | E530: Lazy gem inside background | error | ✅ |
+| [E530](E530.md) | Lazy gem inside background | error | ✅ |
 
 ## validation (E5x)
 
@@ -1106,7 +1106,7 @@ The filename in the @Media header does not match the name of the CHAT file being
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E531](E531.md) | E531: Media filename mismatch | error | ✅ |
+| [E531](E531.md) | Media filename mismatch | error | ✅ |
 
 ## validation (E5x)
 
@@ -1114,7 +1114,7 @@ Invalid participant role
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E532](E532.md) | E532: Invalid participant role | error | ✅ |
+| [E532](E532.md) | Invalid participant role | error | ✅ |
 
 ## validation (E5x)
 
@@ -1122,7 +1122,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E533](E533.md) | generated from corpus | error | ✅ |
+| [E533](E533.md) | Auto-generated from corpus | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1130,7 +1130,7 @@ An @Options header contains a flag that is not one of the recognized option valu
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E534](E534.md) | E534: Unsupported @Options Value | error | ✅ |
+| [E534](E534.md) | Unsupported @Options Value | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1138,7 +1138,7 @@ An @Media header contains a media type that is not one of the recognized values.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E535](E535.md) | E535: Unsupported @Media Type | error | ✅ |
+| [E535](E535.md) | Unsupported @Media Type | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1146,7 +1146,7 @@ An @Media header contains a status value that is not one of the recognized value
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E536](E536.md) | E536: Unsupported @Media Status | error | ✅ |
+| [E536](E536.md) | Unsupported @Media Status | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1154,7 +1154,7 @@ An @Number header contains a value that is not one of the recognized number opti
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E537](E537.md) | E537: Unsupported @Number Value | error | ✅ |
+| [E537](E537.md) | Unsupported @Number Value | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1162,7 +1162,7 @@ An @Recording Quality header contains a value that is not one of the recognized 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E538](E538.md) | E538: Unsupported @Recording Quality Value | error | ✅ |
+| [E538](E538.md) | Unsupported @Recording Quality Value | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1170,7 +1170,7 @@ An @Transcription header contains a value that is not one of the recognized tran
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E539](E539.md) | E539: Unsupported @Transcription Value | error | ✅ |
+| [E539](E539.md) | Unsupported @Transcription Value | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1178,7 +1178,7 @@ An @Time Duration header must match one of the three time patterns that CLAN's a
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E540](E540.md) | E540: @Time Duration does not match a legal CLAN time pattern | error | ✅ |
+| [E540](E540.md) | @Time Duration does not match a legal CLAN time pattern | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1186,7 +1186,7 @@ An @Time Start header must match one of the two time patterns that CLAN's author
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E541](E541.md) | E541: @Time Start does not match a legal CLAN time pattern | error | ✅ |
+| [E541](E541.md) | @Time Start does not match a legal CLAN time pattern | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1194,7 +1194,7 @@ An @ID header contains a sex field value that is not one of the recognized value
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E542](E542.md) | E542: Unsupported @ID Sex Value | error | ✅ |
+| [E542](E542.md) | Unsupported @ID Sex Value | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1202,7 +1202,7 @@ A header appears out of canonical order. For example, @Options or @ID appears be
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E543](E543.md) | E543: Header out of canonical order | error | ✅ |
+| [E543](E543.md) | Header out of canonical order | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1210,7 +1210,7 @@ An @Media header declares a linked media file (no unlinked / missing / notrans s
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E544](E544.md) | E544: @Media claims linkage but transcript has no timing evidence | error | ✅ |
+| [E544](E544.md) | @Media claims linkage but transcript has no timing evidence | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1218,7 +1218,7 @@ An @Birth of <CODE> header must carry a date matching CLAN's authoritative depfi
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E545](E545.md) | E545: @Birth of date does not match a legal CHAT date pattern | error | ✅ |
+| [E545](E545.md) | @Birth of date does not match a legal CHAT date pattern | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1226,7 +1226,7 @@ An @ID header contains an SES (socioeconomic status) field value that is not one
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E546](E546.md) | E546: Unsupported @ID SES Value | error | ✅ |
+| [E546](E546.md) | Unsupported @ID SES Value | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1234,7 +1234,7 @@ A constant participant-specific header (@Birth of, @Birthplace of, or @L1 of) do
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E547](E547.md) | E547: Constant participant header out of order | error | ✅ |
+| [E547](E547.md) | Constant participant header out of order | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1242,7 +1242,7 @@ An @ID header does not immediately follow the @Participants / @Options headers (
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E548](E548.md) | E548: @ID header out of order | error | ✅ |
+| [E548](E548.md) | @ID header out of order | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1250,7 +1250,7 @@ The same speaker code is declared more than once in the @Participants header. Ea
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E549](E549.md) | E549: Duplicate speaker declaration | error | ✅ |
+| [E549](E549.md) | Duplicate speaker declaration | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1258,7 +1258,7 @@ The @Participants header ends with a trailing comma: a stray comma after the las
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E550](E550.md) | E550: Trailing comma in @Participants | error | ✅ |
+| [E550](E550.md) | Trailing comma in @Participants | error | ✅ |
 
 ## header_validation (E5x)
 
@@ -1266,7 +1266,7 @@ The @Media header's unlinked status declares that the transcript is not time-ali
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E552](E552.md) | E552: @Media declares unlinked but transcript carries timing | error | ✅ |
+| [E552](E552.md) | @Media declares unlinked but transcript carries timing | error | ✅ |
 
 ## validation (E6x)
 
@@ -1274,7 +1274,7 @@ A dependent tier (typically %mor) had parse errors during lenient recovery, so t
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E600](E600.md) | E600: Tier alignment skipped due to parse errors | error | ✅ |
+| [E600](E600.md) | Tier alignment skipped due to parse errors | error | ✅ |
 
 ## validation (E6x)
 
@@ -1282,7 +1282,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E601](E601.md) | generated from corpus | error | ✅ |
+| [E601](E601.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E6x)
 
@@ -1290,7 +1290,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E602](E602.md) | generated from corpus | error | ✅ |
+| [E602](E602.md) | Auto-generated from corpus | error | ✅ |
 
 ## tier_validation (E6x)
 
@@ -1298,7 +1298,7 @@ A %tim dependent tier contains content that does not match the expected time for
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E603](E603.md) | E603: Invalid %tim Tier Format | error | ✅ |
+| [E603](E603.md) | Invalid %tim Tier Format | error | ✅ |
 
 ## Dependent tier parsing (E6x)
 
@@ -1306,7 +1306,7 @@ Empty GRA relation
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E604](E604.md) | E604: Empty GRA relation | error | ✅ |
+| [E604](E604.md) | Empty GRA relation | error | ✅ |
 
 ## tier_validation (E6x)
 
@@ -1314,7 +1314,7 @@ A %gra (grammatical relations) tier appears without a corresponding %mor (morpho
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E604](E604.md) | E604: %gra Tier Without %mor Tier | error | ✅ |
+| [E604](E604.md) | %gra Tier Without %mor Tier | error | ✅ |
 
 ## tier_validation (E6x)
 
@@ -1322,7 +1322,7 @@ An utterance contains a dependent tier with a label that is not a standard CHAT 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E605](E605.md) | E605: Unsupported Dependent Tier | error | ✅ |
+| [E605](E605.md) | Unsupported Dependent Tier | error | ✅ |
 
 ## Temporal validation (E7x)
 
@@ -1330,7 +1330,7 @@ Each utterance's first media bullet must have a start time greater than or equal
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E701](E701.md) | speaker start | error | ✅ |
+| [E701](E701.md) | Per-speaker start-time not monotonically increasing | error | ✅ |
 
 ## Dependent tier parsing (E7x)
 
@@ -1338,7 +1338,7 @@ Invalid MOR chunk format - missing |
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E702](E702.md) | missing | | error | ⏳ |
+| [E702](E702.md) | Invalid MOR chunk format - missing | | error | ⏳ |
 
 ## validation (E7x)
 
@@ -1346,7 +1346,7 @@ A single speaker has consecutive utterances with overlap markers (⌈⌉/⌊⌋)
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E704](E704.md) | overlap, overlapping overlap markers | error | ✅ |
+| [E704](E704.md) | Speaker self-overlap, overlapping overlap markers | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1354,7 +1354,7 @@ Mor count mismatch - too few items
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E705](E705.md) | too few items | error | ✅ |
+| [E705](E705.md) | Mor count mismatch - too few items | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1362,7 +1362,7 @@ Mor count mismatch - too many mor items
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E706](E706.md) | too many mor items | error | ✅ |
+| [E706](E706.md) | Mor count mismatch - too many mor items | error | ✅ |
 
 ## Alignment terminator mismatch (E7x)
 
@@ -1370,7 +1370,7 @@ The %mor tier has a terminator but the main tier does not, or vice versa. One ti
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E707](E707.md) | E707: Mor terminator presence mismatch | error | ⏳ |
+| [E707](E707.md) | Mor terminator presence mismatch | error | ⏳ |
 
 ## Dependent tier parsing (E7x)
 
@@ -1378,7 +1378,7 @@ A grammar relation on the %gra tier is malformed, missing an index, head, or rel
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E708](E708.md) | E708: Malformed grammar relation on %gra tier | error | ⏳ |
+| [E708](E708.md) | Malformed grammar relation on %gra tier | error | ⏳ |
 
 ## validation (E7x)
 
@@ -1386,7 +1386,7 @@ A %gra relation uses an invalid index. %gra indices are 1-indexed: the first wor
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E709](E709.md) | E709: Invalid grammar index | error | ✅ |
+| [E709](E709.md) | Invalid grammar index | error | ✅ |
 
 ## Dependent tier parsing (E7x)
 
@@ -1394,7 +1394,7 @@ Invalid GRA format
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E710](E710.md) | E710: Invalid GRA format | error | ✅ |
+| [E710](E710.md) | Invalid GRA format | error | ✅ |
 
 ## Mor content validation (E7x)
 
@@ -1402,7 +1402,7 @@ A %mor word has an empty stem, POS category, prefix, or suffix. Every morphosynt
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E711](E711.md) | E711: Mor empty content | error | ⏳ |
+| [E711](E711.md) | Mor empty content | error | ⏳ |
 
 ## validation (E7x)
 
@@ -1410,7 +1410,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E712](E712.md) | generated from corpus | error | ✅ |
+| [E712](E712.md) | Auto-generated from corpus | error | ✅ |
 
 ## validation (E7x)
 
@@ -1418,7 +1418,7 @@ A %gra relation has a head index that falls outside the valid range 0..=N, where
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E713](E713.md) | E713: Gra head index invalid | error | ✅ |
+| [E713](E713.md) | Gra head index invalid | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1426,7 +1426,7 @@ The %pho (actual phonology) tier has fewer alignable tokens than the main tier. 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E714](E714.md) | E714: %pho alignment count mismatch, too few tokens | error | ✅ |
+| [E714](E714.md) | %pho alignment count mismatch, too few tokens | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1434,7 +1434,7 @@ The %pho (actual phonology) tier has more alignable tokens than the main tier. R
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E715](E715.md) | E715: %pho alignment count mismatch, too many tokens | error | ✅ |
+| [E715](E715.md) | %pho alignment count mismatch, too many tokens | error | ✅ |
 
 ## Alignment terminator mismatch (E7x)
 
@@ -1442,7 +1442,7 @@ The %mor tier has a terminator that does not match the main tier's terminator. B
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E716](E716.md) | E716: Mor terminator value mismatch | error | ✅ |
+| [E716](E716.md) | Mor terminator value mismatch | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1450,7 +1450,7 @@ Sin count mismatch - too few sin tokens
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E718](E718.md) | too few sin tokens | error | ✅ |
+| [E718](E718.md) | Sin count mismatch - too few sin tokens | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1458,7 +1458,7 @@ Sin count mismatch - too many sin tokens
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E719](E719.md) | too many sin tokens | error | ✅ |
+| [E719](E719.md) | Sin count mismatch - too many sin tokens | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1466,7 +1466,7 @@ The number of %mor chunks does not equal the number of %gra relations for an utt
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E720](E720.md) | Gra count mismatch | error | ✅ |
+| [E720](E720.md) | Mor-Gra count mismatch | error | ✅ |
 
 ## validation (E7x)
 
@@ -1474,7 +1474,7 @@ The number of %mor chunks does not equal the number of %gra relations for an utt
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E721](E721.md) | sequential index | error | ✅ |
+| [E721](E721.md) | GRA non-sequential index | error | ✅ |
 
 ## validation (E7x)
 
@@ -1482,7 +1482,7 @@ The number of %mor chunks does not equal the number of %gra relations for an utt
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E722](E722.md) | E722: GRA has no ROOT | error | ✅ |
+| [E722](E722.md) | GRA has no ROOT | error | ✅ |
 
 ## validation (E7x)
 
@@ -1490,7 +1490,7 @@ The number of %mor chunks does not equal the number of %gra relations for an utt
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E723](E723.md) | E723: GRA has multiple ROOTs | error | ✅ |
+| [E723](E723.md) | GRA has multiple ROOTs | error | ✅ |
 
 ## validation (E7x)
 
@@ -1498,7 +1498,7 @@ A %gra tier contains a circular dependency where following parent pointers creat
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E724](E724.md) | E724: GRA has circular dependency | error | ✅ |
+| [E724](E724.md) | GRA has circular dependency | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1506,7 +1506,7 @@ The %xmodsyl tier word count does not match the %mod tier word count. Each word-
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E725](E725.md) | E725: Modsyl tier word count does not match mod tier | error | ✅ |
+| [E725](E725.md) | Modsyl tier word count does not match mod tier | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1514,7 +1514,7 @@ The %xphosyl tier word count does not match the %pho tier word count. Each word-
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E726](E726.md) | E726: Phosyl tier word count does not match pho tier | error | ✅ |
+| [E726](E726.md) | Phosyl tier word count does not match pho tier | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1522,7 +1522,7 @@ The %xphoaln tier word count does not match the %mod tier word count. Each word-
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E727](E727.md) | E727: Phoaln tier word count does not match mod tier | error | ✅ |
+| [E727](E727.md) | Phoaln tier word count does not match mod tier | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1530,7 +1530,7 @@ The %xphoaln tier word count does not match the %pho tier word count. Each word-
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E728](E728.md) | E728: Phoaln tier word count does not match pho tier | error | ✅ |
+| [E728](E728.md) | Phoaln tier word count does not match pho tier | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1538,7 +1538,7 @@ The %mod (model/target phonology) tier has fewer alignable tokens than the main 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E733](E733.md) | E733: %mod alignment count mismatch, too few tokens | error | ✅ |
+| [E733](E733.md) | %mod alignment count mismatch, too few tokens | error | ✅ |
 
 ## Alignment count mismatch (E7x)
 
@@ -1546,7 +1546,7 @@ The %mod (model/target phonology) tier has more alignable tokens than the main t
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E734](E734.md) | E734: %mod alignment count mismatch, too many tokens | error | ✅ |
+| [E734](E734.md) | %mod alignment count mismatch, too many tokens | error | ✅ |
 
 ## Phon syllabification content (E7x)
 
@@ -1554,7 +1554,7 @@ Every %xmodsyl/%xphosyl unit must be one phone, an ASCII ':', then one constitue
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E735](E735.md) | E735: Syllabification unit is not a phone:CODE pair | error | ✅ |
+| [E735](E735.md) | Syllabification unit is not a phone:CODE pair | error | ✅ |
 
 ## Phon syllabification content (E7x)
 
@@ -1562,7 +1562,7 @@ Constituent codes on %xmodsyl/%xphosyl must be one of O N C L R E A D U.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E736](E736.md) | E736: Illegal syllable constituent code | error | ✅ |
+| [E736](E736.md) | Illegal syllable constituent code | error | ✅ |
 
 ## Phon syllabification content (E7x)
 
@@ -1570,7 +1570,7 @@ Stripping :CODE from each %xmodsyl unit must reproduce the corresponding %mod wo
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E737](E737.md) | E737: Modsyl does not reproduce the mod word | error | ✅ |
+| [E737](E737.md) | Modsyl does not reproduce the mod word | error | ✅ |
 
 ## Phon syllabification content (E7x)
 
@@ -1578,7 +1578,7 @@ Stripping :CODE from each %xphosyl unit must reproduce the corresponding %pho wo
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E738](E738.md) | E738: Phosyl does not reproduce the pho word | error | ✅ |
+| [E738](E738.md) | Phosyl does not reproduce the pho word | error | ✅ |
 
 ## Phon phone alignment (E7x)
 
@@ -1586,7 +1586,7 @@ Every %xphoaln pair has exactly one ↔ with a non-null phone on at least one si
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E739](E739.md) | E739: Phoaln pair is malformed | error | ✅ |
+| [E739](E739.md) | Phoaln pair is malformed | error | ✅ |
 
 ## Phon phone alignment (E7x)
 
@@ -1594,7 +1594,7 @@ Concatenating the model (left) sides of %xphoaln, skipping ∅, must reproduce t
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E740](E740.md) | E740: Phoaln model side does not reproduce the mod word | error | ✅ |
+| [E740](E740.md) | Phoaln model side does not reproduce the mod word | error | ✅ |
 
 ## Phon phone alignment (E7x)
 
@@ -1602,7 +1602,7 @@ Concatenating the actual (right) sides of %xphoaln, skipping ∅, must reproduce
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E741](E741.md) | E741: Phoaln actual side does not reproduce the pho word | error | ✅ |
+| [E741](E741.md) | Phoaln actual side does not reproduce the pho word | error | ✅ |
 
 ## Phon phone interval (E7x)
 
@@ -1610,7 +1610,7 @@ Each %xphoint phone interval must have start strictly less than end.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E742](E742.md) | E742: Xphoint bullet has start >= end | error | ✅ |
+| [E742](E742.md) | Xphoint bullet has start >= end | error | ✅ |
 
 ## Phon phone interval (E7x)
 
@@ -1618,7 +1618,7 @@ Each %xphoint phone interval must have start strictly less than end.
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E743](E743.md) | decreasing | error | ✅ |
+| [E743](E743.md) | Xphoint interval starts are not non-decreasing | error | ✅ |
 
 ## Phon phone interval (E7x)
 
@@ -1626,7 +1626,7 @@ The first start and last end of %xphoint must lie within the *SPK: media bullet 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E744](E744.md) | E744: Xphoint intervals fall outside the media bullet | error | ✅ |
+| [E744](E744.md) | Xphoint intervals fall outside the media bullet | error | ✅ |
 
 ## Phon phone interval (E7x)
 
@@ -1634,7 +1634,7 @@ Concatenating a %xphoint group's phones must reproduce the corresponding %pho wo
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E745](E745.md) | E745: Xphoint group does not reproduce the pho word | error | ✅ |
+| [E745](E745.md) | Xphoint group does not reproduce the pho word | error | ✅ |
 
 ## Phon phone interval (E7x)
 
@@ -1642,7 +1642,7 @@ Concatenating a %xphoint group's phones must reproduce the corresponding %pho wo
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E746](E746.md) | E746: Xphoint group count does not match the pho word count | error | ✅ |
+| [E746](E746.md) | Xphoint group count does not match the pho word count | error | ✅ |
 
 ## Media bullets (E7x)
 
@@ -1650,7 +1650,7 @@ A media bullet timestamp is written with a leading zero before another digit (fo
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E748](E748.md) | E748: Leading zero in bullet timestamp | error | ✅ |
+| [E748](E748.md) | Leading zero in bullet timestamp | error | ✅ |
 
 ## Main tier separators (E7x)
 
@@ -1658,7 +1658,7 @@ A comma on a speaker tier must be followed by a space or end-of-line (CLAN CHECK
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E749](E749.md) | E749: Comma glued to the following word | error | ✅ |
+| [E749](E749.md) | Comma glued to the following word | error | ✅ |
 
 ## Main tier groups (E7x)
 
@@ -1666,7 +1666,7 @@ A space directly after the opening < or directly before the closing > of an angl
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E750](E750.md) | bracket group delimiters | error | ✅ |
+| [E750](E750.md) | Space inside angle-bracket group delimiters | error | ✅ |
 
 ## Main tier separators (E7x)
 
@@ -1674,7 +1674,7 @@ A pause marker opening directly attached to the end of a word with no space (hel
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E751](E751.md) | E751: Pause glued to the preceding word | error | ✅ |
+| [E751](E751.md) | Pause glued to the preceding word | error | ✅ |
 
 ## header_validation (E7x)
 
@@ -1682,7 +1682,7 @@ The transcript carries timing evidence (main-tier bullets, or a positional %wor 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E752](E752.md) | E752: Timing bullets without an @Media header | error | ✅ |
+| [E752](E752.md) | Timing bullets without an @Media header | error | ✅ |
 
 ## Main tier words (E7x)
 
@@ -1690,7 +1690,7 @@ A word whose entire spoken material sits inside segment-repetition delimiters (�
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E753](E753.md) | E753: Word consisting only of repetition segments | error | ✅ |
+| [E753](E753.md) | Word consisting only of repetition segments | error | ✅ |
 
 ## Main tier words (E7x)
 
@@ -1698,7 +1698,7 @@ The @l special form marks a single spoken LETTER (b@l, reading a letter aloud). 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E754](E754.md) | E754: Letter form @l with more than one letter | error | ✅ |
+| [E754](E754.md) | Letter form @l with more than one letter | error | ✅ |
 
 ## header_validation (E7x)
 
@@ -1706,7 +1706,7 @@ A [- CODE] precode marks a whole utterance as being in another language: substan
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E755](E755.md) | E755: Utterance language not declared in @Languages | error | ✅ |
+| [E755](E755.md) | Utterance language not declared in @Languages | error | ✅ |
 
 ## Dependent tier validation (E7x)
 
@@ -1714,7 +1714,7 @@ A user-defined %x tier whose content is empty or whitespace-only declares nothin
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E756](E756.md) | defined tier | error | ✅ |
+| [E756](E756.md) | Empty user-defined tier | error | ✅ |
 
 ## Main tier separators (E7x)
 
@@ -1722,7 +1722,7 @@ A bracketed code's closing ] directly attached to the start of the next word wit
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E757](E757.md) | E757: Bracketed code glued to the following content | error | ✅ |
+| [E757](E757.md) | Bracketed code glued to the following content | error | ✅ |
 
 ## Tier structure (E7x)
 
@@ -1730,7 +1730,7 @@ Every CHAT line has the shape label:<tab>content, where the separator between th
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E758](E758.md) | CA file) | error | ✅ |
+| [E758](E758.md) | Trailing space in a line's tier separator (non-CA file) | error | ✅ |
 
 ## Main tier annotations (E7x)
 
@@ -1738,7 +1738,7 @@ Postfix annotations (retraces [/] [//] [///] [/-], overlap markers [<] [>] and t
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E759](E759.md) | E759: Annotation at utterance start has nothing to attach to | error | ✅ |
+| [E759](E759.md) | Annotation at utterance start has nothing to attach to | error | ✅ |
 
 ## Dependent tier validation (E7x)
 
@@ -1746,7 +1746,7 @@ A %mor item is pos|stem (with optional prefixes, clitics, and suffixes). An item
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E760](E760.md) | of | error | ✅ |
+| [E760](E760.md) | %mor item has an empty part-of-speech field | error | ✅ |
 
 ## Dependent tier validation (E7x)
 
@@ -1754,7 +1754,7 @@ A %gra relation label is HEAD or HEAD-SUBTYPE. Universal Dependencies fixes the 
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E761](E761.md) | E761: %gra relation head is not a Universal Dependencies relation | error | ✅ |
+| [E761](E761.md) | %gra relation head is not a Universal Dependencies relation | error | ✅ |
 
 ## Word validation (E7x)
 
@@ -1762,7 +1762,7 @@ The prefix marker # separates a bound prefix from its stem in languages whose or
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E762](E762.md) | E762: prefix marker stands alone or opens a word | error | ✅ |
+| [E762](E762.md) | prefix marker stands alone or opens a word | error | ✅ |
 
 ## Word validation (E7x)
 
@@ -1770,7 +1770,7 @@ The prefix marker # separates a bound prefix from its stem (Hebrew ha# kelev, Ar
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E763](E763.md) | E763: prefix marker in a language that does not use it | error | ✅ |
+| [E763](E763.md) | prefix marker in a language that does not use it | error | ✅ |
 
 ## Alignment count mismatch (E9x)
 
@@ -1778,7 +1778,7 @@ Unknown error
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E999](E999.md) | E999: Unknown error | error | ⏳ |
+| [E999](E999.md) | Unknown error | error | ⏳ |
 
 ## validation (W1x)
 
@@ -1786,7 +1786,7 @@ Auto-generated from corpus
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [W108](W108.md) | generated from corpus | error | ✅ |
+| [W108](W108.md) | Auto-generated from corpus | error | ✅ |
 
 ## Warnings (W6x)
 
@@ -1794,5 +1794,5 @@ A user-defined dependent tier (%x...) uses a label that matches a known standard
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [W602](W602.md) | W602: Deprecated experimental tier name | error | ⏳ |
+| [W602](W602.md) | Deprecated experimental tier name | error | ⏳ |
 

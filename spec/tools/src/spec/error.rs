@@ -52,6 +52,31 @@ fn default_status() -> String {
     "implemented".to_string()
 }
 
+/// Strip the leading error-code prefix from a spec H1 heading.
+///
+/// Spec headings are `<CODE><sep> <Name>`, and `<sep>` has drifted over time:
+/// today 212 of 222 files use `:`, nine use `,` (a mechanical dash sweep
+/// rewrote their separator), and none use the ` - ` form the loader used to
+/// assume.
+///
+/// The previous implementation was `name.split('-').nth(1)`, which therefore
+/// matched NOTHING and silently fell back to the entire heading, so every
+/// generated page rendered its code twice: `# E248: E248, Bare @s shortcut`.
+/// It also mis-split any name containing a hyphen inside a word. Parsing the
+/// prefix explicitly is separator-agnostic and survives the next sweep.
+fn strip_code_prefix(heading: &str, code: &str) -> String {
+    let heading = heading.trim();
+    let Some(rest) = heading.strip_prefix(code) else {
+        // No code prefix to remove: the heading is already just the name.
+        return heading.to_string();
+    };
+    let rest = rest.trim_start();
+    rest.strip_prefix([',', ':', '-'])
+        .unwrap_or(rest)
+        .trim()
+        .to_string()
+}
+
 /// A single error definition
 #[derive(Debug, Deserialize)]
 pub struct ErrorDefinition {
@@ -251,11 +276,7 @@ impl ErrorSpec {
 
         let error_def = ErrorDefinition {
             code: code.clone(),
-            name: name
-                .split('-')
-                .nth(1)
-                .map(|s| s.trim().to_string())
-                .unwrap_or_else(|| name.clone()),
+            name: strip_code_prefix(&name, &code),
             severity: metadata
                 .get("Severity")
                 .cloned()
@@ -440,5 +461,58 @@ impl ErrorExample {
     /// Extract expected error message substring for assertion
     pub fn expected_substring(&self) -> &str {
         &self.expected_message
+    }
+}
+
+#[cfg(test)]
+mod strip_code_prefix_tests {
+    use super::strip_code_prefix;
+
+    /// The colon form, which 212 of the 222 spec files use today.
+    #[test]
+    fn strips_a_colon_separated_code() {
+        assert_eq!(
+            strip_code_prefix("E101: Invalid line format", "E101"),
+            "Invalid line format"
+        );
+    }
+
+    /// The comma form. Nine specs carry it because a dash sweep rewrote the
+    /// separator, and it is exactly what broke the old `split('-')` parse.
+    #[test]
+    fn strips_a_comma_separated_code() {
+        assert_eq!(
+            strip_code_prefix("E248, Bare @s shortcut in tertiary language context", "E248"),
+            "Bare @s shortcut in tertiary language context"
+        );
+    }
+
+    /// The historical hyphen form still parses.
+    #[test]
+    fn strips_a_hyphen_separated_code() {
+        assert_eq!(
+            strip_code_prefix("E304 - Something went wrong", "E304"),
+            "Something went wrong"
+        );
+    }
+
+    /// A hyphen INSIDE the name must survive. The old implementation split on
+    /// the first hyphen anywhere and returned "of" for this input.
+    #[test]
+    fn keeps_hyphens_that_belong_to_the_name() {
+        assert_eq!(
+            strip_code_prefix("E543: Header out-of-order", "E543"),
+            "Header out-of-order"
+        );
+    }
+
+    /// A heading that carries no code prefix is returned unchanged, rather
+    /// than being truncated by a speculative split.
+    #[test]
+    fn passes_through_a_heading_with_no_code() {
+        assert_eq!(
+            strip_code_prefix("UnknownBaseContent", "E340"),
+            "UnknownBaseContent"
+        );
     }
 }
