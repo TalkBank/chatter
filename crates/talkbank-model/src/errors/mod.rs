@@ -102,25 +102,29 @@ pub use text_size::{TextRange, TextSize};
 /// our existing API while gaining the type-safe offset arithmetic from
 /// the `text-size` ecosystem (used by rust-analyzer, rowan, etc.).
 ///
-/// # Known hazard: `Default` and [`Span::DUMMY`] are the same value
-///
-/// `Span::default()` is `{0, 0}`, which is exactly `DUMMY`, the sentinel
-/// meaning "this value has no source location". Several validators branch on
-/// that sentinel: `validation/utterance/spacing.rs` SKIPS a retrace whose span
-/// is `DUMMY`, and `underline.rs` / `validation/retrace/mod.rs` widen to an
-/// enclosing span. So a span arriving via `default()` or `unwrap_or_default()`
-/// silently changes validation behaviour with nothing at the call site saying
-/// so, and it is invisible to a grep for `DUMMY`.
-///
-/// Dropping the derive is the fix, but it is not free: 22 model fields carry
-/// `#[serde(skip)] pub span: Span`, and serde needs `Default` to reconstruct a
-/// skipped field (44 compile errors when the derive is removed). The honest
-/// version is `#[serde(skip, default = "Span::dummy")]` on each, which also
-/// documents what deserialization produces. Tracked as a 1.0 cleanup rather
-/// than done piecemeal.
-///
-/// Until then: **write `Span::DUMMY` explicitly, never `Span::default()`**, so
-/// that choosing the sentinel stays greppable.
+// KNOWN HAZARD, for maintainers: `Default` and `DUMMY` are the same value.
+//
+// Deliberately a plain comment, not rustdoc: schemars turns doc comments into
+// `description` text in the published `schema/chat-file.schema.json`, and this
+// is internal maintenance detail, not something a schema consumer should read.
+//
+// `Span::default()` is `{0, 0}`, which is exactly `DUMMY`, the sentinel meaning
+// "this value has no source location". Several validators branch on that
+// sentinel: `validation/utterance/spacing.rs` SKIPS a retrace whose span is
+// `DUMMY`, and `underline.rs` / `validation/retrace/mod.rs` widen to an
+// enclosing span. So a span arriving via `default()` or `unwrap_or_default()`
+// silently changes validation behaviour with nothing at the call site saying
+// so, and is invisible to a grep for `DUMMY`.
+//
+// Dropping the derive is the fix, but it is not free: 22 model fields carry
+// `#[serde(skip)] pub span: Span`, and serde needs `Default` to reconstruct a
+// skipped field (44 compile errors when the derive is removed). The honest
+// version is `#[serde(skip, default = "Span::dummy")]` on each, which also
+// documents what deserialization produces. Tracked as a 1.0 cleanup rather
+// than done piecemeal.
+//
+// Until then: write `Span::DUMMY` explicitly, never `Span::default()`, so that
+// choosing the sentinel stays greppable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct Span {
     /// Start byte offset (0-indexed, inclusive)
