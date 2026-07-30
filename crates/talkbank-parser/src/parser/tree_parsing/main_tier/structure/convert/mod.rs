@@ -63,7 +63,7 @@ pub fn convert_main_tier_node(
     let main = extract_main_tier(MainTierNode(node));
 
     // Speaker prefix (`* speaker : tab`).
-    let prefix = prefix::parse_prefix(&main, source, original_input, errors);
+    let prefix = prefix::parse_prefix(&main, node.byte_range(), source, original_input, errors);
 
     // The optional trailing separator space after the tab, before tier_body
     // (E758 provenance): `main.child_4.slot` is `Option<NodeSlot<..>>`. Only
@@ -113,16 +113,30 @@ pub fn convert_main_tier_node(
     // EXHAUSTIVELY so no recovery node is silently dropped.
     let tier = match &main.child_5.slot {
         NodeSlot::Present(tier_body) => {
-            let tier_body_children = extract_tier_body(TierBodyNode(tier_body.raw_node()));
-            body::parse_tier_body(&tier_body_children, source, original_input, errors)
+            let raw = tier_body.raw_node();
+            let tier_body_children = extract_tier_body(TierBodyNode(raw));
+            body::parse_tier_body(
+                &tier_body_children,
+                raw.byte_range(),
+                source,
+                original_input,
+                errors,
+            )
         }
         NodeSlot::Missing(tier_body_node) => {
             let tier_body_children = extract_tier_body(TierBodyNode(*tier_body_node));
-            body::parse_tier_body(&tier_body_children, source, original_input, errors)
+            body::parse_tier_body(
+                &tier_body_children,
+                tier_body_node.byte_range(),
+                source,
+                original_input,
+                errors,
+            )
         }
         NodeSlot::Error(error_node) => {
             errors.report(analyze_word_error(*error_node, source));
             report_missing_child(
+                node.byte_range(),
                 original_input,
                 errors,
                 ErrorCode::MissingTerminator,
@@ -139,6 +153,7 @@ pub fn convert_main_tier_node(
                 TIER_BODY_POSITION,
             );
             report_missing_child(
+                node.byte_range(),
                 original_input,
                 errors,
                 ErrorCode::MissingTerminator,
@@ -148,6 +163,7 @@ pub fn convert_main_tier_node(
         }
         NodeSlot::Absent => {
             report_missing_child(
+                node.byte_range(),
                 original_input,
                 errors,
                 ErrorCode::MissingTerminator,
@@ -278,8 +294,17 @@ fn sep_from_slot(slot: &Option<NodeSlot<'_, SepTrailingSpaceNode<'_>>>) -> TierS
     }
 }
 
-/// Report a required-child omission in a user-facing input slice.
+/// Report a required-child omission, located on the carrier node.
+///
+/// `carrier` is the byte range of the node whose child is missing (the
+/// `main_tier` or `tier_body` node), in the PARSE's coordinate space, so the
+/// diagnostic lands on the offending line. Until 2026-07-30 this helper used
+/// `0..original_input.len()`, a fragment-local span: correct for the
+/// standalone fragment entry points, but in whole-file parsing it rendered
+/// every such diagnostic at line 1 over the header block (the IISRP-residue
+/// finding; same family as the annotated-word wrapper span).
 pub(super) fn report_missing_child(
+    carrier: std::ops::Range<usize>,
     original_input: &str,
     errors: &impl ErrorSink,
     code: ErrorCode,
@@ -288,8 +313,8 @@ pub(super) fn report_missing_child(
     errors.report(ParseError::new(
         code,
         Severity::Error,
-        SourceLocation::from_offsets(0, original_input.len()),
-        ErrorContext::new(original_input, 0..original_input.len(), ""),
+        SourceLocation::from_offsets(carrier.start, carrier.end),
+        ErrorContext::new(original_input, carrier, ""),
         message,
     ));
 }

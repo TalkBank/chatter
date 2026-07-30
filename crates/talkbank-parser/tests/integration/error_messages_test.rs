@@ -228,3 +228,45 @@ fn test_error_spans_point_to_problem_locations() {
         }
     }
 }
+
+/// A diagnostic caused by a defect on one line must be LOCATED on that line.
+///
+/// Regression for the IISRP-residue finding (2026-07-30): an unparsable main
+/// tier (`&- um and .`, the split filler prefix) produced an E305 whose span
+/// was `0..line_len`, i.e. fragment-local coordinates never rebased onto the
+/// file, so the diagnostic rendered on line 1 over the header block. The
+/// `report_missing_child` recovery used `0..original_input.len()` as its span;
+/// every span it reports must lie inside the offending line instead.
+#[test]
+fn test_recovery_diagnostics_are_located_on_the_offending_line() {
+    let header = "@UTF8
+@Begin
+@Languages:	eng
+@Participants:	INV Investigator
+@ID:	eng|test|INV|||||Investigator|||
+";
+    let bad_line = "*INV:	&- um and .
+";
+    let input = format!(
+        "{header}{bad_line}@End
+"
+    );
+    let line_start = header.len() as u32;
+    let line_end = (header.len() + bad_line.len()) as u32;
+
+    let errors = parse_and_collect_errors(&input);
+    assert!(
+        !errors.is_empty(),
+        "the split filler prefix must produce diagnostics"
+    );
+    for error in &errors {
+        let span = error.location.span;
+        assert!(
+            span.start >= line_start && span.end <= line_end,
+            "diagnostic located outside the offending line              (span {}..{}, line is {line_start}..{line_end}): {:?}",
+            span.start,
+            span.end,
+            error
+        );
+    }
+}

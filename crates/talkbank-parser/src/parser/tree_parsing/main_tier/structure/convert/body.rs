@@ -42,6 +42,7 @@ use super::{TierBodyData, report_missing_child};
 /// diagnostics; the remaining slot states reproduce the prior recovery behavior.
 pub(super) fn parse_tier_body(
     body: &TierBodyChildren,
+    carrier: std::ops::Range<usize>,
     source: &str,
     original_input: &str,
     errors: &impl ErrorSink,
@@ -131,6 +132,7 @@ pub(super) fn parse_tier_body(
         // absent) rather than reaching this arm.
         NodeSlot::Unexpected(_) | NodeSlot::Absent => {
             report_missing_child(
+                carrier.clone(),
                 original_input,
                 errors,
                 ErrorCode::MissingTerminator,

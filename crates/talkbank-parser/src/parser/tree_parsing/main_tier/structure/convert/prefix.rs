@@ -38,6 +38,7 @@ const TAB_POSITION: usize = 3;
 /// states reproduce the prior recovery behavior.
 pub(super) fn parse_prefix(
     main: &MainTierChildren,
+    carrier: std::ops::Range<usize>,
     source: &str,
     original_input: &str,
     errors: &impl ErrorSink,
@@ -66,6 +67,7 @@ pub(super) fn parse_prefix(
             ));
         }
         NodeSlot::Absent => report_missing_child(
+            carrier.clone(),
             original_input,
             errors,
             ErrorCode::MissingSpeaker,
@@ -89,6 +91,7 @@ pub(super) fn parse_prefix(
         }
         NodeSlot::Absent => {
             report_missing_child(
+                carrier.clone(),
                 original_input,
                 errors,
                 ErrorCode::MissingSpeaker,
@@ -132,6 +135,7 @@ pub(super) fn parse_prefix(
         }
         NodeSlot::Absent => {
             report_missing_child(
+                carrier.clone(),
                 original_input,
                 errors,
                 ErrorCode::MissingColonAfterSpeaker,
@@ -155,6 +159,7 @@ pub(super) fn parse_prefix(
             report_unexpected_child(*node, source, errors, "tab", TAB_POSITION);
         }
         NodeSlot::Absent => report_missing_child(
+            carrier,
             original_input,
             errors,
             ErrorCode::StructuralOrderError,
