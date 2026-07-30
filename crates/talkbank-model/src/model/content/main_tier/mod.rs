@@ -344,8 +344,14 @@ impl crate::validation::Validate for MainTier {
         let content_items = &tier_content.content;
 
         // E305: missing terminator, main tier utterances must end with a
-        // terminator unless CA mode is active.
-        if tier_content.terminator.is_none() && !context.shared.ca_mode {
+        // terminator unless CA mode is active. Skipped on a parse-recovered
+        // tier: the terminator may sit inside the unparsed region, so its
+        // absence from the model is unknowable, not a finding (the E316
+        // recovery diagnostic already marks the utterance invalid).
+        if tier_content.terminator.is_none()
+            && !context.shared.ca_mode
+            && !context.main_parse_tainted
+        {
             errors.report(
                 ParseError::new(
                     ErrorCode::MissingTerminator,

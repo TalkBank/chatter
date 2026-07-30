@@ -153,6 +153,16 @@ pub struct ValidationContext {
 
     /// Optional error code override for field-level validation
     pub field_error_code: Option<ErrorCode>,
+
+    /// Whether the active utterance's MAIN tier was parse-recovered.
+    ///
+    /// Set per-utterance from [`crate::model::ParseHealth`] before the main
+    /// tier validates. Structural claims about content the parser never saw
+    /// (E306 "utterance is empty", the model-side E305 "expected terminator
+    /// not found") are unknowable on a recovered tier and gate on this flag:
+    /// the parse-layer E316 alone marks the utterance invalid. Recovery is
+    /// not validity; it is also not license to invent findings.
+    pub main_parse_tainted: bool,
 }
 
 impl Default for ValidationContext {
@@ -165,6 +175,7 @@ impl Default for ValidationContext {
             field_text: None,
             field_label: None,
             field_error_code: None,
+            main_parse_tainted: false,
         }
     }
 }
@@ -190,6 +201,7 @@ impl ValidationContext {
             field_text: None,
             field_label: None,
             field_error_code: None,
+            main_parse_tainted: false,
         }
     }
 
@@ -263,6 +275,12 @@ impl ValidationContext {
     /// context instance's overlay field.
     pub fn with_tier_language(mut self, lang: Option<LanguageCode>) -> Self {
         self.tier_language = lang;
+        self
+    }
+
+    /// Marks the active utterance's main tier as parse-recovered.
+    pub fn with_main_parse_taint(mut self, tainted: bool) -> Self {
+        self.main_parse_tainted = tainted;
         self
     }
 
