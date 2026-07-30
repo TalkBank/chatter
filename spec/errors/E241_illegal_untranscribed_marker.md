@@ -22,6 +22,24 @@ The marker 'xx' is used for untranscribed speech, but this is not allowed in CHA
 @End
 ```
 
+## Example 2
+
+**Trigger**: the same illegal marker in a CA file. CA mode legalizes the
+`(word)` omission form, not arbitrary untranscribed markers; the wholesale
+E241 skip was ungrounded (no CLAN CHECK counterpart) and removed 2026-07-29.
+**Expected Error Codes**: E241
+
+```chat
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@Options:	CA
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I said xx today .
+@End
+```
+
 ## Expected Behavior
 
 - **Parser**: Should succeed - 'xx' is syntactically valid as a word

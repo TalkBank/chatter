@@ -9,6 +9,22 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Removed
+
+- **Two ungrounded CA-mode validation exemptions.** `@Options: CA` no longer
+  disables the E241 illegal-untranscribed checks, nor the E701/E704 temporal
+  checks (which it had skipped wholesale via an early return, while E362
+  bullet monotonicity kept running on the same files). Neither skip had a
+  CLAN CHECK counterpart: CHECK's whole CA behavior is three suppressed
+  errors (21 terminator, 155 parenthesized word, 123 leading space), and
+  chatter keeps exactly those three. Measured before removal on ALL 994 kept
+  CA-declared files: both gates protected zero occurrences. The temporal
+  skip's recorded rationale (leniency-policy Decision 6, false positives on
+  CA reference files) no longer reproduces, since the temporal rules gained
+  the 500 ms tolerance and per-speaker semantics; its Revisit line
+  anticipated this removal. CA files with genuine timing defects or illegal
+  untranscribed markers are now diagnosed like any other file.
+
 ### Fixed
 
 - **An annotated word's wrapper span was never set**, left `Span::DUMMY` at

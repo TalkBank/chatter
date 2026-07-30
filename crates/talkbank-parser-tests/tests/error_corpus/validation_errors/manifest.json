@@ -81,6 +81,14 @@
       "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
     },
     {
+      "fixture": "E241_Illegal_Untranscribed_Marker_xx_2.cha",
+      "expected_codes": [
+        "E241"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
+    },
+    {
       "fixture": "E242_Unbalanced_quotation_marks.cha",
       "expected_codes": [
         "E242"
@@ -1228,6 +1236,14 @@
     },
     {
       "fixture": "E701_Per_speaker_start_time_not_monotonically_increasing.cha",
+      "expected_codes": [
+        "E701"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E701_auto.md"
+    },
+    {
+      "fixture": "E701_Per_speaker_start_time_not_monotonically_increasing_2.cha",
       "expected_codes": [
         "E701"
       ],

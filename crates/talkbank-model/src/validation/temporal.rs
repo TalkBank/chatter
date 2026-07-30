@@ -36,17 +36,16 @@ const SPEAKER_OVERLAP_TOLERANCE_MS: u64 = 500;
 /// 1. Per-speaker start-time monotonicity (`E701` / Error 83)
 /// 2. Per-speaker self-overlap with tolerance (`E704` / Error 133)
 ///
-/// The check is skipped when CA mode is enabled, where timing constraints are
-/// intentionally relaxed for conversation-analysis workflows.
+/// Runs in CA mode too (gate removed 2026-07-29). The wholesale CA skip had
+/// no CLAN CHECK counterpart, no recorded rationale (it bottoms out in a
+/// squashed initial commit), and protected ZERO occurrences across all 994
+/// kept CA-declared files, while disabling timing validation exactly where
+/// overlap is densest. E362 (bullet monotonicity) always ran on CA files, so
+/// the skip was also internally incoherent: one timing rule active, two off.
 pub fn validate_temporal_constraints<S: ValidationState>(
     file: &ChatFile<S>,
-    ca_mode: bool,
     errors: &impl ErrorSink,
 ) {
-    if ca_mode {
-        return;
-    }
-
     // Collect all relevant bullets in document order
     let bullets = collect_bullets(file);
 

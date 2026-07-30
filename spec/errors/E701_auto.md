@@ -33,6 +33,28 @@ speaker). Corresponds to CLAN CHECK Error 83.
 @End
 ```
 
+## Example 2
+
+**Trigger**: the identical timing defect in a CA file. `@Options: CA` is not
+a timing statement: the ungrounded wholesale skip it used to trigger was
+removed 2026-07-29 (protected zero occurrences across all 994 kept
+CA-declared files; see
+docs/investigations/2026-07-29-ca-mode-gate-adjudication.md in the operator
+workspace).
+**Expected Error Codes**: E701
+
+```chat
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@Options:	CA
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello . 5000_6000
+*CHI:	world . 3000_4000
+@End
+```
+
 ## Expected Behavior
 
 Validation should report E701 on the second `*CHI:` utterance because its
@@ -45,7 +67,6 @@ bullet start time (3000ms) is less than the first utterance's start time
 
 ## Notes
 
-- Skipped in CA mode (`@Options: CA`) where timing constraints are relaxed.
 - Implementation: `crates/talkbank-model/src/validation/temporal.rs`
 - E704 (same-speaker overlap with 500ms tolerance) may also fire for the same
   input when overlap exceeds the tolerance threshold.

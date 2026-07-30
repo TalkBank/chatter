@@ -188,10 +188,11 @@ impl crate::validation::Validate for Word {
             }
         }
 
-        // E241: Check for illegal untranscribed types
-        if context.shared.ca_mode {
-            // CA mode treats omission markers differently; skip standard untranscribed checks.
-        } else if let Some(suggested) = structure::get_illegal_untranscribed_suggestion(cleaned) {
+        // E241: Check for illegal untranscribed types. Runs in CA mode too
+        // (gate removed 2026-07-29): CA legalizes the `(word)` omission form,
+        // not arbitrary untranscribed markers; the skip had no CHECK
+        // counterpart and protected zero occurrences on kept CA data.
+        if let Some(suggested) = structure::get_illegal_untranscribed_suggestion(cleaned) {
             errors.report(
                 ParseError::new(
                     ErrorCode::IllegalUntranscribed,

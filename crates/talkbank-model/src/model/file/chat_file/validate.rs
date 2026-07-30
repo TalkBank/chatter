@@ -342,8 +342,11 @@ impl<S: ValidationState> ChatFile<S> {
         check_utterance_language_declared(self, errors);
 
         // E758: leading space between the tab and tier content (CLAN CHECK
-        // 123). CA transcripts column-align with spaces, so CA files are
-        // exempt (all 457 wild occurrences declare CA, 2026-07-16 scan).
+        // 123). CA files are exempt, and the exemption is CHECK-grounded:
+        // check_Tabs suppresses 123 under CA and applies rule 132 instead.
+        // Measured 2026-07-29 (all 994 kept CA-declared files): the
+        // exemption currently shields 6 instances in one file; the earlier
+        // "457 wild occurrences" figure was stale.
         if !context.shared.ca_mode {
             check_separator_trailing_space(self, errors);
         }
@@ -351,11 +354,7 @@ impl<S: ValidationState> ChatFile<S> {
         // E701, E704: Validate temporal constraints on media bullets
         // - E701 (CLAN Error 83): Global timeline monotonicity
         // - E704 (CLAN Error 133): Per-speaker overlap with 500ms tolerance
-        crate::validation::temporal::validate_temporal_constraints(
-            self,
-            context.shared.ca_mode,
-            errors,
-        );
+        crate::validation::temporal::validate_temporal_constraints(self, errors);
 
         // E531: Validate media filename matches file name (if provided)
         if let Some(file_name) = filename {
@@ -452,11 +451,7 @@ impl<S: ValidationState> ChatFile<S> {
         // E701, E704: Validate temporal constraints on media bullets
         // - E701 (CLAN Error 83): Global timeline monotonicity
         // - E704 (CLAN Error 133): Per-speaker overlap with 500ms tolerance
-        crate::validation::temporal::validate_temporal_constraints(
-            self,
-            context.shared.ca_mode,
-            &configurable_sink,
-        );
+        crate::validation::temporal::validate_temporal_constraints(self, &configurable_sink);
 
         // E531: Validate media filename matches file name (if provided)
         if let Some(file_name) = filename {

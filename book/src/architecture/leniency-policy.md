@@ -1,7 +1,7 @@
 # Parser Leniency Policy
 
 **Status:** Current
-**Last updated:** 2026-07-16 11:58 EDT
+**Last updated:** 2026-07-29 23:34 EDT
 
 This document is the single source of truth for how the tree-sitter grammar,
 Rust validation layer, and CLI tooling divide responsibility for enforcing the
@@ -156,17 +156,21 @@ summarised here with its rationale.
   HSLLD corpus).
 - **Revisit**: Decide whether nesting policy should be global or per-label.
 
-### Decision 6: Temporal bullets in CA mode, skipped
+### Decision 6: Temporal bullets in CA mode (RESOLVED 2026-07-29: skip removed)
 
-- **Previous behaviour**: `E701`/`E704` temporal checks ran even for CA-mode
-  files.
-- **Current behaviour**: Temporal constraints are skipped when file is in CA
-  mode.
-- **Implementation**: `validate_temporal_constraints()` early-returns when
-  `ca_mode` is true (`talkbank-model/src/validation/temporal.rs`).
-- **Rationale**: CA reference files include patterns that triggered false
-  monotonicity/self-overlap diagnostics.
-- **Revisit**: Implement CA-specific temporal policy rather than global skip.
+- **Previous behaviour**: temporal constraints were skipped wholesale when a
+  file was in CA mode (`validate_temporal_constraints()` early-returned).
+- **Current behaviour**: `E701`/`E704` run for every file, CA included.
+- **Rationale for removal**: the original workaround ("CA reference files
+  include patterns that triggered false monotonicity/self-overlap
+  diagnostics") outlived its cause. The temporal rules have since gained the
+  500 ms tolerance and per-speaker semantics; with the skip removed, the CA
+  reference files and all 994 kept CA-declared files validate clean (measured
+  2026-07-29, full population). The skip also had no CLAN CHECK counterpart,
+  and was internally incoherent: `E362` bullet monotonicity always ran on CA
+  files while `E701`/`E704` did not.
+- **Revisit**: closed. The anticipated "CA-specific temporal policy" turned
+  out to be unnecessary: no policy difference is needed at all.
 
 ### Decision 7: Pipeline severity threshold, errors only
 
