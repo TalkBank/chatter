@@ -8,9 +8,9 @@ use std::fs;
 use std::path::PathBuf;
 
 // Moved to the crate root (`crate::paths`) so it survives builds with the
-// `validation-runner` feature off; re-exported here so this module's public
-// surface (and `validation_runner::is_chat_transcript_path` consumers) are
-// unchanged.
+// `validation-runner` feature off. This re-export is an EXTERNAL-compat shim
+// only (the crate is public and downstream code imported it from here);
+// in-tree consumers import `talkbank_transform::paths` directly.
 pub use crate::paths::is_chat_transcript_path;
 
 /// Recursively collect all .cha files from a directory

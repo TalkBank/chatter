@@ -16,7 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use talkbank_model::model::{ChatFile, WriteChat};
-use talkbank_transform::validation_runner::is_chat_transcript_path;
+use talkbank_transform::paths::is_chat_transcript_path;
 use tracing::{Level, debug, info, span, warn};
 use walkdir::WalkDir;
 

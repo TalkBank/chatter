@@ -25,8 +25,8 @@ use tempfile::tempdir;
 
 use crate::common::command_surface::{CoverageExpectation, SurfaceFamily, surface_group};
 use crate::common::{
-    CliHarness, assert_failure, assert_success, parse_json, stderr_string, stdout_string,
-    write_fixture,
+    CliHarness, assert_failure, assert_success, combined_output, parse_json, stderr_string,
+    stdout_string, write_fixture,
 };
 
 const VALID_CHAT: &str = "@UTF8
@@ -255,11 +255,7 @@ fn validate_flags_single_word_language_switch_with_e255() -> Result<(), TestErro
     )?;
 
     let output = run_path_command(&harness, &["validate"], &file_path, &["--force"])?;
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let text = combined_output(&output);
     assert!(
         text.contains("E255"),
         "E255 fires on a single-word whole-utterance @s switch (the precode \

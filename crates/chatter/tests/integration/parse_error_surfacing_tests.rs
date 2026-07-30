@@ -124,20 +124,26 @@ const GROUP_WITHOUT_ANNOTATION: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
     @Participants:\tPAR Participant\n@ID:\teng|corpus|PAR|||||Participant|||\n\
     *PAR:\t<I don't> &-uh I know xxx .\n@End\n";
 
-/// Assert `chatter validate` (with `parser_args`, e.g. `["--parser","re2c"]`)
-/// rejects inline `content` with `code`, through the real CLI.
-fn assert_inline_rejected(
-    content: &str,
-    code: &str,
-    parser_args: &[&str],
-) -> Result<(), TestError> {
+/// Run `chatter validate` (with `parser_args`, e.g. `["--parser","re2c"]`)
+/// over inline `content` through the real CLI and return the combined
+/// stdout+stderr text. Shared core of the inline-rejection assertions below.
+fn validate_inline(content: &str, parser_args: &[&str]) -> Result<String, TestError> {
     let harness = CliHarness::new()?;
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", content)?;
     let mut args = vec!["--force"];
     args.extend_from_slice(parser_args);
     let output = harness.run_validate(&path, &args)?;
-    let text = combined_output(&output);
+    Ok(combined_output(&output))
+}
+
+/// Assert `chatter validate` rejects inline `content` with `code`.
+fn assert_inline_rejected(
+    content: &str,
+    code: &str,
+    parser_args: &[&str],
+) -> Result<(), TestError> {
+    let text = validate_inline(content, parser_args)?;
     assert!(
         text.contains(code),
         "expected {code} for a `<...>` group recovered via a synthetic MISSING node, got:\n{text}"
@@ -169,13 +175,7 @@ fn assert_inline_rejected_without(
     unexpected: &str,
     parser_args: &[&str],
 ) -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
-    let path = write_fixture(dir.path(), "session.cha", content)?;
-    let mut args = vec!["--force"];
-    args.extend_from_slice(parser_args);
-    let output = harness.run_validate(&path, &args)?;
-    let text = combined_output(&output);
+    let text = validate_inline(content, parser_args)?;
     assert!(
         text.contains(expected),
         "expected {expected} in output, got:\n{text}"

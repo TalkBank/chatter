@@ -15,7 +15,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use talkbank_transform::validation_runner::is_chat_transcript_path;
+use talkbank_transform::paths::is_chat_transcript_path;
 use thiserror::Error;
 
 use crate::cli::OutputFormat;

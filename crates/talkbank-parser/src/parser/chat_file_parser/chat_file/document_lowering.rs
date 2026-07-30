@@ -389,36 +389,32 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 // the fix is deleting one space (IISRP residue finding 6).
                 // This is a diagnostic hint derived from the already-reported
                 // line text, not model construction.
-                let indented_kind = match text.trim_start().chars().next() {
-                    Some('%') => Some("a dependent tier"),
-                    Some('*') => Some("a main tier"),
-                    Some('@') => Some("a header"),
-                    _ => None,
+                let report = |message: String| {
+                    ParseError::new(
+                        ErrorCode::UnexpectedLineType,
+                        Severity::Error,
+                        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                        ErrorContext::new(
+                            self.source,
+                            node.start_byte()..node.end_byte(),
+                            UNSUPPORTED_LINE,
+                        ),
+                        message,
+                    )
                 };
-                let message = match indented_kind {
-                    Some(kind) => format!(
+                let indented = |kind: &str| {
+                    report(format!(
                         "Unsupported line skipped: {} (looks like {kind} line pushed off \
                          column 1; it must begin at column 1)",
                         text.trim()
-                    ),
-                    None => format!("Unsupported line skipped: {}", text.trim()),
+                    ))
+                    .with_suggestion("Remove the leading whitespace so the line starts at column 1")
                 };
-                let error = ParseError::new(
-                    ErrorCode::UnexpectedLineType,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(
-                        self.source,
-                        node.start_byte()..node.end_byte(),
-                        UNSUPPORTED_LINE,
-                    ),
-                    message,
-                );
-                let error = match indented_kind {
-                    Some(_) => error.with_suggestion(
-                        "Remove the leading whitespace so the line starts at column 1",
-                    ),
-                    None => error,
+                let error = match text.trim_start().chars().next() {
+                    Some('%') => indented("a dependent tier"),
+                    Some('*') => indented("a main tier"),
+                    Some('@') => indented("a header"),
+                    _ => report(format!("Unsupported line skipped: {}", text.trim())),
                 };
                 self.errors.report(error);
             }

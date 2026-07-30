@@ -319,11 +319,10 @@ fn parse_content_item(
         parse_sin_group_content,
     };
     use crate::node_types::{
-        BASE_CONTENT_ITEM, CA_NO_BREAK_LINKER, CA_TECHNICAL_BREAK_LINKER, GROUP_WITH_ANNOTATIONS,
-        ILLEGAL_CURLY_QUOTE, LINKER_LAZY_OVERLAP, LINKER_QUICK_UPTAKE, LINKER_QUICK_UPTAKE_OVERLAP,
-        LINKER_QUOTATION_FOLLOWS, LINKER_SELF_COMPLETION, MAIN_PHO_GROUP, MAIN_SIN_GROUP,
-        QUOTATION,
+        BASE_CONTENT_ITEM, GROUP_WITH_ANNOTATIONS, ILLEGAL_CURLY_QUOTE, MAIN_PHO_GROUP,
+        MAIN_SIN_GROUP, QUOTATION,
     };
+    use crate::parser::tree_parsing::parser_helpers::is_linker;
 
     // CRITICAL FIX: Handle the node itself if it's a leaf node (e.g., bare COLON, SEPARATOR)
     // This is needed because the serializer outputs canonical spacing like "⌈2 :" where
@@ -371,20 +370,11 @@ fn parse_content_item(
             errors.report(illegal_curly_quote_error(node, source));
             return ParseOutcome::rejected();
         }
-        LINKER_LAZY_OVERLAP
-        | LINKER_QUICK_UPTAKE
-        | LINKER_QUICK_UPTAKE_OVERLAP
-        | LINKER_QUOTATION_FOLLOWS
-        | LINKER_SELF_COMPLETION
-        | CA_NO_BREAK_LINKER
-        | CA_TECHNICAL_BREAK_LINKER => {
-            // A linker parsed in content position (the `linker` supertype is
-            // hidden, so the concrete token appears directly): linkers are
-            // utterance-initial by definition, so name it E766 and reject
-            // (no model element), same pattern as the curly quote above.
-            errors.report(misplaced_linker_error(node, source));
-            return ParseOutcome::rejected();
-        }
+        // NOTE: no linker arm here on purpose. A misplaced linker always
+        // arrives wrapped in a `content_item` (the grammar's only route into
+        // content position), so the child loop below handles it; a BARE
+        // linker as a direct `contents` child is a shape the grammar cannot
+        // produce and correctly falls to the fail-loud `_` arm.
         // content_item is a supertype wrapper, fall through to iterate its children below
         CONTENT_ITEM => {}
         _ => {
@@ -418,15 +408,12 @@ fn parse_content_item(
                 errors.report(illegal_curly_quote_error(child, source));
                 return ParseOutcome::rejected();
             }
-            LINKER_LAZY_OVERLAP
-            | LINKER_QUICK_UPTAKE
-            | LINKER_QUICK_UPTAKE_OVERLAP
-            | LINKER_QUOTATION_FOLLOWS
-            | LINKER_SELF_COMPLETION
-            | CA_NO_BREAK_LINKER
-            | CA_TECHNICAL_BREAK_LINKER => {
-                // A misplaced linker inside a content_item wrapper: report
-                // E766 and reject (no model element).
+            // A misplaced linker inside a content_item wrapper (the `linker`
+            // supertype is hidden, so the concrete token appears directly):
+            // report E766 and reject (no model element). Membership comes
+            // from the shared `is_linker` supertype predicate so a future
+            // linker kind cannot be missed here.
+            kind if is_linker(kind) => {
                 errors.report(misplaced_linker_error(child, source));
                 return ParseOutcome::rejected();
             }

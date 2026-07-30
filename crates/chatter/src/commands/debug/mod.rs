@@ -13,7 +13,7 @@ pub use overlap::*;
 pub use sanitize::*;
 
 use std::path::PathBuf;
-use talkbank_transform::validation_runner::is_chat_transcript_path;
+use talkbank_transform::paths::is_chat_transcript_path;
 
 pub(super) fn pct(n: usize, total: usize) -> String {
     if total == 0 {

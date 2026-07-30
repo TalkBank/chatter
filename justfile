@@ -39,8 +39,15 @@ test:
 # ran the whole doctest suite twice over. Doctests are merged into one binary
 # per crate (edition 2024), so they are cheap to RUN; the cost is the rustdoc
 # compile, which is what the inner loop skips.
-test-all: test
+test-all: test check-feature-off
     cargo test --doc --workspace
+
+# The `validation-runner`-off configuration of talkbank-transform (the
+# SQL-free surface downstream consumers opt into with
+# `default-features = false`). No in-workspace consumer builds it, so
+# without this gate feature unification would let it rot silently.
+check-feature-off:
+    cargo test -p talkbank-transform --no-default-features --tests
 
 # Line/region/function coverage over the whole workspace via cargo-llvm-cov,
 # using cargo test (matches the project's test convention). Prints a

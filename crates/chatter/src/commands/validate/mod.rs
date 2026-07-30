@@ -21,7 +21,8 @@ use std::path::PathBuf;
 
 use crate::cli::OutputFormat;
 use crate::ui::Theme;
-use talkbank_transform::validation_runner::{ParserKind, is_chat_transcript_path};
+use talkbank_transform::paths::is_chat_transcript_path;
+use talkbank_transform::validation_runner::ParserKind;
 
 use super::validate_parallel::{
     AlignmentValidationMode, CacheRefreshMode, RoundtripValidationMode, StreamingValidationOutput,

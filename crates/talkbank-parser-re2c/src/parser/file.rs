@@ -211,27 +211,45 @@ fn report_separator_glued_to_following_content<'a>(tokens: &[Token<'a>], errors:
     }
 }
 
-/// Indices of every misplaced linker token in one main tier line's
-/// token slice (`*` through newline): a linker is legal only in the
-/// initial run after `*SPK:\t` (before the optional langcode and the
-/// content), so any linker after the first non-linker item is
-/// misplaced (E766). The scan stops at the terminator: a linker AFTER
-/// the terminator does not parse as a content item on the tree-sitter
-/// side either, so it stays on the generic-failure path in both
-/// parsers (parity).
-fn misplaced_linker_indices<'a>(main_tier_tokens: &[Token<'a>]) -> Vec<usize> {
+/// What one pre-parse pass over a main tier line's token slice (`*`
+/// through newline) found that must be reported-and-stripped before the
+/// combinator parse.
+struct LineScan {
+    /// Any `IllegalCurlyQuote` token on the line (E256; detected
+    /// line-wide, including after the terminator).
+    has_curly_quote: bool,
+    /// Ascending indices of misplaced linker tokens (E766). A linker is
+    /// legal only in the initial run after `*SPK:\t` (before the optional
+    /// langcode and the content), so any linker after the first
+    /// non-linker item is misplaced. Detection stops at the terminator: a
+    /// linker AFTER the terminator does not parse as a content item on
+    /// the tree-sitter side either, so it stays on the generic-failure
+    /// path in both parsers (parity).
+    misplaced_linkers: Vec<usize>,
+}
+
+/// Single pre-parse scan for [`LineScan`]: one pass finds both the curly
+/// quotes and the misplaced linkers, so the valid-line fast path pays one
+/// token walk instead of two. The `Vec` is heap-free until first push, so
+/// clean lines allocate nothing.
+fn scan_main_tier_line(main_tier_tokens: &[Token<'_>]) -> LineScan {
     use super::classify::{is_linker, is_terminator};
 
-    /// Where the scan is within the line.
+    /// Where the linker-phase half of the scan is within the line.
     enum LinePhase {
         /// Still in the initial linker run after `*SPK:\t`.
         InitialRun,
         /// After the first non-linker item; a linker here is misplaced.
         AfterContent,
+        /// After the terminator; linkers here stay on the generic path.
+        PastTerminator,
     }
 
     let mut phase = LinePhase::InitialRun;
-    let mut misplaced = Vec::new();
+    let mut scan = LineScan {
+        has_curly_quote: false,
+        misplaced_linkers: Vec::new(),
+    };
     for (idx, tok) in main_tier_tokens.iter().enumerate() {
         let d = TokenDiscriminants::from(tok);
         match d {
@@ -240,16 +258,28 @@ fn misplaced_linker_indices<'a>(main_tier_tokens: &[Token<'a>]) -> Vec<usize> {
             | TokenDiscriminants::TierSep
             | TokenDiscriminants::Whitespace
             | TokenDiscriminants::Newline => {}
-            _ if is_linker(Some(d)) => {
-                if matches!(phase, LinePhase::AfterContent) {
-                    misplaced.push(idx);
+            TokenDiscriminants::IllegalCurlyQuote => {
+                scan.has_curly_quote = true;
+                // The quote is content for the linker phase too: `’ +"`
+                // has content before the linker.
+                if matches!(phase, LinePhase::InitialRun) {
+                    phase = LinePhase::AfterContent;
                 }
             }
-            _ if is_terminator(Some(d)) => break,
-            _ => phase = LinePhase::AfterContent,
+            _ if is_linker(Some(d)) => {
+                if matches!(phase, LinePhase::AfterContent) {
+                    scan.misplaced_linkers.push(idx);
+                }
+            }
+            _ if is_terminator(Some(d)) => phase = LinePhase::PastTerminator,
+            _ => {
+                if matches!(phase, LinePhase::InitialRun) {
+                    phase = LinePhase::AfterContent;
+                }
+            }
         }
     }
-    misplaced
+    scan
 }
 
 /// Report E758 for a main tier whose content starts with a space after
@@ -407,27 +437,28 @@ pub fn parse_file_with_errors<'a>(
                 // diagnostic is emitted here, mirroring the MISSING-token
                 // recovery policy (see this crate's CLAUDE.md).
                 //
-                // The `.any()` precheck keeps the valid-file fast path to a
-                // single no-allocation scan. Only when a curly quote is present
-                // do we make one more pass that both reports each E256 and
-                // builds the filtered stream. chumsky ties the input-slice
-                // lifetime to the parsed output, so the filtered stream must
-                // outlive 'a; we leak it the way this crate already leaks its
-                // token storage (see `lex_to_tokens`). The leak is bounded to
-                // invalid input, never the valid-file fast path.
-                let has_curly_quote = main_tier_tokens
-                    .iter()
-                    .any(|t| matches!(t, Token::IllegalCurlyQuote(_)));
-                // Misplaced linkers (E766, linker after content) get the
-                // same treatment as curly quotes: report each by name and
-                // strip it, so the rest of the line parses and no generic
-                // E321 co-fires. Mirrors the tree-sitter side, where the
-                // grammar parses the misplaced linker as a content item and
-                // the lowering rejects just that item.
-                let misplaced_linkers = misplaced_linker_indices(main_tier_tokens);
-                let tier_input: &'a [Token<'a>] = if has_curly_quote
-                    || !misplaced_linkers.is_empty()
+                // Misplaced linkers (E766, linker after content) get the same
+                // treatment: report each by name and strip it, so the rest of
+                // the line parses and no generic E321 co-fires, mirroring the
+                // tree-sitter side, where the grammar parses the misplaced
+                // linker as a content item and the lowering rejects just that
+                // item. One `scan_main_tier_line` pass finds both, keeping the
+                // valid-line fast path to a single no-allocation scan. Only
+                // when something must be stripped do we make one more pass
+                // that both reports and builds the filtered stream. chumsky
+                // ties the input-slice lifetime to the parsed output, so the
+                // filtered stream must outlive 'a; we leak it the way this
+                // crate already leaks its token storage (see
+                // `lex_to_tokens`). The leak is bounded to invalid input,
+                // never the valid-file fast path.
+                let scan = scan_main_tier_line(main_tier_tokens);
+                let tier_input: &'a [Token<'a>] = if scan.has_curly_quote
+                    || !scan.misplaced_linkers.is_empty()
                 {
+                    // The indices come out of the scan in ascending order and
+                    // `idx` ascends too, so a forward cursor replaces a
+                    // per-token membership test.
+                    let mut next_misplaced = scan.misplaced_linkers.iter().copied().peekable();
                     let mut filtered: Vec<Token<'a>> = Vec::with_capacity(main_tier_tokens.len());
                     for (idx, tok) in main_tier_tokens.iter().enumerate() {
                         if let Token::IllegalCurlyQuote(s) = tok {
@@ -446,7 +477,7 @@ pub fn parse_file_with_errors<'a>(
                                     "Replace the curly single quote with the ASCII apostrophe (')",
                                 ),
                             );
-                        } else if misplaced_linkers.contains(&idx) {
+                        } else if next_misplaced.next_if_eq(&idx).is_some() {
                             errors.report(
                                 ParseError::new(
                                     talkbank_model::errors::codes::ErrorCode::LinkerNotUtteranceInitial,

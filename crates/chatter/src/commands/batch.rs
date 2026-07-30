@@ -16,8 +16,8 @@ use std::process::Command;
 use tracing::{Level, info, span, warn};
 
 use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_LOW_CONFIDENCE, EXIT_PRECONDITION, EXIT_SUCCESS};
+use talkbank_transform::paths::is_chat_transcript_path;
 use talkbank_transform::sanity_scan::SanityScanThreshold;
-use talkbank_transform::validation_runner::is_chat_transcript_path;
 
 use super::merge_preflight::{InvalidInput, abort_if_any_invalid, validate_chat_input};
 use super::pipeline::PipelineArgs;

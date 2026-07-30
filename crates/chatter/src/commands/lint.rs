@@ -18,7 +18,7 @@ use std::path::Path;
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::{ErrorCode, ParseError};
 use talkbank_parser::TreeSitterParser;
-use talkbank_transform::validation_runner::is_chat_transcript_path;
+use talkbank_transform::paths::is_chat_transcript_path;
 use talkbank_transform::{PipelineError, parse_and_validate_with_parser};
 
 /// Entry point for the `lint` subcommand that discovers fixable CHAT problems and applies
