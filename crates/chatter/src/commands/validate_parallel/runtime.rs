@@ -60,7 +60,7 @@ pub fn run_validation_runtime(
         strict_linkers: rules.strict_linkers,
     };
 
-    let cache = initialize_validation_cache(&summary_label, execution.cache_refresh);
+    let cache = initialize_validation_cache(&files, execution.cache_refresh);
 
     // The TUI is a streaming-only surface: audit mode writes a file and has no
     // interactive presentation to hand a terminal.

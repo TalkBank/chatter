@@ -79,7 +79,7 @@ pub fn validate_file(
     // signature so the public API and the watch-mode caller don't break.
     let check_alignment = alignment.enabled();
 
-    let cache = initialize_validation_cache(path, cache_refresh);
+    let cache = initialize_validation_cache(std::slice::from_ref(path), cache_refresh);
 
     // Try to get cached results.
     // On Some(true): cached valid, skip revalidation.

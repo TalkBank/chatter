@@ -448,6 +448,15 @@ impl<S: ValidationState> ChatFile<S> {
             crate::validation::check_bullet_monotonicity(&bullets, &configurable_sink);
         }
 
+        // E758: leading space between the tab and tier content, CA-exempt,
+        // same rule as the plain `validate` path. Missing here until
+        // 2026-07-30: the two validate bodies are near-copies that drift,
+        // and this one had silently lost the check, so `--strict-linkers`
+        // runs never reported E758.
+        if !context.shared.ca_mode {
+            check_separator_trailing_space(self, &configurable_sink);
+        }
+
         // E701, E704: Validate temporal constraints on media bullets
         // - E701 (CLAN Error 83): Global timeline monotonicity
         // - E704 (CLAN Error 133): Per-speaker overlap with 500ms tolerance

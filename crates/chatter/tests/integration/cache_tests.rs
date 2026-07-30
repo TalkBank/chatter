@@ -231,6 +231,50 @@ fn test_force_flag_clears_cache() -> Result<(), TestError> {
     Ok(())
 }
 
+/// `--force` must clear the cache for EVERY input path, not only the first.
+///
+/// Regression: `initialize_validation_cache` cleared by the cosmetic
+/// `summary_label` (the first input arg), so `chatter validate --force a.cha
+/// b.cha` silently served b.cha's stale verdict. Found 2026-07-30 when a
+/// gate-removal measurement over 994 CA files reported near-zero impact
+/// because 993 of the verdicts came from the cache of the PREVIOUS build
+/// (same rules fingerprint, changed rule behavior).
+#[test]
+fn test_force_flag_clears_cache_for_every_input_path() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world .\n@End\n";
+    let file_a = dir.path().join("a.cha");
+    let file_b = dir.path().join("b.cha");
+    fs::write(&file_a, content)?;
+    fs::write(&file_b, content)?;
+    let a = file_a.to_string_lossy().to_string();
+    let b = file_b.to_string_lossy().to_string();
+
+    // Populate the cache for both files.
+    let output1 = harness.run_output(&["validate", &a, &b])?;
+    if !output1.status.success() {
+        return Err(TestError::Failure(
+            "initial validation should succeed".to_string(),
+        ));
+    }
+
+    // Force-refresh both. Both cached entries must be cleared.
+    let output2 = harness.run_output(&["validate", "--force", &a, &b])?;
+    if !output2.status.success() {
+        return Err(TestError::Failure(
+            "forced validation should succeed".to_string(),
+        ));
+    }
+    let stderr = String::from_utf8_lossy(&output2.stderr);
+    if !stderr.contains("Cleared 2 cache entries") {
+        return Err(TestError::Failure(format!(
+            "--force must clear every input path's entries; stderr: {stderr}"
+        )));
+    }
+    Ok(())
+}
+
 /// Tests validate directory with cache.
 #[test]
 fn test_validate_directory_with_cache() -> Result<(), TestError> {
