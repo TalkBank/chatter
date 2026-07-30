@@ -11,18 +11,27 @@ categories.workspace = true
 description = "TalkBank CHAT transform and conversion pipelines"
 readme = "README.md"
 
+[features]
+default = ["validation-runner"]
+# The corpus-scale validation runner and its SQLite result cache. This is the
+# only part of the crate that needs a SQL stack (sqlx, via talkbank-cache),
+# so consumers that want the transform surface alone can opt out with
+# `default-features = false`. crossbeam-channel and num_cpus are runner-only
+# too and ride the same feature.
+validation-runner = ["dep:talkbank-cache", "dep:crossbeam-channel", "dep:num_cpus"]
+
 [dependencies]
 chrono = { workspace = true, features = ["serde"] }
-crossbeam-channel = { workspace = true }
+crossbeam-channel = { workspace = true, optional = true }
 jsonschema = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-num_cpus = { workspace = true }
+num_cpus = { workspace = true, optional = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smallvec = { workspace = true }
 smol_str = { workspace = true }
-talkbank-cache = { workspace = true }
+talkbank-cache = { workspace = true, optional = true }
 talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }
 talkbank-parser-re2c = { workspace = true }

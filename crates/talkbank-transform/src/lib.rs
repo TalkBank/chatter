@@ -91,8 +91,16 @@ pub mod transcript_merge;
 // Format bridges and serialization boundaries.
 pub mod json;
 
-// Corpus-scale orchestration namespaces.
+// CHAT transcript path classification (feature-independent; the corpus walk
+// and CLI walks need it even when the validation runner is compiled out).
+pub mod paths;
+
+// Corpus-scale orchestration namespaces. The validation runner (and its
+// SQLite result cache, which pulls sqlx via talkbank-cache) is behind the
+// default-on `validation-runner` feature so consumers that only want the
+// transform surface can opt out with `default-features = false`.
 pub mod corpus;
+#[cfg(feature = "validation-runner")]
 pub mod validation_runner;
 
 // Internal crate-root wiring for the convenience APIs below.
@@ -120,9 +128,11 @@ pub use self::rendering::{
     render_error_with_miette_with_named_source, render_error_with_miette_with_source,
     render_error_with_miette_with_source_colored,
 };
+#[cfg(feature = "validation-runner")]
 pub use self::validation_runner::{
     CacheMode, CacheOutcome, DirectoryMode, ErrorEvent, FileCompleteEvent, FileStatus, ParserKind,
     RoundtripEvent, ValidationCache, ValidationConfig, ValidationEvent, ValidationStats,
     ValidationStatsSnapshot, validate_directory_streaming,
 };
+#[cfg(feature = "validation-runner")]
 pub use talkbank_cache::{CacheError, CachePool, CacheStats, UnifiedCache};

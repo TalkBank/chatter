@@ -56,6 +56,16 @@ version and are listed under "Changed" / "Removed".
 
 ### Added
 
+- **`talkbank-transform` gained a default-on `validation-runner` feature.**
+  The corpus-scale validation runner is the crate's only SQL consumer (sqlx,
+  via `talkbank-cache`), so it, that dependency, and the runner-only
+  `crossbeam-channel`/`num_cpus` now sit behind the feature. Default builds
+  are unchanged; a consumer that wants the transform surface without a SQL
+  stack opts out with `default-features = false`. The path predicate
+  `is_chat_transcript_path` moved to the feature-independent
+  `talkbank_transform::paths` (still re-exported from `validation_runner`),
+  since the corpus walk and CLI walks need it on every build.
+
 - **E766, a linker placed after utterance content** (`yeah that go +" okay .`).
   Linkers connect an utterance to the previous one, so they are
   utterance-initial by definition; a misplaced one used to surface as generic

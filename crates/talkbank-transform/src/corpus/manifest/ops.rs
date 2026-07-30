@@ -193,7 +193,7 @@ impl CorpusManifest {
 
             if path.is_dir() {
                 Self::find_cha_files_recursive(&path, files)?;
-            } else if crate::validation_runner::is_chat_transcript_path(&path) {
+            } else if crate::paths::is_chat_transcript_path(&path) {
                 let path_str = path_to_string(&path)?;
                 files.insert(
                     path_str.clone(),

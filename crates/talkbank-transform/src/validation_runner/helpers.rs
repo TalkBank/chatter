@@ -5,19 +5,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// Return `true` when `path` is a CHAT transcript we should collect: a `.cha`
-/// file that is not a macOS AppleDouble sidecar (`._name.cha`). Shared by the
-/// transform-side directory walk below and the CLI-side walk so the two never
-/// drift in what they treat as a transcript.
-pub fn is_chat_transcript_path(path: &Path) -> bool {
-    path.extension().and_then(|s| s.to_str()) == Some("cha")
-        && !path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(|name| name.starts_with("._"))
-}
+// Moved to the crate root (`crate::paths`) so it survives builds with the
+// `validation-runner` feature off; re-exported here so this module's public
+// surface (and `validation_runner::is_chat_transcript_path` consumers) are
+// unchanged.
+pub use crate::paths::is_chat_transcript_path;
 
 /// Recursively collect all .cha files from a directory
 pub(super) fn collect_cha_files(dir: &PathBuf, recursive: bool, files: &mut Vec<PathBuf>) {

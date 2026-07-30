@@ -12,7 +12,11 @@
 mod adjudication_tests;
 mod book_library_usage_examples;
 mod cache_key_properties;
+// The three suites below exercise the validation runner / result cache and
+// only compile with the default-on `validation-runner` feature.
+#[cfg(feature = "validation-runner")]
 mod cache_tests;
+#[cfg(feature = "validation-runner")]
 mod concurrent_tests;
 mod e552_message_quality;
 mod generate_schema;
@@ -24,4 +28,5 @@ mod render_parity;
 mod sanitize_tests;
 mod speaker_id_tests;
 mod transcript_merge_tests;
+#[cfg(feature = "validation-runner")]
 mod validation_runner_tests;
