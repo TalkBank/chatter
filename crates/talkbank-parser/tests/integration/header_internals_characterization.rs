@@ -282,12 +282,6 @@ fn id_missing_tail_yields_e505_via_document_level_recovery() {
                 "Invalid @ID header format: structure could not be parsed".to_string(),
             ),
             (
-                "E747".to_string(),
-                73,
-                74,
-                "Blank lines are not allowed".to_string(),
-            ),
-            (
                 "E522".to_string(),
                 29,
                 54,
@@ -354,20 +348,12 @@ fn media_empty_contents_yields_e509_via_document_level_recovery() {
 
     assert_eq!(
         diags,
-        vec![
-            (
-                "E509".to_string(),
-                87,
-                95,
-                "@Media header cannot be empty".to_string(),
-            ),
-            (
-                "E747".to_string(),
-                95,
-                96,
-                "Blank lines are not allowed".to_string(),
-            ),
-        ],
+        vec![(
+            "E509".to_string(),
+            87,
+            95,
+            "@Media header cannot be empty".to_string(),
+        ),],
         "media_empty_contents diagnostics changed, got: {diags:?}"
     );
 }
@@ -391,20 +377,12 @@ fn languages_digit_token_yields_e316_via_document_level_recovery() {
 
     assert_eq!(
         diags,
-        vec![
-            (
-                "E316".to_string(),
-                13,
-                28,
-                "Unparsable content at file level: '@Languages:\t123'".to_string(),
-            ),
-            (
-                "E747".to_string(),
-                28,
-                29,
-                "Blank lines are not allowed".to_string(),
-            ),
-        ],
+        vec![(
+            "E316".to_string(),
+            13,
+            28,
+            "Unparsable content at file level: '@Languages:\t123'".to_string(),
+        ),],
         "languages_digit_token diagnostics changed, got: {diags:?}"
     );
 }
@@ -515,20 +493,12 @@ fn types_missing_activity_and_group_yields_e316_via_document_level_recovery() {
 
     assert_eq!(
         diags,
-        vec![
-            (
-                "E316".to_string(),
-                87,
-                99,
-                "Unparsable content at file level: '@Types:\tlong'".to_string(),
-            ),
-            (
-                "E747".to_string(),
-                99,
-                100,
-                "Blank lines are not allowed".to_string(),
-            ),
-        ],
+        vec![(
+            "E316".to_string(),
+            87,
+            99,
+            "Unparsable content at file level: '@Types:\tlong'".to_string(),
+        ),],
         "types_missing_activity_and_group diagnostics changed, got: {diags:?}"
     );
 }

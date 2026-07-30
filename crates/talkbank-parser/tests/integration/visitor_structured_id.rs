@@ -250,10 +250,6 @@ fn malformed_truncated_id_emits_e505_no_header() {
             "Invalid @ID header format: structure could not be parsed".to_string(),
         ),
         (
-            "E747".to_string(),
-            "Blank lines are not allowed".to_string(),
-        ),
-        (
             "E522".to_string(),
             "Speaker 'CHI' declared in @Participants but has no matching @ID header".to_string(),
         ),

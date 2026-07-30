@@ -221,27 +221,19 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
         "stray @Date: must be recovered into a Date header line in file order"
     );
 
-    // EXACTLY two diagnostics, captured from the pre-migration parser:
-    //   - E747 blank line at the trailing newline (span 93..94)
-    //   - E316 unparsable content for the @Date: ERROR node (span 87..93),
-    //     emitted once by the whole-tree backstop (NOT duplicated).
+    // EXACTLY one diagnostic: E316 unparsable content for the @Date: ERROR
+    // node (span 87..93), emitted once by the whole-tree backstop (NOT
+    // duplicated). The pre-migration parser also emitted a spurious E747
+    // for the recovery `blank_line` node covering the malformed line's own
+    // trailing newline; that diagnostic was removed 2026-07-30 (E747 now
+    // requires the newline to sit at a line boundary, i.e. an actually
+    // blank line; IISRP-residue finding 3).
     let codes: Vec<&str> = diags.iter().map(|(c, _, _, _)| c.as_str()).collect();
     assert_eq!(
         codes,
-        vec!["E747", "E316"],
-        "stray @Date: must emit exactly E747 then E316, got: {diags:?}"
+        vec!["E316"],
+        "stray @Date: must emit exactly E316, got: {diags:?}"
     );
-
-    let e747 = diags
-        .iter()
-        .find(|(c, _, _, _)| c == "E747")
-        .expect("E747 present");
-    assert_eq!(
-        (e747.1, e747.2),
-        (93, 94),
-        "E747 blank-line span must be (93..94)"
-    );
-    assert_eq!(e747.3, "Blank lines are not allowed");
 
     let e316: Vec<&(String, u32, u32, String)> =
         diags.iter().filter(|(c, _, _, _)| c == "E316").collect();

@@ -396,15 +396,29 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
             NodeSlot::Present(LineChoice::BlankLine(blank)) => {
                 let node = blank.0;
                 // The grammar represents a blank line as a `blank_line` node
-                // (CLAN CHECK 91: blank lines are not allowed). Reject it from the
-                // tree with a specific diagnostic; no source/text scanning.
-                self.errors.report(ParseError::new(
-                    ErrorCode::BlankLineNotAllowed,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(self.source, node.start_byte()..node.end_byte(), BLANK_LINE),
-                    "Blank lines are not allowed".to_string(),
-                ));
+                // (CLAN CHECK 91: blank lines are not allowed). Under error
+                // recovery, though, the node can cover just the trailing
+                // newline of a NON-blank malformed line (a speaker-less
+                // `*:` tier, IISRP-residue finding 3), and "blank lines are
+                // not allowed" on a visibly non-blank line sends the reader
+                // hunting for a line that does not exist. A genuine blank
+                // line's newline sits at a line boundary: the node starts
+                // the file or is preceded by another newline. One-byte
+                // boundary probe, the same class of check as the
+                // span-adjacency rules; the malformed line already carries
+                // its own diagnostics.
+                let start = node.start_byte();
+                let at_line_boundary =
+                    start == 0 || self.source.as_bytes().get(start - 1) == Some(&b'\n');
+                if at_line_boundary {
+                    self.errors.report(ParseError::new(
+                        ErrorCode::BlankLineNotAllowed,
+                        Severity::Error,
+                        SourceLocation::from_offsets(start, node.end_byte()),
+                        ErrorContext::new(self.source, start..node.end_byte(), BLANK_LINE),
+                        "Blank lines are not allowed".to_string(),
+                    ));
+                }
             }
             NodeSlot::Error(error_node) => {
                 // Tree-sitter recovery ERROR as the direct child of the `line`
