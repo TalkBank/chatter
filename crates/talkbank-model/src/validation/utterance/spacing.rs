@@ -210,6 +210,130 @@ pub(crate) fn check_prefixed_form_glued_to_preceding_word(
     });
 }
 
+/// Whether nothing may be glued after this separator.
+///
+/// SCOPE, set by the corpus (2026-07-29 differential, adjudicated
+/// UNINTENDED for the wider reading): only the plain punctuation
+/// separators, `:` and `;`. Every CA mark is deliberately EXCLUDED,
+/// because glue is part of what several of them MEAN and the wild data
+/// uses it systematically:
+///
+/// - `≡` is latching, "no gap between turns", and is written glued on
+///   both sides (`y≡I≡`); spacing it would misstate the phenomenon;
+/// - the intonation arrows attach to the material they mark, including
+///   directly before an overlap close (`⌊I don't know⇗⌋`);
+/// - the remaining marks (`„ ‡ ∞ ≈ ≋`) are unadjudicated against real
+///   data, so they stay out until they are.
+///
+/// A wider rule flagged 270 instances in a 2% corpus sample (~13,500
+/// corpus-wide) of exactly these legitimate shapes. The comma is
+/// excluded too: `,dog` is E749 and `,,` is E258.
+fn separator_forbids_trailing_glue(separator: &crate::model::Separator) -> bool {
+    matches!(
+        separator,
+        crate::model::Separator::Colon { .. } | crate::model::Separator::Semicolon { .. }
+    )
+}
+
+/// The source end byte of a FREE-STANDING item that nothing may be glued
+/// after: an in-scope separator (see [`separator_forbids_trailing_glue`])
+/// or a pause. Each is its own main-tier item, so the next item takes a
+/// space.
+fn free_standing_end(item: &UtteranceContent) -> Option<u32> {
+    match item {
+        UtteranceContent::Separator(separator) => separator_forbids_trailing_glue(separator)
+            .then(|| separator.span())
+            .filter(|span| *span != crate::Span::DUMMY)
+            .map(|span| span.end),
+        UtteranceContent::Pause(pause) => Some(pause.span.end),
+        UtteranceContent::OverlapPoint(_) => None,
+        // Everything else either takes trailing material legitimately or is
+        // covered by its own rule (E757 for code-terminated items).
+        UtteranceContent::Word(_)
+        | UtteranceContent::AnnotatedWord(_)
+        | UtteranceContent::ReplacedWord(_)
+        | UtteranceContent::Event(_)
+        | UtteranceContent::AnnotatedEvent(_)
+        | UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedAction(_)
+        | UtteranceContent::Freecode(_)
+        | UtteranceContent::InternalBullet(_)
+        | UtteranceContent::LongFeatureBegin(_)
+        | UtteranceContent::LongFeatureEnd(_)
+        | UtteranceContent::UnderlineBegin(_)
+        | UtteranceContent::UnderlineEnd(_)
+        | UtteranceContent::NonvocalBegin(_)
+        | UtteranceContent::NonvocalEnd(_)
+        | UtteranceContent::NonvocalSimple(_)
+        | UtteranceContent::OtherSpokenEvent(_) => None,
+    }
+}
+
+/// The source start byte of an item that must not be glued onto a
+/// preceding free-standing item: the word family (via
+/// [`word_family_start`]), plus the in-scope separators and pauses, so
+/// `::`, `;;`, `:(.)` and `(.):` chains are covered.
+///
+/// Overlap markers are excluded on this side for the same reason as on
+/// the other: `⌈` glued after a mark is attested CA notation.
+fn glued_target_start(item: &UtteranceContent) -> Option<u32> {
+    if let Some(start) = word_family_start(item) {
+        return Some(start);
+    }
+    match item {
+        UtteranceContent::Separator(separator) => separator_forbids_trailing_glue(separator)
+            .then(|| separator.span())
+            .filter(|span| *span != crate::Span::DUMMY)
+            .map(|span| span.start),
+        UtteranceContent::Pause(pause) => Some(pause.span.start),
+        _ => None,
+    }
+}
+
+/// E765: a free-standing `:` or `;` separator, or a pause, must not run
+/// directly into the item after it (`:and`, `;;`, `(.)dog`). Fires when
+/// the following item starts at the byte where the free-standing item
+/// ends.
+///
+/// Only this direction: trailing glue ONTO a word (`word↘`, `dog,`) is
+/// documented CHAT convention and stays valid. Juxtaposition-matrix cell
+/// 7, narrowed from its ruled scope by real-corpus evidence; see the spec
+/// and [`separator_forbids_trailing_glue`] for what is excluded and why.
+pub(crate) fn check_separator_glued_to_following_content(
+    utterance: &Utterance,
+    errors: &impl ErrorSink,
+) {
+    for pair in utterance.main.content.content.0.windows(2) {
+        let Some(end) = free_standing_end(&pair[0]) else {
+            continue;
+        };
+        if end == crate::Span::DUMMY.end {
+            continue;
+        }
+        let Some(start) = glued_target_start(&pair[1]) else {
+            continue;
+        };
+        if start == end {
+            let span = crate::Span::new(start, start);
+            errors.report(
+                ParseError::new(
+                    ErrorCode::SeparatorGluedToFollowingContent,
+                    Severity::Error,
+                    SourceLocation::new(span),
+                    ErrorContext::new(" ", span, " "),
+                    "Separator must be separated from the following content by a space",
+                )
+                .with_suggestion("Add a space after the separator"),
+            );
+        }
+    }
+}
+
 /// E751: a pause must not open directly at the end of a word
 /// (`hello(.)`; CLAN CHECK 57). Fires when a pause's span starts at the
 /// byte where the previous in-order word's span ends.

@@ -82,6 +82,7 @@ impl Validate for Utterance {
         crate::validation::utterance::check_pause_glued_to_word(self, errors);
         crate::validation::utterance::check_code_glued_to_following_content(self, errors);
         crate::validation::utterance::check_prefixed_form_glued_to_preceding_word(self, errors);
+        crate::validation::utterance::check_separator_glued_to_following_content(self, errors);
 
         // E401: Validate no duplicate dependent tiers
         crate::validation::utterance::check_no_duplicate_dependent_tiers(self, errors);

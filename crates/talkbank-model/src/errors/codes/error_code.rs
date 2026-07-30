@@ -953,6 +953,27 @@ pub enum ErrorCode {
     #[code("E764")]
     PrefixedFormGluedToPrecedingWord,
 
+    /// A separator, pause, or overlap marker runs directly into the item
+    /// after it (`:and`, `;;`, `(.)dog`, `⌈⌉`).
+    ///
+    /// Each is a free-standing main-tier item, so the next item takes a
+    /// space. Only this direction is invalid: trailing glue ONTO a word
+    /// (`word↘`, `dog,`) is documented CHAT convention, and a word glued
+    /// to a colon (`dog:`) is not two items at all (the colon fuses as
+    /// prosodic lengthening).
+    ///
+    /// Comma shapes keep their own codes and are not reported here too:
+    /// `,dog` is `E749`, `,,` is `E258`.
+    ///
+    /// Juxtaposition-matrix cell 7, ruled REJECT 2026-07-18. The
+    /// following-side-only scope comes from the per-variant probe
+    /// (2026-07-29): every `Separator` variant accepted glue on both
+    /// sides beforehand, and all the ruled exceptions are trailing, so a
+    /// class-level rule would have rejected 30,790 attested CA arrow
+    /// usages.
+    #[code("E765")]
+    SeparatorGluedToFollowingContent,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

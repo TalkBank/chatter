@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-29 19:51 EDT
+**Last modified:** 2026-07-29 20:17 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -298,6 +298,21 @@ exactly as the digits rule (E220) does, so a code-switched word marked
 `@s:heb` inside an English file is accepted. Word-internal markers
 (`mi#ha#shuk`) stay legal wherever the language allows the marker at
 all.
+
+### E765: separator glued to the following content
+
+A free-standing `:` or `;`, or a pause, must have a space after it:
+`:and`, `;;`, `(.)dog` are invalid. The preceding side is untouched:
+`word↘` and `dog,` are documented CHAT convention, and `dog:` is not two
+items at all (the colon fuses as lengthening).
+
+**Every CA mark is out of scope**, on corpus evidence. Implementing the
+whole separator class flagged 270 instances in a 2% corpus sample (about
+13,500 corpus-wide), all legitimate notation: `≡` is latching and is
+written glued on both sides (`y≡I≡`) because that is what it encodes, and
+the intonation arrows attach to the material they mark, including
+directly before an overlap close (`⌊I don't know⇗⌋`). Whether any CA mark
+should forbid trailing glue is unresolved.
 
 ### E757 widening: every bracketed code, not only retraces
 

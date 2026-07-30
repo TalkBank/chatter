@@ -168,6 +168,49 @@ fn report_prefixed_form_glued_to_preceding_word<'a>(tokens: &[Token<'a>], errors
     }
 }
 
+/// Whether this token is a free-standing item that nothing may be glued
+/// after: a plain `:` or `;` separator, or a pause.
+///
+/// Every CA mark and both overlap markers are deliberately EXCLUDED, and
+/// so is the comma. Scope and evidence: the model-side
+/// `separator_forbids_trailing_glue` (talkbank-model
+/// `validation/utterance/spacing.rs`), which this mirrors.
+fn is_free_standing<'a>(token: &Token<'a>) -> bool {
+    matches!(
+        token,
+        Token::Semicolon(_)
+            | Token::Colon(_)
+            | Token::PauseShort(_)
+            | Token::PauseMedium(_)
+            | Token::PauseLong(_)
+            | Token::PauseTimed(_)
+    )
+}
+
+/// Report E765 for every item glued directly after a free-standing item
+/// (`:and`, `;;`, `(.)dog`). Mirrors the model-validation rule
+/// `check_separator_glued_to_following_content` (talkbank-model
+/// `validation/utterance/spacing.rs`), which cannot fire on this parser's
+/// output because its items carry dummy spans.
+///
+/// Only this direction, as in the model rule: trailing glue onto a word
+/// (`word↘`) is documented CHAT convention.
+fn report_separator_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    for pair in tokens.windows(2) {
+        if is_free_standing(&pair[0])
+            && (matches!(pair[1], Token::Word { .. }) || is_free_standing(&pair[1]))
+        {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::SeparatorGluedToFollowingContent,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Separator must be separated from the following content by a space".to_owned(),
+            ));
+        }
+    }
+}
+
 /// Report E758 for a main tier whose content starts with a space after
 /// the `:\t` separator, in a file WITHOUT `@Options: CA` (CLAN CHECK
 /// 123). Mirrors the model-validation rule
@@ -251,6 +294,7 @@ pub fn parse_file_with_errors<'a>(
     report_pause_glued_to_word(tokens, errors);
     report_code_glued_to_following_content(tokens, errors);
     report_prefixed_form_glued_to_preceding_word(tokens, errors);
+    report_separator_glued_to_following_content(tokens, errors);
     report_leading_space_on_main_tier(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();

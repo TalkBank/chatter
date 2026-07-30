@@ -3351,6 +3351,11 @@
           "type": "string"
         },
         {
+          "const": "E765",
+          "description": "A separator, pause, or overlap marker runs directly into the item\nafter it (`:and`, `;;`, `(.)dog`, `⌈⌉`).\n\nEach is a free-standing main-tier item, so the next item takes a\nspace. Only this direction is invalid: trailing glue ONTO a word\n(`word↘`, `dog,`) is documented CHAT convention, and a word glued\nto a colon (`dog:`) is not two items at all (the colon fuses as\nprosodic lengthening).\n\nComma shapes keep their own codes and are not reported here too:\n`,dog` is `E749`, `,,` is `E258`.\n\nJuxtaposition-matrix cell 7, ruled REJECT 2026-07-18. The\nfollowing-side-only scope comes from the per-variant probe\n(2026-07-29): every `Separator` variant accepted glue on both\nsides beforehand, and all the ruled exceptions are trailing, so a\nclass-level rule would have rejected 30,790 attested CA arrow\nusages.",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

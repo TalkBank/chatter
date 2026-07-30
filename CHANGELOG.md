@@ -32,6 +32,22 @@ version and are listed under "Changed" / "Removed".
 
 ### Added
 
+- **E765, a free-standing `:` or `;` separator, or a pause, glued to the item
+  after it** (`:and`, `;;`, `(.)dog`). Same family and same span-adjacency
+  mechanism as E764; the preceding side stays valid, since `word↘` and `dog,`
+  are documented convention and `dog:` fuses into the word.
+
+  Juxtaposition-matrix cell 7 was ruled REJECT for the whole separator class,
+  against an estimate of roughly six affected files. The corpus differential
+  measured that reading at 270 new instances on a 2%, 2,134-file sample (about
+  13,500 corpus-wide), every inspected one legitimate CA notation rather than a
+  missing space: `≡` is latching and is written glued on both sides, and the
+  intonation arrows attach to the material they mark, including directly before
+  an overlap close. Adjudicated UNINTENDED, so the rule ships narrowed to the
+  plain punctuation separators and pauses, where the differential is clean.
+  Whether any CA mark should forbid trailing glue is left open, with receipts
+  in the spec.
+
 - **E764, a `&`-prefixed form glued to the preceding word** (`dog&-um`,
   `dog&~gaga`, `dog&+fr`). The shape parses as two words, because `&` cannot
   continue a word, so a missing space silently manufactures a word boundary

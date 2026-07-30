@@ -1827,6 +1827,30 @@
       "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
     },
     {
+      "fixture": "E765_separator_glued_to_the_following_content.cha",
+      "expected_codes": [
+        "E765"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
+    },
+    {
+      "fixture": "E765_separator_glued_to_the_following_content_2.cha",
+      "expected_codes": [
+        "E765"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
+    },
+    {
+      "fixture": "E765_separator_glued_to_the_following_content_3.cha",
+      "expected_codes": [
+        "E765"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"
