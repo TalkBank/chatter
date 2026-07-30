@@ -9,6 +9,8 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-30
+
 ### Removed
 
 - **Two ungrounded CA-mode validation exemptions.** `@Options: CA` no longer
@@ -741,7 +743,17 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/TalkBank/chatter/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/TalkBank/chatter/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/TalkBank/chatter/compare/v0.3.6...v0.4.0
+[0.3.6]: https://github.com/TalkBank/chatter/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/TalkBank/chatter/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/TalkBank/chatter/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/TalkBank/chatter/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/TalkBank/chatter/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/TalkBank/chatter/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/TalkBank/chatter/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/TalkBank/chatter/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/TalkBank/chatter/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/TalkBank/chatter/compare/v0.1.0...v0.1.1
