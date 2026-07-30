@@ -9,6 +9,8 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-30
+
 ### Fixed
 
 - **`validate --force` was unusable at corpus scale** (v0.5.0 DOA): the
@@ -756,7 +758,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/TalkBank/chatter/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/TalkBank/chatter/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/TalkBank/chatter/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/TalkBank/chatter/compare/v0.3.6...v0.4.0
