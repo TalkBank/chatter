@@ -36,6 +36,30 @@ source-of-truth guidance.
 (cargo-dist) publishes the signed GitHub Releases for the CLI and the desktop
 app.
 
+### Cutting a release: the two-command procedure
+
+The version literal lives in many places (the workspace version, every
+internal path-dep pin, the desktop `package.json`, the CHANGELOG section),
+and the tag is the release trigger, so both steps are mechanized and
+fail-closed. Hand-editing version fields or tagging with raw `git tag` is
+how releases break (v0.1.1 shipped a desktop version mismatch; v0.5.0
+tagged a bump commit before its CI reported and the desktop build died on
+drift CI would have caught). The procedure:
+
+1. `just release-bump X.Y.Z` rewrites the canonical
+   `[workspace.package] version`, every `path = "crates/…"` pin, and
+   `package.json`, then refreshes both lockfiles (root + `spec/`).
+2. Write the `## [X.Y.Z]` CHANGELOG section (the one deliberately manual
+   step; every gate enforces its presence).
+3. Commit and `just push`, then wait for CI on that commit.
+4. `just release-tag X.Y.Z` tags and pushes `vX.Y.Z`, refusing on a dirty
+   tree, an unpushed HEAD, any version-copy drift, a missing CHANGELOG
+   section, or CI/Cross-platform not yet green on the exact tagged commit.
+
+After the tag: `release.yml` and `release-desktop.yml` build and publish;
+verify the release page carries the CLI archives, the LSP standalone
+artifacts, and the desktop installers before announcing.
+
 ### Workflows that actually exist in this repo
 
 | Workflow | Purpose | Notes |

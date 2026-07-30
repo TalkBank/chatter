@@ -119,6 +119,23 @@ app-sync:
 app-sync-check:
     python3 scripts/sync-app-version.py --check
 
+# Bump the release version EVERYWHERE in one command: the canonical
+# [workspace.package] version, all internal path-dep pins, package.json, and
+# both lockfiles. The one remaining manual step (deliberately) is writing the
+# `## [X.Y.Z]` CHANGELOG section; the check gates enforce it. Then: commit,
+# `just push`, wait for CI, `just release-tag X.Y.Z`.
+release-bump VERSION:
+    python3 scripts/sync-app-version.py --bump {{VERSION}}
+    cargo update --workspace
+    cargo update --workspace --manifest-path spec/Cargo.toml
+
+# Tag and push vX.Y.Z, fail-closed: refuses on a dirty tree, an unpushed
+# HEAD, any version-copy drift, a missing CHANGELOG section, or CI not yet
+# green on this exact commit. Mechanizes away the tag-races-CI failure mode
+# (v0.5.0, 2026-07-30).
+release-tag VERSION:
+    bash scripts/release-tag.sh {{VERSION}}
+
 # Lint GitHub Actions workflows locally (catches expression/action-input/shell
 # errors WITHOUT pushing). Config in .github/actionlint.yaml. The default run
 # is clean; if it reports something, fix it (do not suppress).

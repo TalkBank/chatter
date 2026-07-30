@@ -21,15 +21,26 @@ version; removing that field fixed the bundle side. This gate guards the literal
 copies that remain (the npm `package.json` and the CHANGELOG section) so a missed
 edit is a hard failure instead of something a releaser has to remember.
 
+The workspace-dependencies table is a third carrier: every internal crate's
+`path = "crates/...", version = "X.Y.Z"` pin (kept literal for crates.io
+publication readiness) must match the workspace version, or `cargo check`
+fails the moment the workspace version moves. `--bump` rewrites them; the
+2026-07-30 v0.5.0 release stumbled on exactly this class (pins found by a
+failed check, package.json found by failed CI, because the bump was a
+hand-performed multi-file edit).
+
 Usage:
   sync-app-version.py --check                 # CI: exit 1 if any file has drifted
   sync-app-version.py --fix                   # rewrite the version files to match
+  sync-app-version.py --bump X.Y.Z            # set the canonical version and
+                                              # rewrite EVERY literal copy
   sync-app-version.py --release-tag vX.Y.Z    # also assert the tag equals the version
 
-The point: bumping the app version is editing ONE file (Cargo.toml
-[workspace.package] version) plus `just app-sync` and a CHANGELOG entry; the
-`--check` gate makes a missed file a hard failure, and `--release-tag` makes a
-tag that disagrees with the bundle a hard failure at release time.
+The point: bumping the app version is ONE command (`just release-bump X.Y.Z`,
+which runs `--bump` and refreshes both lockfiles) plus a human-written
+CHANGELOG section; the `--check` gate makes a missed file a hard failure, and
+`--release-tag` makes a tag that disagrees with the bundle a hard failure at
+release time.
 """
 
 from __future__ import annotations
@@ -48,6 +59,19 @@ CHANGELOG = REPO / "CHANGELOG.md"
 # A 2-space-indented top-level `"version": "..."` line, the shape package.json
 # uses. Anchoring to the indent avoids matching a nested object's version.
 JSON_VERSION_RE = re.compile(r'(?m)^(  "version"\s*:\s*")[^"]+(")')
+
+# The canonical `[workspace.package] version` line in the root Cargo.toml.
+WORKSPACE_VERSION_RE = re.compile(
+    r'(?ms)(\[workspace\.package\].*?^version\s*=\s*")[^"]+(")'
+)
+
+# An internal path-dep pin in `[workspace.dependencies]`:
+# `name = { path = "crates/...", version = "X.Y.Z" }`. These stay literal for
+# crates.io publication readiness and must track the workspace version.
+PATH_DEP_PIN_RE = re.compile(r'(path = "crates/[^"]+", version = ")[^"]+(")')
+
+# A release version: three dot-separated integers, no leading `v`.
+SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def canonical_version() -> str:
@@ -81,7 +105,25 @@ def changelog_has(version: str) -> bool:
     return re.search(pattern, CHANGELOG.read_text(), re.MULTILINE) is not None
 
 
-def process(fix: bool, release_tag: str | None) -> int:
+def bump_canonical(version: str) -> None:
+    """Set `[workspace.package] version` and every internal path-dep pin.
+
+    The path-dep pins live in the same Cargo.toml, so one read-modify-write
+    covers both; the remaining literal copies (package.json) then follow via
+    the ordinary fix pass against the new canonical version.
+    """
+    if not SEMVER_RE.match(version):
+        sys.exit(f"error: --bump takes X.Y.Z (no leading v), got {version!r}")
+    text = CARGO.read_text()
+    text, n_ws = WORKSPACE_VERSION_RE.subn(rf"\g<1>{version}\g<2>", text, count=1)
+    if n_ws != 1:
+        sys.exit("error: no [workspace.package] version line in Cargo.toml")
+    text, n_pins = PATH_DEP_PIN_RE.subn(rf"\g<1>{version}\g<2>", text)
+    CARGO.write_text(text)
+    print(f"canonical version -> {version} (workspace + {n_pins} path-dep pins)")
+
+
+def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = False) -> int:
     want = canonical_version()
     drift: list[str] = []
 
@@ -93,8 +135,13 @@ def process(fix: bool, release_tag: str | None) -> int:
                 set_json_version(path, want)
 
     if not changelog_has(want):
-        # A changelog entry is human-written, so this is never auto-fixable.
-        drift.append(f"CHANGELOG.md  missing a `## [{want}]` section")
+        if changelog_reminder_only:
+            # `--bump` runs BEFORE the human writes the section; the `--check`
+            # gate (CI, and the tag script) still enforces it afterwards.
+            print(f"next: write the `## [{want}]` CHANGELOG section")
+        else:
+            # A changelog entry is human-written, so this is never auto-fixable.
+            drift.append(f"CHANGELOG.md  missing a `## [{want}]` section")
 
     if release_tag is not None:
         tag_version = release_tag[1:] if release_tag.startswith("v") else release_tag
@@ -121,12 +168,20 @@ def main() -> int:
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="fail on drift (CI mode)")
     mode.add_argument("--fix", action="store_true", help="rewrite the version files")
+    mode.add_argument(
+        "--bump",
+        metavar="X.Y.Z",
+        help="set the canonical version and rewrite every literal copy",
+    )
     ap.add_argument(
         "--release-tag",
         metavar="vX.Y.Z",
         help="also assert this release tag equals the canonical version",
     )
     args = ap.parse_args()
+    if args.bump:
+        bump_canonical(args.bump)
+        return process(fix=True, release_tag=args.release_tag, changelog_reminder_only=True)
     # Default to check semantics so an accidental bare run never mutates files.
     return process(fix=args.fix, release_tag=args.release_tag)
 

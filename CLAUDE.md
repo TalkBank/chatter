@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-29 13:21 EDT
+**Last modified:** 2026-07-30 13:22 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -177,13 +177,17 @@ or CLAN still say.
   the canonical signal.
 - Clippy: CI owns it (single pass, no flags; red means a panic-policy
   violation, nothing else). Never run locally as a habit.
-- Releases: cargo-dist on `vX.Y.Z` tags matching the single workspace
-  version; gate the CONTENT commit fully, validate the bump commit
-  with `cargo check --workspace` only; refresh BOTH lockfiles
-  (root + spec). Full story:
-  `book/src/contributing/ci-and-release.md`. The desktop version has
-  a single source of truth (the workspace version; `tauri.conf.json`
-  deliberately carries NO `version` key, do not re-add one).
+- Releases: cargo-dist on `vX.Y.Z` tags. TWO COMMANDS, NEVER a hand
+  bump or a raw `git tag`: `just release-bump X.Y.Z` (rewrites the
+  workspace version, every path-dep pin, package.json; refreshes both
+  lockfiles), write the CHANGELOG section, commit + push + CI green,
+  then `just release-tag X.Y.Z` (fail-closed: refuses drift, missing
+  CHANGELOG section, or CI not green on the exact tagged commit; the
+  v0.5.0 bump missed files and tagged before CI, which is why this is
+  mechanized). Full story: `book/src/contributing/ci-and-release.md`.
+  The desktop version has a single source of truth (the workspace
+  version; `tauri.conf.json` deliberately carries NO `version` key, do
+  not re-add one).
 - Release freeze status and fleet coupling are operator concerns
   tracked outside this repo; when in doubt whether a release may be
   cut, ask the maintainer.
