@@ -23,6 +23,7 @@ mod command_matrix_tests;
 mod command_surface_manifest;
 mod dependent_tier_continuation_tests;
 mod docs_sync;
+mod force_refresh_scale_tests;
 mod gra_relation_vocabulary_tests;
 mod holistic_judgment_cli;
 mod holistic_pipeline_batch_cli;

@@ -9,6 +9,7 @@
 //!
 //! Add a test file by dropping it in this directory and declaring it below.
 
+mod clear_prefix_scale;
 mod concurrent_open;
 mod concurrent_process_open;
 mod rules_version_invalidation;

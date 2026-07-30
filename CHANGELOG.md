@@ -9,6 +9,19 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Fixed
+
+- **`validate --force` was unusable at corpus scale** (v0.5.0 DOA): the
+  cache refresh called `clear_prefix` once per resolved FILE, and each call
+  scanned every `file_path` in the cache, so a corpus-sized invocation did
+  quadratic work (on a 136k-file cache, effectively forever) at 100% CPU
+  behind a blank screen before the progress display started. The refresh is
+  now one batched `DELETE ... IN (...)` pass over the resolved file list,
+  and `clear_prefix` itself became a single range-predicate statement
+  instead of a scan-and-loop. Pinned by a real-CLI regression test that
+  warms a 6,000-file cache and bounds the forced pass (old: 34s at that
+  size; new: seconds, dominated by validation itself).
+
 ## [0.5.0] - 2026-07-30
 
 ### Removed

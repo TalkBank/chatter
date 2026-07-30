@@ -29,19 +29,15 @@ pub(crate) fn initialize_validation_cache(
     })?;
 
     if cache_refresh.should_clear_cache() {
-        let mut cleared = 0usize;
-        let mut failed = false;
-        for path in files {
-            match cache.clear_prefix(&path.to_string_lossy()) {
-                Ok(count) => cleared += count,
-                Err(error) => {
-                    eprintln!("Warning: Failed to clear cache: {}", error);
-                    failed = true;
-                }
-            }
-        }
-        if !failed {
-            eprintln!("Cleared {} cache entries", cleared);
+        // One batched clear over the resolved file list. Never loop
+        // per-file clears here: each `clear_prefix` call was a full-table
+        // scan, so the loop this replaces was quadratic in corpus size and
+        // pinned `validate --force ~/0tb/data` at 100% CPU behind a blank
+        // screen (v0.5.0 DOA, 2026-07-30; regression test
+        // `force_refresh_scales_to_corpus_sized_input`).
+        match cache.clear_paths(files) {
+            Ok(cleared) => eprintln!("Cleared {} cache entries", cleared),
+            Err(error) => eprintln!("Warning: Failed to clear cache: {}", error),
         }
     }
 

@@ -339,6 +339,20 @@ impl CachePool {
             .block_on(maintenance_ops::clear_prefix(&self.pool, prefix))
     }
 
+    /// Clear the cache entries for an explicit set of files, batched.
+    ///
+    /// The `--force` seam: one bulk statement per chunk of paths, so a
+    /// corpus-sized refresh stays linear (the per-file `clear_prefix`
+    /// pattern this replaces was quadratic; v0.5.0 DOA, 2026-07-30).
+    pub fn clear_paths(&self, paths: &[std::path::PathBuf]) -> Result<usize, CacheError> {
+        let path_strings: Vec<String> = paths
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        self.rt
+            .block_on(maintenance_ops::clear_paths(&self.pool, &path_strings))
+    }
+
     /// Clear all cache entries.
     pub fn clear_all(&self) -> Result<(), CacheError> {
         self.rt.block_on(maintenance_ops::clear_all(&self.pool))
