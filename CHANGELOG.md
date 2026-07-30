@@ -27,6 +27,14 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- **E326 now says when the skipped line looks like a CHAT line pushed off
+  column 1.** An indented dependent tier (` %mor:	...`) was reported as
+  "Unsupported line skipped", accurate but useless: the reader hunts for junk
+  when the fix is deleting one space. The message now names the shape ("looks
+  like a dependent tier line pushed off column 1; it must begin at column 1")
+  for tier-, main-tier-, and header-shaped lines, with a suggestion to remove
+  the leading whitespace.
+
 - **An annotated word's wrapper span was never set**, left `Span::DUMMY` at
   construction while the annotated event, action, and group paths all set a
   real one. Two consequences: any diagnostic located on an annotated word
@@ -47,6 +55,20 @@ version and are listed under "Changed" / "Removed".
   is affected.
 
 ### Added
+
+- **E766, a linker placed after utterance content** (`yeah that go +" okay .`).
+  Linkers connect an utterance to the previous one, so they are
+  utterance-initial by definition; a misplaced one used to surface as generic
+  unparsable content (E316), which gave the transcriber nothing to act on.
+  The grammar now parses the misplaced linker into the CST (the same
+  strict+catch-all pattern as the curly-quote rule) so the diagnostic names
+  the construct at the exact token, in both parser front ends. One deliberate
+  carve-out: a `++` glued to words on both sides (`un++do`) is a word run
+  with an empty compound part and keeps its E233 diagnosis. A side effect of
+  the grammar change is finer error recovery on several unparsable-content
+  shapes: diagnostics that used to blame a whole line now land on the exact
+  offending region (e.g. an unmatched `<` now yields E316 on `<word ` with
+  the rest of the utterance parsed normally).
 
 - **E765, a free-standing `:` or `;` separator, or a pause, glued to the item
   after it** (`:and`, `;;`, `(.)dog`). Same family and same span-adjacency

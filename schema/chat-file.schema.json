@@ -3356,6 +3356,11 @@
           "type": "string"
         },
         {
+          "const": "E766",
+          "description": "A linker (`+\"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) placed after\nutterance content. Linkers are utterance-initial by definition\n(they connect this utterance to the PREVIOUS one), so a linker in\ncontent position is meaningless.\n\nThe grammar deliberately parses the misplaced linker into the CST\n(same strict+catch-all pattern as [`IllegalCurlyQuote`]) so this\nnamed rule can locate it precisely; before that, the construct\nfell into ERROR-node recovery and surfaced as a generic `E316`\nthat gave the transcriber nothing to act on (IISRP residue\nfinding 5, 2026-07-30).\n\n[`IllegalCurlyQuote`]: Self::IllegalCurlyQuote",
+          "type": "string"
+        },
+        {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"

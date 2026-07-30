@@ -121,7 +121,13 @@ fn full_document_enumerates_clean_line_repeat() {
 /// not skipped).
 #[test]
 fn full_document_repeat_captures_error_line() {
-    let path = repo_root().join("tests/error_corpus/parse_errors/E345_unmatched_scoped_begin.cha");
+    // The fixture is a bare speaker code (`*CHI`, no colon), which still
+    // parses as a top-level ERROR sibling among the `line` children. The
+    // previous fixture (E345, an unmatched `<`) stopped qualifying when
+    // the misplaced-linker grammar change (E766) made recovery finer:
+    // that line now parses as an utterance with a narrow inner ERROR,
+    // which is better recovery but no longer exercises this repeat slot.
+    let path = repo_root().join("tests/error_corpus/parse_errors/E316_speaker_without_colon.cha");
     let source =
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
 
@@ -131,7 +137,7 @@ fn full_document_repeat_captures_error_line() {
     let children = extract_full_document(FullDocumentNode(full_doc));
 
     // The line repeat must contain at least one ERROR slot (the unparsable
-    // `*CHI:\thello <world .` line) AND at least one Present `line` slot (the
+    // bare `*CHI` line) AND at least one Present `line` slot (the
     // surrounding clean lines), proving the loop enumerates both rather than
     // skipping the whole region.
     let error_count = children

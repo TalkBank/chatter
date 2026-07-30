@@ -1726,3 +1726,72 @@ fn test_e760_mor_item_empty_pos_utf8_begin_languages_1() -> Result<(), talkbank_
     Ok(())
 }
 
+
+/// Tests expected behavior.
+#[test]
+fn test_e766_linker_not_utterance_initial_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tyeah that go +\" okay .\n@Comment:\tERROR: the linker must open the utterance\n@End");
+
+    let errors = match result {
+        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
+        Err(errors) => errors,
+    };
+
+    let expected_codes = vec!["E766"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+
+
+/// Tests expected behavior.
+#[test]
+fn test_e766_linker_not_utterance_initial_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tI know ++ and then .\n@Comment:\tERROR: the linker must open the utterance\n@End");
+
+    let errors = match result {
+        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
+        Err(errors) => errors,
+    };
+
+    let expected_codes = vec!["E766"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+
+
+/// Tests expected behavior.
+#[test]
+fn test_e766_linker_not_utterance_initial_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello +< there .\n@Comment:\tERROR: the linker must open the utterance\n@End");
+
+    let errors = match result {
+        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
+        Err(errors) => errors,
+    };
+
+    let expected_codes = vec!["E766"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+

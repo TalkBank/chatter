@@ -1,5 +1,5 @@
 //! Generator: tree-sitter-node-types 0.1.0 (generate_typed_traversal)
-//! Source grammar digest (sha256): grammar.json=c6727cd8fe14ba081aee509a3e6fcf23b64536de9e1b5dccec3544d902a374a3 node-types.json=37ad5c58000ee592720a859d78615dd155f6a0dc1ab2c7c0e1a6a8a344301837
+//! Source grammar digest (sha256): grammar.json=c5d6480e1de3d51c8f7f04c729f8fd69d345d05251f07b336c4118c18a0cae7d node-types.json=7b3ac2d08f2d94ace122333d5113072c2bed00722f5cc1323db6e240812bf2a5
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -8322,6 +8322,36 @@ pub fn extract_comment_header<'tree>(
 
 // Task 7 extract contract: pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemChildren<'tree>
 #[derive(Debug, Clone)]
+pub enum ContentItemCaNoBreakLinkerChoice<'tree> {
+    /// Subtype `ca_no_break_linker`.
+    CaNoBreakLinker(CaNoBreakLinkerNode<'tree>),
+    /// Subtype `ca_technical_break_linker`.
+    CaTechnicalBreakLinker(CaTechnicalBreakLinkerNode<'tree>),
+    /// Subtype `linker_lazy_overlap`.
+    LinkerLazyOverlap(LinkerLazyOverlapNode<'tree>),
+    /// Subtype `linker_quick_uptake`.
+    LinkerQuickUptake(LinkerQuickUptakeNode<'tree>),
+    /// Subtype `linker_quick_uptake_overlap`.
+    LinkerQuickUptakeOverlap(LinkerQuickUptakeOverlapNode<'tree>),
+    /// Subtype `linker_quotation_follows`.
+    LinkerQuotationFollows(LinkerQuotationFollowsNode<'tree>),
+    /// Subtype `linker_self_completion`.
+    LinkerSelfCompletion(LinkerSelfCompletionNode<'tree>),
+}
+impl<'tree> AsRawNode<'tree> for ContentItemCaNoBreakLinkerChoice<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        match self {
+            ContentItemCaNoBreakLinkerChoice::CaNoBreakLinker(inner) => inner.raw_node(),
+            ContentItemCaNoBreakLinkerChoice::CaTechnicalBreakLinker(inner) => inner.raw_node(),
+            ContentItemCaNoBreakLinkerChoice::LinkerLazyOverlap(inner) => inner.raw_node(),
+            ContentItemCaNoBreakLinkerChoice::LinkerQuickUptake(inner) => inner.raw_node(),
+            ContentItemCaNoBreakLinkerChoice::LinkerQuickUptakeOverlap(inner) => inner.raw_node(),
+            ContentItemCaNoBreakLinkerChoice::LinkerQuotationFollows(inner) => inner.raw_node(),
+            ContentItemCaNoBreakLinkerChoice::LinkerSelfCompletion(inner) => inner.raw_node(),
+        }
+    }
+}
+#[derive(Debug, Clone)]
 pub enum ContentItemChoice<'tree> {
     /// Alternative `BaseContentItem`.
     BaseContentItem(BaseContentItemNode<'tree>),
@@ -8335,6 +8365,8 @@ pub enum ContentItemChoice<'tree> {
     MainPhoGroup(MainPhoGroupNode<'tree>),
     /// Alternative `MainSinGroup`.
     MainSinGroup(MainSinGroupNode<'tree>),
+    /// Alternative `CaNoBreakLinker`.
+    CaNoBreakLinker(ContentItemCaNoBreakLinkerChoice<'tree>),
 }
 impl<'tree> AsRawNode<'tree> for ContentItemChoice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
@@ -8345,6 +8377,7 @@ impl<'tree> AsRawNode<'tree> for ContentItemChoice<'tree> {
             ContentItemChoice::IllegalCurlyQuote(inner) => inner.raw_node(),
             ContentItemChoice::MainPhoGroup(inner) => inner.raw_node(),
             ContentItemChoice::MainSinGroup(inner) => inner.raw_node(),
+            ContentItemChoice::CaNoBreakLinker(inner) => inner.raw_node(),
         }
     }
 }
@@ -8385,6 +8418,15 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                         ReconShape::Kind("illegal_curly_quote"),
                         ReconShape::Kind("main_pho_group"),
                         ReconShape::Kind("main_sin_group"),
+                        ReconShape::Supertype(&[
+                            "ca_no_break_linker",
+                            "ca_technical_break_linker",
+                            "linker_lazy_overlap",
+                            "linker_quick_uptake",
+                            "linker_quick_uptake_overlap",
+                            "linker_quotation_follows",
+                            "linker_self_completion",
+                        ]),
                     ],
                     &cont_of(&[]),
                     __cur.all(),
@@ -8442,6 +8484,60 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             __cur.take_if_kind("main_sin_group").map(MainSinGroupNode)
                         {
                             NodeSlot::Present(ContentItemChoice::MainSinGroup(__v))
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    }
+                    Some((6, _)) => {
+                        if let Some(__v) = {
+                            if let Some(__c) = __cur.peek() {
+                                if __c.is_error() || __c.is_missing() {
+                                    None
+                                } else if __c.kind() == "ca_no_break_linker" {
+                                    __cur.advance();
+                                    Some(ContentItemCaNoBreakLinkerChoice::CaNoBreakLinker(
+                                        CaNoBreakLinkerNode(__c),
+                                    ))
+                                } else if __c.kind() == "ca_technical_break_linker" {
+                                    __cur.advance();
+                                    Some(ContentItemCaNoBreakLinkerChoice::CaTechnicalBreakLinker(
+                                        CaTechnicalBreakLinkerNode(__c),
+                                    ))
+                                } else if __c.kind() == "linker_lazy_overlap" {
+                                    __cur.advance();
+                                    Some(ContentItemCaNoBreakLinkerChoice::LinkerLazyOverlap(
+                                        LinkerLazyOverlapNode(__c),
+                                    ))
+                                } else if __c.kind() == "linker_quick_uptake" {
+                                    __cur.advance();
+                                    Some(ContentItemCaNoBreakLinkerChoice::LinkerQuickUptake(
+                                        LinkerQuickUptakeNode(__c),
+                                    ))
+                                } else if __c.kind() == "linker_quick_uptake_overlap" {
+                                    __cur.advance();
+                                    Some(
+                                        ContentItemCaNoBreakLinkerChoice::LinkerQuickUptakeOverlap(
+                                            LinkerQuickUptakeOverlapNode(__c),
+                                        ),
+                                    )
+                                } else if __c.kind() == "linker_quotation_follows" {
+                                    __cur.advance();
+                                    Some(ContentItemCaNoBreakLinkerChoice::LinkerQuotationFollows(
+                                        LinkerQuotationFollowsNode(__c),
+                                    ))
+                                } else if __c.kind() == "linker_self_completion" {
+                                    __cur.advance();
+                                    Some(ContentItemCaNoBreakLinkerChoice::LinkerSelfCompletion(
+                                        LinkerSelfCompletionNode(__c),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } {
+                            NodeSlot::Present(ContentItemChoice::CaNoBreakLinker(__v))
                         } else {
                             NodeSlot::Absent
                         }

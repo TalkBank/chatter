@@ -537,13 +537,23 @@ impl_inspect_choice!(BaseContentItemChoice {
     Freecode,
     Bullet
 });
+impl_inspect_choice!(ContentItemCaNoBreakLinkerChoice {
+    CaNoBreakLinker,
+    CaTechnicalBreakLinker,
+    LinkerLazyOverlap,
+    LinkerQuickUptake,
+    LinkerQuickUptakeOverlap,
+    LinkerQuotationFollows,
+    LinkerSelfCompletion
+});
 impl_inspect_choice!(ContentItemChoice {
     BaseContentItem,
     GroupWithAnnotations,
     Quotation,
     IllegalCurlyQuote,
     MainPhoGroup,
-    MainSinGroup
+    MainSinGroup,
+    CaNoBreakLinker
 });
 impl_inspect_choice!(ContentsChild0Choice {
     Whitespaces,

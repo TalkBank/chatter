@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -313,6 +313,17 @@ written glued on both sides (`y≡I≡`) because that is what it encodes, and
 the intonation arrows attach to the material they mark, including
 directly before an overlap close (`⌊I don't know⇗⌋`). Whether any CA mark
 should forbid trailing glue is unresolved.
+
+### E766: linker not utterance-initial
+
+Linkers (`+"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) tie an utterance to the
+PREVIOUS one, so they may only open the utterance. One placed after content
+(`yeah that go +" okay .`) is meaningless and is named here, at the exact
+token, instead of surfacing as generic unparsable content (E316).
+
+One deliberate carve-out: a `++` glued to words on both sides (`un++do`) is
+not a linker but a word run with an empty compound part, and keeps its E233
+diagnosis.
 
 ### E757 widening: every bracketed code, not only retraces
 

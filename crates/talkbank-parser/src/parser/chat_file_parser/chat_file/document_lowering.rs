@@ -381,7 +381,29 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 let text = node
                     .utf8_text(self.source.as_bytes())
                     .unwrap_or("<invalid UTF-8>");
-                self.errors.report(ParseError::new(
+                // An `unsupported_line` only matches lines that do NOT begin
+                // with `*`, `@`, `%`, or a tab, so a line whose TRIMMED text
+                // begins with one of those is a recognisable CHAT line pushed
+                // off column 1 by leading whitespace. Say so: "Unsupported
+                // line skipped" alone sends the reader hunting for junk when
+                // the fix is deleting one space (IISRP residue finding 6).
+                // This is a diagnostic hint derived from the already-reported
+                // line text, not model construction.
+                let indented_kind = match text.trim_start().chars().next() {
+                    Some('%') => Some("a dependent tier"),
+                    Some('*') => Some("a main tier"),
+                    Some('@') => Some("a header"),
+                    _ => None,
+                };
+                let message = match indented_kind {
+                    Some(kind) => format!(
+                        "Unsupported line skipped: {} (looks like {kind} line pushed off \
+                         column 1; it must begin at column 1)",
+                        text.trim()
+                    ),
+                    None => format!("Unsupported line skipped: {}", text.trim()),
+                };
+                let error = ParseError::new(
                     ErrorCode::UnexpectedLineType,
                     Severity::Error,
                     SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
@@ -390,8 +412,15 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                         node.start_byte()..node.end_byte(),
                         UNSUPPORTED_LINE,
                     ),
-                    format!("Unsupported line skipped: {}", text.trim()),
-                ));
+                    message,
+                );
+                let error = match indented_kind {
+                    Some(_) => error.with_suggestion(
+                        "Remove the leading whitespace so the line starts at column 1",
+                    ),
+                    None => error,
+                };
+                self.errors.report(error);
             }
             NodeSlot::Present(LineChoice::BlankLine(blank)) => {
                 let node = blank.0;

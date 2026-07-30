@@ -625,10 +625,9 @@
    "fixture": "CHECK_065_trailing_at_sign.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E202",
-    "E305"
+    "E202"
    ],
-   "note": "A special-form or morph marker followed by an illegal next symbol; 'hello@' with '@' at end of word (w[s+1]==EOS) hits check.cpp:3499-region (one of 31 sites). CLAN also emits (147) undeclared special form. This grounds only the trailing-@ shape of 65's 31 sites. chatter rejects via E202/E305."
+   "note": "A special-form or morph marker followed by an illegal next symbol; 'hello@' with '@' at end of word (w[s+1]==EOS) hits check.cpp:3499-region (one of 31 sites). CLAN also emits (147) undeclared special form. This grounds only the trailing-@ shape of 65's 31 sites. chatter rejects via E202/E305. Expected codes refreshed 2026-07-30 (E202, E305 -> E202): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 66,
@@ -689,9 +688,11 @@
    "fixture": "CHECK_070_annotation_only_utterance.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E306"
+    "E375",
+    "E305",
+    "E342"
    ],
-   "note": "Utterance whose content is ONLY a scoped annotation ([=! laughs] .). Empirically grounded 2026-07-24: real CLAN emits (73)+(70); chatter rejects (E306 empty-utterance core, with E305/E342/E375 cascade). IMPORTANT adjudicated scope: CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances (both validators ACCEPT those; verified live), so the old 'pause-only utterance' framing of this gap was wrong."
+   "note": "Utterance whose content is ONLY a scoped annotation ([=! laughs] .). Empirically grounded 2026-07-24: real CLAN emits (73)+(70); chatter rejects (E306 empty-utterance core, with E305/E342/E375 cascade). IMPORTANT adjudicated scope: CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances (both validators ACCEPT those; verified live), so the old 'pause-only utterance' framing of this gap was wrong. Expected codes refreshed 2026-07-30 (E306 -> E375, E305, E342): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 71,
@@ -766,9 +767,9 @@
    "fixture": "CHECK_078_pluscomma_mid.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316"
+    "E766"
    ],
-   "note": "A special delimiter word '+,' '+\"' '+^' '+<' '++' (exactly two chars) appearing after the first word of the tier (check.cpp 4769). Fixture 'hey +, you .'; chatter rejects (unparsable ' +')."
+   "note": "A special delimiter word '+,' '+\"' '+^' '+<' '++' (exactly two chars) appearing after the first word of the tier (check.cpp 4769). Fixture 'hey +, you .'; chatter rejects (unparsable ' +'). Expected codes refreshed 2026-07-30 (E316 -> E766): the misplaced-linker grammar change names this construct E766 (linker not utterance-initial), the direct counterpart of CHECK 78's message."
   },
   {
    "check_code": 79,
@@ -1250,7 +1251,7 @@
   },
   {
    "check_code": 128,
-   "check_message": "Unmatched \u2039 found on the tier.",
+   "check_message": "Unmatched ‹ found on the tier.",
    "fixture": "CHECK_128_unmatched_group_start.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1260,18 +1261,17 @@
   },
   {
    "check_code": 129,
-   "check_message": "Unmatched \u203a found on the tier.",
+   "check_message": "Unmatched › found on the tier.",
    "fixture": "CHECK_129_unmatched_group_end.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E316"
    ],
-   "note": "Group-end marker U+203A encountered with no open U+2039 (gm goes negative). Rejected at parse level: E316 unparsable content on the stray closer plus E305 missing terminator."
+   "note": "Group-end marker U+203A encountered with no open U+2039 (gm goes negative). Rejected at parse level: E316 unparsable content on the stray closer plus E305 missing terminator. Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 130,
-   "check_message": "Unmatched \u3014 found on the tier.",
+   "check_message": "Unmatched 〔 found on the tier.",
    "fixture": "CHECK_130_unmatched_sign_group_start.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1281,14 +1281,13 @@
   },
   {
    "check_code": 131,
-   "check_message": "Unmatched \u3015 found on the tier.",
+   "check_message": "Unmatched 〕 found on the tier.",
    "fixture": "CHECK_131_unmatched_sign_group_end.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E316"
    ],
-   "note": "Sign-group-end marker U+3015 with no opener (sgm goes negative). Rejected at parse level (E316 + E305)."
+   "note": "Sign-group-end marker U+3015 with no opener (sgm goes negative). Rejected at parse level (E316 + E305). Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 132,
@@ -1332,7 +1331,7 @@
   },
   {
    "check_code": 136,
-   "check_message": "Unmatched \u201c found on the tier.",
+   "check_message": "Unmatched “ found on the tier.",
    "fixture": "CHECK_136_unmatched_open_quote.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1342,14 +1341,13 @@
   },
   {
    "check_code": 137,
-   "check_message": "Unmatched \u201d found on the tier.",
+   "check_message": "Unmatched ” found on the tier.",
    "fixture": "CHECK_137_unmatched_close_quote.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E242",
-    "E305"
+    "E242"
    ],
-   "note": "Close curly quote U+201D with no preceding open quote (qt goes negative). Dedicated chatter code: E242 'Unmatched curly quote \u201d found on the tier'."
+   "note": "Close curly quote U+201D with no preceding open quote (qt goes negative). Dedicated chatter code: E242 'Unmatched curly quote ” found on the tier'. Expected codes refreshed 2026-07-30 (E242, E305 -> E242): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 138,
@@ -1387,10 +1385,9 @@
    "fixture": "CHECK_141_replacement_after_group.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316",
-    "E747"
+    "E316"
    ],
-   "note": "A [: text] replacement preceded by a group '>', another ']', nothing, a pause, or an &/+ form instead of exactly one plain word. chatter's grammar does not accept a replacement after a group, so it rejects at parse level (E316 on '<big dog> [: doggy]'); no dedicated code."
+   "note": "A [: text] replacement preceded by a group '>', another ']', nothing, a pause, or an &/+ form instead of exactly one plain word. chatter's grammar does not accept a replacement after a group, so it rejects at parse level (E316 on '<big dog> [: doggy]'); no dedicated code. Expected codes refreshed 2026-07-30 (E316, E747 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 142,
@@ -1434,10 +1431,9 @@
    "fixture": "CHECK_146_bare_amp_eq.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E316"
    ],
-   "note": "A main-tier word that is exactly '&=' with no code after the equals sign. Rejected at parse level: E316 'Unparsable content on main tier: &= '."
+   "note": "A main-tier word that is exactly '&=' with no code after the equals sign. Rejected at parse level: E316 'Unparsable content on main tier: &= '. Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 147,
@@ -1528,7 +1524,7 @@
   },
   {
    "check_code": 156,
-   "check_message": "Please replace ,, with F2-t (\u201e) character.",
+   "check_message": "Please replace ,, with F2-t („) character.",
    "fixture": "CHECK_156_double_comma.cha",
    "status": "parity",
    "expected_chatter_codes": [
@@ -1562,10 +1558,9 @@
    "fixture": "CHECK_159_pause_before_retrace.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E375"
    ],
-   "note": "A pause marker such as (.) immediately preceding a retrace marker [/], [//], [///], or [/-]. chatter rejects the configuration but via parse-level complaints (E375 bracket-annotation spacing at the '[' of [/], plus E305), not a dedicated pause-before-retrace rule; the merger may want a sharper probe of whether chatter has the ordering rule itself."
+   "note": "A pause marker such as (.) immediately preceding a retrace marker [/], [//], [///], or [/-]. chatter rejects the configuration but via parse-level complaints (E375 bracket-annotation spacing at the '[' of [/], plus E305), not a dedicated pause-before-retrace rule; the merger may want a sharper probe of whether chatter has the ordering rule itself. Expected codes refreshed 2026-07-30 (E305, E375 -> E375): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
   },
   {
    "check_code": 160,

@@ -21,7 +21,9 @@ use crate::generated_traversal::{
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 
 use super::super::super::parser_helpers::parse_separator_like;
-use super::super::content::{analyze_word_error, illegal_curly_quote_error, parse_overlap_point};
+use super::super::content::{
+    analyze_word_error, illegal_curly_quote_error, misplaced_linker_error, parse_overlap_point,
+};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
 /// One `contents` alternative, keyed by its NEW-backend per-position choice
@@ -317,8 +319,10 @@ fn parse_content_item(
         parse_sin_group_content,
     };
     use crate::node_types::{
-        BASE_CONTENT_ITEM, GROUP_WITH_ANNOTATIONS, ILLEGAL_CURLY_QUOTE, MAIN_PHO_GROUP,
-        MAIN_SIN_GROUP, QUOTATION,
+        BASE_CONTENT_ITEM, CA_NO_BREAK_LINKER, CA_TECHNICAL_BREAK_LINKER, GROUP_WITH_ANNOTATIONS,
+        ILLEGAL_CURLY_QUOTE, LINKER_LAZY_OVERLAP, LINKER_QUICK_UPTAKE, LINKER_QUICK_UPTAKE_OVERLAP,
+        LINKER_QUOTATION_FOLLOWS, LINKER_SELF_COMPLETION, MAIN_PHO_GROUP, MAIN_SIN_GROUP,
+        QUOTATION,
     };
 
     // CRITICAL FIX: Handle the node itself if it's a leaf node (e.g., bare COLON, SEPARATOR)
@@ -367,6 +371,20 @@ fn parse_content_item(
             errors.report(illegal_curly_quote_error(node, source));
             return ParseOutcome::rejected();
         }
+        LINKER_LAZY_OVERLAP
+        | LINKER_QUICK_UPTAKE
+        | LINKER_QUICK_UPTAKE_OVERLAP
+        | LINKER_QUOTATION_FOLLOWS
+        | LINKER_SELF_COMPLETION
+        | CA_NO_BREAK_LINKER
+        | CA_TECHNICAL_BREAK_LINKER => {
+            // A linker parsed in content position (the `linker` supertype is
+            // hidden, so the concrete token appears directly): linkers are
+            // utterance-initial by definition, so name it E766 and reject
+            // (no model element), same pattern as the curly quote above.
+            errors.report(misplaced_linker_error(node, source));
+            return ParseOutcome::rejected();
+        }
         // content_item is a supertype wrapper, fall through to iterate its children below
         CONTENT_ITEM => {}
         _ => {
@@ -398,6 +416,18 @@ fn parse_content_item(
                 // Recognized illegal curly single quote inside a content_item
                 // wrapper: report E256 and reject (no model element).
                 errors.report(illegal_curly_quote_error(child, source));
+                return ParseOutcome::rejected();
+            }
+            LINKER_LAZY_OVERLAP
+            | LINKER_QUICK_UPTAKE
+            | LINKER_QUICK_UPTAKE_OVERLAP
+            | LINKER_QUOTATION_FOLLOWS
+            | LINKER_SELF_COMPLETION
+            | CA_NO_BREAK_LINKER
+            | CA_TECHNICAL_BREAK_LINKER => {
+                // A misplaced linker inside a content_item wrapper: report
+                // E766 and reject (no model element).
+                errors.report(misplaced_linker_error(child, source));
                 return ParseOutcome::rejected();
             }
             OVERLAP_POINT => {

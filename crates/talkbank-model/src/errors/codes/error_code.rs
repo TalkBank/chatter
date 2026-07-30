@@ -974,6 +974,22 @@ pub enum ErrorCode {
     #[code("E765")]
     SeparatorGluedToFollowingContent,
 
+    /// A linker (`+"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) placed after
+    /// utterance content. Linkers are utterance-initial by definition
+    /// (they connect this utterance to the PREVIOUS one), so a linker in
+    /// content position is meaningless.
+    ///
+    /// The grammar deliberately parses the misplaced linker into the CST
+    /// (same strict+catch-all pattern as [`IllegalCurlyQuote`]) so this
+    /// named rule can locate it precisely; before that, the construct
+    /// fell into ERROR-node recovery and surfaced as a generic `E316`
+    /// that gave the transcriber nothing to act on (IISRP residue
+    /// finding 5, 2026-07-30).
+    ///
+    /// [`IllegalCurlyQuote`]: Self::IllegalCurlyQuote
+    #[code("E766")]
+    LinkerNotUtteranceInitial,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

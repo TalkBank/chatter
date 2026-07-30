@@ -10,6 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::node_types::WHITESPACES;
 use talkbank_model::chars::{
     LEFT_DOUBLE_QUOTE, LEFT_SINGLE_QUOTE, RIGHT_DOUBLE_QUOTE, RIGHT_SINGLE_QUOTE,
 };
@@ -418,6 +419,84 @@ pub(crate) fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
 /// happens to contain a curly single), so every E256 carries the same
 /// message and suggestion. CHAT requires the ASCII apostrophe; mirrors CLAN
 /// CHECK 138 (U+2019) and 139 (U+2018).
+/// Builds the diagnostic for a linker parsed in content position:
+/// normally E766, with one carve-out.
+///
+/// Linkers (`+"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) connect an utterance
+/// to the PREVIOUS one, so they are utterance-initial by definition; the
+/// grammar deliberately parses a misplaced one into the CST (the
+/// strict+catch-all pattern) so this rule can name and locate it instead
+/// of leaving it to ERROR-node recovery's generic E316. `node` is exactly
+/// the offending linker token.
+///
+/// **Carve-out (E233):** a `++` glued to items on BOTH sides (`un++do`)
+/// is not a linker at all; it is a word run with an empty compound part.
+/// The linker token only wins that lex because `++` outranks the
+/// compound marker wherever the content position admits a linker, so
+/// naming it "linker must be utterance-initial" would be the
+/// message-does-not-match-input defect this rule exists to remove. The
+/// glued shape keeps E233, matching the word-level
+/// `check_compound_markers` rule (and the re2c front end, whose lexer
+/// still produces one word there). Adjacency is judged at the enclosing
+/// `content_item` wrapper against its non-whitespace siblings, the same
+/// span-adjacency mechanism as the E764/E765 family.
+pub(crate) fn misplaced_linker_error(node: Node, source: &str) -> ParseError {
+    if node.kind() == crate::node_types::LINKER_QUICK_UPTAKE && is_glued_both_sides(node) {
+        return ParseError::new(
+            ErrorCode::EmptyCompoundPart,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            "Compound marker '+' cannot have empty parts (++)".to_string(),
+        )
+        .with_suggestion("Remove one '+' or add content between compound markers");
+    }
+    misplaced_linker_e766(node, source)
+}
+
+/// Whether the (wrapped) item containing `node` is directly glued, with
+/// no intervening whitespace sibling, to a sibling item on each side.
+fn is_glued_both_sides(node: Node) -> bool {
+    // Judge adjacency at the `content_item` wrapper when present: the
+    // wrapper is the sibling-level item inside `contents`.
+    let item = match node.parent() {
+        Some(parent) if parent.kind() == crate::node_types::CONTENT_ITEM => parent,
+        _ => node,
+    };
+    let glued_prev = item
+        .prev_sibling()
+        .is_some_and(|prev| prev.kind() != WHITESPACES && prev.end_byte() == item.start_byte());
+    let glued_next = item
+        .next_sibling()
+        .is_some_and(|next| next.kind() != WHITESPACES && next.start_byte() == item.end_byte());
+    glued_prev && glued_next
+}
+
+/// The plain E766 misplaced-linker diagnostic (no carve-out applies).
+fn misplaced_linker_e766(node: Node, source: &str) -> ParseError {
+    // `source` is a &str, so the token's bytes are valid UTF-8 by
+    // construction; the Err arm exists only because the tree-sitter API
+    // is byte-oriented. Falling back to the node kind keeps the message
+    // honest (it names the grammar rule) rather than fabricating text.
+    let linker_text = match node.utf8_text(source.as_bytes()) {
+        Ok(text) => text,
+        Err(_) => node.kind(),
+    };
+    ParseError::new(
+        ErrorCode::LinkerNotUtteranceInitial,
+        Severity::Error,
+        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+        format!(
+            "Linker '{linker_text}' must be utterance-initial; it links this \
+             utterance to the previous one and cannot follow content"
+        ),
+    )
+    .with_suggestion(
+        "Move the linker to the start of the utterance, or remove it if no link is intended",
+    )
+}
+
 pub(crate) fn illegal_curly_quote_error(node: Node, source: &str) -> ParseError {
     ParseError::new(
         ErrorCode::IllegalCurlyQuote,

@@ -1042,6 +1042,10 @@
           "named": true
         },
         {
+          "type": "linker",
+          "named": true
+        },
+        {
           "type": "main_pho_group",
           "named": true
         },

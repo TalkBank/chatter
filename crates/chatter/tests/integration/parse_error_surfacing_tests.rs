@@ -151,6 +151,83 @@ fn group_without_annotation_is_rejected_via_cli() -> Result<(), TestError> {
     assert_inline_rejected(GROUP_WITHOUT_ANNOTATION, "E342", &[])
 }
 
+/// A linker (`+"` here) placed mid-utterance. Linkers are utterance-initial
+/// by definition, so the construct is invalid, but "unparsable content"
+/// (E316) gives the transcriber nothing to act on. It must surface as the
+/// named rule E766 (linker not utterance-initial), and the generic E316
+/// must not also fire for the same construct. (IISRP residue finding 5,
+/// 2026-07-30; wild instance 059-1:155.)
+const MID_UTTERANCE_LINKER: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+    @Participants:\tINV Investigator\n@ID:\teng|corpus|INV|||||Investigator|||\n\
+    *INV:\tyeah that go +\" okay .\n@End\n";
+
+/// Assert `chatter validate` (with `parser_args`) rejects inline `content`
+/// with `expected` and does NOT report `unexpected`, through the real CLI.
+fn assert_inline_rejected_without(
+    content: &str,
+    expected: &str,
+    unexpected: &str,
+    parser_args: &[&str],
+) -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let path = write_fixture(dir.path(), "session.cha", content)?;
+    let mut args = vec!["--force"];
+    args.extend_from_slice(parser_args);
+    let output = harness.run_validate(&path, &args)?;
+    let text = combined_output(&output);
+    assert!(
+        text.contains(expected),
+        "expected {expected} in output, got:\n{text}"
+    );
+    assert!(
+        !text.contains(unexpected),
+        "the named rule owns this construct; the generic {unexpected} must not also fire, got:\n{text}"
+    );
+    Ok(())
+}
+
+/// The default (tree-sitter) parser names the mid-utterance linker E766.
+#[test]
+fn mid_utterance_linker_is_named_e766_via_cli() -> Result<(), TestError> {
+    assert_inline_rejected_without(MID_UTTERANCE_LINKER, "E766", "E316", &[])
+}
+
+/// The re2c oracle agrees: same construct, same named rule.
+#[test]
+fn mid_utterance_linker_is_named_e766_by_re2c() -> Result<(), TestError> {
+    assert_inline_rejected_without(MID_UTTERANCE_LINKER, "E766", "E316", &["--parser", "re2c"])
+}
+
+/// A dependent tier pushed off column 1 (a leading space before `%mor:`).
+/// The line is skipped as unsupported (E326, correct as far as it goes), but
+/// the message must SAY the line looks like a dependent tier that must begin
+/// at column 1, so the transcriber knows the fix is deleting one space, not
+/// hunting for junk. (IISRP residue finding 6, 2026-07-30; wild instance
+/// 222-3:733, where the mirror-image assumption in a tier stripper let a
+/// legacy %mor survive a strip.)
+const INDENTED_DEPENDENT_TIER: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+    @Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n\
+    *CHI:\thello .\n%com:\tfine .\n %mor:\tadj|good .\n@End\n";
+
+#[test]
+fn indented_dependent_tier_message_names_the_column_rule() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let path = write_fixture(dir.path(), "session.cha", INDENTED_DEPENDENT_TIER)?;
+    let output = harness.run_validate(&path, &["--force"])?;
+    let text = combined_output(&output);
+    assert!(
+        text.contains("E326"),
+        "the indented tier line stays unsupported (E326), got:\n{text}"
+    );
+    assert!(
+        text.contains("must begin at column 1"),
+        "E326 on a tier-shaped line must name the column rule, got:\n{text}"
+    );
+    Ok(())
+}
+
 /// The re2c oracle must reject the same input (its MISSING-Token Recovery Policy
 /// requires emitting a matching diagnostic, not treating it as a known
 /// divergence), so the two parsers agree on validity.

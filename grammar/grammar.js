@@ -880,6 +880,13 @@ export default grammar({
       $.illegal_curly_quote,
       $.main_pho_group,
       $.main_sin_group,
+      // A linker in content position. Linkers are utterance-initial by
+      // definition; one that reduces here instead of into the tier_body
+      // `linkers` field is misplaced, and the lowering names it (E766)
+      // rather than leaving it to ERROR-node recovery. prec(-1) so the
+      // utterance-initial reading (the `linkers` field) always wins the
+      // reduce conflict at the start of the tier body.
+      prec(-1, $.linker),
     ),
 
     // Other speaker's speech event, e.g., &*MOT:word, speech attributed to another speaker.
@@ -1045,12 +1052,17 @@ export default grammar({
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers
     // If they exist, they start an utterance.
-    linkers: $ => repeat1(
+    // prec.right: with `linker` also reachable as a (misplaced) content
+    // item, a run of initial linkers is ambiguous between "all in the
+    // linkers field" and "field ends early, rest are content". Right
+    // associativity keeps consuming into the field, so only a linker
+    // after real content ever reduces to the misplaced-content reading.
+    linkers: $ => prec.right(repeat1(
       seq(
         $.linker,
         $.whitespaces
       )
-    ),
+    )),
     linker: $ => choice(
       $.linker_lazy_overlap,
       $.linker_quick_uptake,

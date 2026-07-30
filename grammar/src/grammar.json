@@ -2327,6 +2327,14 @@
         {
           "type": "SYMBOL",
           "name": "main_sin_group"
+        },
+        {
+          "type": "PREC",
+          "value": -1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "linker"
+          }
         }
       ]
     },
@@ -2676,19 +2684,23 @@
       }
     },
     "linkers": {
-      "type": "REPEAT1",
+      "type": "PREC_RIGHT",
+      "value": 0,
       "content": {
-        "type": "SEQ",
-        "members": [
-          {
-            "type": "SYMBOL",
-            "name": "linker"
-          },
-          {
-            "type": "SYMBOL",
-            "name": "whitespaces"
-          }
-        ]
+        "type": "REPEAT1",
+        "content": {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "linker"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "whitespaces"
+            }
+          ]
+        }
       }
     },
     "linker": {

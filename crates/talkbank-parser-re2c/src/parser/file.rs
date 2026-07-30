@@ -211,6 +211,47 @@ fn report_separator_glued_to_following_content<'a>(tokens: &[Token<'a>], errors:
     }
 }
 
+/// Indices of every misplaced linker token in one main tier line's
+/// token slice (`*` through newline): a linker is legal only in the
+/// initial run after `*SPK:\t` (before the optional langcode and the
+/// content), so any linker after the first non-linker item is
+/// misplaced (E766). The scan stops at the terminator: a linker AFTER
+/// the terminator does not parse as a content item on the tree-sitter
+/// side either, so it stays on the generic-failure path in both
+/// parsers (parity).
+fn misplaced_linker_indices<'a>(main_tier_tokens: &[Token<'a>]) -> Vec<usize> {
+    use super::classify::{is_linker, is_terminator};
+
+    /// Where the scan is within the line.
+    enum LinePhase {
+        /// Still in the initial linker run after `*SPK:\t`.
+        InitialRun,
+        /// After the first non-linker item; a linker here is misplaced.
+        AfterContent,
+    }
+
+    let mut phase = LinePhase::InitialRun;
+    let mut misplaced = Vec::new();
+    for (idx, tok) in main_tier_tokens.iter().enumerate() {
+        let d = TokenDiscriminants::from(tok);
+        match d {
+            TokenDiscriminants::Star
+            | TokenDiscriminants::Speaker
+            | TokenDiscriminants::TierSep
+            | TokenDiscriminants::Whitespace
+            | TokenDiscriminants::Newline => {}
+            _ if is_linker(Some(d)) => {
+                if matches!(phase, LinePhase::AfterContent) {
+                    misplaced.push(idx);
+                }
+            }
+            _ if is_terminator(Some(d)) => break,
+            _ => phase = LinePhase::AfterContent,
+        }
+    }
+    misplaced
+}
+
 /// Report E758 for a main tier whose content starts with a space after
 /// the `:\t` separator, in a file WITHOUT `@Options: CA` (CLAN CHECK
 /// 123). Mirrors the model-validation rule
@@ -377,9 +418,18 @@ pub fn parse_file_with_errors<'a>(
                 let has_curly_quote = main_tier_tokens
                     .iter()
                     .any(|t| matches!(t, Token::IllegalCurlyQuote(_)));
-                let tier_input: &'a [Token<'a>] = if has_curly_quote {
+                // Misplaced linkers (E766, linker after content) get the
+                // same treatment as curly quotes: report each by name and
+                // strip it, so the rest of the line parses and no generic
+                // E321 co-fires. Mirrors the tree-sitter side, where the
+                // grammar parses the misplaced linker as a content item and
+                // the lowering rejects just that item.
+                let misplaced_linkers = misplaced_linker_indices(main_tier_tokens);
+                let tier_input: &'a [Token<'a>] = if has_curly_quote
+                    || !misplaced_linkers.is_empty()
+                {
                     let mut filtered: Vec<Token<'a>> = Vec::with_capacity(main_tier_tokens.len());
-                    for tok in main_tier_tokens {
+                    for (idx, tok) in main_tier_tokens.iter().enumerate() {
                         if let Token::IllegalCurlyQuote(s) = tok {
                             errors.report(
                                 ParseError::new(
@@ -394,6 +444,22 @@ pub fn parse_file_with_errors<'a>(
                                 )
                                 .with_suggestion(
                                     "Replace the curly single quote with the ASCII apostrophe (')",
+                                ),
+                            );
+                        } else if misplaced_linkers.contains(&idx) {
+                            errors.report(
+                                ParseError::new(
+                                    talkbank_model::errors::codes::ErrorCode::LinkerNotUtteranceInitial,
+                                    talkbank_model::Severity::Error,
+                                    talkbank_model::SourceLocation::new(Span::DUMMY),
+                                    None,
+                                    "Linker must be utterance-initial; it links this utterance \
+                                     to the previous one and cannot follow content"
+                                        .to_owned(),
+                                )
+                                .with_suggestion(
+                                    "Move the linker to the start of the utterance, or remove it \
+                                     if no link is intended",
                                 ),
                             );
                         } else {
