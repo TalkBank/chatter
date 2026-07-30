@@ -36,6 +36,17 @@ impl MainTier {
         // rewrite, see the 2026-05-06 corpus-wide damage assessment.
         let mut words = Vec::new();
         collect_main_tier_words_for_language_check(&self.content.content, &mut words);
+        // Deliberately fires on a ONE-word utterance too (`si@s .`).
+        // Linguistically that is a judgment call (a lone insertion vs a
+        // whole-utterance switch cannot be formalized), so the tiebreak is
+        // operational (maintainer reassessment, 2026-07-30): the Batchalign
+        // morphotag pipeline routes `[- LANG]`-precoded utterances wholesale
+        // to that language's Stanza model, while `@s` words go through its
+        // L2 splice machinery, which assumes an `@s` span is a proper
+        // SUBSET of the utterance; a whole-utterance `@s` (one word is the
+        // degenerate case) would exercise that machinery's unsupported
+        // shape. E255 and `debug fix-s` share this predicate, so both keep
+        // the one-word behavior together.
         if words.is_empty() {
             return None;
         }

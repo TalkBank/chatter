@@ -78,6 +78,35 @@ const WHOLE_UTTERANCE_PRECODE_CHAT: &str = "@UTF8
 @End
 ";
 
+/// A single-word utterance whose one word carries `@s`. E255 deliberately
+/// fires here and `debug fix-s` deliberately rewrites it to the `[- spa]`
+/// precode (maintainer reassessment, 2026-07-30): linguistically one word
+/// is a judgment call, but the Batchalign morphotag pipeline routes
+/// precoded utterances wholesale to the right Stanza model, while its L2
+/// `@s` splice machinery assumes an `@s` span is a proper SUBSET of the
+/// utterance, so the precode coding is the operationally correct form for
+/// a whole-utterance switch of any length, one word included.
+const SINGLE_WORD_SWITCH_CHAT: &str = "@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:	si@s .
+%mor:	co|si .
+@End
+";
+
+/// What `debug fix-s` must turn [`SINGLE_WORD_SWITCH_CHAT`] into.
+const SINGLE_WORD_PRECODE_CHAT: &str = "@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:	[- spa] si .
+%mor:	co|si .
+@End
+";
+
 const MISSING_EXPLICIT_LANGUAGE_HEADER_CHAT: &str = "@UTF8
 @Begin
 @Languages:	eng
@@ -211,6 +240,53 @@ fn debug_fix_s_leaves_already_correct_file_unmodified() -> Result<(), TestError>
     assert_eq!(
         before_modified, after_modified,
         "fix-s should not rewrite files that need no changes"
+    );
+    Ok(())
+}
+
+#[test]
+fn validate_flags_single_word_language_switch_with_e255() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let file_path = write_fixture(
+        dir.path(),
+        "single-word-switch.cha",
+        SINGLE_WORD_SWITCH_CHAT,
+    )?;
+
+    let output = run_path_command(&harness, &["validate"], &file_path, &["--force"])?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        text.contains("E255"),
+        "E255 fires on a single-word whole-utterance @s switch (the precode \
+         coding is the operationally correct form for Batchalign morphotag \
+         routing), got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn debug_fix_s_rewrites_single_word_switch_to_precode() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let file_path = write_fixture(
+        dir.path(),
+        "single-word-switch.cha",
+        SINGLE_WORD_SWITCH_CHAT,
+    )?;
+
+    let output = run_path_command(&harness, &["debug", "fix-s"], &file_path, &[])?;
+    assert_success(&output, "debug fix-s single-word rewrite");
+
+    let rewritten = fs::read_to_string(&file_path)?;
+    assert_eq!(
+        rewritten, SINGLE_WORD_PRECODE_CHAT,
+        "fix-s rewrites a single-word whole-utterance @s switch to the \
+         [- LANG] precode, same as any other whole-utterance switch"
     );
     Ok(())
 }
