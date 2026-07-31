@@ -17,6 +17,7 @@ validation errors (missing @UTF8, @End, @Participants, etc.) and E316
 - **Category**: validation
 - **Level**: file
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

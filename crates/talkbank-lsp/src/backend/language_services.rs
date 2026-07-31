@@ -125,10 +125,10 @@ mod tests {
         let text = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
 
         let first = services
-            .with_parser(|parser| parser.parse_chat_file(text).is_ok())
+            .with_parser(|parser| parser.parse_chat_file(text).is_built())
             .expect("parser should initialize");
         let second = services
-            .with_parser(|parser| parser.parse_chat_file(text).is_ok())
+            .with_parser(|parser| parser.parse_chat_file(text).is_built())
             .expect("parser should remain available");
 
         assert!(first);

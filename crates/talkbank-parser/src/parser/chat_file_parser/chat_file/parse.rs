@@ -1,13 +1,19 @@
-//! Strict (error-returning) chat-file parse entry points.
+//! Strict chat-file parse entry points.
 //!
-//! This module provides parser methods that return `ParseResult` and therefore
-//! fail the call when any error-level diagnostics are produced.
+//! `parse_chat_file` returns [`ParseProduct`]: it always hands back a model
+//! it managed to build, alongside whatever diagnostics fired, rather than
+//! discarding the model on any error-level diagnostic the way a
+//! `ParseResult<ChatFile>` return would. `parse_tree_incremental` and
+//! `parse_chat_file_incremental` still return `ParseResult` (CST-only and
+//! incremental-reparse callers respectively); they are out of scope for the
+//! `ParseProduct` migration.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use super::ParseProduct;
 use super::helpers::parse_lines_with_old_tree;
 use super::normalize::{headers_enable_ca_mode, normalize_ca_omissions};
 use crate::error::{
@@ -86,40 +92,40 @@ impl TreeSitterParser {
 
     /// Parse a CHAT file in strict mode.
     ///
-    /// Delegates to the streaming parse path, then upgrades any
-    /// error-severity diagnostics into a returned `Err`.
+    /// Delegates to the streaming parse path and reports whatever
+    /// diagnostics fired, but never discards a model it managed to build:
+    /// the return type is [`ParseProduct`], not a `Result`, precisely so a
+    /// document that built a `ChatFile` always hands that `ChatFile` back,
+    /// even when diagnostics are also present. A document that could not
+    /// build a model at all comes back as [`ParseProduct::Unbuildable`].
     ///
-    /// Callers that need best-effort recovery should use
-    /// `parse_chat_file_streaming()` instead.
+    /// Callers that need incremental reparsing or a raw `ErrorSink` should
+    /// use `parse_chat_file_streaming()` instead; that method already
+    /// always returns a `ChatFile` and is unaffected by this one.
     #[tracing::instrument(skip(self, input), fields(input_size = input.len()))]
-    pub fn parse_chat_file(&self, input: &str) -> ParseResult<ChatFile> {
+    pub fn parse_chat_file(&self, input: &str) -> ParseProduct {
         let errors = ErrorCollector::new();
         let outcome = self.parse_chat_file_fragment(input, 0, &errors);
 
-        let error_vec = errors.into_vec();
+        let diagnostics = errors.into_vec();
         match outcome {
-            ParseOutcome::Parsed(chat_file) => {
-                let has_actual_errors = error_vec
-                    .iter()
-                    .any(|e| matches!(e.severity, Severity::Error));
-                if has_actual_errors {
-                    Err(ParseErrors::from(error_vec))
-                } else {
-                    Ok(chat_file)
-                }
-            }
+            ParseOutcome::Parsed(chat_file) => ParseProduct::Built {
+                file: chat_file,
+                diagnostics,
+            },
             ParseOutcome::Rejected => {
-                if error_vec.is_empty() {
-                    Err(ParseErrors::from(vec![ParseError::new(
+                let diagnostics = if diagnostics.is_empty() {
+                    vec![ParseError::new(
                         ErrorCode::ParseFailed,
                         Severity::Error,
                         SourceLocation::from_offsets(0, input.len()),
                         ErrorContext::new(input, 0..input.len(), input),
                         "Parser returned no result and emitted no diagnostics",
-                    )]))
+                    )]
                 } else {
-                    Err(ParseErrors::from(error_vec))
-                }
+                    diagnostics
+                };
+                ParseProduct::Unbuildable { diagnostics }
             }
         }
     }

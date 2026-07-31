@@ -35,9 +35,9 @@ pub fn run_join_retrace(paths: &[PathBuf], dry_run: bool, scope: RetraceJoinScop
     for path in files {
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", path.display())));
-        let mut parsed = parser
-            .parse_chat_file(&source)
-            .unwrap_or_else(|e| die(&format!("parse failed for {}: {e:?}", path.display())));
+        let Some(mut parsed) = parse_or_report(&parser, &path, &source) else {
+            continue;
+        };
 
         let stats = join_dangling_retraces(&mut parsed, scope);
         if stats.is_empty() {

@@ -14,6 +14,7 @@ utterance context.
 - **Category**: parser\_recovery
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

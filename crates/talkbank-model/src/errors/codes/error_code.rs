@@ -184,18 +184,20 @@ pub enum ErrorCode {
     /// Malformed tier content.
     #[code("E365")]
     MalformedTierContent,
-    /// Long feature begin/end labels do not match.
-    #[code("E366")]
-    LongFeatureLabelMismatch,
+    // E366 (long feature begin/end label mismatch) was RETIRED 2026-07-31
+    // (spec/ErrorCode divergence closure): its only reference anywhere in
+    // the workspace was the generated DiagnosticKind registry arm itself,
+    // no emit site ever constructed it. The number is retired and not
+    // reused.
     /// Unmatched nonvocal begin marker.
     #[code("E367")]
     UnmatchedNonvocalBegin,
     /// Unmatched nonvocal end marker.
     #[code("E368")]
     UnmatchedNonvocalEnd,
-    /// Nonvocal begin/end labels do not match.
-    #[code("E369")]
-    NonvocalLabelMismatch,
+    // E369 (nonvocal begin/end label mismatch) was RETIRED 2026-07-31,
+    // same closure and same reason as E366: no emit site ever constructed
+    // it. The number is retired and not reused.
     /// Structural ordering error in utterance elements.
     #[code("E370")]
     StructuralOrderError,
@@ -558,18 +560,24 @@ pub enum ErrorCode {
     // =========================================================================
     // Temporal/Media Bullet Errors (E7xx)
     // =========================================================================
-    /// Unexpected node in tier content.
-    #[code("E700")]
-    UnexpectedTierNode,
+    // E700 (unexpected node in tier content) was RETIRED 2026-07-31
+    // (spec/ErrorCode divergence closure): its only reference anywhere in
+    // the workspace was the generated DiagnosticKind registry arm itself,
+    // no emit site ever constructed it. The number is retired and not
+    // reused.
     /// Tier begin time is not monotonically increasing (CLAN Error 83).
     #[code("E701")]
     TierBeginTimeNotMonotonic,
     /// Invalid morphology format on `%mor` tier.
     #[code("E702")]
     InvalidMorphologyFormat,
-    /// Unexpected node in morphology tier.
-    #[code("E703")]
-    UnexpectedMorphologyNode,
+    // E703 (unexpected node in morphology tier) was RETIRED 2026-07-31,
+    // same closure and same reason as E700: no emit site ever constructed
+    // it. The number is retired and not reused. (Distinct from the
+    // temporal.rs module doc's separate note that E702/E703 are also
+    // "reserved for strict timeline mode": that note describes a NEVER-
+    // BUILT future feature that would need its own new variant, not this
+    // retired one.)
     /// Speaker overlaps with themselves (CLAN Error 133).
     #[code("E704")]
     SpeakerSelfOverlap,
@@ -1010,9 +1018,10 @@ pub enum ErrorCode {
     // W602 (deprecated %xLABEL) was DELETED the same day: the Phon %x-tier
     // fold routes every known label to typed tier parsers, so the check was
     // dead code. W602 is retired and not reused.
-    /// Legacy warning from older CHAT validation.
-    #[code("W999")]
-    LegacyWarning,
+    // W999 (generic legacy warning) was RETIRED 2026-07-31 (spec/ErrorCode
+    // divergence closure): its only reference anywhere in the workspace was
+    // the generated DiagnosticKind registry arm itself, no emit site ever
+    // constructed it. The number is retired and not reused.
 
     // =========================================================================
     // Generic/Unknown (MUST be last for fallback in new())

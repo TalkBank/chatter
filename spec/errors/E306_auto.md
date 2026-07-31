@@ -10,6 +10,7 @@ Utterance has no content
 - **Category**: Main tier validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

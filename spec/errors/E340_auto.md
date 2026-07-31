@@ -15,6 +15,7 @@ been updated to handle).
 - **Level**: utterance
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Notes
 

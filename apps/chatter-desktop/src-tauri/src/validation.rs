@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use talkbank_transform::UnifiedCache;
 use talkbank_transform::validation_runner::{
     ParserKind, ValidationConfig, ValidationEvent, is_chat_transcript_path,
     validate_directory_streaming, validate_files_streaming,
 };
+use talkbank_transform::{RulesVersion, UnifiedCache};
 
 use crate::events::{FrontendEvent, to_frontend_event};
 use crate::protocol::commands::{ParserKindRequest, ValidateRequest};
@@ -34,10 +34,21 @@ impl From<ParserKindRequest> for ParserKind {
 
 impl From<&ValidateRequest> for ValidationConfig {
     fn from(request: &ValidateRequest) -> Self {
+        // `strict_linkers` now lives inside `model_config`
+        // (`talkbank_model::ValidationConfig`) rather than as a bare bool on
+        // the runner config, so it is set the same way the CLI folds
+        // `--strict-linkers` in: via `with_strict_linkers()` when requested.
+        // The desktop request carries no `--suppress` equivalent yet, so no
+        // codes are disabled here.
+        let model_config = if request.strict_linkers {
+            talkbank_model::ValidationConfig::new().with_strict_linkers()
+        } else {
+            talkbank_model::ValidationConfig::new()
+        };
         Self {
             roundtrip: request.roundtrip,
             parser_kind: request.parser_kind.into(),
-            strict_linkers: request.strict_linkers,
+            model_config,
             jobs: request.jobs.map(|jobs| jobs as usize),
             ..Self::default()
         }
@@ -88,12 +99,32 @@ pub fn validate_target_streaming_with_config(
 /// `--force`-clear step the desktop has no flag for. Zero CLI dependency:
 /// `UnifiedCache::new()` resolves the OS cache dir on its own.
 ///
-/// Called once, at app startup (`ValidationState::new()`), not per validation
-/// run: it opens a SQLite pool and a dedicated tokio runtime, so building a
-/// fresh one on every "Validate"/"Re-validate" click would pay that setup cost
-/// repeatedly on a hot, user-facing path for no benefit.
+/// Keyed to [`RulesVersion::current`] (no suppression, no strict-linkers).
+/// Callers that need a pool keyed to a specific active
+/// `talkbank_model::ValidationConfig` (any desktop request whose settings
+/// might not be the default) use [`initialize_cache_with_rules_version`]
+/// instead; see `ValidationState::cache_for_config` in `commands.rs`, the
+/// seam that opens (and memoizes) one pool per distinct config a session
+/// actually uses, rather than one pool for the app's whole lifetime.
 pub fn initialize_cache() -> Option<Arc<UnifiedCache>> {
     UnifiedCache::open_or_else(|error| {
+        eprintln!("Warning: Failed to initialize validation cache: {error}");
+    })
+}
+
+/// [`initialize_cache`], keyed to an explicit [`RulesVersion`] instead of
+/// [`RulesVersion::current`].
+///
+/// Opening a SQLite pool and a dedicated tokio runtime costs real time, so
+/// this is not called per validation run either: `ValidationState` opens (at
+/// most) one pool per DISTINCT active config a session has actually used,
+/// reusing it for every subsequent request under that same config, the same
+/// "open once, reuse" behavior the single-cache design had back when only
+/// one config could ever exist.
+pub fn initialize_cache_with_rules_version(
+    rules_version: RulesVersion,
+) -> Option<Arc<UnifiedCache>> {
+    UnifiedCache::open_or_else_with_rules_version(rules_version, |error| {
         eprintln!("Warning: Failed to initialize validation cache: {error}");
     })
 }
@@ -116,6 +147,24 @@ pub fn initialize_cache() -> Option<Arc<UnifiedCache>> {
 /// processes (the CLI subprocess tests set it via `Command::env`).
 pub fn initialize_cache_at(cache_dir: PathBuf) -> Option<Arc<UnifiedCache>> {
     match UnifiedCache::with_directory(cache_dir) {
+        Ok(cache) => Some(Arc::new(cache)),
+        Err(error) => {
+            eprintln!("Warning: Failed to initialize validation cache: {error}");
+            None
+        }
+    }
+}
+
+/// [`initialize_cache_at`], keyed to an explicit [`RulesVersion`]. Test
+/// counterpart of [`initialize_cache_with_rules_version`], used by
+/// `ValidationState::new_at` so cache-key tests can isolate BOTH the
+/// directory (never the developer's real cache) and the rule set (never a
+/// row left behind by a differently-configured earlier test run).
+pub fn initialize_cache_at_with_rules_version(
+    cache_dir: PathBuf,
+    rules_version: RulesVersion,
+) -> Option<Arc<UnifiedCache>> {
+    match UnifiedCache::with_directory_and_rules_version(cache_dir, rules_version) {
         Ok(cache) => Some(Arc::new(cache)),
         Err(error) => {
             eprintln!("Warning: Failed to initialize validation cache: {error}");

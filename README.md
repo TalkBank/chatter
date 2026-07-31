@@ -74,7 +74,7 @@ and an LSP-backed editor experience.
 
 | Component | What it is |
 |---|---|
-| [`chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON), lint, watch, plus transcript merge, speaker-id reconciliation, batch processing, and interactive adjudication |
+| [`chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON), watch, plus transcript merge, speaker-id reconciliation, batch processing, and interactive adjudication |
 | [`talkbank-lsp`](crates/talkbank-lsp/), the `talkbank-lsp` binary | Language Server Protocol implementation; powers real-time validation, hover, go-to-definition, and cross-tier alignment in any LSP-aware editor |
 | [`apps/chatter-desktop/`](apps/chatter-desktop/) | Desktop validation app (Tauri) for researchers who do not use a terminal; runs the same validation engine as the CLI, with the same cache |
 

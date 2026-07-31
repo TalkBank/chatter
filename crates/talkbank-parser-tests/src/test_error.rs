@@ -37,3 +37,37 @@ impl From<talkbank_parser::ParserInitError> for TestError {
         TestError::ParserInit(err.to_string())
     }
 }
+
+/// Convert a [`talkbank_parser::ParseProduct`] into the pre-`ParseProduct`
+/// strict-parse contract: a [`talkbank_parser::ParseProduct::Built`] that
+/// carries an error-severity diagnostic is treated as a failure, the same
+/// as [`talkbank_parser::ParseProduct::Unbuildable`].
+///
+/// Spec-generated construct/error tests (see `spec/tools/src/output/rust_test.rs`)
+/// and hand-written parser-suite tests that assert a fixture parses
+/// completely cleanly use this, rather than
+/// [`talkbank_parser::ParseProduct::expect_built`] alone, which only
+/// answers "was a model built," not "was it built without error
+/// diagnostics." Kept in this test-support crate (never in
+/// `talkbank-parser` itself): a convenience that silently discards a
+/// built model on any diagnostic is exactly the footgun `ParseProduct`
+/// exists to make impossible to reach for by accident in production code.
+pub fn strict_parse(
+    product: talkbank_parser::ParseProduct,
+) -> Result<talkbank_model::model::ChatFile, talkbank_model::ParseErrors> {
+    match product {
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+            if diagnostics
+                .iter()
+                .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
+            {
+                Err(talkbank_model::ParseErrors::from(diagnostics))
+            } else {
+                Ok(file)
+            }
+        }
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            Err(talkbank_model::ParseErrors::from(diagnostics))
+        }
+    }
+}

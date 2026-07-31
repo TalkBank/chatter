@@ -63,19 +63,22 @@ All fields use the `**Field**: value` format inside a markdown list.
 
 #### Layer: How It Affects Tests
 
-**`Layer: parser`**: The generated test calls `parser.parse_chat_file()` and
-expects it to return `Err`. The test then checks that the returned errors contain
-the expected error code. Use this for inputs that cause a hard parse failure
-(the parser cannot produce a valid AST at all).
+**`Layer: parser`**: The generated test calls `parser.parse_chat_file()`, which
+returns a `ParseProduct` (never a bare `Result`: a document that builds a model
+always hands the model back, even alongside diagnostics), and expects at least
+one error-severity diagnostic. The test then checks that the diagnostics
+contain the expected error code. Use this for inputs that cause a hard parse
+failure (the parser cannot produce a valid AST at all) or that recover with an
+error-severity diagnostic.
 
 ```rust
-// Generated code for Layer: parser
-let result = parser.parse_chat_file(input);
-let errors = match result {
-    Ok(_) => return Err("Expected parse error but parsing succeeded"),
-    Err(errors) => errors,
-};
-// Assert expected error code is in errors
+// Generated code for a "chat_file"-context Layer: parser example
+let product = parser.parse_chat_file(input);
+if !product.has_error_diagnostics() {
+    return Err("Expected parse error but parsing succeeded");
+}
+let diagnostics = product.diagnostics();
+// Assert expected error code is in diagnostics
 ```
 
 **`Layer: validation`**: The generated test uses the streaming parse+validate

@@ -17,6 +17,7 @@ Valid form types: `@b`, `@c`, `@d`, `@f`, `@fp`, `@g`, `@i`, `@k`, `@l`,
 - **Category**: Word validation
 - **Level**: word
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

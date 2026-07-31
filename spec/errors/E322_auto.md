@@ -13,6 +13,7 @@ because the speaker code has no colon at all.
 - **Category**: parser\_recovery
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

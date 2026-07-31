@@ -13,6 +13,7 @@ for an utterance. `%gra` aligns 1-to-1 with `%mor` chunks (not items, a
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example
 

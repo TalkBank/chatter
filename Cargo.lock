@@ -836,6 +836,7 @@ dependencies = [
  "ansi-to-html",
  "arc-swap",
  "crossbeam-channel",
+ "dashmap 6.2.1",
  "dirs",
  "send2clan",
  "serde",

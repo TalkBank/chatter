@@ -12,6 +12,7 @@ Syntax error - caret at word start
 - **Category**: Prosodic marker placement
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

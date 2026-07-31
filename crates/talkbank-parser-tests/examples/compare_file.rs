@@ -28,8 +28,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ts = talkbank_parser::TreeSitterParser::new()?;
     let direct = talkbank_parser::TreeSitterParser::new()?;
 
-    let ts_result = ts.parse_chat_file(&content);
-    let direct_result = direct.parse_chat_file(&content);
+    let ts_result = talkbank_parser_tests::test_error::strict_parse(ts.parse_chat_file(&content));
+    let direct_result =
+        talkbank_parser_tests::test_error::strict_parse(direct.parse_chat_file(&content));
 
     match (&ts_result, &direct_result) {
         (Ok(ts_file), Ok(direct_file)) => {

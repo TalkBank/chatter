@@ -21,6 +21,7 @@ use std::path::PathBuf;
 
 use crate::cli::OutputFormat;
 use crate::ui::Theme;
+use talkbank_model::ErrorCode;
 use talkbank_transform::paths::is_chat_transcript_path;
 use talkbank_transform::validation_runner::ParserKind;
 
@@ -91,36 +92,100 @@ pub struct ValidateCommandOptions {
     pub check_xphon: bool,
 }
 
-/// Every Phon `%x` dependent-tier diagnostic, grouped under the `xphon` suppress
-/// name. Phon validation now runs by default (these tiers are first-class CHAT),
-/// so the group exists only as the opt-out: `--suppress xphon` silences them all.
-///
-/// The codes themselves are the single source of truth in
-/// `talkbank_model::XPHON_ERROR_CODES` (co-located with the `ErrorCode`
-/// definitions), so the CLI group can never drift from the codes the validator
-/// actually emits.
-///
-/// Expand named suppress groups into concrete error codes. Named groups are a
-/// user-friendly shorthand; unknown names are treated as literal error codes
-/// (e.g., "E726"). Phon `%x` validation runs by default, with no automatic
-/// suppression: the user silences it with `--suppress xphon` (the whole group)
-/// or an individual code. (The historical `--check-xphon` opt-in is now a
-/// deprecated no-op.)
-fn expand_suppress_groups(raw: Vec<String>) -> Vec<String> {
-    let mut codes = Vec::new();
-    for item in raw {
-        match item.to_lowercase().as_str() {
-            // The whole Phon `%x` validation surface (`%xmodsyl`, `%xphosyl`,
-            // `%xphoaln`, `%xphoint`). Opt-out only; validation is on by default.
-            "xphon" => codes.extend(
-                talkbank_model::XPHON_ERROR_CODES
-                    .iter()
-                    .map(|code| code.as_str().to_string()),
-            ),
-            _ => codes.push(item.to_uppercase()),
+/// A named `--suppress` group: a user-friendly shorthand for a fixed set of
+/// error codes. Closed on purpose (a `match` on this type must be exhaustive),
+/// so adding a new group is a compile-time-visible decision, not a new string
+/// literal someone has to remember to wire up everywhere.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SuppressionGroup {
+    /// The whole Phon `%x` dependent-tier validation surface (`%xmodsyl`,
+    /// `%xphosyl`, `%xphoaln`, `%xphoint`). Opt-out only; this validation
+    /// runs by default.
+    Xphon,
+}
+
+impl SuppressionGroup {
+    /// The error codes this group expands to.
+    ///
+    /// For [`Self::Xphon`] this is `talkbank_model::XPHON_ERROR_CODES`
+    /// (co-located with the `ErrorCode` definitions), so the CLI group can
+    /// never drift from the codes the validator actually emits.
+    fn codes(self) -> &'static [ErrorCode] {
+        match self {
+            Self::Xphon => talkbank_model::XPHON_ERROR_CODES,
         }
     }
-    codes
+}
+
+/// One resolved `--suppress` argument: either a named group or a single error
+/// code. Replaces the earlier untyped behavior where any value not matching a
+/// known group name was assumed, unchecked, to be a literal error code and
+/// silently uppercased; a typo (`E9999` for `E999`, or a misspelled group
+/// name) then suppressed nothing and the CLI still exited 0, indistinguishable
+/// from a suppression that worked.
+enum SuppressionSelector {
+    /// A named group, e.g. `xphon`.
+    Group(SuppressionGroup),
+    /// A single error code, e.g. `E736`.
+    Code(ErrorCode),
+}
+
+/// A `--suppress` value that names neither a known group nor a known error
+/// code.
+///
+/// Carries the offending value verbatim (as the user typed it, before any
+/// case normalization) so the CLI's error message can point at exactly what
+/// was wrong.
+#[derive(Clone, Debug, thiserror::Error)]
+#[error(
+    "--suppress {value:?} is not a known suppression group (xphon) or a known error code; \
+     see `chatter validate --list-checks` for valid codes"
+)]
+struct UnknownSuppressionValue {
+    value: String,
+}
+
+impl SuppressionSelector {
+    /// Resolve one raw `--suppress` value.
+    ///
+    /// Group names are matched case-insensitively (`xphon`, `XPHON`); error
+    /// codes are matched case-insensitively too (`e241`, `E241`). Leniency
+    /// about case is preserved from the pre-existing behavior; leniency about
+    /// *existence* is exactly the bug this type closes: any value that is
+    /// neither a real group nor a real code is refused, not guessed at.
+    fn parse(raw: &str) -> Result<Self, UnknownSuppressionValue> {
+        match raw.to_lowercase().as_str() {
+            "xphon" => Ok(Self::Group(SuppressionGroup::Xphon)),
+            _ => super::error_codes::resolve_error_code(raw)
+                .map(Self::Code)
+                .ok_or_else(|| UnknownSuppressionValue {
+                    value: raw.to_string(),
+                }),
+        }
+    }
+}
+
+/// Expand named suppress groups into concrete error codes.
+///
+/// Named groups are a user-friendly shorthand; every other value must name a
+/// real [`ErrorCode`] or the whole `--suppress` argument is rejected (see
+/// [`SuppressionSelector::parse`]). Phon `%x` validation runs by default,
+/// with no automatic suppression: the user silences it with `--suppress
+/// xphon` (the whole group) or an individual code. (The historical
+/// `--check-xphon` opt-in is now a deprecated no-op.)
+///
+/// Returns typed [`ErrorCode`] values, not strings, so a caller can feed the
+/// result straight into a typed suppression configuration without an
+/// intermediate string round-trip.
+fn expand_suppress_groups(raw: Vec<String>) -> Result<Vec<ErrorCode>, UnknownSuppressionValue> {
+    let mut codes = Vec::new();
+    for item in raw {
+        match SuppressionSelector::parse(&item)? {
+            SuppressionSelector::Group(group) => codes.extend_from_slice(group.codes()),
+            SuppressionSelector::Code(code) => codes.push(code),
+        }
+    }
+    Ok(codes)
 }
 
 /// Execute one top-level `chatter validate` invocation.
@@ -142,7 +207,13 @@ pub fn run_validate_command(paths: Vec<PathBuf>, options: ValidateCommandOptions
              now runs by default (use --suppress xphon to silence it)"
         );
     }
-    let suppress = expand_suppress_groups(raw_suppress);
+    let suppress = match expand_suppress_groups(raw_suppress) {
+        Ok(codes) => codes,
+        Err(err) => {
+            eprintln!("Error: {err}");
+            std::process::exit(1);
+        }
+    };
     let ValidateCommandRules {
         alignment,
         roundtrip,
@@ -268,29 +339,25 @@ fn collect_cha_files_recursive(dir: &std::path::Path, files: &mut Vec<PathBuf>) 
 #[cfg(test)]
 mod tests {
     use super::expand_suppress_groups;
-    use talkbank_model::XPHON_ERROR_CODES;
-
-    /// The Phon `%x` group codes as strings, derived from the single model-side
-    /// source of truth (so these tests cannot drift from the actual codes).
-    fn xphon_code_strings() -> Vec<String> {
-        XPHON_ERROR_CODES
-            .iter()
-            .map(|code| code.as_str().to_string())
-            .collect()
-    }
+    use talkbank_model::{ErrorCode, XPHON_ERROR_CODES};
 
     #[test]
     fn nothing_suppressed_by_default() {
         // Phon `%x` validation is on by default: no automatic suppression.
-        assert!(expand_suppress_groups(vec![]).is_empty());
+        assert!(
+            expand_suppress_groups(vec![])
+                .expect("empty suppress list always resolves")
+                .is_empty()
+        );
     }
 
     #[test]
     fn suppress_xphon_silences_whole_group() {
-        let effective = expand_suppress_groups(vec!["xphon".to_string()]);
-        for code in xphon_code_strings() {
+        let effective =
+            expand_suppress_groups(vec!["xphon".to_string()]).expect("xphon is a known group");
+        for code in XPHON_ERROR_CODES {
             assert!(
-                effective.contains(&code),
+                effective.contains(code),
                 "--suppress xphon should include {code}"
             );
         }
@@ -298,47 +365,67 @@ mod tests {
 
     #[test]
     fn explicit_user_suppress_does_not_add_xphon() {
-        let effective = expand_suppress_groups(vec!["E316".to_string()]);
-        assert_eq!(effective, vec!["E316"]);
+        let effective =
+            expand_suppress_groups(vec!["E316".to_string()]).expect("E316 is a known code");
+        assert_eq!(effective, vec![ErrorCode::UnparsableContent]);
     }
 
     #[test]
     fn redundant_xphon_entry_not_doubled() {
-        let effective = expand_suppress_groups(vec!["xphon".to_string()]);
-        for code in xphon_code_strings() {
-            let count = effective.iter().filter(|c| **c == code).count();
+        let effective =
+            expand_suppress_groups(vec!["xphon".to_string()]).expect("xphon is a known group");
+        for code in XPHON_ERROR_CODES {
+            let count = effective.iter().filter(|c| *c == code).count();
             assert_eq!(count, 1, "code {code} should appear exactly once");
         }
     }
 
     #[test]
     fn single_xphon_code_can_be_suppressed_individually() {
-        let effective = expand_suppress_groups(vec!["E742".to_string()]);
-        assert!(effective.contains(&"E742".to_string()));
-        assert!(!effective.contains(&"E743".to_string()));
+        let effective =
+            expand_suppress_groups(vec!["E742".to_string()]).expect("E742 is a known code");
+        assert!(effective.contains(&ErrorCode::XphointBulletInvalid));
+        assert!(!effective.contains(&ErrorCode::XphointIntervalNotMonotonic));
     }
 
     #[test]
     fn xphon_expands_to_all_phon_codes() {
-        let result = expand_suppress_groups(vec!["xphon".to_string()]);
+        let result =
+            expand_suppress_groups(vec!["xphon".to_string()]).expect("xphon is a known group");
         assert_eq!(result.len(), XPHON_ERROR_CODES.len());
-        for code in xphon_code_strings() {
-            assert!(result.contains(&code), "missing {code}");
+        for code in XPHON_ERROR_CODES {
+            assert!(result.contains(code), "missing {code}");
         }
     }
 
     #[test]
-    fn literal_codes_pass_through_uppercased() {
-        let result = expand_suppress_groups(vec!["e316".to_string()]);
-        assert_eq!(result, vec!["E316"]);
+    fn literal_codes_pass_through_case_insensitively() {
+        let result =
+            expand_suppress_groups(vec!["e316".to_string()]).expect("e316 is a known code");
+        assert_eq!(result, vec![ErrorCode::UnparsableContent]);
     }
 
     #[test]
     fn mixed_groups_and_codes() {
-        let result = expand_suppress_groups(vec!["xphon".to_string(), "E316".to_string()]);
+        let result = expand_suppress_groups(vec!["xphon".to_string(), "E316".to_string()])
+            .expect("xphon and E316 are both known");
         assert_eq!(result.len(), XPHON_ERROR_CODES.len() + 1);
-        assert!(result.contains(&"E725".to_string()));
-        assert!(result.contains(&"E742".to_string()));
-        assert!(result.contains(&"E316".to_string()));
+        assert!(result.contains(&ErrorCode::ModsylModCountMismatch));
+        assert!(result.contains(&ErrorCode::XphointBulletInvalid));
+        assert!(result.contains(&ErrorCode::UnparsableContent));
+    }
+
+    #[test]
+    fn unknown_group_name_is_rejected() {
+        let err = expand_suppress_groups(vec!["notagroup".to_string()])
+            .expect_err("notagroup names no group or code");
+        assert!(err.to_string().contains("notagroup"));
+    }
+
+    #[test]
+    fn unknown_code_is_rejected() {
+        let err = expand_suppress_groups(vec!["E9999".to_string()])
+            .expect_err("E9999 names no real error code");
+        assert!(err.to_string().contains("E9999"));
     }
 }

@@ -32,7 +32,9 @@ fn parser_equivalence(#[files("../../corpus/reference/**/*.cha")] path: PathBuf)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
 
     let parser = TreeSitterParser::new().expect("TreeSitterParser init");
-    let result = parser.parse_chat_file(&content);
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: the reference corpus is expected to be clean.
+    let result = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&content));
 
     assert!(
         result.is_ok(),

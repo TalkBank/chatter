@@ -40,7 +40,8 @@ fn test_wor_tier_terminator_not_counted_in_real_parse() -> Result<(), TestError>
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world today .\n%wor:\thello \u{0015}100_200\u{0015} world \u{0015}300_400\u{0015} today \u{0015}500_600\u{0015} .\n@End\n";
 
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
-    let chat_file = parser.parse_chat_file(source)?;
+    let chat_file =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(source))?;
 
     let line = chat_file
         .lines
@@ -90,7 +91,8 @@ fn test_wor_tier_terminator_not_counted_in_real_parse() -> Result<(), TestError>
 /// Helper to extract the WorTier from a parsed CHAT string
 fn parse_wor_tier(source: &str) -> Result<WorTier, TestError> {
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
-    let chat_file = parser.parse_chat_file(source)?;
+    let chat_file =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(source))?;
 
     let utterance = chat_file
         .lines
@@ -305,7 +307,8 @@ fn test_wor_alignment_excludes_separators() -> Result<(), TestError> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\twater , too .\n%wor:\twater \u{0015}100_200\u{0015} , too \u{0015}300_400\u{0015} .\n@End\n";
 
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
-    let chat_file = parser.parse_chat_file(source)?;
+    let chat_file =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(source))?;
 
     let utterance = chat_file
         .lines

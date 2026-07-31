@@ -57,22 +57,26 @@ fn roundtrip_file(path: &Path, parser: &TreeSitterParser) -> Result<(), String> 
     let content = std::fs::read_to_string(path)
         .map_err(|e| format!("IO error reading {}: {}", path.display(), e))?;
 
-    // Parse with TreeSitterParser
-    let chat_file = parser
-        .parse_chat_file(&content)
-        .map_err(|e| format!("TreeSitterParser failed to parse {}: {}", path.display(), e))?;
+    // Parse with TreeSitterParser. `strict_parse` reproduces the
+    // pre-`ParseProduct` fail-on-any-diagnostic contract: the reference
+    // corpus is expected to be clean.
+    let chat_file =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&content))
+            .map_err(|e| format!("TreeSitterParser failed to parse {}: {}", path.display(), e))?;
 
     // Serialize back to CHAT
     let serialized = chat_file.to_chat_string();
 
     // Re-parse the serialized CHAT
-    let reparsed = parser.parse_chat_file(&serialized).map_err(|e| {
-        format!(
-            "TreeSitterParser failed to re-parse serialized {}: {}",
-            path.display(),
-            e
-        )
-    })?;
+    let reparsed =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&serialized))
+            .map_err(|e| {
+                format!(
+                    "TreeSitterParser failed to re-parse serialized {}: {}",
+                    path.display(),
+                    e
+                )
+            })?;
 
     // Semantic comparison
     if !chat_file.semantic_eq(&reparsed) {

@@ -10,6 +10,7 @@
 - **Category**: Participant validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

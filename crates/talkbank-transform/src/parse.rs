@@ -62,11 +62,33 @@ fn generated_tier_at_offset(chat_text: &str, offset: usize) -> Option<IgnoredGen
 }
 
 /// Parse CHAT text strictly (tree-sitter, no error recovery).
+///
+/// This reproduces the pre-`ParseProduct` strict contract explicitly and
+/// deliberately: a caller of `parse_strict` wants "did this text parse
+/// completely cleanly," not "give me whatever model was built." A
+/// [`talkbank_parser::ParseProduct::Built`] that carries an error-severity
+/// diagnostic is therefore an `Err` here, the same as
+/// [`talkbank_parser::ParseProduct::Unbuildable`], even though the
+/// underlying parser call did build a model in the `Built` case.
 pub fn parse_strict(
     parser: &TreeSitterParser,
     chat_text: &str,
 ) -> Result<ChatFile, talkbank_model::ParseErrors> {
-    parser.parse_chat_file(chat_text)
+    match parser.parse_chat_file(chat_text) {
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+            if diagnostics
+                .iter()
+                .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
+            {
+                Err(talkbank_model::ParseErrors::from(diagnostics))
+            } else {
+                Ok(file)
+            }
+        }
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            Err(talkbank_model::ParseErrors::from(diagnostics))
+        }
+    }
 }
 
 /// Check whether a parsed CHAT file has `@Options: dummy`.

@@ -17,6 +17,7 @@ marks) are not flagged, matching CLAN's CA exemptions conservatively.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

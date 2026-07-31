@@ -90,7 +90,11 @@ Testing {} parse error files...\n",
     for (error_code, path) in &error_files {
         let content = fs::read_to_string(path)?;
 
-        let result = parser.parse_chat_file(&content);
+        // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-
+        // diagnostic contract: this corpus is specifically files that
+        // should fail to parse cleanly.
+        let result =
+            talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&content));
 
         match result {
             Err(parse_errors) => {

@@ -10,6 +10,7 @@ Participant entry should have both code and role
 - **Category**: Header validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

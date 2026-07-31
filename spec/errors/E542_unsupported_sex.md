@@ -10,6 +10,7 @@ An `@ID` header contains a sex field value that is not one of the recognized val
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

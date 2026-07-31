@@ -15,6 +15,7 @@ switches (maintainer ruling 2026-07-15, part 2).
 - **Level**: header
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

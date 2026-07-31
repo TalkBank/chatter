@@ -2506,11 +2506,6 @@
           "type": "string"
         },
         {
-          "const": "E366",
-          "description": "Long feature begin/end labels do not match.",
-          "type": "string"
-        },
-        {
           "const": "E367",
           "description": "Unmatched nonvocal begin marker.",
           "type": "string"
@@ -2518,11 +2513,6 @@
         {
           "const": "E368",
           "description": "Unmatched nonvocal end marker.",
-          "type": "string"
-        },
-        {
-          "const": "E369",
-          "description": "Nonvocal begin/end labels do not match.",
           "type": "string"
         },
         {
@@ -3031,11 +3021,6 @@
           "type": "string"
         },
         {
-          "const": "E700",
-          "description": "Unexpected node in tier content.",
-          "type": "string"
-        },
-        {
           "const": "E701",
           "description": "Tier begin time is not monotonically increasing (CLAN Error 83).",
           "type": "string"
@@ -3043,11 +3028,6 @@
         {
           "const": "E702",
           "description": "Invalid morphology format on `%mor` tier.",
-          "type": "string"
-        },
-        {
-          "const": "E703",
-          "description": "Unexpected node in morphology tier.",
           "type": "string"
         },
         {
@@ -3363,11 +3343,6 @@
         {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
-          "type": "string"
-        },
-        {
-          "const": "W999",
-          "description": "Legacy warning from older CHAT validation.",
           "type": "string"
         },
         {

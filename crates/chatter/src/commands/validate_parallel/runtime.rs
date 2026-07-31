@@ -37,7 +37,44 @@ pub fn run_validation_runtime(
         presentation,
         suppress,
     } = options;
-    let suppress_set: std::collections::HashSet<String> = suppress.into_iter().collect();
+
+    // An up-front note naming WHAT is being suppressed, replacing the old
+    // post-hoc "Suppressed: N file(s)..." summary line. That per-file count
+    // no longer exists to compute: a suppressed code is never emitted, so
+    // the worker cannot tell "genuinely clean" apart from "clean because N
+    // codes are disabled" after the fact. This is derived from the active
+    // config at zero cost and is strictly more informative anyway, since it
+    // says which codes are suppressed rather than how many files happened
+    // to be affected this run. Deduped and sorted: `suppress` can contain
+    // the same code twice (e.g. `--suppress xphon,E736` when E736 is
+    // already a member of the `xphon` group). stderr, not stdout, so it
+    // never lands inside `--format json` output.
+    if !suppress.is_empty() {
+        let mut codes: Vec<&str> = suppress.iter().map(|code| code.as_str()).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        eprintln!(
+            "note: suppressing {} code(s): {}",
+            codes.len(),
+            codes.join(", ")
+        );
+    }
+
+    // Suppression joins the RULE SET here, upstream of validation: a
+    // suppressed code is folded into `model_config` as a disabled code, so
+    // the worker's parser/model layer never emits it at all. Classification
+    // (Valid/Invalid) then happens exactly once, inside the worker; there is
+    // no separate post-hoc event-filtering pass left to reconcile with the
+    // worker's own tallies (the previous `filter_suppressed_events` did that
+    // reconciliation, and a double-adjustment of it once produced a
+    // plausible `Invalid: 0` on a corpus with 15 genuinely invalid files).
+    let mut model_config = talkbank_model::ValidationConfig::new();
+    for code in &suppress {
+        model_config = model_config.disable(*code);
+    }
+    if rules.strict_linkers {
+        model_config = model_config.with_strict_linkers();
+    }
 
     let config = ValidationConfig {
         check_alignment: rules.alignment.enabled(),
@@ -57,24 +94,24 @@ pub fn run_validation_runtime(
         },
         roundtrip: rules.roundtrip.enabled(),
         parser_kind: rules.parser_kind,
-        strict_linkers: rules.strict_linkers,
+        model_config,
     };
 
-    let cache = initialize_validation_cache(&files, execution.cache_refresh);
+    // The cache key MUST include the active rule set: suppression AND
+    // strict-linkers both change which files count as Valid, so a cache row
+    // produced under one active config is not a valid answer for a
+    // different one. Pass `&config.model_config` (the exact value the
+    // worker below validates with), never a re-derived summary of it, so
+    // the cache key and the validation behavior cannot drift apart. See
+    // `initialize_validation_cache` and `RulesVersion::current_with_config`.
+    let cache = initialize_validation_cache(&files, execution.cache_refresh, &config.model_config);
 
     // The TUI is a streaming-only surface: audit mode writes a file and has no
     // interactive presentation to hand a terminal.
     if let ValidationPresentation::Streaming(output) = &presentation
         && output.interface.uses_tui()
     {
-        return run_tui_loop(
-            files,
-            &summary_label,
-            &config,
-            cache,
-            output.theme.clone(),
-            &suppress_set,
-        );
+        return run_tui_loop(files, &summary_label, &config, cache, output.theme.clone());
     }
 
     // Build the renderer BEFORE starting the worker pool. Audit mode creates
@@ -89,14 +126,13 @@ pub fn run_validation_runtime(
     let mut renderer = create_presentation_renderer(&presentation);
 
     let (events_rx, cancel_tx) = validate_files_streaming(files, &config, cache.clone());
-    let (filtered_rx, files_fully_suppressed) = filter_suppressed_events(events_rx, &suppress_set);
     install_ctrlc_handler(&cancel_tx);
 
     let mut final_stats = None;
     let mut error_count = 0usize;
     let mut files_completed = 0usize;
 
-    for event in filtered_rx {
+    for event in events_rx {
         match event {
             ValidationEvent::Discovering => renderer.handle_discovering(),
             ValidationEvent::Started { total_files } => renderer.handle_started(total_files),
@@ -127,22 +163,12 @@ pub fn run_validation_runtime(
         }
     };
 
-    // Adjust stats before rendering: files whose errors were entirely
-    // suppressed should not count as invalid in the summary or exit code.
-    let mut stats = stats;
-    let suppressed = files_fully_suppressed.load(Ordering::Relaxed);
-    if suppressed > 0 {
-        stats.invalid_files = stats.invalid_files.saturating_sub(suppressed);
-    }
-
+    // These are the worker's own tallies, with no post-hoc adjustment: a
+    // suppressed code was never emitted, so a fully-suppressed file was
+    // simply Valid from the worker's point of view. Regression test:
+    // `suppression_does_not_hide_other_files_invalid_count`.
     renderer.handle_finished(&stats, files_completed, execution.max_errors, error_count);
     renderer.print_summary(&summary_label, &stats, rules.roundtrip.enabled());
-
-    if suppressed > 0 {
-        eprintln!(
-            "Suppressed: {suppressed} file(s) had only suppressed errors (not counted as invalid)"
-        );
-    }
 
     stats
 }
@@ -157,13 +183,11 @@ fn run_tui_loop(
     config: &ValidationConfig,
     cache: Option<Arc<talkbank_transform::CachePool>>,
     theme: crate::ui::Theme,
-    suppress_set: &std::collections::HashSet<String>,
 ) -> ValidationStatsSnapshot {
     let _ = summary_label; // reserved for future "rerunning <label>..." messaging
     loop {
         let (events_rx, cancel_tx) = validate_files_streaming(files.clone(), config, cache.clone());
-        let (filtered_rx, _suppressed) = filter_suppressed_events(events_rx, suppress_set);
-        match run_validation_tui_streaming(filtered_rx, cancel_tx, theme.clone()) {
+        match run_validation_tui_streaming(events_rx, cancel_tx, theme.clone()) {
             Ok(TuiAction::Quit) => return empty_stats(false),
             Ok(TuiAction::ForceQuit) => std::process::exit(130),
             Ok(TuiAction::Rerun) => {
@@ -175,72 +199,6 @@ fn run_tui_loop(
             }
         }
     }
-}
-
-/// Filter suppressed error codes from the validation event stream.
-///
-/// Returns a new receiver that has suppressed errors removed, plus an atomic
-/// counter of files whose errors were entirely suppressed (for stats adjustment).
-/// If `suppress_set` is empty, returns the original receiver unchanged.
-fn filter_suppressed_events(
-    events_rx: crossbeam_channel::Receiver<ValidationEvent>,
-    suppress_set: &std::collections::HashSet<String>,
-) -> (
-    crossbeam_channel::Receiver<ValidationEvent>,
-    Arc<AtomicUsize>,
-) {
-    let suppressed_count = Arc::new(AtomicUsize::new(0));
-    if suppress_set.is_empty() {
-        return (events_rx, suppressed_count);
-    }
-
-    let (filtered_tx, filtered_rx) = crossbeam_channel::unbounded();
-    let suppress_set = suppress_set.clone();
-    let count = Arc::clone(&suppressed_count);
-    std::thread::spawn(move || {
-        // Track files whose errors were entirely suppressed, so we can
-        // rewrite their FileComplete status from Invalid → Valid.
-        let mut fully_suppressed_files: std::collections::HashSet<std::path::PathBuf> =
-            std::collections::HashSet::new();
-
-        for event in events_rx {
-            match event {
-                ValidationEvent::Errors(mut error_event) => {
-                    let pre_count = error_event.errors.len();
-                    error_event
-                        .errors
-                        .retain(|e| !suppress_set.contains(e.code.as_str()));
-                    if error_event.errors.is_empty() && pre_count > 0 {
-                        count.fetch_add(1, Ordering::Relaxed);
-                        fully_suppressed_files.insert(error_event.path.clone());
-                    }
-                    if !error_event.errors.is_empty() {
-                        let _ = filtered_tx.send(ValidationEvent::Errors(error_event));
-                    }
-                }
-                ValidationEvent::FileComplete(mut file_event) => {
-                    // If this file's errors were entirely suppressed, report it as Valid
-                    if fully_suppressed_files.remove(&file_event.path) {
-                        file_event.status =
-                            talkbank_transform::validation_runner::FileStatus::Valid {
-                                cache_hit: false,
-                            };
-                    }
-                    let _ = filtered_tx.send(ValidationEvent::FileComplete(file_event));
-                }
-                ValidationEvent::Finished(mut snapshot) => {
-                    // Adjust the final stats to reflect suppression
-                    let suppressed = count.load(Ordering::Relaxed);
-                    snapshot.invalid_files = snapshot.invalid_files.saturating_sub(suppressed);
-                    let _ = filtered_tx.send(ValidationEvent::Finished(snapshot));
-                }
-                other => {
-                    let _ = filtered_tx.send(other);
-                }
-            }
-        }
-    });
-    (filtered_rx, suppressed_count)
 }
 
 /// Install the Ctrl+C handler used by non-interactive validation modes.

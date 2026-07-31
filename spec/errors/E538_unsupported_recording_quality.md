@@ -10,6 +10,7 @@ An `@Recording Quality` header contains a value that is not one of the recognize
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

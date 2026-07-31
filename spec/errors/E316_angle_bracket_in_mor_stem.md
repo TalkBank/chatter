@@ -30,6 +30,7 @@ the parser cannot silently start accepting invalid CHAT later.
 - **Category**: Dependent tier validation
 - **Level**: tier
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

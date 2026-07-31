@@ -22,6 +22,7 @@ exhibit.
 - **Category**: Word validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

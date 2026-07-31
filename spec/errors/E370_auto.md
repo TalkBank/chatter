@@ -18,6 +18,7 @@ material it retraces. A retrace marker followed only by a terminator (e.g.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -20,12 +20,12 @@ use tree_sitter::Tree;
 
 /// Parse a CHAT source string into a `ChatFile`, panicking on failure.
 ///
-/// Callers get a sharp panic (`unwrap`) on the parser's `Result`
-/// because a test that can't parse its own fixture has nothing useful
-/// to say.
+/// Callers get a sharp panic (`ParseProduct::expect_built`) when no model
+/// could be built, because a test that can't parse its own fixture has
+/// nothing useful to say.
 pub(crate) fn parse_chat(content: &str) -> ChatFile {
     let parser = TreeSitterParser::new().unwrap();
-    parser.parse_chat_file(content).unwrap()
+    parser.parse_chat_file(content).expect_built()
 }
 
 /// [`parse_chat`] + compute per-utterance alignment metadata.

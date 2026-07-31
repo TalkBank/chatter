@@ -34,6 +34,11 @@ serde_json = "1"
 crossbeam-channel = "0.5"
 arc-swap = "1.9"
 ansi-to-html = "0.2"
+# ValidationState's per-config cache-pool map (cache_for_config), the same
+# concurrent-map idiom talkbank-lsp's backend state uses; this crate's coding
+# standard bans an explicit mutex, and DashMap's sharded internal locking is
+# the sanctioned alternative.
+dashmap = { workspace = true }
 
 # Used by commands.rs for the cache path. On macOS/Linux this happens
 # to resolve through Tauri's transitive dep tree, but on Windows the

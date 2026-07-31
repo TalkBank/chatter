@@ -12,6 +12,7 @@ Failed to parse utterance
 - **Category**: Main tier validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

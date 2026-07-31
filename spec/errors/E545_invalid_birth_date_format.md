@@ -34,6 +34,7 @@ without any format check. This was a depfile.cut conformance gap.
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1 (lowercase month)
 

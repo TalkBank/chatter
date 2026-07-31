@@ -10,6 +10,7 @@ An `@ID` header contains an SES (socioeconomic status) field value that is not o
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

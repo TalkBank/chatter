@@ -181,7 +181,7 @@ mod tests {
     /// Parse a CHAT string into a ChatFile, panicking on errors (test-only).
     fn parse_chat(text: &str) -> ChatFile {
         let parser = TreeSitterParser::new().expect("tree-sitter parser");
-        parser.parse_chat_file(text).expect("parse chat file")
+        parser.parse_chat_file(text).expect_built()
     }
 
     /// Minimal valid CHAT with one utterance containing the given main tier text.

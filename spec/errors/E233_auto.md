@@ -15,6 +15,7 @@ into a separate token. This error covers internal empty parts only.
 - **Category**: validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

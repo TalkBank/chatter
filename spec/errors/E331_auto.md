@@ -15,6 +15,7 @@ contains nodes in unexpected positions.
 - **Category**: parser_recovery
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1, Missing stem in %mor word
 

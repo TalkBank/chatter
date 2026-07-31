@@ -25,7 +25,7 @@ use talkbank_transform::redact::{SanitizationPolicy, sanitize};
 /// Parses `cha` and runs the strict sanitizer; returns the serialized output.
 fn sanitize_to_string(cha: &str) -> String {
     let parser = TreeSitterParser::new().expect("parser construction");
-    let parsed = parser.parse_chat_file(cha).expect("parse fixture");
+    let parsed = parser.parse_chat_file(cha).expect_built();
     let policy = SanitizationPolicy::strict();
     let sanitized = sanitize(parsed, &policy).expect("sanitize");
     sanitized.to_chat_string()
@@ -35,7 +35,7 @@ fn sanitize_to_string(cha: &str) -> String {
 /// gives the round-trip baseline for byte comparisons.
 fn roundtrip_only(cha: &str) -> String {
     let parser = TreeSitterParser::new().expect("parser construction");
-    let parsed = parser.parse_chat_file(cha).expect("parse fixture");
+    let parsed = parser.parse_chat_file(cha).expect_built();
     let mut out = String::new();
     parsed.write_chat(&mut out).expect("write_chat");
     out
@@ -271,9 +271,16 @@ fn t13_sanitized_output_parses_back() {
     let cha = fixture_four_utterances_with_bullets();
     let out = sanitize_to_string(&cha);
     let parser = TreeSitterParser::new().expect("parser construction");
-    parser
-        .parse_chat_file(&out)
-        .expect("sanitized output should re-parse cleanly");
+    let product = parser.parse_chat_file(&out);
+    assert!(
+        !product.has_error_diagnostics(),
+        "sanitized output should re-parse cleanly, got diagnostics: {:?}",
+        product.diagnostics()
+    );
+    assert!(
+        product.is_built(),
+        "sanitized output should re-parse to a model"
+    );
 }
 
 #[test]

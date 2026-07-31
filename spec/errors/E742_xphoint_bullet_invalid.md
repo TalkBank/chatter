@@ -11,6 +11,7 @@ Each `%xphoint` phone interval must have start strictly less than end.
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

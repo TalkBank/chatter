@@ -310,13 +310,19 @@ fn rust_validity_counts(
     validate_alignment: bool,
 ) -> (usize, usize) {
     let parser = TreeSitterParser::new().expect("grammar loads");
-    let mut chat_file = match parser.parse_chat_file(source) {
-        Ok(file) => file,
-        Err(parse_errors) => return (parse_errors.len(), 0),
+    // A `Built` model (even with diagnostics) still gets counted AND
+    // validated, unlike the pre-`ParseProduct` version, which discarded
+    // the model (and so skipped validation entirely) on any parse
+    // diagnostic.
+    let (mut chat_file, parse_diagnostic_count) = match parser.parse_chat_file(source) {
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => (file, diagnostics.len()),
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            return (diagnostics.len(), 0);
+        }
     };
 
     if !run_validation {
-        return (0, 0);
+        return (parse_diagnostic_count, 0);
     }
 
     let sink = ErrorCollector::new();
@@ -326,7 +332,7 @@ fn rust_validity_counts(
         chat_file.validate(&sink, None);
     }
     let validation_errors = sink.into_vec();
-    (0, validation_errors.len())
+    (parse_diagnostic_count, validation_errors.len())
 }
 
 fn extract_language(source: &str) -> Option<String> {

@@ -9,6 +9,7 @@ A %gra (grammatical relations) tier appears without a corresponding %mor (morpho
 - **Category**: tier_validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

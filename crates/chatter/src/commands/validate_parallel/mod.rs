@@ -186,8 +186,11 @@ pub struct ValidateDirectoryOptions {
     pub execution: ValidationExecution,
     /// Presentation mode for the validation stream.
     pub presentation: ValidationPresentation,
-    /// Error codes to suppress (uppercased, e.g., ["E726", "E727"]).
-    pub suppress: Vec<String>,
+    /// Error codes to suppress, already resolved from raw `--suppress`
+    /// values (named groups expanded to their member codes). Typed end to
+    /// end so suppression can be fed straight into a
+    /// [`talkbank_model::ValidationConfig`] with no string round-trip.
+    pub suppress: Vec<talkbank_model::ErrorCode>,
 }
 
 /// Validate an explicit list of CHAT files using the parallel

@@ -14,6 +14,7 @@ from the same speaker does not begin with a quotation precedes linker
 - **Category**: cross\_utterance
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

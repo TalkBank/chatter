@@ -10,6 +10,7 @@ Nested quotation
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

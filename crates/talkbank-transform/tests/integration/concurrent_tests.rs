@@ -82,7 +82,7 @@ fn test_config(jobs: usize) -> ValidationConfig {
         directory: DirectoryMode::Recursive,
         roundtrip: false,
         parser_kind: ParserKind::TreeSitter,
-        strict_linkers: false,
+        model_config: talkbank_model::ValidationConfig::new(),
     }
 }
 
@@ -343,7 +343,7 @@ fn parser_per_thread_deterministic() {
                 let parser = TreeSitterParser::new().expect("parser should initialize");
                 let result = parser.parse_chat_file(VALID_CHAT);
                 // Return the number of utterances as a determinism check.
-                let chat_file = result.expect("valid CHAT should parse");
+                let chat_file = result.expect_built();
                 chat_file.lines.len()
             })
         })
@@ -378,7 +378,7 @@ fn parser_per_thread_different_files() {
                 let parser = TreeSitterParser::new().expect("parser should initialize");
                 let result = parser.parse_chat_file(&input);
                 assert!(
-                    result.is_ok(),
+                    result.is_built(),
                     "Thread {i} should parse valid CHAT without error"
                 );
             })
@@ -401,7 +401,7 @@ fn parser_many_sequential_parses() {
         let input = if i % 2 == 0 { VALID_CHAT } else { VALID_CHAT_B };
         let result = parser.parse_chat_file(input);
         assert!(
-            result.is_ok(),
+            result.is_built(),
             "Parse #{i} should succeed (parser reuse test)"
         );
     }
@@ -417,7 +417,7 @@ fn parser_error_isolation() {
         for _ in 0..20 {
             let result = parser.parse_chat_file(VALID_CHAT);
             assert!(
-                result.is_ok(),
+                result.is_built(),
                 "Valid CHAT should always parse without error"
             );
         }
@@ -427,16 +427,17 @@ fn parser_error_isolation() {
         let parser = TreeSitterParser::new().expect("parser init");
         for _ in 0..20 {
             let result = parser.parse_chat_file(INVALID_CHAT);
-            // Invalid CHAT should either return Err or produce a ChatFile
-            // with errors, either way, it should not panic.
+            // Invalid CHAT should either build a recovered ChatFile (with
+            // diagnostics) or come back Unbuildable, either way, it should
+            // not panic.
             match result {
-                Ok(_chat_file) => {
+                talkbank_parser::ParseProduct::Built { .. } => {
                     // Parser may recover and return a ChatFile; that is fine.
                 }
-                Err(errors) => {
+                talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
                     assert!(
-                        !errors.errors.is_empty(),
-                        "Err result should contain at least one error"
+                        !diagnostics.is_empty(),
+                        "Unbuildable result should contain at least one diagnostic"
                     );
                 }
             }
@@ -675,7 +676,7 @@ fn stress_parser_rapid_creation() {
         // Parse one file to ensure the parser is fully initialized and usable.
         let result = parser.parse_chat_file(VALID_CHAT);
         assert!(
-            result.is_ok(),
+            result.is_built(),
             "Parser #{i} should parse valid CHAT successfully"
         );
         // Parser is dropped here; resources should be freed cleanly.

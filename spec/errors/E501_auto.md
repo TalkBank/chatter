@@ -10,6 +10,7 @@ Auto-generated from corpus
 - **Category**: Header validation
 - **Level**: header
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

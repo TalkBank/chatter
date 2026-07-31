@@ -16,6 +16,7 @@ speaker). Corresponds to CLAN CHECK Error 83.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

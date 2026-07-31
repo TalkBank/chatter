@@ -194,7 +194,7 @@ pub(super) fn worker_loop<C>(
                     &file_path,
                     source.clone(),
                     config.check_alignment,
-                    config.strict_linkers,
+                    &config.model_config,
                     &parser,
                     &event_tx,
                 );
@@ -395,11 +395,18 @@ pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
 ///
 /// Returns the collected errors AND the parsed ChatFile (if parsing succeeded).
 /// The ChatFile is needed for roundtrip testing.
+///
+/// Always validates through the config-aware entry points
+/// ([`ChatFile::validate_with_config`]/[`ChatFile::validate_with_alignment_and_config`]),
+/// branching only on whether alignment precomputation is wanted. Suppressed
+/// codes in `model_config` are therefore never emitted by the parser/model
+/// layer at all: there is exactly one classification per file, with nothing
+/// left for a caller to reconcile after the fact.
 fn validate_single_file_streaming(
     file_path: &Path,
     content: Arc<str>,
     check_alignment: bool,
-    strict_linkers: bool,
+    model_config: &talkbank_model::ValidationConfig,
     parser: &ParserDispatch,
     event_tx: &Sender<ValidationEvent>,
 ) -> (Vec<ParseError>, Option<ChatFile>) {
@@ -415,14 +422,10 @@ fn validate_single_file_streaming(
     // (Passing `None` silently disabled E531 for the whole CLI, CLAN CHECK 157.)
     let file_stem = file_path.file_stem().and_then(|s| s.to_str());
 
-    // Validate with error collection, optionally enabling strict linker checks.
-    if strict_linkers {
-        let config = talkbank_model::ValidationConfig::new().with_strict_linkers();
-        chat_file.validate_with_config(config, &collector, file_stem);
-    } else if check_alignment {
-        chat_file.validate_with_alignment(&collector, file_stem);
+    if check_alignment {
+        chat_file.validate_with_alignment_and_config(model_config.clone(), &collector, file_stem);
     } else {
-        chat_file.validate(&collector, file_stem);
+        chat_file.validate_with_config(model_config.clone(), &collector, file_stem);
     }
 
     let errors = collector.into_vec();

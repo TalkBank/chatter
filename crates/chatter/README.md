@@ -1,6 +1,6 @@
 # chatter
 
-**Last modified:** 2026-06-15 20:38 EDT
+**Last modified:** 2026-07-31 06:13 EDT
 
 `chatter` is the command-line interface for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html)
 validation, normalization, conversion, and cache inspection.
@@ -18,7 +18,6 @@ chatter validate corpus/ --format json
 chatter normalize file.cha -o normalized.cha
 chatter to-json file.cha -o file.json
 chatter from-json file.json -o file.cha
-chatter lint corpus/ --fix
 chatter cache stats
 chatter schema
 ```

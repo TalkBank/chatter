@@ -14,6 +14,7 @@ position.
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

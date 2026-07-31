@@ -236,7 +236,9 @@ fn chat_file_builder_empty_file() -> Result<(), TestError> {
 /// Parses chat.
 fn parse_chat(content: &str) -> Result<ChatFile, TestError> {
     let parser = TreeSitterParser::new().expect("grammar loads");
-    Ok(parser.parse_chat_file(content)?)
+    Ok(crate::test_error::strict_parse(
+        parser.parse_chat_file(content),
+    )?)
 }
 
 /// Tests require header.

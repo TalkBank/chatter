@@ -10,6 +10,7 @@ Every valid CHAT file must begin with an `@UTF8` header as its first line. This 
 - **Category**: Header validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1: File without @UTF8
 

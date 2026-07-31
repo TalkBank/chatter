@@ -10,6 +10,7 @@ An `@Number` header contains a value that is not one of the recognized number op
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

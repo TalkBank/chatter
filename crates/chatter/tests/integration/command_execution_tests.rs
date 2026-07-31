@@ -206,61 +206,22 @@ fn clean_json_is_valid_json_array() -> Result<(), TestError> {
 }
 
 // ============================================================================
-// lint
+// lint (removed; the span-splicing `fix` command is the intended successor)
 // ============================================================================
 
-/// `chatter lint` on a clean reference file reports no fixable issues and
-/// exits successfully.
+/// `chatter lint` was deleted (unmaintained span-driven byte writer with no
+/// dummy-span, char-boundary, or overlap protection; zero production
+/// callers). Clap must reject the unknown subcommand rather than silently
+/// accepting it.
 #[test]
-fn lint_clean_file_reports_no_issues() -> Result<(), TestError> {
+fn lint_subcommand_is_gone() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     harness
         .chatter_cmd()
-        .arg("lint")
-        .arg(reference_fixture(CONVERSATION_FIXTURE))
+        .args(["lint", "--help"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("No fixable issues"));
-    Ok(())
-}
-
-/// `chatter lint --fix` on a clean copy leaves a still-valid CHAT file
-/// (idempotent on already-clean input).
-#[test]
-fn lint_fix_preserves_valid_file() -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    let dir = tempdir()?;
-    let path = dir.path().join("lintme.cha");
-    fs::copy(reference_fixture(CONVERSATION_FIXTURE), &path)?;
-
-    harness
-        .chatter_cmd()
-        .arg("lint")
-        .arg(&path)
-        .arg("--fix")
-        .assert()
-        .success();
-
-    // The fixed file must still be valid CHAT.
-    assert_success(
-        &harness.run_validate(&path, &[])?,
-        "validate lint-fixed file",
-    );
-    Ok(())
-}
-
-/// `--dry-run` requires `--fix` (clap `requires`); supplying it alone is a
-/// usage error (exit 2), never a silent no-op.
-#[test]
-fn lint_dry_run_requires_fix() -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    harness
-        .chatter_cmd()
-        .arg("lint")
-        .arg(reference_fixture(CONVERSATION_FIXTURE))
-        .arg("--dry-run")
-        .assert()
-        .code(2);
+        .failure()
+        .stderr(predicate::str::contains("unrecognized subcommand"));
     Ok(())
 }
 

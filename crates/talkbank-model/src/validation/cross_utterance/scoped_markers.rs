@@ -17,10 +17,13 @@ use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
 /// Checks:
 /// - E358: Every LongFeatureBegin has a matching LongFeatureEnd
 /// - E359: Every LongFeatureEnd has a matching LongFeatureBegin
-/// - E366: Labels match between paired begin/end markers
 ///
 /// Matching is label-specific and uses LIFO behavior per label, so nested scopes
-/// with distinct labels are handled independently.
+/// with distinct labels are handled independently. This does NOT check that a
+/// begin/end pair's labels agree beyond that label-specific matching itself
+/// (there is no separate label-MISMATCH diagnostic here): the code once
+/// reserved for that, E366 (`LongFeatureLabelMismatch`), was retired
+/// 2026-07-31 as dead code with no emit site.
 pub fn check_long_feature_balance(utterances: &[Utterance], errors: &impl ErrorSink) {
     // Track open scopes by label, storing the span of each begin marker
     let mut open_scopes: Vec<(&str, Span)> = Vec::new();
@@ -79,10 +82,13 @@ pub fn check_long_feature_balance(utterances: &[Utterance], errors: &impl ErrorS
 /// Checks:
 /// - E367: Every NonvocalBegin has a matching NonvocalEnd
 /// - E368: Every NonvocalEnd has a matching NonvocalBegin
-/// - E369: Labels match between paired begin/end markers
 ///
 /// The algorithm mirrors long-feature balancing so both scoped-marker families
-/// share consistent cross-utterance semantics and diagnostics.
+/// share consistent cross-utterance semantics and diagnostics. As with
+/// `check_long_feature_balance`, there is no separate label-MISMATCH
+/// diagnostic: the code once reserved for that, E369
+/// (`NonvocalLabelMismatch`), was retired 2026-07-31 as dead code with no
+/// emit site.
 pub fn check_nonvocal_balance(utterances: &[Utterance], errors: &impl ErrorSink) {
     // Track open scopes by label, storing the span of each begin marker
     let mut open_scopes: Vec<(&str, Span)> = Vec::new();

@@ -28,6 +28,7 @@ transcriber fixing the wrong thing.
 - **Category**: Dependent tier validation
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

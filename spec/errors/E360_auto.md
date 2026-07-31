@@ -13,6 +13,7 @@ Media bullet (timestamp marker) contains malformed content, e.g., non-numeric ch
 - **Level**: utterance
 - **Layer**: parser
 - **Status note**: Partially unreachable via tree-sitter parser. E360 is emitted in three code paths: (1) `parse_media_bullet` for legacy token-style bullets (dead code for structured grammar), (2) `parse_internal_bullet` for content-area bullets where `parse_bullet_node_timestamps` returns None, and (3) `parse_inline_bullet` for dependent-tier bullets where `0_0` IS checked. However, the grammar's `bullet` rule (`bullet_timestamp: /[0-9]+/`) pre-validates numeric content, so `parse_bullet_node_timestamps` always succeeds for grammar-accepted bullets. The `0_0` check in `parse_media_bullet` and `parse_inline_bullet` fires, but `utterance_end.rs` and `internal_bullet.rs` skip this check, `0_0` bullets pass through to the model where E362 (start >= end) fires instead.
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -19,6 +19,7 @@ the kept corpus are registry-valid, so this rule flags nothing today.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

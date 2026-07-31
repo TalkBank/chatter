@@ -18,6 +18,7 @@ reserved tier-delimiter character.
 - **Level**: word
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

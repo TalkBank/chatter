@@ -26,7 +26,7 @@ fn ts() -> TreeSitterParser {
 #[ignore]
 fn study_simple_file() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child, MOT Mother\n@ID:\teng|corpus|CHI|3;00.||||Child|||\n*CHI:\thello world .\n%mor:\tn|hello n|world .\n%gra:\t1|2|SUBJ 2|0|ROOT .\n@End\n";
-    let file = ts().parse_chat_file(input).unwrap();
+    let file = ts().parse_chat_file(input).expect_built();
     eprintln!("{}", serde_json::to_string_pretty(&file).unwrap());
 }
 
@@ -303,7 +303,7 @@ fn file_equivalence_basic_conversation() {
     );
     let content = std::fs::read_to_string(&path).expect("read basic-conversation.cha");
 
-    let ts_file = ts().parse_chat_file(&content).expect("ts parse");
+    let ts_file = ts().parse_chat_file(&content).expect_built();
     let re2c_parsed = talkbank_parser_re2c::parser::parse_chat_file(&content);
     let re2c_file = talkbank_model::model::ChatFile::from(&re2c_parsed);
 
@@ -347,7 +347,7 @@ fn file_equivalence_reference_corpus_core() {
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let content = std::fs::read_to_string(&path).unwrap();
 
-        let ts_file = ts().parse_chat_file(&content).unwrap();
+        let ts_file = ts().parse_chat_file(&content).expect_built();
         let re2c_parsed = talkbank_parser_re2c::parser::parse_chat_file(&content);
         let re2c_file = talkbank_model::model::ChatFile::from(&re2c_parsed);
 
@@ -407,7 +407,7 @@ fn file_equivalence_reference_corpus_content() {
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let content = std::fs::read_to_string(&path).unwrap();
 
-        let ts_file = ts().parse_chat_file(&content).unwrap();
+        let ts_file = ts().parse_chat_file(&content).expect_built();
         let re2c_parsed = talkbank_parser_re2c::parser::parse_chat_file(&content);
         let re2c_file = talkbank_model::model::ChatFile::from(&re2c_parsed);
 
@@ -466,7 +466,7 @@ fn file_equivalence_reference_corpus_annotation() {
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let content = std::fs::read_to_string(&path).unwrap();
 
-        let ts_file = ts().parse_chat_file(&content).unwrap();
+        let ts_file = ts().parse_chat_file(&content).expect_built();
         let re2c_parsed = talkbank_parser_re2c::parser::parse_chat_file(&content);
         let re2c_file = talkbank_model::model::ChatFile::from(&re2c_parsed);
 
@@ -525,7 +525,7 @@ macro_rules! corpus_equivalence_test {
                 }
                 let filename = path.file_name().unwrap().to_string_lossy().to_string();
                 let content = std::fs::read_to_string(&path).unwrap();
-                let ts_file = ts().parse_chat_file(&content).unwrap();
+                let ts_file = ts().parse_chat_file(&content).expect_built();
                 let re2c_parsed = talkbank_parser_re2c::parser::parse_chat_file(&content);
                 let re2c_file = talkbank_model::model::ChatFile::from(&re2c_parsed);
                 if ts_file.semantic_eq(&re2c_file) {

@@ -73,7 +73,9 @@ pub fn generate_construct_test(
 /// Tests expected behavior.
 fn test_{name}() -> Result<(), {test_error_path}> {{
     let parser = TreeSitterParser::new()?;
-    let _parsed = parser.parse_chat_file({wrapped_input:?})?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file({wrapped_input:?}))?;
 
     Ok(())
 }}
@@ -133,8 +135,54 @@ pub fn generate_error_test(
         example.expected_codes.clone()
     };
 
-    format!(
-        r#"{ignore_attr}
+    // `TreeSitterParser::parse_chat_file` returns `ParseProduct`, not a
+    // `Result`, so a "chat_file" context example needs a different template
+    // from every other context (which still parses through a fragment
+    // method returning `ParseResult<T>`, e.g. `parse_utterance`,
+    // `parse_word`). Branch here rather than forcing both shapes through
+    // one template.
+    if example.context == "chat_file" {
+        format!(
+            r#"{ignore_attr}
+/// Tests expected behavior.
+#[test]
+fn test_{sanitized_source}_{fn_suffix}() -> Result<(), {test_error_path}> {{
+    let parser = TreeSitterParser::new()?;
+    let product = parser.parse_chat_file({input:?});
+
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {{
+        return Err({test_error_path}::Failure("Expected parse error but parsing succeeded".to_string()));
+    }}
+    let diagnostics = product.diagnostics();
+
+    let expected_codes = vec![{expected_codes}];
+    for code in expected_codes {{
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {{}}, but got: {{:?}}",
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }}
+
+    Ok(())
+}}
+
+"#,
+            ignore_attr = ignore_attr,
+            sanitized_source = sanitized_source,
+            fn_suffix = fn_suffix,
+            input = example.input,
+            expected_codes = codes
+                .iter()
+                .map(|c| format!("{:?}", c))
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    } else {
+        format!(
+            r#"{ignore_attr}
 /// Tests expected behavior.
 #[test]
 fn test_{sanitized_source}_{fn_suffix}() -> Result<(), {test_error_path}> {{
@@ -158,17 +206,18 @@ fn test_{sanitized_source}_{fn_suffix}() -> Result<(), {test_error_path}> {{
 }}
 
 "#,
-        ignore_attr = ignore_attr,
-        sanitized_source = sanitized_source,
-        fn_suffix = fn_suffix,
-        context = example.context,
-        input = example.input,
-        expected_codes = codes
-            .iter()
-            .map(|c| format!("{:?}", c))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
+            ignore_attr = ignore_attr,
+            sanitized_source = sanitized_source,
+            fn_suffix = fn_suffix,
+            context = example.context,
+            input = example.input,
+            expected_codes = codes
+                .iter()
+                .map(|c| format!("{:?}", c))
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
 }
 
 /// Generate just the test bodies (no imports) for construct specs

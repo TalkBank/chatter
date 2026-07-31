@@ -31,6 +31,7 @@ Rust chatter must match.
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1 (milliseconds, not in depfile)
 

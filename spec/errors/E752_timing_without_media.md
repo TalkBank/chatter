@@ -22,6 +22,7 @@ grounding scan found bullet-bearing corpus files universally carry
 - **Level**: file
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -12,6 +12,7 @@ Compound delimiter (`∆`) is not properly balanced, opening delimiter has no ma
 - **Category**: validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

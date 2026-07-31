@@ -7,7 +7,7 @@
 //! examples that should trigger the error. Generators consume these types to
 //! emit Rust validation tests and error documentation pages.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use unicode_normalization::UnicodeNormalization;
@@ -44,12 +44,76 @@ pub struct ErrorMetadata {
     /// Implementation status: "implemented" (default) or "not_implemented"
     #[serde(default = "default_status")]
     pub status: String,
+    /// What this diagnostic intrinsically IS, per the code's own spec.
+    ///
+    /// Deliberately REQUIRED, not `Option` with a default: a spec file
+    /// carrying no `Kind` metadata bullet fails to load (see
+    /// [`ErrorSpec::load`]) rather than silently falling back to a guess.
+    /// The talkbank-model `DiagnosticKind` registry
+    /// (`crates/talkbank-model/src/errors/generated_diagnostic_kind.rs`) is
+    /// generated from this field across every spec file, so an unclassified
+    /// code is a build-time failure here, not a silent gap in that registry.
+    pub kind: ErrorKind,
 }
 
 /// Serde default for `ErrorMetadata::status` -- specs without an explicit
 /// `Status` field are assumed to be implemented.
 fn default_status() -> String {
     "implemented".to_string()
+}
+
+/// The four `DiagnosticKind` axis values a spec file's `## Metadata` block
+/// can declare via its `- **Kind**:` bullet.
+///
+/// Mirrors `talkbank_model::errors::DiagnosticKind` structurally by name.
+/// This crate cannot depend on `talkbank-model` (that would be circular:
+/// `talkbank-model`'s own diagnostic-kind registry is generated FROM this
+/// crate's spec loader, by a binary in the sibling `spec/runtime-tools`
+/// crate, which is the one place both directions of the dependency meet).
+/// The generator maps each variant here to the identically-named
+/// `DiagnosticKind` variant by name; a variant added to one and not the
+/// other is caught at the generator's match, not silently ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ErrorKind {
+    /// Violates the spec, or the construct does not make sense.
+    Invalidity,
+    /// Preserved but not interpreted: a chatter coverage gap, never a fault
+    /// in the file itself.
+    Unmodeled,
+    /// Valid now, discouraged, on a sunset path toward `Invalidity`.
+    Deprecation,
+    /// Valid, purely stylistic.
+    Style,
+}
+
+impl ErrorKind {
+    /// Parse a `- **Kind**:` bullet value. Case-sensitive and exact: the
+    /// four spelled-out variant names, nothing else (no abbreviations, no
+    /// synonyms), so a typo in a spec file fails loudly at load time
+    /// instead of silently defaulting.
+    fn parse(value: &str) -> Result<Self, String> {
+        match value.trim() {
+            "Invalidity" => Ok(Self::Invalidity),
+            "Unmodeled" => Ok(Self::Unmodeled),
+            "Deprecation" => Ok(Self::Deprecation),
+            "Style" => Ok(Self::Style),
+            other => Err(format!(
+                "unrecognized Kind value {other:?}: expected one of \
+                 Invalidity, Unmodeled, Deprecation, Style"
+            )),
+        }
+    }
+
+    /// The identically-named `talkbank_model::errors::DiagnosticKind`
+    /// variant this value maps to, as source text for code generation.
+    pub fn diagnostic_kind_variant(self) -> &'static str {
+        match self {
+            Self::Invalidity => "Invalidity",
+            Self::Unmodeled => "Unmodeled",
+            Self::Deprecation => "Deprecation",
+            Self::Style => "Style",
+        }
+    }
 }
 
 /// Strip the leading error-code prefix from a spec H1 heading.
@@ -274,6 +338,18 @@ impl ErrorSpec {
                 .unwrap_or_default()
         });
 
+        // Required: a spec file with no `- **Kind**:` bullet, or an
+        // unrecognized value, fails to load rather than silently defaulting.
+        // See `ErrorMetadata::kind` for why this must never become optional.
+        let kind_str = metadata.get("Kind").ok_or_else(|| {
+            format!(
+                "{}: missing required Kind metadata (must be one of: \
+                 Invalidity, Unmodeled, Deprecation, Style)",
+                path.display()
+            )
+        })?;
+        let kind = ErrorKind::parse(kind_str).map_err(|e| format!("{}: {}", path.display(), e))?;
+
         let error_def = ErrorDefinition {
             code: code.clone(),
             name: strip_code_prefix(&name, &code),
@@ -301,6 +377,7 @@ impl ErrorSpec {
                     .get("Status")
                     .cloned()
                     .unwrap_or_else(|| "implemented".to_string()),
+                kind,
             },
             errors: vec![error_def],
             source_file: path
@@ -349,11 +426,20 @@ impl ErrorSpec {
             }
         }
 
-        if !issues.is_empty() {
-            // println!("Warnings while loading error specs:\n{}", issues.join("\n"));
+        // A load failure (missing/invalid Kind, malformed metadata, a WalkDir
+        // error) must actually fail the whole load: this used to be collected
+        // into `issues` and then silently discarded (the `println!` below was
+        // commented out), which meant a spec file that failed to parse was
+        // just dropped from the result with NO signal to the caller. Every
+        // caller of `load_all` already propagates a `Result` with `?`, so
+        // surfacing failures here costs nothing and closes that hole. This is
+        // also what makes `ErrorMetadata::kind` genuinely REQUIRED rather
+        // than "required unless the loader swallows the error."
+        if issues.is_empty() {
+            Ok(specs)
+        } else {
+            Err(issues.join("\n"))
         }
-
-        Ok(specs)
     }
 }
 
@@ -482,7 +568,10 @@ mod strip_code_prefix_tests {
     #[test]
     fn strips_a_comma_separated_code() {
         assert_eq!(
-            strip_code_prefix("E248, Bare @s shortcut in tertiary language context", "E248"),
+            strip_code_prefix(
+                "E248, Bare @s shortcut in tertiary language context",
+                "E248"
+            ),
             "Bare @s shortcut in tertiary language context"
         );
     }

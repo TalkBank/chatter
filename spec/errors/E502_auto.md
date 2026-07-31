@@ -10,6 +10,7 @@ Every valid CHAT file must end with an `@End` header. This error indicates the f
 - **Category**: validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Corpus Impact
 

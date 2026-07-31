@@ -12,6 +12,9 @@ use super::*;
 /// `[- LANG] ...`, matching per-word language markers are removed, and missing
 /// explicit `@s:LANG` codes are appended to `@Languages`. Files with no
 /// qualifying rewrites or language-header repairs are left untouched.
+///
+/// A file that fails to parse is reported and skipped; it does not stop the
+/// run from processing the remaining paths (see [`parse_or_report`]).
 pub fn run_fix_s(paths: &[PathBuf]) {
     let files = collect_cha_files(paths);
     if files.is_empty() {
@@ -27,9 +30,9 @@ pub fn run_fix_s(paths: &[PathBuf]) {
     for path in files {
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", path.display())));
-        let mut parsed = parser
-            .parse_chat_file(&source)
-            .unwrap_or_else(|e| die(&format!("parse failed for {}: {e:?}", path.display())));
+        let Some(mut parsed) = parse_or_report(&parser, &path, &source) else {
+            continue;
+        };
         let stats =
             talkbank_transform::fix_s::rewrite_whole_utterance_language_switches(&mut parsed);
         if stats.is_empty() {

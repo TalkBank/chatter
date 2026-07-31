@@ -140,9 +140,20 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
 /// Generate description for complete CHAT file examples
 fn generate_chatfile_description(input: &str) -> Result<String, DescriptionError> {
     let parser = TreeSitterParser::new().expect("TreeSitterParser should construct");
-    let chat_file = parser
-        .parse_chat_file(input)
-        .map_err(|err| parse_error("chat file", err))?;
+    let chat_file = match parser.parse_chat_file(input) {
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+            if diagnostics
+                .iter()
+                .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
+            {
+                return Err(parse_error("chat file", talkbank_model::ParseErrors::from(diagnostics)));
+            }
+            file
+        }
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            return Err(parse_error("chat file", talkbank_model::ParseErrors::from(diagnostics)));
+        }
+    };
 
     let mut has_mor = false;
     let mut has_gra = false;

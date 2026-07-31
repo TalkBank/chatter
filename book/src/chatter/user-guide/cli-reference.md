@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-07-08 18:41 EDT
+**Last modified:** 2026-07-31 14:22 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -18,7 +18,7 @@ flowchart TD
     chatter --> fromjson["from-json\n(talkbank-transform)"]
     chatter --> showalign["show-alignment\n(chatter)"]
     chatter --> watch["watch\n(chatter)"]
-    chatter --> lint["lint\n(chatter)"]
+    chatter --> fix["fix\n(talkbank-transform splice)"]
     chatter --> clean["clean\n(chatter)"]
     chatter --> newfile["new-file\n(chatter)"]
     chatter --> cache["cache\n(stats, clear)"]
@@ -43,7 +43,7 @@ chatter to-json INPUT
 chatter from-json INPUT
 chatter show-alignment INPUT
 chatter watch PATH
-chatter lint PATH
+chatter fix PATH... --apply
 chatter clean PATH
 chatter new-file
 chatter cache stats
@@ -187,19 +187,44 @@ chatter watch corpus/ --skip-alignment --clear
 Flags: `--skip-alignment` (faster reruns); `-c/--clear` (clear the
 terminal between runs).
 
-### `lint`
+### `fix`
 
-Run lint checks and optionally auto-fix.
+Apply catalog fixes to CHAT file(s) at exact byte spans. Every file is
+parsed and validated, each diagnostic is resolved against a per-code fix
+catalog, and the resulting edits are admitted only into utterances that
+parsed clean (a broken region elsewhere in the file never blocks a fix, and
+is never itself rewritten) before being spliced in.
 
 ```bash
-chatter lint corpus/
-chatter lint corpus/ --fix
-chatter lint corpus/ --fix --dry-run         # preview without modifying files
-chatter lint corpus/ --skip-alignment
+chatter fix file.cha                      # report only, writes nothing
+chatter fix corpus/ --apply               # write the mechanical fixes
+chatter fix corpus/ --apply --dry-run     # preview without writing
+chatter fix file.cha --apply --code E259  # opt a semantic fix into writing
 ```
 
-Flags: `--fix` (apply fixes); `--dry-run` (show what would change
-without writing); `--skip-alignment`.
+Every catalog entry carries a batch-safety tier, and this command enforces
+it rather than trusting the caller:
+
+- **Mechanical** (one right answer, no semantic judgment): written by a
+  bare `--apply`.
+- **Semantic** (deterministic, but changes meaning enough to need a human
+  naming it): written only when its code is named with `--code`.
+- **Ambiguous** (several valid answers, no evidence in the file picks
+  one): never written by this command, regardless of `--code`; only
+  reported.
+
+Flags: `--apply` (write; without it, `fix` only reports what it would do);
+`--dry-run` (preview, requires `--apply`); `--code <CODE>` (repeatable;
+narrows the diagnostics considered to exactly the named codes, and is how
+a semantic-tier code opts into being written); `--skip-alignment`.
+
+**Header-scoped fixes are currently reported, not applied.** Edits are
+admitted only into utterances that parsed clean, so a catalog fix whose
+edit lands in the header region (`E501`, `E502`, `E503`, `E504`, `E506`,
+`E507`) never has an enclosing utterance to be admitted into; `fix`
+reports it as skipped instead of writing it. This is today's limit of the
+admission gate, not a missing catalog entry; a header-scoped admission
+path is separate future work.
 
 ### `clean`
 

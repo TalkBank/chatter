@@ -10,6 +10,7 @@
 //! Add a test file by dropping it in this directory and declaring it below.
 
 mod check_validity_parity;
+mod config_path_check_parity;
 mod conformance_inventory_current;
 mod dev_equivalence;
 mod direct_parser_roundtrip_corpus;
@@ -32,6 +33,7 @@ mod phon_xtier_acceptance;
 mod property_tests;
 mod public_error_types;
 mod roundtrip_reference_corpus;
+mod utterance_containment;
 mod validation_error_corpus;
 mod visitor_slot_repeat_members;
 mod warning_corpus;

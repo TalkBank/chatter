@@ -67,15 +67,6 @@ pub(super) fn insert_at(
     )
 }
 
-pub(super) fn insert_at_diagnostic_end(
-    uri: &Url,
-    diagnostic: &Diagnostic,
-    text: impl Into<String>,
-    title: impl Into<String>,
-) -> CodeAction {
-    insert_at(uri, diagnostic.range.end, text, title, Some(diagnostic))
-}
-
 pub(super) fn delete_diagnostic_line(
     uri: &Url,
     diagnostic: &Diagnostic,

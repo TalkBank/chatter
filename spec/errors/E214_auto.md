@@ -21,6 +21,7 @@ list is not empty.
 - **Category**: validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

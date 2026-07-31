@@ -10,6 +10,7 @@ Mor count mismatch - too many mor items
 - **Category**: Alignment count mismatch
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

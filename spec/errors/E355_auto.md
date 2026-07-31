@@ -15,6 +15,7 @@ utterance, use `+,` (self-completion) instead.
 - **Category**: cross\_utterance
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

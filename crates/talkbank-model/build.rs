@@ -30,15 +30,150 @@
 //!
 //! The generated file is written to `$OUT_DIR/iso639_3_set.rs` and included
 //! by `src/model/header/codes/iso639.rs` at compile time.
+//!
+//! Also generates a source-behaviour fingerprint of this crate's entire
+//! `src/` tree (`MODEL_BEHAVIOR_FINGERPRINT`, written to
+//! `$OUT_DIR/model_behavior_fingerprint.rs` and included by
+//! `src/errors/codes/rules_fingerprint.rs`). See that module's doc comment
+//! for why the fingerprint covers the whole tree rather than only the
+//! validation submodule.
 
 use std::env;
 use std::fs;
 use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 
 fn main() {
     generate_iso639_3_set();
+    generate_model_behavior_fingerprint();
+}
+
+/// FNV-1a 64-bit offset basis.
+///
+/// Duplicated from `src/errors/codes/rules_fingerprint.rs` rather than
+/// shared: a build script cannot depend on the crate it builds (that would
+/// be circular), and this constant is a two-line algorithm, not a module
+/// worth a separate build-dependency crate.
+const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// FNV-1a 64-bit prime. See [`FNV_OFFSET_BASIS`] for why this is duplicated.
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+/// Unit separator byte, matching the discipline in `rules_fingerprint.rs`:
+/// mixed in after every hashed component (a path, a file's contents) so
+/// that two different splits of the same byte stream cannot collide. ASCII
+/// Unit Separator (`0x1F`) never appears in a source path.
+const UNIT_SEPARATOR: u8 = 0x1F;
+
+/// Fold one byte into an FNV-1a accumulator.
+const fn fnv1a_byte(mut hash: u64, byte: u8) -> u64 {
+    hash ^= byte as u64;
+    hash = hash.wrapping_mul(FNV_PRIME);
+    hash
+}
+
+/// Fold every byte of a slice into an FNV-1a accumulator.
+fn fnv1a_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash = fnv1a_byte(hash, *byte);
+    }
+    hash
+}
+
+/// Recursively collect every regular file under `dir`, as paths relative to
+/// `root`, using forward slashes regardless of host OS so the fingerprint
+/// does not depend on which platform built it.
+///
+/// Panics on I/O failure: build scripts run at build time, not runtime (see
+/// the crate-level `#![allow]` above), and a crate whose own `src/` tree
+/// cannot be read is not buildable anyway.
+fn collect_source_files_relative(dir: &Path, root: &Path, out: &mut Vec<String>) {
+    let entries = fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("failed to read directory {}: {e}", dir.display()));
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|e| {
+            panic!(
+                "failed to read directory entry under {}: {e}",
+                dir.display()
+            )
+        });
+        let path = entry.path();
+        if path.is_dir() {
+            collect_source_files_relative(&path, root, out);
+        } else {
+            let relative = path
+                .strip_prefix(root)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "{} is not under crate root {}: {e}",
+                        path.display(),
+                        root.display()
+                    )
+                })
+                .to_str()
+                .unwrap_or_else(|| panic!("non-UTF-8 source path: {}", path.display()))
+                .replace(std::path::MAIN_SEPARATOR, "/");
+            out.push(relative);
+        }
+    }
+}
+
+/// Generate a behaviour fingerprint of this crate's entire `src/` tree.
+///
+/// Walks `src/` in sorted (relative-path) order and hashes, for every file,
+/// its relative path followed by its bytes, each followed by a
+/// [`UNIT_SEPARATOR`]. Sorted order and relative (not absolute) paths make
+/// the result independent of directory iteration order and of where the
+/// repository is checked out, so the same source tree fingerprints
+/// identically on every machine.
+///
+/// This intentionally hashes the *whole* crate, not just the validation
+/// submodule: see `src/errors/codes/rules_fingerprint.rs` for why splitting
+/// "validation behaviour" from "serialization behaviour" would be a false
+/// precision here, and why over-invalidating is the deliberate, honest
+/// choice.
+fn generate_model_behavior_fingerprint() {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let crate_root = Path::new(&manifest_dir);
+    let src_dir = crate_root.join("src");
+
+    // Recomputed whenever ANY file under src/ changes (added, removed, or
+    // edited), not merely the files enumerated by a previous run: a
+    // directory-level watch, not a per-file one.
+    println!("cargo:rerun-if-changed=src");
+
+    let mut relative_paths: Vec<String> = Vec::new();
+    collect_source_files_relative(&src_dir, &src_dir, &mut relative_paths);
+    relative_paths.sort();
+
+    let mut hash = FNV_OFFSET_BASIS;
+    for relative_path in &relative_paths {
+        hash = fnv1a_bytes(hash, relative_path.as_bytes());
+        hash = fnv1a_byte(hash, UNIT_SEPARATOR);
+
+        let full_path = src_dir.join(relative_path);
+        let content = fs::read(&full_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", full_path.display()));
+        hash = fnv1a_bytes(hash, &content);
+        hash = fnv1a_byte(hash, UNIT_SEPARATOR);
+    }
+
+    let fingerprint = format!("{hash:016x}");
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = PathBuf::from(&out_dir).join("model_behavior_fingerprint.rs");
+    let mut file = fs::File::create(&dest_path).unwrap();
+    writeln!(
+        file,
+        "/// Source-behaviour fingerprint of this crate's `src/` tree at build \
+         time, over {} files. Generated by build.rs; see its \
+         `generate_model_behavior_fingerprint` doc comment.\n\
+         pub const MODEL_BEHAVIOR_FINGERPRINT: &str = {fingerprint:?};",
+        relative_paths.len()
+    )
+    .unwrap();
 }
 
 /// Parse the ISO 639-3 registry and generate a `phf::Set<&str>`.

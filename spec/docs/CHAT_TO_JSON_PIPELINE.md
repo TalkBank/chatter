@@ -109,8 +109,8 @@ talkbank-parser/src/parser/chat_file_parser/parser_struct.rs
 ```rust
 let parser = TreeSitterParser::new()?;
 
-// Full-file parsing (Result API):
-let chat_file = parser.parse_chat_file(input)?;
+// Full-file parsing (ParseProduct API; never discards a model it built):
+let chat_file = parser.parse_chat_file(input).expect_built();
 
 // Fragment parsing with offset + streaming errors:
 parser.parse_chat_file_fragment(input, offset, &errors)  // -> ParseOutcome<ChatFile>

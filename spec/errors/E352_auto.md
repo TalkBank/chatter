@@ -14,6 +14,7 @@ from the same speaker, but that prior utterance did not end with a `+/.`
 - **Category**: cross\_utterance
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

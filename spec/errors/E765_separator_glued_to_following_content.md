@@ -53,6 +53,7 @@ Comma-specific shapes keep their own codes and are not reported here as well:
 - **Category**: Main tier separators
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

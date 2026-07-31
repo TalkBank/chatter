@@ -12,6 +12,7 @@ itself, not in the CHAT input. It cannot be triggered by any CHAT file.
 - **Level**: file
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Notes
 

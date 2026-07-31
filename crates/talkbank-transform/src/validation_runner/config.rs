@@ -94,8 +94,17 @@ pub struct ValidationConfig {
     /// Which parser backend to use
     pub parser_kind: ParserKind,
 
-    /// Enable strict cross-utterance linker validation (E351-E355).
-    pub strict_linkers: bool,
+    /// Model-level validation configuration: per-code severity overrides
+    /// (including disabled/suppressed codes) plus strict cross-utterance
+    /// linker validation (E351-E355, via
+    /// [`talkbank_model::ValidationConfig::with_strict_linkers`]).
+    ///
+    /// This is the RULE SET the worker validates against. Suppression
+    /// joins it upstream of validation (a disabled code is never emitted
+    /// at all), which is what makes classification happen exactly once:
+    /// there is no separate post-hoc event-filtering pass to keep in sync
+    /// with the worker's own tallies.
+    pub model_config: talkbank_model::ValidationConfig,
 }
 
 impl Default for ValidationConfig {
@@ -108,7 +117,7 @@ impl Default for ValidationConfig {
             directory: DirectoryMode::Recursive,
             roundtrip: false,
             parser_kind: ParserKind::TreeSitter,
-            strict_linkers: false,
+            model_config: talkbank_model::ValidationConfig::default(),
         }
     }
 }

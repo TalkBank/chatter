@@ -14,6 +14,7 @@ where an unusual node type ends up inside an utterance subtree.
 - **Category**: parser\_recovery
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

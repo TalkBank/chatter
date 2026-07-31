@@ -10,6 +10,7 @@ An `@Media` header contains a media type that is not one of the recognized value
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

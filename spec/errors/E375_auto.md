@@ -10,6 +10,7 @@ Scoped annotation parse error
 - **Category**: Parser bugs (experimental)
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

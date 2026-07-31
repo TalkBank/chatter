@@ -33,7 +33,6 @@
 //! | `from-json`        | Convert JSON back to CHAT                                  |
 //! | `show-alignment`   | Visualize main-tier / dependent-tier alignment              |
 //! | `watch`            | Re-validate on every file save (uses `notify` file watcher)|
-//! | `lint`             | Detect and optionally auto-fix common issues               |
 //! | `clean`            | Show cleaned text for each word (debugging aid)            |
 //! | `new-file`         | Scaffold a minimal valid CHAT file                          |
 //! | `cache`            | Manage the on-disk validation cache (stats, clear)          |
@@ -97,7 +96,6 @@
 //! │   ├── json.rs      ← to-json / from-json conversion
 //! │   ├── normalize.rs ← canonical re-serialization
 //! │   ├── watch.rs     ← file-watcher continuous validation
-//! │   ├── lint.rs      ← auto-fixable issue detection
 //! │   ├── clean.rs     ← cleaned-text debugging output
 //! │   ├── debug.rs     ← debug-family commands
 //! │   ├── new_file.rs  ← CHAT file scaffolding

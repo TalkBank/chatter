@@ -40,11 +40,13 @@
 //!
 //! let parser = TreeSitterParser::new().expect("grammar loads");
 //!
-//! // Reuse the same parser for multiple files:
+//! // Reuse the same parser for multiple files. `parse_chat_file` returns a
+//! // `ParseProduct`, never a bare `Result`: a document that built a model
+//! // always hands the model back, even when it also carries diagnostics.
 //! let file1 = parser.parse_chat_file("@UTF8\n@Begin\n*CHI:\thello .\n@End\n")
-//!     .expect("valid CHAT");
+//!     .expect_built();
 //! let file2 = parser.parse_chat_file("@UTF8\n@Begin\n*MOT:\thi .\n@End\n")
-//!     .expect("valid CHAT");
+//!     .expect_built();
 //! ```
 //!
 //! # Thread Safety
@@ -119,8 +121,9 @@ pub mod api;
 /// Internal parser implementation modules.
 pub(crate) mod parser;
 
-/// Main parser type and initialization error.
-pub use parser::{ParserInitError, TreeSitterParser};
+/// Main parser type, initialization error, and the strict whole-file parse
+/// product type.
+pub use parser::{ParseProduct, ParserInitError, TreeSitterParser};
 /// The error type (and its `Result` alias) that every public
 /// `TreeSitterParser::parse_*` method returns. Re-exported from
 /// `talkbank-model` so a crate depending only on `talkbank-parser` can name
@@ -131,3 +134,17 @@ pub use talkbank_model::{FragmentSemanticContext, ParseErrors, ParseResult};
 
 /// Convenience re-exports for dependent-tier parsing APIs.
 pub use api::{dependent_tier::parse_dependent_tier, tiers};
+
+/// Build-time fingerprint of the grammar crate's own sources (`grammar.js`
+/// and the generated `src/parser.c`), re-exported from
+/// [`tree_sitter_talkbank::GRAMMAR_FINGERPRINT`] so a caller that already
+/// depends on `talkbank-parser` (the CLI does) can read it without adding a
+/// direct dependency on the grammar crate merely for this constant.
+///
+/// A grammar change alters what parses, which alters what validates, so this
+/// value is what a cache-versioning caller folds into
+/// `talkbank_cache::RulesVersion::current_with_config`'s mandatory
+/// `parser_fingerprint` parameter (via `talkbank-transform`'s re-export, for
+/// callers that depend on `talkbank-transform` rather than this crate
+/// directly).
+pub use tree_sitter_talkbank::GRAMMAR_FINGERPRINT;

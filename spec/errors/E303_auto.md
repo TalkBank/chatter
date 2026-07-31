@@ -12,6 +12,7 @@ Unexpected node - helper function
 - **Category**: Parser bugs (experimental)
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example
 

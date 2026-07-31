@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use chatter_desktop_lib::commands::resolve_open_in_clan;
+use chatter_desktop_lib::commands::{ValidationState, resolve_open_in_clan};
 use chatter_desktop_lib::events::FrontendEvent;
 use chatter_desktop_lib::protocol;
 use chatter_desktop_lib::protocol::commands::{
@@ -35,9 +35,10 @@ use crossbeam_channel::{Receiver, Sender};
 use talkbank_transform::validation_runner::ValidationConfig;
 
 /// Test-only convenience wrapper: production always threads an explicit
-/// config and an app-lifetime cache (see `ValidationState` in `commands.rs`),
-/// but most tests here don't care about either, so this opens a fresh cache
-/// (isolated per-process by `cargo test`) and uses `ValidationConfig::default()`.
+/// config and a cache pool selected for that config's active rule set (see
+/// `ValidationState::cache_for_config` in `commands.rs`), but most tests
+/// here don't care about either, so this opens a fresh cache (isolated
+/// per-process by `cargo test`) and uses `ValidationConfig::default()`.
 fn validate_target_streaming(
     target: PathBuf,
 ) -> Result<(Receiver<FrontendEvent>, Sender<()>), String> {
@@ -1000,4 +1001,95 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
         resolved.message, error.message,
         "highlight message must be the bare error.message, not '{{code}}: {{message}}'"
     );
+}
+
+/// REGRESSION GUARD (2026-07-30): `ValidationState`'s cache must be keyed to
+/// the PER-REQUEST active `ValidationConfig`, not opened once at app
+/// startup and reused regardless of what a later request asks for.
+///
+/// Before this fix, `ValidationState` held exactly one cache pool
+/// (`RulesVersion::current()`, oblivious to `strict_linkers`) for the
+/// app's whole lifetime, so a request with strict-linkers OFF could
+/// poison the cache with a "Valid" verdict that a LATER request with
+/// strict-linkers ON would then be served, even though E351
+/// (self-completion linker `+,` with no preceding interrupted utterance)
+/// only fires under strict mode. This is the same bug class
+/// `RulesVersion::current_with_config` closed for the CLI's
+/// `chatter validate` path (see `crates/talkbank-cache/src/rules_version.rs`);
+/// this test is that fix's desktop-side counterpart.
+///
+/// Drives `ValidationState` exactly the way the `validate` Tauri command
+/// does (`cache_for_config` then `validate_target_streaming_with_config`),
+/// which is the highest boundary reachable in this crate without adding
+/// Tauri's `test` feature and a mocked `AppHandle`/window (this crate has
+/// no precedent for that anywhere; the actual `#[tauri::command] async fn
+/// validate(...)` wrapper, with real event emission, is one level above
+/// what this test reaches).
+#[test]
+fn cache_does_not_leak_a_verdict_across_strict_linkers_toggle() {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+
+    let cache_dir = std::env::temp_dir().join(format!(
+        "chatter-desktop-strict-linkers-cache-test-{}-{now}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&cache_dir).unwrap();
+
+    // Self-completion linker (`+,`) with no preceding interrupted
+    // utterance: valid under lenient rules, E351 under strict-linkers.
+    // Same fixture `crates/chatter/tests/integration/integration_tests.rs`'s
+    // `CHAT_WITH_SELF_COMPLETION_ORPHAN` uses for the CLI-level version of
+    // this exact distinction.
+    let fixture = std::env::temp_dir().join(format!(
+        "chatter-desktop-strict-linkers-cache-test-{}-{now}.cha",
+        std::process::id()
+    ));
+    std::fs::write(
+        &fixture,
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
+         @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t+, hello world .\n@End\n",
+    )
+    .unwrap();
+
+    let state = ValidationState::new_at(cache_dir.clone());
+
+    let lenient = ValidationConfig::default();
+    let strict = ValidationConfig {
+        model_config: talkbank_model::ValidationConfig::new().with_strict_linkers(),
+        ..ValidationConfig::default()
+    };
+
+    let run = |config: ValidationConfig| -> Vec<FrontendEvent> {
+        let cache = state.cache_for_config(&config.model_config);
+        let (rx, _cancel_tx) =
+            validate_target_streaming_with_config(fixture.clone(), config, cache)
+                .expect("desktop validation should start");
+        let mut events = Vec::new();
+        while let Ok(event) = rx.recv() {
+            events.push(event);
+        }
+        events
+    };
+
+    let lenient_summary = summarize(&run(lenient));
+    assert_eq!(
+        lenient_summary.valid_files, 1,
+        "the self-completion orphan must be Valid WITHOUT strict-linkers: {:?}",
+        lenient_summary.hard_errors_by_file
+    );
+
+    let strict_summary = summarize(&run(strict));
+    assert_eq!(
+        strict_summary.invalid_files, 1,
+        "the SAME file, now with strict-linkers ON, must be Invalid (E351): \
+         a cached Valid verdict from the lenient run above must not be reused. \
+         valid={} invalid={} errors={:?}",
+        strict_summary.valid_files, strict_summary.invalid_files, strict_summary.errors_by_file
+    );
+
+    std::fs::remove_file(&fixture).ok();
+    std::fs::remove_dir_all(&cache_dir).ok();
 }

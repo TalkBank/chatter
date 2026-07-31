@@ -12,6 +12,7 @@ verify error handling plumbing. Never emitted in production.
 - **Level**: file
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Notes
 

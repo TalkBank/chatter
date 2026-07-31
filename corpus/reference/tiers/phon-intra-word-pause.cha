@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Phon %x tiers: intra-word pause (^, U+005E) on syllabification tiers
+@Comment:	Constructs: x_dependent_tier (Phon %xmodsyl, %xphosyl intra-word pause)
+@Comment:	Word 1 (word-final ^) and word 2 (mid-word AND word-final ^ together)
+@Comment:	reproduce the two real phon-data corpus occurrences of this construct;
+@Comment:	%mod carries the same pause as %pho here (the spec allows ^ on either)
+*CHI:	dodo tea .
+%mod:	dodo u̯e̞ə^ˈtʰ^
+%pho:	dodo^ u̯e̞ə^ˈtʰ^
+%xmodsyl:	d:Oo:Nd:Oo:N u̯:Ne̞:Nə:N^ˈtʰ:C^
+%xphosyl:	d:Oo:Nd:Oo:N^ u̯:Ne̞:Nə:N^ˈtʰ:C^
+@End

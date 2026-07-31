@@ -31,8 +31,10 @@ use talkbank_parser::TreeSitterParser;
 
 let parser = TreeSitterParser::new().expect("parser init");
 
-// Parse a complete CHAT file:
-let chat_file = parser.parse_chat_file(source).expect("valid CHAT");
+// Parse a complete CHAT file. `parse_chat_file` returns a `ParseProduct`,
+// not a bare `Result`: a document that builds a model always hands the
+// model back, even alongside diagnostics.
+let chat_file = parser.parse_chat_file(source).expect_built();
 
 // Parse a fragment with offset adjustment and streaming errors:
 let errors = talkbank_model::ErrorCollector::new();

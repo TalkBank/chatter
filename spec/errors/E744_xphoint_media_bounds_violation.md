@@ -11,6 +11,7 @@ The first start and last end of `%xphoint` must lie within the `*SPK:` media bul
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

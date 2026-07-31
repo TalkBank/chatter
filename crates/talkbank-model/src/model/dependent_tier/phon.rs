@@ -251,6 +251,54 @@ pub struct SyllableUnit {
     pub code: PositionCode,
 }
 
+/// The intra-word pause marker (`^`, U+005E) on syllabification tiers.
+///
+/// Per the Phon `%x` tier spec: intra-word pauses occur inside a word on
+/// `%mod`/`%pho`, pass through verbatim on the syllabification tiers, and are
+/// excluded from `%xphoaln` alignment while still occupying time. A bare `^`
+/// carries no `:CODE` suffix and may appear between units or after the last
+/// unit in a word (word-final placement is legal; rule 3 governs
+/// reconstruction, not rule 2's "between units" wording).
+const INTRA_WORD_PAUSE: char = '^';
+
+/// One token of a tokenized syllabification word: either a `phone:CODE` unit
+/// or a bare intra-word pause.
+///
+/// Reconstruction (Phon `%x` tier spec rule 3: strip `:CODE` from every unit
+/// and concatenate the phones, in order, with pause characters preserved in
+/// place, to reproduce the source `%mod`/`%pho` word exactly) must visit
+/// every variant here. Representing a syllabification word as `Vec<SylToken>`
+/// rather than `Vec<SyllableUnit>` is what makes an exhaustive match the only
+/// way to write that reconstruction: the prior struct-only representation let
+/// a `^` silently fuse into a phone string instead of being carried as its
+/// own token, and [`reconstruct_syl_word`]'s exhaustive match is the fix.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SylToken {
+    /// A `phone:CODE` syllable-constituent unit.
+    Unit(SyllableUnit),
+    /// A bare `^` intra-word pause, carrying no `:CODE` suffix.
+    IntraWordPause,
+}
+
+/// Reconstructs the source-tier word text from tokenized syllabification
+/// tokens.
+///
+/// Phon `%x` tier spec rule 3: stripping the `:CODE` from every unit and
+/// concatenating the phones, in order, must reproduce the corresponding
+/// `%mod`/`%pho` word exactly; pause characters, which carry no code, are
+/// preserved in place. The match is exhaustive over [`SylToken`] (no `_ =>`
+/// arm), so a future variant cannot be silently dropped from reconstruction
+/// the way `^` previously was.
+pub fn reconstruct_syl_word(tokens: &[SylToken]) -> String {
+    tokens
+        .iter()
+        .map(|token| match token {
+            SylToken::Unit(unit) => unit.phone.as_str(),
+            SylToken::IntraWordPause => "^",
+        })
+        .collect()
+}
+
 /// Why a syllabification word failed to tokenize into `phone:CODE` units.
 ///
 /// These map to the syllabification validation diagnostics: a structurally
@@ -289,19 +337,47 @@ impl SylWordError {
 /// classifier recognizes it BEFORE unit tokenization.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SylWordKind {
-    /// A pause filler (`(.)`, `(..)`, `(...)`) mirroring a pause at the same
-    /// word position on the source tier. Timed pauses (`(1.5)`) are not
-    /// accepted: they are unattested on syllabification tiers in the wild
-    /// corpus, and this inventory extends only from attestation.
+    /// A pause filler (`(.)`, `(..)`, `(...)`, or numeric `(x.x)`) mirroring
+    /// a pause at the same word position on the source tier. Greg Hedlund's
+    /// "Phon `%x` Dependent Tiers" spec lists numeric inter-word pauses as
+    /// legal alongside the three untimed forms (§"Pauses"); an earlier
+    /// version of this classifier excluded them on "unattested in the wild
+    /// corpora" grounds, which is not a basis for rejecting a construct the
+    /// authority declares legal.
     PauseFiller(crate::model::PauseDuration),
-    /// A syllabified word: a sequence of `phone:CODE` units.
-    Units(Vec<SyllableUnit>),
+    /// A syllabified word: a sequence of `phone:CODE` units and bare `^`
+    /// intra-word pauses, in source order.
+    Units(Vec<SylToken>),
+}
+
+/// True when `word` is a legal inter-word pause marker: `(.)`, `(..)`,
+/// `(...)`, or numeric `(<duration>)` (seconds, or minutes:seconds).
+///
+/// Shared by the syllabification-tier pause-filler classifier and the
+/// `%xphoaln` one-sided-pause word-count exception (Greg Hedlund's spec,
+/// §2 rule 5): a pause word present on only one of `%mod`/`%pho` consumes a
+/// word slot only on the tier that contains it.
+pub fn is_pause_marker(word: &str) -> bool {
+    matches!(word, "(.)" | "(..)" | "(...)") || numeric_pause_duration(word).is_some()
+}
+
+/// Parse `word` as a numeric inter-word pause marker `(<duration>)`, returning
+/// its typed duration when it is one, `None` otherwise (including for the
+/// three untimed forms, which [`classify_syl_word`] matches directly).
+fn numeric_pause_duration(word: &str) -> Option<crate::model::PauseTimedDuration> {
+    use crate::model::PauseTimedDuration;
+    let inner = word.strip_prefix('(')?.strip_suffix(')')?;
+    match PauseTimedDuration::new(inner) {
+        parsed @ PauseTimedDuration::Parsed { .. } => Some(parsed),
+        PauseTimedDuration::Unsupported(_) => None,
+    }
 }
 
 /// Classify one syllabification-tier word: pause filler or `phone:CODE` units.
 ///
-/// The pause forms are matched exactly (the serialized forms of the untimed
-/// [`crate::model::PauseDuration`] variants); anything else must tokenize as
+/// The untimed pause forms are matched exactly (the serialized forms of the
+/// untimed [`crate::model::PauseDuration`] variants); a numeric pause is
+/// recognized via [`numeric_pause_duration`]; anything else must tokenize as
 /// units via [`tokenize_syl_word`].
 pub fn classify_syl_word(word: &str) -> Result<SylWordKind, SylWordError> {
     use crate::model::PauseDuration;
@@ -309,24 +385,35 @@ pub fn classify_syl_word(word: &str) -> Result<SylWordKind, SylWordError> {
         "(.)" => Ok(SylWordKind::PauseFiller(PauseDuration::Short)),
         "(..)" => Ok(SylWordKind::PauseFiller(PauseDuration::Medium)),
         "(...)" => Ok(SylWordKind::PauseFiller(PauseDuration::Long)),
-        _ => tokenize_syl_word(word).map(SylWordKind::Units),
+        _ => match numeric_pause_duration(word) {
+            Some(duration) => Ok(SylWordKind::PauseFiller(PauseDuration::Timed(duration))),
+            None => tokenize_syl_word(word).map(SylWordKind::Units),
+        },
     }
 }
 
-/// Tokenize one syllabification word (e.g. `k:Oæ:Nt:C`) into `phone:CODE` units.
+/// Tokenize one syllabification word (e.g. `k:Oæ:Nt:C`) into `phone:CODE`
+/// units and bare `^` intra-word pauses.
 ///
 /// Units concatenate with no internal whitespace; a phone may be any
 /// multi-codepoint IPA sequence (length is written `ː`, U+02D0, never ASCII
 /// `:`), so each ASCII `:` unambiguously introduces a one-character constituent
-/// code.
-pub fn tokenize_syl_word(word: &str) -> Result<Vec<SyllableUnit>, SylWordError> {
+/// code. A bare `^` (with no `:CODE` suffix) may occur between units or after
+/// the last unit; it is checked for at each token boundary before attempting
+/// to find a `:`, so it can never fuse into an adjacent phone string.
+pub fn tokenize_syl_word(word: &str) -> Result<Vec<SylToken>, SylWordError> {
     const COLON: char = ':';
     if !word.contains(COLON) {
         return Err(SylWordError::MissingColon(word.to_string()));
     }
-    let mut units = Vec::new();
+    let mut tokens = Vec::new();
     let mut rest = word;
     while !rest.is_empty() {
+        if let Some(after_pause) = rest.strip_prefix(INTRA_WORD_PAUSE) {
+            tokens.push(SylToken::IntraWordPause);
+            rest = after_pause;
+            continue;
+        }
         let Some(colon) = rest.find(COLON) else {
             return Err(SylWordError::MissingColon(rest.to_string()));
         };
@@ -337,10 +424,10 @@ pub fn tokenize_syl_word(word: &str) -> Result<Vec<SyllableUnit>, SylWordError> 
         };
         let phone = NonEmptyString::new(phone_str).ok_or(SylWordError::EmptyPhone(code_char))?;
         let code = PositionCode::try_from(code_char).map_err(SylWordError::IllegalCode)?;
-        units.push(SyllableUnit { phone, code });
+        tokens.push(SylToken::Unit(SyllableUnit { phone, code }));
         rest = &after[code_char.len_utf8()..];
     }
-    Ok(units)
+    Ok(tokens)
 }
 
 // ---------------------------------------------------------------------------
@@ -690,11 +777,20 @@ pub fn parse_phoaln_content(content: &str) -> Result<Vec<WordAlignment>, PhoalnP
 }
 
 /// Parse a single `source↔target` alignment pair.
+///
+/// The spec requires exactly one `↔` per pair; a second arrow most often
+/// means a missing space swallowed a word boundary (`a↔b c↔c` typed as
+/// `a↔bc↔c`), which would otherwise silently fold into one malformed
+/// segment rather than surface as the structural error it is.
 fn parse_alignment_pair(s: &str) -> Result<AlignmentPair, PhoalnParseError> {
     // The ↔ character is U+2194 (LEFT RIGHT ARROW), 3 bytes in UTF-8
-    let Some(arrow_pos) = s.find('↔') else {
+    let mut arrows = s.match_indices('↔');
+    let Some((arrow_pos, _)) = arrows.next() else {
         return Err(PhoalnParseError::MissingArrow(s.to_string()));
     };
+    if arrows.next().is_some() {
+        return Err(PhoalnParseError::MultipleArrows(s.to_string()));
+    }
 
     let source_str = &s[..arrow_pos];
     let target_str = &s[arrow_pos + '↔'.len_utf8()..];
@@ -720,6 +816,10 @@ pub enum PhoalnParseError {
     /// Missing `↔` separator in an alignment pair.
     #[error("missing '↔' separator in alignment pair: {0}")]
     MissingArrow(String),
+    /// More than one `↔` separator in an alignment pair (the spec requires
+    /// exactly one).
+    #[error("more than one '↔' separator in alignment pair: {0}")]
+    MultipleArrows(String),
     /// Empty word (no alignment pairs).
     #[error("empty word in alignment (no pairs)")]
     EmptyWord,
@@ -818,6 +918,15 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// The spec requires exactly one `↔` per pair; a second arrow (e.g. a
+    /// swallowed space between two pairs) must be rejected, not silently
+    /// folded into one malformed segment.
+    #[test]
+    fn multiple_arrows_error() {
+        let result = parse_phoaln_content("a↔b↔c");
+        assert!(matches!(result, Err(PhoalnParseError::MultipleArrows(_))));
+    }
+
     #[test]
     fn position_code_roundtrips_all_legal_chars() {
         for c in ['O', 'N', 'C', 'L', 'R', 'E', 'A', 'D', 'U'] {
@@ -833,15 +942,24 @@ mod tests {
         assert_eq!(PositionCode::try_from('S'), Err('S'));
     }
 
+    /// Unwraps a [`SylToken::Unit`], panicking (test-only) with a clear
+    /// message if the token was an [`SylToken::IntraWordPause`] instead.
+    fn unit(token: &SylToken) -> &SyllableUnit {
+        match token {
+            SylToken::Unit(u) => u,
+            SylToken::IntraWordPause => panic!("expected a Unit token, got IntraWordPause"),
+        }
+    }
+
     #[test]
     fn tokenize_syl_word_splits_units() {
         let units = tokenize_syl_word("k:Oæ:Nt:C").expect("well-formed");
         assert_eq!(units.len(), 3);
-        assert_eq!(units[0].phone.as_str(), "k");
-        assert_eq!(units[0].code, PositionCode::Onset);
-        assert_eq!(units[1].phone.as_str(), "æ");
-        assert_eq!(units[1].code, PositionCode::Nucleus);
-        assert_eq!(units[2].code, PositionCode::Coda);
+        assert_eq!(unit(&units[0]).phone.as_str(), "k");
+        assert_eq!(unit(&units[0]).code, PositionCode::Onset);
+        assert_eq!(unit(&units[1]).phone.as_str(), "æ");
+        assert_eq!(unit(&units[1]).code, PositionCode::Nucleus);
+        assert_eq!(unit(&units[2]).code, PositionCode::Coda);
     }
 
     #[test]
@@ -849,8 +967,52 @@ mod tests {
         // ʌ̾ is U+028C + U+033E (combining); the ASCII ':' still delimits.
         let units = tokenize_syl_word("ʌ̾:N").expect("well-formed");
         assert_eq!(units.len(), 1);
-        assert_eq!(units[0].phone.as_str(), "ʌ̾");
-        assert_eq!(units[0].code, PositionCode::Nucleus);
+        assert_eq!(unit(&units[0]).phone.as_str(), "ʌ̾");
+        assert_eq!(unit(&units[0]).code, PositionCode::Nucleus);
+    }
+
+    /// Phon `%x` tier spec: "An intra-word pause appears inside a word as a
+    /// bare `^` between units, with no `:CODE` suffix, e.g.
+    /// `b:Oʌ:N^b:Oʌ:N`." The pause must land as its own token, never fused
+    /// into the phone before or after it.
+    #[test]
+    fn tokenize_syl_word_mid_word_intra_word_pause() {
+        let tokens = tokenize_syl_word("b:Oʌ:N^b:Oʌ:N").expect("well-formed");
+        assert_eq!(tokens.len(), 5);
+        assert_eq!(unit(&tokens[0]).phone.as_str(), "b");
+        assert_eq!(unit(&tokens[0]).code, PositionCode::Onset);
+        assert_eq!(unit(&tokens[1]).phone.as_str(), "ʌ");
+        assert_eq!(unit(&tokens[1]).code, PositionCode::Nucleus);
+        assert_eq!(tokens[2], SylToken::IntraWordPause);
+        assert_eq!(unit(&tokens[3]).phone.as_str(), "b");
+        assert_eq!(unit(&tokens[3]).code, PositionCode::Onset);
+        assert_eq!(unit(&tokens[4]).phone.as_str(), "ʌ");
+        assert_eq!(unit(&tokens[4]).code, PositionCode::Nucleus);
+    }
+
+    /// Already adjudicated (do not re-litigate): word-final `^` is legal.
+    /// Rule 2's "between units" describes the common case; rule 3 governs.
+    /// Verified against the real corpus occurrence `%xphosyl: d:Oo:Nd:Oo:N^`
+    /// (source `%pho: dodo^`), minimized here to one unit.
+    #[test]
+    fn tokenize_syl_word_word_final_intra_word_pause() {
+        let tokens = tokenize_syl_word("k:O^").expect("well-formed");
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(unit(&tokens[0]).phone.as_str(), "k");
+        assert_eq!(unit(&tokens[0]).code, PositionCode::Onset);
+        assert_eq!(tokens[1], SylToken::IntraWordPause);
+    }
+
+    /// A bare caret with no `phone:CODE` unit at all is not a legal
+    /// syllabification word (the spec's intra-word-pause wording presupposes
+    /// at least one unit); it must still be rejected as code-less, not
+    /// silently accepted as a zero-unit tokenization.
+    #[test]
+    fn tokenize_syl_word_rejects_bare_pause_with_no_units() {
+        assert_eq!(
+            tokenize_syl_word("^").unwrap_err(),
+            SylWordError::MissingColon("^".to_string())
+        );
     }
 
     #[test]
@@ -878,9 +1040,25 @@ mod tests {
 
     #[test]
     fn reconstruct_syllabification_yields_source_word() {
-        let units = tokenize_syl_word("k:Oæ:Nt:C").unwrap();
-        let reconstructed: String = units.iter().map(|u| u.phone.as_str()).collect();
-        assert_eq!(reconstructed, "kæt");
+        let tokens = tokenize_syl_word("k:Oæ:Nt:C").unwrap();
+        assert_eq!(reconstruct_syl_word(&tokens), "kæt");
+    }
+
+    /// Real corpus occurrence: `%pho: dodo^`, `%xphosyl: d:Oo:Nd:Oo:N^`.
+    /// Reconstruction must reproduce the source word exactly, caret included.
+    #[test]
+    fn reconstruct_syl_word_preserves_word_final_pause() {
+        let tokens = tokenize_syl_word("d:Oo:Nd:Oo:N^").unwrap();
+        assert_eq!(reconstruct_syl_word(&tokens), "dodo^");
+    }
+
+    /// Real corpus occurrence: `%pho: u̯e̞ə^ˈtʰ^`, `%xphosyl:
+    /// u̯:Ne̞:Nə:N^ˈtʰ:C^`. Exercises BOTH a mid-word pause (between `ə:N` and
+    /// `ˈtʰ:C`) and a word-final pause in the same word.
+    #[test]
+    fn reconstruct_syl_word_preserves_mid_and_final_pause() {
+        let tokens = tokenize_syl_word("u̯:Ne̞:Nə:N^ˈtʰ:C^").unwrap();
+        assert_eq!(reconstruct_syl_word(&tokens), "u̯e̞ə^ˈtʰ^");
     }
 
     #[test]
@@ -919,5 +1097,41 @@ mod tests {
             parse_xphoint_content("t").unwrap_err(),
             XphointParseError::MissingBullet("t".to_string())
         );
+    }
+
+    /// Greg Hedlund's spec (§"Pauses") lists numeric inter-word pauses
+    /// (`(x.x)`) as legal alongside `(.)`/`(..)`/`(...)`; a numeric pause
+    /// word on a syllabification tier must classify as a pause filler, not
+    /// fail `phone:CODE` tokenization.
+    #[test]
+    fn classify_syl_word_accepts_numeric_pause() {
+        use crate::model::{PauseDuration, PauseTimedDuration};
+        let kind = classify_syl_word("(1.5)").expect("numeric pause is a legal filler");
+        assert_eq!(
+            kind,
+            SylWordKind::PauseFiller(PauseDuration::Timed(PauseTimedDuration::new("1.5")))
+        );
+    }
+
+    #[test]
+    fn classify_syl_word_accepts_minutes_seconds_numeric_pause() {
+        let kind = classify_syl_word("(1:02.5)").expect("minutes:seconds pause is legal");
+        assert!(matches!(
+            kind,
+            SylWordKind::PauseFiller(crate::model::PauseDuration::Timed(_))
+        ));
+    }
+
+    #[test]
+    fn is_pause_marker_recognizes_all_legal_forms() {
+        for marker in ["(.)", "(..)", "(...)", "(1.5)", "(2)", "(1:02.5)"] {
+            assert!(is_pause_marker(marker), "{marker} should be a pause marker");
+        }
+        for not_a_pause in ["(x)", "k:O", "kæt", "()"] {
+            assert!(
+                !is_pause_marker(not_a_pause),
+                "{not_a_pause} should not be a pause marker"
+            );
+        }
     }
 }

@@ -17,6 +17,7 @@ This covers two sub-cases:
 - **Category**: parser\_recovery
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

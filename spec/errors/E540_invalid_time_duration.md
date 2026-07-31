@@ -33,6 +33,7 @@ CHECK rejects anything else; Rust chatter must match.
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1 (semicolon separator, not in depfile)
 

@@ -161,6 +161,22 @@
       "source_spec": "spec/errors/E252_auto.md"
     },
     {
+      "fixture": "E255_Whole_utterance_language_switch_should_use_precode.cha",
+      "expected_codes": [
+        "E255"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E255_whole_utterance_language_switch_should_use_precode.md"
+    },
+    {
+      "fixture": "E255_Whole_utterance_language_switch_should_use_precode_2.cha",
+      "expected_codes": [
+        "E255"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E255_whole_utterance_language_switch_should_use_precode.md"
+    },
+    {
       "fixture": "E258_Consecutive_commas.cha",
       "expected_codes": [
         "E258"
@@ -1163,6 +1179,14 @@
       "source_spec": "spec/errors/E549_duplicate_speaker_declaration.md"
     },
     {
+      "fixture": "E551_Options_header_out_of_order.cha",
+      "expected_codes": [
+        "E551"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E551_options_header_out_of_order.md"
+    },
+    {
       "fixture": "E552_Media_declares_unlinked_but_transcript_carries_timing.cha",
       "expected_codes": [
         "E552"
@@ -1513,6 +1537,38 @@
       ],
       "status": "implemented",
       "source_spec": "spec/errors/E728_phoaln_pho_count_mismatch.md"
+    },
+    {
+      "fixture": "E729_Cross_speaker_bullet_overlap.cha",
+      "expected_codes": [
+        "E729"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E729_bullet_overlap.md"
+    },
+    {
+      "fixture": "E730_Bullet_timing_gap.cha",
+      "expected_codes": [
+        "E730"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E730_bullet_gap.md"
+    },
+    {
+      "fixture": "E731_Speaker_bullet_self_overlap_via_timing.cha",
+      "expected_codes": [
+        "E731"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E731_speaker_bullet_self_overlap.md"
+    },
+    {
+      "fixture": "E732_Missing_bullet_in_bullet_consistency_mode.cha",
+      "expected_codes": [
+        "E732"
+      ],
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E732_missing_bullet.md"
     },
     {
       "fixture": "E733_mod_alignment_count_mismatch_too_few_tokens.cha",
@@ -1873,14 +1929,6 @@
       ],
       "status": "implemented",
       "source_spec": "spec/errors/W108_auto.md"
-    },
-    {
-      "fixture": "W602_Deprecated_experimental_tier_name.cha",
-      "expected_codes": [
-        "W602"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/W602_auto.md"
     }
   ],
   "implemented_specs_without_examples": []

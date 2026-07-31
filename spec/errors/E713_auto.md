@@ -13,6 +13,7 @@ an existing chunk.
 - **Category**: validation
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

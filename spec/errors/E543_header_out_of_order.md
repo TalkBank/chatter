@@ -10,6 +10,7 @@ A header appears out of canonical order. For example, `@Options` or `@ID` appear
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

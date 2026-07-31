@@ -16,6 +16,7 @@ instead of E213 for the same condition.
 - **Level**: word
 - **Layer**: validation
 - **Status**: deprecated
+- **Kind**: Invalidity
 
 ## Example 1
 

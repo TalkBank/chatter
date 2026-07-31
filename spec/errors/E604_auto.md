@@ -10,6 +10,7 @@ Empty GRA relation
 - **Category**: Dependent tier parsing
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

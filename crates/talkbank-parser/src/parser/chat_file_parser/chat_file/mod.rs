@@ -12,6 +12,9 @@ mod document_lowering;
 mod helpers;
 pub(crate) mod normalize;
 mod parse;
+mod product;
 mod streaming;
 #[cfg(test)]
 mod tests;
+
+pub use product::ParseProduct;

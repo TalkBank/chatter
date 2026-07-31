@@ -12,6 +12,7 @@ Missing form type after @
 - **Category**: Parser error
 - **Level**: word
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -12,6 +12,7 @@ Missing required element
 - **Category**: Word validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

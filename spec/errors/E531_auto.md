@@ -21,6 +21,7 @@ E531.
 - **Category**: validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

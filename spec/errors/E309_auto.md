@@ -16,6 +16,7 @@ unexpected content. The error is emitted from `make_error_from_node()` in
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

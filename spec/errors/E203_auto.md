@@ -11,6 +11,7 @@ Word contains an invalid or undeclared `@` form type marker (e.g., `dog@b@c` has
 - **Category**: validation
 - **Level**: word
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

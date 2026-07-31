@@ -9,38 +9,110 @@
 // still not write unreachable! (reviewed at the PR level).
 #![allow(clippy::unreachable)]
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
 use crossbeam_channel::Sender;
+use dashmap::DashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ParserKindRequest, ValidateRequest,
 };
-use crate::validation::{initialize_cache, validate_target_streaming_with_config};
-use talkbank_transform::UnifiedCache;
+use crate::validation::{
+    initialize_cache_at_with_rules_version, initialize_cache_with_rules_version,
+    validate_target_streaming_with_config,
+};
 use talkbank_transform::validation_runner::ValidationConfig;
+use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache};
 
 /// Shared state: cancel sender for the current validation run, and the
-/// on-disk validation cache opened once for the app's lifetime.
+/// on-disk validation cache pools opened so far this app session.
 ///
 /// Uses `ArcSwapOption` for lock-free atomic swap of the cancel sender, no
-/// mutex needed. The cache is opened once here rather than per validation
-/// run: `UnifiedCache::new()` opens a SQLite pool and a dedicated tokio
-/// runtime, so building a fresh one on every "Validate"/"Re-validate" click
-/// would pay that setup cost repeatedly for no benefit.
+/// mutex needed. `caches` is a [`DashMap`] (the same concurrent-map idiom
+/// `talkbank-lsp`'s backend state uses), not a `Mutex<HashMap<...>>>`: this
+/// crate's coding standard bans an explicit mutex, and `DashMap`'s sharded
+/// internal locking is the sanctioned alternative.
+///
+/// # Why more than one cache pool
+///
+/// A validation request's active [`talkbank_model::ValidationConfig`]
+/// (suppressed codes, strict-linkers) changes which files count as Valid, so
+/// a cache row produced under one active config is not a valid answer for a
+/// different one, the exact defect this whole struct exists to prevent: it
+/// used to open exactly ONE `RulesVersion::current()` pool for the app's
+/// whole lifetime, so toggling "Strict linkers" in the settings panel and
+/// re-validating the same file could silently reuse a verdict computed
+/// under the OTHER setting. [`Self::cache_for_config`] is the seam that
+/// fixes this, using the SAME [`RulesVersion::current_with_config`]
+/// composition the CLI uses (`crates/chatter/src/commands/validate/cache.rs`),
+/// not a second mechanism.
+///
+/// Pools are opened lazily and memoized per distinct [`RulesVersion`]:
+/// opening one costs a SQLite pool + a dedicated tokio runtime, so a request
+/// under a config already seen this session reuses the pool (the same "open
+/// once" behavior the old single-cache design had when only one config
+/// could ever exist), while a request under a genuinely new config (the
+/// user just flipped a setting) pays that cost once and remembers the
+/// result for next time.
 pub struct ValidationState {
     cancel_tx: ArcSwapOption<Sender<()>>,
-    cache: Option<Arc<UnifiedCache>>,
+    /// Explicit cache root for test isolation; `None` uses the platform
+    /// default (or `TALKBANK_CHAT_CACHE_DIR`). See [`Self::new_at`].
+    cache_dir: Option<PathBuf>,
+    caches: DashMap<RulesVersion, Arc<UnifiedCache>>,
 }
 
 impl ValidationState {
     pub fn new() -> Self {
         Self {
             cancel_tx: ArcSwapOption::empty(),
-            cache: initialize_cache(),
+            cache_dir: None,
+            caches: DashMap::new(),
         }
+    }
+
+    /// Test/isolation constructor: every cache pool this state opens is
+    /// rooted at `cache_dir` instead of the platform default, so tests
+    /// never touch the developer's real cache and never collide with each
+    /// other. Mirrors `validation::initialize_cache_at`.
+    pub fn new_at(cache_dir: PathBuf) -> Self {
+        Self {
+            cancel_tx: ArcSwapOption::empty(),
+            cache_dir: Some(cache_dir),
+            caches: DashMap::new(),
+        }
+    }
+
+    /// Return the cache pool keyed to `model_config`'s active rule set AND
+    /// the grammar compiled into this binary, opening and memoizing a new
+    /// pool on first use for that combination. See the struct docs for why
+    /// this exists and what it fixes; the parser dimension closes the same
+    /// stale-verdict shape one dimension over (a grammar change alters what
+    /// parses, hence what validates, exactly like a rule-set or
+    /// strict-linkers change does).
+    pub fn cache_for_config(
+        &self,
+        model_config: &talkbank_model::ValidationConfig,
+    ) -> Option<Arc<UnifiedCache>> {
+        let rules_version = RulesVersion::current_with_config(model_config, GRAMMAR_FINGERPRINT);
+        if let Some(existing) = self.caches.get(&rules_version) {
+            return Some(Arc::clone(existing.value()));
+        }
+
+        let opened = match &self.cache_dir {
+            Some(dir) => initialize_cache_at_with_rules_version(dir.clone(), rules_version.clone()),
+            None => initialize_cache_with_rules_version(rules_version.clone()),
+        }?;
+        // A concurrent first-use race can open two pools for the same
+        // version; both are equally valid (same on-disk DB, same version
+        // column), so whichever `insert` lands last simply wins the memo
+        // slot. No mutex is worth adding to prevent that harmless
+        // duplication.
+        self.caches.insert(rules_version, Arc::clone(&opened));
+        Some(opened)
     }
 }
 
@@ -74,8 +146,13 @@ pub async fn validate(
     }
 
     let config = ValidationConfig::from(&request);
+    // The cache pool MUST be selected from THIS request's active config, via
+    // the same seam `cache_for_config` composes the cache key from
+    // (`RulesVersion::current_with_config`), not a single pool opened once
+    // at app startup: see `ValidationState`'s docs for why.
+    let cache = state.cache_for_config(&config.model_config);
     let (rx, cancel_tx) =
-        validate_target_streaming_with_config(request.path.into(), config, state.cache.clone())?;
+        validate_target_streaming_with_config(request.path.into(), config, cache)?;
 
     // Atomically store the cancel sender (lock-free)
     state.cancel_tx.store(Some(Arc::new(cancel_tx)));

@@ -9,9 +9,11 @@
 //! suppressed diagnostic into the audit file anyway.
 //!
 //! Modelling audit as one more [`ValidationRenderer`] fixes that by
-//! construction: the renderer sees events *after* `filter_suppressed_events`
-//! has run, so every option applies to the JSONL without anyone remembering to
-//! thread it through a second implementation.
+//! construction: the renderer sees events from the SAME worker pool every
+//! other presentation does, and suppression joins the rule set upstream of
+//! validation (a suppressed code is never emitted at all), so every option
+//! applies to the JSONL without anyone remembering to thread it through a
+//! second implementation.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -78,8 +80,9 @@ impl ValidationRenderer for AuditRenderer {
     }
 
     fn handle_errors(&mut self, error_event: &ErrorEvent) -> usize {
-        // Reaching here means the event survived `filter_suppressed_events`,
-        // so every error in it is one the user asked to see.
+        // Reaching here means the worker's own `ValidationConfig` already
+        // excluded suppressed codes, so every error in it is one the user
+        // asked to see.
         self.handle.report_file_results(
             &error_event.path.to_string_lossy(),
             error_event.errors.clone(),

@@ -11,19 +11,22 @@ use talkbank_model::ErrorSink;
 #[test]
 fn test_e003_auto_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("");
+    let product = parser.parse_chat_file("");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316", "E502", "E503", "E504"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -34,19 +37,22 @@ fn test_e003_auto_0() -> Result<(), talkbank_parser_tests::test_error::TestError
 #[test]
 fn test_e101_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@Begin\n@Languages:\teng\nInvalidLine\n@Comment:\tERROR: Line format invalid\n@End");
+    let product = parser.parse_chat_file("@Begin\n@Languages:\teng\nInvalidLine\n@Comment:\tERROR: Line format invalid\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E501", "E502", "E503", "E504"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -57,19 +63,22 @@ fn test_e101_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
 #[test]
 fn test_e202_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello@ world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello@ world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E202"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -80,19 +89,22 @@ fn test_e202_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e202_missing_form_type_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello@ .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello@ .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E202"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -103,19 +115,22 @@ fn test_e202_missing_form_type_utf8_begin_languages_0() -> Result<(), talkbank_p
 #[test]
 fn test_e202_missing_form_type_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tdog@j .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tdog@j .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E203"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -126,19 +141,22 @@ fn test_e202_missing_form_type_utf8_begin_languages_1() -> Result<(), talkbank_p
 #[test]
 fn test_e203_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tdog@b@c .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tdog@b@c .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -149,19 +167,22 @@ fn test_e203_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e207_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [@ xyz] world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [@ xyz] world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E207"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -172,19 +193,22 @@ fn test_e207_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e208_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello [: ] .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello [: ] .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E376"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -195,19 +219,22 @@ fn test_e208_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e231_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thel(o .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thel(o .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -218,19 +245,22 @@ fn test_e231_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e245_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tˈ .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tˈ .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E245"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -241,19 +271,22 @@ fn test_e245_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e251_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t@s:eng .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t@s:eng .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E251"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -264,19 +297,22 @@ fn test_e251_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e256_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tdon’t .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tdon’t .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E256"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -287,19 +323,22 @@ fn test_e256_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_
 #[test]
 fn test_e301_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*:\thello world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*:\thello world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E301"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -310,19 +349,22 @@ fn test_e301_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e302_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*ch:\thello .\n@End");
+    let product = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*ch:\thello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E501", "E502", "E503", "E504", "E505"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -333,19 +375,22 @@ fn test_e302_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
 #[test]
 fn test_e303_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\thello {{{ world }}} .\n@End");
+    let product = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\thello {{{ world }}} .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E303"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -356,19 +401,22 @@ fn test_e303_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
 #[test]
 fn test_e304_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*:\thello .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*:\thello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E301"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -379,19 +427,22 @@ fn test_e304_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e307_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tA:B Child\n@ID:\teng|corpus|A:B|||||Child|||\n*A:B:\thello .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tA:B Child\n@ID:\teng|corpus|A:B|||||Child|||\n*A:B:\thello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E370"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -402,19 +453,22 @@ fn test_e307_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e309_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello ## world .\n@End");
+    let product = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello ## world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E501", "E502", "E503", "E504", "E505"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -425,19 +479,22 @@ fn test_e309_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
 #[test]
 fn test_e311_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t[: unclosed replacement [* error] .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t[: unclosed replacement [* error] .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -448,19 +505,22 @@ fn test_e311_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e312_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tword [= comment .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tword [= comment .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E304", "E375"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -471,19 +531,22 @@ fn test_e312_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e313_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thel(lo .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thel(lo .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -494,19 +557,22 @@ fn test_e313_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e314_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tword [\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tword [\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E375"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -517,19 +583,22 @@ fn test_e314_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e315_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tword\u{1}test .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tword\u{1}test .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -540,19 +609,22 @@ fn test_e315_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_angle_bracket_in_mor_stem_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\tfin\n@Participants:\tCHI Target_Child\n@ID:\tfin|test|CHI|||||Target_Child|||\n*CHI:\tkato tos .\n%mor:\tintj|kato noun|<sos>tos .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\tfin\n@Participants:\tCHI Target_Child\n@ID:\tfin|test|CHI|||||Target_Child|||\n*CHI:\tkato tos .\n%mor:\tintj|kato noun|<sos>tos .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -563,19 +635,22 @@ fn test_e316_angle_bracket_in_mor_stem_utf8_begin_languages_0() -> Result<(), ta
 #[test]
 fn test_e316_angle_bracket_in_mor_stem_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\tfin\n@Participants:\tCHI Target_Child\n@ID:\tfin|test|CHI|||||Target_Child|||\n*CHI:\ttos ei .\n%mor:\tsconj|<sos>tos~aux|ei-Fin-Neg-S3 .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\tfin\n@Participants:\tCHI Target_Child\n@ID:\tfin|test|CHI|||||Target_Child|||\n*CHI:\ttos ei .\n%mor:\tsconj|<sos>tos~aux|ei-Fin-Neg-S3 .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -586,19 +661,22 @@ fn test_e316_angle_bracket_in_mor_stem_utf8_begin_languages_1() -> Result<(), ta
 #[test]
 fn test_e316_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|||||Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello . [+ bch] 2041689_2042652\n*CHI:\tworld . [+ bch] 2051689_2052652\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|||||Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello . [+ bch] 2041689_2042652\n*CHI:\tworld . [+ bch] 2051689_2052652\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -609,19 +687,22 @@ fn test_e316_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\thello {{{ world }}} .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\thello {{{ world }}} .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -632,19 +713,22 @@ fn test_e316_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\t<<< [= test] >>> .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\t<<< [= test] >>> .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -655,19 +739,22 @@ fn test_e316_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_auto_utf8_begin_languages_3() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\t<<<<< hello >>>>> world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\t<<<<< hello >>>>> world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -678,19 +765,22 @@ fn test_e316_auto_utf8_begin_languages_3() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_auto_utf8_begin_languages_4() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI\thello world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI\thello world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -701,19 +791,22 @@ fn test_e316_auto_utf8_begin_languages_4() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_auto_utf8_begin_begin_5() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E501"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -724,19 +817,22 @@ fn test_e316_auto_utf8_begin_begin_5() -> Result<(), talkbank_parser_tests::test
 #[test]
 fn test_e316_auto_utf8_begin_languages_6() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: Timestamp shows 2052652_2041689 where start > end\n*CHI:\thello world . [+ bch] 2052652_2041689\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: Timestamp shows 2052652_2041689 where start > end\n*CHI:\thello world . [+ bch] 2052652_2041689\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -747,19 +843,22 @@ fn test_e316_auto_utf8_begin_languages_6() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e316_auto_utf8_begin_languages_7() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\thello n|world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\thello n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -770,19 +869,22 @@ fn test_e316_auto_utf8_begin_languages_7() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e319_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello .\n%%%broken line content here\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello .\n%%%broken line content here\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E319"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -793,19 +895,22 @@ fn test_e319_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e320_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n@Transcription:\t[malformed content with [unbalanced brackets\n*CHI:\thello .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n@Transcription:\t[malformed content with [unbalanced brackets\n*CHI:\thello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E320"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -816,19 +921,22 @@ fn test_e320_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e321_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello [% broken [nested unclosed .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello [% broken [nested unclosed .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E321"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -839,19 +947,22 @@ fn test_e321_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e322_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI hello .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI hello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E322"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -862,19 +973,22 @@ fn test_e322_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e323_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tERROR: Speaker must be followed by colon\n@Comment:\tInvalid: '*CHI hello' - Missing colon\n*CHI hello .\n@End");
+    let product = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tERROR: Speaker must be followed by colon\n@Comment:\tInvalid: '*CHI hello' - Missing colon\n*CHI hello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316", "E502", "E503", "E504", "E505"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -885,19 +999,22 @@ fn test_e323_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
 #[test]
 fn test_e324_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello } .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello } .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -908,19 +1025,22 @@ fn test_e324_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e325_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello .\n@@@unexpected content\n%mor:\tco|hello .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello .\n@@@unexpected content\n%mor:\tco|hello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E325"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -931,19 +1051,22 @@ fn test_e325_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e330_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t<hello [/] .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t<hello [/] .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -954,19 +1077,22 @@ fn test_e330_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e331_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tMAR Target_Child\n@ID:\teng|corpus|MAR|||||Target_Child|||\n*MAR:\tdon't give me a YM . 1520652_1522904\n%mor:\taux|do-Fin-Imp-S~part|not verb|give-Fin-Imp-S pron|I-Prs-Acc-S1 det|a-Ind-Art noun|-Acc .\n%gra:\t1|3|AUX 2|3|ADVMOD 3|6|ROOT 4|3|IOBJ 5|6|DET 6|3|OBJ 7|3|PUNCT\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tMAR Target_Child\n@ID:\teng|corpus|MAR|||||Target_Child|||\n*MAR:\tdon't give me a YM . 1520652_1522904\n%mor:\taux|do-Fin-Imp-S~part|not verb|give-Fin-Imp-S pron|I-Prs-Acc-S1 det|a-Ind-Art noun|-Acc .\n%gra:\t1|3|AUX 2|3|ADVMOD 3|6|ROOT 4|3|IOBJ 5|6|DET 6|3|OBJ 7|3|PUNCT\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E331"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -977,19 +1103,22 @@ fn test_e331_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e342_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thelo [: 0] world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thelo [: 0] world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E390"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1000,19 +1129,22 @@ fn test_e342_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e342_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\t|hello n|world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\t|hello n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316", "E702"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1023,19 +1155,22 @@ fn test_e342_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e342_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\tv| n|world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\tv| n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1046,19 +1181,22 @@ fn test_e342_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e342_auto_utf8_begin_languages_3() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%gra:\t1|2| 2|0|ROOT\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%gra:\t1|2| 2|0|ROOT\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1069,19 +1207,22 @@ fn test_e342_auto_utf8_begin_languages_3() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e342_group_without_annotation_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n@ID:\teng|corpus|PAR|||||Participant|||\n*PAR:\t<I don't> &-uh I know xxx .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n@ID:\teng|corpus|PAR|||||Participant|||\n*PAR:\t<I don't> &-uh I know xxx .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E342"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1092,19 +1233,22 @@ fn test_e342_group_without_annotation_utf8_begin_languages_0() -> Result<(), tal
 #[test]
 fn test_e344_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello <world <foo> bar> .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello <world <foo> bar> .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1115,19 +1259,22 @@ fn test_e344_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e346_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world> [/] .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world> [/] .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1138,19 +1285,22 @@ fn test_e346_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e360_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello . 0_0\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello . 0_0\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E362"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1161,19 +1311,22 @@ fn test_e360_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e361_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [^ bad[ .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [^ bad[ .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1184,19 +1337,22 @@ fn test_e361_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e363_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello . [+ ]\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello . [+ ]\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1207,19 +1363,22 @@ fn test_e363_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e364_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello@s:+ .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello@s:+ .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E246", "E249"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1230,19 +1389,22 @@ fn test_e364_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e375_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\thello [[[[ test ]]]] world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Comment:\tNote: This may need adjustment after testing\n*CHI:\thello [[[[ test ]]]] world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E375"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1253,19 +1415,22 @@ fn test_e375_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e375_replacement_needs_preceding_space_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword[: foo] .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword[: foo] .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E375"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1276,19 +1441,22 @@ fn test_e375_replacement_needs_preceding_space_utf8_begin_languages_0() -> Resul
 #[test]
 fn test_e376_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [:] world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [:] world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E376"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1299,19 +1467,22 @@ fn test_e376_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e382_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\t|hello n|world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\t|hello n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E760"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1322,19 +1493,22 @@ fn test_e382_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e382_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\thello n|world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\thello n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1345,19 +1519,22 @@ fn test_e382_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e382_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\tv| n|world .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\tv| n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1368,19 +1545,22 @@ fn test_e382_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e501_auto_utf8_begin_begin_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E501"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1391,19 +1571,22 @@ fn test_e501_auto_utf8_begin_begin_0() -> Result<(), talkbank_parser_tests::test
 #[test]
 fn test_e501_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI\n@ID:\teng|corpus|CHI|||||CHI|||\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI\n@ID:\teng|corpus|CHI|||||CHI|||\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E513"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1414,19 +1597,22 @@ fn test_e501_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e506_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\t\n\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\t\n\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E342"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1437,19 +1623,22 @@ fn test_e506_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e510_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\t|corpus|CHI|\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\t|corpus|CHI|\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E505"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1460,19 +1649,22 @@ fn test_e510_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e550_trailing_comma_participants_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child, MOT Mother,\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello .\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child, MOT Mother,\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E550"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1483,19 +1675,22 @@ fn test_e550_trailing_comma_participants_utf8_begin_languages_0() -> Result<(), 
 #[test]
 fn test_e702_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\thello n|world .\n@End");
+    let product = parser.parse_chat_file("@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\thello n|world .\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E702"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1506,19 +1701,48 @@ fn test_e702_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
 #[test]
 fn test_e710_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%gra:\t1-2-SUBJ 2|0|ROOT\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%gra:\t1-2-SUBJ 2|0|ROOT\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E316"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+
+
+/// Tests expected behavior.
+#[test]
+fn test_e747_blank_line_not_allowed_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thi .\n\n*CHI:\tbye .\n@End");
+
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
+
+    let expected_codes = vec!["E747"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1529,19 +1753,22 @@ fn test_e710_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
 #[test]
 fn test_e748_leading_zero_bullet_time_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n*CHI:\they . \u{15}012_200\u{15}\n@Comment:\tERROR: start time 012 has a leading zero\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n*CHI:\they . \u{15}012_200\u{15}\n@Comment:\tERROR: start time 012 has a leading zero\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E748"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1552,19 +1779,22 @@ fn test_e748_leading_zero_bullet_time_utf8_begin_languages_0() -> Result<(), tal
 #[test]
 fn test_e748_leading_zero_bullet_time_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n*CHI:\they . \u{15}100_012\u{15}\n@Comment:\tERROR: end time 012 has a leading zero\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n*CHI:\they . \u{15}100_012\u{15}\n@Comment:\tERROR: end time 012 has a leading zero\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E748"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1575,19 +1805,22 @@ fn test_e748_leading_zero_bullet_time_utf8_begin_languages_1() -> Result<(), tal
 #[test]
 fn test_e750_space_inside_angle_group_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog> [/] dog .\n@Comment:\tERROR: space directly after the opening angle bracket\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog> [/] dog .\n@Comment:\tERROR: space directly after the opening angle bracket\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E750"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1598,19 +1831,22 @@ fn test_e750_space_inside_angle_group_utf8_begin_languages_0() -> Result<(), tal
 #[test]
 fn test_e750_space_inside_angle_group_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t<dog > [/] dog .\n@Comment:\tERROR: space directly before the closing angle bracket\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t<dog > [/] dog .\n@Comment:\tERROR: space directly before the closing angle bracket\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E750"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1621,19 +1857,22 @@ fn test_e750_space_inside_angle_group_utf8_begin_languages_1() -> Result<(), tal
 #[test]
 fn test_e759_annotation_at_utterance_start_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[/] we go home .\n@Comment:\tERROR: the leading retrace has no material to retrace\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[/] we go home .\n@Comment:\tERROR: the leading retrace has no material to retrace\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E759"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1644,19 +1883,22 @@ fn test_e759_annotation_at_utterance_start_utf8_begin_languages_0() -> Result<()
 #[test]
 fn test_e759_annotation_at_utterance_start_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[<] no way .\n@Comment:\tERROR: the leading overlap marker has no scoped material\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[<] no way .\n@Comment:\tERROR: the leading overlap marker has no scoped material\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E759"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1667,19 +1909,22 @@ fn test_e759_annotation_at_utterance_start_utf8_begin_languages_1() -> Result<()
 #[test]
 fn test_e759_annotation_at_utterance_start_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[: because] we go .\n@Comment:\tERROR: the leading replacement has no word to replace\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[: because] we go .\n@Comment:\tERROR: the leading replacement has no word to replace\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E759"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1690,19 +1935,22 @@ fn test_e759_annotation_at_utterance_start_utf8_begin_languages_2() -> Result<()
 #[test]
 fn test_e760_mor_item_empty_pos_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\twe go .\n%mor:\t|we v|go .\n@Comment:\tERROR: the first mor item has an empty POS field\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\twe go .\n%mor:\t|we v|go .\n@Comment:\tERROR: the first mor item has an empty POS field\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E760"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1713,19 +1961,22 @@ fn test_e760_mor_item_empty_pos_utf8_begin_languages_0() -> Result<(), talkbank_
 #[test]
 fn test_e760_mor_item_empty_pos_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\twe go home .\n%mor:\tpro|we v|go |home .\n@Comment:\tERROR: the third mor item has an empty POS field\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\twe go home .\n%mor:\tpro|we v|go |home .\n@Comment:\tERROR: the third mor item has an empty POS field\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E760"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1736,19 +1987,22 @@ fn test_e760_mor_item_empty_pos_utf8_begin_languages_1() -> Result<(), talkbank_
 #[test]
 fn test_e766_linker_not_utterance_initial_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tyeah that go +\" okay .\n@Comment:\tERROR: the linker must open the utterance\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tyeah that go +\" okay .\n@Comment:\tERROR: the linker must open the utterance\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E766"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1759,19 +2013,22 @@ fn test_e766_linker_not_utterance_initial_utf8_begin_languages_0() -> Result<(),
 #[test]
 fn test_e766_linker_not_utterance_initial_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tI know ++ and then .\n@Comment:\tERROR: the linker must open the utterance\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tI know ++ and then .\n@Comment:\tERROR: the linker must open the utterance\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E766"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())
@@ -1782,19 +2039,22 @@ fn test_e766_linker_not_utterance_initial_utf8_begin_languages_1() -> Result<(),
 #[test]
 fn test_e766_linker_not_utterance_initial_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
-    let result = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello +< there .\n@Comment:\tERROR: the linker must open the utterance\n@End");
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello +< there .\n@Comment:\tERROR: the linker must open the utterance\n@End");
 
-    let errors = match result {
-        Ok(_) => return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    };
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
 
     let expected_codes = vec!["E766"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
         assert!(has_expected, "Expected error code {}, but got: {:?}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
     }
 
     Ok(())

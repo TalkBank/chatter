@@ -13,6 +13,7 @@ Word content is structurally malformed, the parser recognized a word node but it
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

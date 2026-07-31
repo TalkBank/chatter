@@ -269,23 +269,26 @@ mod tests {
 @ID:\teng|test|CHI|3;|male|||Target_Child|||\n*CHI:\thello world .\n\
 %mor:\tn|hello n|world .\n%gra:\t1|2|SUBJ 2|0|ROOT 3|2|PUNCT\n@End\n";
 
-    fn parse_chat_file(
-        text: &str,
-    ) -> Result<talkbank_model::ChatFile, talkbank_model::ParseErrors> {
+    /// `MOR_GRA_CHAT` below is a known-clean fixture, so `expect_built`'s
+    /// "was a model built" question is equivalent here to the old strict
+    /// "did it parse without error diagnostics" contract; this helper drops
+    /// the `Result` wrapper the pre-`ParseProduct` version needed, since
+    /// `expect_built` already panics on a bad fixture.
+    fn parse_chat_file(text: &str) -> talkbank_model::ChatFile {
         let parser = TreeSitterParser::new().expect("grammar loads");
-        parser.parse_chat_file(text)
+        parser.parse_chat_file(text).expect_built()
     }
 
     #[test]
     fn test_valid_file_passes_all_levels() {
-        let chat = parse_chat_file(MOR_GRA_CHAT).unwrap();
+        let chat = parse_chat_file(MOR_GRA_CHAT);
         assert!(validate_to_level(&chat, &[], ValidityLevel::MainTierValid).is_ok());
     }
 
     #[test]
     fn test_parse_errors_fail_l0() {
         use talkbank_model::{ErrorCode, Severity, SourceLocation, Span};
-        let chat = parse_chat_file(MOR_GRA_CHAT).unwrap();
+        let chat = parse_chat_file(MOR_GRA_CHAT);
         let synthetic: Vec<ParseError> = (0..3)
             .map(|_| {
                 ParseError::new(
@@ -317,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_morphotag_output_validates_alignment() {
-        let chat = parse_chat_file(MOR_GRA_CHAT).unwrap();
+        let chat = parse_chat_file(MOR_GRA_CHAT);
         // Valid morphotag output should pass
         assert!(validate_output(&chat, "morphotag").is_ok());
     }
@@ -329,7 +332,7 @@ mod tests {
     fn test_ca_file_skips_terminator_check() {
         use talkbank_model::model::Line;
 
-        let mut chat = parse_chat_file(MOR_GRA_CHAT).unwrap();
+        let mut chat = parse_chat_file(MOR_GRA_CHAT);
 
         // Add @Options: CA and remove terminators
         chat.options.push(ChatOptionFlag::Ca);
@@ -352,7 +355,7 @@ mod tests {
     fn test_non_ca_file_fails_without_terminator() {
         use talkbank_model::model::Line;
 
-        let mut chat = parse_chat_file(MOR_GRA_CHAT).unwrap();
+        let mut chat = parse_chat_file(MOR_GRA_CHAT);
 
         // Remove terminators WITHOUT setting CA option
         for line in &mut chat.lines {
@@ -372,7 +375,7 @@ mod tests {
     fn test_output_validation_catches_missing_terminator() {
         use talkbank_model::model::Line;
 
-        let mut chat = parse_chat_file(MOR_GRA_CHAT).unwrap();
+        let mut chat = parse_chat_file(MOR_GRA_CHAT);
 
         // Remove the terminator to simulate corruption
         for line in &mut chat.lines {

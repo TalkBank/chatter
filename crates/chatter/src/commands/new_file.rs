@@ -175,12 +175,32 @@ mod tests {
     }
 
     /// Parses file.
+    ///
+    /// `create_new_file` fixtures are expected to be clean, so this
+    /// reproduces the pre-`ParseProduct` strict contract explicitly: a
+    /// [`talkbank_parser::ParseProduct::Built`] with an error-severity
+    /// diagnostic is treated as a failure the same as
+    /// [`talkbank_parser::ParseProduct::Unbuildable`], rather than silently
+    /// accepting a recovered-but-invalid model.
     fn parse_file(path: &Path) -> Result<ChatFile, TestError> {
         let content = fs::read_to_string(path).map_err(|source| TestError::Io { source })?;
         let parser = TreeSitterParser::new().expect("grammar loads");
-        parser
-            .parse_chat_file(&content)
-            .map_err(|source| TestError::Parse { source })
+        match parser.parse_chat_file(&content) {
+            talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+                if diagnostics
+                    .iter()
+                    .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
+                {
+                    return Err(TestError::Parse {
+                        source: ParseErrors::from(diagnostics),
+                    });
+                }
+                Ok(file)
+            }
+            talkbank_parser::ParseProduct::Unbuildable { diagnostics } => Err(TestError::Parse {
+                source: ParseErrors::from(diagnostics),
+            }),
+        }
     }
 
     /// Assert that a required header appears in the parsed file.

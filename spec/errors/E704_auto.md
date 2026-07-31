@@ -11,6 +11,7 @@ A single speaker has consecutive utterances with overlap markers (`⌈⌉`/`⌊�
 - **Category**: validation
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Corpus Impact
 

@@ -21,7 +21,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Phonology_Tier>
 
 use crate::model::Utterance;
-use crate::model::dependent_tier::{PhoItem, PhoTier, SylTier, SylWordKind, classify_syl_word};
+use crate::model::dependent_tier::{
+    PhoItem, PhoTier, SylTier, SylWordKind, classify_syl_word, reconstruct_syl_word,
+};
 use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
 
 /// 1 ms rounding tolerance for the `%xphoint` media-bounds check.
@@ -149,7 +151,7 @@ fn validate_syl_tier(
                 if !reconstruction_clean {
                     continue;
                 }
-                let reconstructed: String = units.iter().map(|u| u.phone.as_str()).collect();
+                let reconstructed = reconstruct_syl_word(&units);
                 if let Some(expected) = source_word(source, i)
                     && reconstructed != expected
                 {

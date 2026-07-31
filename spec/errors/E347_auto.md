@@ -21,6 +21,7 @@ CLAPI, and Forrester corpora).
 - **Level**: cross_utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

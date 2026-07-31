@@ -11,6 +11,7 @@ Every `%xphoaln` pair has exactly one ↔ with a non-null phone on at least one 
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -6,9 +6,6 @@
 //! one-off conversions. All conversions respect UTF-8 character boundaries and
 //! use 0-indexed lines/characters per LSP convention.
 
-use talkbank_model::Span;
-use talkbank_model::dependent_tier::DependentTier;
-use talkbank_model::model::Utterance;
 use tower_lsp::lsp_types::*;
 
 // =============================================================================
@@ -166,35 +163,22 @@ pub fn position_to_offset(text: &str, position: Position) -> usize {
     text.len()
 }
 
-/// Finds utterance at position.
+/// Finds the utterance at a cursor position.
+///
+/// The cursor may rest at an utterance's exclusive end (for example right
+/// after the last character of a word), so the offset is tried as-is and
+/// then one byte back. Containment itself lives in the model
+/// (`ChatFile::utterance_containing`, half-open); this crate owns only the
+/// position-to-offset conversion and this cursor-affinity fallback.
 pub fn find_utterance_at_position<'a>(
     chat_file: &'a talkbank_model::model::ChatFile,
     position: Position,
     document: &str,
 ) -> Option<&'a talkbank_model::model::Utterance> {
     let offset = position_to_offset(document, position) as u32;
-
     chat_file
-        .utterances()
-        .find(|utterance| utterance_contains_offset(utterance, offset))
-}
-
-/// Returns whether the offset falls within the utterance main/dependent-tier spans.
-fn utterance_contains_offset(utterance: &Utterance, offset: u32) -> bool {
-    span_contains(utterance.main.span, offset)
-        || utterance.dependent_tiers.iter().any(|entry| {
-            dependent_tier_span(&entry.tier).is_some_and(|span| span_contains(span, offset))
-        })
-}
-
-/// Returns the source span for a dependent-tier variant.
-fn dependent_tier_span(tier: &DependentTier) -> Option<Span> {
-    Some(tier.span())
-}
-
-/// Returns whether the offset is inside the span (inclusive bounds).
-fn span_contains(span: Span, offset: u32) -> bool {
-    offset >= span.start && offset <= span.end
+        .utterance_containing(offset)
+        .or_else(|| chat_file.utterance_containing(offset.saturating_sub(1)))
 }
 
 #[cfg(test)]
@@ -228,15 +212,5 @@ mod tests {
 
         assert_eq!(position_to_offset(text, pos_after_chinese), 5);
         assert_eq!(position_to_offset(text, pos_after_z), 6);
-    }
-
-    #[test]
-    fn span_contains_is_inclusive() {
-        let span = Span { start: 10, end: 20 };
-        assert!(span_contains(span, 10));
-        assert!(span_contains(span, 15));
-        assert!(span_contains(span, 20));
-        assert!(!span_contains(span, 9));
-        assert!(!span_contains(span, 21));
     }
 }

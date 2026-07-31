@@ -13,6 +13,7 @@ Unmatched scoped annotation end marker (`>` without matching `<`). This is a cro
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

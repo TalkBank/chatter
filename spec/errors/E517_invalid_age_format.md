@@ -44,6 +44,7 @@ Authoritative source: `clan-info/lib/depfile.cut:16`.
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## CHAT background
 

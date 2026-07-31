@@ -13,6 +13,7 @@ The media bullet contains a deprecated skip flag (dash before closing NAK delimi
 - **Category**: Main tier validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

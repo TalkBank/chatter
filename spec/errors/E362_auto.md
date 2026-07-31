@@ -10,6 +10,7 @@ Bullet timestamps must be monotonic
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -26,6 +26,7 @@ unaffected: they parse normally and never reach this path.
 - **Category**: Main tier annotations
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

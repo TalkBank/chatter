@@ -9,6 +9,33 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Added
+
+- **`chatter fix`**, built on the span-splicing engine. It supersedes the
+  deleted `chatter lint`: the old `lint --fix` is now `fix --apply`. `fix`
+  covers the full fix catalog rather than three codes, applies fixes at
+  exact byte spans validated against the source text, and repairs a clean
+  utterance in a file whose other regions did not parse (the utterance
+  containing an edit must have parsed clean, or the edit is refused and
+  reported, never silently dropped). Every catalog entry carries a
+  batch-safety tier and a bare `--apply` writes only the mechanical ones;
+  a semantic fix is written only when its code is named with `--code`; an
+  ambiguous fix is only ever reported, never written by this command.
+
+### Removed
+
+- **`chatter lint` (the `--fix` auto-fixer) is deleted.** It was a live
+  span-driven byte writer built before the splice engine's safety
+  guarantees existed: it read `error.location.span` with no dummy-span
+  guard (`Span::DUMMY` is `{0,0}`, a real file offset), called
+  `String::replace_range` with no `is_char_boundary` check (a panic on a
+  non-character-boundary span), inserted its E301 terminator fix at zero
+  width with no dummy-span guard either (corrupting the `@UTF8` header had
+  one ever fired at offset 0), and detected no overlap between fixes. An
+  audit found zero production callers (no `talkbank-tools` reference, no
+  workspace script, no IISRP pipeline usage; only its own tests and the
+  book mentioned it). `chatter fix` is its successor; see Added above.
+
 ## [0.5.1] - 2026-07-30
 
 ### Fixed

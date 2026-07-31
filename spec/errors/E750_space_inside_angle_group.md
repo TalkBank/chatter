@@ -18,6 +18,7 @@ being silently rewritten on normalize.
 - **Level**: utterance
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -190,3 +190,67 @@ fn genuine_mismatches_still_reported() {
         "genuinely different phones must still fail reconstruction, got: {codes:?}"
     );
 }
+
+/// Greg Hedlund's spec (§2 rule 5): a pause word present on only one of
+/// `%mod`/`%pho` forms its own `%xphoaln` alignment word and consumes no word
+/// slot on the tier lacking it, so `%xphoaln`'s word count MAY legitimately
+/// differ from either source tier's count. Here the model was transcribed
+/// with a mid-utterance pause ("cat (..) dog", 3 words) but the child
+/// produced no pause ("cat dog", 2 words on %pho): %xphoaln has 3 words, one
+/// of them the mod-only pause `(..)↔∅`, and must validate cleanly against
+/// both a 3-word %mod and a 2-word %pho.
+#[test]
+fn one_sided_pause_word_does_not_trip_phoaln_word_count() {
+    let content = "@UTF8\n\
+@Begin\n\
+@Languages:\teng\n\
+@Participants:\tCHI Target_Child\n\
+@ID:\teng|corpus|CHI|||||Target_Child|||\n\
+*CHI:\tcat dog .\n\
+%mod:\tkæt (..) dɔɡ\n\
+%pho:\tkæt dɔɡ\n\
+%xphoaln:\tk↔k,æ↔æ,t↔t (..)↔∅ d↔d,ɔ↔ɔ,ɡ↔ɡ\n\
+@End\n";
+    let codes = diagnostic_codes(content);
+    assert_no_codes(&codes, &["E727", "E728"]);
+}
+
+/// The one-sided-pause exception must not swallow a genuine count mismatch
+/// that has nothing to do with a pause: %xphoaln here is missing a word
+/// entirely (2 words for a 3-word %mod), so E727 must still fire.
+#[test]
+fn genuine_phoaln_word_count_mismatch_still_reported() {
+    let content = "@UTF8\n\
+@Begin\n\
+@Languages:\teng\n\
+@Participants:\tCHI Target_Child\n\
+@ID:\teng|corpus|CHI|||||Target_Child|||\n\
+*CHI:\tcat dog run .\n\
+%mod:\tkæt dɔɡ ɹʌn\n\
+%xphoaln:\tk↔k,æ↔æ,t↔t d↔d,ɔ↔ɔ,ɡ↔ɡ\n\
+@End\n";
+    let codes = diagnostic_codes(content);
+    assert!(
+        codes.iter().any(|c| c == "E727"),
+        "a real word-count shortfall (not explained by a one-sided pause) \
+         must still fail, got: {codes:?}"
+    );
+}
+
+/// Greg Hedlund's spec lists numeric inter-word pauses (`(x.x)`) as legal
+/// alongside `(.)`/`(..)`/`(...)`; a numeric pause filler on `%xmodsyl` must
+/// not fail `phone:CODE` tokenization (E735).
+#[test]
+fn numeric_pause_filler_accepted_on_syllabification_tier() {
+    let content = "@UTF8\n\
+@Begin\n\
+@Languages:\teng\n\
+@Participants:\tCHI Target_Child\n\
+@ID:\teng|corpus|CHI|||||Target_Child|||\n\
+*CHI:\tcat (1.5) dog .\n\
+%mod:\tkæt (1.5) dɔɡ\n\
+%xmodsyl:\tk:Oæ:Nt:C (1.5) d:Oɔ:Nɡ:C\n\
+@End\n";
+    let codes = diagnostic_codes(content);
+    assert_no_codes(&codes, &["E735", "E725", "E737"]);
+}

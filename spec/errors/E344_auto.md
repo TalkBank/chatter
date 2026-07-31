@@ -13,6 +13,7 @@ Invalid nesting of scoped annotations (quotation precedes pattern). This is a cr
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

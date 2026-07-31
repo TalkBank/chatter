@@ -132,6 +132,26 @@ fn write_fixture(
 // Tests
 // ============================================================================
 
+/// Intra-word pauses (`^`, U+005E) on `%xmodsyl`/`%xphosyl` reconstruct
+/// cleanly in both legal positions: mid-word (between units) and word-final
+/// (after the last unit). Fixture is `corpus/reference/tiers/
+/// phon-intra-word-pause.cha`, derived from two real phon-data corpus
+/// occurrences (danger rule 9: reference corpus, not an ad hoc fixture).
+/// Before the fix, word-final `^` wrongly errored `MissingColon` (surfaced
+/// as E735) and a mid-word `^` silently fused into the following phone.
+#[test]
+fn phon_intra_word_pause_validates() -> Result<(), TestError> {
+    let path = crate::common::reference_fixture("corpus/reference/tiers/phon-intra-word-pause.cha");
+    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .arg("validate")
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Valid: 1"))
+        .stdout(predicate::str::contains("Invalid: 0"));
+    Ok(())
+}
+
 /// A well-formed Phon export validates cleanly with NO flags (validation is on
 /// by default). Post-feature this passes because the tiers are parsed and every
 /// rule holds, not because they are ignored.
@@ -265,5 +285,151 @@ fn phon_suppress_xphon_also_silences_the_audit_stream() -> Result<(), TestError>
         leaked.len(),
         leaked
     );
+    Ok(())
+}
+
+/// A file with a NON-suppressed error must still count as invalid, and still
+/// fail the run, when another file in the same directory was fully suppressed.
+///
+/// The fixtures are a MIX on purpose, and that is the whole difficulty of
+/// reproducing this: the bug needs at least one fully suppressed file to drive
+/// the count adjustment AND at least one genuinely invalid file to be
+/// under-counted by it. Every single-file run reported correctly, which is why
+/// a full-corpus assessment found it (2026-07-30) and the existing per-file
+/// suppression tests above did not.
+///
+/// Both assertions are load-bearing and check different consumers of the same
+/// field: the printed summary, and the exit code derived from `invalid_files`.
+/// Their divergence is exactly the bug class.
+#[test]
+fn suppression_does_not_hide_other_files_invalid_count() -> Result<(), TestError> {
+    let harness = crate::common::CliHarness::new()?;
+    let corpus = tempdir()?;
+
+    // Fully suppressed by `--suppress xphon`: contributes to the suppressed
+    // count that gets moved over to the valid column.
+    crate::common::write_fixture(corpus.path(), "all_suppressed.cha", PHON_ILLEGAL_CODE)?;
+
+    // A non-Phon error that `--suppress xphon` must NOT silence. Copied from
+    // the committed, spec-generated E241 fixture rather than hand-written, so
+    // that narrowing or retiring the E241 rule regenerates it and this test
+    // follows, instead of silently asserting against a file that no longer
+    // produces an error.
+    fs::copy(
+        crate::common::reference_fixture(
+            "crates/talkbank-parser-tests/tests/error_corpus/\
+             validation_errors/E241_Illegal_Untranscribed_Marker_xx.cha",
+        ),
+        corpus.path().join("really_invalid.cha"),
+    )?;
+
+    let output = harness.run_validate(corpus.path(), &["--suppress", "xphon"])?;
+    let stdout = crate::common::stdout_string(&output);
+
+    assert!(
+        stdout.contains("Invalid: 1"),
+        "the non-suppressed file must be counted as invalid; suppression must \
+         not decrement the count for OTHER files.\nsummary said:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Valid: 1"),
+        "the fully-suppressed file must MOVE to the valid column, not vanish \
+         from both; valid + invalid must still equal the file count.\n\
+         summary said:\n{stdout}"
+    );
+    crate::common::assert_failure(&output, "validate over a directory with one invalid file");
+
+    Ok(())
+}
+
+/// A verdict produced under `--suppress` must never be served back to a run
+/// without it.
+///
+/// This test is GREEN today and is here as a trap, not as a bug report.
+/// Suppression currently runs AFTER validation, so what lands in the cache is
+/// always the unsuppressed verdict and the cache key can ignore suppression
+/// entirely. The planned change moves suppression into the rule set so that
+/// classification happens once, and at that moment the cached verdict starts
+/// depending on which codes were active. A cache key that still ignores
+/// suppression would then hand a suppressed run's "valid" to an unsuppressed
+/// run: the same stale-verdict shape as the rules-fingerprint defect, arrived
+/// at from the other direction.
+///
+/// Both runs share one `CliHarness`, so they share one cache directory. That
+/// is the whole point; do not split them.
+#[test]
+fn a_suppressed_verdict_is_not_served_to_an_unsuppressed_run() -> Result<(), TestError> {
+    let harness = crate::common::CliHarness::new()?;
+    let corpus = tempdir()?;
+
+    // Its only problems are Phon %x errors, so it is invalid normally and
+    // valid under `--suppress xphon`. That difference is what must not leak
+    // through the cache.
+    crate::common::write_fixture(corpus.path(), "only_xphon.cha", PHON_ILLEGAL_CODE)?;
+
+    let suppressed = harness.run_validate(corpus.path(), &["--suppress", "xphon"])?;
+    let suppressed_out = crate::common::stdout_string(&suppressed);
+    assert!(
+        suppressed_out.contains("Valid: 1"),
+        "with xphon suppressed the file must count as valid.\nsummary said:\n{suppressed_out}"
+    );
+
+    // Same cache, same file bytes, different active rule set.
+    let unsuppressed = harness.run_validate(corpus.path(), &[])?;
+    let unsuppressed_out = crate::common::stdout_string(&unsuppressed);
+    assert!(
+        unsuppressed_out.contains("Invalid: 1"),
+        "without suppression the SAME file must be invalid; a cached verdict \
+         from the suppressed run must not be reused.\nsummary said:\n{unsuppressed_out}"
+    );
+    crate::common::assert_failure(
+        &unsuppressed,
+        "validate without suppression over a file whose only errors are xphon",
+    );
+
+    Ok(())
+}
+
+/// `--suppress` takes `Vec<String>` and is matched against code strings, so a
+/// value naming no real code or group silently suppresses nothing and the run
+/// still exits 0.
+///
+/// That is the worst possible outcome for this flag: the user believes they
+/// suppressed something, the tool agrees by saying nothing, and a typo in a
+/// CI invocation quietly becomes a no-op that nobody notices until the
+/// suppressed diagnostics reappear in someone else's run. A suppression that
+/// silently does nothing is indistinguishable from one that worked.
+///
+/// Verified by hand before writing this test: `chatter validate <clean file>
+/// --suppress E9999` exits 0 with no diagnostic about `E9999`.
+#[test]
+fn an_unknown_suppress_value_is_rejected_rather_than_silently_ignored() -> Result<(), TestError> {
+    let harness = crate::common::CliHarness::new()?;
+    let corpus = tempdir()?;
+
+    crate::common::write_fixture(corpus.path(), "all_suppressed.cha", PHON_ILLEGAL_CODE)?;
+
+    // `E9999` is not a real error code and `notagroup` is not a real group.
+    // Each must be refused at argument-parse time, naming the offending value.
+    for bogus in ["E9999", "notagroup"] {
+        let output = harness.run_validate(corpus.path(), &["--suppress", bogus])?;
+        let combined = format!(
+            "{}{}",
+            crate::common::stdout_string(&output),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        assert!(
+            !output.status.success(),
+            "--suppress {bogus} names nothing that exists, so the run must fail \
+             rather than silently suppress nothing.\noutput was:\n{combined}"
+        );
+        assert!(
+            combined.contains(bogus),
+            "the rejection must name the offending value {bogus} so the user can \
+             see which one was wrong.\noutput was:\n{combined}"
+        );
+    }
+
     Ok(())
 }

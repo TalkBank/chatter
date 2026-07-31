@@ -414,9 +414,13 @@ fn test_speaker_parity_with_existing_parser() {
         let source = std::fs::read_to_string(entry.path()).expect("read file");
         let tree = parser.parse(&source, None).expect("parse");
 
-        // Parse with the Rust parser
-        let Ok(existing) = chat_parser.parse_chat_file(&source) else {
-            continue; // Skip files that fail to parse
+        // Parse with the Rust parser. A healthy region can still be
+        // compared even when the file also carries diagnostics elsewhere;
+        // only a genuinely unbuildable file is skipped.
+        let talkbank_parser::ParseProduct::Built { file: existing, .. } =
+            chat_parser.parse_chat_file(&source)
+        else {
+            continue; // Skip files with no model at all.
         };
 
         // Collect speakers from generated traversal

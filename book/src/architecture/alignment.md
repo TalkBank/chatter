@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-07-31 09:51 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -136,10 +136,13 @@ potentially emitting E727 and E728 simultaneously.
 
 **Known data issue:** Phon XML source data has orthography↔IPA word
 count discrepancies in ~4% of files (518 / 12,340). Expected in child
-phonology data. The PhonTalk converter handles this inconsistently,
-`%mod`/`%pho` are truncated to match orthography via `OneToOne`, but
-`%xmodsyl`/`%xphosyl`/`%xphoaln` are written from raw `IPATranscript`,
-exposing the full IPA word count. Result: E725-E728 mismatches.
+phonology data. A subset of existing corpus CHAT files handle this
+inconsistently across tiers: `%mod`/`%pho` are truncated to match
+orthography, one word to one word, but `%xmodsyl`/`%xphosyl`/`%xphoaln`
+carry the full IPA word set, undropped. Result: E725-E728 mismatches.
+As of Phon 4.0.0-beta.9 (2026-06-25), Phon reads and writes CHAT
+natively; we have not seen output from that native export and do not
+know whether it reproduces the inconsistency.
 
 ### Parse-health gating
 

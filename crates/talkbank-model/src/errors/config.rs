@@ -18,6 +18,23 @@
 use crate::{ErrorCode, Severity};
 use std::collections::HashMap;
 
+/// Prefix for the sorted per-code severity-override list inside
+/// [`ValidationConfig::cache_key_fragment`]'s output.
+const OVERRIDES_FRAGMENT_PREFIX: &str = "+overrides.";
+
+/// Label standing in for a fully disabled code inside the overrides list
+/// (`Option<Severity>`'s `None` has no `Display`).
+const DISABLED_OVERRIDE_LABEL: &str = "disabled";
+
+/// Suffix appended by [`ValidationConfig::cache_key_fragment`] when
+/// `enable_quotation_validation` (strict cross-utterance linker validation)
+/// is on.
+const STRICT_LINKERS_FRAGMENT: &str = "+strict-linkers";
+
+/// Suffix appended by [`ValidationConfig::cache_key_fragment`] when
+/// `upgrade_unmapped_warnings` is on.
+const UPGRADE_UNMAPPED_WARNINGS_FRAGMENT: &str = "+upgrade-unmapped-warnings";
+
 /// Configuration for validation severity behavior.
 ///
 /// Allows downgrading errors to warnings, disabling specific checks,
@@ -207,6 +224,78 @@ impl ValidationConfig {
             .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning)
             .downgrade(ErrorCode::InvalidOverlapIndex, Severity::Warning)
     }
+
+    /// Render the cache-relevant surface of this config as a deterministic,
+    /// canonical text fragment, for folding into a validation cache key
+    /// (`talkbank_cache::RulesVersion::current_with_config`).
+    ///
+    /// # Why this lives here, next to the struct, and not in `talkbank-cache`
+    ///
+    /// `talkbank-cache` cannot enumerate `ValidationConfig`'s fields itself:
+    /// they are private, and even if they were public, a hand-picked field
+    /// list in a downstream crate is exactly the shape of bug this method
+    /// exists to make unrepresentable. Two real gaps shipped from that
+    /// shape: `upgrade_unmapped_warnings` was never folded into the cache
+    /// key at all (inert only because `ValidationConfig::strict()`, the
+    /// sole constructor that sets it, had no production caller yet), and a
+    /// separate CLI cache-key builder folded `strict_linkers` but not its
+    /// `--suppress` list. Both were silent: nothing failed to compile, and
+    /// nothing failed a test, until a caller finally exercised the gap and
+    /// got served a stale verdict from a differently-configured run.
+    ///
+    /// This method closes the shape, not just the two instances: it
+    /// destructures `Self` FIELD BY FIELD with **no `..` rest pattern**, so
+    /// adding a field to `ValidationConfig` is a compile error here until
+    /// someone decides whether it can change a validation verdict. If it
+    /// can, fold it into the returned fragment. If it genuinely cannot,
+    /// bind it to `_` with a one-line comment explaining why not; that
+    /// comment is the recorded decision, not a silent omission.
+    ///
+    /// The wrapped fields are the invariant every call site relies on: two
+    /// configs with equal `cache_key_fragment()` output must be
+    /// interchangeable as far as a cached pass/fail verdict is concerned.
+    pub fn cache_key_fragment(&self) -> String {
+        let Self {
+            severity_overrides,
+            upgrade_unmapped_warnings,
+            enable_quotation_validation,
+        } = self;
+
+        // A disabled code is never emitted and a downgraded/upgraded code
+        // changes severity, either of which can flip a file between Valid
+        // and Invalid: every override must be folded in. Sorted + deduped
+        // so `HashMap` iteration order never affects the fragment.
+        let mut overrides: Vec<String> = severity_overrides
+            .iter()
+            .map(|(code, severity)| {
+                let severity_label = severity
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| DISABLED_OVERRIDE_LABEL.to_string());
+                format!("{}:{severity_label}", code.as_str())
+            })
+            .collect();
+        overrides.sort_unstable();
+        overrides.dedup();
+
+        let mut fragment = String::new();
+        if !overrides.is_empty() {
+            fragment.push_str(OVERRIDES_FRAGMENT_PREFIX);
+            fragment.push_str(&overrides.join(","));
+        }
+        // Escalates warnings without an explicit override to errors, which
+        // can flip a file from Valid to Invalid: must be folded in. This is
+        // the gap that shipped inert (`ValidationConfig::strict()` had no
+        // production caller) and is closed here.
+        if *upgrade_unmapped_warnings {
+            fragment.push_str(UPGRADE_UNMAPPED_WARNINGS_FRAGMENT);
+        }
+        // Turns on E351-E355 (strict cross-utterance linker validation),
+        // which can flip a file from Valid to Invalid: must be folded in.
+        if *enable_quotation_validation {
+            fragment.push_str(STRICT_LINKERS_FRAGMENT);
+        }
+        fragment
+    }
 }
 
 #[cfg(test)]
@@ -278,6 +367,51 @@ mod tests {
             config.effective_severity(ErrorCode::UnknownAnnotation, Severity::Warning),
             Some(Severity::Error)
         );
+    }
+
+    /// `ValidationConfig::strict()` and `ValidationConfig::new()` differ in
+    /// exactly one field, `upgrade_unmapped_warnings`, so this is a direct
+    /// probe of that one dimension: before `cache_key_fragment` folded it
+    /// in, the two configs produced the SAME fragment despite `strict()`
+    /// being able to flip a file from Valid to Invalid (any unmapped
+    /// warning becomes an error). A downstream `RulesVersion` built from
+    /// these two fragments must diverge or a cache row produced under one
+    /// could be served to the other.
+    #[test]
+    fn cache_key_fragment_differs_when_only_upgrade_unmapped_warnings_differs() {
+        let default_config = ValidationConfig::new();
+        let strict_config = ValidationConfig::strict();
+        assert_ne!(
+            default_config.cache_key_fragment(),
+            strict_config.cache_key_fragment(),
+            "upgrade_unmapped_warnings must be folded into the cache key fragment"
+        );
+    }
+
+    /// Same probe as above, for the other boolean dimension.
+    #[test]
+    fn cache_key_fragment_differs_when_only_strict_linkers_differs() {
+        let default_config = ValidationConfig::new();
+        let strict_linkers_config = ValidationConfig::new().with_strict_linkers();
+        assert_ne!(
+            default_config.cache_key_fragment(),
+            strict_linkers_config.cache_key_fragment(),
+            "strict_linkers must be folded into the cache key fragment"
+        );
+    }
+
+    /// Two configs with the same disabled-code SET, built in a different
+    /// order, must produce the same fragment: `HashMap` iteration order
+    /// must never leak into the cache key.
+    #[test]
+    fn cache_key_fragment_is_order_independent_over_overrides() {
+        let forward = ValidationConfig::new()
+            .disable(ErrorCode::InvalidOverlapIndex)
+            .disable(ErrorCode::UnparsableContent);
+        let backward = ValidationConfig::new()
+            .disable(ErrorCode::UnparsableContent)
+            .disable(ErrorCode::InvalidOverlapIndex);
+        assert_eq!(forward.cache_key_fragment(), backward.cache_key_fragment());
     }
 
     /// Explicit per-code overrides take precedence over strict-mode escalation.

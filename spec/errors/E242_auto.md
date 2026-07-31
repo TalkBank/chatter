@@ -12,6 +12,7 @@ Quotation marks must be balanced within an utterance.
 - **Category**: validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -11,6 +11,7 @@ Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D U.
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

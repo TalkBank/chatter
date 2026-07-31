@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-30 13:22 EDT
+**Last modified:** 2026-07-31 10:05 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -118,6 +118,43 @@ or CLAN still say.
     main thread (Windows 1 MiB incident). Gate:
     `crates/chatter/tests/stack_limit_tests.rs`.
 
+## Type-oriented design is mandatory
+
+**Every change follows type-oriented design: make illegal states
+unrepresentable, and make transitions between well-defined states
+explicit.** The cross-cutting rules below are instances of this, not
+alternatives to it. It governs new code, changes to existing code, and
+any design note that precedes either.
+
+**An affordance beats a rule.** A prohibition in a guidance file loses
+to a type signature that makes the forbidden thing the natural thing to
+write. If a rule here keeps getting broken, the first question is which
+type is offering the wrong path, not how to word the rule more loudly.
+
+**Four shapes to recognise before writing the bug:**
+
+- **A value proxies for a richer fact, and the two drift.** Cure: derive
+  it from the fact instead of mirroring the fact.
+- **A sentinel is also a legal value.** A "dummy" span equal to the
+  default equal to a real zero-length position at offset 0 is three
+  meanings on one value, and the compiler cannot tell them apart. Cure:
+  a variant, an `Option`, or no `Default` at all.
+- **A total function silently discards information.** A strict parse
+  that throws away the model it built; a traversal that skips what its
+  map does not mention. Cure: return the information, and make the lossy
+  path the explicit one.
+- **Knowledge duplicated with no owner**, held together by a contract
+  test asserting two things stay equal. That test is a standing
+  confession that one of them should not exist. Cure: one owner, then
+  delete the test.
+
+**Decision test, before writing any type:** name a wrong value it
+permits, and ask what would notice. If the answer is a reviewer, a
+comment, or a doc, the type is wrong. If the answer is the compiler, it
+is right.
+
+Not a licence to rewrite: apply it to what you touch and to new design.
+
 ## Cross-cutting design rules
 
 1. Types are the first layer of documentation; newtypes over raw
@@ -163,6 +200,32 @@ or CLAN still say.
     `book/src/contributing/documentation-architecture.md`.
 13. No historical CHAT options in new logic: structured `@Options`
     names are `CA` and `NoAlign` only.
+14. **`From` is infallible; use `TryFrom` when construction can fail.**
+    A conversion that can reject its input must say so in its type.
+    Never launder a validation failure through an infallible `From`
+    plus a default value.
+15. **Never hand-parse CHAT with regex or string slicing, in any
+    language.** CHAT content is read through the typed model and the
+    fragment parsers (`parse_word`, `parse_main_tier`, and friends),
+    never by pattern-matching raw bytes. Never fabricate
+    `@UTF8`/`@Begin`/`@End` scaffolding to make a fragment parse, and
+    never re-parse text this codebase just serialized. Every
+    structured output gets a typed pre-serialization model, lowered
+    once at the boundary. Searching for FILES with a regex is fine;
+    extracting MEANING from CHAT with one is not.
+16. **Prefer `Result` to `Option` for anything that can fail.**
+    `Option` discards the reason. If a caller could reasonably ask
+    "what went wrong", that answer belongs in the type rather than in
+    a log line or a comment.
+17. **Do not materialize intermediate collections.** Prefer iterators
+    and sinks, materializing once at the end. This codebase runs over
+    corpora of six figures of files, where an incidental `collect()`
+    in a hot path is a real cost rather than a style question.
+18. **Never revert a deliberate dependency bump to make a build
+    pass.** Diagnose and fix the build under the new version.
+    Reverting discards the intent to stay current and hides the
+    fragility the bump exposed; revert a bumped manifest only when
+    the maintainer asks for it.
 
 ## Building, testing, releasing (pointers)
 

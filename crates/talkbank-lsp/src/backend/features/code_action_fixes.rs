@@ -1,10 +1,30 @@
+use talkbank_model::ErrorCode;
 use tower_lsp::lsp_types::*;
 
 use super::builders::{
-    delete_diagnostic_line, document_end_position, insert_at, insert_at_diagnostic_end,
-    replace_diagnostic_range,
+    delete_diagnostic_line, document_end_position, insert_at, replace_diagnostic_range,
 };
 
+/// Build the quick-fix actions offered for one diagnostic, if its code has
+/// a verified fix.
+///
+/// Every arm here was checked against a real `chatter validate` run on a
+/// fixture that actually triggers the code. A code with no arm here,
+/// whether never considered or found (2026-07-31 audit) to offer the wrong
+/// fix, falls through to `Vec::new()`; nothing here invents a default
+/// action for a code it does not recognize. `test_removed_codes_offer_no_action`
+/// in the sibling test module names every code that was removed and why.
+/// The rationale for several of the same exclusions is written out in more
+/// detail in `talkbank_transform::splice::catalog`'s module docs, the
+/// shared fix catalog this LSP module has not yet migrated onto.
+///
+/// This routes on [`ErrorCode`] variants, not the wire-protocol code
+/// string, specifically so that renumbering an `ErrorCode` (changing its
+/// `#[code("E...")]` attribute) breaks this match at compile time instead
+/// of silently detaching a case from the diagnostic it used to fire for.
+/// The string comparison this replaced (`"E501" => ...`) was exactly how
+/// several of the removed cases went stale: a code's meaning moved to a
+/// different number and nothing here noticed.
 pub(super) fn actions_for_diagnostic(
     uri: &Url,
     diagnostic: &Diagnostic,
@@ -15,54 +35,32 @@ pub(super) fn actions_for_diagnostic(
     };
 
     match code {
-        "E241" => vec![replace_diagnostic_range(
+        ErrorCode::IllegalUntranscribed => vec![replace_diagnostic_range(
             uri,
             diagnostic,
             "xxx",
             "Replace 'xx' with 'xxx' (proper untranscribed marker)",
         )],
-        "E242" => vec![insert_at(
-            uri,
-            diagnostic.range.end,
-            " +...",
-            "Add '+...' (trailing off marker)",
-            Some(diagnostic),
-        )],
-        "E301" | "E305" => missing_terminator_actions(uri, diagnostic),
-        "E308" => doc
+        ErrorCode::MissingTerminator => missing_terminator_actions(uri, diagnostic),
+        ErrorCode::UndeclaredSpeaker => doc
             .and_then(|text| undeclared_speaker_action(uri, diagnostic, text))
             .into_iter()
             .collect(),
-        "E502" => doc
+        ErrorCode::MissingEndHeader => doc
             .map(|text| insert_at_end(uri, text, "@End\n", "Insert '@End' at end of file"))
             .into_iter()
             .collect(),
-        "E503" => vec![insert_at_start(
+        ErrorCode::MissingUTF8Header => vec![insert_at_start(
             uri,
             "@UTF8\n",
             "Insert '@UTF8' at start of file",
         )],
-        "E501" => doc
-            .and_then(|text| {
-                insert_after_utf8(uri, text, "@Begin\n", "Insert '@Begin' after @UTF8")
-            })
-            .into_iter()
-            .collect(),
-        "E306" => vec![delete_diagnostic_line(
+        ErrorCode::EmptyUtterance => vec![delete_diagnostic_line(
             uri,
             diagnostic,
             "Delete empty utterance",
         )],
-        "E322" => vec![delete_diagnostic_line(
-            uri,
-            diagnostic,
-            "Delete empty colon line",
-        )],
-        "E362" => doc
-            .and_then(|text| timestamp_swap_action(uri, diagnostic, text))
-            .into_iter()
-            .collect(),
-        "E504" => {
+        ErrorCode::MissingRequiredHeader => {
             if diagnostic.message.contains("Participants") {
                 doc.and_then(|text| {
                     insert_after_utf8(
@@ -78,54 +76,13 @@ pub(super) fn actions_for_diagnostic(
                 Vec::new()
             }
         }
-        "E604" => vec![delete_diagnostic_line(
-            uri,
-            diagnostic,
-            "Delete orphaned '%gra' tier",
-        )],
-        "E258" => vec![replace_diagnostic_range(
-            uri,
-            diagnostic,
-            ",",
-            "Replace ',,' with ','",
-        )],
-        "E259" => vec![replace_diagnostic_range(
+        ErrorCode::CommaAfterNonSpokenContent => vec![replace_diagnostic_range(
             uri,
             diagnostic,
             "",
             "Remove comma after non-spoken content",
         )],
-        "E312" => vec![insert_at_diagnostic_end(
-            uri,
-            diagnostic,
-            "]",
-            "Add closing bracket ']'",
-        )],
-        "E313" => vec![insert_at_diagnostic_end(
-            uri,
-            diagnostic,
-            ")",
-            "Add closing parenthesis ')'",
-        )],
-        "E323" => vec![insert_at_diagnostic_end(
-            uri,
-            diagnostic,
-            ":",
-            "Add ':' after speaker code",
-        )],
-        "E244" => vec![replace_diagnostic_range(
-            uri,
-            diagnostic,
-            "ˈ",
-            "Replace consecutive stress markers with single 'ˈ'",
-        )],
-        "E506" => vec![replace_diagnostic_range(
-            uri,
-            diagnostic,
-            "@Participants:\tCHI Child",
-            "Insert participant template",
-        )],
-        "E507" => vec![replace_diagnostic_range(
+        ErrorCode::EmptyLanguagesHeader => vec![replace_diagnostic_range(
             uri,
             diagnostic,
             "@Languages:\teng",
@@ -135,9 +92,9 @@ pub(super) fn actions_for_diagnostic(
     }
 }
 
-fn diagnostic_code(diagnostic: &Diagnostic) -> Option<&str> {
+fn diagnostic_code(diagnostic: &Diagnostic) -> Option<ErrorCode> {
     match &diagnostic.code {
-        Some(NumberOrString::String(code)) => Some(code.as_str()),
+        Some(NumberOrString::String(code)) => ErrorCode::parse_exact(code),
         _ => None,
     }
 }
@@ -226,37 +183,5 @@ fn insert_after_utf8(uri: &Url, doc: &str, text: &str, title: &str) -> Option<Co
         text,
         title,
         None,
-    ))
-}
-
-fn timestamp_swap_action(uri: &Url, diagnostic: &Diagnostic, doc: &str) -> Option<CodeAction> {
-    let line = doc.lines().nth(diagnostic.range.start.line as usize)?;
-    let start_char = diagnostic.range.start.character as usize;
-    let end_char = diagnostic.range.end.character as usize;
-    let start_byte = line
-        .char_indices()
-        .nth(start_char)
-        .map(|(index, _)| index)?;
-    let end_byte = line
-        .char_indices()
-        .nth(end_char)
-        .map(|(index, _)| index)
-        .unwrap_or(line.len());
-    let bullet_text = &line[start_byte..end_byte];
-
-    let inner = bullet_text
-        .trim_start_matches('\u{2022}')
-        .trim_end_matches('\u{2022}');
-    let parts: Vec<&str> = inner.split('_').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-
-    let swapped = format!("\u{2022}{}_{}\u{2022}", parts[1], parts[0]);
-    Some(replace_diagnostic_range(
-        uri,
-        diagnostic,
-        swapped.clone(),
-        format!("Swap timestamps: {bullet_text} → {swapped}"),
     ))
 }

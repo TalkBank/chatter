@@ -11,6 +11,7 @@ Word contains illegal characters such as whitespace, control characters, or bull
 - **Category**: validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

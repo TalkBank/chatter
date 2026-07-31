@@ -23,6 +23,7 @@ undeclared word-level codes).
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

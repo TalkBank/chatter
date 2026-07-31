@@ -14,6 +14,7 @@ never validated for count mismatches.
 - **Category**: Alignment count mismatch
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

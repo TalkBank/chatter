@@ -1,13 +1,21 @@
 # Phon Tiers (%xmodsyl, %xphosyl, %xphoaln, %xphoint)
 
 **Status:** Reference
-**Last updated:** 2026-06-23 07:28 EDT
+**Last updated:** 2026-07-31 09:51 EDT
 
 The Phon extension tiers provide syllable-level phonological annotation,
 segmental alignment between target and actual IPA, and per-phone time
 intervals. They are produced by the
-[Phon](https://www.phon.ca/phon-manual/getting_started.html) application and
-exported to CHAT via [PhonTalk](https://github.com/phon-ca/phontalk).
+[Phon](https://www.phon.ca/) application. As of Phon 4.0.0-beta.9
+(2026-06-25), Phon reads and writes CHAT natively (see "Data quality notes"
+below for what this means for existing corpus files).
+
+**The authority for these formats is upstream, not this chapter.** Phon
+generates these tiers, so Phon specifies them; the current specification comes
+from Phon's maintainer. This chapter and the `E735`-`E746` error specs are
+chatter's implementation OF that specification, not a substitute for it. Where
+chatter disagrees with it, the disagreement is a finding to take upstream rather
+than a rule to settle here.
 
 chatter parses and **validates all four tiers as first-class CHAT tiers**.
 
@@ -44,12 +52,13 @@ primary, `ˌ` secondary) is part of the phone it precedes.
 
 **Pause fillers.** Phon keeps every word-aligned phonology tier in index
 lockstep with the main tier: when the main tier carries a pause, the pause
-token (`(.)`, `(..)`, `(...)`) is mirrored at the same word position on
-`%mod`, `%pho`, `%xmodsyl`, and `%xphosyl` (and as a `(..)↔(..)` pair on
-`%xphoaln`). A pause filler is a valid word on the syllabification tiers; it
-carries no `phone:CODE` structure and must mirror the same pause token as
-the source-tier word at its position. Timed pauses (`(1.5)`) are not
-accepted as fillers (unattested in the wild corpora).
+token (`(.)`, `(..)`, `(...)`, or numeric `(x.x)`) is mirrored at the same
+word position on `%mod`, `%pho`, `%xmodsyl`, and `%xphosyl` (and as a
+`(..)↔(..)` pair on `%xphoaln`). A pause filler is a valid word on the
+syllabification tiers; it carries no `phone:CODE` structure and must mirror
+the same pause token as the source-tier word at its position. Numeric pauses
+(`(1.5)`, minutes:seconds `(1:02.5)`) are accepted on the same footing as
+the three untimed forms, per Greg Hedlund's spec.
 
 The constituent code is one character. The legal codes are `O N C L R E A D U`:
 
@@ -118,12 +127,18 @@ Phon `%x` validation surface, or suppress an individual code. (The historical
 `--check-xphon` opt-in flag is now a deprecated no-op: the checks it used to
 gate are on by default.)
 
-**Word-count cross-checks** (each `%x` tier has the same number of words as the
-tier(s) it depends on):
+**Word-count cross-checks:**
 
-- `%xmodsyl` ↔ `%mod`: **E725**
-- `%xphosyl` ↔ `%pho`: **E726**
-- `%xphoaln` ↔ `%mod`: **E727**, ↔ `%pho`: **E728**
+- `%xmodsyl` ↔ `%mod`: **E725**, `%xphosyl` ↔ `%pho`: **E726**. Always a
+  strict equality: inter-word pauses are mirrored onto both tiers by
+  construction (spec §1 rule 4), so the counts must match exactly.
+- `%xphoaln` ↔ `%mod`: **E727**, ↔ `%pho`: **E728**. NOT strict equality: a
+  pause word present on only one of `%mod`/`%pho` forms its own `%xphoaln`
+  alignment word (its other side entirely `∅`, e.g. `(..)↔∅`) and consumes a
+  word slot only on the tier bearing the pause (spec §2 rule 5). E727/E728
+  compare each tier's word count against `%xphoaln`'s count *after*
+  excluding the one-sided pause words that do not consume a slot on that
+  tier, not against `%xphoaln`'s raw word count.
 
 **Content checks:**
 
@@ -196,13 +211,16 @@ For current counts on a local CHILDES/TalkBank data tree, run:
 python3 scripts/analysis/scan_phon_mismatches.py /path/to/data
 ```
 
-The PhonTalk CHAT export handles this discrepancy inconsistently:
+A subset of existing corpus CHAT files handle this discrepancy inconsistently
+between tiers:
 
-1. `%mod`/`%pho` are written through a `OneToOne` alignment path that maps IPA
-   words to orthography words; extras are silently dropped.
-2. `%xmodsyl`/`%xphosyl`/`%xphoaln` are written directly from the raw
-   `IPATranscript`; all IPA words are included.
+1. `%mod`/`%pho` map IPA words to orthography words one to one; extras are
+   silently dropped.
+2. `%xmodsyl`/`%xphosyl`/`%xphoaln` carry the full IPA word set, undropped.
 
 This produces CHAT files where `%xmodsyl` may have more words than `%mod`,
-triggering the E725-E728 word-count errors. This is being investigated in
-collaboration with the Phon team.
+triggering the E725-E728 word-count errors. As of Phon 4.0.0-beta.9
+(2026-06-25), Phon reads and writes CHAT natively; we have not yet seen
+output from that native export and do not know whether it reproduces this
+inconsistency. Files already affected remain in the corpora and must
+continue to validate against the behavior above.

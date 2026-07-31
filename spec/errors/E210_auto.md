@@ -15,6 +15,7 @@ The validation logic now emits E387 instead of E210 for the same condition.
 - **Level**: word
 - **Layer**: validation
 - **Status**: deprecated
+- **Kind**: Invalidity
 
 ## Example 1
 

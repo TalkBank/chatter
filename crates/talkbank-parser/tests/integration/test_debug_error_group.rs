@@ -23,9 +23,7 @@ fn error_marker_group_words_are_parsed() {
     let content = "@UTF8\n@Begin\n@Languages:\thrv\n@Participants:\tPAR Participant\n@ID:\thrv|test|PAR|||||Participant|||\n*PAR:\thello <one two three> [*] .\n%mor:\tn|hello n|one n|two n|three .\n@End\n";
 
     let parser = TreeSitterParser::new().expect("grammar loads");
-    let chat_file = parser
-        .parse_chat_file(content)
-        .expect("parse should succeed");
+    let chat_file = parser.parse_chat_file(content).expect_built();
 
     for line in &chat_file.lines {
         if let Line::Utterance(u) = line {

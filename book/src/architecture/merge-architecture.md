@@ -1,7 +1,7 @@
 # Merge Pipeline, Crate Architecture
 
 **Status:** Draft
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-07-31 06:13 EDT
 
 This page explains where the new merge-pipeline code lives in the
 `chatter` workspace, which crates gain modules, what
@@ -180,7 +180,7 @@ pub mod transcript_merge;
 
 The CLI dispatch pattern in this crate uses one directory per
 multi-file command (e.g. `commands/validate/`) or one file for
-single-file commands (`commands/normalize.rs`, `commands/lint.rs`).
+single-file commands (`commands/normalize.rs`, `commands/clean.rs`).
 Speaker-id warranted a directory (it has reference / explicit /
 override-file operation modes plus override/pending write paths);
 merge and the other pipeline commands fit in single files:

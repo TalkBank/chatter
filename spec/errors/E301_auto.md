@@ -10,6 +10,7 @@ Empty speaker code
 - **Category**: Main tier validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

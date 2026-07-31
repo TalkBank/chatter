@@ -11,6 +11,7 @@ Comma without any preceding spoken word in the utterance
 - **Level**: word
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

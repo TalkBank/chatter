@@ -14,6 +14,7 @@ A %gra tier contains a circular dependency where following parent pointers creat
 - **Layer**: validation
 - **Status**: implemented
 - **Severity**: error
+- **Kind**: Invalidity
 
 ## Example 1: Simple 2-Node Cycle
 

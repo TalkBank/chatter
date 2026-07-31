@@ -98,10 +98,13 @@ Testing {} warning files...\n",
     for (expected_code, path) in &warning_files {
         let content = fs::read_to_string(path)?;
 
-        // Parse (should succeed - these are syntactically valid)
+        // Parse (should succeed - these are syntactically valid). A warning
+        // corpus file is expected to build a model; the warning under test
+        // comes from the separate `validate()` call below, not from parse
+        // diagnostics, so any `Built` counts as success here.
         let chat_file = match parser.parse_chat_file(&content) {
-            Ok(file) => file,
-            Err(parse_errors) => {
+            talkbank_parser::ParseProduct::Built { file, .. } => file,
+            talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
                 let filename = file_name_str(path)?;
                 parse_failures.push(format!(
                     "{} - {} (Parse failed: should be syntactically valid!)",
@@ -109,7 +112,7 @@ Testing {} warning files...\n",
                 ));
                 println!(
                     "  ✗ {} - {} → Parse failed (unexpected: {:?})",
-                    expected_code, filename, parse_errors
+                    expected_code, filename, diagnostics
                 );
                 continue;
             }

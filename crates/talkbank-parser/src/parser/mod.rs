@@ -33,5 +33,6 @@ mod node_span;
 /// from the NEW backend's free `extract_*` functions, not a trait receiver.
 mod typed_cst;
 
-/// Re-export the main parser type and initialization error.
-pub use chat_file_parser::{ParserInitError, TreeSitterParser};
+/// Re-export the main parser type, initialization error, and the strict
+/// whole-file parse product type.
+pub use chat_file_parser::{ParseProduct, ParserInitError, TreeSitterParser};

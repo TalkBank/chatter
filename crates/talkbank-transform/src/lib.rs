@@ -80,6 +80,7 @@ pub mod parse;
 pub mod redact;
 pub mod rediarize;
 pub mod serialize;
+pub mod splice;
 pub mod validate;
 
 // Transcript merge / adjudication surface (corpus-agnostic workflow).
@@ -135,4 +136,12 @@ pub use self::validation_runner::{
     ValidationStatsSnapshot, validate_directory_streaming,
 };
 #[cfg(feature = "validation-runner")]
-pub use talkbank_cache::{CacheError, CachePool, CacheStats, UnifiedCache};
+pub use talkbank_cache::{CacheError, CachePool, CacheStats, RulesVersion, UnifiedCache};
+// Re-exported alongside the cache types (rather than unconditionally at the
+// crate root) because its only use is composing a `RulesVersion`: a caller
+// with `validation-runner` disabled has no `RulesVersion` to compose it into
+// either. Lets a caller that depends on `talkbank-transform` but not
+// `talkbank-parser` directly (the desktop app) fold PARSE behaviour into a
+// cache-compatibility version without a new direct dependency.
+#[cfg(feature = "validation-runner")]
+pub use talkbank_parser::GRAMMAR_FINGERPRINT;

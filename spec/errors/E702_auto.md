@@ -11,6 +11,7 @@ Invalid MOR chunk format - missing |
 - **Category**: Dependent tier parsing
 - **Level**: tier
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example
 

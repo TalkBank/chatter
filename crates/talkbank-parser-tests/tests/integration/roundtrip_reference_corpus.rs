@@ -43,22 +43,27 @@ fn roundtrip_reference(#[files("../../corpus/reference/**/*.cha")] path: PathBuf
     let parser = TreeSitterParser::new()
         .unwrap_or_else(|e| panic!("Failed to create TreeSitterParser: {}", e));
 
-    // Pass 1: parse original
-    let original = parser
-        .parse_chat_file(&content)
-        .unwrap_or_else(|e| panic!("Parse failed for {}: {}", path.display(), e));
+    // Pass 1: parse original. `strict_parse` reproduces the pre-`ParseProduct`
+    // fail-on-any-diagnostic contract: the reference corpus is expected to be
+    // clean, and this gate exists to catch it when a file (or the parser) is
+    // not, not to silently accept a recovered-but-invalid model.
+    let original =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&content))
+            .unwrap_or_else(|e| panic!("Parse failed for {}: {}", path.display(), e));
 
     // Serialize back to CHAT text
     let serialized = original.to_chat_string();
 
     // Pass 2: reparse the serialized output
-    let reparsed = parser.parse_chat_file(&serialized).unwrap_or_else(|e| {
-        panic!(
-            "Reparse of serialized output failed for {}: {}",
-            path.display(),
-            e
-        )
-    });
+    let reparsed =
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&serialized))
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Reparse of serialized output failed for {}: {}",
+                    path.display(),
+                    e
+                )
+            });
 
     // Semantic comparison
     assert!(

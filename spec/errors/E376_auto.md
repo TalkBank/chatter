@@ -13,6 +13,7 @@ words.
 - **Level**: utterance
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

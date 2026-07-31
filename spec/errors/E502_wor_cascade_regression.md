@@ -16,11 +16,12 @@ error recovery cascade triggered by long invalid %wor content.
 
 ## Metadata
 
-- **Error Code**: E502 (false positive)
+- **Error Code**: E502
 - **Category**: parser
 - **Level**: file
 - **Layer**: parser
 - **Root Cause**: tree-sitter error recovery threshold exceeded by long invalid %wor
+- **Kind**: Invalidity
 
 ## Minimal Reproduction
 

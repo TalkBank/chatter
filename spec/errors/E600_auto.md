@@ -17,6 +17,7 @@ checks are skipped, producing two E600 warnings for the same utterance.
 - **Category**: validation
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1, Non-integer index in %gra
 

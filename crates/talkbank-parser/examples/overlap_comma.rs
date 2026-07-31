@@ -22,11 +22,22 @@ fn main() {
 
     let parser = TreeSitterParser::new().expect("grammar loads");
     let chat_file = match parser.parse_chat_file(input) {
-        Ok(file) => file,
-        Err(errors) => {
-            println!("Parse errors: {}", errors.errors.len());
-            for error in &errors.errors {
-                println!("  - {}", error);
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+            if !diagnostics.is_empty() {
+                println!("Parse diagnostics ({}):", diagnostics.len());
+                for diagnostic in &diagnostics {
+                    println!("  - {}", diagnostic);
+                }
+            }
+            file
+        }
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            println!(
+                "Parse failed, no model built ({} diagnostics):",
+                diagnostics.len()
+            );
+            for diagnostic in &diagnostics {
+                println!("  - {}", diagnostic);
             }
             return;
         }

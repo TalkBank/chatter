@@ -29,6 +29,7 @@ the fix for either shape.
 - **Category**: Word validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -44,6 +44,39 @@ pub enum FileValidationOutcome {
     Invalid,
 }
 
+/// Build the [`talkbank_model::ValidationConfig`] that determines
+/// `validate_file`'s cache key: every dimension folded in here, and ONLY
+/// those dimensions, is what a stale-verdict check can catch, so this is
+/// deliberately the single place both `strict_linkers` and `suppress` are
+/// combined, rather than each caller assembling its own partial view.
+///
+/// `suppress` is matched case-insensitively against real [`ErrorCode`]s,
+/// mirroring the case-insensitive matching `validate_file`'s own post-hoc
+/// filter already does; a value that names no real code is silently
+/// skipped here exactly as it is silently ignored by that filter (an
+/// unrecognized string never matches anything either way), so this stays
+/// behavior-preserving. Unlike `validate_paths_parallel`'s `--suppress`,
+/// there is no named-group expansion (`xphon`, etc.): `chatter watch` has
+/// no `--suppress` CLI flag at all today, so there is no group syntax to
+/// support yet; add it here (mirroring `expand_suppress_groups`) if that
+/// ever changes.
+fn build_model_config(
+    strict_linkers: bool,
+    suppress: &[String],
+) -> talkbank_model::ValidationConfig {
+    let mut model_config = if strict_linkers {
+        talkbank_model::ValidationConfig::new().with_strict_linkers()
+    } else {
+        talkbank_model::ValidationConfig::new()
+    };
+    for raw in suppress {
+        if let Some(code) = talkbank_model::ErrorCode::parse_exact(&raw.to_uppercase()) {
+            model_config = model_config.disable(code);
+        }
+    }
+    model_config
+}
+
 /// Validate a single CHAT file with optional alignment and caching behavior.
 ///
 /// This routine encapsulates the CLI behavior for the `validate` subcommand when the target
@@ -79,7 +112,20 @@ pub fn validate_file(
     // signature so the public API and the watch-mode caller don't break.
     let check_alignment = alignment.enabled();
 
-    let cache = initialize_validation_cache(std::slice::from_ref(path), cache_refresh);
+    // Both `strict_linkers` and `suppress` fold into the cache key via
+    // `build_model_config`, mirroring how `validate_paths_parallel`'s
+    // runtime folds its own `--strict-linkers`/`--suppress` into the
+    // worker's `ValidationConfig` (`commands/validate_parallel/runtime.rs`).
+    // `chatter watch` (the only caller of this path) has no `--suppress`
+    // CLI flag today and always passes `&[]`, so folding `suppress` in is
+    // currently a no-op in production; it exists so a future caller that
+    // DOES pass a non-empty suppress list gets a correct cache key instead
+    // of a silently stale verdict served under a different suppress set
+    // (the same shape of gap `talkbank_cache::RulesVersion`'s module doc
+    // describes for `upgrade_unmapped_warnings`).
+    let model_config = build_model_config(strict_linkers, suppress);
+    let cache =
+        initialize_validation_cache(std::slice::from_ref(path), cache_refresh, &model_config);
 
     // Try to get cached results.
     // On Some(true): cached valid, skip revalidation.
@@ -255,5 +301,98 @@ pub fn validate_file(
         FileValidationOutcome::Valid
     } else {
         FileValidationOutcome::Invalid
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fixed stand-in parser/grammar fingerprint, mirroring the pattern
+    /// `talkbank-cache`'s own `RulesVersion` tests use: this test isolates
+    /// the CONFIG dimension, so the parser dimension is held constant.
+    const TEST_PARSER_FINGERPRINT: &str = "test-fingerprint";
+
+    /// `validate_file` is the ONLY reachable seam for this regression.
+    /// `chatter watch` (its sole caller) has no `--suppress` CLI flag at
+    /// all today, so the bug cannot be reproduced by spawning `chatter
+    /// watch` and varying its arguments; there is nothing to vary. This
+    /// test pins the property one level down, at the exact function
+    /// `validate_file` calls to build its cache key
+    /// (`initialize_validation_cache` -> `RulesVersion::current_with_config`),
+    /// with two different `suppress` inputs standing in for the two
+    /// `watch` calls a future caller could make once a `--suppress` flag
+    /// is wired up.
+    ///
+    /// A verdict cached under one suppress set must never be served to a
+    /// run with a different suppress set, and the mechanism that prevents
+    /// that is exactly this: the two configs must produce different
+    /// `RulesVersion`s.
+    #[test]
+    fn different_suppress_sets_produce_different_cache_keys() {
+        let empty = build_model_config(false, &[]);
+        let suppressing_e736 = build_model_config(false, &["E736".to_string()]);
+        assert_ne!(
+            talkbank_transform::RulesVersion::current_with_config(&empty, TEST_PARSER_FINGERPRINT),
+            talkbank_transform::RulesVersion::current_with_config(
+                &suppressing_e736,
+                TEST_PARSER_FINGERPRINT
+            ),
+            "a --suppress list must change validate_file's cache key or a \
+             verdict cached under one suppress set could be served to a \
+             run with a different one"
+        );
+    }
+
+    /// Two configs built from suppress lists that differ only in case or
+    /// duplication (both of which `validate_file`'s existing post-hoc
+    /// filter already treats as equivalent, via `.to_uppercase()`) must
+    /// still land on the SAME cache key, or a cache miss would fire on
+    /// every run for no behavioral reason.
+    #[test]
+    fn equivalent_suppress_lists_produce_the_same_cache_key() {
+        let lowercase = build_model_config(false, &["e736".to_string()]);
+        let uppercase = build_model_config(false, &["E736".to_string()]);
+        assert_eq!(
+            talkbank_transform::RulesVersion::current_with_config(
+                &lowercase,
+                TEST_PARSER_FINGERPRINT
+            ),
+            talkbank_transform::RulesVersion::current_with_config(
+                &uppercase,
+                TEST_PARSER_FINGERPRINT
+            )
+        );
+    }
+
+    /// `strict_linkers` alone must still change the cache key (regression
+    /// guard: the pre-existing behavior this function already got right,
+    /// which the suppress fix must not disturb).
+    #[test]
+    fn strict_linkers_alone_still_changes_the_cache_key() {
+        let lenient = build_model_config(false, &[]);
+        let strict = build_model_config(true, &[]);
+        assert_ne!(
+            talkbank_transform::RulesVersion::current_with_config(
+                &lenient,
+                TEST_PARSER_FINGERPRINT
+            ),
+            talkbank_transform::RulesVersion::current_with_config(&strict, TEST_PARSER_FINGERPRINT)
+        );
+    }
+
+    /// A suppress value that names no real `ErrorCode` must not change the
+    /// cache key, matching the post-hoc filter's own leniency: an
+    /// unrecognized string never matches anything there either, so a run
+    /// with a bogus suppress value and a run with none behave identically
+    /// and should share a cache row.
+    #[test]
+    fn unrecognized_suppress_values_do_not_change_the_cache_key() {
+        let empty = build_model_config(false, &[]);
+        let bogus = build_model_config(false, &["NOTACODE".to_string()]);
+        assert_eq!(
+            talkbank_transform::RulesVersion::current_with_config(&empty, TEST_PARSER_FINGERPRINT),
+            talkbank_transform::RulesVersion::current_with_config(&bogus, TEST_PARSER_FINGERPRINT)
+        );
     }
 }

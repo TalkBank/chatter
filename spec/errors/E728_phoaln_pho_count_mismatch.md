@@ -11,6 +11,7 @@ The `%xphoaln` tier word count does not match the `%pho` tier word count. Each w
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

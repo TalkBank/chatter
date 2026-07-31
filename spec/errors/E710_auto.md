@@ -11,6 +11,7 @@ Invalid GRA format
 - **Category**: Dependent tier parsing
 - **Level**: tier
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -10,6 +10,7 @@ Auto-generated from corpus
 - **Category**: Dependent tier parsing
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

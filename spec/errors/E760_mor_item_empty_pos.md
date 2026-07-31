@@ -24,6 +24,7 @@ POS" rather than "something on this tier is unparsable".
 - **Category**: Dependent tier validation
 - **Level**: tier
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

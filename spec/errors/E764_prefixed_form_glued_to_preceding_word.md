@@ -32,6 +32,7 @@ shape produces a single malformed word and is already rejected (E220).
 - **Category**: Main tier separators
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Style
 
 ## Example 1
 

@@ -7,12 +7,29 @@ use crate::parser::TreeSitterParser;
 use crate::validation::{Validate, ValidationContext};
 
 /// Parses chat file or err.
+///
+/// Fixtures here are hand-crafted and expected to be clean, so a
+/// [`crate::ParseProduct::Built`] carrying an error-severity diagnostic
+/// is treated as a failure, matching the pre-`ParseProduct` strict
+/// contract, rather than silently accepting a recovered model.
 fn parse_chat_file_or_err(input: &str) -> Result<crate::model::ChatFile, String> {
     let parser =
         TreeSitterParser::new().map_err(|err| format!("Failed to create parser: {err}"))?;
-    parser
-        .parse_chat_file(input)
-        .map_err(|err| format!("Failed to parse chat file: {err:?}"))
+    match parser.parse_chat_file(input) {
+        crate::ParseProduct::Built { file, diagnostics } => {
+            if diagnostics
+                .iter()
+                .any(|d| matches!(d.severity, crate::error::Severity::Error))
+            {
+                Err(format!("Failed to parse chat file: {diagnostics:?}"))
+            } else {
+                Ok(file)
+            }
+        }
+        crate::ParseProduct::Unbuildable { diagnostics } => {
+            Err(format!("Failed to parse chat file: {diagnostics:?}"))
+        }
+    }
 }
 
 /// `@Languages: cat, spa` produces `ChatFile.languages = [cat, spa]`
@@ -225,6 +242,35 @@ fn test_main_tier_span_is_set() -> Result<(), String> {
     println!("MainTier text: {:?}", span_text);
 
     Ok(())
+}
+
+/// A document whose main tier parses cleanly but whose `%mor` tier is
+/// malformed (an empty POS field) still builds a [`crate::ParseProduct::Built`]
+/// model, carrying the diagnostic rather than losing the model. This is
+/// invariant 1 of the span-splicing engine design: a parse that produces
+/// diagnostics but is still buildable must return `Built`, never
+/// `Unbuildable`, so a healthy region of a document can survive an
+/// unhealthy one in the same file.
+#[test]
+fn built_with_diagnostics_is_not_unbuildable() -> Result<(), String> {
+    let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+@ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\thello world .\n\
+%mor:\t|hello n|world .\n@End\n";
+    let parser =
+        TreeSitterParser::new().map_err(|err| format!("Failed to create parser: {err}"))?;
+
+    match parser.parse_chat_file(input) {
+        crate::ParseProduct::Built { diagnostics, .. } => {
+            assert!(
+                !diagnostics.is_empty(),
+                "expected the malformed %mor tier to produce a diagnostic"
+            );
+            Ok(())
+        }
+        crate::ParseProduct::Unbuildable { diagnostics } => Err(format!(
+            "expected Built (model survives a malformed %mor tier), got Unbuildable: {diagnostics:?}"
+        )),
+    }
 }
 
 /// Tests validation error has proper span.

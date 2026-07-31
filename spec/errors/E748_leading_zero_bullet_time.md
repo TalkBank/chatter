@@ -16,6 +16,7 @@ when a `0` is followed by another digit.
 - **Level**: tier
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

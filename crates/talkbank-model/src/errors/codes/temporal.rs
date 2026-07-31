@@ -18,21 +18,27 @@ use super::ErrorCode;
 /// Also covers within-tier sequence: bullets within an utterance must be in temporal order.
 pub const E701: ErrorCode = ErrorCode::TierBeginTimeNotMonotonic;
 
-/// E702: Reserved for gap in strict timeline mode (CLAN Error 84)
+/// E702: number occupied by `InvalidMorphologyFormat` (an existing,
+/// unrelated `%mor`-tier code); NOT available for reassignment.
 ///
-/// Would validate that bullet start times exactly match previous end times (CLAN +c1 flag).
-/// Currently using E702 variant for InvalidMorphologyFormat (existing code).
-///
-/// TODO(temporal): Add dedicated GapInStrictTimeline variant when strict mode is implemented
+/// The strict-timeline-mode gap check (CLAN +c1 flag: bullet start times
+/// must exactly match previous end times) that this number was once
+/// pencilled in for still has no dedicated variant and no implementation.
+/// TODO(temporal): allocate a fresh code (E702 is taken) for
+/// GapInStrictTimeline when strict mode is implemented.
 /// Status: Low priority - strict timeline mode (+c1 flag) is rare in practice
 /// Blocked by: Implementing --strict-timeline flag in CLI and ValidationConfig
 ///
-/// E703: Reserved for overlap in strict timeline mode (CLAN Error 85)
+/// E703: genuinely free. Its prior occupant, `UnexpectedMorphologyNode`,
+/// was RETIRED 2026-07-31 (no emit site ever constructed it; see
+/// `error_code.rs`), so this number is now actually available, unlike
+/// E702 above.
 ///
-/// Would validate no overlaps in the global timeline (CLAN +c1 flag).
-/// Currently using E703 variant for UnexpectedMorphologyNode (existing code).
-///
-/// TODO(temporal): Add dedicated OverlapInStrictTimeline variant when strict mode is implemented
+/// The strict-timeline-mode overlap check (CLAN +c1 flag: no overlaps in
+/// the global timeline) this number was pencilled in for still has no
+/// implementation.
+/// TODO(temporal): add a dedicated OverlapInStrictTimeline variant at
+/// E703 when strict mode is implemented.
 /// Status: Low priority - strict timeline mode (+c1 flag) is rare in practice
 /// Blocked by: Implementing --strict-timeline flag in CLI and ValidationConfig
 ///

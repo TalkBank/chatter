@@ -14,6 +14,7 @@ but the header type is not one of the specifically handled types
 - **Category**: parser\_recovery
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -111,21 +111,15 @@ pub fn parse_and_validate_with_parser(
         // worker (which does have the path). FOLLOW-UP: thread an
         // `Option<&str>` filename through `parse_and_validate_with_parser` so
         // `to-json` and other pipeline consumers also run E531.
-        if options.alignment {
-            // validate_with_alignment does not accept a config; it calls
-            // validate() internally. For strict-linkers support we fall back
-            // to validate_with_config (which runs the same checks minus
-            // the pre-alignment computation). The alignment pass is implicit
-            // when the ChatFile already has alignments computed.
-            if let Some(config) = model_config {
-                chat_file.validate_with_config(config, &validation_errors, None);
-            } else {
-                chat_file.validate_with_alignment(&validation_errors, None);
+        match (options.alignment, model_config) {
+            (true, Some(config)) => {
+                chat_file.validate_with_alignment_and_config(config, &validation_errors, None);
             }
-        } else if let Some(config) = model_config {
-            chat_file.validate_with_config(config, &validation_errors, None);
-        } else {
-            chat_file.validate(&validation_errors, None);
+            (true, None) => chat_file.validate_with_alignment(&validation_errors, None),
+            (false, Some(config)) => {
+                chat_file.validate_with_config(config, &validation_errors, None);
+            }
+            (false, None) => chat_file.validate(&validation_errors, None),
         }
 
         let validation_error_vec = validation_errors.into_vec();
@@ -210,16 +204,13 @@ pub fn parse_and_validate_streaming_with_parser(
             None
         };
 
-        if options.alignment {
-            if let Some(config) = model_config {
-                chat_file.validate_with_config(config, errors, None);
-            } else {
-                chat_file.validate_with_alignment(errors, None);
+        match (options.alignment, model_config) {
+            (true, Some(config)) => {
+                chat_file.validate_with_alignment_and_config(config, errors, None);
             }
-        } else if let Some(config) = model_config {
-            chat_file.validate_with_config(config, errors, None);
-        } else {
-            chat_file.validate(errors, None);
+            (true, None) => chat_file.validate_with_alignment(errors, None),
+            (false, Some(config)) => chat_file.validate_with_config(config, errors, None),
+            (false, None) => chat_file.validate(errors, None),
         }
     }
 

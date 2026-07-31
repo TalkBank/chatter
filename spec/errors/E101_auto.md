@@ -18,6 +18,7 @@ not reach E101 detection.
 - **Category**: validation
 - **Level**: file
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

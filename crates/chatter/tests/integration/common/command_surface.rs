@@ -12,7 +12,7 @@ pub enum SurfaceScope {
 /// Functional family for one command-surface group.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SurfaceFamily {
-    /// Validation, watch, and lint flows.
+    /// Validation and watch flows.
     Validation,
     /// Normalize and inspect commands over one CHAT file.
     Formatting,
@@ -90,16 +90,16 @@ pub const SURFACE_GROUPS: &[SurfaceGroup] = &[
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,
         family: SurfaceFamily::Validation,
-        commands: &["validate", "watch", "lint"],
+        commands: &["validate", "watch"],
         coverage: VALIDATION_COVERAGE,
         note: "validation lifecycle and continuous feedback commands",
     },
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,
         family: SurfaceFamily::Formatting,
-        commands: &["normalize", "clean", "new-file"],
+        commands: &["normalize", "clean", "new-file", "fix"],
         coverage: FORMATTING_COVERAGE,
-        note: "single-file normalization, inspection, and scaffold commands",
+        note: "single-file normalization, inspection, scaffold, and repair commands",
     },
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,

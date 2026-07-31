@@ -15,6 +15,7 @@ patterns (missing form type, empty replacement, unknown annotation).
 - **Category**: parser\_recovery
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

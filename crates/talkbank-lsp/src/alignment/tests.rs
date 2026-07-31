@@ -14,6 +14,11 @@ use talkbank_parser::TreeSitterParser;
 use tower_lsp::lsp_types::Position;
 
 /// Helper to parse and validate a CHAT file
+///
+/// Fixtures here are expected to be clean, so a
+/// [`talkbank_parser::ParseProduct::Built`] carrying an error-severity
+/// diagnostic is treated as a failure, matching the pre-`ParseProduct`
+/// strict contract, rather than silently accepting a recovered model.
 fn parse_and_validate_chat_file(
     content: &str,
 ) -> Result<(talkbank_model::model::ChatFile, tree_sitter::Tree), String> {
@@ -21,9 +26,22 @@ fn parse_and_validate_chat_file(
         TreeSitterParser::new().map_err(|err| format!("Failed to create parser: {err:?}"))?;
 
     // Parse the file
-    let mut chat_file = parser
-        .parse_chat_file(content)
-        .map_err(|err| format!("Failed to parse CHAT file: {err:?}"))?;
+    let mut chat_file = match parser.parse_chat_file(content) {
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+            if diagnostics
+                .iter()
+                .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
+            {
+                return Err(format!(
+                    "Failed to parse CHAT file cleanly: {diagnostics:?}"
+                ));
+            }
+            file
+        }
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            return Err(format!("Failed to parse CHAT file: {diagnostics:?}"));
+        }
+    };
 
     // Compute alignments for all utterances
     for line in &mut chat_file.lines {

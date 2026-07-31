@@ -33,6 +33,7 @@ that legacy tooling was last updated.
 - **Category**: header_validation
 - **Level**: file
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Resolved design decisions
 

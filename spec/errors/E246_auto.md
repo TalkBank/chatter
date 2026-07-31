@@ -22,6 +22,7 @@ element followed by text, so the validator never sees the expected structure.
 - **Category**: validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

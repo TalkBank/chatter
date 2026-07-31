@@ -17,6 +17,7 @@ when a `%`-prefixed ERROR node appears before any utterance.
 - **Category**: validation
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

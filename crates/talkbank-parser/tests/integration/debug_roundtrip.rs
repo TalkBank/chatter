@@ -36,7 +36,7 @@ fn test_pho_groupings_roundtrip() {
 
     let parser = TreeSitterParser::new().expect("grammar loads");
     match parser.parse_chat_file(&input) {
-        Ok(file) => {
+        talkbank_parser::ParseProduct::Built { file, .. } => {
             println!("\n=== Parsed successfully! {} lines ===", file.lines.len());
 
             // Find the CHI utterance
@@ -78,9 +78,9 @@ fn test_pho_groupings_roundtrip() {
                 }
             }
         }
-        Err(errors) => {
-            println!("\n=== PARSE ERRORS: {} ===", errors.errors.len());
-            for err in &errors.errors {
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            println!("\n=== PARSE ERRORS: {} ===", diagnostics.len());
+            for err in &diagnostics {
                 println!("[{}] {}", err.severity, err.message);
             }
             panic!("Parse failed");

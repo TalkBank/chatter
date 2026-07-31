@@ -17,6 +17,7 @@ structurally via the `Drifted` variant, not via `ParseError`.
 - **Category**: Alignment count mismatch
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

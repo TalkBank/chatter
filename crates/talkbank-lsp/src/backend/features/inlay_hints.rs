@@ -128,7 +128,7 @@ mod tests {
 
     fn parse_and_align(input: &str) -> talkbank_model::model::ChatFile {
         let parser = TreeSitterParser::new().unwrap();
-        let mut chat_file = parser.parse_chat_file(input).unwrap();
+        let mut chat_file = parser.parse_chat_file(input).expect_built();
         for line in &mut chat_file.lines {
             if let Line::Utterance(utterance) = line {
                 utterance.compute_alignments_default();

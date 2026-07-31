@@ -9,6 +9,7 @@ The marker 'xx' is used for untranscribed speech, but this is not allowed in CHA
 - **Category**: word_validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

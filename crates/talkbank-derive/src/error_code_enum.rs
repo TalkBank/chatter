@@ -4,6 +4,9 @@
 //! - Serde rename attributes for each variant
 //! - `as_str()` for enum-to-code conversion
 //! - `new()` for code-to-enum conversion with `UnknownError` fallback
+//! - `parse_exact()` for a fallible code-to-enum conversion that returns
+//!   `None` for any code that names no declared variant, instead of
+//!   silently falling back
 //! - `Display` implementation
 //! - `documentation_url()` helper
 //!
@@ -125,6 +128,16 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         }
     });
 
+    // Generate parse_exact() match arms: same code-to-variant mapping as
+    // new(), but each arm is wrapped in `Some` and there is no fallback arm,
+    // so a caller can tell "named a real variant" apart from "named nothing
+    // we know about" (new() conflates the two into UnknownError).
+    let parse_exact_arms = variants_with_codes.iter().map(|(variant_name, code, _)| {
+        quote! {
+            #code => Some(#enum_name::#variant_name)
+        }
+    });
+
     // Generate the const slice of every variant for iteration.
     // Lets callers enumerate every known code without hand-maintaining a list.
     let all_variants = variants_with_codes.iter().map(|(variant_name, _, _)| {
@@ -156,6 +169,22 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
                 match code {
                     #(#new_arms,)*
                     _ => #enum_name::#unknown_ident,
+                }
+            }
+
+            /// Parse a short code into an enum variant, without a silent fallback.
+            ///
+            /// Returns `None` when `code` does not exactly match any declared
+            /// variant's code. Unlike [`Self::new`], this never coerces an
+            /// unrecognized string into the unknown-code sentinel variant, so
+            /// callers that must distinguish "this names a real code" from
+            /// "this is a typo" (e.g. validating user-supplied CLI arguments)
+            /// should use this instead of comparing `new()`'s result against
+            /// the sentinel variant by name.
+            pub fn parse_exact(code: &str) -> Option<Self> {
+                match code {
+                    #(#parse_exact_arms,)*
+                    _ => None,
                 }
             }
 

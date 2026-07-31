@@ -16,6 +16,7 @@ The `%gra` tier format is `index|head|RELATION` for each word.
 - **Category**: Dependent tier parsing
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -11,6 +11,7 @@ Main tier or dependent tier contains an invalid control character (e.g., embedde
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

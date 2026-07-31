@@ -12,6 +12,7 @@ Replacement annotation `[: ...]` is attached to a non-word element (e.g., a para
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

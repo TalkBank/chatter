@@ -27,6 +27,7 @@ accordingly keeps valid.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

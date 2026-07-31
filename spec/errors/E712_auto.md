@@ -10,6 +10,7 @@ Auto-generated from corpus
 - **Category**: validation
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

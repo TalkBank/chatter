@@ -15,6 +15,7 @@ word may carry suprasegmental and boundary notation.
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -6,8 +6,8 @@
 //! - `json` - JSON conversion (to-json, from-json)
 //! - `alignment` - Alignment visualization
 //! - `watch` - Continuous validation on file changes
-//! - `lint` - Auto-fixable issue detection and repair
 //! - `clean` - Cleaned-text inspection
+//! - `fix` - Apply catalog fixes at exact byte spans
 //! - `cache` - Cache management (stats, clear)
 //! - `debug` - Debug-family commands
 //! - `list_checks` - `validate --list-checks` output
@@ -27,8 +27,9 @@ pub mod cache;
 pub mod clean;
 pub mod debug;
 mod dispatch;
+mod error_codes;
+pub mod fix;
 pub mod json;
-pub mod lint;
 pub mod list_checks;
 pub mod merge_preflight;
 pub mod new_file;
@@ -47,8 +48,8 @@ pub mod watch;
 pub use alignment::show_alignment;
 pub use clean::clean_file;
 pub use dispatch::{CommandContext, dispatch_command};
+pub use fix::run_fix;
 pub use json::{chat_to_json, json_to_chat};
-pub use lint::lint_files;
 pub use new_file::create_new_file;
 pub use normalize::normalize_chat;
 pub use schema::run_schema;

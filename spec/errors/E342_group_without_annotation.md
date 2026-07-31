@@ -32,6 +32,7 @@ remove the angle brackets if no scope was meant.
 - **Category**: Main tier structure
 - **Level**: main_tier
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

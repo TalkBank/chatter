@@ -16,6 +16,7 @@ to attach to.
 - **Level**: word
 - **Layer**: parser
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -21,6 +21,7 @@ marker carries its own language.
 - **Category**: Word validation
 - **Level**: word
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

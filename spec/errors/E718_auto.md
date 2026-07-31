@@ -10,6 +10,7 @@ Sin count mismatch - too few sin tokens
 - **Category**: Alignment count mismatch
 - **Level**: tier
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

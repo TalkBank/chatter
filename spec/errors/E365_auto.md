@@ -23,6 +23,7 @@ that does not match any known header pattern.
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

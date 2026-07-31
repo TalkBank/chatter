@@ -28,6 +28,7 @@ span. This rule flags no kept corpus data (exhaustive typed scan over
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

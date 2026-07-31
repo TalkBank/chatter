@@ -27,6 +27,14 @@ pub(super) struct AlignmentContext {
 /// output is grounded in the structured CHAT rules described in the manual. It writes the original text,
 /// the parsed `ChatFile`, and any validation errors into an `AlignmentContext` so the caller can highlight
 /// misalignments exactly where the main-tier content differs from the dependent tiers.
+///
+/// A parse that produced diagnostics but still built a model (a healthy
+/// region alongside a malformed one) is not an error here: the parse
+/// diagnostics are folded into `validation_errors` alongside the
+/// alignment-validation errors, and the caller still gets a
+/// [`ChatFile`] to render, healthy utterances included. Only a document
+/// that could not build a model at all
+/// ([`talkbank_parser::ParseProduct::Unbuildable`]) is a hard `Err`.
 pub(super) fn load_alignment_context(input: &PathBuf) -> Result<AlignmentContext, String> {
     // Read file
     let content =
@@ -35,15 +43,23 @@ pub(super) fn load_alignment_context(input: &PathBuf) -> Result<AlignmentContext
     // Parse file
     let parser = TreeSitterParser::new().map_err(|e| format!("Error creating parser: {}", e))?;
 
-    let mut chat_file = parser
-        .parse_chat_file(&content)
-        .map_err(|e| format!("Error parsing file {:?}: {}", input, e))?;
+    let (mut chat_file, mut validation_errors) = match parser.parse_chat_file(&content) {
+        talkbank_parser::ParseProduct::Built { file, diagnostics } => (file, diagnostics),
+        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
+            return Err(format!(
+                "Error parsing file {:?}: {}",
+                input,
+                talkbank_model::ParseErrors::from(diagnostics)
+            ));
+        }
+    };
 
-    // Compute alignments for all utterances and report validation issues
+    // Compute alignments for all utterances and report validation issues,
+    // appended after the parse diagnostics collected above.
     let errors = ErrorCollector::new();
     let filename = input.to_str();
     chat_file.validate_with_alignment(&errors, filename);
-    let validation_errors = errors.into_vec();
+    validation_errors.extend(errors.into_vec());
 
     Ok(AlignmentContext {
         content,

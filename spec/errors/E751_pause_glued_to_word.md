@@ -14,6 +14,7 @@ free-standing content items and must be space-delimited from words.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

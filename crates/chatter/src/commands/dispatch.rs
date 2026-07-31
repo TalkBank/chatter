@@ -13,8 +13,8 @@ use super::validate::{
 };
 use super::{
     AlignmentValidationMode, CacheRefreshMode, RoundtripValidationMode, ValidationInterface,
-    chat_to_json, clean_file, create_new_file, json_to_chat, lint_files, normalize_chat,
-    run_schema, run_update, show_alignment, watch_files,
+    chat_to_json, clean_file, create_new_file, json_to_chat, normalize_chat, run_fix, run_schema,
+    run_update, show_alignment, watch_files,
 };
 
 /// Runtime context shared across top-level CLI command families.
@@ -69,10 +69,9 @@ impl CommandServices {
 impl Commands {
     const fn family(&self) -> CommandFamily {
         match self {
-            Self::Validate { .. }
-            | Self::ShowAlignment { .. }
-            | Self::Watch { .. }
-            | Self::Lint { .. } => CommandFamily::Validation,
+            Self::Validate { .. } | Self::ShowAlignment { .. } | Self::Watch { .. } => {
+                CommandFamily::Validation
+            }
             Self::Normalize { .. }
             | Self::ToJson { .. }
             | Self::FromJson { .. }
@@ -86,6 +85,7 @@ impl Commands {
             | Self::Batch { .. }
             | Self::SanityScan { .. }
             | Self::Schema { .. }
+            | Self::Fix { .. }
             | Self::Update => CommandFamily::Utility,
             Self::Cache { .. } => CommandFamily::Cache,
             Self::Debug { .. } => CommandFamily::Debug,
@@ -173,12 +173,6 @@ impl CommandFamilyService for ValidationCommandService {
                     std::process::exit(1);
                 }
             }
-            Commands::Lint {
-                path,
-                fix,
-                dry_run,
-                skip_alignment,
-            } => lint_files(&path, fix, dry_run, true, !skip_alignment),
             // Routing invariant: `CommandRoutingService::dispatch` (in
             // this file) partitions `Commands` variants by family
             // before forwarding to each `CommandFamilyService`, so
@@ -408,6 +402,13 @@ impl CommandFamilyService for UtilityCommandService {
                 diff_only,
                 format,
             } => clean_file(&path, diff_only, format),
+            Commands::Fix {
+                paths,
+                apply,
+                dry_run,
+                codes,
+                skip_alignment,
+            } => run_fix(&paths, apply, dry_run, &codes, skip_alignment),
             Commands::NewFile {
                 output,
                 speaker,

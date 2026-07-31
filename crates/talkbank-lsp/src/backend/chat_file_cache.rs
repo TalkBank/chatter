@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use talkbank_model::ParseErrors;
+use talkbank_model::ParseError;
 use talkbank_model::model::ChatFile;
 use tower_lsp::lsp_types::Url;
 
@@ -22,6 +22,14 @@ use crate::backend::state::{Backend, ParseState};
 /// Emits a `tracing::debug!` when a cache hit is being served from a
 /// stale baseline so operators can observe KIB-013 occurrences without
 /// touching each feature handler (see [`Backend::parse_state`]).
+///
+/// A [`talkbank_parser::ParseProduct::Built`] is returned as `Ok` even
+/// when it carries diagnostics: per this crate's degrade-gracefully
+/// doctrine, a document with one bad region should still serve feature
+/// requests (hover, completion, alignment) for the healthy rest of the
+/// file, rather than failing the whole request. Only
+/// [`talkbank_parser::ParseProduct::Unbuildable`] maps to
+/// [`LspBackendError::ParseFailure`].
 pub(crate) fn load_chat_file(
     backend: &Backend,
     uri: &Url,
@@ -41,8 +49,10 @@ pub(crate) fn load_chat_file(
         .language_services
         .with_parser(|parser| parser.parse_chat_file(doc))
     {
-        Ok(Ok(chat_file)) => Ok(Arc::new(chat_file)),
-        Ok(Err(errors)) => Err(parse_failure_from(&errors)),
+        Ok(talkbank_parser::ParseProduct::Built { file, .. }) => Ok(Arc::new(file)),
+        Ok(talkbank_parser::ParseProduct::Unbuildable { diagnostics }) => {
+            Err(parse_failure_from(&diagnostics))
+        }
         Err(init_error) => Err(LspBackendError::LanguageServicesUnavailable(init_error)),
     }
 }
@@ -62,18 +72,17 @@ pub(crate) fn load_document_and_chat_file(
     Ok((text, chat_file))
 }
 
-/// Convert the parser's collected [`ParseErrors`] into
-/// [`LspBackendError::ParseFailure`] (the empty-diagnostics branch is
-/// the `count == 0` case of the same variant).
+/// Convert a [`talkbank_parser::ParseProduct::Unbuildable`]'s diagnostics
+/// into [`LspBackendError::ParseFailure`].
 ///
 /// Kept private: every call that needs a [`ChatFile`] should route
 /// through [`load_chat_file`] rather than recreate the error-mapping
 /// shape. New code that needs a different classification should add
 /// a variant to [`LspBackendError`], not a second copy of this
 /// function.
-fn parse_failure_from(errors: &ParseErrors) -> LspBackendError {
+fn parse_failure_from(diagnostics: &[ParseError]) -> LspBackendError {
     LspBackendError::ParseFailure {
-        count: errors.errors.len(),
-        first_message: errors.errors.first().map(|e| e.message.clone()),
+        count: diagnostics.len(),
+        first_message: diagnostics.first().map(|e| e.message.clone()),
     }
 }

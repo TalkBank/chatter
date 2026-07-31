@@ -28,6 +28,7 @@ parser cannot regress to accepting it.
 - **Category**: Word annotation
 - **Level**: word
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

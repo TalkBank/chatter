@@ -99,6 +99,88 @@ fn build_validation_context(
     ))
 }
 
+/// Shared check sequence run by both [`ChatFile::validate`] and
+/// [`ChatFile::validate_with_config`].
+///
+/// The two entry points differ only in which [`ValidationConfig`] built the
+/// `context`, and whether `errors` is the raw sink or a
+/// [`ConfigurableErrorSink`] wrapping it; the actual check sequence must stay
+/// identical or the two paths silently drift (this is what happened to E758
+/// before the two bodies were unified here: a check present in `validate`
+/// was simply absent from `validate_with_config`, so `--strict-linkers` runs
+/// never reported it). Factoring the sequence into one function makes that
+/// class of drift structurally impossible: there is only one place to add a
+/// new file-level check.
+fn run_validation_checks<S: ValidationState>(
+    file: &ChatFile<S>,
+    context: &crate::validation::ValidationContext,
+    errors: &impl crate::ErrorSink,
+    filename: Option<&str>,
+) {
+    use crate::validation::{cross_utterance, header};
+
+    let headers_with_spans: Vec<(&Header, crate::Span)> = file.headers_with_spans().collect();
+
+    // Validate header collection (duplicates, required headers).
+    let source_len = file.lines.last().map(|l| l.span().end as usize);
+    header::structure::check_headers(&headers_with_spans, errors, source_len);
+
+    // Validate individual headers.
+    for (header, span) in &headers_with_spans {
+        header::check_header(header, *span, context, errors);
+    }
+
+    // Cross-header validation: @ID language vs @Languages, role mismatch.
+    check_cross_header_consistency(file, &headers_with_spans, errors);
+
+    // Validate utterances.
+    for utt in file.utterances() {
+        utt.validate(context, errors);
+    }
+
+    // Validate cross-utterance patterns.
+    let utterances_vec: Vec<crate::model::Utterance> = file.utterances().cloned().collect();
+    cross_utterance::check_cross_utterance_patterns_with_sink(&utterances_vec, context, errors);
+
+    // E362: Validate bullet timestamp monotonicity across utterances.
+    // Skip monotonicity check if bullets mode is enabled.
+    let bullets: Vec<&crate::model::Bullet> = file
+        .utterances()
+        .filter_map(|utt| utt.main.content.bullet.as_ref())
+        .collect();
+    if !bullets.is_empty() && !context.shared.bullets_mode {
+        crate::validation::check_bullet_monotonicity(&bullets, errors);
+    }
+
+    // E544: @Media declares linkage but transcript has no timing evidence.
+    check_media_linkage_has_timing(&headers_with_spans, file, &bullets, errors);
+
+    // E552: the inverse, @Media declares `unlinked` but the transcript has
+    // timing bullets, so the media is in fact linked (CLAN CHECK 124).
+    check_media_unlinked_has_no_timing(&headers_with_spans, file, &bullets, errors);
+
+    // E752: timing evidence with NO @Media header at all (CLAN CHECK 112).
+    check_timing_has_media(&headers_with_spans, file, &bullets, errors);
+
+    // E755: a [- CODE] utterance language must be declared in @Languages
+    // (CLAN CHECK 152); word-level @s:CODE deliberately exempt.
+    check_utterance_language_declared(file, errors);
+
+    // E758: leading space between the tab and tier content (CLAN CHECK
+    // 123). CA files are exempt.
+    if !context.shared.ca_mode {
+        check_separator_trailing_space(file, errors);
+    }
+
+    // E701, E704: Validate temporal constraints on media bullets.
+    crate::validation::temporal::validate_temporal_constraints(file, errors);
+
+    // E531: Validate media filename matches file name (if provided).
+    if let Some(file_name) = filename {
+        check_media_filename_match(&headers_with_spans, file_name, errors);
+    }
+}
+
 impl<S: ValidationState> ChatFile<S> {
     /// Run header-only validation and return the derived context.
     ///
@@ -268,8 +350,6 @@ impl<S: ValidationState> ChatFile<S> {
     /// ```
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
     pub fn validate(&self, errors: &impl crate::ErrorSink, filename: Option<&str>) {
-        use crate::validation::{cross_utterance, header};
-
         let header_count = self.header_count();
         let utterance_count = self.utterance_count();
         tracing::debug!(
@@ -278,8 +358,7 @@ impl<S: ValidationState> ChatFile<S> {
             utterance_count
         );
 
-        let headers_with_spans: Vec<(&Header, crate::Span)> = self.headers_with_spans().collect();
-        let headers: Vec<&Header> = headers_with_spans.iter().map(|(h, _)| *h).collect();
+        let headers: Vec<&Header> = self.headers().collect();
         let participant_ids: HashSet<crate::model::SpeakerCode> =
             self.participants.keys().cloned().collect();
         let context = build_validation_context(
@@ -289,77 +368,7 @@ impl<S: ValidationState> ChatFile<S> {
             ValidationConfig::new(),
         );
 
-        // Validate header collection (duplicates, required headers) - stream immediately
-        let source_len = self.lines.last().map(|l| l.span().end as usize);
-        header::structure::check_headers(&headers_with_spans, errors, source_len);
-
-        // Validate individual headers - stream errors directly
-        for (header, span) in &headers_with_spans {
-            header::check_header(header, *span, &context, errors);
-        }
-
-        // Cross-header validation: @ID language vs @Languages, role mismatch
-        check_cross_header_consistency(self, &headers_with_spans, errors);
-
-        // Validate utterances - stream errors directly
-        for utt in self.utterances() {
-            utt.validate(&context, errors);
-        }
-
-        // Validate cross-utterance patterns
-        let utterances_vec: Vec<crate::model::Utterance> = self.utterances().cloned().collect();
-        cross_utterance::check_cross_utterance_patterns_with_sink(
-            &utterances_vec,
-            &context,
-            errors,
-        );
-
-        // E362: Validate bullet timestamp monotonicity across utterances
-        // Skip monotonicity check if bullets mode is enabled
-        let bullets: Vec<&crate::model::Bullet> = self
-            .utterances()
-            .filter_map(|utt| utt.main.content.bullet.as_ref())
-            .collect();
-        if !bullets.is_empty() && !context.shared.bullets_mode {
-            crate::validation::check_bullet_monotonicity(&bullets, errors);
-        }
-
-        // E544: @Media declares linkage but transcript has no timing
-        // evidence. Rule and scope documented in `ErrorCode::
-        // MediaLinkageWithoutTiming` and the E544 spec.
-        check_media_linkage_has_timing(&headers_with_spans, self, &bullets, errors);
-
-        // E552: the inverse, @Media declares `unlinked` but the transcript has
-        // timing bullets, so the media is in fact linked (CLAN CHECK 124).
-        check_media_unlinked_has_no_timing(&headers_with_spans, self, &bullets, errors);
-
-        // E752: timing evidence with NO @Media header at all (CLAN CHECK 112);
-        // completes the media-consistency family in the remaining direction.
-        check_timing_has_media(&headers_with_spans, self, &bullets, errors);
-
-        // E755: a [- CODE] utterance language must be declared in @Languages
-        // (CLAN CHECK 152); word-level @s:CODE deliberately exempt.
-        check_utterance_language_declared(self, errors);
-
-        // E758: leading space between the tab and tier content (CLAN CHECK
-        // 123). CA files are exempt, and the exemption is CHECK-grounded:
-        // check_Tabs suppresses 123 under CA and applies rule 132 instead.
-        // Measured 2026-07-29 (all 994 kept CA-declared files): the
-        // exemption currently shields 6 instances in one file; the earlier
-        // "457 wild occurrences" figure was stale.
-        if !context.shared.ca_mode {
-            check_separator_trailing_space(self, errors);
-        }
-
-        // E701, E704: Validate temporal constraints on media bullets
-        // - E701 (CLAN Error 83): Global timeline monotonicity
-        // - E704 (CLAN Error 133): Per-speaker overlap with 500ms tolerance
-        crate::validation::temporal::validate_temporal_constraints(self, errors);
-
-        // E531: Validate media filename matches file name (if provided)
-        if let Some(file_name) = filename {
-            check_media_filename_match(&headers_with_spans, file_name, errors);
-        }
+        run_validation_checks(self, &context, errors, filename);
 
         tracing::debug!("Streaming validation complete");
     }
@@ -397,8 +406,6 @@ impl<S: ValidationState> ChatFile<S> {
         errors: &impl crate::ErrorSink,
         filename: Option<&str>,
     ) {
-        use crate::validation::{cross_utterance, header};
-
         let header_count = self.header_count();
         let utterance_count = self.utterance_count();
         tracing::debug!(
@@ -410,81 +417,25 @@ impl<S: ValidationState> ChatFile<S> {
         // Apply severity/disable overrides at sink boundary.
         let configurable_sink = ConfigurableErrorSink::new(errors, config.clone());
 
-        let headers_with_spans: Vec<(&Header, crate::Span)> = self.headers_with_spans().collect();
-        let headers: Vec<&Header> = headers_with_spans.iter().map(|(h, _)| *h).collect();
+        let headers: Vec<&Header> = self.headers().collect();
         let participant_ids: HashSet<crate::model::SpeakerCode> =
             self.participants.keys().cloned().collect();
         let context = build_validation_context(participant_ids, &self.languages, &headers, config);
 
-        // Validate header-set invariants.
-        let source_len = self.lines.last().map(|l| l.span().end as usize);
-        header::structure::check_headers(&headers_with_spans, &configurable_sink, source_len);
-
-        // Validate each header payload.
-        for (header, span) in &headers_with_spans {
-            header::check_header(header, *span, &context, &configurable_sink);
-        }
-
-        // Validate utterances.
-        for utt in self.utterances() {
-            utt.validate(&context, &configurable_sink);
-        }
-
-        // Validate cross-utterance patterns
-        let utterances_vec: Vec<crate::model::Utterance> = self.utterances().cloned().collect();
-        cross_utterance::check_cross_utterance_patterns_with_sink(
-            &utterances_vec,
-            &context,
-            &configurable_sink,
-        );
-
-        // E362: Validate bullet timestamp monotonicity across utterances
-        // Skip monotonicity check if bullets mode is enabled
-        let bullets: Vec<&crate::model::Bullet> = self
-            .utterances()
-            .filter_map(|utt| utt.main.content.bullet.as_ref())
-            .collect();
-        if !bullets.is_empty() && !context.shared.bullets_mode {
-            crate::validation::check_bullet_monotonicity(&bullets, &configurable_sink);
-        }
-
-        // E758: leading space between the tab and tier content, CA-exempt,
-        // same rule as the plain `validate` path. Missing here until
-        // 2026-07-30: the two validate bodies are near-copies that drift,
-        // and this one had silently lost the check, so `--strict-linkers`
-        // runs never reported E758.
-        if !context.shared.ca_mode {
-            check_separator_trailing_space(self, &configurable_sink);
-        }
-
-        // E701, E704: Validate temporal constraints on media bullets
-        // - E701 (CLAN Error 83): Global timeline monotonicity
-        // - E704 (CLAN Error 133): Per-speaker overlap with 500ms tolerance
-        crate::validation::temporal::validate_temporal_constraints(self, &configurable_sink);
-
-        // E531: Validate media filename matches file name (if provided)
-        if let Some(file_name) = filename {
-            check_media_filename_match(&headers_with_spans, file_name, &configurable_sink);
-        }
+        run_validation_checks(self, &context, &configurable_sink, filename);
 
         tracing::debug!("Streaming validation with config complete");
     }
 
-    /// Validate this CHAT file including alignment/language precomputation.
+    /// Precompute per-utterance tier alignment and language metadata.
     ///
-    /// This first computes per-utterance alignment and language metadata, then
-    /// runs the normal streaming validation pipeline.
-    ///
-    /// # Parameters
-    ///
-    /// * `errors` - Error sink for streaming validation errors
-    /// * `filename` - Optional filename (without extension) for E531 validation
-    #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
-    pub fn validate_with_alignment(
-        &mut self,
-        errors: &impl crate::ErrorSink,
-        filename: Option<&str>,
-    ) {
+    /// Shared by [`Self::validate_with_alignment`] and
+    /// [`Self::validate_with_alignment_and_config`]. Alignment computation
+    /// only needs the header-derived default/declared languages, which do
+    /// not depend on severity overrides, so both callers precompute with a
+    /// fresh default [`ValidationConfig`] regardless of what config the
+    /// actual validation pass will use.
+    fn precompute_alignments(&mut self) {
         let utterance_count = self.utterance_count();
         tracing::debug!(
             "Computing tier alignments for {} utterances",
@@ -513,10 +464,56 @@ impl<S: ValidationState> ChatFile<S> {
             }
         }
 
-        tracing::debug!("Tier alignments computed, running streaming validation");
+        tracing::debug!("Tier alignments computed");
+    }
 
-        // Run streaming validation
+    /// Validate this CHAT file including alignment/language precomputation.
+    ///
+    /// This first computes per-utterance alignment and language metadata, then
+    /// runs the normal streaming validation pipeline.
+    ///
+    /// # Parameters
+    ///
+    /// * `errors` - Error sink for streaming validation errors
+    /// * `filename` - Optional filename (without extension) for E531 validation
+    #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
+    pub fn validate_with_alignment(
+        &mut self,
+        errors: &impl crate::ErrorSink,
+        filename: Option<&str>,
+    ) {
+        self.precompute_alignments();
+        tracing::debug!("running streaming validation");
         self.validate(errors, filename)
+    }
+
+    /// Validate this CHAT file with alignment/language precomputation AND a
+    /// custom per-code severity configuration.
+    ///
+    /// This is the combination [`Self::validate_with_alignment`] cannot
+    /// express (it always calls the unconfigured [`Self::validate`]) and
+    /// [`Self::validate_with_config`] cannot express (it never precomputes
+    /// alignment): both alignment-aware diagnostics AND suppressed/remapped
+    /// codes apply. This is the entry point streamed validation runners use
+    /// whenever both alignment checking and a suppression/severity config
+    /// are in force at once, so there is exactly one validation call per
+    /// file regardless of which options are active.
+    ///
+    /// # Parameters
+    ///
+    /// * `config` - Validation configuration (severity overrides, disabled errors)
+    /// * `errors` - Error sink for streaming validation errors
+    /// * `filename` - Optional filename (without extension) for E531 validation
+    #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
+    pub fn validate_with_alignment_and_config(
+        &mut self,
+        config: ValidationConfig,
+        errors: &impl crate::ErrorSink,
+        filename: Option<&str>,
+    ) {
+        self.precompute_alignments();
+        tracing::debug!("running streaming validation with config");
+        self.validate_with_config(config, errors, filename)
     }
 }
 

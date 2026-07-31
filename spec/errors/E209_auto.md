@@ -19,6 +19,7 @@ This is the Rust equivalent of CLAN CHECK error 155.
 - **Level**: word
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

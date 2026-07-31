@@ -10,6 +10,7 @@ A `%tim` dependent tier contains content that does not match the expected time f
 - **Category**: tier_validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Unmodeled
 
 ## Example
 

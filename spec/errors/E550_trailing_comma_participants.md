@@ -14,6 +14,7 @@ header; the header has participants, it just has an extra comma at the end.
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

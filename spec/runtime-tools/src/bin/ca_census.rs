@@ -520,9 +520,15 @@ fn main() -> Result<()> {
             continue;
         };
         // CA-mode detection needs the parsed headers, so parse once here and
-        // hand the source to the census; a file that will not parse at all is
-        // counted and skipped rather than guessed at.
-        let Ok(parsed) = parser.parse_chat_file(&source) else {
+        // hand the source to the census; a file that will not build a model
+        // at all is counted and skipped rather than guessed at. A file that
+        // builds a model but also carries diagnostics is still usable here
+        // (the census only reads headers), matching the stated intent
+        // ("will not parse at all") more literally than the old
+        // any-diagnostic-fails behavior did.
+        let talkbank_parser::ParseProduct::Built { file: parsed, .. } =
+            parser.parse_chat_file(&source)
+        else {
             files_unparsable += 1;
             continue;
         };

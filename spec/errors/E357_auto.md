@@ -14,6 +14,7 @@ close.
 - **Category**: underline\_balance
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

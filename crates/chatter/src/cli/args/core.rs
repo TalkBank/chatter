@@ -104,6 +104,11 @@ pub enum Commands {
         ///            `--suppress xphon` to silence the group.
         ///
         /// Can mix groups and codes: --suppress xphon,E316
+        ///
+        /// Group and code names are matched case-insensitively. A value that
+        /// names neither a known group nor a known error code is refused
+        /// (non-zero exit, naming the offending value) rather than silently
+        /// suppressing nothing.
         #[arg(
             long,
             value_delimiter = ',',
@@ -609,18 +614,22 @@ pub enum Commands {
         clear: bool,
     },
 
-    /// Lint CHAT file(s) and optionally auto-fix issues
-    Lint {
-        /// Path to CHAT file or directory
-        path: PathBuf,
+    /// Apply catalog fixes to CHAT file(s) at exact byte spans
+    Fix {
+        /// Paths to CHAT files or directories
+        paths: Vec<PathBuf>,
 
-        /// Automatically apply fixes
+        /// Write the fixes (without this, report only)
         #[arg(long)]
-        fix: bool,
+        apply: bool,
 
-        /// Show what would be fixed without modifying files
-        #[arg(long, requires = "fix")]
+        /// Show what would change without writing
+        #[arg(long, requires = "apply")]
         dry_run: bool,
+
+        /// Restrict to these error codes; required to apply a Semantic fix
+        #[arg(long = "code")]
+        codes: Vec<String>,
 
         /// Skip tier alignment checks
         #[arg(long)]

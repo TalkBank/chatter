@@ -15,6 +15,7 @@ previous speaker to have trailed off.
 - **Category**: cross\_utterance
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

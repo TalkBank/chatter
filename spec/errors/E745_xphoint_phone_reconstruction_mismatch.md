@@ -11,6 +11,7 @@ Concatenating a `%xphoint` group's phones must reproduce the corresponding `%pho
 - **Level**: tier
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

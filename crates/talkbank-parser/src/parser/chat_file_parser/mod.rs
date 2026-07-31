@@ -40,5 +40,8 @@ mod utterance_parser;
 pub use parser_struct::ParserInitError;
 pub use parser_struct::TreeSitterParser;
 
+// Re-export the strict whole-file parse product type.
+pub use chat_file::ParseProduct;
+
 // Re-export minimal CHAT constants for use in ChatParser trait impl
 pub(crate) use single_item::helpers::{MINIMAL_CHAT_PREFIX, MINIMAL_CHAT_SUFFIX};

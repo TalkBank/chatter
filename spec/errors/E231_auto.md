@@ -10,6 +10,7 @@ Auto-generated from corpus
 - **Category**: validation
 - **Level**: word
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -1,7 +1,7 @@
 # Install
 
 **Status:** Current
-**Last modified:** 2026-07-07 21:20 EDT
+**Last modified:** 2026-07-31 06:13 EDT
 
 Everything here comes from the [latest
 release](https://github.com/TalkBank/chatter/releases/latest).
@@ -55,7 +55,7 @@ a Linux ARM build.)
 ## `chatter`, the command-line tool (for programmers and automation)
 
 If you are comfortable in a terminal, the `chatter` CLI validates, normalizes,
-converts (JSON), lints, watches, and batch-processes CHAT files, and is
+converts (JSON), watches, and batch-processes CHAT files, and is
 the right tool for scripting and CI.
 
 macOS / Linux:

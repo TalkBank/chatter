@@ -11,7 +11,7 @@
 use crate::model::header::IDHeader;
 use crate::model::{Participant, Utterance};
 use crate::validation::ValidationState;
-use crate::{Header, WriteChat};
+use crate::{Header, Span, WriteChat};
 use tracing::{debug, info};
 
 use super::ChatFile;
@@ -64,6 +64,24 @@ impl<S: ValidationState> ChatFile<S> {
     /// Returned items exclude header lines but keep relative utterance ordering unchanged.
     pub fn utterances(&self) -> impl Iterator<Item = &Utterance> {
         self.lines.iter().filter_map(|line| line.as_utterance())
+    }
+
+    /// Finds the utterance whose main tier or a dependent tier contains `offset`.
+    ///
+    /// Containment is HALF-OPEN (`start <= offset < end`), matching [`Span`]'s
+    /// documented semantics, so an offset sitting exactly at one utterance's
+    /// end belongs to the next utterance, never to both. This is the shared
+    /// home for "which utterance is byte N in": callers that want inclusive-end
+    /// behaviour (for example an editor cursor resting at the end of a word)
+    /// must widen the offset themselves and document why.
+    pub fn utterance_containing(&self, offset: u32) -> Option<&Utterance> {
+        self.utterances().find(|utterance| {
+            span_contains_half_open(utterance.main.span, offset)
+                || utterance
+                    .dependent_tiers
+                    .iter()
+                    .any(|entry| span_contains_half_open(entry.tier.span(), offset))
+        })
     }
 
     /// Returns the number of header lines in `self.lines`.
@@ -162,4 +180,12 @@ impl<S: ValidationState> ChatFile<S> {
         info!("Serialized to {} bytes", s.len());
         s
     }
+}
+
+/// Half-open containment: `start <= offset < end`.
+///
+/// A [`Span::DUMMY`]/[`Span::is_dummy`] span never contains anything: it
+/// marks "no real source location," not a zero-width span at byte 0.
+fn span_contains_half_open(span: Span, offset: u32) -> bool {
+    !span.is_dummy() && offset >= span.start && offset < span.end
 }

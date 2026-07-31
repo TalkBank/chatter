@@ -470,7 +470,7 @@ mod tests {
     /// serialized result and stats.
     fn join_with_scope(chat: &str, scope: RetraceJoinScope) -> (String, JoinRetraceStats) {
         let parser = TreeSitterParser::new().expect("parser");
-        let mut parsed = parser.parse_chat_file(chat).expect("parse chat");
+        let mut parsed = parser.parse_chat_file(chat).expect_built();
         let stats = join_dangling_retraces(&mut parsed, scope);
         (parsed.to_chat_string(), stats)
     }

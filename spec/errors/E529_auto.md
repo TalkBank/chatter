@@ -10,6 +10,7 @@ Nested background with identical label
 - **Category**: validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

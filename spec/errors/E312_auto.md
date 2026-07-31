@@ -13,6 +13,7 @@ Opening bracket `[` on the main tier has no matching closing bracket `]`.
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

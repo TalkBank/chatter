@@ -29,6 +29,7 @@ convention, the transcriber marks where overlap begins, with the end implied.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: not_implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

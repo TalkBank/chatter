@@ -276,6 +276,14 @@ A parsed Word object has empty content, the word node exists in the CST but cont
 |------|------|----------|--------|
 | [E253](E253.md) | Empty word content | error | ✅ |
 
+## main_tier_validation (E2x)
+
+Every lexical (and filler/nonword) item in an utterance carries a per-word @s language marker that resolves to the same single non-default language. When an entire utterance switches language, CHAT provides the utterance precode [- LANG] for exactly this case; tagging every word individually with @s instead of using the precode is flagged so the file is rewritten into the operationally correct form.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E255](E255.md) | Whole-utterance language switch should use precode | error | ✅ |
+
 ## parser (E2x)
 
 A curly single quotation mark (U+2018 or U+2019) is used as a word character. CHAT requires the ASCII apostrophe; the curly form (typically a typographic apostrophe introduced by autocorrect or ASR) is not a legal word character. Mirrors CLAN CHECK errors 138 (U+2019) and 139 (U+2018).
@@ -866,7 +874,7 @@ When a %wor tier contains invalid content (e.g., an action marker like &=head:no
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E502 (false positive)](E502 (false positive).md) | E502 false positive: %wor parse error cascades to entire file | error | ✅ |
+| [E502](E502.md) | false positive: %wor parse error cascades to entire file | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -1262,6 +1270,14 @@ The @Participants header ends with a trailing comma: a stray comma after the las
 
 ## header_validation (E5x)
 
+An @Options header does not immediately follow @Participants. Per the CHAT spec the optional @Options line, when present, comes directly after @Participants, before the @ID block or any other header. This check is gated on @Participants already having been seen; @Options appearing before @Participants is a distinct case reported as E543 instead, so the two do not double-report the same header.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E551](E551.md) | @Options header out of order | error | ✅ |
+
+## header_validation (E5x)
+
 The @Media header's unlinked status declares that the transcript is not time-aligned to the media file. Timing evidence anywhere in the transcript contradicts that declaration: either the transcript really is aligned (so unlinked must be removed), or the timing tier is stale (so it must be removed). This is the inverse of E544 (declared linkage without timing evidence).
 
 | Code | Name | Severity | Status |
@@ -1532,6 +1548,38 @@ The %xphoaln tier word count does not match the %pho tier word count. Each word-
 |------|------|----------|--------|
 | [E728](E728.md) | Phoaln tier word count does not match pho tier | error | ✅ |
 
+## Temporal validation (E7x)
+
+The current tier's media-bullet BEG time is before the previous tier's END time, where the two tiers belong to different speakers. Unlike same-speaker self-overlap (E704, checked via overlap markers), this is a cross-speaker timing check on the bullets themselves. CLAN reports this as a warning rather than an error, since cross-speaker overlap can be intentional (e.g. genuine simultaneous speech).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E729](E729.md) | Cross-speaker bullet overlap | error | ⏳ |
+
+## Temporal validation (E7x)
+
+The gap between the current tier's bullet BEG time and the previous tier's bullet END time exceeds an acceptable discontinuity threshold. Intended to be reported only in bullet consistency mode (CLAN +c0).
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E730](E730.md) | Bullet timing gap | error | ⏳ |
+
+## Temporal validation (E7x)
+
+A speaker's bullet start time (BEG) is before their own previous bullet's end time (END), checked purely from bullet timing rather than from overlap markers. This is intended to supplement E704 (SpeakerSelfOverlap, which checks overlap markers ⌈⌉/⌊⌋) with an actual-timing check for the same condition, without E704's 500ms tolerance.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E731](E731.md) | Speaker bullet self-overlap via timing | error | ⏳ |
+
+## Temporal validation (E7x)
+
+When bullet consistency mode is active (CLAN +c0 or +c1), every main tier is required to carry a media bullet. This code is intended to be reported on a main tier that has none while that mode is active.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E732](E732.md) | Missing bullet in bullet consistency mode | error | ⏳ |
+
 ## Alignment count mismatch (E7x)
 
 The %mod (model/target phonology) tier has fewer alignable tokens than the main tier. Each main-tier word must have a corresponding %mod token.
@@ -1644,6 +1692,14 @@ Concatenating a %xphoint group's phones must reproduce the corresponding %pho wo
 |------|------|----------|--------|
 | [E746](E746.md) | Xphoint group count does not match the pho word count | error | ✅ |
 
+## parser (E7x)
+
+CHAT does not allow blank lines anywhere in the transcript (CLAN CHECK 91). The grammar represents a blank line as a structural blank_line node (a lone newline at a line boundary), so the parser emits this diagnostic directly from the tree rather than by scanning the source text.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E747](E747.md) | Blank line not allowed | error | ✅ |
+
 ## Media bullets (E7x)
 
 A media bullet timestamp is written with a leading zero before another digit (for example 012_200). CHAT bullet times are plain millisecond integers; a leading zero is an illegal time representation (CLAN CHECK error 90, check_getMediaTagInfo res 3). A bare 0 timestamp (for example 0_200) is legal: the rule fires only when a 0 is followed by another digit.
@@ -1718,7 +1774,7 @@ A user-defined %x tier whose content is empty or whitespace-only declares nothin
 
 ## Main tier separators (E7x)
 
-A bracketed code's closing ] directly attached to the start of the next word with no space (hello [/]x) is invalid (CLAN CHECK error 19, "Illegal use of delimiter in a word." / "Or a SPACE should be added after it."). Bracketed codes are free-standing items and must be space-delimited from what follows. The parse itself is unambiguous (the retrace closes at ] and x becomes a separate word), which is exactly why this is a STYLE rule: sloppy but readable source that must still be rejected so the corpus stays canonically spaced.
+A bracketed code's closing ] directly attached to the start of the next word with no space (hello [/]x, hello [!]x) is invalid (CLAN CHECK error 19, "Illegal use of delimiter in a word." / "Or a SPACE should be added after it.").
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
@@ -1772,6 +1828,30 @@ The prefix marker # separates a bound prefix from its stem (Hebrew ha# kelev, Ar
 |------|------|----------|--------|
 | [E763](E763.md) | prefix marker in a language that does not use it | error | ✅ |
 
+## Main tier separators (E7x)
+
+The & prefixes introduce a word of their own: a filler (&-um), a nonword (&~gaga), or a phonological fragment (&+fr). Each is a separate main-tier word and must be separated from what precedes it by a space:
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E764](E764.md) | prefixed form glued to the preceding word | error | ✅ |
+
+## Main tier separators (E7x)
+
+A plain separator (: or ;) and a pause ((.), (2.4)) are free-standing main-tier items. Whatever follows one of them starts a new item and must be separated from it by a space:
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E765](E765.md) | separator glued to the following content | error | ✅ |
+
+## Main tier structure (E7x)
+
+Linkers (+", ++, +<, +^, +,, +≈, +≋) connect an utterance to the PREVIOUS utterance, so they are utterance-initial by definition:
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E766](E766.md) | linker not utterance-initial | error | ✅ |
+
 ## Alignment count mismatch (E9x)
 
 Unknown error
@@ -1787,12 +1867,4 @@ Auto-generated from corpus
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [W108](W108.md) | Auto-generated from corpus | error | ✅ |
-
-## Warnings (W6x)
-
-A user-defined dependent tier (%x...) uses a label that matches a known standard tier name. For example, %xpho should be updated to %pho since pho is now a recognized standard tier. This is a warning to encourage migration from legacy experimental naming to the current standard.
-
-| Code | Name | Severity | Status |
-|------|------|----------|--------|
-| [W602](W602.md) | Deprecated experimental tier name | error | ⏳ |
 

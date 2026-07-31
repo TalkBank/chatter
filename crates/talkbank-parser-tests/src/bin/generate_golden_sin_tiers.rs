@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        match parser.parse_chat_file(&content) {
+        match talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&content)) {
             Ok(chat) => {
                 insert_sin_tiers_from_chat(&chat, &mut sin_tiers, limit);
             }

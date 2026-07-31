@@ -14,6 +14,7 @@ Unknown error
 - **Category**: Alignment count mismatch
 - **Level**: file
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

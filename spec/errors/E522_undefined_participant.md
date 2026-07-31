@@ -9,6 +9,7 @@ An utterance uses a speaker code that was not defined in the @Participants heade
 - **Category**: header_validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

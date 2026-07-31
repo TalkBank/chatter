@@ -10,6 +10,7 @@ An utterance contains a dependent tier with a label that is not a standard CHAT 
 - **Category**: tier_validation
 - **Level**: utterance
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

@@ -40,6 +40,7 @@ fired, because they demand different advice:
 - **Category**: header_validation
 - **Level**: file
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

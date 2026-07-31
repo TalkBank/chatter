@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use talkbank_transform::UnifiedCache;
+use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache};
 
 use crate::commands::CacheRefreshMode;
 
@@ -20,11 +20,33 @@ pub(crate) type ValidationCacheHandle = Arc<UnifiedCache>;
 /// rotate the key) but poisonous when the BINARY changes rule behavior
 /// without changing the rule list: a 994-file measurement served 993 stale
 /// verdicts from the previous build and reported near-zero impact.
+///
+/// `model_config` is the SAME [`talkbank_model::ValidationConfig`] the run
+/// will hand to the worker for actual validation (built once, upstream, from
+/// `--suppress` and `--strict-linkers`). Threading the identical value
+/// through here, rather than re-deriving a summary of it, is what keeps the
+/// cache key and the validation behavior from ever disagreeing: it is folded
+/// into the pool's [`RulesVersion`] (via
+/// [`RulesVersion::current_with_config`]) so a verdict produced under one
+/// active config is never served back to a run with a different one. Both
+/// the disabled-code set AND strict-linkers matter here: either one alone
+/// can change which files count as Valid.
+///
+/// The PARSE dimension is folded in too: `RulesVersion::current_with_config`
+/// takes `talkbank_transform::GRAMMAR_FINGERPRINT` (re-exported from the
+/// grammar crate via `talkbank-parser`) as a mandatory parameter, so a
+/// verdict produced under one compiled-in grammar is never served back to a
+/// binary built against a different one. This CLI already depends on both
+/// the parser and the cache, which is exactly the seam
+/// `RulesVersion::current_with_config`'s doc comment names as the intended
+/// place to close that gap.
 pub(crate) fn initialize_validation_cache(
     files: &[std::path::PathBuf],
     cache_refresh: CacheRefreshMode,
+    model_config: &talkbank_model::ValidationConfig,
 ) -> Option<ValidationCacheHandle> {
-    let cache = UnifiedCache::open_or_else(|error| {
+    let rules_version = RulesVersion::current_with_config(model_config, GRAMMAR_FINGERPRINT);
+    let cache = UnifiedCache::open_or_else_with_rules_version(rules_version, |error| {
         eprintln!("Warning: Failed to initialize cache: {}", error);
     })?;
 

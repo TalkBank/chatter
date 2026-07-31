@@ -14,6 +14,7 @@ directly after the `@ID` headers, before any changeable header such as
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example 1
 

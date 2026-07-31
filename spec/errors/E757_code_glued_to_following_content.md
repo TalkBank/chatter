@@ -26,6 +26,7 @@ still be rejected so the corpus stays canonically spaced.
 - **Level**: utterance
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Style
 
 ## Example 1
 

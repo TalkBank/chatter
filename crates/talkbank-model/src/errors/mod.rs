@@ -44,10 +44,17 @@ pub mod config;
 pub mod configurable_sink;
 /// Rich error context for helpful error messages.
 pub mod context;
+/// Diagnostic KIND (Axis 1) and validation PROFILE (Axis 2): the exhaustive
+/// per-code registry that severity is derived from, never stored.
+pub mod diagnostic_kind;
 /// Error enhancement utilities for adding line/column and source context.
 pub mod enhance;
 /// Core error sink trait plus lightweight forwarding implementations.
 pub mod error_sink;
+/// Generated `DiagnosticKind` match, produced from `spec/errors/*.md` by
+/// `gen_diagnostic_kind` (`spec/runtime-tools`). DO NOT EDIT BY HAND; see
+/// the file's own header for the regeneration command.
+mod generated_diagnostic_kind;
 /// Byte-offset line index for O(log n) line/column lookups.
 pub mod line_map;
 /// Offset-adjusting error sink for wrapper technique offset adjustment.
@@ -75,6 +82,7 @@ pub use collectors::{ErrorCollector, ParseTracker};
 pub use config::ValidationConfig;
 pub use configurable_sink::ConfigurableErrorSink;
 pub use context::ErrorContext;
+pub use diagnostic_kind::{DiagnosticKind, ValidationProfile, kind_of, severity};
 pub use enhance::{enhance_errors_with_line_map, enhance_errors_with_source};
 #[cfg(feature = "channels")]
 pub use error_sink::ChannelErrorSink;

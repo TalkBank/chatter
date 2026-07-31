@@ -18,6 +18,7 @@ typically fails to match the main tier pattern at all, producing an ERROR node
 - **Category**: validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

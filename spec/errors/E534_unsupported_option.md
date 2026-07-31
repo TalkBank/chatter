@@ -10,6 +10,7 @@ An `@Options` header contains a flag that is not one of the recognized option va
 - **Category**: header_validation
 - **Level**: header
 - **Layer**: validation
+- **Kind**: Invalidity
 
 ## Example
 

@@ -33,6 +33,7 @@ the generic unparsable path in both parser front ends.
 - **Category**: Main tier structure
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 

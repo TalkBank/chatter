@@ -18,6 +18,7 @@ target to resolve to. The speaker must use an explicit language code
 - **Level**: word
 - **Layer**: validation
 - **Status**: implemented
+- **Kind**: Invalidity
 
 ## Example 1
 

@@ -65,7 +65,27 @@ impl CachePool {
     /// shares the same construction and `Option`-collapsing logic instead of
     /// each hand-rolling the same `match`.
     pub fn open_or_else(on_error: impl FnOnce(&CacheError)) -> Option<Arc<Self>> {
-        match Self::new() {
+        Self::open_or_else_with_rules_version(RulesVersion::current(), on_error)
+    }
+
+    /// Open the default cache keyed to an explicit [`RulesVersion`],
+    /// `Arc`-wrapped for sharing across worker threads/validation runs,
+    /// degrading to `None` on failure. Same error-reporting contract as
+    /// [`Self::open_or_else`] (which is now expressed in terms of this
+    /// method, passing [`RulesVersion::current`]).
+    ///
+    /// Exists so a caller whose active `ValidationConfig` suppresses codes
+    /// or enables strict-linker mode (either of which changes which files
+    /// count as Valid) can key the pool to a version that reflects that, via
+    /// [`RulesVersion::current_with_config`], instead of always deriving the
+    /// version from the compiled-in rule set alone.
+    pub fn open_or_else_with_rules_version(
+        rules_version: RulesVersion,
+        on_error: impl FnOnce(&CacheError),
+    ) -> Option<Arc<Self>> {
+        match cache_utils::default_cache_dir()
+            .and_then(|cache_dir| Self::with_directory_and_rules_version(cache_dir, rules_version))
+        {
             Ok(cache) => Some(Arc::new(cache)),
             Err(error) => {
                 on_error(&error);

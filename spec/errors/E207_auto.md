@@ -10,6 +10,7 @@ Unknown scoped annotation marker
 - **Category**: Word validation
 - **Level**: word
 - **Layer**: parser
+- **Kind**: Invalidity
 
 ## Example 1
 
