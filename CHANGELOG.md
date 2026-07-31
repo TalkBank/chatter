@@ -7,7 +7,14 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
-## [Unreleased]
+## [0.6.0] - 2026-07-31
+
+**Validation verdicts: CHANGED.** Files that earlier versions accepted may
+now be rejected, and files they rejected may now be accepted. Both
+directions occur in this release: the Phon `%x` fixes below remove false
+rejects, while the removed error codes and the suppression fix change what
+`validate` reports and what exit code it returns. Pin with `~` if you depend
+on a fixed rule set.
 
 ### Added
 
@@ -35,6 +42,62 @@ version and are listed under "Changed" / "Removed".
   audit found zero production callers (no `talkbank-tools` reference, no
   workspace script, no IISRP pipeline usage; only its own tests and the
   book mentioned it). `chatter fix` is its successor; see Added above.
+
+- **Five `ErrorCode` variants**, each unreachable or redundant:
+  `LongFeatureLabelMismatch`, `NonvocalLabelMismatch`, `UnexpectedTierNode`,
+  `UnexpectedMorphologyNode`, and `LegacyWarning` (with its generated spec
+  entry). Consumers matching on `ErrorCode` will see these gone.
+
+- **Twelve of the language server's twenty-one quick fixes.** Each was
+  attached to a code it did not repair: the action offered for a duplicate
+  header inserted a missing one, and eleven others were similarly
+  mismatched. The nine that remain repair the diagnostic they are attached
+  to. Quick-fix matching now goes through parsed error codes rather than
+  string literals, so a renamed code is a compile error instead of a
+  silently dead action.
+
+### Fixed
+
+- **Phon `%x` dependent tiers, reconciled against the upstream spec.** Three
+  fixes, two of which were false rejects on valid Phon output:
+  - `%xphoaln` no longer requires its word count to equal `%mod`/`%pho`
+    exactly. The spec allows a pause present on only one of the two tiers to
+    consume a word slot only on the tier that contains it, so the counts
+    legitimately differ by one.
+  - Numeric inter-word pauses (`(1.5)`, `(1:05.2)`) are accepted on the
+    syllabification tiers, alongside the three untimed forms. They were
+    rejected on the grounds of being unattested in available corpora, which
+    is not a basis for refusing a construct the spec declares legal.
+  - Intra-word pauses (`^`, U+005E) are tokenized rather than absorbed into
+    the neighbouring phone. A word-final `^` previously produced a spurious
+    error, and a mid-word `^` silently became part of the following phone.
+    Reconstruction preserves the pause in place, per the spec's rule that
+    stripping each unit's `:CODE` and concatenating must reproduce the
+    source word exactly.
+
+- **`validate --suppress` no longer zeroes the invalid count and the exit
+  code.** Suppressing a code removed it from the report AND from the
+  tallies, so a file with genuine errors could be counted valid and the
+  command could exit 0. Suppression now affects what is displayed, not
+  whether the file passed.
+
+- **The validation cache key covers every dimension of the verdict**,
+  including parse behaviour and the active rule set, as a required
+  parameter rather than a hand-picked subset. A cached verdict from one
+  configuration could previously be served for another.
+
+- **Strict parsing no longer discards the model it built** on failure, so a
+  caller can inspect what parsed alongside the diagnostics.
+
+### Changed
+
+- **Diagnostic classification happens once, from the active rule set**,
+  rather than being recomputed at three call sites that could disagree.
+
+- **The diagnostic kind is generated from the spec** instead of mirrored in
+  a hand-maintained match, and a divergence between the spec and the
+  `ErrorCode` enum now fails the build in both directions rather than
+  falling through to a default.
 
 ## [0.5.1] - 2026-07-30
 
