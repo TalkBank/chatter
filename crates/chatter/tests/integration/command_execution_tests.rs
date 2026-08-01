@@ -27,6 +27,7 @@
 //! ship, not a flaky expectation.
 
 use std::fs;
+use std::path::Path;
 
 use predicates::prelude::*;
 use talkbank_parser_tests::test_error::TestError;
@@ -275,14 +276,30 @@ fn watch_requires_path_argument() -> Result<(), TestError> {
 /// It would have caught the Windows regression on Ubuntu CI.
 #[test]
 fn program_name_is_pinned_regardless_of_argv0() -> Result<(), TestError> {
-    let scratch = tempdir()?;
-    // Keep the platform's executable suffix so the copy stays runnable;
-    // `fs::copy` preserves the source's permission bits (the exec bit on
-    // Unix). The stem is deliberately NOT `chatter`.
+    // HARD LINK, NOT COPY, and the scratch dir sits beside the binary so the
+    // link cannot cross a filesystem.
+    //
+    // A copy has to be WRITTEN, and on Linux exec'ing a file that any process
+    // still holds open for writing fails with ETXTBSY ("Text file busy").
+    // `cargo test` runs the suite multi-threaded, so while this thread is
+    // writing the copy another thread can fork for its own `Command`; the
+    // child inherits this thread's write fd for the window between fork and
+    // exec, and if we exec the copy inside that window the kernel refuses.
+    // That is what failed the scheduled ubuntu run on 2026-08-01 while the
+    // identical commit passed on push: a race, not flakiness.
+    //
+    // A hard link gives the same inode a second name with no write at all, so
+    // the window does not exist. It also keeps the exec bit for free, and
+    // `argv[0]` is still the new name, which is the whole point of the test.
+    let bin = Path::new(env!("CARGO_BIN_EXE_chatter"));
+    let scratch = tempfile::Builder::new()
+        .prefix("argv0-probe-")
+        .tempdir_in(bin.parent().expect("test binary has a parent directory"))?;
+    // The stem is deliberately NOT `chatter`.
     let renamed = scratch
         .path()
         .join(format!("renamed-probe{}", std::env::consts::EXE_SUFFIX));
-    fs::copy(env!("CARGO_BIN_EXE_chatter"), &renamed)?;
+    fs::hard_link(bin, &renamed)?;
 
     // The top-level command and a subcommand both build their usage line
     // from the program name; pin must hold for both.
