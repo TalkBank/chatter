@@ -9,6 +9,13 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-03
+
+**Validation verdicts: UNCHANGED.** No rule was added, removed or altered, and
+no file changes its valid/invalid verdict in this release. What changes is that
+the desktop app can run at all, that runs differing only in `--suppress` share a
+cache again, and the library API named under "Changed" below.
+
 ### Fixed
 
 - **Chatter Desktop can validate again.** Since v0.6.0 the desktop app could not
@@ -53,8 +60,6 @@ version and are listed under "Changed" / "Removed".
   current version plus the most recently written previous one, so a rollback or
   a bisect is not cold), rewrites the file so the space actually returns to the
   filesystem, and reports what it reclaimed.
-
-### Changed
 
 - **Rule selection and presentation policy are now separate types.**
   `ValidationConfig` held both "which rules run" and "how diagnostics are shown",
