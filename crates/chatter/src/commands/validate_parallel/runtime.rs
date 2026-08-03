@@ -59,20 +59,31 @@ pub fn run_validation_runtime(
         );
     }
 
-    // Suppression joins the RULE SET here, upstream of validation: a
-    // suppressed code is folded into `model_config` as a disabled code, so
-    // the worker's parser/model layer never emits it at all. Classification
-    // (Valid/Invalid) then happens exactly once, inside the worker; there is
-    // no separate post-hoc event-filtering pass left to reconcile with the
-    // worker's own tallies (the previous `filter_suppressed_events` did that
-    // reconciliation, and a double-adjustment of it once produced a
-    // plausible `Invalid: 0` on a corpus with 15 genuinely invalid files).
-    let mut model_config = talkbank_model::ValidationConfig::new();
+    // The two halves of what the user asked for, kept apart because they are
+    // different kinds of thing and only one of them may reach the cache key.
+    //
+    // WHAT IS COMPUTED: `--strict-linkers` turns on checks a lenient run never
+    // reaches, so it changes the diagnostics that exist.
+    let rule_selection = if rules.strict_linkers {
+        talkbank_model::RuleSelection::new().with_strict_linkers()
+    } else {
+        talkbank_model::RuleSelection::new()
+    };
+
+    // WHAT IS SHOWN: `--suppress` hides computed diagnostics from the reader.
+    // It is applied once, inside the worker, at the boundary where results are
+    // handed to this runtime, so classification still happens exactly once and
+    // there is no post-hoc event-filtering pass to reconcile with the worker's
+    // tallies (the previous `filter_suppressed_events` did that reconciliation,
+    // and a double-adjustment of it once produced a plausible `Invalid: 0` on a
+    // corpus with 15 genuinely invalid files).
+    // Named `display_policy` rather than `presentation` because this function
+    // already has a `presentation`: the CLI's choice of output SURFACE (text,
+    // JSON, audit file). Two different meanings of one word in one scope is how
+    // a reader ends up conflating them.
+    let mut display_policy = talkbank_transform::PresentationPolicy::new();
     for code in &suppress {
-        model_config = model_config.disable(*code);
-    }
-    if rules.strict_linkers {
-        model_config = model_config.with_strict_linkers();
+        display_policy = display_policy.disable(*code);
     }
 
     let config = ValidationConfig {
@@ -93,17 +104,17 @@ pub fn run_validation_runtime(
         },
         roundtrip: rules.roundtrip.enabled(),
         parser_kind: rules.parser_kind,
-        model_config,
+        rules: rule_selection,
+        presentation: display_policy,
     };
 
-    // The cache key MUST include the active rule set: suppression AND
-    // strict-linkers both change which files count as Valid, so a cache row
-    // produced under one active config is not a valid answer for a
-    // different one. Pass `&config.model_config` (the exact value the
-    // worker below validates with), never a re-derived summary of it, so
-    // the cache key and the validation behavior cannot drift apart. See
-    // `initialize_validation_cache` and `RulesVersion::current_with_config`.
-    let cache = initialize_validation_cache(&files, execution.cache_refresh, &config.model_config);
+    // The cache key covers the active RULE SET and nothing else: a row records
+    // what validation found, which `--strict-linkers` changes and `--suppress`
+    // does not. Pass `&config.rules` (the exact value the worker below
+    // validates with), never a re-derived summary, so the key and the
+    // behaviour cannot drift apart. See `initialize_validation_cache` and
+    // `RulesVersion::current_with_rule_selection`.
+    let cache = initialize_validation_cache(&files, execution.cache_refresh, &config.rules);
 
     // The TUI is a streaming-only surface: audit mode writes a file and has no
     // interactive presentation to hand a terminal.

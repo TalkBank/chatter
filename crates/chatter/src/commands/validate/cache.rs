@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache};
+use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache, VersionPruneOutcome};
 
 use crate::commands::CacheRefreshMode;
 
@@ -21,16 +21,20 @@ pub(crate) type ValidationCacheHandle = Arc<UnifiedCache>;
 /// without changing the rule list: a 994-file measurement served 993 stale
 /// verdicts from the previous build and reported near-zero impact.
 ///
-/// `model_config` is the SAME [`talkbank_model::ValidationConfig`] the run
-/// will hand to the worker for actual validation (built once, upstream, from
-/// `--suppress` and `--strict-linkers`). Threading the identical value
-/// through here, rather than re-deriving a summary of it, is what keeps the
-/// cache key and the validation behavior from ever disagreeing: it is folded
-/// into the pool's [`RulesVersion`] (via
-/// [`RulesVersion::current_with_config`]) so a verdict produced under one
-/// active config is never served back to a run with a different one. Both
-/// the disabled-code set AND strict-linkers matter here: either one alone
-/// can change which files count as Valid.
+/// `rules` is the SAME [`talkbank_model::RuleSelection`] the run will hand to
+/// the worker for actual validation. Threading the identical value through
+/// here, rather than re-deriving a summary of it, is what keeps the cache key
+/// and the validation behaviour from ever disagreeing: it is folded into the
+/// pool's [`RulesVersion`] via [`RulesVersion::current_with_rule_selection`],
+/// so a verdict produced under one rule set is never served to a run with a
+/// different one.
+///
+/// What is deliberately ABSENT is the run's presentation policy (`--suppress`
+/// and severity remapping). v0.6.0 folded it in, which gave every distinct
+/// suppression set its own private cache and re-validated a 106,000-file corpus
+/// from cold on the second run. It is not merely omitted here: this function
+/// cannot be handed one, because `RulesVersion::current_with_rule_selection`
+/// does not accept one and `talkbank-cache` cannot name the type.
 ///
 /// The PARSE dimension is folded in too: `RulesVersion::current_with_config`
 /// takes `talkbank_transform::GRAMMAR_FINGERPRINT` (re-exported from the
@@ -43,12 +47,21 @@ pub(crate) type ValidationCacheHandle = Arc<UnifiedCache>;
 pub(crate) fn initialize_validation_cache(
     files: &[std::path::PathBuf],
     cache_refresh: CacheRefreshMode,
-    model_config: &talkbank_model::ValidationConfig,
+    rules: &talkbank_model::RuleSelection,
 ) -> Option<ValidationCacheHandle> {
-    let rules_version = RulesVersion::current_with_config(model_config, GRAMMAR_FINGERPRINT);
+    let rules_version = RulesVersion::current_with_rule_selection(rules, GRAMMAR_FINGERPRINT);
     let cache = UnifiedCache::open_or_else_with_rules_version(rules_version, |error| {
         eprintln!("Warning: Failed to initialize cache: {}", error);
     })?;
+
+    // Opening prunes rows no reader can ever bind again (superseded rule
+    // versions). Reported rather than silent: the first prune on a long-lived
+    // cache reclaims most of the file, and an operator who is told nothing
+    // concludes the cleanup does nothing.
+    match cache.version_prune() {
+        VersionPruneOutcome::NothingUnreachable => {}
+        VersionPruneOutcome::Pruned(report) => eprintln!("note: {report}"),
+    }
 
     if cache_refresh.should_clear_cache() {
         // One batched clear over the resolved file list. Never loop

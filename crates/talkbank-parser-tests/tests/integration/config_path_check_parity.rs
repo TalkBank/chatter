@@ -37,7 +37,7 @@
 
 use std::path::{Path, PathBuf};
 
-use talkbank_model::{ErrorCollector, ParseOutcome, ValidationConfig};
+use talkbank_model::{ErrorCollector, ParseOutcome, RuleSelection};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
 
@@ -49,7 +49,7 @@ fn corpus_dir() -> PathBuf {
 
 /// Parse `content` and run `ChatFile::validate_with_config` (the path that
 /// was missing these checks), returning every parse + validation code
-/// produced. `config` is a plain no-op `ValidationConfig::new()` in every
+/// produced. `rules` is a plain default `RuleSelection::new()` in every
 /// caller below: the point is that the CONFIG-PATH FUNCTION ITSELF must
 /// still run the full check sequence, independent of what the config
 /// actually overrides.
@@ -70,7 +70,7 @@ fn codes_through_config_path(content: &str, stem: Option<&str>) -> Result<Vec<St
     };
 
     let validation_errors = ErrorCollector::new();
-    chat_file.validate_with_config(ValidationConfig::new(), &validation_errors, stem);
+    chat_file.validate_with_rules(RuleSelection::new(), &validation_errors, stem);
     codes.extend(
         validation_errors
             .to_vec()

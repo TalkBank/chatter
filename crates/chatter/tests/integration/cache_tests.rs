@@ -22,7 +22,7 @@ use std::time::Duration;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
 
-use crate::common::CliHarness;
+use crate::common::{CliHarness, assert_failure, assert_success, combined_output};
 
 // Integration tests for the validation cache, exercised via CLI commands.
 
@@ -352,6 +352,162 @@ fn test_validate_single_file_cached_output() -> Result<(), TestError> {
         return Err(TestError::Failure(
             "Expected second validation run to report one cache hit".to_string(),
         ));
+    }
+    Ok(())
+}
+
+/// A minimal valid CHAT file, used by the cache-partitioning tests below.
+const VALID_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world .\n@End\n";
+
+/// A CHAT file whose only diagnostic is E370 (a retrace marker with nothing
+/// after it), so `--suppress E370` empties its diagnostic set entirely.
+const E370_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world [/] .\n@End\n";
+
+/// Read the `Cache hits: N` figure out of a text-format run summary.
+///
+/// Asserting on COUNTED WORK rather than elapsed time is deliberate: every
+/// cache regression this project has actually shipped was a change in how many
+/// files got re-validated, which is an exact integer the summary already
+/// prints, whereas a wall-clock threshold is machine-dependent and goes flaky.
+fn cache_hits(output: &std::process::Output) -> Result<usize, TestError> {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("Cache hits: "))
+        .ok_or_else(|| TestError::Failure(format!("no `Cache hits:` line in summary:\n{stdout}")))?
+        .trim()
+        .parse::<usize>()
+        .map_err(|error| TestError::Failure(format!("unparsable cache-hit count: {error}")))
+}
+
+/// Two validation runs that differ ONLY in `--suppress` must share one cache.
+///
+/// # The regression this pins (introduced in v0.6.0)
+///
+/// `--suppress` is a PRESENTATION preference: it changes which diagnostics the
+/// user is shown, never which diagnostics the validator computes. v0.6.0 folded
+/// the suppression set into the cache key, so every distinct `--suppress` list
+/// got its own private cache and a second run over the ~106,000-file corpus
+/// re-validated all of it from cold. The invariant is a count, not a duration:
+/// on the second run every file must be a cache HIT.
+#[test]
+fn suppression_does_not_partition_the_validation_cache() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    for index in 1..=3 {
+        fs::write(dir.path().join(format!("file{index}.cha")), VALID_CHAT)?;
+    }
+
+    let cold = run_validate(&harness, dir.path(), &[])?;
+    assert_success(&cold, "cold validation run");
+    if cache_hits(&cold)? != 0 {
+        return Err(TestError::Failure(
+            "the first run over an empty cache cannot hit anything".to_string(),
+        ));
+    }
+
+    let suppressed = run_validate(&harness, dir.path(), &["--suppress", "E370"])?;
+    assert_success(&suppressed, "suppressed validation run");
+    let hits = cache_hits(&suppressed)?;
+    if hits != 3 {
+        return Err(TestError::Failure(format!(
+            "a run differing only in --suppress must reuse the cache the first run \
+             filled: expected 3 cache hits, got {hits}. A presentation preference is \
+             in the cache key."
+        )));
+    }
+    Ok(())
+}
+
+/// `--strict-linkers` genuinely changes WHAT IS COMPUTED (it turns on
+/// E351-E355), so unlike `--suppress` it MUST partition the cache: a verdict
+/// reached without those checks is not an answer for a run that wants them.
+///
+/// The companion to the test above: together they pin both directions, which
+/// is what stops "share everything" being an acceptable fix for the
+/// suppression regression.
+#[test]
+fn strict_linkers_does_partition_the_validation_cache() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    for index in 1..=3 {
+        fs::write(dir.path().join(format!("file{index}.cha")), VALID_CHAT)?;
+    }
+
+    let lenient = run_validate(&harness, dir.path(), &[])?;
+    assert_success(&lenient, "lenient validation run");
+
+    let strict = run_validate(&harness, dir.path(), &["--strict-linkers"])?;
+    assert_success(&strict, "strict-linkers validation run");
+    let hits = cache_hits(&strict)?;
+    if hits != 0 {
+        return Err(TestError::Failure(format!(
+            "--strict-linkers runs extra checks, so a lenient verdict must not be \
+             served to it: expected 0 cache hits, got {hits}"
+        )));
+    }
+    Ok(())
+}
+
+/// Suppression still suppresses: the code disappears from the report, and a
+/// file whose only diagnostic was suppressed stops counting as invalid.
+///
+/// This is v0.6.0 behaviour and the fix must not regress it. It is the reason
+/// the cached value is NOT a pass/fail verdict under the active policy but the
+/// narrower fact "this file produced no diagnostics at all", which is the same
+/// under every policy.
+#[test]
+fn suppressing_the_only_diagnostic_hides_it_and_clears_the_verdict() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    fs::write(dir.path().join("retrace.cha"), E370_CHAT)?;
+
+    let unsuppressed = run_validate(&harness, dir.path(), &[])?;
+    assert_failure(&unsuppressed, "a file with E370 must fail validation");
+    if !combined_output(&unsuppressed).contains("E370") {
+        return Err(TestError::Failure(
+            "the unsuppressed run must report E370".to_string(),
+        ));
+    }
+
+    let suppressed = run_validate(&harness, dir.path(), &["--suppress", "E370"])?;
+    assert_success(&suppressed, "suppressed run over an E370-only file");
+    let shown = combined_output(&suppressed);
+    if shown.contains("error[E370]") {
+        return Err(TestError::Failure(format!(
+            "a suppressed code must not be reported:\n{shown}"
+        )));
+    }
+    if !shown.contains("Invalid: 0") {
+        return Err(TestError::Failure(format!(
+            "a file whose every diagnostic is suppressed has nothing left to fail \
+             on:\n{shown}"
+        )));
+    }
+    Ok(())
+}
+
+/// Suppressing one code must not touch the verdict on files that have OTHER
+/// diagnostics. The v0.6.0 defect this guards: post-hoc filtering adjusted the
+/// tallies twice and reported `Invalid: 0` for a corpus with genuinely invalid
+/// files, exiting 0.
+#[test]
+fn suppression_does_not_clear_other_files_verdicts() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    fs::write(dir.path().join("retrace.cha"), E370_CHAT)?;
+    fs::write(dir.path().join("headerless.cha"), "*CHI:\thello .\n")?;
+
+    let suppressed = run_validate(&harness, dir.path(), &["--suppress", "E370"])?;
+    assert_failure(
+        &suppressed,
+        "a file with unsuppressed errors must still fail the run",
+    );
+    let shown = combined_output(&suppressed);
+    if !shown.contains("Invalid: 1") {
+        return Err(TestError::Failure(format!(
+            "exactly the file with unsuppressed errors must count invalid:\n{shown}"
+        )));
     }
     Ok(())
 }

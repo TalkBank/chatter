@@ -39,7 +39,7 @@
 //! what validates, so a cached verdict from before a grammar change is not a
 //! valid answer after one.
 //!
-//! [`RulesVersion::current_with_config`] closes this without inverting the
+//! [`RulesVersion::current_with_rule_selection`] closes this without inverting the
 //! layering: it takes the parser fingerprint as a mandatory `&str`
 //! parameter rather than deriving it internally. `talkbank-cache` never
 //! reads or interprets that string; it only folds the bytes it is handed
@@ -86,10 +86,10 @@ const CACHE_CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const VERSION_PART_SEPARATOR: &str = "+rules.";
 
 /// Separator preceding the caller-supplied parser/grammar fingerprint folded
-/// in by [`RulesVersion::current_with_config`]. Placed immediately after the
-/// rule-set fingerprint (before the config fragment appended after it)
-/// because, unlike the config fragment, the parser fingerprint is never
-/// optional: every `current_with_config` call carries one.
+/// in by [`RulesVersion::current_with_rule_selection`]. Placed immediately
+/// after the rule-set fingerprint (before the rule-selection fragment appended
+/// after it) because, unlike that fragment, the parser fingerprint is never
+/// optional: every `current_with_rule_selection` call carries one.
 const PARSER_PART_SEPARATOR: &str = "+parser.";
 
 impl RulesVersion {
@@ -104,7 +104,7 @@ impl RulesVersion {
     /// [`crate::CachePool::with_directory`] back administrative commands
     /// (`chatter cache stats`, `chatter cache clear`) whose queries do not
     /// filter by `version` at all. Any caller that serves a pass/fail
-    /// verdict back to a user MUST use [`Self::current_with_config`]
+    /// verdict back to a user MUST use [`Self::current_with_rule_selection`]
     /// instead, which requires a parser fingerprint.
     pub fn current() -> Self {
         let fingerprint = talkbank_model::validation_rules_fingerprint();
@@ -113,59 +113,63 @@ impl RulesVersion {
         ))
     }
 
-    /// Build the version for the rule set compiled into this binary,
-    /// further scoped to the CACHE-RELEVANT surface of an active
-    /// [`talkbank_model::ValidationConfig`] AND an explicit PARSE-behaviour
-    /// fingerprint.
+    /// Build the version for the rule set compiled into this binary, further
+    /// scoped to an active [`talkbank_model::RuleSelection`] AND an explicit
+    /// PARSE-behaviour fingerprint.
     ///
-    /// A `ValidationConfig` now joins the rule set upstream of validation
-    /// (see `ChatFile::validate_with_config` /
-    /// `validate_with_alignment_and_config`), so whether a file counts as
-    /// Valid depends on the FULL active config: a disabled code is never
-    /// emitted at all, a downgraded/upgraded code changes severity, strict
-    /// linker mode runs additional checks (E351-E355) a lenient run never
-    /// reaches, and `upgrade_unmapped_warnings` can turn any unmapped
-    /// warning into an error. A cache row produced under one active config
-    /// is not a valid answer for a different one.
+    /// # Why the parameter is a `RuleSelection` and nothing wider
     ///
-    /// The CACHE-RELEVANT surface is computed by
-    /// [`talkbank_model::ValidationConfig::cache_key_fragment`], not
-    /// enumerated here: that method destructures the whole struct with no
-    /// `..` rest pattern, so a field added to `ValidationConfig` in the
-    /// future is a compile error there until someone decides whether it
-    /// belongs in the cache key, rather than a silent omission in a
-    /// hand-picked field list on this side of the crate boundary. This
-    /// crate cannot do that destructuring itself: `ValidationConfig`'s
-    /// fields are private, and even if they were public, re-enumerating
-    /// them here would recreate exactly the "someone has to remember"
-    /// failure mode that shipped two real gaps (`upgrade_unmapped_warnings`
-    /// never folded in at all, and a separate CLI cache-key builder that
-    /// folded `strict_linkers` but not `--suppress`; see that method's doc
-    /// comment for the full incident).
+    /// A cache row records what validation FOUND, so the key must cover
+    /// everything that can change what validation DOES, and nothing else.
+    /// `RuleSelection`'s defining property is exactly that: every field in it
+    /// changes what is computed (today, whether E351-E355 run at all). Anything
+    /// that merely changes what a reader is shown is a
+    /// `talkbank_transform::PresentationPolicy`, and folding one of those in
+    /// here is the v0.6.0 regression this signature exists to prevent: a
+    /// `--suppress` list reached the key, so every distinct suppression set got
+    /// its own private cache and a second pass over a 106,000-file corpus
+    /// re-validated all of it from cold.
+    ///
+    /// That is enforced by the crate graph rather than by this comment.
+    /// `talkbank-transform` depends on `talkbank-cache`, so this crate cannot
+    /// name `PresentationPolicy` at all: a future attempt to fold a
+    /// presentation setting into the key is a compile error about an
+    /// unreachable type, not a passing test and a slowdown a user finds three
+    /// releases later.
+    ///
+    /// The fragment itself is computed by
+    /// [`talkbank_model::RuleSelection::cache_key_fragment`], not enumerated
+    /// here: that method destructures the whole struct with no `..` rest
+    /// pattern, so a field added to `RuleSelection` is a compile error there
+    /// until someone folds it in. This crate cannot do that destructuring
+    /// itself (the fields are private), and re-enumerating them here would
+    /// recreate the "someone has to remember" failure mode that shipped two
+    /// real gaps: a flag never folded in at all, and a second hand-rolled
+    /// cache-key builder in the CLI that folded strict-linkers but not the
+    /// suppression list.
     ///
     /// # `parser_fingerprint` is mandatory, not optional
     ///
     /// This crate cannot compute a parser fingerprint itself (see the module
     /// doc comment for why depending on the parser crate is banned), so the
-    /// caller supplies one. It is a required positional parameter rather
-    /// than an `Option` or a builder method with a `Default`, on purpose:
-    /// the whole point is that a caller CANNOT build a production
-    /// `RulesVersion` while forgetting the parser dimension, the exact
-    /// defect this type exists to make unrepresentable. Production callers
-    /// pass `talkbank_parser::GRAMMAR_FINGERPRINT` (or its re-export through
-    /// `talkbank-transform`); this crate treats the string as opaque bytes
-    /// to fold in, never parsing or interpreting it. Tests that only need to
-    /// model rule-set changes, independent of parse behaviour, pass a fixed
-    /// literal (see this module's own tests below).
-    pub fn current_with_config(
-        config: &talkbank_model::ValidationConfig,
+    /// caller supplies one. It is a required positional parameter rather than
+    /// an `Option` or a builder method with a `Default`, on purpose: a caller
+    /// CANNOT build a production `RulesVersion` while forgetting the parser
+    /// dimension, the exact defect this type exists to make unrepresentable.
+    /// Production callers pass `talkbank_parser::GRAMMAR_FINGERPRINT` (or its
+    /// re-export through `talkbank-transform`); this crate treats the string as
+    /// opaque bytes to fold in, never parsing or interpreting it. Tests that
+    /// only need to model rule-set changes, independent of parse behaviour,
+    /// pass a fixed literal (see this module's own tests below).
+    pub fn current_with_rule_selection(
+        rules: &talkbank_model::RuleSelection,
         parser_fingerprint: &str,
     ) -> Self {
         let fingerprint = talkbank_model::validation_rules_fingerprint();
         Self(format!(
             "{CACHE_CRATE_VERSION}{VERSION_PART_SEPARATOR}{fingerprint}\
              {PARSER_PART_SEPARATOR}{parser_fingerprint}{}",
-            config.cache_key_fragment()
+            rules.cache_key_fragment()
         ))
     }
 
@@ -181,6 +185,17 @@ impl RulesVersion {
         Self(label.to_owned())
     }
 
+    /// Adopt a version string read back out of the `version` column.
+    ///
+    /// The only values in that column were written by some build's composed
+    /// version, so this is a round trip rather than a construction: it is how
+    /// maintenance code (the reachability prune) names a version it found on
+    /// disk without inventing one. Crate-internal on purpose; outside callers
+    /// derive a version from a rule set, never from a string.
+    pub(crate) fn from_stored(stored: String) -> Self {
+        Self(stored)
+    }
+
     /// Borrow the underlying string for binding into a SQL parameter.
     ///
     /// Kept crate-internal: outside code has no business reading the raw
@@ -193,12 +208,13 @@ impl RulesVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use talkbank_model::RuleSelection;
 
-    /// A fixed stand-in parser/grammar fingerprint for tests that exercise
-    /// the CONFIG dimension and want the parser dimension held constant.
+    /// A fixed stand-in parser/grammar fingerprint for tests that exercise the
+    /// RULE-SELECTION dimension and want the parser dimension held constant.
     /// Real callers pass `talkbank_parser::GRAMMAR_FINGERPRINT`; this crate
-    /// cannot depend on the parser crate (see the module doc comment), so
-    /// tests here model the caller-supplied string with a literal.
+    /// cannot depend on the parser crate (see the module doc comment), so tests
+    /// here model the caller-supplied string with a literal.
     const TEST_PARSER_FINGERPRINT: &str = "grammar-fp-test";
 
     /// `current()` is stable within a build: the same rule set yields the same
@@ -222,7 +238,7 @@ mod tests {
     }
 
     /// Distinct test labels produce distinct versions, the property the
-    /// integration test relies on to model a rules change.
+    /// integration tests rely on to model a rules change.
     #[test]
     fn distinct_testing_labels_are_distinct_versions() {
         assert_ne!(
@@ -231,189 +247,76 @@ mod tests {
         );
     }
 
-    /// `current_with_config` is deterministic: the same config and the same
-    /// parser fingerprint yield the same version every time.
+    /// `current_with_rule_selection` is deterministic: the same rule selection
+    /// and the same parser fingerprint yield the same version every time.
     #[test]
-    fn current_with_config_is_stable_within_a_build() {
-        let config = talkbank_model::ValidationConfig::new();
+    fn current_with_rule_selection_is_stable_within_a_build() {
+        let rules = RuleSelection::new();
         assert_eq!(
-            RulesVersion::current_with_config(&config, TEST_PARSER_FINGERPRINT),
-            RulesVersion::current_with_config(&config, TEST_PARSER_FINGERPRINT)
+            RulesVersion::current_with_rule_selection(&rules, TEST_PARSER_FINGERPRINT),
+            RulesVersion::current_with_rule_selection(&rules, TEST_PARSER_FINGERPRINT)
         );
     }
 
-    /// A default (no overrides, no strict-linkers) config combined with a
-    /// parser fingerprint is now a DIFFERENT version from bare `current()`,
-    /// which carries no parser dimension at all. Before the parser
-    /// dimension existed, the default config was equivalent to `current()`;
-    /// that equivalence is gone on purpose, because `current_with_config`
-    /// always folds in a parser fingerprint and `current()` never does. The
-    /// two constructors now serve genuinely different callers (see each
-    /// method's doc comment), not lenient/strict variants of the same
+    /// A default rule selection combined with a parser fingerprint is a
+    /// DIFFERENT version from bare `current()`, which carries no parser
+    /// dimension at all. The two constructors serve genuinely different callers
+    /// (see each method's doc comment), not lenient/strict variants of one
     /// value.
     #[test]
-    fn default_config_with_parser_fingerprint_differs_from_current() {
-        let config = talkbank_model::ValidationConfig::new();
+    fn default_rule_selection_with_parser_fingerprint_differs_from_current() {
+        let rules = RuleSelection::new();
         assert_ne!(
-            RulesVersion::current_with_config(&config, TEST_PARSER_FINGERPRINT),
+            RulesVersion::current_with_rule_selection(&rules, TEST_PARSER_FINGERPRINT),
             RulesVersion::current()
         );
     }
 
-    /// Two `RulesVersion` values built from the SAME config but DIFFERENT
-    /// parser fingerprints must not be equal. This is the property that
-    /// lets the cache detect a grammar change: a grammar edit alters what
-    /// parses, which alters what validates, even when the compiled-in
-    /// validation rule set and the active config are byte-identical. Before
-    /// `current_with_config` took a parser fingerprint at all, two builds
-    /// compiled against different grammars produced the SAME `RulesVersion`
-    /// here, and a stale verdict from before the grammar change could be
-    /// served after it.
+    /// Two versions built from the SAME rule selection but DIFFERENT parser
+    /// fingerprints must not be equal. This is what lets the cache detect a
+    /// grammar change: a grammar edit alters what parses, which alters what
+    /// validates, even when the compiled-in rule set and the active rule
+    /// selection are byte-identical.
     #[test]
     fn distinct_parser_fingerprints_are_distinct_versions() {
-        let config = talkbank_model::ValidationConfig::new();
-        let a = RulesVersion::current_with_config(&config, "grammar-fp-a");
-        let b = RulesVersion::current_with_config(&config, "grammar-fp-b");
+        let rules = RuleSelection::new();
+        let a = RulesVersion::current_with_rule_selection(&rules, "grammar-fp-a");
+        let b = RulesVersion::current_with_rule_selection(&rules, "grammar-fp-b");
         assert_ne!(
             a, b,
-            "a config held constant across two different parser fingerprints \
+            "a rule selection held constant across two different parser fingerprints \
              must not collide to the same cache key"
         );
     }
 
-    /// Disabling a code changes the version: this is the property that lets
-    /// the cache distinguish a suppressed verdict from an unsuppressed one.
-    /// The parser fingerprint is held constant so this test isolates the
-    /// CONFIG dimension, not the parser dimension `distinct_parser_fingerprints_are_distinct_versions` already covers.
+    /// Strict-linker mode runs checks (E351-E355) a lenient run never reaches,
+    /// so it must not share a cache row with one. The parser fingerprint is
+    /// held constant to isolate the rule-selection dimension.
     #[test]
-    fn disabled_codes_change_the_version() {
-        let default_config = talkbank_model::ValidationConfig::new();
-        let config = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex);
+    fn strict_linkers_changes_the_version() {
+        let lenient = RuleSelection::new();
+        let strict = RuleSelection::new().with_strict_linkers();
         assert_ne!(
-            RulesVersion::current_with_config(&config, TEST_PARSER_FINGERPRINT),
-            RulesVersion::current_with_config(&default_config, TEST_PARSER_FINGERPRINT)
+            RulesVersion::current_with_rule_selection(&strict, TEST_PARSER_FINGERPRINT),
+            RulesVersion::current_with_rule_selection(&lenient, TEST_PARSER_FINGERPRINT)
         );
     }
 
-    /// Different disabled-code sets produce different versions.
+    /// The other direction, and the regression this whole split exists for:
+    /// two runs that select the same rules land on the SAME key, however they
+    /// intend to DISPLAY the result. There is no presentation parameter here to
+    /// vary, which is the point; this test pins that the remaining dimensions
+    /// leave equal rule selections equal.
     #[test]
-    fn distinct_disabled_code_sets_are_distinct_versions() {
-        let a = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex);
-        let b = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::UnparsableContent);
-        assert_ne!(
-            RulesVersion::current_with_config(&a, TEST_PARSER_FINGERPRINT),
-            RulesVersion::current_with_config(&b, TEST_PARSER_FINGERPRINT)
-        );
-    }
-
-    /// Order must not matter: two configs that disable the same set of
-    /// codes in a different order (as a `HashMap` iteration would) must
-    /// produce the SAME version, or the cache would miss every time despite
-    /// an identical active rule set. This is the trap the `RulesVersion`
-    /// doc comment on `current_with_config` calls out explicitly.
-    #[test]
-    fn disabled_code_order_does_not_affect_the_version() {
-        let forward = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex)
-            .disable(talkbank_model::ErrorCode::UnparsableContent);
-        let backward = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::UnparsableContent)
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex);
-        assert_eq!(
-            RulesVersion::current_with_config(&forward, TEST_PARSER_FINGERPRINT),
-            RulesVersion::current_with_config(&backward, TEST_PARSER_FINGERPRINT)
-        );
-    }
-
-    /// Disabling the same code twice does not change the version (a
-    /// `HashMap` entry cannot literally duplicate, but two configs built by
-    /// different code paths that converge on the same disabled set must
-    /// still compare equal).
-    #[test]
-    fn duplicate_disabled_codes_do_not_affect_the_version() {
-        let once = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex);
-        let twice = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex)
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex);
-        assert_eq!(
-            RulesVersion::current_with_config(&once, TEST_PARSER_FINGERPRINT),
-            RulesVersion::current_with_config(&twice, TEST_PARSER_FINGERPRINT)
-        );
-    }
-
-    /// Item 4's confirmation: strict-linkers-only and suppression-only
-    /// configs must produce DIFFERENT cache keys from each other AND from
-    /// the default. Before this test existed, only the disabled-code set
-    /// was folded into the version, so a `--strict-linkers` run and a plain
-    /// unsuppressed run shared a key even though strict mode can flip a
-    /// file from Valid to Invalid: the same stale-verdict bug this whole
-    /// module exists to close, reopened one dimension over. The parser
-    /// fingerprint is held constant so this test isolates the CONFIG
-    /// dimension.
-    #[test]
-    fn strict_linkers_and_suppression_produce_distinct_cache_keys() {
-        let default_config = talkbank_model::ValidationConfig::new();
-        let strict_only = talkbank_model::ValidationConfig::new().with_strict_linkers();
-        let suppress_only = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex);
-        let both = talkbank_model::ValidationConfig::new()
-            .disable(talkbank_model::ErrorCode::InvalidOverlapIndex)
+    fn equal_rule_selections_produce_one_shared_key() {
+        let built_one_way = RuleSelection::new().with_strict_linkers();
+        let built_another = RuleSelection::new()
+            .with_strict_linkers()
             .with_strict_linkers();
-
-        let default_version =
-            RulesVersion::current_with_config(&default_config, TEST_PARSER_FINGERPRINT);
-        let strict_version =
-            RulesVersion::current_with_config(&strict_only, TEST_PARSER_FINGERPRINT);
-        let suppress_version =
-            RulesVersion::current_with_config(&suppress_only, TEST_PARSER_FINGERPRINT);
-        let both_version = RulesVersion::current_with_config(&both, TEST_PARSER_FINGERPRINT);
-
-        assert_ne!(
-            strict_version, default_version,
-            "strict-linkers-only must differ from the default"
-        );
-        assert_ne!(
-            strict_version, suppress_version,
-            "strict-linkers-only must differ from suppression-only"
-        );
-        assert_ne!(
-            suppress_version, default_version,
-            "suppression-only must differ from the default"
-        );
-        assert_ne!(
-            both_version, strict_version,
-            "both active must differ from strict-linkers alone"
-        );
-        assert_ne!(
-            both_version, suppress_version,
-            "both active must differ from suppression alone"
-        );
-    }
-
-    /// `ValidationConfig::strict()`'s `upgrade_unmapped_warnings` flag can
-    /// flip a file from Valid to Invalid (any warning lacking an explicit
-    /// override becomes an error), so it must be folded into the version.
-    ///
-    /// This is the gap `current_with_config`'s old hand-picked field list
-    /// left open: `strict()` differs from `new()` in exactly this one
-    /// field, and nothing folded it in until `ValidationConfig` grew
-    /// `cache_key_fragment` (an exhaustive destructure with no `..` rest
-    /// pattern) and this function started delegating to it instead of
-    /// enumerating fields itself.
-    #[test]
-    fn upgrade_unmapped_warnings_changes_the_version() {
-        let default_config = talkbank_model::ValidationConfig::new();
-        let strict_config = talkbank_model::ValidationConfig::strict();
-        assert_ne!(
-            RulesVersion::current_with_config(&default_config, TEST_PARSER_FINGERPRINT),
-            RulesVersion::current_with_config(&strict_config, TEST_PARSER_FINGERPRINT),
-            "upgrade_unmapped_warnings must be folded into the cache key: \
-             ValidationConfig::strict() differs from ValidationConfig::new() \
-             only in that flag"
+        assert_eq!(
+            RulesVersion::current_with_rule_selection(&built_one_way, TEST_PARSER_FINGERPRINT),
+            RulesVersion::current_with_rule_selection(&built_another, TEST_PARSER_FINGERPRINT),
+            "two runs selecting the same rules must share one cache"
         );
     }
 }

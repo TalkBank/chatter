@@ -38,10 +38,8 @@ pub mod clan_location;
 pub mod codes;
 /// In-memory error collectors and counters.
 pub mod collectors;
-/// Validation configuration for customizing error severity and filtering.
+/// Which validation rules run: the input the cache key is derived from.
 pub mod config;
-/// Configurable error sink that applies validation configuration.
-pub mod configurable_sink;
 /// Rich error context for helpful error messages.
 pub mod context;
 /// Diagnostic KIND (Axis 1) and validation PROFILE (Axis 2): the exhaustive
@@ -79,8 +77,7 @@ pub use builder::{ParseErrorBuilder, ParseErrorBuilderError};
 pub use clan_location::{ClanHiddenLineError, ClanLocation, resolve_clan_location};
 pub use codes::{ErrorCode, XPHON_ERROR_CODES, validation_rules_fingerprint};
 pub use collectors::{ErrorCollector, ParseTracker};
-pub use config::ValidationConfig;
-pub use configurable_sink::ConfigurableErrorSink;
+pub use config::RuleSelection;
 pub use context::ErrorContext;
 pub use diagnostic_kind::{DiagnosticKind, ValidationProfile, kind_of, severity};
 pub use enhance::{enhance_errors_with_line_map, enhance_errors_with_source};

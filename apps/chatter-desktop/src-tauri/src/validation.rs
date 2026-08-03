@@ -13,6 +13,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::errors::TargetError;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use talkbank_transform::validation_runner::{
     ParserKind, ValidationConfig, ValidationEvent, is_chat_transcript_path,
@@ -34,21 +35,19 @@ impl From<ParserKindRequest> for ParserKind {
 
 impl From<&ValidateRequest> for ValidationConfig {
     fn from(request: &ValidateRequest) -> Self {
-        // `strict_linkers` now lives inside `model_config`
-        // (`talkbank_model::ValidationConfig`) rather than as a bare bool on
-        // the runner config, so it is set the same way the CLI folds
-        // `--strict-linkers` in: via `with_strict_linkers()` when requested.
-        // The desktop request carries no `--suppress` equivalent yet, so no
-        // codes are disabled here.
-        let model_config = if request.strict_linkers {
-            talkbank_model::ValidationConfig::new().with_strict_linkers()
+        // `strict_linkers` selects RULES (it turns on E351-E355), so it lives
+        // in the rule selection, which is also what keys the cache. The desktop
+        // request carries no `--suppress` equivalent yet, so the presentation
+        // policy stays the default: show everything the validator computed.
+        let rules = if request.strict_linkers {
+            talkbank_model::RuleSelection::new().with_strict_linkers()
         } else {
-            talkbank_model::ValidationConfig::new()
+            talkbank_model::RuleSelection::new()
         };
         Self {
             roundtrip: request.roundtrip,
             parser_kind: request.parser_kind.into(),
-            model_config,
+            rules,
             jobs: request.jobs.map(|jobs| jobs as usize),
             ..Self::default()
         }
@@ -65,9 +64,9 @@ pub fn validate_target_streaming_with_config(
     target: PathBuf,
     config: ValidationConfig,
     cache: Option<Arc<UnifiedCache>>,
-) -> Result<(Receiver<FrontendEvent>, Sender<()>), String> {
+) -> Result<(Receiver<FrontendEvent>, Sender<()>), TargetError> {
     if !target.exists() {
-        return Err(format!("Path does not exist: {}", target.display()));
+        return Err(TargetError::Missing { path: target });
     }
 
     if target.is_dir() {
@@ -75,10 +74,7 @@ pub fn validate_target_streaming_with_config(
         Ok((bridge_validation_events(validation_rx, target), cancel_tx))
     } else if target.is_file() {
         if !is_chat_transcript_path(&target) {
-            return Err(format!(
-                "Chatter validates one .cha file or one folder at a time: {}",
-                target.display()
-            ));
+            return Err(TargetError::NotChatTranscript { path: target });
         }
         let root = target
             .parent()
@@ -87,10 +83,7 @@ pub fn validate_target_streaming_with_config(
         let (validation_rx, cancel_tx) = validate_files_streaming(vec![target], &config, cache);
         Ok((bridge_validation_events(validation_rx, root), cancel_tx))
     } else {
-        Err(format!(
-            "Path is not a file or directory: {}",
-            target.display()
-        ))
+        Err(TargetError::NotFileOrDirectory { path: target })
     }
 }
 
@@ -99,11 +92,11 @@ pub fn validate_target_streaming_with_config(
 /// `--force`-clear step the desktop has no flag for. Zero CLI dependency:
 /// `UnifiedCache::new()` resolves the OS cache dir on its own.
 ///
-/// Keyed to [`RulesVersion::current`] (no suppression, no strict-linkers).
+/// Keyed to [`RulesVersion::current`] (the default rule selection).
 /// Callers that need a pool keyed to a specific active
-/// `talkbank_model::ValidationConfig` (any desktop request whose settings
+/// `talkbank_model::RuleSelection` (any desktop request whose settings
 /// might not be the default) use [`initialize_cache_with_rules_version`]
-/// instead; see `ValidationState::cache_for_config` in `commands.rs`, the
+/// instead; see `ValidationState::cache_for_rules` in `commands.rs`, the
 /// seam that opens (and memoizes) one pool per distinct config a session
 /// actually uses, rather than one pool for the app's whole lifetime.
 pub fn initialize_cache() -> Option<Arc<UnifiedCache>> {

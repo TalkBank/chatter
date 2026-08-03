@@ -12,6 +12,33 @@ use serde_json::Value;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::{TempDir, tempdir};
 
+/// Cache root shared by every CLI subprocess that does not stand up its own
+/// [`CliHarness`].
+///
+/// Created once per test binary and kept alive for its whole run.
+static SHARED_CACHE_DIR: std::sync::OnceLock<TempDir> = std::sync::OnceLock::new();
+
+/// Build a `chatter` command whose cache CANNOT be the developer's real one.
+///
+/// # Why this exists rather than `cargo_bin_cmd!` at each call site
+///
+/// A spawned `chatter validate` writes to, and now prunes, whatever cache
+/// `TALKBANK_CHAT_CACHE_DIR` (or the platform default) resolves to. Tests that
+/// spawned the binary directly therefore ran against the machine's real cache:
+/// their verdicts depended on state no test wrote, and they mutated a
+/// user-owned artifact as a side effect. That was invisible until reachability
+/// pruning landed, at which point one `cargo test` run deleted a real corpus
+/// cache. Isolation is not something each test should have to remember, so the
+/// only builder tests reach for provides it.
+pub fn chatter_cmd() -> assert_cmd::Command {
+    let cache_dir = SHARED_CACHE_DIR
+        .get_or_init(|| tempdir().expect("create shared test cache dir"))
+        .path();
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("chatter");
+    cmd.env("TALKBANK_CHAT_CACHE_DIR", cache_dir);
+    cmd
+}
+
 /// Isolated integration-test harness for running the `chatter` binary.
 #[allow(dead_code)]
 pub struct CliHarness {

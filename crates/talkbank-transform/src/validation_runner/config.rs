@@ -94,17 +94,23 @@ pub struct ValidationConfig {
     /// Which parser backend to use
     pub parser_kind: ParserKind,
 
-    /// Model-level validation configuration: per-code severity overrides
-    /// (including disabled/suppressed codes) plus strict cross-utterance
-    /// linker validation (E351-E355, via
-    /// [`talkbank_model::ValidationConfig::with_strict_linkers`]).
+    /// WHICH RULES RUN: the rule set the worker validates against, and the
+    /// only part of this configuration the cache key is derived from.
     ///
-    /// This is the RULE SET the worker validates against. Suppression
-    /// joins it upstream of validation (a disabled code is never emitted
-    /// at all), which is what makes classification happen exactly once:
-    /// there is no separate post-hoc event-filtering pass to keep in sync
-    /// with the worker's own tallies.
-    pub model_config: talkbank_model::ValidationConfig,
+    /// Deliberately separate from [`Self::presentation`]. v0.6.0 held both in
+    /// one value and keyed the cache on all of it, so a `--suppress` list
+    /// partitioned the cache and a second pass over a 106,000-file corpus
+    /// re-validated everything. The two fields answer different questions and a
+    /// caller composing a cache key can only reach for this one.
+    pub rules: talkbank_model::RuleSelection,
+
+    /// WHAT A READER SEES: suppression and severity remapping, applied to
+    /// diagnostics the worker has already computed and already counted.
+    ///
+    /// Never consulted when deciding what to cache. The cached fact is "this
+    /// file produced no diagnostics at all under `rules`", which is true or
+    /// false independently of how any run chooses to display them.
+    pub presentation: crate::PresentationPolicy,
 }
 
 impl Default for ValidationConfig {
@@ -117,7 +123,8 @@ impl Default for ValidationConfig {
             directory: DirectoryMode::Recursive,
             roundtrip: false,
             parser_kind: ParserKind::TreeSitter,
-            model_config: talkbank_model::ValidationConfig::default(),
+            rules: talkbank_model::RuleSelection::default(),
+            presentation: crate::PresentationPolicy::default(),
         }
     }
 }

@@ -69,7 +69,7 @@ pub(crate) mod utterance;
 pub(crate) mod word;
 
 // Re-export public API
-pub use config::ValidationConfig;
+pub use config::RuleSelection;
 pub use context::{SharedValidationData, ValidationContext, language_allows_numbers};
 pub use state::{NotValidated, Validated, ValidationState};
 pub use r#trait::Validate;
@@ -78,7 +78,7 @@ pub use r#trait::Validate;
 #[cfg(feature = "async")]
 pub use crate::AsyncChannelErrorSink;
 #[cfg(feature = "async")]
-pub use async_runtime::{AsyncValidationError, validate_async, validate_with_config_async};
+pub use async_runtime::{AsyncValidationError, validate_async, validate_with_rules_async};
 pub use word::language::LanguageResolution;
 pub use word::{LanguageResolutionOutcome, resolve_word_language};
 

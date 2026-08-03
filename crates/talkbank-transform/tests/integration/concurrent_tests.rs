@@ -82,7 +82,8 @@ fn test_config(jobs: usize) -> ValidationConfig {
         directory: DirectoryMode::Recursive,
         roundtrip: false,
         parser_kind: ParserKind::TreeSitter,
-        model_config: talkbank_model::ValidationConfig::new(),
+        rules: talkbank_model::RuleSelection::new(),
+        presentation: talkbank_transform::PresentationPolicy::new(),
     }
 }
 

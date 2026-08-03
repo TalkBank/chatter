@@ -47,7 +47,7 @@ pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 // this crate's own `grammar.js` and generated `src/parser.c` (path + content
 // of each, in that fixed order). See `generate_grammar_fingerprint` in
 // `bindings/rust/build.rs` for why exactly these two files, and
-// `talkbank_cache::RulesVersion::current_with_config` (in the `talkbank-cache`
+// `talkbank_cache::RulesVersion::current_with_rule_selection` (in the `talkbank-cache`
 // crate) for the cache-versioning composition this feeds, via
 // `talkbank_parser::GRAMMAR_FINGERPRINT`.
 include!(concat!(env!("OUT_DIR"), "/grammar_fingerprint.rs"));

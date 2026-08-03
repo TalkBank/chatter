@@ -1,12 +1,12 @@
-//! Validation configuration for customizing error severity and filtering.
+//! Re-export of the rule-selection type from the errors module.
 //!
-//! Validation configuration types.
-//!
-//! Configures which error codes are active and their severity overrides.
+//! `validation::RuleSelection` and `errors::RuleSelection` are the same type;
+//! the alias exists because callers reach for it from whichever module they
+//! are already importing from.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-pub use crate::ValidationConfig;
+pub use crate::RuleSelection;

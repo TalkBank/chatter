@@ -23,26 +23,41 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chatter_desktop_lib::commands::{ValidationState, resolve_open_in_clan};
+use chatter_desktop_lib::errors::TargetError;
 use chatter_desktop_lib::events::FrontendEvent;
 use chatter_desktop_lib::protocol;
 use chatter_desktop_lib::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ValidateRequest,
 };
-use chatter_desktop_lib::validation::{
-    initialize_cache, initialize_cache_at, validate_target_streaming_with_config,
-};
+use chatter_desktop_lib::validation::{initialize_cache_at, validate_target_streaming_with_config};
 use crossbeam_channel::{Receiver, Sender};
 use talkbank_transform::validation_runner::ValidationConfig;
 
 /// Test-only convenience wrapper: production always threads an explicit
 /// config and a cache pool selected for that config's active rule set (see
-/// `ValidationState::cache_for_config` in `commands.rs`), but most tests
-/// here don't care about either, so this opens a fresh cache (isolated
-/// per-process by `cargo test`) and uses `ValidationConfig::default()`.
+/// `ValidationState::cache_for_rules` in `commands.rs`), but most tests here
+/// don't care about either, so this uses `ValidationConfig::default()`.
+///
+/// The cache is rooted in a temp directory, NOT the platform default. This
+/// used to call `initialize_cache()`, whose doc comment claimed the result was
+/// "isolated per-process by `cargo test`". It was not: that resolves the ONE
+/// shared user cache directory, so running these tests operated on the
+/// developer's real cache and, on 2026-08-03, pruned a 243 MB working cache
+/// down to 1.3 MB mid-session. The claim was in a comment; nothing enforced it.
 fn validate_target_streaming(
     target: PathBuf,
-) -> Result<(Receiver<FrontendEvent>, Sender<()>), String> {
-    validate_target_streaming_with_config(target, ValidationConfig::default(), initialize_cache())
+) -> Result<(Receiver<FrontendEvent>, Sender<()>), TargetError> {
+    validate_target_streaming_with_config(
+        target,
+        ValidationConfig::default(),
+        initialize_cache_at(test_cache_dir()),
+    )
+}
+
+/// A cache root private to this test binary, so a test run can never touch the
+/// developer's real cache.
+fn test_cache_dir() -> PathBuf {
+    std::env::temp_dir().join("chatter-desktop-validation-bridge-cache")
 }
 
 /// Find the workspace root by walking up from the manifest dir.
@@ -684,11 +699,13 @@ fn non_chat_files_are_rejected_by_path_contract() {
 
     std::fs::remove_file(&file).ok();
 
-    let message = result.expect_err("non-.cha file should be rejected");
-    assert!(
-        message.contains("one .cha file or one folder at a time"),
-        "unexpected rejection message: {message}"
-    );
+    // Match the VARIANT, not the message text. The rejection reason is now a
+    // fact the type carries, so this no longer breaks on rewording and no
+    // longer passes if a different rejection happens to share a substring.
+    match result.expect_err("non-.cha file should be rejected") {
+        TargetError::NotChatTranscript { path } => assert_eq!(path, file),
+        other => panic!("expected a not-a-transcript rejection, got: {other}"),
+    }
 }
 
 /// REGRESSION GUARD (highest-level desktop boundary test for the wrong-line bug):
@@ -1004,7 +1021,7 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
 }
 
 /// REGRESSION GUARD (2026-07-30): `ValidationState`'s cache must be keyed to
-/// the PER-REQUEST active `ValidationConfig`, not opened once at app
+/// the PER-REQUEST active `RuleSelection`, not opened once at app
 /// startup and reused regardless of what a later request asks for.
 ///
 /// Before this fix, `ValidationState` held exactly one cache pool
@@ -1014,12 +1031,12 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
 /// strict-linkers ON would then be served, even though E351
 /// (self-completion linker `+,` with no preceding interrupted utterance)
 /// only fires under strict mode. This is the same bug class
-/// `RulesVersion::current_with_config` closed for the CLI's
+/// `RulesVersion::current_with_rule_selection` closed for the CLI's
 /// `chatter validate` path (see `crates/talkbank-cache/src/rules_version.rs`);
 /// this test is that fix's desktop-side counterpart.
 ///
 /// Drives `ValidationState` exactly the way the `validate` Tauri command
-/// does (`cache_for_config` then `validate_target_streaming_with_config`),
+/// does (`cache_for_rules` then `validate_target_streaming_with_config`),
 /// which is the highest boundary reachable in this crate without adding
 /// Tauri's `test` feature and a mocked `AppHandle`/window (this crate has
 /// no precedent for that anywhere; the actual `#[tauri::command] async fn
@@ -1058,12 +1075,12 @@ fn cache_does_not_leak_a_verdict_across_strict_linkers_toggle() {
 
     let lenient = ValidationConfig::default();
     let strict = ValidationConfig {
-        model_config: talkbank_model::ValidationConfig::new().with_strict_linkers(),
+        rules: talkbank_model::RuleSelection::new().with_strict_linkers(),
         ..ValidationConfig::default()
     };
 
     let run = |config: ValidationConfig| -> Vec<FrontendEvent> {
-        let cache = state.cache_for_config(&config.model_config);
+        let cache = state.cache_for_rules(&config.rules);
         let (rx, _cancel_tx) =
             validate_target_streaming_with_config(fixture.clone(), config, cache)
                 .expect("desktop validation should start");
@@ -1092,4 +1109,73 @@ fn cache_does_not_leak_a_verdict_across_strict_linkers_toggle() {
 
     std::fs::remove_file(&fixture).ok();
     std::fs::remove_dir_all(&cache_dir).ok();
+}
+
+// ============================================================================
+// Starting a run from inside the async runtime
+// ============================================================================
+
+/// A validation run must start when the command is driven by an async runtime.
+///
+/// This is the boundary every other test in this file skips, as its own module
+/// docs admit ("without the Tauri runtime"), and skipping it cost four weeks.
+/// Tauri runs an `async fn` command ON its async runtime, so the real `validate`
+/// command opens the cache from inside a runtime context. `CachePool` owns a
+/// runtime of its own and blocks on it; nesting runtimes panics, the panic
+/// unwound out of the command, the IPC promise never settled, and the app sat on
+/// "Starting..." forever with no error to show. Introduced 2026-07-07 in
+/// `5cea49bd`, shipped in v0.6.0 and v0.7.0, and invisible to every green test
+/// because the CLI and these tests all run on plain threads.
+///
+/// The fix is confinement in `talkbank_cache::blocking`, so this is a regression
+/// guard rather than the enforcement. It stays because it pins the CONTEXT (an
+/// async caller), which no signature can express.
+#[test]
+fn a_run_starts_when_the_caller_is_driving_an_async_runtime() {
+    let corpus = reference_corpus();
+    if !corpus.exists() {
+        eprintln!("Skipping: reference corpus not present");
+        return;
+    }
+
+    // Isolated cache root: never the developer's real cache.
+    let cache_dir = std::env::temp_dir().join("chatter-desktop-async-start-test");
+    let _ = std::fs::remove_dir_all(&cache_dir);
+    let state = ValidationState::new_at(cache_dir.clone());
+
+    let request = ValidateRequest {
+        path: corpus.to_string_lossy().into_owned(),
+        jobs: Some(1),
+        ..ValidateRequest::default()
+    };
+    let config = talkbank_transform::ValidationConfig::from(&request);
+
+    // The load-bearing part: this mirrors what Tauri does to `validate`.
+    let started = tauri::async_runtime::block_on(async {
+        let cache = state.cache_for_rules(&config.rules);
+        chatter_desktop_lib::validation::validate_target_streaming_with_config(
+            PathBuf::from(&request.path),
+            config,
+            cache,
+        )
+    });
+
+    let (events, _cancel) = match started {
+        Ok(pair) => pair,
+        Err(error) => panic!(
+            "starting a run from inside an async runtime must succeed, got: {error}\n\
+             This is the desktop app's actual validate path."
+        ),
+    };
+
+    // A started run is not enough: the frontend hangs on SILENCE, so the first
+    // event has to actually arrive.
+    let first = events.recv_timeout(std::time::Duration::from_secs(60));
+    assert!(
+        first.is_ok(),
+        "a run started from an async caller must emit its first event; \
+         silence here is exactly what the user saw"
+    );
+
+    let _ = std::fs::remove_dir_all(&cache_dir);
 }

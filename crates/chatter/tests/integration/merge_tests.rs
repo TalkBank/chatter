@@ -90,7 +90,7 @@ fn merge_basic_smoke() -> Result<(), TestError> {
     fs::write(&file1, FIX_REF_TWO_UTT_NO_MARKUP)?;
     fs::write(&file2, FIX_ASR_LABELED_TWO_UTT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("merge")
         .arg(&file1)
         .arg(&file2)
@@ -197,7 +197,7 @@ fn merge_no_retain_speakers_in_file1() -> Result<(), TestError> {
     fs::write(&file1, FIX_REF_PAR_ONLY)?;
     fs::write(&file2, FIX_ASR_INV_PRECOND)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("merge")
         .arg(&file1)
         .arg(&file2)
@@ -250,7 +250,7 @@ fn merge_no_timeline_in_file1() -> Result<(), TestError> {
     fs::write(&file1, FIX_REF_CHI_NO_BULLETS)?;
     fs::write(&file2, FIX_ASR_INV_PRECOND)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("merge")
         .arg(&file1)
         .arg(&file2)
@@ -315,7 +315,7 @@ fn merge_ambiguous_speaker() -> Result<(), TestError> {
     fs::write(&file1, FIX_REF_CHI_PLUS_INV)?;
     fs::write(&file2, FIX_ASR_INV_AMBIG)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("merge")
         .arg(&file1)
         .arg(&file2)
@@ -377,7 +377,7 @@ fn merge_language_mismatch() -> Result<(), TestError> {
     fs::write(&file1, FIX_REF_CHI_ENG)?;
     fs::write(&file2, FIX_ASR_INV_YUE)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("merge")
         .arg(&file1)
         .arg(&file2)

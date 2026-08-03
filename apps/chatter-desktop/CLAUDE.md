@@ -1,7 +1,7 @@
 # CLAUDE.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-08-02 19:10 EDT
+**Last updated:** 2026-08-03 15:24 EDT
 
 ## Overview
 
@@ -130,6 +130,37 @@ apps/chatter-desktop/
   is indistinguishable from silence) and reduced the best possible user bug
   report to "it doesn't go beyond Discovering files", received 2026-08-02.
   Anything needing to treat them alike goes through `isRunPending`.
+- **A command must always produce an outcome.** A panic unwinding out of an
+  `async` Tauri command leaves the IPC promise UNSETTLED: the frontend's `await`
+  neither resolves nor rejects, so the UI sits in `invoked` forever with nothing
+  to display. `validate` therefore wraps its startup sequence and reports a panic
+  as `ValidationStartError::Panicked`, which the frontend already renders. Do not
+  "simplify" that wrapper away; it is the reason a crash is now visible.
+
+- **Anything a command touches must be safe to call from a runtime thread.**
+  Tauri runs `async fn` commands ON its async runtime. `UnifiedCache` bridges
+  sync to async by owning a runtime and blocking on it, and nesting runtimes
+  panics. That combination made the desktop app unable to validate ANYTHING from
+  2026-07-07 (`5cea49bd`, which gave the desktop a real cache) until 2026-08-03,
+  across v0.6.0 and v0.7.0, while every test stayed green: the CLI and all these
+  tests run on plain threads, so none of them ever entered an async context. The
+  cache is now safe from any thread (`talkbank_cache::blocking`), and
+  `validation_bridge.rs` carries
+  `a_run_starts_when_the_caller_is_driving_an_async_runtime` to keep that
+  boundary covered. **Any new test of a command path must enter the runtime**;
+  calling the underlying function directly is what hid this.
+
+- **Tests must never open the real user cache.** Use
+  `initialize_cache_at(<temp dir>)` or `ValidationState::new_at`, never
+  `initialize_cache()`. The helper in `validation_bridge.rs` used to call the
+  latter under a comment claiming it was "isolated per-process by `cargo test`";
+  it was not, and running the suite pruned a developer's live 243 MB cache to
+  1.3 MB mid-session.
+
+- **Commands return typed domain errors** from `src/errors.rs`, never
+  `Result<_, String>`. They serialize as their display text, so the wire
+  contract with the frontend is unchanged; the typing is for the Rust side.
+
 - **Single-target contract**: desktop validation accepts one `.cha` file or one folder at a time. Native drag/drop must use Tauri's webview drag-drop API, not browser file-name placeholders.
 - **Capability-first runtime seam**: keep `@tauri-apps/*` imports inside `src/runtime/tauriTransport.ts`; components and hooks should depend on narrow capability hooks rather than a whole desktop service object.
 - **No desktop-local domain logic; reuse the CLI's**: this covers the FULL validation pipeline, not just presentation. Error rendering goes through `talkbank_transform::render_diagnostics()` and Open-in-CLAN through `send2clan::open_location_in_clan()`, the exact functions the CLI uses. **Validation orchestration itself is the same shared functions too**: both single-file and directory targets route through `talkbank_transform::validation_runner::{validate_files_streaming, validate_directory_streaming}` with a real `Arc<UnifiedCache>` (constructed identically to the CLI's `initialize_validation_cache`, `crates/chatter/src/commands/validate/cache.rs`), never a bespoke single-file loop built on the bare `parse_and_validate_streaming` primitive. Before 2026-07-06, the single-file path took exactly that bespoke shortcut and silently diverged from the CLI/directory path on caching, the `@Media`-filename check (E531), `--roundtrip`/`--parser`/`--strict-linkers` reachability, and stats accounting; the desktop must not re-implement enhancement, miette rendering, CLAN-location resolution, cache lookups, config dispatch, or stats aggregation; doing so is how the GUI silently drifted from the CLI. `commands::resolve_open_in_clan()` is split out from the Apple-Event send so the Open-in-CLAN resolution (file read + `resolve_clan_location` + message) is testable without launching CLAN.

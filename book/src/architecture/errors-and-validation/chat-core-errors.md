@@ -1,7 +1,7 @@
 # Errors, CHAT core
 
 **Status:** Current
-**Last modified:** 2026-06-17 11:29 EDT
+**Last modified:** 2026-08-03 14:03 EDT
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
@@ -115,7 +115,7 @@ flowchart LR
     vec["ErrorCollector\ncollect to Vec"]
     chan["ChannelErrorSink\ncrossbeam channel\n(feature = channels)"]
     asyncchan["AsyncChannelErrorSink\ntokio mpsc"]
-    cfg["ConfigurableErrorSink\nseverity gating"]
+    cfg["ConfigurableErrorSink\n(talkbank-transform)\npresentation policy"]
     null["NullErrorSink\nno-op"]
 
     val --> pe --> sink
@@ -149,8 +149,13 @@ Module layout in `talkbank-model`:
 - `errors/error_sink.rs`: trait and lightweight forwarding sinks.
 - `errors/collectors.rs`: in-memory collectors and counters.
 - `errors/async_channel_sink.rs`: Tokio-channel streaming.
-- `errors/configurable_sink.rs`, `errors/offset_adjusting_sink.rs`,
-  `errors/tee_sink.rs`, adapters.
+- `errors/offset_adjusting_sink.rs`, `errors/tee_sink.rs`, adapters.
+
+`ConfigurableErrorSink` is the one adapter that does NOT live here: it
+applies a `PresentationPolicy` (what a reader is shown), which belongs to
+`talkbank-transform` so that `talkbank-cache` cannot reach it and fold a
+display preference into the validation cache key. See the leniency-policy
+chapter.
 
 `ChannelErrorSink` is opt-in behind the `channels` feature so the
 default `talkbank-model` dependency does not pull in `crossbeam` just

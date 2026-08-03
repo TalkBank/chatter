@@ -7,6 +7,73 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
+## [Unreleased]
+
+### Fixed
+
+- **Chatter Desktop can validate again.** Since v0.6.0 the desktop app could not
+  start a run at all: it stopped on "Starting..." forever, on every machine and
+  every folder. Tauri drives a command on its async runtime, and the validation
+  cache bridges its synchronous API to an async database by owning a runtime and
+  blocking on it; nesting runtimes panics, the panic unwound out of the command,
+  and the IPC call then never resolved OR rejected, so the window had nothing to
+  report and no error to show. The cache now runs such a call on a thread with no
+  ambient runtime, so nesting cannot arise, and the desktop `validate` command
+  always produces an outcome, reporting a panic as a failed run rather than as
+  silence. The CLI was never affected. Introduced 2026-07-07; shipped in v0.6.0
+  and v0.7.0.
+
+### Changed
+
+- **Desktop commands return typed errors instead of `String`.** Each command now
+  names the failures it actually has (`TargetError`, `ValidationStartError`,
+  `ClanError`, `InstallCliError`, `RevealError`, `ExportError`,
+  `OpenExternalError`), so a failure can be matched on and carries its source
+  error. Errors still cross the IPC boundary as the same display text, so
+  nothing the user sees changes.
+
+- **`--suppress` no longer throws the validation cache away.** Suppression is a
+  presentation preference: it changes which diagnostics are printed, never which
+  ones the validator computes. v0.6.0 folded the suppression set into the cache
+  key, so every distinct `--suppress` list got its own private cache and
+  `chatter validate ~/corpus` followed by `chatter validate --suppress xphon
+  ~/corpus` re-validated all ~106,000 files from cold instead of hitting the
+  cache. Runs that differ only in `--suppress` now share one cache;
+  `--strict-linkers`, which genuinely turns extra checks on, still validates
+  afresh. Suppression behaviour itself is unchanged: a suppressed code is not
+  reported, and a file with other diagnostics still counts invalid.
+
+- **The cache no longer grows without bound across releases.** Every read binds
+  the current rules version, so rows written under a superseded one can never be
+  matched again, yet nothing deleted them: only a 30-day age cutoff existed,
+  which answers a different question. Each release therefore stranded a complete
+  copy of the corpus in the database, which had reached 464,773 rows across 88
+  versions (about 190 MB of a 243 MB file) for a corpus of ~106,000 files.
+  Opening the cache now deletes rows outside a two-generation window (the
+  current version plus the most recently written previous one, so a rollback or
+  a bisect is not cold), rewrites the file so the space actually returns to the
+  filesystem, and reports what it reclaimed.
+
+### Changed
+
+- **Rule selection and presentation policy are now separate types.**
+  `ValidationConfig` held both "which rules run" and "how diagnostics are shown",
+  and the validation cache key was derived from the whole thing, which is what
+  let a display preference partition the cache. It is replaced by
+  `talkbank_model::RuleSelection` (what is computed; the only input to the cache
+  key) and `talkbank_transform::PresentationPolicy` (what is shown). The cache
+  crate cannot name the second, since the crate that owns it depends on the
+  cache, so folding a display preference into the key is now a compile error
+  rather than a judgement call.
+
+  Library callers: `ChatFile::validate_with_config` and
+  `validate_with_alignment_and_config` are now `validate_with_rules` and
+  `validate_with_alignment_and_rules`, taking a `RuleSelection`, and they report
+  the complete diagnostic set with nothing filtered. `ConfigurableErrorSink`
+  moved to `talkbank_transform` and takes a `PresentationPolicy`. The validation
+  runner's config field `model_config` is now the pair `rules` and
+  `presentation`.
+
 ## [0.7.0] - 2026-08-03
 
 **Validation verdicts: UNCHANGED.** No rule was added, removed or altered, and
@@ -128,9 +195,11 @@ on a fixed rule set.
 
 - **`validate --suppress` no longer zeroes the invalid count and the exit
   code.** Suppressing a code removed it from the report AND from the
-  tallies, so a file with genuine errors could be counted valid and the
-  command could exit 0. Suppression now affects what is displayed, not
-  whether the file passed.
+  tallies, so a file with genuine OTHER errors could be counted valid and the
+  command could exit 0. A file that still has unsuppressed diagnostics now
+  counts invalid and the command exits non-zero, as it should. A file whose
+  every diagnostic was suppressed does count valid: that is what asking for
+  those codes to be suppressed means.
 
 - **The validation cache key covers every dimension of the verdict**,
   including parse behaviour and the active rule set, as a required

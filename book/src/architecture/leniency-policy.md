@@ -1,7 +1,7 @@
 # Parser Leniency Policy
 
 **Status:** Current
-**Last updated:** 2026-07-29 23:34 EDT
+**Last updated:** 2026-08-03 14:02 EDT
 
 This document is the single source of truth for how the tree-sitter grammar,
 Rust validation layer, and CLI tooling divide responsibility for enforcing the
@@ -241,45 +241,78 @@ Each proposes a new error code and priority.
 
 ### What Exists
 
-#### `ValidationConfig` (`talkbank-model/src/errors/config.rs`)
+#### Two kinds of setting, two types, two crates
 
-Builder-pattern configuration for per-error-code severity overrides.
+What the validator COMPUTES and what a reader SEES are different questions, and
+conflating them is not a style matter: it decides what a cached verdict means.
+They are separate types, and deliberately not in the same crate.
+
+#### `RuleSelection` (`talkbank-model/src/errors/config.rs`)
+
+Which rules run. Every field here changes the diagnostics that exist, which is
+why this type, and only this type, derives the validation cache key.
 
 ```rust,ignore
-let config = ValidationConfig::new()
+let rules = RuleSelection::new().with_strict_linkers(); // turns on E351-E355
+```
+
+- `new()`: every always-on check, no opt-in check
+- `with_strict_linkers()`: run the cross-utterance linker checks (chainable)
+- `strict_linkers_enabled() -> bool`: query
+- `cache_key_fragment() -> String`: the canonical text folded into
+  `talkbank_cache::RulesVersion::current_with_rule_selection`. Destructures
+  `Self` with no `..` rest pattern, so a new field is a compile error until
+  someone folds it in.
+
+#### `PresentationPolicy` (`talkbank-transform/src/presentation.rs`)
+
+What a reader is shown, and at what severity, applied to diagnostics the
+validator has ALREADY produced. `--suppress` lands here.
+
+```rust,ignore
+let policy = PresentationPolicy::new()
     .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning)
     .disable(ErrorCode::InvalidOverlapIndex)
     .upgrade(ErrorCode::UnknownAnnotation, Severity::Error);
 ```
 
-**API**:
-- `new()`: empty config, all codes use original severity
-- `downgrade(code, severity)`: lower severity (chainable)
-- `disable(code)`: suppress entirely (chainable)
-- `upgrade(code, severity)`: raise severity (chainable)
-- `set_severity(code, Option<Severity>)`: set or disable (chainable)
-- `effective_severity(code, original) -> Option<Severity>`: query
-- `is_disabled(code) -> bool`: check
+**API**: `new()`, `downgrade(code, severity)`, `disable(code)`,
+`upgrade(code, severity)`, `set_severity(code, Option<Severity>)`,
+`effective_severity(code, original) -> Option<Severity>`,
+`is_disabled(code) -> bool`, `shows_everything() -> bool`,
+`apply(diagnostic) -> Option<ParseError>`, `apply_all(Vec<ParseError>)`.
 
 **Pre-built profiles**:
-- `lenient()`: Downgrades `IllegalUntranscribed` and `InvalidOverlapIndex` to
-  `Severity::Warning`. Designed for legacy corpora gradual migration.
-- `strict()`: escalates unmapped warnings to errors (sets
-  `upgrade_unmapped_warnings`, honored by `effective_severity`). Explicit
-  per-code overrides still take precedence, so a caller can opt a specific
-  code back to `Severity::Warning`.
+- `lenient()`: shows `IllegalUntranscribed` and `InvalidOverlapIndex` as
+  warnings. For gradual migration of legacy corpora.
+- `strict()`: shows unmapped warnings as errors. Explicit per-code overrides
+  still take precedence, so a caller can opt a specific code back to
+  `Severity::Warning`.
 
-#### `ConfigurableErrorSink` (`talkbank-model/src/errors/configurable_sink.rs`)
+**Why the crate split.** `talkbank-transform` depends on `talkbank-cache`, so
+the cache crate cannot name `PresentationPolicy`. Folding a display preference
+into the cache key is therefore a dependency cycle rather than a judgement call.
+It was a judgement call in v0.6.0, it went wrong, and `--suppress` partitioned
+the cache: two runs differing only in what they printed shared no entries, and a
+second pass over a 106,000-file corpus re-validated all of it from cold.
 
-Wrapper that intercepts errors and applies `ValidationConfig` before forwarding
-to an inner `ErrorSink`.
+**What this makes true of a cache row.** The stored fact is "this file produced
+no diagnostics at all under this rule selection". No presentation policy can
+change that, which is what lets one cache serve suppressed and unsuppressed runs
+alike.
+
+#### `ConfigurableErrorSink` (`talkbank-transform/src/presentation.rs`)
+
+Wrapper that applies a `PresentationPolicy` to diagnostics on their way to an
+inner `ErrorSink`, for surfaces that stream to a reader as they arrive.
 
 ```rust,ignore
 let inner = ErrorCollector::new();
-let sink = ConfigurableErrorSink::new(&inner, config);
-// Pass `sink` to parser/validator, disabled errors are filtered,
-// severity overrides are applied.
+let sink = ConfigurableErrorSink::new(&inner, policy);
 ```
+
+It must never wrap a sink whose output feeds a cache write or a run tally: those
+consume the complete diagnostic set.
 
 #### Runner-Level Flags (`talkbank-transform`, `chatter`)
 
@@ -295,7 +328,6 @@ let sink = ConfigurableErrorSink::new(&inner, config);
 | Gap | Description | Effort |
 |-----|-------------|--------|
 | No `--profile` CLI flag | Users cannot select `strict` / `lenient` / `lint` from the command line | Medium |
-| `ConfigurableErrorSink` not wired into validation pipeline | Infrastructure exists but is not used by `chatter validate` | Medium |
 | No profile serialization | Cannot load profiles from TOML/JSON config files | Medium |
 | No corpus-specific profiles | E.g., HSLLD-specific rules | Future |
 
@@ -345,8 +377,8 @@ layer.
 | Permissiveness regression log (archived) | 8 permissiveness regression decisions with rationale |
 | Python-Rust boundary audit (archived) | Silent recovery points; ParseHealth gap; NLP pipeline audit |
 | `grammar/grammar.js` | Inline comments on each leniency decision (line references in matrix above) |
-| `talkbank-model/src/errors/config.rs` | `ValidationConfig` API |
-| `talkbank-model/src/errors/configurable_sink.rs` | `ConfigurableErrorSink` adapter |
+| `talkbank-model/src/errors/config.rs` | `RuleSelection` API (and the cache key derived from it) |
+| `talkbank-transform/src/presentation.rs` | `PresentationPolicy` and the `ConfigurableErrorSink` adapter |
 | `talkbank-model/src/validation/header/structure.rs` | Header validation: E501, E502, E503, E504-E533 |
 | `talkbank-model/src/validation/temporal.rs` | Temporal constraint checks (E701, E704); CA-mode skip |
 | `talkbank-model/src/model/content/main_tier.rs` | Where W210/W211 were removed |

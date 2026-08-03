@@ -31,6 +31,9 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Domain error types for the command surface (errors.rs); replaced the
+# `Result<_, String>` every command used to return.
+thiserror = { workspace = true }
 crossbeam-channel = "0.5"
 arc-swap = "1.9"
 ansi-to-html = "0.2"

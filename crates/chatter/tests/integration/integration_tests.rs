@@ -91,7 +91,7 @@ fn test_validate_valid_file() -> Result<(), TestError> {
     let file_path = dir.path().join("valid.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -109,7 +109,7 @@ fn test_validate_invalid_file_missing_end() -> Result<(), TestError> {
     let file_path = dir.path().join("invalid.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -132,7 +132,7 @@ fn test_validate_multi_file_processes_every_argument() -> Result<(), TestError> 
     // Process exits non-zero (the bad file is invalid) and the summary
     // accounts for both files, proving the run did not bail out after the
     // first failure.
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&bad)
         .arg(&good)
@@ -152,7 +152,7 @@ fn test_validate_invalid_file_text_mode_uses_stderr_for_diagnostics() -> Result<
     let file_path = dir.path().join("invalid.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -186,7 +186,7 @@ fn test_validate_warnings_only_file_not_headlined_as_error() -> Result<(), TestE
     let file_path = dir.path().join("warnings_only.cha");
     fs::write(&file_path, WARNINGS_ONLY_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -210,7 +210,7 @@ fn test_validate_invalid_file_syntax_error() -> Result<(), TestError> {
     let file_path = dir.path().join("syntax_error.cha");
     fs::write(&file_path, INVALID_CHAT_SYNTAX_ERROR)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -225,7 +225,7 @@ fn test_validate_invalid_file_json_mode_keeps_stderr_clean() -> Result<(), TestE
     let file_path = dir.path().join("invalid.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--format")
         .arg("json")
@@ -245,7 +245,7 @@ fn test_validate_invalid_file_json_mode_keeps_stderr_clean() -> Result<(), TestE
 /// Tests validate file not found.
 #[test]
 fn test_validate_file_not_found() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("/nonexistent/file.cha")
         .assert()
@@ -259,7 +259,7 @@ fn test_validate_quiet_mode_success() -> Result<(), TestError> {
     let file_path = dir.path().join("valid.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .arg("--quiet")
@@ -276,7 +276,7 @@ fn test_validate_quiet_mode_failure() -> Result<(), TestError> {
     let file_path = dir.path().join("invalid.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .arg("--quiet")
@@ -293,14 +293,14 @@ fn test_validate_skip_alignment() -> Result<(), TestError> {
     fs::write(&file_path, CHAT_WITH_ALIGNMENT_ERROR)?;
 
     // With alignment checking (default): should detect error
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
         .failure();
 
     // With --skip-alignment: should pass (only validates structure)
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .arg("--skip-alignment")
@@ -322,7 +322,7 @@ fn test_validate_directory_recursive() -> Result<(), TestError> {
     fs::write(subdir.join("nested.cha"), VALID_CHAT)?;
 
     // Directories are always validated recursively by default
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(dir.path())
         .assert()
@@ -339,7 +339,7 @@ fn test_validate_directory_ignores_appledouble_sidecars() -> Result<(), TestErro
     fs::write(dir.path().join("real.cha"), VALID_CHAT)?;
     fs::write(dir.path().join("._real.cha"), b"\0\x05AppleDouble metadata")?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(dir.path())
         .arg("--force")
@@ -360,7 +360,7 @@ fn test_validate_json_output() -> Result<(), TestError> {
     let file_path = dir.path().join("valid.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .arg("--format")
@@ -382,7 +382,7 @@ fn test_normalize_to_stdout() -> Result<(), TestError> {
     let file_path = dir.path().join("input.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("normalize")
         .arg(&file_path)
         .assert()
@@ -401,7 +401,7 @@ fn test_normalize_to_file() -> Result<(), TestError> {
 
     fs::write(&input_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("normalize")
         .arg(&input_path)
         .arg("--output")
@@ -429,7 +429,7 @@ fn test_normalize_with_validation() -> Result<(), TestError> {
     let file_path = dir.path().join("invalid.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("normalize")
         .arg(&file_path)
         .arg("--validate")
@@ -449,7 +449,7 @@ fn test_to_json_stdout() -> Result<(), TestError> {
     let file_path = dir.path().join("input.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&file_path)
         .assert()
@@ -468,7 +468,7 @@ fn test_to_json_file() -> Result<(), TestError> {
 
     fs::write(&input_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_path)
         .arg("--output")
@@ -494,7 +494,7 @@ fn test_to_json_pretty_vs_compact() -> Result<(), TestError> {
     fs::write(&file_path, VALID_CHAT)?;
 
     // Pretty (default)
-    let pretty_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let pretty_output = crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&file_path)
         .output()?;
@@ -503,7 +503,7 @@ fn test_to_json_pretty_vs_compact() -> Result<(), TestError> {
         .map_err(|err| TestError::Failure(format!("Invalid UTF-8: {err}")))?;
 
     // Compact
-    let compact_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let compact_output = crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&file_path)
         .arg("--compact")
@@ -533,7 +533,7 @@ fn test_to_json_with_validation() -> Result<(), TestError> {
     let file_path = dir.path().join("invalid.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&file_path)
         .arg("--validate")
@@ -558,7 +558,7 @@ fn test_to_json_directory_mode() -> Result<(), TestError> {
 
     let output_dir = dir.path().join("json");
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -591,7 +591,7 @@ fn test_to_json_incremental() -> Result<(), TestError> {
     let output_dir = dir.path().join("json");
 
     // First run: should convert
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -603,7 +603,7 @@ fn test_to_json_incremental() -> Result<(), TestError> {
         .stderr(predicate::str::contains("1 converted, 0 up-to-date"));
 
     // Second run: should skip (up-to-date)
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -627,7 +627,7 @@ fn test_to_json_force() -> Result<(), TestError> {
     let output_dir = dir.path().join("json");
 
     // First run
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -638,7 +638,7 @@ fn test_to_json_force() -> Result<(), TestError> {
         .success();
 
     // Force run: should reconvert despite up-to-date
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -663,7 +663,7 @@ fn test_to_json_prune() -> Result<(), TestError> {
     let output_dir = dir.path().join("json");
 
     // First run: convert
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -678,7 +678,7 @@ fn test_to_json_prune() -> Result<(), TestError> {
     assert!(output_dir.join("orphan.json").exists());
 
     // Run with --prune
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .arg("--output-dir")
@@ -704,7 +704,7 @@ fn test_to_json_directory_requires_output_dir() -> Result<(), TestError> {
     fs::create_dir_all(&input_dir)?;
     fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&input_dir)
         .assert()
@@ -728,7 +728,7 @@ fn test_from_json_roundtrip() -> Result<(), TestError> {
     fs::write(&chat_path, VALID_CHAT)?;
 
     // CHAT → JSON
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&chat_path)
         .arg("--output")
@@ -737,7 +737,7 @@ fn test_from_json_roundtrip() -> Result<(), TestError> {
         .success();
 
     // JSON → CHAT
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("from-json")
         .arg(&json_path)
         .arg("--output")
@@ -764,7 +764,7 @@ fn test_from_json_invalid_json() -> Result<(), TestError> {
     let json_file = NamedTempFile::new()?;
     fs::write(json_file.path(), "{ invalid json ")?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("from-json")
         .arg(json_file.path())
         .assert()
@@ -783,7 +783,7 @@ fn test_show_alignment_basic() -> Result<(), TestError> {
     let file_path = dir.path().join("aligned.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("show-alignment")
         .arg(&file_path)
         .assert()
@@ -799,7 +799,7 @@ fn test_show_alignment_specific_tier() -> Result<(), TestError> {
     let file_path = dir.path().join("aligned.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("show-alignment")
         .arg(&file_path)
         .arg("--tier")
@@ -816,12 +816,12 @@ fn test_show_alignment_compact_mode() -> Result<(), TestError> {
     let file_path = dir.path().join("aligned.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    let normal_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let normal_output = crate::common::chatter_cmd()
         .arg("show-alignment")
         .arg(&file_path)
         .output()?;
 
-    let compact_output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let compact_output = crate::common::chatter_cmd()
         .arg("show-alignment")
         .arg(&file_path)
         .arg("--compact")
@@ -843,7 +843,7 @@ fn test_show_alignment_compact_mode() -> Result<(), TestError> {
 /// Tests help command.
 #[test]
 fn test_help_command() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("--help")
         .assert()
         .success()
@@ -855,7 +855,7 @@ fn test_help_command() {
 /// Tests validate help.
 #[test]
 fn test_validate_help() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--help")
         .assert()
@@ -867,7 +867,7 @@ fn test_validate_help() {
 /// Tests no args shows help.
 #[test]
 fn test_no_args_shows_help() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .assert()
         .failure()
         .stderr(predicate::str::contains("Usage"));
@@ -886,7 +886,7 @@ fn test_error_exit_codes() -> Result<(), TestError> {
     let valid_path = dir.path().join("valid.cha");
     fs::write(&valid_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&valid_path)
         .assert()
@@ -896,7 +896,7 @@ fn test_error_exit_codes() -> Result<(), TestError> {
     let invalid_path = dir.path().join("invalid.cha");
     fs::write(&invalid_path, INVALID_CHAT_MISSING_END)?;
 
-    let assert = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let assert = crate::common::chatter_cmd()
         .arg("validate")
         .arg(&invalid_path)
         .assert()
@@ -910,7 +910,7 @@ fn test_error_exit_codes() -> Result<(), TestError> {
 /// Tests missing required argument.
 #[test]
 fn test_missing_required_argument() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .assert()
         .failure()
@@ -928,7 +928,7 @@ fn exit_code_zero_for_valid_file() -> Result<(), TestError> {
     let file = dir.path().join("valid.cha");
     fs::write(&file, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .args(["validate", file.to_str().unwrap(), "--tui-mode", "disable"])
         .assert()
         .success(); // exit code 0
@@ -942,7 +942,7 @@ fn exit_code_nonzero_for_invalid_file() -> Result<(), TestError> {
     let file = dir.path().join("invalid.cha");
     fs::write(&file, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .args(["validate", file.to_str().unwrap(), "--tui-mode", "disable"])
         .assert()
         .failure(); // exit code != 0
@@ -952,7 +952,7 @@ fn exit_code_nonzero_for_invalid_file() -> Result<(), TestError> {
 /// Exit code 1 for a nonexistent file path (CI contract).
 #[test]
 fn exit_code_nonzero_for_nonexistent_file() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .args([
             "validate",
             "/tmp/nonexistent_file_12345.cha",
@@ -966,7 +966,7 @@ fn exit_code_nonzero_for_nonexistent_file() {
 /// Exit code 2 for missing required arguments (clap usage error).
 #[test]
 fn exit_code_two_for_usage_error() {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .args(["validate"])
         .assert()
         .code(2);
@@ -975,7 +975,7 @@ fn exit_code_two_for_usage_error() {
 /// Tests that --help includes a Getting Started section for new users.
 #[test]
 fn help_text_includes_getting_started() -> Result<(), TestError> {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("--help")
         .assert()
         .success()
@@ -998,7 +998,7 @@ fn strict_linkers_off_allows_orphan_self_completion() -> Result<(), TestError> {
     let file_path = dir.path().join("orphan.cha");
     fs::write(&file_path, CHAT_WITH_SELF_COMPLETION_ORPHAN)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -1019,7 +1019,7 @@ fn cascading_error_hint_shown_for_structural_errors() -> Result<(), TestError> {
     let file_path = dir.path().join("missing_end.cha");
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -1037,7 +1037,7 @@ fn no_cascading_hint_for_valid_file() -> Result<(), TestError> {
     let file_path = dir.path().join("valid.cha");
     fs::write(&file_path, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -1058,7 +1058,7 @@ fn strict_linkers_on_rejects_orphan_self_completion() -> Result<(), TestError> {
     let file_path = dir.path().join("orphan.cha");
     fs::write(&file_path, CHAT_WITH_SELF_COMPLETION_ORPHAN)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--strict-linkers")
         .arg(&file_path)
@@ -1081,7 +1081,7 @@ fn strict_linkers_on_rejects_orphan_self_completion() -> Result<(), TestError> {
 /// the column exists.
 #[test]
 fn list_checks_shows_active_and_planned() -> Result<(), TestError> {
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .args(["validate", "--list-checks", "--tui-mode", "disable"])
         .assert()
         .success()
@@ -1104,7 +1104,7 @@ fn test_sanitize_stdout_strips_words() -> Result<(), TestError> {
     let input = dir.path().join("input.cha");
     fs::write(&input, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("debug")
         .arg("sanitize")
         .arg(&input)
@@ -1126,7 +1126,7 @@ fn test_sanitize_output_file() -> Result<(), TestError> {
     let output = dir.path().join("sanitized.cha");
     fs::write(&input, VALID_CHAT)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("debug")
         .arg("sanitize")
         .arg(&input)
@@ -1164,13 +1164,13 @@ fn test_to_json_types_u_form_content_as_phonetic() -> Result<(), TestError> {
          *CHI:\ts\u{026a}nd\u{259}\u{02de}w\u{0251}n@u [: syndrome] [* n:k] .\n@End\n",
     )?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
         .success();
 
-    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let output = crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&file_path)
         .assert()
@@ -1240,13 +1240,13 @@ fn test_mid_word_syllable_pause_chain_is_one_word_and_valid() -> Result<(), Test
          *PAR:\trhi^noceros je .\n@End\n",
     )?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
         .success();
 
-    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let output = crate::common::chatter_cmd()
         .arg("to-json")
         .arg(&file_path)
         .arg("--skip-validation")

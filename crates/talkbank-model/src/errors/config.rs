@@ -1,13 +1,10 @@
-//! Validation policy for remapping or suppressing diagnostics.
+//! Which validation rules RUN. Not how their diagnostics are shown.
 //!
-//! `ValidationConfig` is applied by [`ConfigurableErrorSink`](crate::ConfigurableErrorSink)
-//! before diagnostics are forwarded to downstream consumers.
-//!
-//! ## Precedence
-//!
-//! 1. Explicit per-code override from `set_severity`/`upgrade`/`downgrade`/`disable`.
-//! 2. Global strict-mode escalation (`strict`) for diagnostics still marked as warnings.
-//! 3. Original parser/validator severity.
+//! [`RuleSelection`] is the input that decides what the validator COMPUTES.
+//! Its counterpart, the policy deciding how computed diagnostics are displayed
+//! and counted, is `talkbank_transform::PresentationPolicy`, and the two are
+//! deliberately in different crates; see the type's own documentation for the
+//! defect that separation exists to make unrepresentable.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -15,283 +12,98 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::{ErrorCode, Severity};
-use std::collections::HashMap;
-
-/// Prefix for the sorted per-code severity-override list inside
-/// [`ValidationConfig::cache_key_fragment`]'s output.
-const OVERRIDES_FRAGMENT_PREFIX: &str = "+overrides.";
-
-/// Label standing in for a fully disabled code inside the overrides list
-/// (`Option<Severity>`'s `None` has no `Display`).
-const DISABLED_OVERRIDE_LABEL: &str = "disabled";
-
-/// Suffix appended by [`ValidationConfig::cache_key_fragment`] when
-/// `enable_quotation_validation` (strict cross-utterance linker validation)
-/// is on.
+/// Suffix appended by [`RuleSelection::cache_key_fragment`] when strict
+/// cross-utterance linker validation is on.
 const STRICT_LINKERS_FRAGMENT: &str = "+strict-linkers";
 
-/// Suffix appended by [`ValidationConfig::cache_key_fragment`] when
-/// `upgrade_unmapped_warnings` is on.
-const UPGRADE_UNMAPPED_WARNINGS_FRAGMENT: &str = "+upgrade-unmapped-warnings";
-
-/// Configuration for validation severity behavior.
+/// The set of validation rules that will actually run.
 ///
-/// Allows downgrading errors to warnings, disabling specific checks,
-/// or upgrading warnings to errors.
+/// # The defining property
 ///
-/// # Example
+/// **Every field here can change WHAT THE VALIDATOR COMPUTES, which is why
+/// this type, and only this type, derives the validation cache key.** A field
+/// that cannot change the computed diagnostics does not belong here: it is a
+/// presentation preference, and it belongs in
+/// `talkbank_transform::PresentationPolicy` instead. That is the mistake to
+/// catch in review, and it is the exact mistake that shipped in v0.6.0.
 ///
-/// ```
-/// use talkbank_model::ValidationConfig;
-/// use talkbank_model::{ErrorCode, Severity};
+/// # Why this is a separate type at all
 ///
-/// let config = ValidationConfig::new()
-///     .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning)
-///     .disable(ErrorCode::InvalidOverlapIndex)
-///     .upgrade(ErrorCode::UnknownAnnotation, Severity::Error);
-/// ```
-#[derive(Clone, Debug, Default)]
-pub struct ValidationConfig {
-    /// Map from error code to overridden severity.
-    ///
-    /// `None` means the diagnostic is disabled.
-    severity_overrides: HashMap<ErrorCode, Option<Severity>>,
-    /// If true, warnings without explicit per-code overrides are escalated to errors.
-    upgrade_unmapped_warnings: bool,
-    /// Enable strict cross-utterance linker validation (E351-E355).
+/// v0.6.0 held rule selection and presentation policy in ONE struct and folded
+/// the whole struct into the cache key. Suppression (`--suppress`, a pure
+/// display preference) therefore partitioned the cache: two runs differing only
+/// in which codes they printed shared no entries, and a second pass over a
+/// 106,000-file corpus re-validated every file from cold. The cure is not a
+/// rule saying "remember to leave presentation out of the key"; a rule loses to
+/// an affordance. The cure is that the key-deriving function cannot NAME a
+/// presentation policy: `talkbank-cache` takes `&RuleSelection`, and the
+/// presentation type lives in a crate that depends on `talkbank-cache`, so
+/// reaching for it there is a dependency cycle, not a judgement call.
+///
+/// # Invariant this buys the cache
+///
+/// Two runs with equal `RuleSelection` compute the same diagnostics for the
+/// same bytes. A cached row therefore records a fact about the file rather
+/// than a rendering of it, and no presentation preference can invalidate it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct RuleSelection {
+    /// Run strict cross-utterance linker validation (E351-E355).
     ///
     /// When true, self-completion (`+,`) and other-completion (`++`) linkers
     /// are checked for correct pairing with preceding terminators (`+/.` and
-    /// `+...` respectively). Disabled by default because many existing corpora
-    /// do not follow these strict conventions.
-    enable_quotation_validation: bool,
+    /// `+...` respectively). Off by default because many existing corpora do
+    /// not follow these strict conventions. This is rule SELECTION, not
+    /// presentation: with it off, the checks never execute and the diagnostics
+    /// do not exist to be shown or hidden.
+    strict_linkers: bool,
 }
 
-impl ValidationConfig {
-    /// Create a new validation configuration with default behavior.
+impl RuleSelection {
+    /// The default rule set: every always-on check, and no opt-in check.
     pub fn new() -> Self {
         Self {
-            severity_overrides: HashMap::new(),
-            upgrade_unmapped_warnings: false,
-            enable_quotation_validation: false,
-        }
-    }
-
-    /// Downgrade an error code to a lower severity
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use talkbank_model::ValidationConfig;
-    /// use talkbank_model::{ErrorCode, Severity};
-    ///
-    /// let config = ValidationConfig::new()
-    ///     .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning);
-    /// ```
-    pub fn downgrade(mut self, code: ErrorCode, severity: Severity) -> Self {
-        self.severity_overrides.insert(code, Some(severity));
-        self
-    }
-
-    /// Disable a specific error code entirely
-    ///
-    /// Errors with this code will not be reported.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use talkbank_model::ValidationConfig;
-    /// use talkbank_model::ErrorCode;
-    ///
-    /// let config = ValidationConfig::new()
-    ///     .disable(ErrorCode::InvalidOverlapIndex);
-    /// ```
-    pub fn disable(mut self, code: ErrorCode) -> Self {
-        self.severity_overrides.insert(code, None);
-        self
-    }
-
-    /// Upgrade a warning to an error
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use talkbank_model::ValidationConfig;
-    /// use talkbank_model::{ErrorCode, Severity};
-    ///
-    /// let config = ValidationConfig::new()
-    ///     .upgrade(ErrorCode::UnknownAnnotation, Severity::Error);
-    /// ```
-    pub fn upgrade(mut self, code: ErrorCode, severity: Severity) -> Self {
-        self.severity_overrides.insert(code, Some(severity));
-        self
-    }
-
-    /// Set a custom severity for an error code.
-    ///
-    /// Pass `None` to disable the error.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use talkbank_model::ValidationConfig;
-    /// use talkbank_model::{ErrorCode, Severity};
-    ///
-    /// let config = ValidationConfig::new()
-    ///     .set_severity(ErrorCode::IllegalUntranscribed, Some(Severity::Warning))
-    ///     .set_severity(ErrorCode::InvalidOverlapIndex, None);  // Disable
-    /// ```
-    pub fn set_severity(mut self, code: ErrorCode, severity: Option<Severity>) -> Self {
-        self.severity_overrides.insert(code, severity);
-        self
-    }
-
-    /// Resolve the severity that should be emitted for a diagnostic.
-    ///
-    /// Returns `None` when the code is disabled.
-    pub fn effective_severity(&self, code: ErrorCode, original: Severity) -> Option<Severity> {
-        match self.severity_overrides.get(&code) {
-            Some(override_severity) => *override_severity,
-            None if self.upgrade_unmapped_warnings && original == Severity::Warning => {
-                Some(Severity::Error)
-            }
-            None => Some(original),
-        }
-    }
-
-    /// Check if an error code is disabled
-    pub fn is_disabled(&self, code: ErrorCode) -> bool {
-        matches!(self.severity_overrides.get(&code), Some(None))
-    }
-
-    /// Get all severity overrides
-    pub fn overrides(&self) -> &HashMap<ErrorCode, Option<Severity>> {
-        &self.severity_overrides
-    }
-
-    /// Create a strict configuration that escalates unmapped warnings to errors.
-    ///
-    /// Explicit per-code overrides still take precedence, so callers can opt out
-    /// for specific codes by setting them back to `Severity::Warning`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use talkbank_model::ValidationConfig;
-    ///
-    /// let config = ValidationConfig::strict();
-    /// // All warnings will be treated as errors
-    /// ```
-    pub fn strict() -> Self {
-        Self {
-            severity_overrides: HashMap::new(),
-            upgrade_unmapped_warnings: true,
-            enable_quotation_validation: false,
+            strict_linkers: false,
         }
     }
 
     /// Enable strict cross-utterance linker validation (E351-E355).
-    ///
-    /// When enabled, self-completion (`+,`) and other-completion (`++`)
-    /// linkers are validated against their required preceding terminators.
-    /// This is off by default because many real corpora do not follow
-    /// strict sequential linker pairing conventions.
     pub fn with_strict_linkers(mut self) -> Self {
-        self.enable_quotation_validation = true;
+        self.strict_linkers = true;
         self
     }
 
-    /// Returns whether strict cross-utterance linker validation is enabled.
+    /// Whether strict cross-utterance linker validation will run.
     pub fn strict_linkers_enabled(&self) -> bool {
-        self.enable_quotation_validation
+        self.strict_linkers
     }
 
-    /// Create a lenient configuration for legacy corpora.
+    /// Render this rule set as a deterministic, canonical text fragment for
+    /// folding into a validation cache key
+    /// (`talkbank_cache::RulesVersion::current_with_rule_selection`).
     ///
-    /// Downgrades common strict errors to warnings for gradual migration.
+    /// # Why the destructure
     ///
-    /// # Example
+    /// The body destructures `Self` FIELD BY FIELD with **no `..` rest
+    /// pattern**, so adding a field to `RuleSelection` is a compile error here
+    /// until someone folds it in. On this type that forcing is always correct,
+    /// because by the type's defining property every field here changes what is
+    /// computed and therefore belongs in the key. (The same destructure on the
+    /// old combined config was the right instinct on the wrong struct: it
+    /// forced presentation settings into the key, which is what broke caching.)
     ///
-    /// ```
-    /// use talkbank_model::ValidationConfig;
+    /// # Why it lives here rather than in `talkbank-cache`
     ///
-    /// let config = ValidationConfig::lenient();
-    /// // E241 (illegal untranscribed) becomes a warning instead of error
-    /// ```
-    pub fn lenient() -> Self {
-        Self::new()
-            .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning)
-            .downgrade(ErrorCode::InvalidOverlapIndex, Severity::Warning)
-    }
-
-    /// Render the cache-relevant surface of this config as a deterministic,
-    /// canonical text fragment, for folding into a validation cache key
-    /// (`talkbank_cache::RulesVersion::current_with_config`).
-    ///
-    /// # Why this lives here, next to the struct, and not in `talkbank-cache`
-    ///
-    /// `talkbank-cache` cannot enumerate `ValidationConfig`'s fields itself:
-    /// they are private, and even if they were public, a hand-picked field
-    /// list in a downstream crate is exactly the shape of bug this method
-    /// exists to make unrepresentable. Two real gaps shipped from that
-    /// shape: `upgrade_unmapped_warnings` was never folded into the cache
-    /// key at all (inert only because `ValidationConfig::strict()`, the
-    /// sole constructor that sets it, had no production caller yet), and a
-    /// separate CLI cache-key builder folded `strict_linkers` but not its
-    /// `--suppress` list. Both were silent: nothing failed to compile, and
-    /// nothing failed a test, until a caller finally exercised the gap and
-    /// got served a stale verdict from a differently-configured run.
-    ///
-    /// This method closes the shape, not just the two instances: it
-    /// destructures `Self` FIELD BY FIELD with **no `..` rest pattern**, so
-    /// adding a field to `ValidationConfig` is a compile error here until
-    /// someone decides whether it can change a validation verdict. If it
-    /// can, fold it into the returned fragment. If it genuinely cannot,
-    /// bind it to `_` with a one-line comment explaining why not; that
-    /// comment is the recorded decision, not a silent omission.
-    ///
-    /// The wrapped fields are the invariant every call site relies on: two
-    /// configs with equal `cache_key_fragment()` output must be
-    /// interchangeable as far as a cached pass/fail verdict is concerned.
+    /// The fields are private, and a hand-picked field list in a downstream
+    /// crate is precisely the shape of bug this method exists to prevent: two
+    /// such lists once drifted apart, one folding in strict-linkers but not
+    /// the suppression set. One owner, no mirror to drift.
     pub fn cache_key_fragment(&self) -> String {
-        let Self {
-            severity_overrides,
-            upgrade_unmapped_warnings,
-            enable_quotation_validation,
-        } = self;
-
-        // A disabled code is never emitted and a downgraded/upgraded code
-        // changes severity, either of which can flip a file between Valid
-        // and Invalid: every override must be folded in. Sorted + deduped
-        // so `HashMap` iteration order never affects the fragment.
-        let mut overrides: Vec<String> = severity_overrides
-            .iter()
-            .map(|(code, severity)| {
-                let severity_label = severity
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| DISABLED_OVERRIDE_LABEL.to_string());
-                format!("{}:{severity_label}", code.as_str())
-            })
-            .collect();
-        overrides.sort_unstable();
-        overrides.dedup();
+        let Self { strict_linkers } = self;
 
         let mut fragment = String::new();
-        if !overrides.is_empty() {
-            fragment.push_str(OVERRIDES_FRAGMENT_PREFIX);
-            fragment.push_str(&overrides.join(","));
-        }
-        // Escalates warnings without an explicit override to errors, which
-        // can flip a file from Valid to Invalid: must be folded in. This is
-        // the gap that shipped inert (`ValidationConfig::strict()` had no
-        // production caller) and is closed here.
-        if *upgrade_unmapped_warnings {
-            fragment.push_str(UPGRADE_UNMAPPED_WARNINGS_FRAGMENT);
-        }
-        // Turns on E351-E355 (strict cross-utterance linker validation),
-        // which can flip a file from Valid to Invalid: must be folded in.
-        if *enable_quotation_validation {
+        // Turns on E351-E355, which a lenient run never reaches at all, so a
+        // lenient verdict is not an answer for a strict run.
+        if *strict_linkers {
             fragment.push_str(STRICT_LINKERS_FRAGMENT);
         }
         fragment
@@ -302,126 +114,40 @@ impl ValidationConfig {
 mod tests {
     use super::*;
 
-    /// Tests downgrade error.
+    /// The one dimension this type carries must reach the cache key, or a
+    /// lenient verdict could be served to a `--strict-linkers` run that wanted
+    /// checks the lenient run never ran.
     #[test]
-    fn test_downgrade_error() {
-        let config =
-            ValidationConfig::new().downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning);
-
-        assert_eq!(
-            config.effective_severity(ErrorCode::IllegalUntranscribed, Severity::Error),
-            Some(Severity::Warning)
-        );
-    }
-
-    /// Tests disable error.
-    #[test]
-    fn test_disable_error() {
-        let config = ValidationConfig::new().disable(ErrorCode::InvalidOverlapIndex);
-
-        assert_eq!(
-            config.effective_severity(ErrorCode::InvalidOverlapIndex, Severity::Error),
-            None
-        );
-        assert!(config.is_disabled(ErrorCode::InvalidOverlapIndex));
-    }
-
-    /// Tests upgrade warning.
-    #[test]
-    fn test_upgrade_warning() {
-        let config = ValidationConfig::new().upgrade(ErrorCode::UnknownAnnotation, Severity::Error);
-
-        assert_eq!(
-            config.effective_severity(ErrorCode::UnknownAnnotation, Severity::Warning),
-            Some(Severity::Error)
-        );
-    }
-
-    /// Tests no override uses original.
-    #[test]
-    fn test_no_override_uses_original() {
-        let config = ValidationConfig::new();
-
-        assert_eq!(
-            config.effective_severity(ErrorCode::IllegalUntranscribed, Severity::Error),
-            Some(Severity::Error)
-        );
-    }
-
-    /// Tests lenient config.
-    #[test]
-    fn test_lenient_config() {
-        let config = ValidationConfig::lenient();
-
-        assert_eq!(
-            config.effective_severity(ErrorCode::IllegalUntranscribed, Severity::Error),
-            Some(Severity::Warning)
-        );
-    }
-
-    /// Strict mode escalates warnings that do not have explicit overrides.
-    #[test]
-    fn test_strict_config_upgrades_warnings() {
-        let config = ValidationConfig::strict();
-        assert_eq!(
-            config.effective_severity(ErrorCode::UnknownAnnotation, Severity::Warning),
-            Some(Severity::Error)
-        );
-    }
-
-    /// `ValidationConfig::strict()` and `ValidationConfig::new()` differ in
-    /// exactly one field, `upgrade_unmapped_warnings`, so this is a direct
-    /// probe of that one dimension: before `cache_key_fragment` folded it
-    /// in, the two configs produced the SAME fragment despite `strict()`
-    /// being able to flip a file from Valid to Invalid (any unmapped
-    /// warning becomes an error). A downstream `RulesVersion` built from
-    /// these two fragments must diverge or a cache row produced under one
-    /// could be served to the other.
-    #[test]
-    fn cache_key_fragment_differs_when_only_upgrade_unmapped_warnings_differs() {
-        let default_config = ValidationConfig::new();
-        let strict_config = ValidationConfig::strict();
+    fn cache_key_fragment_differs_when_strict_linkers_differs() {
         assert_ne!(
-            default_config.cache_key_fragment(),
-            strict_config.cache_key_fragment(),
-            "upgrade_unmapped_warnings must be folded into the cache key fragment"
+            RuleSelection::new().cache_key_fragment(),
+            RuleSelection::new()
+                .with_strict_linkers()
+                .cache_key_fragment(),
+            "strict_linkers changes which checks execute and must reach the key"
         );
     }
 
-    /// Same probe as above, for the other boolean dimension.
+    /// Enabling the same dimension twice is the same rule set, so it must
+    /// produce the same fragment: two call paths that converge on strict mode
+    /// must share a cache.
     #[test]
-    fn cache_key_fragment_differs_when_only_strict_linkers_differs() {
-        let default_config = ValidationConfig::new();
-        let strict_linkers_config = ValidationConfig::new().with_strict_linkers();
-        assert_ne!(
-            default_config.cache_key_fragment(),
-            strict_linkers_config.cache_key_fragment(),
-            "strict_linkers must be folded into the cache key fragment"
-        );
-    }
-
-    /// Two configs with the same disabled-code SET, built in a different
-    /// order, must produce the same fragment: `HashMap` iteration order
-    /// must never leak into the cache key.
-    #[test]
-    fn cache_key_fragment_is_order_independent_over_overrides() {
-        let forward = ValidationConfig::new()
-            .disable(ErrorCode::InvalidOverlapIndex)
-            .disable(ErrorCode::UnparsableContent);
-        let backward = ValidationConfig::new()
-            .disable(ErrorCode::UnparsableContent)
-            .disable(ErrorCode::InvalidOverlapIndex);
-        assert_eq!(forward.cache_key_fragment(), backward.cache_key_fragment());
-    }
-
-    /// Explicit per-code overrides take precedence over strict-mode escalation.
-    #[test]
-    fn test_strict_with_explicit_warning_override() {
-        let config = ValidationConfig::strict()
-            .set_severity(ErrorCode::UnknownAnnotation, Some(Severity::Warning));
+    fn cache_key_fragment_is_idempotent() {
         assert_eq!(
-            config.effective_severity(ErrorCode::UnknownAnnotation, Severity::Warning),
-            Some(Severity::Warning)
+            RuleSelection::new()
+                .with_strict_linkers()
+                .cache_key_fragment(),
+            RuleSelection::new()
+                .with_strict_linkers()
+                .with_strict_linkers()
+                .cache_key_fragment()
         );
+    }
+
+    /// The default rule set contributes nothing to the key, so the common case
+    /// composes the shortest possible version string.
+    #[test]
+    fn default_rule_selection_contributes_no_fragment() {
+        assert!(RuleSelection::new().cache_key_fragment().is_empty());
     }
 }

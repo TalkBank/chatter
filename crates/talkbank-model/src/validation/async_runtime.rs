@@ -31,7 +31,7 @@
 
 use crate::ErrorSink;
 use crate::model::ChatFile;
-use crate::validation::{NotValidated, ValidationConfig};
+use crate::validation::{NotValidated, RuleSelection};
 
 /// Async wrapper errors emitted by validation task orchestration.
 #[cfg(feature = "async")]
@@ -80,34 +80,33 @@ where
         .map_err(AsyncValidationError::from)
 }
 
-/// Validate a `ChatFile` asynchronously with a custom `ValidationConfig`.
+/// Validate a `ChatFile` asynchronously with a custom `RuleSelection`.
 ///
-/// This variant mirrors `validate_async` but applies per-run severity/enablement
-/// overrides before executing checks.
+/// This variant mirrors `validate_async` but runs an explicit rule selection
+/// rather than the default one.
 ///
 /// # Parameters
 ///
 /// * `file` - The ChatFile to validate (cloned for async task)
-/// * `config` - Validation configuration (severity overrides, disabled errors)
+/// * `rules` - Which validation rules to run
 /// * `errors` - Error sink for collecting validation errors (must be Send + 'static)
 /// * `filename` - Optional filename for media validation
 ///
 /// # Example
 ///
 /// ```ignore
-/// use talkbank_model::validation::{validate_with_config_async, ValidationConfig};
-/// use talkbank_model::{ErrorCollector, ErrorCode, Severity};
+/// use talkbank_model::validation::{validate_with_rules_async, RuleSelection};
+/// use talkbank_model::ErrorCollector;
 ///
-/// let config = ValidationConfig::new()
-///     .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning);
+/// let rules = RuleSelection::new().with_strict_linkers();
 ///
 /// let errors = ErrorCollector::new();
-/// validate_with_config_async(file.clone(), config, errors.clone(), Some("myfile".to_string())).await?;
+/// validate_with_rules_async(file.clone(), rules, errors.clone(), Some("myfile".to_string())).await?;
 /// ```
 #[cfg(feature = "async")]
-pub async fn validate_with_config_async<S>(
+pub async fn validate_with_rules_async<S>(
     file: ChatFile<NotValidated>,
-    config: ValidationConfig,
+    rules: RuleSelection,
     errors: S,
     filename: Option<String>,
 ) -> Result<(), AsyncValidationError>
@@ -115,7 +114,7 @@ where
     S: ErrorSink + Send + 'static,
 {
     tokio::task::spawn_blocking(move || {
-        file.validate_with_config(config, &errors, filename.as_deref())
+        file.validate_with_rules(rules, &errors, filename.as_deref())
     })
     .await
     .map_err(AsyncValidationError::from)
@@ -151,12 +150,12 @@ mod tests {
 
     /// Verifies validate with config async.
     #[tokio::test]
-    async fn test_validate_with_config_async() -> Result<(), AsyncValidationError> {
+    async fn test_validate_with_rules_async() -> Result<(), AsyncValidationError> {
         let file = make_test_file();
-        let config = ValidationConfig::new();
+        let config = RuleSelection::new();
         let errors = ErrorCollector::new();
 
-        validate_with_config_async(file, config, errors, None).await?;
+        validate_with_rules_async(file, config, errors, None).await?;
 
         // Should complete without panicking
         Ok(())

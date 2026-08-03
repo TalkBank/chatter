@@ -19,6 +19,19 @@ use talkbank_parser::TreeSitterParser;
 
 use super::error::PipelineError;
 
+/// The rule set a `ParseValidateOptions` asks for.
+///
+/// One owner for the mapping, so the two pipeline entry points below cannot
+/// drift into running different rules for the same options.
+fn rule_selection(strict_linkers: bool) -> talkbank_model::RuleSelection {
+    let rules = talkbank_model::RuleSelection::new();
+    if strict_linkers {
+        rules.with_strict_linkers()
+    } else {
+        rules
+    }
+}
+
 /// Parse CHAT content and optionally validate.
 ///
 /// This is the core pipeline function that:
@@ -97,12 +110,10 @@ pub fn parse_and_validate_with_parser(
     if options.validate || options.alignment {
         let validation_errors = ErrorCollector::new();
 
-        // Build a model-level ValidationConfig when strict-linkers is requested.
-        let model_config = if options.strict_linkers {
-            Some(talkbank_model::ValidationConfig::new().with_strict_linkers())
-        } else {
-            None
-        };
+        // Which rules to run. `Option` would be boolean blindness with extra
+        // steps: the lenient case is a rule selection too, not the absence of
+        // one.
+        let rules = rule_selection(options.strict_linkers);
 
         // NOTE: the filename is passed as `None` here, so the @Media filename
         // match (E531, CLAN CHECK 157) does NOT run on this path. This function
@@ -111,15 +122,10 @@ pub fn parse_and_validate_with_parser(
         // worker (which does have the path). FOLLOW-UP: thread an
         // `Option<&str>` filename through `parse_and_validate_with_parser` so
         // `to-json` and other pipeline consumers also run E531.
-        match (options.alignment, model_config) {
-            (true, Some(config)) => {
-                chat_file.validate_with_alignment_and_config(config, &validation_errors, None);
-            }
-            (true, None) => chat_file.validate_with_alignment(&validation_errors, None),
-            (false, Some(config)) => {
-                chat_file.validate_with_config(config, &validation_errors, None);
-            }
-            (false, None) => chat_file.validate(&validation_errors, None),
+        if options.alignment {
+            chat_file.validate_with_alignment_and_rules(rules, &validation_errors, None);
+        } else {
+            chat_file.validate_with_rules(rules, &validation_errors, None);
         }
 
         let validation_error_vec = validation_errors.into_vec();
@@ -197,20 +203,12 @@ pub fn parse_and_validate_streaming_with_parser(
     };
 
     if options.validate || options.alignment {
-        // Build a model-level ValidationConfig when strict-linkers is requested.
-        let model_config = if options.strict_linkers {
-            Some(talkbank_model::ValidationConfig::new().with_strict_linkers())
-        } else {
-            None
-        };
+        let rules = rule_selection(options.strict_linkers);
 
-        match (options.alignment, model_config) {
-            (true, Some(config)) => {
-                chat_file.validate_with_alignment_and_config(config, errors, None);
-            }
-            (true, None) => chat_file.validate_with_alignment(errors, None),
-            (false, Some(config)) => chat_file.validate_with_config(config, errors, None),
-            (false, None) => chat_file.validate(errors, None),
+        if options.alignment {
+            chat_file.validate_with_alignment_and_rules(rules, errors, None);
+        } else {
+            chat_file.validate_with_rules(rules, errors, None);
         }
     }
 

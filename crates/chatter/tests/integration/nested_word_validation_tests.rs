@@ -62,7 +62,7 @@ fn assert_validation(name: &str, content: &str, valid: bool) -> Result<(), TestE
     let file_path = dir.path().join(name);
     fs::write(&file_path, content)?;
 
-    let assertion = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    let assertion = crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert();

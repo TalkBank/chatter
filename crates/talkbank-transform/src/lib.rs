@@ -104,6 +104,13 @@ pub mod corpus;
 #[cfg(feature = "validation-runner")]
 pub mod validation_runner;
 
+// How computed diagnostics are shown. Deliberately in THIS crate rather than
+// in `talkbank-model`: `talkbank-transform` depends on `talkbank-cache`, so the
+// cache crate cannot name a presentation policy, and folding a display
+// preference into the validation cache key (the v0.6.0 regression) is a
+// dependency cycle rather than a judgement call.
+pub mod presentation;
+
 // Internal crate-root wiring for the convenience APIs below.
 mod pipeline;
 mod rendering;
@@ -124,6 +131,7 @@ pub use self::pipeline::{
     parse_and_validate_streaming, parse_and_validate_streaming_with_parser,
     parse_and_validate_with_parser, parse_file_and_validate,
 };
+pub use self::presentation::{ConfigurableErrorSink, PresentationPolicy};
 pub use self::rendering::{
     RenderMode, RenderedDiagnostic, render_diagnostics, render_error_with_miette,
     render_error_with_miette_with_named_source, render_error_with_miette_with_source,
@@ -136,7 +144,10 @@ pub use self::validation_runner::{
     ValidationStats, ValidationStatsSnapshot, validate_directory_streaming,
 };
 #[cfg(feature = "validation-runner")]
-pub use talkbank_cache::{CacheError, CachePool, CacheStats, RulesVersion, UnifiedCache};
+pub use talkbank_cache::{
+    CACHE_DIR_ENV, CacheError, CachePool, CacheStats, RulesVersion, SpaceReclaimed, UnifiedCache,
+    VacuumSkipped, VersionPruneOutcome, VersionPruneReport, cache_db_path, default_cache_dir,
+};
 // Re-exported alongside the cache types (rather than unconditionally at the
 // crate root) because its only use is composing a `RulesVersion`: a caller
 // with `validation-runner` disabled has no `RulesVersion` to compose it into

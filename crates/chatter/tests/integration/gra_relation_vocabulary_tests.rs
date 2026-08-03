@@ -82,7 +82,7 @@ fn validate_rejects_a_gra_relation_head_outside_the_ud_universal_set() -> Result
     let file_path = dir.path().join("unknown_relation_head.cha");
     fs::write(&file_path, CHAT_WITH_UNKNOWN_RELATION_HEAD)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -97,7 +97,7 @@ fn validate_accepts_the_same_file_with_a_correctly_spelled_head() -> Result<(), 
     let file_path = dir.path().join("valid_relations.cha");
     fs::write(&file_path, CHAT_WITH_VALID_RELATIONS)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()
@@ -112,7 +112,7 @@ fn validate_accepts_a_language_specific_relation_subtype() -> Result<(), TestErr
     let file_path = dir.path().join("subtype.cha");
     fs::write(&file_path, CHAT_WITH_LANGUAGE_SPECIFIC_SUBTYPE)?;
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&file_path)
         .assert()

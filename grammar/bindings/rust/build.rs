@@ -84,7 +84,7 @@ fn fnv1a_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
 /// grammar change must not be served after one. `GRAMMAR_FINGERPRINT` is the
 /// value a caller who already depends on both this crate (via
 /// `talkbank-parser`) and `talkbank-cache` folds into
-/// `RulesVersion::current_with_config`'s mandatory `parser_fingerprint`
+/// `RulesVersion::current_with_rule_selection`'s mandatory `parser_fingerprint`
 /// parameter.
 ///
 /// Relative paths only, never absolute: an absolute path would make the

@@ -36,31 +36,3 @@ pub fn now_secs() -> Result<u64, CacheError> {
         .map(|duration| duration.as_secs())
         .map_err(|e| CacheError::Message(format!("system time before Unix epoch: {e}")))
 }
-
-/// Environment variable that relocates the cache root.
-///
-/// When set (to an absolute or relative directory path), the cache
-/// database lives directly in that directory instead of under the
-/// platform cache root. This is the supported way to redirect cache
-/// state, and the only reliable isolation mechanism on Windows: the
-/// platform default there resolves through the Known Folder API, which
-/// ignores `HOME`-style environment variables entirely.
-pub const CACHE_DIR_ENV: &str = "TALKBANK_CHAT_CACHE_DIR";
-
-/// Get the default cache directory.
-///
-/// Resolution order: [`CACHE_DIR_ENV`] if set and non-empty (used
-/// verbatim, no `talkbank-chat` suffix appended); otherwise the
-/// platform cache root (`~/Library/Caches` on macOS, `XDG_CACHE_HOME`
-/// or `~/.cache` on Linux, `%LocalAppData%` on Windows) plus
-/// `talkbank-chat`.
-pub fn default_cache_dir() -> Result<std::path::PathBuf, CacheError> {
-    if let Some(dir) = std::env::var_os(CACHE_DIR_ENV)
-        && !dir.is_empty()
-    {
-        return Ok(std::path::PathBuf::from(dir));
-    }
-    dirs::cache_dir()
-        .map(|d| d.join("talkbank-chat"))
-        .ok_or(CacheError::CacheDirMissing)
-}

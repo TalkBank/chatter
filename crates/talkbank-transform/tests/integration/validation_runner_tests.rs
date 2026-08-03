@@ -149,7 +149,8 @@ fn validate_directory_with_valid_files() {
         directory: DirectoryMode::Recursive,
         roundtrip: false,
         parser_kind: ParserKind::TreeSitter,
-        model_config: talkbank_model::ValidationConfig::new(),
+        rules: talkbank_model::RuleSelection::new(),
+        presentation: talkbank_transform::PresentationPolicy::new(),
     };
 
     let (events, _cancel) =
@@ -191,7 +192,8 @@ fn validate_directory_with_invalid_file() {
         directory: DirectoryMode::Recursive,
         roundtrip: false,
         parser_kind: ParserKind::TreeSitter,
-        model_config: talkbank_model::ValidationConfig::new(),
+        rules: talkbank_model::RuleSelection::new(),
+        presentation: talkbank_transform::PresentationPolicy::new(),
     };
 
     let (events, _cancel) =
@@ -237,7 +239,8 @@ fn validate_directory_empty() {
         directory: DirectoryMode::Recursive,
         roundtrip: false,
         parser_kind: ParserKind::TreeSitter,
-        model_config: talkbank_model::ValidationConfig::new(),
+        rules: talkbank_model::RuleSelection::new(),
+        presentation: talkbank_transform::PresentationPolicy::new(),
     };
 
     let (events, _cancel) =

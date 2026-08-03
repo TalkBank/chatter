@@ -64,10 +64,13 @@ mod trait_def;
 mod types;
 
 // Utility and infrastructure modules
+mod blocking;
+mod cache_location;
 mod cache_utils;
 mod init_lock;
 mod rules_version;
 mod schema_init;
+mod version_prune;
 
 // Operation modules
 mod maintenance_ops;
@@ -79,10 +82,12 @@ mod cache_impl;
 
 // Re-export public API
 pub use cache_impl::CachePool;
+pub use cache_location::{CACHE_DIR_ENV, cache_db_path, default_cache_dir};
 pub use error::CacheError;
 pub use rules_version::RulesVersion;
 pub use trait_def::{CacheOutcome, ValidationCache};
 pub use types::CacheStats;
+pub use version_prune::{SpaceReclaimed, VacuumSkipped, VersionPruneOutcome, VersionPruneReport};
 
 /// Backward-compatible alias. Prefer `CachePool` in new code.
 pub type UnifiedCache = CachePool;

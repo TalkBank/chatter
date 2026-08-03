@@ -142,7 +142,7 @@ fn write_fixture(
 #[test]
 fn phon_intra_word_pause_validates() -> Result<(), TestError> {
     let path = crate::common::reference_fixture("corpus/reference/tiers/phon-intra-word-pause.cha");
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&path)
         .assert()
@@ -158,7 +158,7 @@ fn phon_intra_word_pause_validates() -> Result<(), TestError> {
 #[test]
 fn phon_xtiers_clean_file_validates() -> Result<(), TestError> {
     let (_dir, path) = write_fixture("clean.cha", PHON_CLEAN)?;
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg(&path)
         .assert()
@@ -173,7 +173,7 @@ fn phon_xtiers_clean_file_validates() -> Result<(), TestError> {
 #[test]
 fn phon_xphosyl_illegal_code_emits_e736() -> Result<(), TestError> {
     let (_dir, path) = write_fixture("illegal.cha", PHON_ILLEGAL_CODE)?;
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--format")
         .arg("json")
@@ -190,7 +190,7 @@ fn phon_xphosyl_illegal_code_emits_e736() -> Result<(), TestError> {
 #[test]
 fn phon_xphosyl_unknown_code_validates() -> Result<(), TestError> {
     let (_dir, path) = write_fixture("unknown.cha", PHON_UNKNOWN_CODE)?;
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--format")
         .arg("json")
@@ -206,7 +206,7 @@ fn phon_xphosyl_unknown_code_validates() -> Result<(), TestError> {
 #[test]
 fn phon_xmodsyl_reconstruction_mismatch_emits_e737() -> Result<(), TestError> {
     let (_dir, path) = write_fixture("badrecon.cha", PHON_BAD_RECONSTRUCTION)?;
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--format")
         .arg("json")
@@ -221,7 +221,7 @@ fn phon_xmodsyl_reconstruction_mismatch_emits_e737() -> Result<(), TestError> {
 #[test]
 fn phon_xphoaln_empty_both_emits_e739() -> Result<(), TestError> {
     let (_dir, path) = write_fixture("phoaln.cha", PHON_PHOALN_EMPTY_BOTH)?;
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--format")
         .arg("json")
@@ -237,7 +237,7 @@ fn phon_xphoaln_empty_both_emits_e739() -> Result<(), TestError> {
 #[test]
 fn phon_suppress_xphon_silences_diagnostics() -> Result<(), TestError> {
     let (_dir, path) = write_fixture("illegal.cha", PHON_ILLEGAL_CODE)?;
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--suppress")
         .arg("xphon")
@@ -262,7 +262,7 @@ fn phon_suppress_xphon_also_silences_the_audit_stream() -> Result<(), TestError>
     let (dir, path) = write_fixture("illegal.cha", PHON_ILLEGAL_CODE)?;
     let audit_path = dir.path().join("audit.jsonl");
 
-    assert_cmd::cargo::cargo_bin_cmd!("chatter")
+    crate::common::chatter_cmd()
         .arg("validate")
         .arg("--suppress")
         .arg("xphon")

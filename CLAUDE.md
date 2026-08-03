@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-07-31 10:05 EDT
+**Last modified:** 2026-08-03 13:30 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -189,6 +189,34 @@ Not a licence to rewrite: apply it to what you touch and to new design.
    request). Unit tests supplement, never substitute. Grammar/parser
    fixes also require a spec + reference-corpus entry (permanent
    regression gates; a bug fixed without a spec WILL regress).
+9b. **Performance regressions get a RED TEST FIRST, like any other bug,
+    and it asserts COUNTED WORK, never elapsed time.** Wall-clock
+    thresholds are machine-dependent and go flaky, and "flaky" is not a
+    diagnosis in this repo. Every performance bug this project has
+    actually shipped was algorithmic and had an exact, deterministic
+    proxy already available in the code:
+    - v0.5.0 was pulled because a cache refresh issued one statement per
+      FILE where one per RUN was needed. The invariant is a statement
+      count, not a duration.
+    - v0.6.0 folded a presentation preference into the cache key, so a
+      second run over 106,000 files hit ZERO cached entries instead of
+      all of them. The invariant is `cache_hits == total_files` on a
+      re-run, and it would have failed instantly.
+    - The cache accumulated 88 rules versions and 464,773 rows for a
+      106,000-file corpus, because nothing pruned rows no reader can
+      ever bind. The invariant is that unreachable rows stay at zero.
+
+    So: when a change could alter how much work is done, assert the
+    work. `ValidationStatsSnapshot` already exposes `cache_hits` and
+    `cache_misses`; use them. Prefer an invariant that holds at every
+    scale (a ratio, a count that must not grow with input size) over a
+    magic number, and if a magic number is unavoidable, comment what
+    input size it was measured at and why it cannot be a ratio.
+
+    A timing test is acceptable ONLY as a coarse smoke check with a
+    ceiling generous enough that it can never fail on a slow machine
+    (an order of magnitude, not 20%), and its docstring must say that
+    it exists to catch a hang rather than a slowdown.
 10. **%mor is UD-only.** Legacy CLAN-mor (`&` fusional suffixes) is
     deliberately unsupported; hyphen-separated sentence-case UD
     features only; never reintroduce `&` handling.

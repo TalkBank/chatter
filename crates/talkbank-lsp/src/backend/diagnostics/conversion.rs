@@ -37,7 +37,7 @@ fn build_diagnostic(
     // the enum for compatibility with miette's severity levels but is
     // no longer emitted anywhere in the validation layer, see the
     // 2026-04-22 depfile.cut conformance sweep). If a future caller
-    // downgrades a specific code to Warning via `ValidationConfig`, we
+    // downgrades a specific code to Warning via a presentation policy, we
     // surface it as an LSP warning; everything else is an error.
     let severity = match error.severity {
         talkbank_model::Severity::Error => DiagnosticSeverity::ERROR,

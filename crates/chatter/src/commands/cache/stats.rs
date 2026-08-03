@@ -47,7 +47,9 @@ pub fn cache_stats(json: bool) {
 
     // Get cache directory and file size
     let cache_dir = stats.cache_dir.to_string_lossy().to_string();
-    let cache_db_path = stats.cache_dir.join("talkbank-cache.db");
+    // Via the cache crate, which owns the file name: this used to spell it
+    // out again here, so a rename would have had two places to remember.
+    let cache_db_path = talkbank_transform::cache_db_path(&stats.cache_dir);
 
     let (cache_size_bytes, last_modified) = if cache_db_path.exists() {
         match std::fs::metadata(&cache_db_path) {

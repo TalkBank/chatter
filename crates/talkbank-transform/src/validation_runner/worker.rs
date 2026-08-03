@@ -192,32 +192,50 @@ pub(super) fn worker_loop<C>(
 
                 let source = Arc::<str>::from(content);
 
-                let (errors, chat_file) = validate_single_file_streaming(
+                let (complete, chat_file) = validate_single_file_streaming(
                     &file_path,
-                    source.clone(),
                     config.check_alignment,
-                    &config.model_config,
+                    config.rules,
                     &parser,
-                    &event_tx,
+                    source.as_ref(),
                 );
 
-                let error_count = errors
+                // THE CACHED FACT, derived from the COMPLETE diagnostic set and
+                // therefore true under every presentation policy: did this file
+                // produce any diagnostic at all?
+                //
+                // Only a file with none is cached Valid. Warnings must be shown
+                // on every run until the user fixes them, so a warnings-only
+                // file must not be cached Valid (that would silently hide it),
+                // and a file whose only diagnostics are currently suppressed
+                // must not be either, or the row would be a rendering rather
+                // than a fact and the next run with different `--suppress`
+                // would be served a view built for someone else.
+                let validation_outcome = if complete.is_empty() {
+                    CacheOutcome::Valid
+                } else {
+                    CacheOutcome::Invalid
+                };
+
+                // Presentation is applied HERE, at the boundary where the run
+                // hands results to a consumer, and never upstream of the fact
+                // above.
+                let shown = config.presentation.apply_all(complete);
+
+                let error_count = shown
                     .iter()
                     .filter(|e| matches!(e.severity, Severity::Error))
                     .count();
 
                 let is_valid = error_count == 0;
 
-                // Cache the validation result.
-                // Only cache as Valid when there are NO diagnostics at all
-                // (including warnings). Warnings must be shown on every run
-                // until the user fixes them, so warnings-only files must not
-                // be cached as Valid (that would silently hide them).
-                let validation_outcome = if errors.is_empty() {
-                    CacheOutcome::Valid
-                } else {
-                    CacheOutcome::Invalid
-                };
+                if !shown.is_empty() {
+                    let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
+                        path: file_path.clone(),
+                        errors: shown,
+                        source: source.clone(),
+                    }));
+                }
                 if config.cache.allows_writes()
                     && let Some(cache_ref) = cache.as_ref()
                     && let Err(e) =
@@ -393,30 +411,29 @@ pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
     }
 }
 
-/// Validate a single file with streaming error output.
+/// Validate one file and return its COMPLETE diagnostic set, plus the parsed
+/// `ChatFile` (which roundtrip testing needs).
 ///
-/// Returns the collected errors AND the parsed ChatFile (if parsing succeeded).
-/// The ChatFile is needed for roundtrip testing.
+/// "Complete" is the load-bearing word: every diagnostic the selected rules
+/// produced, at the severity the validator assigned, with nothing suppressed or
+/// re-labelled. The caller derives the cached fact and the run's tallies from
+/// this, then applies the presentation policy on the way to a reader.
 ///
-/// Always validates through the config-aware entry points
-/// ([`ChatFile::validate_with_config`]/[`ChatFile::validate_with_alignment_and_config`]),
-/// branching only on whether alignment precomputation is wanted. Suppressed
-/// codes in `model_config` are therefore never emitted by the parser/model
-/// layer at all: there is exactly one classification per file, with nothing
-/// left for a caller to reconcile after the fact.
+/// It emits no events and takes no sink, so there is no seam here through which
+/// a display preference could reach what gets cached: that seam is exactly what
+/// let a `--suppress` list decide a cache row's value in v0.6.0.
 fn validate_single_file_streaming(
     file_path: &Path,
-    content: Arc<str>,
     check_alignment: bool,
-    model_config: &talkbank_model::ValidationConfig,
+    rules: talkbank_model::RuleSelection,
     parser: &ParserDispatch,
-    event_tx: &Sender<ValidationEvent>,
+    content: &str,
 ) -> (Vec<ParseError>, Option<ChatFile>) {
-    // Collect all errors during validation (no streaming)
+    // Collect all diagnostics during validation (no streaming).
     let collector = talkbank_model::ErrorCollector::new();
 
-    // Parse with error collection
-    let mut chat_file = parser.parse_chat_file_streaming(content.as_ref(), &collector);
+    // Parse with error collection.
+    let mut chat_file = parser.parse_chat_file_streaming(content, &collector);
 
     // The datafile basename (stem, no extension) is what `@Media`'s filename
     // must match; pass it so `check_media_filename_match` (E531) can run. The
@@ -425,21 +442,10 @@ fn validate_single_file_streaming(
     let file_stem = file_path.file_stem().and_then(|s| s.to_str());
 
     if check_alignment {
-        chat_file.validate_with_alignment_and_config(model_config.clone(), &collector, file_stem);
+        chat_file.validate_with_alignment_and_rules(rules, &collector, file_stem);
     } else {
-        chat_file.validate_with_config(model_config.clone(), &collector, file_stem);
+        chat_file.validate_with_rules(rules, &collector, file_stem);
     }
 
-    let errors = collector.into_vec();
-
-    // Send ONE batched error event if there are any errors
-    if !errors.is_empty() {
-        let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
-            path: file_path.to_path_buf(),
-            errors: errors.clone(),
-            source: content.clone(),
-        }));
-    }
-
-    (errors, Some(chat_file))
+    (collector.into_vec(), Some(chat_file))
 }

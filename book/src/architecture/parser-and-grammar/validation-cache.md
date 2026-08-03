@@ -1,7 +1,7 @@
 # Validation Cache
 
 **Status:** Current
-**Last modified:** 2026-07-22 11:19 EDT
+**Last modified:** 2026-08-03 14:03 EDT
 
 The CHAT-core validation cache, used by `chatter validate` and the
 LSP server. Distinct from the audio-task cache used by upstream
@@ -35,6 +35,7 @@ flowchart TD
 | Pool size | 16 connections | Matches validation worker count |
 | `mmap` | 256 MB | Fast random access for 95k+ entries |
 | Invalidation | Rules-version field + content hash + 30-day TTL | Rule-set or schema changes auto-invalidate; content edits invalidate per-file; stale entries pruned |
+| Reachability prune | On open: keep the opening version plus one predecessor | Rows under any other version can never be bound again; without this the file grew by a corpus per release |
 | Bridge | Embedded single-threaded tokio runtime | Sync workers call `rt.block_on()` for async SQLite |
 | Init serialization | Advisory file lock (`talkbank-cache.init.lock`) | Exactly one opener performs first-time create + migrate; see below |
 
@@ -113,6 +114,57 @@ process) and `tests/concurrent_process_open.rs` (many processes racing one
 fresh directory, with a hard deadline so a wedge fails instead of hanging
 the suite).
 
+## What the cached value means, and what does NOT key it
+
+A row records ONE fact: **this file produced no diagnostics at all under this
+rule selection**. That is a property of the bytes and the rules, so it is the
+same answer for every run, whatever any given run chooses to display.
+
+Only `RuleSelection` therefore reaches the key
+(`RulesVersion::current_with_rule_selection`). A `PresentationPolicy`
+(`--suppress`, severity remapping) never does: it is applied to diagnostics that
+have already been computed and have already decided what gets cached.
+
+This was a comment once, and the comment lost. v0.6.0 folded the suppression set
+into the key, so `chatter validate` followed by `chatter validate --suppress
+xphon` re-validated 106,000 files from cold instead of hitting the cache. It is
+now a fact of the crate graph: `talkbank-transform` (home of
+`PresentationPolicy`) depends on `talkbank-cache`, so the cache crate cannot
+name the type, and folding one in is a dependency cycle rather than a judgement
+call.
+
+## Reachability pruning
+
+Deleting by AGE and deleting by REACHABILITY are different questions, and the
+cache answers both on open.
+
+The 30-day TTL removes rows that are stale. It never removed rows that were
+merely unreachable, so every release stranded a complete copy of the corpus
+under its retired version: a real cache reached 464,773 rows across 88 versions
+for a corpus of ~106,000 files, roughly 190 MB of a 243 MB file that no reader
+could ever bind.
+
+Opening now deletes every row whose version is outside a two-generation window:
+
+- the version the pool binds, and
+- the most recently written OTHER version.
+
+The predecessor is kept deliberately. Pruning strictly to the current version
+makes a downgrade cold, which is a real cost during a bisect or a rollback, and
+it would make two chatter builds sharing a machine delete each other's rows on
+every open. One generation of grace bounds the file at about two copies of the
+corpus while keeping both of those cases cheap.
+
+When rows are deleted the database is rewritten (`VACUUM`) so the space returns
+to the filesystem: SQLite otherwise frees pages for reuse without shrinking the
+file, and an operator checking with `du` would reasonably conclude nothing
+happened. A rewrite blocked by another process is not an error (the rows are
+gone either way); the pages stay reusable and the next quiet open rewrites.
+
+The outcome is reported (`CachePool::version_prune`) rather than logged from
+inside the library, and `chatter validate` prints it: reclaiming most of a
+user's cache file in silence is indistinguishable from a bug.
+
 ## Database location
 
 | Platform | Path |
@@ -132,12 +184,17 @@ the suite).
   hence the `RulesVersion`, hence the lookup key, so verdicts cached under the
   old rule set become a cache MISS and are re-validated instead of served stale.
   This is the mechanism that keeps `chatter validate` (the authority on CHAT
-  validity) from returning a stale "Valid" after the rules tighten. The stale
-  rows stay on disk under their old version for selective re-testing; they are
-  simply never served to a query carrying the new version.
+  validity) from returning a stale "Valid" after the rules tighten.
+
+  Rows under a superseded version are then UNREACHABLE: no query any binary can
+  issue will match them again. Opening the cache deletes them (see
+  "Reachability pruning" below), keeping one predecessor generation.
 - **Content changes**: each entry stores the file's `content_hash`; a mismatch
   is a per-file miss.
 - **Time-based**: entries older than 30 days are pruned.
+- **Reachability**: rows under versions outside the two-generation window are
+  deleted on open (see above). This is about unbounded growth, not correctness:
+  those rows were already invisible.
 - **Manual**: pass `--force` to bypass cache lookups for a
   particular validation run.
 

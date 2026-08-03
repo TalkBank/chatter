@@ -114,9 +114,9 @@ fn validation_result_is_not_served_across_a_rules_version_change() {
 /// what parses, which alters what validates, exactly like a validation-rule
 /// change does. `talkbank-cache` cannot compute a grammar fingerprint itself
 /// (see `rules_version.rs`'s module doc comment for why depending on the
-/// parser crate is banned here), so `RulesVersion::current_with_config`
-/// takes it as a mandatory caller-supplied `parser_fingerprint` parameter
-/// instead. This test drives that parameter directly, standing in for "the
+/// parser crate is banned here), so `RulesVersion::current_with_rule_selection`
+/// takes it as a mandatory caller-supplied `parser_fingerprint` parameter on
+/// `RulesVersion::current_with_rule_selection` instead. This test drives that parameter directly, standing in for "the
 /// real `talkbank_parser::GRAMMAR_FINGERPRINT` before a grammar edit" and
 /// "... after one", the same way `RulesVersion::for_testing` stands in for a
 /// validation-rules change in the sibling test above.
@@ -125,8 +125,8 @@ fn validation_result_is_not_served_across_a_rules_version_change() {
 ///
 /// A validation result written under one `parser_fingerprint` must be
 /// invisible to a lookup that supplies a different one, even when the
-/// [`talkbank_model::ValidationConfig`] and the compiled-in validation rule
-/// set are otherwise identical. This is the cache-level half of the fix;
+/// [`talkbank_model::RuleSelection`] and the compiled-in validation rule set
+/// are otherwise identical. This is the cache-level half of the fix;
 /// the CLI/desktop-level half (composing `talkbank_parser::GRAMMAR_FINGERPRINT`
 /// into the call) cannot be exercised from this crate, since `talkbank-cache`
 /// does not and must not depend on the parser crate.
@@ -137,11 +137,13 @@ fn validation_result_is_not_served_across_a_parser_fingerprint_change() {
     let file_dir = tempfile::tempdir().expect("create temp file dir");
     let file_path = write_temp_cha(file_dir.path(), "sample.cha", CHAT_CONTENT);
 
-    // Same validation config throughout: only the parser fingerprint differs
+    // Same rule selection throughout: only the parser fingerprint differs
     // between the two runs, isolating the dimension under test.
-    let config = talkbank_model::ValidationConfig::new();
-    let rules_before_grammar_change = RulesVersion::current_with_config(&config, "grammar-fp-a");
-    let rules_after_grammar_change = RulesVersion::current_with_config(&config, "grammar-fp-b");
+    let rules = talkbank_model::RuleSelection::new();
+    let rules_before_grammar_change =
+        RulesVersion::current_with_rule_selection(&rules, "grammar-fp-a");
+    let rules_after_grammar_change =
+        RulesVersion::current_with_rule_selection(&rules, "grammar-fp-b");
 
     // --- Run 1: validate under the OLD grammar, cache "Valid" ---
     {

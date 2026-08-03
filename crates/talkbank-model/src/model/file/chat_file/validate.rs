@@ -9,8 +9,8 @@
 use std::collections::HashSet;
 
 use super::ChatFile;
-use crate::validation::{Validate, ValidationConfig, ValidationState};
-use crate::{ConfigurableErrorSink, ErrorSink, ParseError};
+use crate::validation::{RuleSelection, Validate, ValidationState};
+use crate::{ErrorSink, ParseError};
 use crate::{Header, Line};
 
 // The file-level header / media / cross-header consistency checks live in a
@@ -75,7 +75,7 @@ fn build_validation_context(
     participant_ids: HashSet<crate::model::SpeakerCode>,
     languages: &crate::model::LanguageCodes,
     headers: &[&Header],
-    config: ValidationConfig,
+    rules: RuleSelection,
 ) -> crate::validation::ValidationContext {
     let declared_languages = languages.as_slice();
     let default_language = declared_languages.first();
@@ -84,7 +84,7 @@ fn build_validation_context(
     // The `bullets` @Options was removed from CHAT, so no file is ever in
     // bullets mode.
     let bullets_mode = false;
-    let enable_quotation_validation = config.strict_linkers_enabled();
+    let enable_quotation_validation = rules.strict_linkers_enabled();
 
     crate::validation::ValidationContext::from_shared(std::sync::Arc::new(
         crate::validation::SharedValidationData {
@@ -94,23 +94,21 @@ fn build_validation_context(
             ca_mode,
             enable_quotation_validation,
             bullets_mode,
-            config,
         },
     ))
 }
 
 /// Shared check sequence run by both [`ChatFile::validate`] and
-/// [`ChatFile::validate_with_config`].
+/// [`ChatFile::validate_with_rules`].
 ///
-/// The two entry points differ only in which [`ValidationConfig`] built the
-/// `context`, and whether `errors` is the raw sink or a
-/// [`ConfigurableErrorSink`] wrapping it; the actual check sequence must stay
-/// identical or the two paths silently drift (this is what happened to E758
-/// before the two bodies were unified here: a check present in `validate`
-/// was simply absent from `validate_with_config`, so `--strict-linkers` runs
-/// never reported it). Factoring the sequence into one function makes that
-/// class of drift structurally impossible: there is only one place to add a
-/// new file-level check.
+/// The two entry points differ only in which [`RuleSelection`] built the
+/// `context`; the actual check sequence must stay identical or the two paths
+/// silently drift (this is what happened to E758 before the two bodies were
+/// unified here: a check present in `validate` was simply absent from the
+/// rule-selecting entry point, so `--strict-linkers` runs never reported it).
+/// Factoring the sequence into one function makes that class of drift
+/// structurally impossible: there is only one place to add a new file-level
+/// check.
 fn run_validation_checks<S: ValidationState>(
     file: &ChatFile<S>,
     context: &crate::validation::ValidationContext,
@@ -208,7 +206,7 @@ impl<S: ValidationState> ChatFile<S> {
             participant_ids,
             &self.languages,
             &headers,
-            ValidationConfig::new(),
+            RuleSelection::new(),
         );
 
         // Validate each header payload.
@@ -365,7 +363,7 @@ impl<S: ValidationState> ChatFile<S> {
             participant_ids,
             &self.languages,
             &headers,
-            ValidationConfig::new(),
+            RuleSelection::new(),
         );
 
         run_validation_checks(self, &context, errors, filename);
@@ -373,68 +371,71 @@ impl<S: ValidationState> ChatFile<S> {
         tracing::debug!("Streaming validation complete");
     }
 
-    /// Validate this CHAT file with custom per-code severity configuration.
+    /// Validate this CHAT file under an explicit [`RuleSelection`].
     ///
-    /// This allows configuring validation behavior:
-    /// - Downgrade errors to warnings
-    /// - Disable specific error codes
-    /// - Upgrade warnings to errors
+    /// Reports the COMPLETE diagnostic set for that rule selection: every
+    /// diagnostic the selected rules produced, at the severity the validator
+    /// assigned. Nothing is filtered or re-labelled here.
+    ///
+    /// # Why no suppression happens at this seam
+    ///
+    /// Deciding what a reader sees is a separate step, applied to these
+    /// diagnostics afterwards (`talkbank_transform::PresentationPolicy`). Doing
+    /// it here would make the outcome of validation depend on a display
+    /// preference, which is how a `--suppress` list ended up in the validation
+    /// cache key in v0.6.0 and partitioned the cache per suppression set. What
+    /// a caller may cache, or count, is what this function reports.
     ///
     /// # Parameters
     ///
-    /// * `config` - Validation configuration (severity overrides, disabled errors)
+    /// * `rules` - Which validation rules to run
     /// * `errors` - Error sink for streaming validation errors
     /// * `filename` - Optional filename (without extension) for E531 validation
     ///
     /// # Example
     ///
     /// ```ignore
-    /// use talkbank_model::{ChatFile, ErrorCollector, ValidationConfig};
-    /// use talkbank_model::{ErrorCode, Severity};
-    ///
-    /// let config = ValidationConfig::new()
-    ///     .downgrade(ErrorCode::IllegalUntranscribed, Severity::Warning)
-    ///     .disable(ErrorCode::InvalidOverlapIndex);
+    /// use talkbank_model::{ChatFile, ErrorCollector, RuleSelection};
     ///
     /// let errors = ErrorCollector::new();
-    /// chat_file.validate_with_config(config, &errors, Some("myfile"));
+    /// chat_file.validate_with_rules(
+    ///     RuleSelection::new().with_strict_linkers(),
+    ///     &errors,
+    ///     Some("myfile"),
+    /// );
     /// ```
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
-    pub fn validate_with_config(
+    pub fn validate_with_rules(
         &self,
-        config: ValidationConfig,
+        rules: RuleSelection,
         errors: &impl crate::ErrorSink,
         filename: Option<&str>,
     ) {
         let header_count = self.header_count();
         let utterance_count = self.utterance_count();
         tracing::debug!(
-            "Validating CHAT file ({} headers, {} utterances) with custom config",
+            "Validating CHAT file ({} headers, {} utterances) with an explicit rule selection",
             header_count,
             utterance_count
         );
 
-        // Apply severity/disable overrides at sink boundary.
-        let configurable_sink = ConfigurableErrorSink::new(errors, config.clone());
-
         let headers: Vec<&Header> = self.headers().collect();
         let participant_ids: HashSet<crate::model::SpeakerCode> =
             self.participants.keys().cloned().collect();
-        let context = build_validation_context(participant_ids, &self.languages, &headers, config);
+        let context = build_validation_context(participant_ids, &self.languages, &headers, rules);
 
-        run_validation_checks(self, &context, &configurable_sink, filename);
+        run_validation_checks(self, &context, errors, filename);
 
-        tracing::debug!("Streaming validation with config complete");
+        tracing::debug!("Streaming validation with rule selection complete");
     }
 
     /// Precompute per-utterance tier alignment and language metadata.
     ///
     /// Shared by [`Self::validate_with_alignment`] and
-    /// [`Self::validate_with_alignment_and_config`]. Alignment computation
-    /// only needs the header-derived default/declared languages, which do
-    /// not depend on severity overrides, so both callers precompute with a
-    /// fresh default [`ValidationConfig`] regardless of what config the
-    /// actual validation pass will use.
+    /// [`Self::validate_with_alignment_and_rules`]. Alignment computation only
+    /// needs the header-derived default/declared languages, which no rule
+    /// selection changes, so both callers precompute with a fresh default
+    /// [`RuleSelection`] regardless of which one the validation pass uses.
     fn precompute_alignments(&mut self) {
         let utterance_count = self.utterance_count();
         tracing::debug!(
@@ -450,7 +451,7 @@ impl<S: ValidationState> ChatFile<S> {
             participant_ids,
             &self.languages,
             &headers,
-            ValidationConfig::new(),
+            RuleSelection::new(),
         );
 
         let default_language = context.shared.default_language.as_ref();
@@ -487,33 +488,31 @@ impl<S: ValidationState> ChatFile<S> {
         self.validate(errors, filename)
     }
 
-    /// Validate this CHAT file with alignment/language precomputation AND a
-    /// custom per-code severity configuration.
+    /// Validate this CHAT file with alignment/language precomputation AND an
+    /// explicit [`RuleSelection`].
     ///
-    /// This is the combination [`Self::validate_with_alignment`] cannot
-    /// express (it always calls the unconfigured [`Self::validate`]) and
-    /// [`Self::validate_with_config`] cannot express (it never precomputes
-    /// alignment): both alignment-aware diagnostics AND suppressed/remapped
-    /// codes apply. This is the entry point streamed validation runners use
-    /// whenever both alignment checking and a suppression/severity config
-    /// are in force at once, so there is exactly one validation call per
-    /// file regardless of which options are active.
+    /// This is the combination [`Self::validate_with_alignment`] cannot express
+    /// (it always uses the default rule selection) and
+    /// [`Self::validate_with_rules`] cannot express (it never precomputes
+    /// alignment): both alignment-aware diagnostics AND opt-in rules apply.
+    /// Streamed validation runners use this entry point so there is exactly one
+    /// validation call per file regardless of which options are active.
     ///
     /// # Parameters
     ///
-    /// * `config` - Validation configuration (severity overrides, disabled errors)
+    /// * `rules` - Which validation rules to run
     /// * `errors` - Error sink for streaming validation errors
     /// * `filename` - Optional filename (without extension) for E531 validation
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
-    pub fn validate_with_alignment_and_config(
+    pub fn validate_with_alignment_and_rules(
         &mut self,
-        config: ValidationConfig,
+        rules: RuleSelection,
         errors: &impl crate::ErrorSink,
         filename: Option<&str>,
     ) {
         self.precompute_alignments();
-        tracing::debug!("running streaming validation with config");
-        self.validate_with_config(config, errors, filename)
+        tracing::debug!("running streaming validation with an explicit rule selection");
+        self.validate_with_rules(rules, errors, filename)
     }
 }
 

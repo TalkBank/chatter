@@ -7,7 +7,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Options_Header>
 
 use crate::model::{LanguageCode, SpeakerCode};
-use crate::validation::ValidationConfig;
 use crate::{ErrorCode, Span};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -98,10 +97,6 @@ pub struct SharedValidationData {
     /// In bullets mode, timestamp monotonicity validation is disabled.
     /// This allows overlapping speech, out-of-sequence editing, and reference timestamps.
     pub bullets_mode: bool,
-
-    /// Validation configuration (severity overrides, disabled errors)
-    /// Defaults to standard validation (no overrides)
-    pub config: ValidationConfig,
 }
 
 impl Default for SharedValidationData {
@@ -114,7 +109,6 @@ impl Default for SharedValidationData {
             ca_mode: false,
             enable_quotation_validation: false,
             bullets_mode: false,
-            config: ValidationConfig::new(),
         }
     }
 }
@@ -206,15 +200,6 @@ impl ValidationContext {
     }
 
     // ── Shared-field builder methods (construct the Arc) ──
-
-    /// Sets the file-level validation policy (`severity`/`disabled` overrides).
-    ///
-    /// This uses `Arc::make_mut`, so clones that still share the old `Arc`
-    /// keep their previous config.
-    pub fn with_config(mut self, config: ValidationConfig) -> Self {
-        Arc::make_mut(&mut self.shared).config = config;
-        self
-    }
 
     /// Sets the allowed speaker IDs from `@Participants`.
     ///

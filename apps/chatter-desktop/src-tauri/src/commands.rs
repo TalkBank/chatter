@@ -17,6 +17,9 @@ use crossbeam_channel::Sender;
 use dashmap::DashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::errors::{
+    ClanError, ExportError, InstallCliError, OpenExternalError, RevealError, ValidationStartError,
+};
 use crate::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ParserKindRequest, ValidateRequest,
 };
@@ -38,15 +41,15 @@ use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache};
 ///
 /// # Why more than one cache pool
 ///
-/// A validation request's active [`talkbank_model::ValidationConfig`]
+/// A validation request's active [`talkbank_model::RuleSelection`]
 /// (suppressed codes, strict-linkers) changes which files count as Valid, so
 /// a cache row produced under one active config is not a valid answer for a
 /// different one, the exact defect this whole struct exists to prevent: it
 /// used to open exactly ONE `RulesVersion::current()` pool for the app's
 /// whole lifetime, so toggling "Strict linkers" in the settings panel and
 /// re-validating the same file could silently reuse a verdict computed
-/// under the OTHER setting. [`Self::cache_for_config`] is the seam that
-/// fixes this, using the SAME [`RulesVersion::current_with_config`]
+/// under the OTHER setting. [`Self::cache_for_rules`] is the seam that
+/// fixes this, using the SAME [`RulesVersion::current_with_rule_selection`]
 /// composition the CLI uses (`crates/chatter/src/commands/validate/cache.rs`),
 /// not a second mechanism.
 ///
@@ -86,18 +89,18 @@ impl ValidationState {
         }
     }
 
-    /// Return the cache pool keyed to `model_config`'s active rule set AND
+    /// Return the cache pool keyed to the request's active RULE SELECTION AND
     /// the grammar compiled into this binary, opening and memoizing a new
     /// pool on first use for that combination. See the struct docs for why
     /// this exists and what it fixes; the parser dimension closes the same
     /// stale-verdict shape one dimension over (a grammar change alters what
     /// parses, hence what validates, exactly like a rule-set or
     /// strict-linkers change does).
-    pub fn cache_for_config(
+    pub fn cache_for_rules(
         &self,
-        model_config: &talkbank_model::ValidationConfig,
+        rules: &talkbank_model::RuleSelection,
     ) -> Option<Arc<UnifiedCache>> {
-        let rules_version = RulesVersion::current_with_config(model_config, GRAMMAR_FINGERPRINT);
+        let rules_version = RulesVersion::current_with_rule_selection(rules, GRAMMAR_FINGERPRINT);
         if let Some(existing) = self.caches.get(&rules_version) {
             return Some(Arc::clone(existing.value()));
         }
@@ -123,6 +126,23 @@ impl Default for ValidationState {
 }
 
 /// Start validation on a single file or folder target.
+///
+/// # Why the body is wrapped rather than written inline
+///
+/// A panic in here does not merely fail the run: it unwinds out of the command
+/// and leaves the IPC promise UNSETTLED, so the frontend's `await` never
+/// resolves and never rejects. The UI then sits in its `invoked` phase forever
+/// with nothing to display, which is indistinguishable to the user from the app
+/// being broken, and indistinguishable to us from a slow disk. That is exactly
+/// how a nested-runtime panic in the cache (fixed in `talkbank_cache::blocking`)
+/// stayed invisible for four weeks while being 100% reproducible.
+///
+/// So the outcome of this command is made TOTAL: it always settles, as `Ok` or
+/// as `Err`, and a panic becomes an `Err` the frontend already knows how to
+/// render (an alert plus an `aborted` run, from which Re-validate is offered).
+/// Catching a panic is not a substitute for not panicking; it is a guarantee
+/// that a run always has an outcome, which is the property the UI's phase
+/// machine depends on and could not previously rely on.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn validate(
@@ -133,7 +153,7 @@ pub async fn validate(
     parser_kind: ParserKindRequest,
     strict_linkers: bool,
     jobs: Option<u32>,
-) -> Result<(), String> {
+) -> Result<(), ValidationStartError> {
     let request = ValidateRequest {
         path,
         roundtrip,
@@ -141,16 +161,55 @@ pub async fn validate(
         strict_linkers,
         jobs,
     };
+
+    // `AssertUnwindSafe` is sound here for the reason the wrapper exists: on a
+    // panic this run is abandoned outright, so no caller observes the partially
+    // updated state a panic might leave behind. The cancel slot is overwritten
+    // by the next run, and the event channel is dropped with the run.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        start_validation(&app, &state, request)
+    })) {
+        Ok(outcome) => outcome,
+        Err(panic) => Err(ValidationStartError::Panicked {
+            message: describe_panic(panic.as_ref()),
+        }),
+    }
+}
+
+/// Extract a human-usable message from a caught panic payload.
+///
+/// The payload is `Box<dyn Any>`; the two shapes `panic!` actually produces are
+/// `&str` (a literal message) and `String` (a formatted one). Anything else is
+/// reported as unknown rather than guessed at, because a wrong message in a bug
+/// report costs more than no message.
+fn describe_panic(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = panic.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = panic.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "the validator panicked without a message".to_string()
+    }
+}
+
+/// The actual startup sequence, separated so [`validate`] can guarantee it
+/// always produces an outcome. Returns as soon as the run is streaming; the
+/// run itself continues on its own threads.
+fn start_validation(
+    app: &AppHandle,
+    state: &ValidationState,
+    request: ValidateRequest,
+) -> Result<(), ValidationStartError> {
     if request.path.is_empty() {
-        return Err("No path provided".into());
+        return Err(ValidationStartError::EmptyPath);
     }
 
     let config = ValidationConfig::from(&request);
-    // The cache pool MUST be selected from THIS request's active config, via
-    // the same seam `cache_for_config` composes the cache key from
-    // (`RulesVersion::current_with_config`), not a single pool opened once
-    // at app startup: see `ValidationState`'s docs for why.
-    let cache = state.cache_for_config(&config.model_config);
+    // The cache pool MUST be selected from THIS request's active rule
+    // selection, via the same seam `cache_for_rules` composes the cache key
+    // from (`RulesVersion::current_with_rule_selection`), not a single pool
+    // opened once at app startup: see `ValidationState`'s docs for why.
+    let cache = state.cache_for_rules(&config.rules);
     let (rx, cancel_tx) =
         validate_target_streaming_with_config(request.path.into(), config, cache)?;
 
@@ -170,8 +229,12 @@ pub async fn validate(
 
 /// Cancel the current validation run.
 #[tauri::command]
-pub async fn cancel_validation(state: State<'_, ValidationState>) -> Result<(), String> {
-    // Atomically take the cancel sender (lock-free)
+pub async fn cancel_validation(state: State<'_, ValidationState>) -> Result<(), ()> {
+    // Atomically take the cancel sender (lock-free). Cancelling has no failure
+    // mode: with no run in flight there is simply nothing to signal, and a
+    // receiver that has already hung up means the run ended on its own. The
+    // `Result` is retained only because Tauri requires it for a command taking
+    // borrowed `State`; `Err` is uninhabited in practice.
     if let Some(tx) = state.cancel_tx.swap(None) {
         let _ = tx.send(());
     }
@@ -196,7 +259,7 @@ pub async fn open_in_clan(
     col: i32,
     byte_offset: u32,
     msg: String,
-) -> Result<(), String> {
+) -> Result<(), ClanError> {
     open_in_clan_request(OpenInClanRequest {
         file,
         line,
@@ -229,8 +292,12 @@ pub struct ResolvedClanTarget {
 /// `talkbank_model::resolve_clan_location`), and carries the request's message
 /// through verbatim. This mirrors exactly what the CLI/TUI computes before it
 /// hands off to `send2clan`.
-pub fn resolve_open_in_clan(request: &OpenInClanRequest) -> Result<ResolvedClanTarget, String> {
-    let source = std::fs::read_to_string(&request.file).map_err(|e| e.to_string())?;
+pub fn resolve_open_in_clan(request: &OpenInClanRequest) -> Result<ResolvedClanTarget, ClanError> {
+    let source =
+        std::fs::read_to_string(&request.file).map_err(|source| ClanError::ReadSource {
+            path: PathBuf::from(&request.file),
+            source,
+        })?;
 
     let location = talkbank_model::SourceLocation {
         span: talkbank_model::Span::new(request.byte_offset, request.byte_offset),
@@ -238,8 +305,7 @@ pub fn resolve_open_in_clan(request: &OpenInClanRequest) -> Result<ResolvedClanT
         column: (request.col >= 1).then_some(request.col as usize),
     };
 
-    let clan_loc =
-        talkbank_model::resolve_clan_location(&location, &source).map_err(|e| e.to_string())?;
+    let clan_loc = talkbank_model::resolve_clan_location(&location, &source)?;
 
     Ok(ResolvedClanTarget {
         line: clan_loc.line as i32,
@@ -248,14 +314,14 @@ pub fn resolve_open_in_clan(request: &OpenInClanRequest) -> Result<ResolvedClanT
     })
 }
 
-pub fn open_in_clan_request(request: OpenInClanRequest) -> Result<(), String> {
+pub fn open_in_clan_request(request: OpenInClanRequest) -> Result<(), ClanError> {
     let target = resolve_open_in_clan(&request)?;
 
     // Route through the SAME shared primitive (and canonical timeout) the
     // CLI/TUI uses, so the desktop issues the identical CLAN request the working
     // CLI does instead of its own ad-hoc parameters.
     send2clan::open_location_in_clan(&request.file, target.line, target.column, &target.message)
-        .map_err(|e| e.to_string())
+        .map_err(ClanError::Send)
 }
 
 /// Install the bundled CLI binary to a system path (VS Code-style).
@@ -263,19 +329,18 @@ pub fn open_in_clan_request(request: OpenInClanRequest) -> Result<(), String> {
 /// On macOS/Linux: symlinks to `/usr/local/bin/chatter`.
 /// On Windows: copies to a user-writable PATH location.
 #[tauri::command]
-pub async fn install_cli(app: AppHandle) -> Result<String, String> {
+pub async fn install_cli(app: AppHandle) -> Result<String, InstallCliError> {
     let resource_path = app
         .path()
         .resource_dir()
-        .map_err(|e| e.to_string())?
+        .map_err(|source| InstallCliError::ResourceDir { source })?
         .join("resources")
         .join("chatter");
 
     if !resource_path.exists() {
-        return Err(format!(
-            "Bundled CLI not found at {}. Build with `cargo build --release -p chatter` first.",
-            resource_path.display()
-        ));
+        return Err(InstallCliError::NotBundled {
+            path: resource_path,
+        });
     }
 
     #[cfg(unix)]
@@ -283,20 +348,16 @@ pub async fn install_cli(app: AppHandle) -> Result<String, String> {
         let target = std::path::PathBuf::from("/usr/local/bin/chatter");
         // Remove existing symlink or file
         if target.exists() || target.is_symlink() {
-            std::fs::remove_file(&target).map_err(|e| {
-                format!(
-                    "Cannot remove existing {}: {}. Try running with sudo.",
-                    target.display(),
-                    e
-                )
+            std::fs::remove_file(&target).map_err(|source| InstallCliError::RemoveExisting {
+                path: target.clone(),
+                source,
             })?;
         }
-        std::os::unix::fs::symlink(&resource_path, &target).map_err(|e| {
-            format!(
-                "Cannot create symlink at {}: {}. Try running with sudo.",
-                target.display(),
-                e
-            )
+        std::os::unix::fs::symlink(&resource_path, &target).map_err(|source| {
+            InstallCliError::Symlink {
+                path: target.clone(),
+                source,
+            }
         })?;
         Ok(format!(
             "CLI installed: {} -> {}",
@@ -308,13 +369,19 @@ pub async fn install_cli(app: AppHandle) -> Result<String, String> {
     #[cfg(windows)]
     {
         let target = dirs::data_local_dir()
-            .ok_or("Cannot determine local app data directory")?
+            .ok_or(InstallCliError::NoLocalDataDir)?
             .join("Chatter")
             .join("chatter.exe");
         if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(parent).map_err(|source| InstallCliError::Install {
+                path: target.clone(),
+                source,
+            })?;
         }
-        std::fs::copy(&resource_path, &target).map_err(|e| e.to_string())?;
+        std::fs::copy(&resource_path, &target).map_err(|source| InstallCliError::Install {
+            path: target.clone(),
+            source,
+        })?;
         Ok(format!(
             "CLI installed to {}. Add this directory to your PATH.",
             target.display()
@@ -324,10 +391,12 @@ pub async fn install_cli(app: AppHandle) -> Result<String, String> {
 
 /// Reveal a file in the platform file manager (Finder, Explorer, etc.).
 #[tauri::command]
-pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
+pub async fn reveal_in_file_manager(path: String) -> Result<(), RevealError> {
     let path = std::path::Path::new(&path);
     if !path.exists() {
-        return Err(format!("Path does not exist: {}", path.display()));
+        return Err(RevealError::Missing {
+            path: path.to_path_buf(),
+        });
     }
 
     #[cfg(target_os = "macos")]
@@ -336,7 +405,7 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
             .arg("-R")
             .arg(path)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .map_err(|source| RevealError::Launch { source })?;
     }
 
     #[cfg(target_os = "windows")]
@@ -344,7 +413,7 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
         std::process::Command::new("explorer")
             .arg(format!("/select,{}", path.display()))
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .map_err(|source| RevealError::Launch { source })?;
     }
 
     #[cfg(target_os = "linux")]
@@ -353,7 +422,7 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
             std::process::Command::new("xdg-open")
                 .arg(parent)
                 .spawn()
-                .map_err(|e| e.to_string())?;
+                .map_err(|source| RevealError::Launch { source })?;
         }
     }
 
@@ -366,7 +435,7 @@ pub async fn export_results(
     results: String,
     format: ExportFormat,
     path: String,
-) -> Result<(), String> {
+) -> Result<(), ExportError> {
     export_results_request(ExportResultsRequest {
         results,
         format,
@@ -374,12 +443,13 @@ pub async fn export_results(
     })
 }
 
-pub fn export_results_request(request: ExportResultsRequest) -> Result<(), String> {
+pub fn export_results_request(request: ExportResultsRequest) -> Result<(), ExportError> {
     let output = match request.format {
         ExportFormat::Json => {
-            let parsed: serde_json::Value =
-                serde_json::from_str(&request.results).map_err(|e| e.to_string())?;
-            serde_json::to_string_pretty(&parsed).map_err(|e| e.to_string())?
+            let parsed: serde_json::Value = serde_json::from_str(&request.results)
+                .map_err(|source| ExportError::MalformedResults { source })?;
+            serde_json::to_string_pretty(&parsed)
+                .map_err(|source| ExportError::MalformedResults { source })?
         }
         ExportFormat::Text => {
             // Reuse the canonical miette-rendered text already computed once in
@@ -387,8 +457,8 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Strin
             // panel shows), instead of hand-rebuilding a poorer one-line
             // "path:line: code msg" form from raw JSON fields. Keeps exported
             // text byte-identical to what the app displayed.
-            let parsed: Vec<serde_json::Value> =
-                serde_json::from_str(&request.results).map_err(|e| e.to_string())?;
+            let parsed: Vec<serde_json::Value> = serde_json::from_str(&request.results)
+                .map_err(|source| ExportError::MalformedResults { source })?;
             let mut lines = Vec::new();
             for file_entry in &parsed {
                 let path = file_entry["path"].as_str().unwrap_or("?");
@@ -403,7 +473,10 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Strin
         }
     };
 
-    std::fs::write(&request.path, output).map_err(|e| e.to_string())
+    std::fs::write(&request.path, output).map_err(|source| ExportError::Write {
+        path: PathBuf::from(&request.path),
+        source,
+    })
 }
 
 /// Open an external `http(s)` URL in the user's default browser.
@@ -413,17 +486,15 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Strin
 /// to launch arbitrary local programs. The app carries no `shell`/`opener`
 /// plugin, so this shells out to the platform opener directly.
 #[tauri::command]
-pub fn open_external(url: String) -> Result<(), String> {
+pub fn open_external(url: String) -> Result<(), OpenExternalError> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err(format!("refusing to open non-http(s) URL: {url}"));
+        return Err(OpenExternalError::NotHttp { url });
     }
     // Defense in depth: a well-formed URL percent-encodes whitespace and control
     // characters, so their raw presence marks a hostile string. Rejecting them
     // keeps such a string from ever reaching a platform opener.
     if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(format!(
-            "refusing to open URL containing whitespace or control characters: {url}"
-        ));
+        return Err(OpenExternalError::Unprintable { url });
     }
 
     #[cfg(target_os = "macos")]
@@ -449,7 +520,9 @@ pub fn open_external(url: String) -> Result<(), String> {
 
     #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     {
-        command.spawn().map_err(|e| e.to_string())?;
+        command
+            .spawn()
+            .map_err(|source| OpenExternalError::Launch { source })?;
         Ok(())
     }
 }

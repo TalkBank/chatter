@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-07-31 14:22 EDT
+**Last modified:** 2026-08-03 14:03 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -107,6 +107,12 @@ codes E725-E728 and E735-E746). These checks **run by default**; pass
 `--suppress xphon` to silence the group. (The old `--check-xphon` flag
 is a deprecated no-op kept only so existing scripts do not break.) The
 `--suppress` flag can mix groups and codes: `--suppress xphon,E316`.
+
+**Suppression does not cost you the cache.** It changes what is printed, not
+what is validated, so runs that differ only in `--suppress` share cached
+results: `chatter validate corpus/` followed by `chatter validate corpus/
+--suppress xphon` reuses the first run's work. `--strict-linkers` is the other
+kind of flag, since it turns extra checks on, so it validates afresh.
 
 ## `normalize`
 
