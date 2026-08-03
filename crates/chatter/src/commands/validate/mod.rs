@@ -27,8 +27,8 @@ use talkbank_transform::validation_runner::ParserKind;
 
 use super::validate_parallel::{
     AlignmentValidationMode, CacheRefreshMode, RoundtripValidationMode, StreamingValidationOutput,
-    ValidateDirectoryOptions, ValidationExecution, ValidationInterface, ValidationPresentation,
-    ValidationRules, ValidationTraversalMode, validate_paths_parallel,
+    ValidateDirectoryOptions, ValidationExecution, ValidationInterface, ValidationOutcome,
+    ValidationPresentation, ValidationRules, ValidationTraversalMode, validate_paths_parallel,
 };
 
 pub use file::validate_file;
@@ -280,7 +280,7 @@ pub fn run_validate_command(paths: Vec<PathBuf>, options: ValidateCommandOptions
     // mixed-input invocation it's just the first arg the user typed.
     let summary_label = paths.first().cloned().unwrap_or_else(|| PathBuf::from("."));
 
-    let stats = validate_paths_parallel(
+    let outcome = validate_paths_parallel(
         files,
         summary_label,
         ValidateDirectoryOptions {
@@ -309,7 +309,20 @@ pub fn run_validate_command(paths: Vec<PathBuf>, options: ValidateCommandOptions
         },
     );
 
-    if stats.invalid_files > 0 || stats.parse_errors > 0 {
+    // The ONE place `chatter validate` decides its exit status, matched
+    // exhaustively so that a new way for a run to end badly cannot be added
+    // without deciding what it exits with. The point of the enum: a run that
+    // lost files to a crashed worker has immaculate-looking counts, because
+    // the missing files contributed to no counter, and exiting 0 on it would
+    // hand a researcher a false clean bill of health.
+    let failed = match outcome {
+        ValidationOutcome::Complete { stats } => stats.invalid_files > 0 || stats.parse_errors > 0,
+        ValidationOutcome::Incomplete { .. } => true,
+        ValidationOutcome::Aborted { .. } => true,
+        ValidationOutcome::NoTerminalEvent => true,
+    };
+
+    if failed {
         std::process::exit(1);
     }
 }

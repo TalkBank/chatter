@@ -5,11 +5,22 @@ import type { ValidationSettings } from "../protocol/desktopProtocol";
 import {
   applyValidationEvent,
   createInitialValidationState,
+  isAwaitingBackend,
   relativeDisplayName,
   type ValidationState,
 } from "./validationState";
 
-export type { Phase, ValidationState } from "./validationState";
+export type { RunPhase, ValidationState } from "./validationState";
+
+/**
+ * How long the backend may stay silent after a validate command before the UI
+ * says so. Everything in that window is config construction, opening the
+ * cache, and spawning a thread, so there is no legitimate slow case here. This
+ * deliberately does NOT apply to `discovering`, where a large tree genuinely
+ * takes time; that distinction is only expressible because the two phases are
+ * separate values.
+ */
+const BACKEND_SILENCE_WARNING_MS = 10_000;
 
 /**
  * Hook that manages all validation state from the Tauri event stream.
@@ -22,6 +33,24 @@ export function useValidation() {
   const runRef = useRef<ValidationRun | null>(null);
   /** Selected validation target used for computing relative display names */
   const rootRef = useRef<string>("");
+
+  // "The backend has been silent past BACKEND_SILENCE_WARNING_MS" is a
+  // property of the RUN, not of whichever component happens to be mounted
+  // watching it, so it lives here rather than in `ProgressBar`: a component
+  // unmount must not silently restart the clock. Derived from the phase and a
+  // timer rather than stored in `ValidationState` itself, since a mirrored
+  // boolean there would be a second representation of "are we still
+  // waiting", free to disagree with it.
+  const [backendSilent, setBackendSilent] = useState(false);
+
+  useEffect(() => {
+    if (!isAwaitingBackend(state.run)) {
+      setBackendSilent(false);
+      return;
+    }
+    const timer = setTimeout(() => setBackendSilent(true), BACKEND_SILENCE_WARNING_MS);
+    return () => clearTimeout(timer);
+  }, [state.run]);
 
   const disposeRun = useCallback(() => {
     runRef.current?.dispose();
@@ -37,7 +66,9 @@ export function useValidation() {
 
     rootRef.current = path;
 
-    setState({ ...createInitialValidationState(), phase: "discovering" });
+    // "invoked", NOT "discovering": the backend has not spoken yet, and the
+    // difference is what makes backend silence observable. See RunPhase's docs.
+    setState({ ...createInitialValidationState(), run: { kind: "invoked" } });
 
     try {
       runRef.current = await validationRunner.startValidation(path, settings, (event) => {
@@ -47,7 +78,10 @@ export function useValidation() {
       console.error("validate command failed:", err);
       window.alert(`Validation failed: ${String(err)}`);
       disposeRun();
-      setState((prev) => ({ ...prev, phase: "finished" }));
+      setState((prev) => ({
+        ...prev,
+        run: { kind: "aborted", reason: `Validation failed to start: ${String(err)}` },
+      }));
     }
   }, [disposeRun, relativeName, validationRunner]);
 
@@ -69,5 +103,5 @@ export function useValidation() {
     disposeRun();
   }, [disposeRun]);
 
-  return { state, startValidation, cancelValidation, reset };
+  return { state, startValidation, cancelValidation, reset, backendSilent };
 }

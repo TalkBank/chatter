@@ -165,6 +165,33 @@ pub struct ValidationStatsSnapshot {
     pub cancelled: bool,
 }
 
+/// How much of what a run discovered it actually accounted for.
+///
+/// Derived from a [`ValidationStatsSnapshot`], never counted alongside it: a
+/// third counter tracking "files lost" could drift from the two it is supposed
+/// to reconcile, whereas a subtraction cannot. See
+/// [`ValidationStatsSnapshot::coverage`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunCoverage {
+    /// Every discovered file produced a per-file result. The snapshot's totals
+    /// describe the whole of what was asked for.
+    Complete,
+    /// The user cancelled, so the run legitimately stopped short. NOT a fault
+    /// and NOT incompleteness: the shortfall was requested.
+    Cancelled {
+        /// Files discovered but never reached because of the cancellation.
+        unprocessed_files: usize,
+    },
+    /// Files were discovered, the run was not cancelled, and they never
+    /// produced a result: a worker abandoned them. The snapshot's totals
+    /// describe ONLY what was processed, so no claim about "all files" can be
+    /// made from them.
+    Lost {
+        /// Files discovered but never accounted for.
+        lost_files: usize,
+    },
+}
+
 impl ValidationStatsSnapshot {
     /// Cache hit rate as a percentage (0.0--100.0).
     pub fn cache_hit_rate(&self) -> f64 {
@@ -172,6 +199,34 @@ impl ValidationStatsSnapshot {
             self.cache_hits as f64 / self.total_files as f64 * 100.0
         } else {
             0.0
+        }
+    }
+
+    /// Files that produced a per-file result of any kind.
+    ///
+    /// Exactly one of these three counters is incremented per completed file
+    /// (`update_stats` in `worker.rs` folds roundtrip failures and read errors
+    /// into `invalid_files`), so this is a count of files, not of events.
+    pub fn files_accounted_for(&self) -> usize {
+        self.valid_files
+            .saturating_add(self.invalid_files)
+            .saturating_add(self.parse_errors)
+    }
+
+    /// Reconcile what was discovered against what was actually processed.
+    ///
+    /// THE reason this exists: a worker thread that unwinds abandons whatever
+    /// files it had taken off the queue, and the run then reports totals that
+    /// look perfectly clean because the missing files contributed nothing to
+    /// any counter. A 500-file corpus could validate 480 and report "all
+    /// valid". This is the single place that difference is computed, so no
+    /// consumer has to know to look for it.
+    pub fn coverage(&self) -> RunCoverage {
+        let missing = self.total_files.saturating_sub(self.files_accounted_for());
+        match (missing, self.cancelled) {
+            (0, _) => RunCoverage::Complete,
+            (unprocessed_files, true) => RunCoverage::Cancelled { unprocessed_files },
+            (lost_files, false) => RunCoverage::Lost { lost_files },
         }
     }
 }
@@ -209,7 +264,54 @@ pub struct RoundtripEvent {
     pub diff: Option<String>,
 }
 
+/// Why a validation run stopped without finishing.
+///
+/// Carried by [`ValidationEvent::Aborted`] so a consumer can tell the user
+/// something specific rather than "it just stopped". Deliberately a closed
+/// enum rather than a string: an abort reason is a fact the runner knows, and
+/// consumers (a CLI exit path, a TUI banner, a desktop dialog) each want to
+/// act on it differently, which a prose message cannot support.
+///
+/// Expected to GROW. Only reasons the runner can actually distinguish belong
+/// here; inventing variants it cannot tell apart would produce confidently
+/// wrong diagnoses. Today the only detectable cause is an unwinding
+/// orchestrator thread, so there is exactly one variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbortReason {
+    /// The thread driving the run unwound (a panic), so it never reached the
+    /// point where it would have sent [`ValidationEvent::Finished`].
+    ///
+    /// Any per-file events already delivered are real, but the run's totals
+    /// were never computed and whatever remained is unprocessed.
+    Panicked,
+}
+
+impl std::fmt::Display for AbortReason {
+    /// Render the reason as a sentence safe to show a user verbatim.
+    ///
+    /// Lives here, next to the variants, so every surface says the same thing:
+    /// before this existed the desktop bridge composed its own wording, which
+    /// is how two consumers of one fact start describing it differently.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Panicked => f.write_str(
+                "The validator stopped without finishing: an internal error \
+                 ended the run. Any results shown are incomplete.",
+            ),
+        }
+    }
+}
+
 /// Validation events streamed to caller
+///
+/// # Exhaustive on purpose
+///
+/// This enum is deliberately NOT `#[non_exhaustive]`. Adding a variant is a
+/// breaking change for external consumers, and that is the point: a new
+/// terminal event that a consumer silently ignores is exactly the defect
+/// [`ValidationEvent::Aborted`] was added to fix. A downstream crate that
+/// bumps chatter should get `error[E0004]` and decide what a dead run means
+/// for its own UI, rather than inheriting a default of "pretend it finished".
 #[derive(Debug, Clone)]
 pub enum ValidationEvent {
     /// Directory discovery started - shows user that work is beginning
@@ -225,6 +327,31 @@ pub enum ValidationEvent {
     FileComplete(FileCompleteEvent),
     /// Roundtrip test completed for a file
     RoundtripComplete(RoundtripEvent),
-    /// All files have been processed; final summary statistics.
+    /// Every discovered file was accounted for; final summary statistics.
+    ///
+    /// This variant is the ONLY basis for a claim about the whole input, such
+    /// as "all files valid" or a zero exit status. A cancelled run still
+    /// arrives here (the shortfall was requested, and `stats.cancelled` says
+    /// so), but a run that lost files does not; see
+    /// [`ValidationEvent::FinishedIncomplete`].
     Finished(ValidationStatsSnapshot),
+    /// The run reached its end but did NOT cover everything it discovered:
+    /// worker threads unwound and abandoned files.
+    ///
+    /// Separate from [`ValidationEvent::Finished`] rather than a `lost` field
+    /// beside it, because a field is something every consumer must remember to
+    /// check, and forgetting produces a false clean bill of health, the worst
+    /// available failure for a tool whose job is telling researchers whether
+    /// their data is sound. As a distinct variant the compiler asks the
+    /// question instead.
+    FinishedIncomplete {
+        /// Totals for the files that WERE processed. Not totals for the input.
+        stats: ValidationStatsSnapshot,
+        /// Files discovered but never accounted for. Always non-zero here.
+        lost_files: usize,
+    },
+    /// The run stopped without processing every file, so no final statistics
+    /// exist. Terminal, and mutually exclusive with
+    /// [`ValidationEvent::Finished`]: exactly one of the two ends a stream.
+    Aborted(AbortReason),
 }

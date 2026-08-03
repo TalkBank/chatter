@@ -15,7 +15,9 @@ use std::path::PathBuf;
 
 use crate::cli::OutputFormat;
 use crate::ui::Theme;
-use talkbank_transform::validation_runner::{ParserKind, ValidationStatsSnapshot};
+use talkbank_transform::validation_runner::ParserKind;
+
+pub use shared::ValidationOutcome;
 
 /// Whether alignment-sensitive validation should run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -210,7 +212,7 @@ pub fn validate_paths_parallel(
     files: Vec<PathBuf>,
     summary_label: PathBuf,
     options: ValidateDirectoryOptions,
-) -> ValidationStatsSnapshot {
+) -> ValidationOutcome {
     // Every presentation, INCLUDING audit, goes through this one flow; see
     // `audit_renderer` for why audit is a renderer rather than a pipeline.
     runtime::run_validation_runtime(files, summary_label, options)

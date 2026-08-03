@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import type { Phase } from "../hooks/useValidation";
-import type { ValidationStats } from "../types";
+import type { RunPhase } from "../hooks/useValidation";
+import { isRunRecoverable, totalFilesOf } from "../hooks/validationState";
 
 interface Props {
-  phase: Phase;
+  run: RunPhase;
+  /** Whether the backend has been silent past the run hook's watchdog window. */
+  backendSilent: boolean;
   processedFiles: number;
-  totalFiles: number;
   totalErrors: number;
-  stats: ValidationStats | null;
   startTime: number | null;
   onRevalidate: () => void;
   onCancel: () => void;
@@ -22,28 +22,28 @@ function formatEta(seconds: number): string {
 }
 
 export default function ProgressBar({
-  phase,
+  run,
+  backendSilent,
   processedFiles,
-  totalFiles,
   totalErrors,
-  stats,
   startTime,
   onRevalidate,
   onCancel,
   onExport,
 }: Props) {
+  const totalFiles = totalFilesOf(run);
   const pct = totalFiles > 0 ? (processedFiles / totalFiles) * 100 : 0;
 
   // Update ETA every second during validation
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (phase !== "running" || !startTime) return;
+    if (run.kind !== "running" || !startTime) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [phase, startTime]);
+  }, [run, startTime]);
 
   let etaText: string | null = null;
-  if (phase === "running" && startTime && processedFiles >= 5 && processedFiles < totalFiles) {
+  if (run.kind === "running" && startTime && processedFiles >= 5 && processedFiles < totalFiles) {
     const elapsed = (Date.now() - startTime) / 1000;
     const perFile = elapsed / processedFiles;
     const remaining = perFile * (totalFiles - processedFiles);
@@ -52,11 +52,39 @@ export default function ProgressBar({
 
   return (
     <div className="status-bar">
-      {phase === "idle" && <span>Ready</span>}
+      {run.kind === "idle" && <span>Ready</span>}
 
-      {phase === "discovering" && <span>Discovering files...</span>}
+      {run.kind === "invoked" && (
+        <span>
+          Starting{"…"}
+          {backendSilent && (
+            <span className="warning-text">
+              {" "}
+              The validator has not responded yet. If this persists, please
+              report it: nothing has begun scanning, so the fault is at startup
+              rather than in your files.
+            </span>
+          )}
+        </span>
+      )}
 
-      {phase === "running" && (
+      {run.kind === "aborted" && (
+        <span className="error-count-text">{run.reason}</span>
+      )}
+
+      {/* Leads with what was NOT checked, because the counts beside it are
+          about the rest and would otherwise read as the run's totals. */}
+      {run.kind === "finishedIncomplete" && (
+        <span className="error-count-text">
+          Incomplete: {run.lostFiles} of {run.stats.totalFiles} files were never
+          checked. Of the rest, {run.stats.validFiles} valid,{" "}
+          {run.stats.invalidFiles} invalid.
+        </span>
+      )}
+
+      {run.kind === "discovering" && <span>Discovering files...</span>}
+
+      {run.kind === "running" && (
         <>
           <div className="progress-track">
             <div className="progress-fill" style={{ width: `${pct}%` }} />
@@ -71,25 +99,25 @@ export default function ProgressBar({
         </>
       )}
 
-      {phase === "finished" && stats && (
+      {run.kind === "finished" && (
         <span>
-          {stats.totalFiles} files: {stats.validFiles} valid, {stats.invalidFiles} invalid
-          {stats.cancelled ? " (cancelled)" : ""}
+          {run.stats.totalFiles} files: {run.stats.validFiles} valid, {run.stats.invalidFiles} invalid
+          {run.stats.cancelled ? " (cancelled)" : ""}
         </span>
       )}
 
       <div className="actions">
-        {phase === "running" && (
+        {run.kind === "running" && (
           <button onClick={onCancel}>Cancel</button>
         )}
-        {phase === "finished" && (
-          <>
-            <button className="primary" onClick={onRevalidate}>
-              Re-validate
-            </button>
-            <button onClick={onExport}>Export</button>
-          </>
+        {isRunRecoverable(run) && (
+          <button className="primary" onClick={onRevalidate}>
+            Re-validate
+          </button>
         )}
+        {/* Export stays finished-only: an aborted run produced no results to
+            export, so isRunRecoverable is deliberately not used here. */}
+        {run.kind === "finished" && <button onClick={onExport}>Export</button>}
       </div>
     </div>
   );

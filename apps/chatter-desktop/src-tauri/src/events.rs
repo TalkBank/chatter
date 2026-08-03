@@ -42,6 +42,29 @@ pub enum FrontendEvent {
         status: FrontendFileStatus,
     },
 
+    /// The run ended abnormally: the validator stopped without finishing.
+    ///
+    /// Distinct from `Finished` because the two demand different things of the
+    /// UI, and merging them is how a dead run gets reported as a clean one
+    /// with empty results. Carries a reason the user can quote in a report.
+    #[serde(rename_all = "camelCase")]
+    Aborted {
+        /// Human-readable explanation, safe to show verbatim.
+        reason: String,
+    },
+    /// The run reached its end but did NOT cover every file it discovered:
+    /// files were abandoned and never examined.
+    ///
+    /// Separate from `Finished` so that no "all files valid" claim can be
+    /// reached from it. `stats` describes only what was processed, and the
+    /// frontend's all-valid gate is reachable from `Finished` alone.
+    #[serde(rename_all = "camelCase")]
+    FinishedIncomplete {
+        /// Totals for the files that WERE processed. Not totals for the input.
+        stats: FrontendStats,
+        /// Files discovered but never accounted for. Always non-zero.
+        lost_files: usize,
+    },
     Finished {
         stats: FrontendStats,
     },
@@ -135,6 +158,21 @@ pub fn to_frontend_event(event: ValidationEvent, root: &Path) -> Option<Frontend
 
         ValidationEvent::Finished(stats) => Some(FrontendEvent::Finished {
             stats: convert_stats(stats),
+        }),
+
+        ValidationEvent::FinishedIncomplete { stats, lost_files } => {
+            Some(FrontendEvent::FinishedIncomplete {
+                stats: convert_stats(stats),
+                lost_files,
+            })
+        }
+
+        // The reason is rendered from the runner's own `AbortReason` rather
+        // than composed here, so the desktop, the CLI and the TUI all quote one
+        // wording. The bridge used to invent this sentence itself, which is how
+        // two consumers of a single fact start describing it differently.
+        ValidationEvent::Aborted(reason) => Some(FrontendEvent::Aborted {
+            reason: reason.to_string(),
         }),
     }
 }

@@ -1,7 +1,7 @@
 # Transform Pipeline
 
 **Status:** Current
-**Last updated:** 2026-07-07 21:17 EDT
+**Last updated:** 2026-08-03 09:06 EDT
 
 The `talkbank-transform` crate provides high-level pipelines that compose parsing, validation, and serialization into reusable workflows.
 
@@ -116,6 +116,44 @@ previous bespoke path skipped the cache and the stem-based checks.
 The invariant to preserve: no frontend grows its own validation
 orchestration; a file must validate identically whether selected alone
 or reached by a directory walk.
+
+### How a run ends, and who decides
+
+Every stream ends with exactly one terminal `ValidationEvent`, and the
+runner is the only thing that decides which:
+
+- `Finished(stats)`: every discovered file was accounted for. This is the
+  ONLY warrant for a claim about the whole input ("all files valid", a
+  zero exit status). A cancelled run still arrives here, carrying
+  `stats.cancelled`, because its shortfall was requested.
+- `FinishedIncomplete { stats, lost_files }`: the run reached its end
+  without covering everything it discovered, because worker threads
+  unwound and abandoned files. `stats` describes only what was
+  processed.
+- `Aborted(reason)`: the run died before producing totals at all. A drop
+  guard on the orchestrating thread emits this during an unwind, so a
+  panicking run terminates its stream instead of closing it in silence.
+
+`ValidationEvent` is deliberately NOT `#[non_exhaustive]`. Adding a
+variant breaks external consumers on purpose: a new terminal event that
+a consumer silently ignores is precisely the defect these variants
+exist to prevent, so a downstream crate should get a non-exhaustive
+match error and decide for itself what a dead or incomplete run means.
+
+Two design points worth keeping:
+
+- **Incompleteness is a VARIANT, not a field.** A `lost: usize` beside
+  `Finished` would be something every consumer must remember to check,
+  and forgetting yields a false clean bill of health: files abandoned by
+  a crashed worker contribute to no counter, so partial totals look
+  immaculate. A 500-file corpus could validate 480 and report "all
+  valid".
+- **Loss is DERIVED, not counted.** `ValidationStatsSnapshot::coverage`
+  reconciles `total_files` against the per-file counters in one place,
+  so there is no third counter free to drift from the two it reconciles.
+  Cancellation is distinguished there too, since a requested shortfall
+  is not lost data and reporting it as such would make the incompleteness
+  report routine, and therefore ignored.
 
 ## Caching
 

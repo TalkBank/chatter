@@ -18,33 +18,50 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::state::{DetailMetrics, Focus, TuiState};
+use super::state::{DetailMetrics, Focus, RunPhase, TuiState};
 use super::text_processing::{process_source_line_for_display, process_text_for_display};
 use talkbank_model::SourceLocation;
 
 /// Render header for streaming validation.
-pub fn render_header_streaming(f: &mut Frame, area: Rect, state: &TuiState, complete: bool) {
-    let title = if complete {
-        let total = state.progress.total_files;
-        let invalid = state
-            .progress
-            .final_invalid_files
-            .unwrap_or_else(|| state.total_files_with_errors());
-        format!("Done | {} files with errors / {} files", invalid, total)
-    } else if state.progress.discovering {
-        "Discovering files...".to_string()
-    } else {
-        "Validating...".to_string()
+///
+/// The title is per-phase because "Done" is a claim about the whole input.
+/// A run that abandoned files or died must not wear it: those endings say what
+/// happened instead, so the header can never present partial tallies as the
+/// run's totals.
+pub fn render_header_streaming(f: &mut Frame, area: Rect, state: &TuiState, phase: &RunPhase) {
+    let title = match phase {
+        RunPhase::Finished => {
+            let total = state.progress.total_files;
+            let invalid = state
+                .progress
+                .final_invalid_files
+                .unwrap_or_else(|| state.total_files_with_errors());
+            format!("Done | {} files with errors / {} files", invalid, total)
+        }
+        RunPhase::Incomplete { lost_files } => format!(
+            "Did not finish | {} of {} files never checked",
+            lost_files, state.progress.total_files
+        ),
+        RunPhase::Aborted { .. } => "Stopped | the run did not finish".to_string(),
+        RunPhase::Running => {
+            if state.progress.discovering {
+                "Discovering files...".to_string()
+            } else {
+                "Validating...".to_string()
+            }
+        }
     };
 
-    let color = if complete {
-        if state.files.is_empty() {
-            state.theme.header_ok
-        } else {
-            state.theme.header_err
+    let color = match phase {
+        RunPhase::Finished => {
+            if state.files.is_empty() {
+                state.theme.header_ok
+            } else {
+                state.theme.header_err
+            }
         }
-    } else {
-        state.theme.header_progress
+        RunPhase::Incomplete { .. } | RunPhase::Aborted { .. } => state.theme.header_err,
+        RunPhase::Running => state.theme.header_progress,
     };
 
     let block = Block::default().borders(Borders::ALL);
@@ -64,7 +81,9 @@ pub fn render_header_streaming(f: &mut Frame, area: Rect, state: &TuiState, comp
     let ratio = if state.progress.total_files > 0 {
         (state.progress.files_processed_display as f64 / state.progress.total_files as f64)
             .clamp(0.0, 1.0)
-    } else if complete {
+    } else if phase.is_terminal() {
+        // A stopped run with nothing to count leaves a full bar rather than an
+        // animating empty one; the title says which ending it was.
         1.0
     } else {
         0.0
@@ -426,12 +445,7 @@ fn render_footer_nav_row(
 }
 
 /// Render footer for streaming validation.
-pub fn render_footer_streaming(
-    f: &mut Frame,
-    area: Rect,
-    state: &TuiState,
-    validation_complete: bool,
-) {
+pub fn render_footer_streaming(f: &mut Frame, area: Rect, state: &TuiState, phase: &RunPhase) {
     let block = Block::default().borders(Borders::ALL);
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -443,7 +457,9 @@ pub fn render_footer_streaming(
 
     render_footer_action_row(f, rows[0], state);
 
-    if validation_complete {
+    // Every stopped run offers Rerun, whichever way it stopped: after an abort
+    // or a lost-files run, re-running is the obvious next move.
+    if phase.is_terminal() {
         render_footer_nav_row(
             f,
             rows[1],

@@ -1,7 +1,7 @@
 # Chatter Desktop
 
 **Status:** Current
-**Last modified:** 2026-07-06 17:27 EDT
+**Last modified:** 2026-08-03 09:06 EDT
 
 Chatter Desktop is a native graphical validation app for CHAT files, released
 alongside the `chatter` CLI. Prefer the `chatter` CLI for scripted or batch
@@ -183,9 +183,29 @@ All other navigation is mouse-driven (click files, scroll errors).
 The window title updates to reflect the current state:
 
 - **Idle:** "Chatter"
+- **Starting:** "Chatter, Starting…"
 - **Discovering:** "Chatter, Discovering files…"
 - **Running:** "Chatter, Validating (45/120)"
 - **Finished:** "Chatter, 14 errors in 3 files" or "Chatter, All 74 files valid"
+- **Incomplete:** "Chatter, Incomplete (2 files not checked)"
+- **Stopped:** "Chatter, Run stopped unexpectedly"
+
+The last two are failures, and they never claim anything about your whole
+folder. **Incomplete** means the validator finished but some files were
+never opened, so the counts it shows describe only the rest; you will see
+how many were missed, and re-validating is the right response.
+**Stopped** means the run died without producing results at all. Neither
+one can show "All N files valid", because that sentence is a claim about
+every file and neither run examined every file.
+
+"Starting" and "Discovering" are different states, and the difference is worth
+knowing if you ever need to report a problem. **Starting** means the app has
+asked the validator to begin and has not heard back; nothing has been scanned
+yet, so a run stuck there is a fault in start-up rather than anything about
+your files. **Discovering** means the validator is walking the folder, which
+legitimately takes time on a large one. If the app sits on "Starting" for more
+than a few seconds it says so in the status bar, and that message is worth
+quoting in a bug report.
 
 ### ETA
 

@@ -8,6 +8,7 @@ import ProgressBar from "./components/ProgressBar";
 import ValidationSettingsPanel from "./components/ValidationSettingsPanel";
 import { useTheme } from "./hooks/useTheme";
 import { useValidation } from "./hooks/useValidation";
+import { isRunPending, isRunRecoverable } from "./hooks/validationState";
 import { DEFAULT_VALIDATION_SETTINGS, type ValidationSettings } from "./protocol/desktopProtocol";
 import type { ParseError } from "./protocol/validation";
 import {
@@ -23,7 +24,7 @@ export default function App() {
   const exportCapability = useExportCapability();
   const updates = useUpdatesCapability();
   const about = useAboutCapability();
-  const { state, startValidation, cancelValidation, reset } = useValidation();
+  const { state, startValidation, cancelValidation, reset, backendSilent } = useValidation();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [clanAvailable, setClanAvailable] = useState(false);
@@ -103,51 +104,60 @@ export default function App() {
 
   // Track validation start time for ETA
   useEffect(() => {
-    if (state.phase === "running" && startTime === null) {
+    if (state.run.kind === "running" && startTime === null) {
       setStartTime(Date.now());
     }
-    if (state.phase === "finished" || state.phase === "idle") {
+    if (state.run.kind === "finished" || state.run.kind === "idle") {
       setStartTime(null);
     }
-  }, [state.phase, startTime]);
+  }, [state.run, startTime]);
 
   // Update window title based on validation state
   useEffect(() => {
-    switch (state.phase) {
+    const run = state.run;
+    switch (run.kind) {
       case "idle":
         document.title = "Chatter";
+        break;
+      case "invoked":
+        document.title = "Chatter \u00b7 Starting\u2026";
         break;
       case "discovering":
         document.title = "Chatter \u00b7 Discovering files\u2026";
         break;
       case "running":
-        document.title = `Chatter \u00b7 Validating (${state.processedFiles}/${state.totalFiles})`;
+        document.title = `Chatter \u00b7 Validating (${state.processedFiles}/${run.totalFiles})`;
+        break;
+      case "aborted":
+        document.title = "Chatter \u00b7 Run stopped unexpectedly";
+        break;
+      case "finishedIncomplete":
+        // Never "all N valid": the run never opened `lostFiles` of them.
+        document.title = `Chatter \u00b7 Incomplete (${run.lostFiles} files not checked)`;
         break;
       case "finished": {
-        if (state.stats) {
-          const { invalidFiles, totalFiles } = state.stats;
-          if (invalidFiles === 0) {
-            document.title = `Chatter \u00b7 All ${totalFiles} files valid`;
-          } else {
-            document.title = `Chatter \u00b7 ${state.totalErrors} errors in ${invalidFiles} files`;
-          }
-        } else {
-          document.title = "Chatter";
-        }
+        // `run.stats` is present by construction here; the old shape needed a
+        // null check that could silently fall through to a bare title.
+        const { invalidFiles, totalFiles } = run.stats;
+        document.title =
+          invalidFiles === 0
+            ? `Chatter \u00b7 All ${totalFiles} files valid`
+            : `Chatter \u00b7 ${state.totalErrors} errors in ${invalidFiles} files`;
         break;
       }
     }
-  }, [state.phase, state.processedFiles, state.totalFiles, state.totalErrors, state.stats]);
+  }, [state.run, state.processedFiles, state.totalErrors]);
 
   // Send notification when validation finishes and window is not focused
   useEffect(() => {
-    if (state.phase !== "finished" || !state.stats) return;
+    const run = state.run;
+    if (run.kind !== "finished") return;
     if (document.hasFocus()) return;
 
-    const { invalidFiles } = state.stats;
+    const { invalidFiles } = run.stats;
     const body =
       invalidFiles === 0
-        ? `All ${state.stats.totalFiles} files valid`
+        ? `All ${run.stats.totalFiles} files valid`
         : `${state.totalErrors} errors in ${invalidFiles} files`;
 
     if ("Notification" in window && Notification.permission === "granted") {
@@ -159,7 +169,7 @@ export default function App() {
         }
       });
     }
-  }, [state.phase, state.stats, state.totalErrors]);
+  }, [state.run, state.totalErrors]);
 
   const handlePath = useCallback(
     (path: string) => {
@@ -207,7 +217,7 @@ export default function App() {
     // `phase === "finished"` gating in ProgressBar: `state.files` only holds a
     // complete, stable result set once the run has actually finished, and this
     // handler should not derive an export from a still-streaming partial set.
-    if (state.phase !== "finished") {
+    if (state.run.kind !== "finished") {
       console.error("export requested before validation finished; ignoring");
       return;
     }
@@ -231,11 +241,11 @@ export default function App() {
       console.error("export failed:", err);
       alert(`Export failed: ${err}`);
     }
-  }, [exportCapability, state.files, state.phase]);
+  }, [exportCapability, state.files, state.run]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const isRunning = state.phase === "running" || state.phase === "discovering";
+      const isRunning = isRunPending(state.run);
 
       if ((event.ctrlKey || event.metaKey) && event.key === "o") {
         event.preventDefault();
@@ -243,7 +253,11 @@ export default function App() {
 
       if ((event.ctrlKey || event.metaKey) && event.key === "r") {
         event.preventDefault();
-        if (!isRunning && lastTarget) {
+        // Same eligibility as the Re-validate button (`isRunRecoverable`),
+        // plus `idle`: a fresh launch with a persisted `lastTarget` but no
+        // run yet in this session is not "recoverable" (nothing to recover
+        // from) but should still let Ctrl+R kick one off.
+        if ((state.run.kind === "idle" || isRunRecoverable(state.run)) && lastTarget) {
           handleRevalidate();
         }
       }
@@ -256,10 +270,10 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [state.phase, lastTarget, handleRevalidate, cancelValidation]);
+  }, [state.run, lastTarget, handleRevalidate, cancelValidation]);
 
   const selectedEntry = selectedFile ? state.files.get(selectedFile) ?? null : null;
-  const isRunning = state.phase === "running" || state.phase === "discovering";
+  const isRunning = isRunPending(state.run);
 
   return (
     <div className="app">
@@ -275,7 +289,7 @@ export default function App() {
         <DropZone
           onPath={handlePath}
           disabled={isRunning}
-          lastTarget={state.phase === "idle" ? lastTarget : null}
+          lastTarget={state.run.kind === "idle" ? lastTarget : null}
           theme={theme}
           onThemeChange={setTheme}
         />
@@ -288,8 +302,7 @@ export default function App() {
       <div className="main-panels">
         <FileTree
           files={state.files}
-          totalFiles={state.totalFiles}
-          phase={state.phase}
+          run={state.run}
           selectedFile={selectedFile}
           onSelectFile={setSelectedFile}
         />
@@ -301,11 +314,10 @@ export default function App() {
         />
       </div>
       <ProgressBar
-        phase={state.phase}
+        run={state.run}
+        backendSilent={backendSilent}
         processedFiles={state.processedFiles}
-        totalFiles={state.totalFiles}
         totalErrors={state.totalErrors}
-        stats={state.stats}
         startTime={startTime}
         onRevalidate={handleRevalidate}
         onCancel={cancelValidation}

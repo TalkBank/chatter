@@ -6,14 +6,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::commands::validate::cache::initialize_validation_cache;
 use crate::commands::validate_parallel::renderer::create_presentation_renderer;
-use crate::commands::validate_parallel::shared::empty_stats;
+use crate::commands::validate_parallel::shared::{Cancellation, ValidationOutcome, empty_stats};
 use crate::commands::validate_parallel::{
     ValidateDirectoryOptions, ValidationPresentation, ValidationTraversalMode,
 };
 use crate::ui::{TuiAction, run_validation_tui_streaming};
 use talkbank_transform::validation_runner::{
-    CacheMode, DirectoryMode, ValidationConfig, ValidationEvent, ValidationStatsSnapshot,
-    validate_files_streaming,
+    CacheMode, DirectoryMode, ValidationConfig, ValidationEvent, validate_files_streaming,
 };
 
 /// Run the standard validation flow on a pre-collected list of CHAT
@@ -29,7 +28,7 @@ pub fn run_validation_runtime(
     files: Vec<PathBuf>,
     summary_label: PathBuf,
     options: ValidateDirectoryOptions,
-) -> ValidationStatsSnapshot {
+) -> ValidationOutcome {
     let ValidateDirectoryOptions {
         rules,
         traversal,
@@ -128,7 +127,11 @@ pub fn run_validation_runtime(
     let (events_rx, cancel_tx) = validate_files_streaming(files, &config, cache.clone());
     install_ctrlc_handler(&cancel_tx);
 
-    let mut final_stats = None;
+    // `None` until a terminal event arrives. The runner guarantees exactly one
+    // of Finished / FinishedIncomplete / Aborted, so a `None` here after the
+    // stream closes means the guarantee was broken; see
+    // `ValidationOutcome::NoTerminalEvent`.
+    let mut termination: Option<ValidationOutcome> = None;
     let mut error_count = 0usize;
     let mut files_completed = 0usize;
 
@@ -150,27 +153,51 @@ pub fn run_validation_runtime(
                 renderer.handle_file_complete(&file_event, files_completed);
             }
             ValidationEvent::Finished(snapshot) => {
-                final_stats = Some(snapshot);
+                termination = Some(ValidationOutcome::Complete { stats: snapshot });
+            }
+            ValidationEvent::FinishedIncomplete { stats, lost_files } => {
+                termination = Some(ValidationOutcome::Incomplete { stats, lost_files });
+            }
+            ValidationEvent::Aborted(reason) => {
+                termination = Some(ValidationOutcome::Aborted { reason });
             }
         }
     }
 
-    let stats = match final_stats {
-        Some(stats) => stats,
-        None => {
-            eprintln!("Error: No validation stats received");
-            std::process::exit(1);
+    let outcome = termination.unwrap_or(ValidationOutcome::NoTerminalEvent);
+
+    // Only a run that produced totals has a summary to render. The two
+    // failure endings print a diagnosis instead, on stderr so `--format json`
+    // output stays parseable, and leave the exit status to `commands::validate`.
+    match &outcome {
+        // These are the worker's own tallies, with no post-hoc adjustment: a
+        // suppressed code was never emitted, so a fully-suppressed file was
+        // simply Valid from the worker's point of view. Regression test:
+        // `suppression_does_not_hide_other_files_invalid_count`.
+        ValidationOutcome::Complete { stats } => {
+            renderer.handle_finished(stats, files_completed, execution.max_errors, error_count);
+            renderer.print_summary(&summary_label, stats, rules.roundtrip.enabled());
         }
-    };
+        ValidationOutcome::Incomplete { stats, lost_files } => {
+            // Printed BEFORE the summary, because the summary's numbers are
+            // exactly what must not be read as totals for the input.
+            eprintln!(
+                "Error: validation did not cover {lost_files} of {} discovered file(s); \
+                 the counts below describe only what was processed.",
+                stats.total_files
+            );
+            renderer.handle_finished(stats, files_completed, execution.max_errors, error_count);
+            renderer.print_summary(&summary_label, stats, rules.roundtrip.enabled());
+        }
+        ValidationOutcome::Aborted { reason } => {
+            eprintln!("Error: {reason}");
+        }
+        ValidationOutcome::NoTerminalEvent => {
+            eprintln!("Error: the validator stopped without reporting any result.");
+        }
+    }
 
-    // These are the worker's own tallies, with no post-hoc adjustment: a
-    // suppressed code was never emitted, so a fully-suppressed file was
-    // simply Valid from the worker's point of view. Regression test:
-    // `suppression_does_not_hide_other_files_invalid_count`.
-    renderer.handle_finished(&stats, files_completed, execution.max_errors, error_count);
-    renderer.print_summary(&summary_label, &stats, rules.roundtrip.enabled());
-
-    stats
+    outcome
 }
 
 /// Drive the interactive TUI, supporting reruns until the user exits.
@@ -183,19 +210,30 @@ fn run_tui_loop(
     config: &ValidationConfig,
     cache: Option<Arc<talkbank_transform::CachePool>>,
     theme: crate::ui::Theme,
-) -> ValidationStatsSnapshot {
+) -> ValidationOutcome {
     let _ = summary_label; // reserved for future "rerunning <label>..." messaging
     loop {
         let (events_rx, cancel_tx) = validate_files_streaming(files.clone(), config, cache.clone());
         match run_validation_tui_streaming(events_rx, cancel_tx, theme.clone()) {
-            Ok(TuiAction::Quit) => return empty_stats(false),
+            // The interactive surface has already SHOWN the user how the run
+            // ended, including an abort or an incomplete run, so the exit
+            // status here reports only that the session closed cleanly. This
+            // deliberately preserves the pre-existing behavior; changing what
+            // an interactive quit exits with is a separate decision.
+            Ok(TuiAction::Quit) => {
+                return ValidationOutcome::Complete {
+                    stats: empty_stats(Cancellation::NotRequested),
+                };
+            }
             Ok(TuiAction::ForceQuit) => std::process::exit(130),
             Ok(TuiAction::Rerun) => {
                 eprintln!("Re-running validation...");
             }
             Err(error) => {
                 eprintln!("TUI error: {}", error);
-                return empty_stats(true);
+                return ValidationOutcome::Complete {
+                    stats: empty_stats(Cancellation::Requested),
+                };
             }
         }
     }

@@ -75,6 +75,64 @@ pub struct TuiState {
     pub status_message: Option<String>,
 }
 
+/// How a streaming validation run has ended, as far as the TUI knows.
+///
+/// Replaces a `validation_complete: bool` that was set true both when the run
+/// reported `Finished` and when the event channel simply closed, so a dead run
+/// rendered as a completed one and advertised its partial tallies as final
+/// totals. The three endings demand different things of the header, the empty
+/// state and the footer, which is precisely why one boolean could not carry
+/// them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunPhase {
+    /// Events are still arriving; no terminal event has been seen.
+    Running,
+    /// The runner covered every discovered file. Only this phase may show the
+    /// counts as totals for the input.
+    Finished,
+    /// The runner ended without covering everything it discovered: files were
+    /// abandoned and their contents were never examined.
+    Incomplete {
+        /// Files discovered but never accounted for.
+        lost_files: usize,
+    },
+    /// The run died without producing totals at all.
+    Aborted {
+        /// Human-readable explanation, safe to show verbatim.
+        reason: String,
+    },
+}
+
+/// Whether a progress redraw happens now or only once enough files have gone by.
+///
+/// A named pair rather than a `bool`: `update_progress_display(true)` and
+/// `(false)` told a reader nothing about which behaviour was being asked for,
+/// and the two differ in whether the stride is honoured at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Redraw {
+    /// Redraw regardless of how few files have completed since the last one.
+    /// Used at terminal moments, where the final count must be shown.
+    Immediately,
+    /// Redraw only once `PROGRESS_DRAW_STRIDE` files have completed, which is
+    /// what keeps a fast run from spending its time painting.
+    WhenStrideReached,
+}
+
+impl RunPhase {
+    /// Whether the run has stopped, by any of its endings.
+    ///
+    /// Used for the affordances that apply to every stopped run (offering
+    /// Rerun, ending the progress animation). Rendering that must distinguish
+    /// the endings matches the variants instead; this is deliberately the only
+    /// place the distinction is collapsed.
+    pub fn is_terminal(&self) -> bool {
+        match self {
+            Self::Running => false,
+            Self::Finished | Self::Incomplete { .. } | Self::Aborted { .. } => true,
+        }
+    }
+}
+
 /// Which pane has focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -134,8 +192,14 @@ impl TuiState {
     }
 
     /// Updates progress display.
-    pub fn update_progress_display(&mut self, force: bool) {
-        if force
+    pub fn update_progress_display(&mut self, redraw: Redraw) {
+        // Matched rather than compared, so a third redraw policy cannot be
+        // added without this deciding what it means.
+        let forced = match redraw {
+            Redraw::Immediately => true,
+            Redraw::WhenStrideReached => false,
+        };
+        if forced
             || (self.progress.files_processed - self.progress.files_processed_display)
                 >= Self::PROGRESS_DRAW_STRIDE
         {

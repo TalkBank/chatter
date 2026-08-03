@@ -73,6 +73,13 @@ export type ValidationEvent =
       source: string;
     }
   | { type: "fileComplete"; file: string; status: FileStatus }
+  | { type: "aborted"; reason: string }
+  /**
+   * The run ended without covering every file it discovered. `stats` describes
+   * ONLY the files that were processed, so nothing here supports a claim about
+   * the whole input.
+   */
+  | { type: "finishedIncomplete"; stats: ValidationStats; lostFiles: number }
   | { type: "finished"; stats: ValidationStats };
 
 /** Per-file state accumulated from the event stream */

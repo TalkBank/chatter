@@ -1,7 +1,7 @@
 # CLAUDE.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-07-25 22:19 EDT
+**Last updated:** 2026-08-02 19:10 EDT
 
 ## Overview
 
@@ -114,6 +114,22 @@ apps/chatter-desktop/
 - **Lock-free concurrency**: `ArcSwapOption` for the cancel sender, no mutex. See the [mutex policy](../../../book/src/chatter/user-guide/desktop-app.md).
 - **Centralized protocol contracts**: Tauri command/event names and transport payload types live in `src-tauri/src/protocol.rs` and `src/protocol/desktopProtocol.ts`.
 - **serde camelCase bridge**: Rust structs use snake_case with `#[serde(rename_all = "camelCase")]` so JSON matches TypeScript types. The Rust integration tests verify the serialized JSON shape. **Every enum variant with fields needs its own `#[serde(rename_all = "camelCase")]`**, not just the enum-level one (the enum-level attribute only renames the `type` tag, not field names): a missing per-variant attribute on `FrontendFileStatus::Valid` silently shipped `cache_hit` instead of `cacheHit` until caught by the 2026-07-06 cache regression test.
+- **Run phase is a DISCRIMINATED UNION (`RunPhase`), not a tag beside nullable
+  fields.** Each phase carries exactly its own data: `running` its file count,
+  `finished` its stats, `aborted` its reason. The flat shape let `finished`
+  exist with no stats and `idle` keep the previous run's results, and it forced
+  `phase === "finished" && stats &&` guards that re-checked what the type
+  already knew. `totalFiles` is DERIVED via `totalFilesOf`, never stored, since
+  `running` and `finished` each already know it and a third copy could
+  disagree.
+- **`invoked` and `discovering` are separate phases; do not merge them.**
+  `invoked` is set locally the moment the Tauri command is sent, `discovering`
+  only ever from the backend's own event. When both were the one value
+  "discovering", the UI could not distinguish "the backend never answered" from
+  "the backend is working", which made a watchdog impossible (a slow discovery
+  is indistinguishable from silence) and reduced the best possible user bug
+  report to "it doesn't go beyond Discovering files", received 2026-08-02.
+  Anything needing to treat them alike goes through `isRunPending`.
 - **Single-target contract**: desktop validation accepts one `.cha` file or one folder at a time. Native drag/drop must use Tauri's webview drag-drop API, not browser file-name placeholders.
 - **Capability-first runtime seam**: keep `@tauri-apps/*` imports inside `src/runtime/tauriTransport.ts`; components and hooks should depend on narrow capability hooks rather than a whole desktop service object.
 - **No desktop-local domain logic; reuse the CLI's**: this covers the FULL validation pipeline, not just presentation. Error rendering goes through `talkbank_transform::render_diagnostics()` and Open-in-CLAN through `send2clan::open_location_in_clan()`, the exact functions the CLI uses. **Validation orchestration itself is the same shared functions too**: both single-file and directory targets route through `talkbank_transform::validation_runner::{validate_files_streaming, validate_directory_streaming}` with a real `Arc<UnifiedCache>` (constructed identically to the CLI's `initialize_validation_cache`, `crates/chatter/src/commands/validate/cache.rs`), never a bespoke single-file loop built on the bare `parse_and_validate_streaming` primitive. Before 2026-07-06, the single-file path took exactly that bespoke shortcut and silently diverged from the CLI/directory path on caching, the `@Media`-filename check (E531), `--roundtrip`/`--parser`/`--strict-linkers` reachability, and stats accounting; the desktop must not re-implement enhancement, miette rendering, CLAN-location resolution, cache lookups, config dispatch, or stats aggregation; doing so is how the GUI silently drifted from the CLI. `commands::resolve_open_in_clan()` is split out from the Apple-Event send so the Open-in-CLAN resolution (file read + `resolve_clan_location` + message) is testable without launching CLAN.

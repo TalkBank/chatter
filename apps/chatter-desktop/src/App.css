@@ -785,6 +785,15 @@ button:disabled {
   font-weight: 600;
 }
 
+/* A caution, not an error: --color-warning (ochre/light, amber/dark) keeps
+   it legible in both themes and visually distinct from .error-count-text's
+   vermilion/red. Prose rather than data, so serif and italic rather than
+   the monospace weight error text carries. */
+.warning-text {
+  color: var(--color-warning);
+  font-style: italic;
+}
+
 .eta-text {
   color: var(--color-text-secondary);
   font-size: 11.5px;

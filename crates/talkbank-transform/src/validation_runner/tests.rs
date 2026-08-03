@@ -6,9 +6,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use super::runner::{TerminalGuard, WorkerPoolOutcome, terminal_event};
 use super::{
-    CacheMode, CacheOutcome, ValidationCache, ValidationConfig, ValidationEvent,
-    validate_directory_streaming,
+    AbortReason, CacheMode, CacheOutcome, ValidationCache, ValidationConfig, ValidationEvent,
+    ValidationStatsSnapshot, validate_directory_streaming,
 };
 use std::fs;
 use std::path::Path;
@@ -207,5 +208,194 @@ fn dropped_cancel_sender_does_not_cancel_and_jobs_zero_still_processes_files() {
         finished.valid_files + finished.invalid_files + finished.parse_errors,
         1,
         "one file should be accounted for in final stats"
+    );
+}
+
+// =============================================================================
+// Terminal-event guarantee
+// =============================================================================
+
+/// A validation thread that unwinds must still put a terminal event on the
+/// stream, so no consumer is left waiting on a run that is already dead.
+///
+/// WHAT THIS DOES NOT COVER: it constructs the guard the way
+/// [`super::runner::validate_directory_streaming`] does and then unwinds the
+/// thread, rather than making the real runner panic. There is no injection
+/// seam for a panic inside the orchestrator itself (a panicking WORKER is a
+/// different case: `join` catches it and the run ends with
+/// `FinishedIncomplete`, covered separately below), so forcing one through the
+/// public entrypoint is not possible without adding a fault switch to
+/// production code. What is verified here is the mechanism the
+/// entrypoints rely on: armed guard plus unwinding thread yields exactly one
+/// `Aborted` event.
+#[test]
+fn a_thread_that_unwinds_while_holding_the_guard_still_delivers_a_terminal_event() {
+    let (event_tx, event_rx) = crossbeam_channel::unbounded::<ValidationEvent>();
+
+    // The panic is the subject of the test, not an accident, so its unwind is
+    // deliberately allowed to reach the thread boundary and is absorbed by the
+    // `join` below. It prints a panic message to stderr; that is expected.
+    let unwound = std::thread::spawn(move || {
+        let _guard = TerminalGuard::armed(event_tx.clone());
+        let _ = event_tx.send(ValidationEvent::Discovering);
+        #[allow(clippy::panic)]
+        {
+            panic!("simulated orchestrator failure");
+        }
+    })
+    .join();
+
+    assert!(unwound.is_err(), "the spawned thread should have unwound");
+
+    let events: Vec<ValidationEvent> = event_rx.into_iter().collect();
+
+    assert!(
+        matches!(events.first(), Some(ValidationEvent::Discovering)),
+        "events sent before the unwind should still arrive, got {events:?}"
+    );
+    assert!(
+        matches!(
+            events.last(),
+            Some(ValidationEvent::Aborted(AbortReason::Panicked))
+        ),
+        "an unwound run must end the stream with Aborted, got {events:?}"
+    );
+}
+
+/// The normal path must stay silent: a disarmed guard reports nothing, so a
+/// completed run is never also reported as aborted.
+#[test]
+fn a_disarmed_guard_reports_nothing() {
+    let (event_tx, event_rx) = crossbeam_channel::unbounded::<ValidationEvent>();
+
+    {
+        let mut guard = TerminalGuard::armed(event_tx.clone());
+        guard.disarm();
+    }
+    drop(event_tx);
+
+    let events: Vec<ValidationEvent> = event_rx.into_iter().collect();
+
+    assert!(
+        events.is_empty(),
+        "a disarmed guard must add nothing to the stream, got {events:?}"
+    );
+}
+
+// =============================================================================
+// Coverage: a run that lost files must not be reportable as a clean finish
+// =============================================================================
+
+/// What one coverage case describes.
+///
+/// A named struct rather than three positional arguments, because
+/// a three-positional-argument call said nothing at the call site about which
+/// number was which, and the two counts are both `usize`, so transposing them
+/// would silently invert the case under test (a run that lost 2 files versus
+/// one that discovered fewer than it processed). The bool had the same
+/// problem: `false` meant "the user did not cancel", which is the whole
+/// difference between a legitimate shortfall and lost data.
+struct Coverage {
+    /// Files discovery found.
+    discovered: usize,
+    /// Files actually accounted for by the run.
+    accounted_for: usize,
+    /// Whether the user asked the run to stop.
+    cancelled: bool,
+}
+
+/// Build a snapshot describing one [`Coverage`] case.
+fn snapshot_covering(coverage: Coverage) -> ValidationStatsSnapshot {
+    let Coverage {
+        discovered,
+        accounted_for,
+        cancelled,
+    } = coverage;
+    ValidationStatsSnapshot {
+        total_files: discovered,
+        valid_files: accounted_for,
+        invalid_files: 0,
+        cache_hits: 0,
+        cache_misses: accounted_for,
+        parse_errors: 0,
+        roundtrip_passed: 0,
+        roundtrip_failed: 0,
+        cancelled,
+    }
+}
+
+/// A run whose workers abandoned files must NOT end with `Finished`.
+///
+/// `Finished` is the only warrant for a claim about the whole input, so a run
+/// that validated 3 of 5 files and reported `Finished` would tell every
+/// consumer that 5 files are clean when 2 were never opened. Before this, the
+/// runner logged `had_panic` to `tracing` (invisible to any GUI user) and sent
+/// `Finished` with the partial stats regardless.
+///
+/// WHAT THIS DOES NOT COVER: it calls the terminal-event decision directly
+/// rather than making a real worker panic, because `worker_loop` has no fault
+/// injection seam and adding one would put test-only machinery in the hot
+/// path. The decision function under test IS the one the runner ships.
+#[test]
+fn a_run_that_lost_files_is_not_reported_as_finished() {
+    let event = terminal_event(
+        snapshot_covering(Coverage {
+            discovered: 5,
+            accounted_for: 3,
+            cancelled: false,
+        }),
+        WorkerPoolOutcome::SomeUnwound { unwound_workers: 1 },
+    );
+
+    match event {
+        ValidationEvent::FinishedIncomplete { stats, lost_files } => {
+            assert_eq!(lost_files, 2, "two discovered files produced no result");
+            assert_eq!(
+                stats.valid_files, 3,
+                "the stats must describe only what was processed"
+            );
+        }
+        other => {
+            panic!("a run that lost files must report FinishedIncomplete, got {other:?}")
+        }
+    }
+}
+
+/// Cancellation is a requested shortfall, not lost data: a cancelled run
+/// still ends with `Finished`, carrying its own `cancelled` flag. Reporting it
+/// as incomplete would train users to ignore the incomplete report.
+#[test]
+fn a_cancelled_run_is_finished_not_incomplete() {
+    let event = terminal_event(
+        snapshot_covering(Coverage {
+            discovered: 5,
+            accounted_for: 3,
+            cancelled: true,
+        }),
+        WorkerPoolOutcome::AllReturned,
+    );
+
+    assert!(
+        matches!(event, ValidationEvent::Finished(stats) if stats.cancelled),
+        "a cancelled run must end with Finished"
+    );
+}
+
+/// Full coverage still ends with `Finished`, so the guarantee above cannot be
+/// satisfied by declaring every run incomplete.
+#[test]
+fn a_fully_covered_run_is_finished() {
+    let event = terminal_event(
+        snapshot_covering(Coverage {
+            discovered: 5,
+            accounted_for: 5,
+            cancelled: false,
+        }),
+        WorkerPoolOutcome::AllReturned,
+    );
+
+    assert!(
+        matches!(event, ValidationEvent::Finished(_)),
+        "a run that accounted for every file must end with Finished"
     );
 }

@@ -131,9 +131,9 @@ pub use self::rendering::{
 };
 #[cfg(feature = "validation-runner")]
 pub use self::validation_runner::{
-    CacheMode, CacheOutcome, DirectoryMode, ErrorEvent, FileCompleteEvent, FileStatus, ParserKind,
-    RoundtripEvent, ValidationCache, ValidationConfig, ValidationEvent, ValidationStats,
-    ValidationStatsSnapshot, validate_directory_streaming,
+    AbortReason, CacheMode, CacheOutcome, DirectoryMode, ErrorEvent, FileCompleteEvent, FileStatus,
+    ParserKind, RoundtripEvent, RunCoverage, ValidationCache, ValidationConfig, ValidationEvent,
+    ValidationStats, ValidationStatsSnapshot, validate_directory_streaming,
 };
 #[cfg(feature = "validation-runner")]
 pub use talkbank_cache::{CacheError, CachePool, CacheStats, RulesVersion, UnifiedCache};

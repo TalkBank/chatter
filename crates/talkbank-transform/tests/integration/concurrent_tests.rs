@@ -491,6 +491,20 @@ fn pipeline_parallel_validate() {
                 );
                 assert!(!stats.cancelled, "Should not be marked as cancelled");
             }
+            // A healthy parallel run must cover every file it discovered and
+            // must not die. Both terminal failure modes are named explicitly
+            // rather than swallowed by a wildcard, so a regression that starts
+            // losing files under concurrency fails HERE instead of passing as
+            // "well, it terminated".
+            ValidationEvent::FinishedIncomplete { stats, lost_files } => {
+                panic!(
+                    "parallel run lost {lost_files} of {} files",
+                    stats.total_files
+                );
+            }
+            ValidationEvent::Aborted(reason) => {
+                panic!("parallel run aborted: {reason:?}");
+            }
         }
     }
 

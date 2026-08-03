@@ -6,12 +6,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use super::cancel::CancelSignal;
 use super::config::{ParserKind, ValidationConfig};
 use super::roundtrip;
 use super::types::{
     ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, ValidationEvent, ValidationStats,
 };
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use crossbeam_channel::{Receiver, Sender};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -65,7 +66,7 @@ impl ParserDispatch {
 pub(super) fn worker_loop<C>(
     work_rx: Receiver<PathBuf>,
     event_tx: Sender<ValidationEvent>,
-    cancel_rx: Receiver<()>,
+    cancel: Arc<CancelSignal>,
     cache: Option<Arc<C>>,
     config: ValidationConfig,
     stats: Arc<ValidationStats>,
@@ -81,11 +82,12 @@ pub(super) fn worker_loop<C>(
     };
 
     loop {
-        // Check for cancellation
-        match cancel_rx.try_recv() {
-            Ok(()) => break,
-            // Sender dropped is not a cancellation request.
-            Err(TryRecvError::Disconnected) | Err(TryRecvError::Empty) => {}
+        // Check for cancellation. Reads a LATCH, not the raw channel: polling
+        // the channel here consumed the single cancel token, so only one of the
+        // N workers ever saw it and the rest ran the queue to the end. See
+        // `CancelSignal`.
+        if cancel.is_cancelled() {
+            break;
         }
 
         // Get next file from work queue
