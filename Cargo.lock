@@ -796,7 +796,7 @@ dependencies = [
 
 [[package]]
 name = "chatter"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "chatter-desktop"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ansi-to-html",
  "arc-swap",
@@ -5459,7 +5459,7 @@ dependencies = [
 
 [[package]]
 name = "send2clan"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cc",
 ]
@@ -6282,7 +6282,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-cache"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "blake3",
  "dirs",
@@ -6296,7 +6296,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-derive"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6309,7 +6309,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-llm"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "httpmock",
  "serde",
@@ -6324,7 +6324,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-lsp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "dashmap 6.2.1",
  "insta",
@@ -6344,7 +6344,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-model"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "crossbeam-channel",
  "dashmap 6.2.1",
@@ -6370,7 +6370,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "divan",
  "indexmap 2.14.0",
@@ -6389,7 +6389,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser-re2c"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chumsky",
  "divan",
@@ -6412,7 +6412,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser-tests"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "clap",
  "comrak",
@@ -6437,7 +6437,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-transform"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -8736,7 +8736,7 @@ checksum = "2fb433233f2df9344722454bc7e96465c9d03bff9d77c248f9e7523fe79585b5"
 
 [[package]]
 name = "xtask"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "yaml-rust"

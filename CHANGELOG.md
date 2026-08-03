@@ -7,6 +7,57 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
+## [0.7.0] - 2026-08-03
+
+**Validation verdicts: UNCHANGED.** No rule was added, removed or altered, and
+no file changes its valid/invalid verdict in this release. What changes is what
+a run REPORTS about itself when it does not complete normally.
+
+### Changed
+
+- **A validation run now always terminates its event stream, and says how.**
+  Previously a run whose thread died emitted no terminal event at all, and the
+  three surfaces each guessed differently: the CLI exited non-zero, the desktop
+  app waited forever showing "Discovering files", and the TUI marked the run
+  COMPLETE, so a dead run was presented as a finished one. Terminality now
+  belongs to the runner, which guarantees a terminal event on every exit path,
+  so all three surfaces inherit the same guarantee instead of reconstructing it.
+
+- **A run that lost files can no longer report success.** A panicking worker was
+  caught, logged where no graphical user could see it, and then ignored: the run
+  reported `Finished` with partial statistics, so a 500 file corpus could
+  validate 480 and be presented as "all valid". `Finished` now means every
+  discovered file was accounted for and is the only basis for a claim about the
+  whole input; a run that covered less reports `FinishedIncomplete` with the
+  number of files lost. **`chatter validate` exits non-zero in that case**, where
+  it previously exited 0.
+
+- **Cancelling a run now cancels it.** The cancel request was a single token on a
+  channel that the dispatch loop, every worker, and the end of run check each
+  consumed destructively, so exactly one of them observed it: cancelling stopped
+  one worker while the rest drained the queue, and the run's own statistics
+  usually recorded that it had not been cancelled.
+
+- **`ValidationEvent` gains `Aborted` and `FinishedIncomplete`** (BREAKING for
+  library consumers). The enum is deliberately NOT `#[non_exhaustive]`: a
+  consumer that upgrades gets a compile error and has to decide what a dead or
+  partial run means for its own interface, rather than silently inheriting
+  "pretend it finished", which is the defect these variants exist to fix.
+
+### Fixed
+
+- **Desktop: a run that never started looked identical to one in progress.** The
+  app showed "Discovering files" from the moment it sent the request, and the
+  backend's own discovery event set the same state, so a backend that never
+  answered was indistinguishable from one still working. The two are now
+  separate states: the app shows "Starting" until the validator actually
+  responds, and says so if that takes more than a few seconds. A run stuck there
+  is a start-up fault rather than anything about your files, which is worth
+  quoting in a bug report.
+
+- **Desktop: an aborted run is no longer a dead end.** It reports why it stopped
+  and offers Re-validate, instead of leaving the window with no way forward.
+
 ## [0.6.0] - 2026-07-31
 
 **Validation verdicts: CHANGED.** Files that earlier versions accepted may
