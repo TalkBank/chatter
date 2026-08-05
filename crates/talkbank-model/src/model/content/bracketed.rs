@@ -269,25 +269,9 @@ impl WriteChat for BracketedContent {
 #[schemars(transparent)]
 pub struct BracketedItems(Vec<BracketedItem>);
 
+crate::collection_newtype_ops!(BracketedItems, BracketedItem);
+
 impl BracketedItems {
-    /// The items, mutably, for ELEMENT mutation only.
-    ///
-    /// `&mut [T]`, not `&mut Vec<T>`: callers may rewrite items in place but
-    /// cannot push, remove or truncate. That is the point of having closed the
-    /// inner field, and it is why `DerefMut` was removed from this family.
-    pub fn as_mut_slice(&mut self) -> &mut [BracketedItem] {
-        &mut self.0
-    }
-
-    /// The items, borrowed.
-    ///
-    /// Kept when the inner field was closed, because reading it was already
-    /// part of this type's contract and losing that would be a regression
-    /// rather than a tightening.
-    pub fn as_slice(&self) -> &[BracketedItem] {
-        &self.0
-    }
-
     /// Wraps an owned bracket-item vector.
     pub fn new(items: Vec<BracketedItem>) -> Self {
         Self(items)

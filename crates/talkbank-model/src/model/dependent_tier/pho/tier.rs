@@ -204,25 +204,9 @@ impl WriteChat for PhoTier {
 #[schemars(transparent)]
 pub struct PhoItems(Vec<PhoItem>);
 
+crate::collection_newtype_ops!(PhoItems, PhoItem);
+
 impl PhoItems {
-    /// The items, owned.
-    ///
-    /// Taking the vector was possible while the inner field was `pub`, and one
-    /// caller genuinely needs ownership, so the capability is kept explicitly
-    /// rather than lost with the field.
-    pub fn into_vec(self) -> Vec<PhoItem> {
-        self.0
-    }
-
-    /// The items, borrowed.
-    ///
-    /// Kept when the inner field was closed, because reading it was already
-    /// part of this type's contract and losing that would be a regression
-    /// rather than a tightening.
-    pub fn as_slice(&self) -> &[PhoItem] {
-        &self.0
-    }
-
     /// Wraps ordered `%pho/%mod` items without reinterpreting alignment.
     pub fn new(items: Vec<PhoItem>) -> Self {
         Self(items)

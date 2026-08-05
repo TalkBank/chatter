@@ -134,6 +134,8 @@ impl BulletContent {
 #[schemars(transparent)]
 pub struct BulletContentSegments(Vec<BulletContentSegment>);
 
+crate::collection_newtype_ops!(BulletContentSegments, BulletContentSegment);
+
 impl BulletContentSegments {
     /// Wraps segments while preserving transcript order.
     pub fn new(segments: Vec<BulletContentSegment>) -> Self {

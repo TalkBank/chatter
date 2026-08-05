@@ -52,6 +52,8 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[schemars(transparent)]
 pub struct AnnotatedContentAnnotations(Vec<ContentAnnotation>);
 
+crate::collection_newtype_ops!(AnnotatedContentAnnotations, ContentAnnotation);
+
 impl AnnotatedContentAnnotations {
     /// Wraps scoped annotations for an [`Annotated`] payload.
     ///

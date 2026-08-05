@@ -10,6 +10,7 @@
 //! Add a test file by dropping it in this directory and declaring it below.
 
 mod check_validity_parity;
+mod closed_newtype_consumer_view;
 mod config_path_check_parity;
 mod conformance_inventory_current;
 mod declared_speakers;

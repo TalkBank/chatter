@@ -697,14 +697,15 @@ fn rendered_html_present_for_errors() {
 
 #[test]
 fn non_chat_files_are_rejected_by_path_contract() {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+    // A process-wide counter, not a timestamp: `SystemTime::now()` has
+    // microsecond-or-worse effective granularity here (measured: 19,584 of
+    // 20,000 consecutive samples identical), and the pid is constant across a
+    // test binary, so "pid + nanos" is not unique between parallel tests.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let file = std::env::temp_dir().join(format!(
         "chatter-desktop-path-contract-{}-{}.txt",
         std::process::id(),
-        now
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::write(&file, "not a .cha file").unwrap();
 

@@ -212,6 +212,8 @@ impl LanguageMetadata {
 #[schemars(transparent)]
 pub struct WordLanguageInfos(Vec<WordLanguageInfo>);
 
+crate::collection_newtype_ops!(WordLanguageInfos, WordLanguageInfo);
+
 impl WordLanguageInfos {
     /// Appends one word's language record.
     ///

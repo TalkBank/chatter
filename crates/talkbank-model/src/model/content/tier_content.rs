@@ -372,18 +372,12 @@ impl Default for TierContent {
 /// - [Utterance linkers](https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers)
 pub struct TierLinkers(Vec<Linker>);
 
+crate::collection_newtype_ops!(TierLinkers, Linker);
+
 impl TierLinkers {
     /// Appends one item.
     pub fn push(&mut self, item: Linker) {
         self.0.push(item);
-    }
-    /// The items, borrowed.
-    ///
-    /// Kept when the inner field was closed, because reading it was already
-    /// part of this type's contract and losing that would be a regression
-    /// rather than a tightening.
-    pub fn as_slice(&self) -> &[Linker] {
-        &self.0
     }
 
     /// Wraps linker values while preserving caller-provided order.
@@ -464,6 +458,8 @@ impl crate::validation::Validate for TierLinkers {
 /// - [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)
 pub struct TierContentItems(Vec<UtteranceContent>);
 
+crate::collection_newtype_ops!(TierContentItems, UtteranceContent);
+
 impl TierContentItems {
     /// Moves every item of `other` onto the end of this list.
     ///
@@ -475,41 +471,15 @@ impl TierContentItems {
 
     /// Removes and returns the last item.
     ///
-    /// A NAMED length-changing operation. With `DerefMut` gone this is the only
-    /// way to shorten the list, which is what lets a future invariant be
-    /// enforced here rather than bypassed through the raw `Vec`.
+    /// A NAMED length-changing operation, which is the point: with `DerefMut`
+    /// gone, shortening happens at sites the type can see. It does NOT follow
+    /// that an invariant is enforceable here yet, and an earlier version of
+    /// this comment overclaimed that it was: a future invariant COULD be enforced here, but note that none is enforced
+    /// today and this is not yet the only door: `From<Vec<_>>` still
+    /// constructs one of these from an arbitrary list in a single call. See
+    /// the note on `collection_newtype_ops!` in `model/macros.rs`.
     pub fn pop(&mut self) -> Option<UtteranceContent> {
         self.0.pop()
-    }
-
-    /// The items, owned.
-    pub fn into_vec(self) -> Vec<UtteranceContent> {
-        self.0
-    }
-
-    /// The items, borrowed.
-    ///
-    /// Kept when the inner field was closed, because reading it was already
-    /// part of this type's contract and losing that would be a regression
-    /// rather than a tightening.
-    pub fn as_slice(&self) -> &[UtteranceContent] {
-        &self.0
-    }
-
-    /// The items, mutably.
-    ///
-    /// Mutation was already possible through the `pub` inner field, so this is
-    /// the same capability behind a named door rather than a new one.
-    ///
-    /// NOTE, and read this before relying on the closed field for anything:
-    /// this type also implements `DerefMut<Target = Vec<_>>`, which hands out
-    /// the whole `Vec` API. Closing the tuple field therefore prevents literal
-    /// construction and destructuring and NOTHING ELSE; it does not reserve
-    /// room for a future invariant, because `push`, `retain`, `clear` and the
-    /// rest remain reachable. An earlier version of this comment claimed
-    /// otherwise and was wrong.
-    pub fn as_mut_slice(&mut self) -> &mut [UtteranceContent] {
-        &mut self.0
     }
 
     /// Wraps utterance content items in their on-tier order.
@@ -652,17 +622,9 @@ impl Validate for TierContentItems {
 /// - [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)
 pub struct TierPostcodes(Vec<Postcode>);
 
+crate::collection_newtype_ops!(TierPostcodes, Postcode);
+
 impl TierPostcodes {
-    /// The postcodes, mutably.
-    pub fn as_mut_slice(&mut self) -> &mut [Postcode] {
-        &mut self.0
-    }
-
-    /// The postcodes, owned.
-    pub fn into_vec(self) -> Vec<Postcode> {
-        self.0
-    }
-
     /// Moves every postcode of `other` onto the end of this list.
     ///
     /// Takes `Self` rather than an iterator so the operation stays in domain
@@ -674,14 +636,6 @@ impl TierPostcodes {
     /// Appends one item.
     pub fn push(&mut self, item: Postcode) {
         self.0.push(item);
-    }
-    /// The items, borrowed.
-    ///
-    /// Kept when the inner field was closed, because reading it was already
-    /// part of this type's contract and losing that would be a regression
-    /// rather than a tightening.
-    pub fn as_slice(&self) -> &[Postcode] {
-        &self.0
     }
 
     /// Wraps postcode annotations while preserving transcript order.

@@ -323,19 +323,17 @@ impl ChatFile<NotValidated> {
 #[schemars(transparent)]
 pub struct ChatFileLines(Vec<Line>);
 
-impl ChatFileLines {
-    /// The lines, borrowed.
-    pub fn as_slice(&self) -> &[Line] {
-        &self.0
-    }
+crate::collection_newtype_ops!(ChatFileLines, Line);
 
+impl ChatFileLines {
     /// Inserts a line at `index`, shifting the rest right.
     ///
-    /// A NAMED length-changing operation. With `DerefMut` gone this and the
-    /// other named mutators are the only ways to change the line count, which
-    /// is what lets a future invariant (a CHAT file's headers precede its
-    /// utterances, `@Begin`/`@End` bracket the body) be enforced here rather
-    /// than bypassed through the raw `Vec`.
+    /// A NAMED length-changing operation, so insertions happen at sites the
+    /// type can see rather than through a raw `Vec`. A future invariant (a
+    /// CHAT file's headers precede its utterances) COULD then be enforced
+    /// here, but none is today, and this is not yet the only door:
+    /// `From<Vec<Line>>` still builds one from an arbitrary list in a single
+    /// call. See `collection_newtype_ops!` in `model/macros.rs`.
     ///
     /// # Panics
     ///
@@ -353,22 +351,6 @@ impl ChatFileLines {
     /// If `index >= len`, like `Vec::remove`.
     pub fn remove(&mut self, index: usize) -> Line {
         self.0.remove(index)
-    }
-
-    /// The lines, mutably.
-    ///
-    /// Mutation was already possible through the `pub` inner field, so this is
-    /// the same capability behind a named door rather than a new one.
-    ///
-    /// NOTE, and read this before relying on the closed field for anything:
-    /// this type also implements `DerefMut<Target = Vec<_>>`, which hands out
-    /// the whole `Vec` API. Closing the tuple field therefore prevents literal
-    /// construction and destructuring and NOTHING ELSE; it does not reserve
-    /// room for a future invariant, because `push`, `retain`, `clear` and the
-    /// rest remain reachable. An earlier version of this comment claimed
-    /// otherwise and was wrong.
-    pub fn as_mut_slice(&mut self) -> &mut [Line] {
-        &mut self.0
     }
 }
 

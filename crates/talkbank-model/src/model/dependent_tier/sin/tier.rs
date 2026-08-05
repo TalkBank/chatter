@@ -146,16 +146,9 @@ impl WriteChat for SinTier {
 #[schemars(transparent)]
 pub struct SinItems(Vec<SinItem>);
 
-impl SinItems {
-    /// The items, borrowed.
-    ///
-    /// Kept when the inner field was closed, because reading it was already
-    /// part of this type's contract and losing that would be a regression
-    /// rather than a tightening.
-    pub fn as_slice(&self) -> &[SinItem] {
-        &self.0
-    }
+crate::collection_newtype_ops!(SinItems, SinItem);
 
+impl SinItems {
     /// Wraps ordered `%sin` items without reinterpreting alignment.
     pub fn new(items: Vec<SinItem>) -> Self {
         Self(items)

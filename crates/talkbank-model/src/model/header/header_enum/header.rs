@@ -40,19 +40,14 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[schemars(transparent)]
 pub struct LanguageCodes(Vec<LanguageCode>);
 
-impl LanguageCodes {
-    /// The entries, borrowed.
-    ///
-    /// Added when the inner field was closed, so reading stays available while
-    /// construction does not.
-    pub fn as_slice(&self) -> &[LanguageCode] {
-        &self.0
-    }
+crate::collection_newtype_ops!(LanguageCodes, LanguageCode);
 
+impl LanguageCodes {
     /// Appends every code of `other`, in order.
     ///
     /// A NAMED length-changing operation, added when `DerefMut` was removed
-    /// from this family so a future invariant can be enforced here.
+    /// from this family so a future invariant COULD be enforced here. None is
+    /// today: `From<Vec<_>>` still bypasses it. See `collection_newtype_ops!`.
     pub fn extend(&mut self, other: impl IntoIterator<Item = LanguageCode>) {
         self.0.extend(other);
     }
@@ -170,24 +165,9 @@ impl crate::validation::Validate for LanguageCodes {
 #[schemars(transparent)]
 pub struct ParticipantEntries(Vec<ParticipantEntry>);
 
+crate::collection_newtype_ops!(ParticipantEntries, ParticipantEntry);
+
 impl ParticipantEntries {
-    /// The entries, borrowed.
-    ///
-    /// Added when the inner field was closed, so reading stays available while
-    /// construction does not.
-    pub fn as_slice(&self) -> &[ParticipantEntry] {
-        &self.0
-    }
-
-    /// The entries, mutably, for ELEMENT mutation only.
-    ///
-    /// `&mut [T]`, not `&mut Vec<T>`: entries may be rewritten in place but
-    /// not added or removed, which is what makes a future invariant on this
-    /// list enforceable rather than bypassable.
-    pub fn as_mut_slice(&mut self) -> &mut [ParticipantEntry] {
-        &mut self.0
-    }
-
     /// Wraps parsed participant entries in source order.
     pub fn new(entries: Vec<ParticipantEntry>) -> Self {
         Self(entries)
@@ -280,6 +260,8 @@ impl crate::validation::Validate for ParticipantEntries {
 #[serde(transparent)]
 #[schemars(transparent)]
 pub struct ChatOptionFlags(Vec<ChatOptionFlag>);
+
+crate::collection_newtype_ops!(ChatOptionFlags, ChatOptionFlag);
 
 impl ChatOptionFlags {
     /// Appends one flag.

@@ -157,11 +157,9 @@ impl Validate for SinToken {
 #[schemars(transparent)]
 pub struct SinGroupGestures(Vec<SinToken>);
 
+crate::collection_newtype_ops!(SinGroupGestures, SinToken);
+
 impl SinGroupGestures {
-    /// The gestures, borrowed.
-    pub fn as_slice(&self) -> &[SinToken] {
-        &self.0
-    }
     /// Create a new gesture group from a list of tokens.
     ///
     /// Order is preserved because grouped `%sin` serialization is positional and

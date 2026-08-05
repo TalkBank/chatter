@@ -87,6 +87,8 @@ pub enum PhoItem {
 /// - [Phonology tier](https://talkbank.org/0info/manuals/CHAT.html#Phonology)
 pub struct PhoGroupWords(Vec<PhoWord>);
 
+crate::collection_newtype_ops!(PhoGroupWords, PhoWord);
+
 impl PhoGroupWords {
     /// Creates a new group of phonological words.
     ///

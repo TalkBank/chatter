@@ -9,6 +9,49 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-05
+
+**Validation verdicts: UNCHANGED.** No rule was added, removed or altered, and
+no file changes its valid/invalid verdict. This release completes the library
+API that v0.9.0 closed the fields on, and every entry below was found by
+compiling a real downstream consumer against v0.9.0, which is a gate this
+project did not previously have.
+
+### Added
+
+- **`into_vec()`, `take()` and `retain()` on every collection newtype.** v0.9.0
+  made these types' inner fields private but shipped only the READING half of
+  the resulting API. With no consuming accessor there was no way to move the
+  items out, so a consumer rebuilding a content list or resegmenting a file
+  could only clone through `as_slice().to_vec()`, on paths that run per
+  utterance; and with no `retain`, every caller wrote take-edit-rebuild by
+  hand, which hands a closure a `&mut Vec<_>` and is `DerefMut` under another
+  name. Downstream, these three methods delete three helper functions and
+  sixteen copies of one incantation.
+- **One owner for that API.** `collection_newtype_ops!` now emits the accessor
+  set for all seventeen `Vec`-backed newtypes. They had drifted while
+  hand-written: `into_vec` was on 6 of 17, `as_slice` on 11, `as_mut_slice` on
+  6, so what a consumer could do depended on which type it happened to hold.
+- **`TierContentItems` and `BracketedItems` are re-exported from `model`.**
+  Both were `pub` but reachable only through a glob, so a consumer could not
+  name the type to reconstruct one after its field closed.
+
+### Fixed
+
+- **A doc-comment claim that was not true.** Several comments said
+  reconstruction "goes through `new`, where a future invariant would be
+  enforced". Every one of these seventeen types also has `impl From<Vec<T>>`
+  and `impl Deref<Target = Vec<T>>`, so `new` is not the only door and no
+  invariant is enforceable on them today. Closing the fields prevents literal
+  construction and destructuring, and nothing more. The docs now say that, and
+  name the open question (whether `From` should become `TryFrom`) rather than
+  implying it is already answered.
+- **A test whose "unique" temporary directory repeated 98% of the time.** The
+  name was the pid plus `SystemTime::now()`, but the pid is constant across a
+  test binary and 19,584 of 20,000 consecutive `SystemTime` samples measured
+  identical, so parallel tests shared a directory and one's cleanup deleted the
+  other's file. Now a process-wide counter.
+
 ## [0.9.0] - 2026-08-05
 
 **Validation verdicts: CHANGED, in the permissive direction.** Files that

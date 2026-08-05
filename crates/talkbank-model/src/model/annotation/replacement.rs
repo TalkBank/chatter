@@ -46,28 +46,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[schemars(transparent)]
 pub struct ReplacementWords(Vec<Word>);
 
-impl ReplacementWords {
-    /// The words, borrowed.
-    pub fn as_slice(&self) -> &[Word] {
-        &self.0
-    }
-
-    /// The words, mutably.
-    ///
-    /// Mutation was already possible through the `pub` inner field, so this is
-    /// the same capability behind a named door rather than a new one.
-    ///
-    /// NOTE, and read this before relying on the closed field for anything:
-    /// this type also implements `DerefMut<Target = Vec<_>>`, which hands out
-    /// the whole `Vec` API. Closing the tuple field therefore prevents literal
-    /// construction and destructuring and NOTHING ELSE; it does not reserve
-    /// room for a future invariant, because `push`, `retain`, `clear` and the
-    /// rest remain reachable. An earlier version of this comment claimed
-    /// otherwise and was wrong.
-    pub fn as_mut_slice(&mut self) -> &mut [Word] {
-        &mut self.0
-    }
-}
+crate::collection_newtype_ops!(ReplacementWords, Word);
 
 impl ReplacementWords {
     /// Wraps replacement tokens in transcript order.
@@ -231,6 +210,8 @@ impl crate::validation::Validate for ReplacementWords {
 #[serde(transparent)]
 #[schemars(transparent)]
 pub struct ReplacedWordAnnotations(Vec<ContentAnnotation>);
+
+crate::collection_newtype_ops!(ReplacedWordAnnotations, ContentAnnotation);
 
 impl ReplacedWordAnnotations {
     /// Wraps scoped annotations attached to a replaced word.

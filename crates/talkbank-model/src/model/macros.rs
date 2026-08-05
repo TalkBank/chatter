@@ -223,3 +223,94 @@ macro_rules! interned_newtype {
         }
     };
 }
+
+/// The accessor set every `Vec`-backed collection newtype in the model owes a
+/// consumer: `as_slice`, `as_mut_slice`, `into_vec`, `take`.
+///
+/// `is_empty`/`len`/`iter` are deliberately NOT here: `Deref<Target = Vec<T>>`
+/// already supplies them, and emitting them would collide with the
+/// hand-written ones on unrelated types sharing these files.
+///
+/// # Why this exists
+///
+/// Seventeen types wrap a `Vec` behind a private field, and before this macro
+/// each hand-wrote its own subset. They had already drifted: `into_vec` was on
+/// 6 of 17, `as_slice` on 11, `as_mut_slice` on 6, so what a consumer could do
+/// depended on which type it happened to hold. v0.9.0 then closed the fields
+/// without the consuming half, and a downstream pipeline could not move data
+/// out of the ones that lacked `into_vec` at all.
+///
+/// One owner ends that: a type either invokes this and has the whole set, or
+/// does not and has none of it. Per-type extras (`push`, `insert`, `remove`,
+/// `append`, `pop`, `extend`) stay hand-written, because they genuinely differ.
+///
+/// # What closing the field does and does not buy, stated honestly
+///
+/// It prevents literal construction and destructuring. It does NOT currently
+/// reserve room for a future invariant, because every one of these types also
+/// has `impl From<Vec<T>>` and `impl Deref<Target = Vec<T>>`, so a caller can
+/// still build any list at all in one call and read all of it. Any claim that
+/// reconstruction "goes through `new`, where an invariant would be checked" is
+/// false while that `From` exists. Deciding whether these types should carry
+/// invariants (and therefore whether `From` should become `TryFrom`) is an open
+/// design question. NOTE that this macro is not yet where that answer would be
+/// applied: `Deref`, `From<Vec<T>>`, `new` and `is_empty` are still hand-written
+/// on all seventeen types, so changing `From` today is a seventeen-site edit.
+/// Moving those four into this macro is the prerequisite, and is worth doing
+/// whichever way the invariant question goes.
+#[macro_export]
+macro_rules! collection_newtype_ops {
+    ($name:ident, $item:ty) => {
+        impl $name {
+            /// Borrows the items.
+            pub fn as_slice(&self) -> &[$item] {
+                &self.0
+            }
+
+            /// Borrows the items for ELEMENT mutation.
+            ///
+            /// A slice, not a `&mut Vec`: elements may be rewritten in place
+            /// but the collection cannot be resized through it. Resizing goes
+            /// through [`take`](Self::take) and reconstruction, so the length
+            /// only ever changes at a point the type can see.
+            pub fn as_mut_slice(&mut self) -> &mut [$item] {
+                &mut self.0
+            }
+
+            /// Consumes the wrapper and returns the owned items.
+            ///
+            /// A consuming accessor cannot violate an invariant, because the
+            /// value it came from no longer exists.
+            pub fn into_vec(self) -> Vec<$item> {
+                self.0
+            }
+
+            /// Moves the items out, leaving this collection empty.
+            ///
+            /// The `&mut` counterpart of [`into_vec`](Self::into_vec), for the
+            /// common "rebuild this list in place" shape. Without it every
+            /// caller writes `std::mem::replace(x, T::new(Vec::new())).into_vec()`
+            /// by hand; that incantation appeared sixteen times in one
+            /// downstream migration before this existed.
+            pub fn take(&mut self) -> Vec<$item> {
+                std::mem::take(&mut self.0)
+            }
+
+            /// Keeps only the items matching `f`.
+            ///
+            /// A NAMED length-shrinking operation, and the reason it belongs
+            /// here rather than downstream: without it every caller does
+            /// `take()`, `retain` on the raw `Vec`, and rebuild, which hands a
+            /// `&mut Vec<_>` to a closure that can do anything at all. That is
+            /// `DerefMut` with ceremony, and `DerefMut` is what closing these
+            /// fields removed. Three such helpers had grown in one downstream
+            /// pipeline before this existed.
+            ///
+            /// It is also the operation an invariant would most need to
+            /// re-check, and here it CAN: it owns `&mut self`.
+            pub fn retain(&mut self, f: impl FnMut(&$item) -> bool) {
+                self.0.retain(f);
+            }
+        }
+    };
+}
