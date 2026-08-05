@@ -156,7 +156,7 @@ fn parse_wor(input: &str) -> WorParse {
     let mut items = Vec::new();
     let mut terminator = None;
     let mut saw_wor_tier = false;
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
                 if let DependentTier::Wor(t) = &dt.tier {

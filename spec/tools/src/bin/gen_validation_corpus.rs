@@ -12,10 +12,10 @@ use anyhow::Result;
 use clap::Parser;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use generators::spec::error_corpus::{ErrorCorpusExample, ErrorCorpusSpec, Status};
 use generators::owned_output::clear_owned;
+use generators::spec::error_corpus::{ErrorCorpusExample, ErrorCorpusSpec, Status};
 use generators::spec::validation_manifest::{
     FixtureName, ValidationFixtureEntry, ValidationManifest,
 };
@@ -78,9 +78,23 @@ fn main() -> Result<()> {
 
     let mut manifest = ValidationManifest {
         fixtures: planned.into_iter().map(|f| f.entry).collect(),
+        // An implemented rule owes a fixture. `UnreachableFromChat` is the
+        // one state that cannot pay: no CHAT input reaches the rule, so it
+        // owes a named out-of-corpus test instead, and is excluded here rather
+        // than being quietly absent from the loader as before.
         implemented_specs_without_examples: validation_specs
             .iter()
             .filter(|spec| spec.metadata.status == Status::Implemented && spec.examples.is_empty())
+            .map(ErrorCorpusSpec::source_path_display)
+            .collect(),
+        // The converse, so the new state cannot become a way to opt a
+        // perfectly reachable rule out of its fixture: if an example exists,
+        // the rule is reachable and the status is wrong.
+        unreachable_specs_with_examples: validation_specs
+            .iter()
+            .filter(|spec| {
+                spec.metadata.status == Status::UnreachableFromChat && !spec.examples.is_empty()
+            })
             .map(ErrorCorpusSpec::source_path_display)
             .collect(),
     };
@@ -88,6 +102,7 @@ fn main() -> Result<()> {
         .fixtures
         .sort_by(|a, b| a.fixture.as_str().cmp(b.fixture.as_str()));
     manifest.implemented_specs_without_examples.sort();
+    manifest.unreachable_specs_with_examples.sort();
 
     let manifest_json = serde_json::to_string_pretty(&manifest)? + "\n";
     fs::write(args.corpus_dir.join("manifest.json"), &manifest_json)?;
@@ -169,6 +184,11 @@ fn sanitize_filename(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    // `Path` is used only here, so importing it at file scope warned on the
+    // non-test build. Scope it to the module that needs it rather than
+    // silencing the warning.
+    use std::path::Path;
+
     use super::*;
 
     fn write_spec(dir: &Path, name: &str, body: &str) {
@@ -179,7 +199,10 @@ mod tests {
 
     #[test]
     fn sanitize_collapses_runs_of_separators() {
-        assert_eq!(sanitize_filename("Illegal 'xx' marker"), "Illegal_xx_marker");
+        assert_eq!(
+            sanitize_filename("Illegal 'xx' marker"),
+            "Illegal_xx_marker"
+        );
         assert_eq!(sanitize_filename("a -- b"), "a_b");
     }
 
@@ -210,7 +233,11 @@ mod tests {
             planned[0].entry.fixture.as_str(),
             planned[1].entry.fixture.as_str()
         );
-        assert!(planned.iter().all(|f| f.entry.status == Status::Implemented));
+        assert!(
+            planned
+                .iter()
+                .all(|f| f.entry.status == Status::Implemented)
+        );
         assert!(planned[0].entry.source_spec.ends_with("E999_multi.md"));
     }
 }

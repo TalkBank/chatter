@@ -29,21 +29,22 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// # Construction
 ///
-/// Use `NonEmptyString::new()` which returns `Option<NonEmptyString>`:
+/// Use `NonEmptyString::new()`, which returns `Result<NonEmptyString, EmptyText>`,
+/// or the equivalent `TryFrom<&str>`:
 ///
 /// ```
 /// use talkbank_model::model::NonEmptyString;
 ///
 /// // Successful construction
-/// if let Some(s) = NonEmptyString::new("hello") {
+/// if let Ok(s) = NonEmptyString::new("hello") {
 ///     assert_eq!(s.as_str(), "hello");
 /// }
 ///
 /// // Whitespace is valid (non-empty)
-/// assert!(NonEmptyString::new("   ").is_some());
+/// assert!(NonEmptyString::new("   ").is_ok());
 ///
 /// // Only empty string is rejected
-/// assert!(NonEmptyString::new("").is_none());
+/// assert!(NonEmptyString::new("").is_err());
 /// ```
 ///
 /// # Validation
@@ -67,7 +68,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// ```
 /// use talkbank_model::model::NonEmptyString;
 ///
-/// if let Some(s) = NonEmptyString::new("hello") {
+/// if let Ok(s) = NonEmptyString::new("hello") {
 ///     assert_eq!(s.as_str().get(0..2), Some("he"));  // str methods work via Deref
 /// }
 /// ```
@@ -81,28 +82,51 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[serde(transparent)]
 pub struct NonEmptyString(smol_str::SmolStr);
 
+/// Why constructing a non-empty text newtype failed.
+///
+/// One shared type rather than one per newtype: the fact is the same in every
+/// case (the input was empty), and the caller already knows which type it
+/// asked for. A per-type error would carry no information the call site does
+/// not have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("text cannot be empty")]
+pub struct EmptyText;
+
+impl TryFrom<&str> for NonEmptyString {
+    type Error = EmptyText;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
 impl NonEmptyString {
     /// Create a new `NonEmptyString` if the input is non-empty.
     ///
-    /// Returns `None` only for truly empty input (`""`).
     /// Whitespace-only strings are accepted because this type enforces lexical
     /// non-emptiness, while higher-level semantic rules decide whether blanks are meaningful.
+    ///
+    /// # Errors
+    ///
+    /// [`EmptyText`] for truly empty input (`""`). A `Result` rather than an
+    /// `Option` because `None` discards the reason, and this constructor now
+    /// has exactly one reason to fail that a caller may want to report.
     ///
     /// # Examples
     ///
     /// ```
     /// use talkbank_model::model::NonEmptyString;
     ///
-    /// assert!(NonEmptyString::new("hello").is_some());
-    /// assert!(NonEmptyString::new("   ").is_some());  // whitespace is valid
-    /// assert!(NonEmptyString::new("").is_none());
+    /// assert!(NonEmptyString::new("hello").is_ok());
+    /// assert!(NonEmptyString::new("   ").is_ok());  // whitespace is valid
+    /// assert!(NonEmptyString::new("").is_err());
     /// ```
-    pub fn new(s: impl AsRef<str>) -> Option<Self> {
+    pub fn new(s: impl AsRef<str>) -> Result<Self, EmptyText> {
         let s = s.as_ref();
         if s.is_empty() {
-            None
+            Err(EmptyText)
         } else {
-            Some(Self(smol_str::SmolStr::from(s)))
+            Ok(Self(smol_str::SmolStr::from(s)))
         }
     }
 
@@ -200,30 +224,29 @@ mod tests {
     /// Non-empty inputs construct successfully.
     #[test]
     fn test_construction() {
-        assert!(NonEmptyString::new("hello").is_some());
-        assert!(NonEmptyString::new("a").is_some());
-        assert!(NonEmptyString::new(" x ").is_some());
+        assert!(NonEmptyString::new("hello").is_ok());
+        assert!(NonEmptyString::new("a").is_ok());
+        assert!(NonEmptyString::new(" x ").is_ok());
     }
 
     /// Empty input is rejected by `new()`.
     #[test]
     fn test_empty_rejected() {
-        assert!(NonEmptyString::new("").is_none());
+        assert!(NonEmptyString::new("").is_err());
     }
 
     /// Whitespace-only input is still non-empty and therefore valid.
     #[test]
     fn test_whitespace_allowed() {
         // Whitespace-only strings are valid (not empty)
-        assert!(NonEmptyString::new("   ").is_some());
-        assert!(NonEmptyString::new("\t\n").is_some());
+        assert!(NonEmptyString::new("   ").is_ok());
+        assert!(NonEmptyString::new("\t\n").is_ok());
     }
 
     /// `Deref<str>` behavior is available.
     #[test]
     fn test_deref() -> Result<(), String> {
-        let s = NonEmptyString::new("hello")
-            .ok_or_else(|| "Expected NonEmptyString for 'hello'".to_string())?;
+        let s = NonEmptyString::new("hello").map_err(|error| error.to_string())?;
         assert_eq!(s.as_str().get(0..2), Some("he"));
         assert_eq!(s.len(), 5);
         Ok(())
@@ -232,8 +255,7 @@ mod tests {
     /// `Display` prints inner contents.
     #[test]
     fn test_display() -> Result<(), String> {
-        let s = NonEmptyString::new("hello")
-            .ok_or_else(|| "Expected NonEmptyString for 'hello'".to_string())?;
+        let s = NonEmptyString::new("hello").map_err(|error| error.to_string())?;
         assert_eq!(format!("{}", s), "hello");
         Ok(())
     }
@@ -241,8 +263,7 @@ mod tests {
     /// Serde roundtrip preserves values.
     #[test]
     fn test_serde_roundtrip() -> Result<(), String> {
-        let s = NonEmptyString::new("hello")
-            .ok_or_else(|| "Expected NonEmptyString for 'hello'".to_string())?;
+        let s = NonEmptyString::new("hello").map_err(|error| error.to_string())?;
         let json = serde_json::to_string(&s)
             .map_err(|err| format!("Failed to serialize NonEmptyString: {err}"))?;
         assert_eq!(json, "\"hello\"");

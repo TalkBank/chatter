@@ -1,5 +1,6 @@
 ---
-source: rust/crates/talkbank-tree-sitter-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
+source: crates/talkbank-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
+assertion_line: 172
 expression: result
 ---
 Ok(
@@ -10,6 +11,7 @@ Ok(
             ),
             media_type: Video,
             status: None,
+            whitespace_before_comma: None,
         },
     ),
 )

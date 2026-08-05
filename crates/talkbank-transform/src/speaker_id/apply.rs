@@ -38,7 +38,7 @@ pub fn apply_mapping(
 pub fn apply_mapping_chat(chat: &ChatFile, mapping: &MappingSpec) -> String {
     let mut new_lines: Vec<Line> = Vec::new();
 
-    for line in chat.lines.0.iter() {
+    for line in chat.lines.as_slice().iter() {
         match line {
             Line::Utterance(u) => match mapping.get(&u.main.speaker) {
                 Some(SpeakerAssignment::Drop) => { /* skip */ }

@@ -121,8 +121,8 @@ fn fold_phonetic(content_items: Vec<WordContent>) -> Vec<WordContent> {
         }
     }
     match talkbank_model::WordPhonetic::new(&phonetic) {
-        Some(form) => vec![WordContent::Phonetic(form)],
-        None => content_items,
+        Ok(form) => vec![WordContent::Phonetic(form)],
+        Err(_) => content_items,
     }
 }
 

@@ -136,7 +136,7 @@ pub(crate) fn check_code_glued_to_following_content(
     utterance: &Utterance,
     errors: &impl ErrorSink,
 ) {
-    for pair in utterance.main.content.content.0.windows(2) {
+    for pair in utterance.main.content.content.as_slice().windows(2) {
         let Some(code_end) = glued_code_end(&pair[0]) else {
             continue;
         };
@@ -188,26 +188,30 @@ pub(crate) fn check_prefixed_form_glued_to_preceding_word(
 ) {
     let mut prev_word_end: Option<u32> = None;
 
-    walk_content(&utterance.main.content.content.0, None, &mut |item| {
-        if let ContentItem::Word(word) = &item
-            && word.span != crate::Span::DUMMY
-            && is_ampersand_prefixed(word)
-            && let Some(end) = prev_word_end
-            && word.span.start == end
-        {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::PrefixedFormGluedToPrecedingWord,
-                    Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new("&", word.span, "&"),
-                    "Prefixed form must be separated from the preceding word by a space",
-                )
-                .with_suggestion("Add a space between the word and the prefixed form"),
-            );
-        }
-        prev_word_end = word_end(&item);
-    });
+    walk_content(
+        utterance.main.content.content.as_slice(),
+        None,
+        &mut |item| {
+            if let ContentItem::Word(word) = &item
+                && word.span != crate::Span::DUMMY
+                && is_ampersand_prefixed(word)
+                && let Some(end) = prev_word_end
+                && word.span.start == end
+            {
+                errors.report(
+                    ParseError::new(
+                        ErrorCode::PrefixedFormGluedToPrecedingWord,
+                        Severity::Error,
+                        SourceLocation::new(word.span),
+                        ErrorContext::new("&", word.span, "&"),
+                        "Prefixed form must be separated from the preceding word by a space",
+                    )
+                    .with_suggestion("Add a space between the word and the prefixed form"),
+                );
+            }
+            prev_word_end = word_end(&item);
+        },
+    );
 }
 
 /// Whether nothing may be glued after this separator.
@@ -308,7 +312,7 @@ pub(crate) fn check_separator_glued_to_following_content(
     utterance: &Utterance,
     errors: &impl ErrorSink,
 ) {
-    for pair in utterance.main.content.content.0.windows(2) {
+    for pair in utterance.main.content.content.as_slice().windows(2) {
         let Some(end) = free_standing_end(&pair[0]) else {
             continue;
         };
@@ -340,23 +344,27 @@ pub(crate) fn check_separator_glued_to_following_content(
 pub(crate) fn check_pause_glued_to_word(utterance: &Utterance, errors: &impl ErrorSink) {
     let mut prev_word_end: Option<u32> = None;
 
-    walk_content(&utterance.main.content.content.0, None, &mut |item| {
-        if let ContentItem::Pause(pause) = item
-            && pause.span != crate::Span::DUMMY
-            && let Some(end) = prev_word_end
-            && pause.span.start == end
-        {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::PauseGluedToWord,
-                    Severity::Error,
-                    SourceLocation::new(pause.span),
-                    ErrorContext::new("(", pause.span, "("),
-                    "Pause must be separated from the preceding word by a space",
-                )
-                .with_suggestion("Add a space between the word and the pause"),
-            );
-        }
-        prev_word_end = word_end(&item);
-    });
+    walk_content(
+        utterance.main.content.content.as_slice(),
+        None,
+        &mut |item| {
+            if let ContentItem::Pause(pause) = item
+                && pause.span != crate::Span::DUMMY
+                && let Some(end) = prev_word_end
+                && pause.span.start == end
+            {
+                errors.report(
+                    ParseError::new(
+                        ErrorCode::PauseGluedToWord,
+                        Severity::Error,
+                        SourceLocation::new(pause.span),
+                        ErrorContext::new("(", pause.span, "("),
+                        "Pause must be separated from the preceding word by a space",
+                    )
+                    .with_suggestion("Add a space between the word and the pause"),
+                );
+            }
+            prev_word_end = word_end(&item);
+        },
+    );
 }

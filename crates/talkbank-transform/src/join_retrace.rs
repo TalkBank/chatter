@@ -388,7 +388,7 @@ fn perform_join<S: ValidationState>(
     };
     let v = *v;
 
-    let Some(Line::Utterance(u)) = chat.lines.get_mut(u_index) else {
+    let Some(Line::Utterance(u)) = chat.lines.as_mut_slice().get_mut(u_index) else {
         return;
     };
 
@@ -407,7 +407,7 @@ fn perform_join<S: ValidationState>(
     let TierContent {
         linkers: _,
         language_code: _,
-        content: mut v_items,
+        content: v_items,
         terminator: v_terminator,
         postcodes: v_postcodes,
         bullet: v_bullet,
@@ -419,13 +419,13 @@ fn perform_join<S: ValidationState>(
     let unioned_bullet = union_bullets(u.main.content.bullet.as_ref(), v_bullet.as_ref());
 
     // Append V's content onto U's (U keeps its trailing retrace marker).
-    u.main.content.content.0.append(&mut v_items.0);
+    u.main.content.content.append(v_items);
 
     // The joined utterance is terminated by V's terminator.
     u.main.content.terminator = v_terminator;
 
     // V's postcodes follow the joined content's terminator.
-    u.main.content.postcodes.0.extend(v_postcodes.0);
+    u.main.content.postcodes.append(v_postcodes);
 
     // Apply the unioned bullet (or clear if neither side had one).
     u.main.content.bullet = unioned_bullet;

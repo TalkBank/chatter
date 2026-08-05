@@ -4,7 +4,7 @@
 //! callers (crossbeam worker threads in `validate_parallel.rs`) remain
 //! synchronous while database operations run async internally.
 //!
-//! Every one of those bridges goes through [`blocking::block_on`], never
+//! Every one of those bridges goes through [`blocking::ConfinedRuntime::block_on`], never
 //! `Runtime::block_on` directly, so that a caller which is itself driving a
 //! runtime cannot nest one runtime inside another. See that module for the
 //! four-week outage that rule was written from.
@@ -36,7 +36,7 @@ use crate::{CacheOutcome, ValidationCache};
 ///
 /// The `ValidationCache` trait is sync (required by crossbeam worker threads),
 /// so `CachePool` holds a dedicated single-threaded tokio runtime and bridges
-/// sync ↔ async through [`blocking::block_on`], which is safe to call from any
+/// sync ↔ async through [`blocking::ConfinedRuntime::block_on`], which is safe to call from any
 /// thread including one already driving a runtime.
 ///
 /// Every read and write binds `rules_version` into the `version` column, so a
@@ -46,12 +46,34 @@ use crate::{CacheOutcome, ValidationCache};
 /// [`Self::version_prune`].
 pub struct CachePool {
     pool: SqlitePool,
-    rt: tokio::runtime::Runtime,
+    rt: blocking::ConfinedRuntime,
     /// Cache-compatibility version bound into every row this pool reads/writes.
     rules_version: RulesVersion,
     /// What the reachability prune did when this pool was opened, so the caller
     /// can tell an operator rather than reclaiming 190 MB in silence.
     version_prune: VersionPruneOutcome,
+}
+
+/// The runtime every pool bridges its async database work through.
+///
+/// One helper rather than the same sixteen lines in both constructors, which is
+/// where it started.
+///
+/// MULTI-THREAD, with one worker, deliberately. A current-thread runtime only
+/// advances while someone calls `Runtime::block_on` on it, and
+/// [`blocking::ConfinedRuntime`] hands ownership to a thread that PARKS rather
+/// than driving it, so `Handle::block_on` from a caller would queue the task
+/// and then wait forever for nobody to run it. Measured 2026-08-04: that
+/// deadlocked the suite outright. One worker thread drives the runtime itself,
+/// which is what makes `Handle::block_on` work from any caller.
+fn confined_runtime() -> Result<blocking::ConfinedRuntime, CacheError> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .map_err(|e| CacheError::Message(format!("failed to create tokio runtime: {e}")))?;
+    blocking::ConfinedRuntime::new(runtime)
+        .map_err(|e| CacheError::Message(format!("failed to spawn the runtime owner: {e}")))
 }
 
 // -- CachePool constructors --------------------------------------------------
@@ -128,10 +150,7 @@ impl CachePool {
 
         let db_path = cache_location::cache_db_path(&cache_dir);
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| CacheError::Message(format!("failed to create tokio runtime: {e}")))?;
+        let rt = confined_runtime()?;
 
         // Serialize the one-time create + WAL setup + migrate against every
         // concurrent opener (other threads AND other processes) with an
@@ -140,26 +159,23 @@ impl CachePool {
         // ready database where the migrator no-ops. See `init_lock` module
         // docs for the race this closes and the incident history.
         let init_lock = InitLock::acquire(&cache_dir)?;
-        let pool = blocking::block_on(&rt, Self::open_file_pool(&db_path))?;
+        let pool = rt.block_on(Self::open_file_pool(&db_path))?;
         // Release before maintenance: the lock guards initialization only.
         // `clean_expired` is an ordinary write, serialized like any other
         // by WAL + busy_timeout, and may be slow on a large cache.
         drop(init_lock);
 
         // Run expired entry cleanup eagerly so DB is ready before worker threads start.
-        blocking::block_on(&rt, Self::clean_expired(&pool))?;
+        rt.block_on(Self::clean_expired(&pool))?;
 
         // Then drop what no reader can bind. Both passes run here, before any
         // worker thread starts, and they answer different questions: the one
         // above deletes what is STALE, this one deletes what is UNREACHABLE.
-        let version_prune = blocking::block_on(
-            &rt,
-            version_prune::prune_unreachable_versions(
-                &pool,
-                Some(db_path.as_path()),
-                &rules_version,
-            ),
-        )?;
+        let version_prune = rt.block_on(version_prune::prune_unreachable_versions(
+            &pool,
+            Some(db_path.as_path()),
+            &rules_version,
+        ))?;
 
         Ok(Self {
             pool,
@@ -184,12 +200,9 @@ impl CachePool {
     /// [`Self::with_directory_and_rules_version`] for why an injected version
     /// matters.
     pub fn in_memory_with_rules_version(rules_version: RulesVersion) -> Result<Self, CacheError> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| CacheError::Message(format!("failed to create tokio runtime: {e}")))?;
+        let rt = confined_runtime()?;
 
-        let pool = blocking::block_on(&rt, async {
+        let pool = rt.block_on(async {
             let options = SqliteConnectOptions::from_str("sqlite::memory:")
                 .map_err(|source| CacheError::InitDatabase { source })?;
 
@@ -331,10 +344,12 @@ impl CachePool {
 
     /// Get cached validation result: `Some(true)` = valid, `Some(false)` = invalid, `None` = miss.
     pub fn get_validation(&self, path: &Path, check_alignment: bool) -> Option<bool> {
-        blocking::block_on(
-            &self.rt,
-            validation_ops::get_validation(&self.pool, &self.rules_version, path, check_alignment),
-        )
+        self.rt.block_on(validation_ops::get_validation(
+            &self.pool,
+            &self.rules_version,
+            path,
+            check_alignment,
+        ))
     }
 
     /// Store validation result as pass/fail.
@@ -344,16 +359,13 @@ impl CachePool {
         check_alignment: bool,
         valid: bool,
     ) -> Result<(), CacheError> {
-        blocking::block_on(
-            &self.rt,
-            validation_ops::set_validation(
-                &self.pool,
-                &self.rules_version,
-                path,
-                check_alignment,
-                valid,
-            ),
-        )
+        self.rt.block_on(validation_ops::set_validation(
+            &self.pool,
+            &self.rules_version,
+            path,
+            check_alignment,
+            valid,
+        ))
     }
 
     // ==================== Roundtrip Operations ====================
@@ -365,16 +377,13 @@ impl CachePool {
         check_alignment: bool,
         parser_kind: &str,
     ) -> Option<bool> {
-        blocking::block_on(
-            &self.rt,
-            roundtrip_ops::get_roundtrip(
-                &self.pool,
-                &self.rules_version,
-                path,
-                check_alignment,
-                parser_kind,
-            ),
-        )
+        self.rt.block_on(roundtrip_ops::get_roundtrip(
+            &self.pool,
+            &self.rules_version,
+            path,
+            check_alignment,
+            parser_kind,
+        ))
     }
 
     /// Store roundtrip result as pass/fail.
@@ -385,24 +394,22 @@ impl CachePool {
         parser_kind: &str,
         passed: bool,
     ) -> Result<(), CacheError> {
-        blocking::block_on(
-            &self.rt,
-            roundtrip_ops::set_roundtrip(
-                &self.pool,
-                &self.rules_version,
-                path,
-                check_alignment,
-                parser_kind,
-                passed,
-            ),
-        )
+        self.rt.block_on(roundtrip_ops::set_roundtrip(
+            &self.pool,
+            &self.rules_version,
+            path,
+            check_alignment,
+            parser_kind,
+            passed,
+        ))
     }
 
     // ==================== Maintenance Operations ====================
 
     /// Clear cache entries for files matching a path prefix.
     pub fn clear_prefix(&self, prefix: &str) -> Result<usize, CacheError> {
-        blocking::block_on(&self.rt, maintenance_ops::clear_prefix(&self.pool, prefix))
+        self.rt
+            .block_on(maintenance_ops::clear_prefix(&self.pool, prefix))
     }
 
     /// Clear the cache entries for an explicit set of files, batched.
@@ -415,27 +422,26 @@ impl CachePool {
             .iter()
             .map(|p| p.to_string_lossy().into_owned())
             .collect();
-        blocking::block_on(
-            &self.rt,
-            maintenance_ops::clear_paths(&self.pool, &path_strings),
-        )
+        self.rt
+            .block_on(maintenance_ops::clear_paths(&self.pool, &path_strings))
     }
 
     /// Clear all cache entries.
     pub fn clear_all(&self) -> Result<(), CacheError> {
-        blocking::block_on(&self.rt, maintenance_ops::clear_all(&self.pool))
+        self.rt.block_on(maintenance_ops::clear_all(&self.pool))
     }
 
     /// Purge cache entries for files that no longer exist on disk.
     pub fn purge_nonexistent(&self) -> Result<usize, CacheError> {
-        blocking::block_on(&self.rt, maintenance_ops::purge_nonexistent(&self.pool))
+        self.rt
+            .block_on(maintenance_ops::purge_nonexistent(&self.pool))
     }
 
     // ==================== Statistics ====================
 
     /// Get cache statistics.
     pub fn stats(&self) -> Result<CacheStats, CacheError> {
-        blocking::block_on(&self.rt, async {
+        self.rt.block_on(async {
             let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM file_cache")
                 .fetch_one(&self.pool)
                 .await

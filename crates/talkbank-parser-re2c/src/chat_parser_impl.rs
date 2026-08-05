@@ -68,7 +68,7 @@ impl ChatParser for Re2cParser {
             // ChatFile<S> derives SpanShift but requires S: SpanShift, and
             // NotValidated is a zero-size marker without that impl.
             // Shift each line individually instead.
-            for line in file.lines.iter_mut() {
+            for line in file.lines.as_mut_slice().iter_mut() {
                 line.shift_spans_after(0, offset as i32);
             }
         }

@@ -121,7 +121,7 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
     desc.pid = Some(PidValue::new("11312/a-00065721-1"));
     desc.date = Some(ChatDate::new("07-JUL-1998"));
     desc.situation = Some(SituationDescription::new("Honors Advising Office"));
-    desc.options = Some(ChatOptionFlags(vec![ChatOptionFlag::Ca]));
+    desc.options = Some(ChatOptionFlags::new(vec![ChatOptionFlag::Ca]));
     desc.transcriber = Some(TranscriberName::new("Jane Doe"));
 
     let chat = build_chat(&desc).expect("build_chat");
@@ -191,4 +191,24 @@ fn text_utterance_is_parsed_into_the_model() {
         .iter()
         .any(|line| matches!(line, Line::Utterance(_)));
     assert!(has_utterance, "the CHI text utterance should be present");
+}
+
+/// A media name carrying the `@Media` delimiter must not be accepted
+/// silently. The comma separates the filename from the media type, so a
+/// filename containing one serializes to a header that re-parses as a
+/// DIFFERENT filename and a different media type. `build_chat` must report
+/// it rather than emit a transcript whose own header contradicts the value
+/// it was given.
+#[test]
+fn a_media_name_containing_the_delimiter_is_rejected() {
+    let mut desc = desc_with(None);
+    desc.media_name = Some("take1,take2".to_string());
+    let built = build_chat(&desc);
+    assert!(
+        built.is_err(),
+        "expected a rejection, got a header reading {:?}",
+        built
+            .as_ref()
+            .map(|chat| media_header(chat).filename.as_str())
+    );
 }

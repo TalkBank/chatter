@@ -43,7 +43,7 @@ pub fn sanitize(
 ) -> Result<SanitizedDocument, RedactError> {
     let mut state = PlaceholderState::new();
 
-    for line in input.lines.0.iter_mut() {
+    for line in input.lines.as_mut_slice().iter_mut() {
         match line {
             Line::Header { header, .. } => {
                 sanitize_header(header);
@@ -53,7 +53,7 @@ pub fn sanitize(
                     sanitize_header(header);
                 }
 
-                let main_content = utt.main.content.content.0.as_mut_slice();
+                let main_content = utt.main.content.content.as_mut_slice();
                 walk_content_mut(main_content, None, &mut |item| {
                     sanitize_content_item(item, &mut state);
                 });
@@ -76,7 +76,7 @@ fn sanitize_content_item(item: ContentItemMut<'_>, state: &mut PlaceholderState)
         ContentItemMut::Word(word) => sanitize_word(word, state),
         ContentItemMut::ReplacedWord(replaced) => {
             sanitize_word(&mut replaced.word, state);
-            for word in replaced.replacement.words.0.iter_mut() {
+            for word in replaced.replacement.words.as_mut_slice().iter_mut() {
                 sanitize_word(word, state);
             }
         }

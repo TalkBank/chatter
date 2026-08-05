@@ -9,7 +9,7 @@
 
 use clap::Parser as ClapParser;
 use comrak::nodes::{AstNode, NodeValue};
-use comrak::{format_commonmark, parse_document, Arena, Options};
+use comrak::{Arena, Options, format_commonmark, parse_document};
 use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -125,12 +125,11 @@ fn discover_specs(dir: &Path) -> Result<Vec<PathBuf>, FixLayerError> {
         })?;
         let path = entry.path();
 
-        if path.is_file() {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with("_auto.md") {
-                    files.push(path);
-                }
-            }
+        if path.is_file()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && name.ends_with("_auto.md")
+        {
+            files.push(path);
         }
     }
 
@@ -184,10 +183,10 @@ fn display_filename(path: &Path) -> String {
 
 fn extract_chat_example<'a>(root: &'a AstNode<'a>) -> Option<String> {
     for node in root.descendants() {
-        if let NodeValue::CodeBlock(block) = &node.data.borrow().value {
-            if block.info == "chat" {
-                return Some(block.literal.clone());
-            }
+        if let NodeValue::CodeBlock(block) = &node.data.borrow().value
+            && block.info == "chat"
+        {
+            return Some(block.literal.clone());
         }
     }
     None
@@ -216,10 +215,10 @@ fn extract_metadata_value<'a>(root: &'a AstNode<'a>, key: &str) -> Option<String
                 in_metadata = normalize_whitespace(&heading_text) == "Metadata";
             }
             NodeValue::Item(_) if in_metadata => {
-                if let Some((item_key, value)) = extract_metadata_item(node) {
-                    if item_key == key {
-                        return Some(value);
-                    }
+                if let Some((item_key, value)) = extract_metadata_item(node)
+                    && item_key == key
+                {
+                    return Some(value);
                 }
             }
             _ => {}
@@ -243,11 +242,11 @@ fn update_metadata_value<'a>(
                 in_metadata = normalize_whitespace(&heading_text) == "Metadata";
             }
             NodeValue::Item(_) if in_metadata => {
-                if let Some((item_key, _)) = extract_metadata_item(node) {
-                    if item_key == key {
-                        set_metadata_item_value(node, value);
-                        return Ok(());
-                    }
+                if let Some((item_key, _)) = extract_metadata_item(node)
+                    && item_key == key
+                {
+                    set_metadata_item_value(node, value);
+                    return Ok(());
                 }
             }
             _ => {}

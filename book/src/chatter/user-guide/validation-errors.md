@@ -39,7 +39,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial, E767: Whitespace before the @Media comma, E768: @Media filename not representable |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -324,6 +324,33 @@ token, instead of surfacing as generic unparsable content (E316).
 One deliberate carve-out: a `++` glued to words on both sides (`un++do`) is
 not a linker but a word run with an empty compound part, and keeps its E233
 diagnosis.
+
+### E767: whitespace before the `@Media` comma
+
+In `@Media` the comma separates the filename from the media type, so the
+filename ends where the comma begins and a space between them belongs to
+neither. Real CLAN rejects it too (CHECK 148), and an unambiguous style
+violation that CLAN rejects is an error here.
+
+The construct is unambiguous, so the grammar deliberately PARSES it rather
+than failing, which is the only way to name the rule and point at the exact
+space. That is a change of diagnostic, not of verdict: before, the `@Media`
+line failed to match and the whole header fell back to `Unknown`, reporting
+E525 about a header chatter had recognised perfectly well alongside E330
+"Missing media_type node" on a line visibly ending in `, audio`. Deleting the
+one space now validates clean.
+
+### E768: `@Media` filename cannot be written and read back
+
+The filename is delimited by the comma that introduces the media type, so a
+few strings cannot survive a round trip through the header: an unquoted comma,
+surrounding whitespace, a line break, a stray double quote, or an empty name. A
+quoted remote URL may contain a comma.
+
+You will not see this one from a transcript. Both parsers end the filename at
+the comma, so no `.cha` file can express a violating value; the rule guards a
+`ChatFile` that arrived as JSON, where deserialization is deliberately lenient
+and validation is what reports the violation.
 
 ### E757 widening: every bracketed code, not only retraces
 

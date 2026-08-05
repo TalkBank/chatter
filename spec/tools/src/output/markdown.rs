@@ -17,6 +17,9 @@ fn status_badge(status: &str) -> &str {
     match status {
         "implemented" => "✅ Active",
         "not_implemented" => "⏳ Planned",
+        // Active too: the rule fires. What it cannot do is be triggered from a
+        // CHAT file, so it carries no corpus fixture and names its own test.
+        "unreachable_from_chat" => "✅ Active (not reachable from CHAT)",
         other => other,
     }
 }
@@ -28,7 +31,9 @@ fn status_badge(status: &str) -> &str {
 fn status_callout(status: &str) -> &'static str {
     match status {
         "implemented" => "This check is active in the validator.\n\n",
-        "not_implemented" => "This check is documented but not yet enforced by the validator. The error code will not fire until implementation is complete.\n\n",
+        "not_implemented" => {
+            "This check is documented but not yet enforced by the validator. The error code will not fire until implementation is complete.\n\n"
+        }
         _ => "\n\n",
     }
 }

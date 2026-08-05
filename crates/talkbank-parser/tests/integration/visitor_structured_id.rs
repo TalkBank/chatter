@@ -89,7 +89,7 @@ fn id_headers_and_diags(input: &str) -> (Vec<String>, Vec<(String, String)>) {
     let chat = parser.parse_chat_file_streaming(input, &errors);
     let headers = chat
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|l| match l {
             Line::Header { header, .. }

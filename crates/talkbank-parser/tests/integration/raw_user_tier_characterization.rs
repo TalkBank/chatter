@@ -89,7 +89,7 @@ fn parse_tiers(input: &str) -> (Vec<Pair>, Vec<Pair>) {
     let chat = parser.parse_chat_file_streaming(input, &errors);
 
     let mut tiers = Vec::new();
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
                 tiers.push(describe_tier(&dt.tier));
@@ -113,11 +113,11 @@ fn describe_tier(dt: &DependentTier) -> (String, String) {
         DependentTier::Eng(t) => ("Eng".to_string(), t.as_str().to_string()),
         DependentTier::UserDefined(t) => (
             format!("UserDefined:{}", t.label.as_str()),
-            t.content.as_str().to_string(),
+            t.content.as_deref().unwrap_or("").to_string(),
         ),
         DependentTier::Unsupported(t) => (
             format!("Unsupported:{}", t.label.as_str()),
-            t.content.as_str().to_string(),
+            t.content.as_deref().unwrap_or("").to_string(),
         ),
         other => (
             format!("{:?}", std::mem::discriminant(other)),

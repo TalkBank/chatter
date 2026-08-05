@@ -13,7 +13,7 @@ use super::*;
 #[test]
 fn test_pho_word_from_str() {
     let word = PhoWord::from("həˈloʊ");
-    assert_eq!(word.0, "həˈloʊ");
+    assert_eq!(word.as_str(), "həˈloʊ");
     assert_eq!(word.as_str(), "həˈloʊ");
 }
 

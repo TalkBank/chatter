@@ -3,8 +3,8 @@
 //! Reads error specs and generates publishable documentation.
 
 use clap::Parser;
-use generators::owned_output::clear_owned;
 use generators::output::markdown;
+use generators::owned_output::clear_owned;
 use generators::spec::ErrorSpec;
 use std::path::PathBuf;
 

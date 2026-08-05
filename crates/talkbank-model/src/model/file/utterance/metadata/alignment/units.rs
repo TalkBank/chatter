@@ -26,7 +26,7 @@ impl AlignmentUnits {
         };
 
         if let Some(tier) = utterance.mor_tier() {
-            let item_count = tier.items.0.len();
+            let item_count = tier.items.len();
             units.mor = (0..item_count)
                 .map(|index| AlignmentUnit { index, span: None })
                 .collect();
@@ -44,14 +44,14 @@ impl AlignmentUnits {
         }
 
         if let Some(tier) = utterance.pho_tier() {
-            let pho_count = tier.items.0.len();
+            let pho_count = tier.items.len();
             units.pho = (0..pho_count)
                 .map(|index| AlignmentUnit { index, span: None })
                 .collect();
         }
 
         if let Some(tier) = utterance.mod_tier() {
-            let mod_count = tier.items.0.len();
+            let mod_count = tier.items.len();
             units.mod_ = (0..mod_count)
                 .map(|index| AlignmentUnit { index, span: None })
                 .collect();
@@ -69,7 +69,7 @@ impl AlignmentUnits {
         }
 
         if let Some(tier) = utterance.sin_tier() {
-            let sin_count = tier.items.0.len();
+            let sin_count = tier.items.len();
             units.sin = (0..sin_count)
                 .map(|index| AlignmentUnit { index, span: None })
                 .collect();

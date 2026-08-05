@@ -47,8 +47,13 @@ pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut Plac
         | DependentTier::Ort(t)
         | DependentTier::Par(t) => redact_text_tier(t),
         DependentTier::UserDefined(t) | DependentTier::Unsupported(t) => {
-            if let Some(redacted) = NonEmptyString::new(REDACTED_TEXT) {
-                t.content = redacted;
+            // Only redact a tier that HAS content. An empty tier has nothing
+            // to hide, and replacing its `None` with placeholder text would
+            // invent content the source never had.
+            if t.content.is_some()
+                && let Ok(redacted) = NonEmptyString::new(REDACTED_TEXT)
+            {
+                t.content = Some(redacted);
             }
         }
         // Numeric / structural tiers, no lexical content.
@@ -71,7 +76,7 @@ fn redacted_bullet() -> BulletContent {
 }
 
 fn redact_text_tier(tier: &mut TextTier) {
-    if let Some(redacted) = NonEmptyString::new(REDACTED_TEXT) {
+    if let Ok(redacted) = NonEmptyString::new(REDACTED_TEXT) {
         tier.content = redacted;
     }
 }

@@ -185,10 +185,16 @@ pub fn dependent_tier_to_model(
                 let raw_text: String = content.iter().map(|t| t.text()).collect();
                 return Some(talkbank_model::model::DependentTier::UserDefined(
                     talkbank_model::model::UserDefinedDependentTier {
-                        label: NonEmptyString::new(label)
-                            .unwrap_or_else(|| NonEmptyString::new("x").unwrap()),
-                        content: NonEmptyString::new(raw_text.as_str())
-                            .unwrap_or_else(|| NonEmptyString::new(" ").unwrap()),
+                        // The branch condition above is `label.len() >= 2`,
+                        // so the label cannot be empty here.
+                        label: NonEmptyString::new_unchecked(label),
+                        // No fabrication. An empty tier is now representable,
+                        // so this reports what it found and lets E756 judge it.
+                        // It used to substitute a single space, which tripped
+                        // E756 by accident: the right diagnostic for the wrong
+                        // reason, and only because the model had no honest way
+                        // to say "this line carried nothing".
+                        content: NonEmptyString::new(raw_text.as_str()).ok(),
                         span: Span::DUMMY,
                     },
                 ));
@@ -209,7 +215,7 @@ pub fn dependent_tier_to_model(
                 "alt" | "coh" | "def" | "eng" | "err" | "fac" | "flo" | "gls" | "ort" | "par" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
                     let text = NonEmptyString::new(raw_text.as_str())
-                        .unwrap_or_else(|| NonEmptyString::new(" ").unwrap());
+                        .unwrap_or_else(|_| NonEmptyString::new_unchecked(" "));
                     let tt = talkbank_model::model::dependent_tier::TextTier::new(text);
                     match label {
                         "alt" => talkbank_model::model::DependentTier::Alt(tt),
@@ -229,7 +235,7 @@ pub fn dependent_tier_to_model(
                 "tim" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
                     let text = NonEmptyString::new(raw_text.as_str())
-                        .unwrap_or_else(|| NonEmptyString::new(" ").unwrap());
+                        .unwrap_or_else(|_| NonEmptyString::new_unchecked(" "));
                     talkbank_model::model::DependentTier::Tim(
                         talkbank_model::dependent_tier::TimTier::from_text(text),
                     )
@@ -268,11 +274,11 @@ pub fn dependent_tier_to_model(
                             talkbank_model::dependent_tier::PhoalnTier::new(words),
                         ),
                         Err(_) => {
-                            let text = NonEmptyString::new(raw_text.as_str())
-                                .unwrap_or_else(|| NonEmptyString::new(" ").unwrap());
+                            // No fabrication: an empty tier says so.
+                            let text = NonEmptyString::new(raw_text.as_str()).ok();
                             talkbank_model::model::DependentTier::Unsupported(
                                 talkbank_model::model::UserDefinedDependentTier {
-                                    label: NonEmptyString::new("phoaln").unwrap(),
+                                    label: NonEmptyString::new_unchecked("phoaln"),
                                     content: text,
                                     span: Span::DUMMY,
                                 },
@@ -288,11 +294,11 @@ pub fn dependent_tier_to_model(
                             talkbank_model::dependent_tier::XphointTier::new(groups),
                         ),
                         Err(_) => {
-                            let text = NonEmptyString::new(raw_text.as_str())
-                                .unwrap_or_else(|| NonEmptyString::new(" ").unwrap());
+                            // No fabrication: an empty tier says so.
+                            let text = NonEmptyString::new(raw_text.as_str()).ok();
                             talkbank_model::model::DependentTier::Unsupported(
                                 talkbank_model::model::UserDefinedDependentTier {
-                                    label: NonEmptyString::new("xphoint").unwrap(),
+                                    label: NonEmptyString::new_unchecked("xphoint"),
                                     content: text,
                                     span: Span::DUMMY,
                                 },
@@ -306,9 +312,8 @@ pub fn dependent_tier_to_model(
                     talkbank_model::model::DependentTier::Unsupported(
                         talkbank_model::model::UserDefinedDependentTier {
                             label: NonEmptyString::new(label)
-                                .unwrap_or_else(|| NonEmptyString::new("unknown").unwrap()),
-                            content: NonEmptyString::new(raw_text.as_str())
-                                .unwrap_or_else(|| NonEmptyString::new(" ").unwrap()),
+                                .unwrap_or_else(|_| NonEmptyString::new_unchecked("unknown")),
+                            content: NonEmptyString::new(raw_text.as_str()).ok(),
                             span: Span::DUMMY,
                         },
                     )

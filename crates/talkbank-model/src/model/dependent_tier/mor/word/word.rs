@@ -143,21 +143,77 @@ impl MorWord {
         self.features.clear();
     }
 
+    /// Borrows the ANALYSIS half of this item: `lemma[-Feature]*`, with no
+    /// `POS|` prefix.
+    ///
+    /// A `%mor` item is a tag and an analysis joined by `|`. Consumers whose
+    /// own token model keeps the two apart (the tag in one field, the lemma
+    /// and features in another) can render the second half directly rather
+    /// than serializing the whole item and stripping the prefix back off.
+    ///
+    /// The returned view borrows, allocates nothing, and implements both
+    /// [`Display`](std::fmt::Display) and [`WriteChat`], so it composes with a
+    /// formatter or with a streaming writer.
+    ///
+    /// ```rust
+    /// # use talkbank_model::model::{MorWord, MorFeature, MorStem, PosCategory, WriteChat};
+    /// let word = MorWord::new(PosCategory::new("n"), MorStem::new("dog"))
+    ///     .with_features(vec![MorFeature::new("PL")]);
+    /// assert_eq!(word.to_chat_string(), "n|dog-PL");
+    /// assert_eq!(word.analysis().to_chat_string(), "dog-PL");
+    ///
+    /// // With no features the analysis is the bare lemma, never an empty
+    /// // string and never a trailing separator.
+    /// let bare = MorWord::new(PosCategory::new("n"), MorStem::new("dog"));
+    /// assert_eq!(bare.analysis().to_string(), "dog"); // Display agrees
+    /// ```
+    pub fn analysis(&self) -> MorAnalysis<'_> {
+        MorAnalysis { word: self }
+    }
+
     /// Serializes one `%mor` word as `POS|lemma[-Feature]*`.
     ///
     /// The method writes directly into the provided formatter so callers can
     /// stream full tiers without per-token allocations.
     pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        // Write pos|lemma
         w.write_str(&self.pos)?;
         w.write_char('|')?;
-        w.write_str(&self.lemma)?;
-        // Write features
-        for feature in &self.features {
+        // The analysis half has exactly one renderer, which is this one, so
+        // the two forms cannot drift apart.
+        self.analysis().write_chat(w)
+    }
+}
+
+/// The analysis half of a `%mor` item: `lemma[-Feature]*`, without the `POS|`
+/// prefix.
+///
+/// Returned by [`MorWord::analysis`]; borrows its word and allocates nothing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MorAnalysis<'a> {
+    word: &'a MorWord,
+}
+
+impl WriteChat for MorAnalysis<'_> {
+    /// Writes `lemma[-Feature]*`.
+    ///
+    /// Implementing the trait rather than declaring an inherent method of the
+    /// same name is what lets a generic `fn render(_: &impl WriteChat)` accept
+    /// an analysis, and supplies `to_chat_string` for free.
+    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+        w.write_str(&self.word.lemma)?;
+        for feature in &self.word.features {
             w.write_char('-')?;
             feature.write_chat(w)?;
         }
         Ok(())
+    }
+}
+
+impl std::fmt::Display for MorAnalysis<'_> {
+    /// Renders `lemma[-Feature]*`, the same bytes
+    /// [`write_chat`](WriteChat::write_chat) produces.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.write_chat(f)
     }
 }
 

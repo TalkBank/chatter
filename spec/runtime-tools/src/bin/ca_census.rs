@@ -216,18 +216,21 @@ impl MarkStats {
             .shapes
             .entry(format!("{}|{}", slot.label(), glue.label()))
             .or_default() += 1;
-        if matches!(glue, Glue::LeftGlued | Glue::BothGlued) {
-            if let Some(kind) = left {
-                *self.glued_left_neighbour.entry(kind.to_owned()).or_default() += 1;
-            }
+        if matches!(glue, Glue::LeftGlued | Glue::BothGlued)
+            && let Some(kind) = left
+        {
+            *self
+                .glued_left_neighbour
+                .entry(kind.to_owned())
+                .or_default() += 1;
         }
-        if matches!(glue, Glue::RightGlued | Glue::BothGlued) {
-            if let Some(kind) = right {
-                *self
-                    .glued_right_neighbour
-                    .entry(kind.to_owned())
-                    .or_default() += 1;
-            }
+        if matches!(glue, Glue::RightGlued | Glue::BothGlued)
+            && let Some(kind) = right
+        {
+            *self
+                .glued_right_neighbour
+                .entry(kind.to_owned())
+                .or_default() += 1;
         }
     }
 
@@ -418,30 +421,36 @@ fn census_file(
         // group is the item that really precedes it in the source.
         let mut stream: Vec<(&'static str, Option<talkbank_model::Span>, Option<MarkRef>)> =
             Vec::new();
-        walk_content(&utterance.main.content.content.0, None, &mut |item| {
-            let mark = match &item {
-                ContentItem::Separator(separator) => Some(MarkRef::Separator(separator.span(), {
-                    let (name, symbol) = separator_identity(separator);
-                    (name, symbol)
-                })),
-                ContentItem::OverlapPoint(point) => {
-                    let OverlapPoint { kind, span, .. } = point;
-                    Some(MarkRef::Overlap(*span, overlap_identity(*kind)))
+        walk_content(
+            utterance.main.content.content.as_slice(),
+            None,
+            &mut |item| {
+                let mark = match &item {
+                    ContentItem::Separator(separator) => {
+                        Some(MarkRef::Separator(separator.span(), {
+                            let (name, symbol) = separator_identity(separator);
+                            (name, symbol)
+                        }))
+                    }
+                    ContentItem::OverlapPoint(point) => {
+                        let OverlapPoint { kind, span, .. } = point;
+                        Some(MarkRef::Overlap(*span, overlap_identity(*kind)))
+                    }
+                    _ => None,
+                };
+                if let ContentItem::Word(word) = &item {
+                    census_word(word, source, file, marks);
                 }
-                _ => None,
-            };
-            if let ContentItem::Word(word) = &item {
-                census_word(word, source, file, marks);
-            }
-            let span = match &item {
-                ContentItem::Word(word) => Some(word.span),
-                ContentItem::Separator(separator) => Some(separator.span()),
-                ContentItem::Pause(pause) => Some(pause.span),
-                ContentItem::OverlapPoint(point) => point.span,
-                _ => None,
-            };
-            stream.push((item_kind(&item), span, mark));
-        });
+                let span = match &item {
+                    ContentItem::Word(word) => Some(word.span),
+                    ContentItem::Separator(separator) => Some(separator.span()),
+                    ContentItem::Pause(pause) => Some(pause.span),
+                    ContentItem::OverlapPoint(point) => point.span,
+                    _ => None,
+                };
+                stream.push((item_kind(&item), span, mark));
+            },
+        );
 
         let len = stream.len();
         for index in 0..len {
@@ -533,7 +542,7 @@ fn main() -> Result<()> {
             continue;
         };
         files_parsed += 1;
-        if files_parsed % 500 == 0 {
+        if files_parsed.is_multiple_of(500) {
             eprintln!("  {files_parsed} files parsed...");
         }
         let ca_declared = parsed.headers().any(|header| match header {
@@ -584,7 +593,8 @@ fn main() -> Result<()> {
         "mark", "total", "files", "dominant shape", "share"
     );
     let mut rows: Vec<(&String, &MarkStats)> = census.marks.iter().collect();
-    rows.sort_by(|left, right| right.1.total.cmp(&left.1.total));
+    // Descending by total, so the key is reversed rather than the comparison.
+    rows.sort_by_key(|row| std::cmp::Reverse(row.1.total));
     for (key, stats) in rows {
         println!(
             "{:<38} {:>10} {:>8} {:>26} {:>6.1}%",

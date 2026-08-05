@@ -178,7 +178,10 @@ pub fn merge_chats(
     // merge). Exact-equality is the special case where both sets match.
     let f1_langs = extract_languages(&f1);
     let f2_langs = extract_languages(&f2);
-    let donor_over_claims = f2_langs.0.iter().any(|code| !f1_langs.0.contains(code));
+    let donor_over_claims = f2_langs
+        .as_slice()
+        .iter()
+        .any(|code| !f1_langs.as_slice().contains(code));
     if donor_over_claims {
         return Err(MergeError::LanguageMismatch {
             file1: f1_langs,
@@ -196,7 +199,7 @@ pub fn merge_chats(
     // loudly instead.
     let retained_utts_in_f1: Vec<&Line> = f1
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter(|line| match line {
             Line::Utterance(u) => in_retain(&u.main.speaker),
@@ -229,7 +232,7 @@ pub fn merge_chats(
     // deterministic, reproducible error across runs.
     let f1_speakers: std::collections::HashSet<SpeakerCode> =
         f1.unique_utterance_speakers().into_iter().collect();
-    for line in f2.lines.0.iter() {
+    for line in f2.lines.as_slice().iter() {
         if let Line::Utterance(u) = line {
             let sp = &u.main.speaker;
             if !in_retain(sp) && f1_speakers.contains(sp) {
@@ -248,7 +251,7 @@ pub fn merge_chats(
     // set up front so the insertion filters below can consult it.
     let f1_declared = declared_participants(&f1);
     let mut dedupe_codes: std::collections::HashSet<SpeakerCode> = std::collections::HashSet::new();
-    for line in f2.lines.0.iter() {
+    for line in f2.lines.as_slice().iter() {
         if let Line::Header { header, .. } = line
             && let Header::Participants { entries } = header.as_ref()
         {
@@ -285,7 +288,7 @@ pub fn merge_chats(
     // `retain`; these will extend File 1's @Participants header.
     let inserted_participants: Vec<ParticipantEntry> = f2
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|line| match line {
             Line::Header { header, .. } => match header.as_ref() {
@@ -304,7 +307,7 @@ pub fn merge_chats(
     // these are injected after File 1's last @ID row.
     let inserted_id_lines: Vec<Line> = f2
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter(|line| match line {
             Line::Header { header, .. } => match header.as_ref() {
@@ -322,7 +325,7 @@ pub fn merge_chats(
     // trail must preserve.
     let inserted_comment_lines: Vec<Line> = f2
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter(|line| match line {
             Line::Header { header, .. } => matches!(header.as_ref(), Header::Comment { .. }),
@@ -346,7 +349,7 @@ pub fn merge_chats(
     let mut end_marker: Option<Line> = None;
     let mut retained_utts: Vec<Line> = Vec::new();
 
-    for (i, line) in f1.lines.0.iter().enumerate() {
+    for (i, line) in f1.lines.as_slice().iter().enumerate() {
         match line {
             Line::Header {
                 header,
@@ -397,7 +400,7 @@ pub fn merge_chats(
     // the merged file enters downstream align / morphotag stages in
     // the expected "no derived tiers" state.
     let mut inserted_utts: Vec<Line> = Vec::new();
-    for line in f2.lines.0.iter() {
+    for line in f2.lines.as_slice().iter() {
         if let Line::Utterance(u) = line
             && !in_retain(&u.main.speaker)
         {
@@ -472,7 +475,7 @@ where
 {
     chat_file
         .lines
-        .0
+        .as_slice()
         .iter()
         .enumerate()
         .rev()
@@ -491,7 +494,7 @@ fn declared_participants(
 ) -> std::collections::HashMap<SpeakerCode, ParticipantEntry> {
     chat_file
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|line| match line {
             Line::Header { header, .. } => match header.as_ref() {
@@ -509,7 +512,7 @@ fn declared_participants(
 fn utterance_count_for(chat_file: &ChatFile, code: &SpeakerCode) -> usize {
     chat_file
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter(|line| matches!(line, Line::Utterance(u) if &u.main.speaker == code))
         .count()

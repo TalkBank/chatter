@@ -51,76 +51,22 @@ fn main() -> anyhow::Result<()> {
     );
     println!("Output directory: {}", args.output_dir.display());
 
-    // Clean by NAME ALLOWLIST, deliberately, NOT by owning the directory.
-    //
-    // `tests/integration/generated/` has TWO producers: this generator writes
-    // `generated_*.rs`, and `bootstrap_reference_corpus` writes
-    // `reference_corpus.rs`. A shared directory cannot be claimed with
-    // `owned_output::clear_owned`; doing so deletes the other producer's output
-    // (tried 2026-07-29, broke the build immediately). The allowlist is what
-    // makes two writers into one directory safe.
-    //
-    // Cost of the allowlist, accepted: it cannot remove stale SUBdirectories,
-    // so a deleted spec can leave an orphan behind. Give each producer its own
-    // owned directory if that ever matters.
-    if args.output_dir.exists() {
-        println!("Cleaning old generated test files...");
-        for entry in std::fs::read_dir(&args.output_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            // Remove known generated files only
-            if let Some(filename) = path.file_name() {
-                if let Some(name_str) = filename.to_str() {
-                    if is_generated_output(name_str) && path.extension().is_some_and(|e| e == "rs")
-                    {
-                        std::fs::remove_file(&path)?;
-                    }
-                }
-            }
-        }
+    println!("Cleaning old generated test files...");
+    let written = rust_test::write_generated_tests(
+        &args.output_dir,
+        &construct_specs,
+        &error_specs,
+        &args.test_error_path,
+    )?;
+
+    for path in &written {
+        println!("✓ Generated: {}", path.display());
     }
-
-    // Ensure output directory exists
-    std::fs::create_dir_all(&args.output_dir)?;
-
-    // Generate construct tests (both versions)
-    let construct_tests =
-        rust_test::generate_construct_test_file(&construct_specs, &args.test_error_path);
-    let construct_path = args.output_dir.join("generated_construct_tests.rs");
-    std::fs::write(&construct_path, construct_tests)?;
-    println!("✓ Generated: {}", construct_path.display());
-
-    let construct_body =
-        rust_test::generate_construct_test_body(&construct_specs, &args.test_error_path);
-    let construct_body_path = args.output_dir.join("generated_construct_tests_body.rs");
-    std::fs::write(&construct_body_path, construct_body)?;
-    println!("✓ Generated: {}", construct_body_path.display());
-
-    // Generate error tests (both versions)
-    let error_tests = rust_test::generate_error_test_file(&error_specs, &args.test_error_path);
-    let error_path = args.output_dir.join("generated_error_tests.rs");
-    std::fs::write(&error_path, error_tests)?;
-    println!("✓ Generated: {}", error_path.display());
-
-    let error_body = rust_test::generate_error_test_body(&error_specs, &args.test_error_path);
-    let error_body_path = args.output_dir.join("generated_error_tests_body.rs");
-    std::fs::write(&error_body_path, error_body)?;
-    println!("✓ Generated: {}", error_body_path.display());
-
     println!(
-        "\n✓ Generated 4 test files to {}",
+        "\n✓ Generated {} test files to {}",
+        written.len(),
         args.output_dir.display()
     );
 
     Ok(())
-}
-
-fn is_generated_output(filename: &str) -> bool {
-    matches!(
-        filename,
-        "generated_construct_tests.rs"
-            | "generated_construct_tests_body.rs"
-            | "generated_error_tests.rs"
-            | "generated_error_tests_body.rs"
-    )
 }

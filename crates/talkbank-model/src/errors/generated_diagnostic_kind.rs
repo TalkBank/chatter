@@ -239,6 +239,8 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::PrefixedFormGluedToPrecedingWord => DiagnosticKind::Style, // E764: E764_prefixed_form_glued_to_preceding_word.md
         ErrorCode::SeparatorGluedToFollowingContent => DiagnosticKind::Invalidity, // E765: E765_separator_glued_to_following_content.md
         ErrorCode::LinkerNotUtteranceInitial => DiagnosticKind::Invalidity, // E766: E766_linker_not_utterance_initial.md
+        ErrorCode::MediaWhitespaceBeforeComma => DiagnosticKind::Invalidity, // E767: E767_media_whitespace_before_comma.md
+        ErrorCode::MediaFilenameNotRepresentable => DiagnosticKind::Invalidity, // E768: E768_media_filename_not_representable.md
         ErrorCode::SpeakerNotFoundInParticipants => DiagnosticKind::Invalidity, // W108: W108_auto.md
         ErrorCode::UnknownError => DiagnosticKind::Invalidity, // E999: E999_auto.md
     }

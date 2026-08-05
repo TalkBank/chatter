@@ -10,7 +10,7 @@
 
 use clap::Parser as ClapParser;
 use comrak::nodes::{AstNode, NodeValue};
-use comrak::{format_commonmark, parse_document, Arena, Options};
+use comrak::{Arena, Options, format_commonmark, parse_document};
 use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -107,12 +107,11 @@ fn discover_specs(dir: &Path) -> Result<Vec<PathBuf>, EnhanceError> {
         })?;
         let path = entry.path();
 
-        if path.is_file() {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with("_auto.md") {
-                    files.push(path);
-                }
-            }
+        if path.is_file()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && name.ends_with("_auto.md")
+        {
+            files.push(path);
         }
     }
 
@@ -173,10 +172,10 @@ fn extract_metadata_value<'a>(root: &'a AstNode<'a>, key: &str) -> Option<String
                 in_metadata = normalize_whitespace(&heading_text) == "Metadata";
             }
             NodeValue::Item(_) if in_metadata => {
-                if let Some((item_key, value)) = extract_metadata_item(node) {
-                    if item_key == key {
-                        return Some(value);
-                    }
+                if let Some((item_key, value)) = extract_metadata_item(node)
+                    && item_key == key
+                {
+                    return Some(value);
                 }
             }
             _ => {}
@@ -242,10 +241,10 @@ fn fix_expected_behavior<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>, layer:
         "The parser should successfully parse this CHAT file, but validation should report the error."
     };
 
-    if let Some(paragraph) = target_paragraph {
-        if update_paragraph_text(paragraph, desired) {
-            modified = true;
-        }
+    if let Some(paragraph) = target_paragraph
+        && update_paragraph_text(paragraph, desired)
+    {
+        modified = true;
     }
 
     let trigger = trigger_value.unwrap_or_else(|| "See example above".to_string());

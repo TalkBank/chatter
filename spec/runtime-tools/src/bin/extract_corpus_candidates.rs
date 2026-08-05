@@ -147,10 +147,10 @@ fn main() -> anyhow::Result<()> {
 
     'repo_loop: for repo in &data_repos {
         for entry in WalkDir::new(repo).into_iter().filter_map(|e| e.ok()) {
-            if let Some(limit) = args.max_files {
-                if scanned_files >= limit {
-                    break 'repo_loop;
-                }
+            if let Some(limit) = args.max_files
+                && scanned_files >= limit
+            {
+                break 'repo_loop;
             }
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("cha") {
@@ -381,11 +381,11 @@ fn collect_types(node: tree_sitter::Node, types: &mut BTreeSet<String>) {
 fn extract_tier_types(source: &str) -> Vec<String> {
     let mut tiers = BTreeSet::new();
     for line in source.lines() {
-        if line.starts_with('%') {
-            if let Some(label) = line.split(':').next() {
-                let label = label.trim_start_matches('%');
-                tiers.insert(label.to_string());
-            }
+        if line.starts_with('%')
+            && let Some(label) = line.split(':').next()
+        {
+            let label = label.trim_start_matches('%');
+            tiers.insert(label.to_string());
         }
     }
     tiers.into_iter().collect()
@@ -394,11 +394,11 @@ fn extract_tier_types(source: &str) -> Vec<String> {
 fn count_speakers(source: &str) -> usize {
     let mut speakers = BTreeSet::new();
     for line in source.lines() {
-        if line.starts_with('*') {
-            if let Some(speaker) = line.split(':').next() {
-                let speaker = speaker.trim_start_matches('*');
-                speakers.insert(speaker.to_string());
-            }
+        if line.starts_with('*')
+            && let Some(speaker) = line.split(':').next()
+        {
+            let speaker = speaker.trim_start_matches('*');
+            speakers.insert(speaker.to_string());
         }
     }
     speakers.len()

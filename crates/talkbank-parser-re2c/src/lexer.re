@@ -507,8 +507,8 @@ impl<'a> Iterator for Lexer<'a> {
         // ═══════════════════════════════════════════════════════
         // MEDIA_CONTENT, @Media header body
         //
-        // grammar.js: media_contents = seq(media_filename, comma, ws, media_type, optional(seq(comma, ws, media_status)))
-        // media_filename = choice(quoted_url, /[a-zA-Z0-9_-]+/)
+        // grammar.js: media_contents = seq(media_filename, optional(ws), comma, ws, media_type, optional(seq(comma, ws, media_status)))
+        // media_filename = choice(quoted_url, TRIMMED_COMMA_FIELD)
         // media_type = choice('video', 'audio', 'missing', generic)
         // media_status = choice('missing', 'unlinked', 'notrans', generic)
         //
@@ -519,8 +519,20 @@ impl<'a> Iterator for Lexer<'a> {
             // Quoted filename
             emit!(MediaFilename);
         }
-        <MEDIA_CONTENT> [a-zA-Z0-9_\-]+ {
-            // Simple filename or media type/status word
+        <MEDIA_CONTENT> [^\x00,"\r\n \t] ([^\x00,\r\n]* [^\x00,\r\n \t])? {
+            // Everything up to the comma: the filename, or a media type/status
+            // word. DELIMITER-based, matching grammar.js, which stopped using an
+            // allowlist on 2026-08-05 because `[a-zA-Z0-9_-]+` made a dot, a
+            // space, a paren or any non-ASCII character unrepresentable and
+            // reported the failure as E330.
+            //
+            // Interior spaces are IN (`name with space` is one filename); edge
+            // whitespace is OUT, because the first and last character classes
+            // both exclude it. That mirrors the grammar's media_filename token
+            // exactly, and it is the reason the whitespace between fields stays
+            // a Whitespace token below rather than being swallowed into the
+            // word. A token carrying " audio" and a converter trimming it back
+            // would be a lexer emitting a value it knows is wrong.
             emit!(MediaWord);
         }
         <MEDIA_CONTENT> "," { emit!(Comma); }

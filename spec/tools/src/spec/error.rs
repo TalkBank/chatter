@@ -309,10 +309,10 @@ impl ErrorSpec {
                             break;
                         }
                         // Stop if we hit another H2
-                        if let comrak::nodes::NodeValue::Heading(h) = sibling.data.borrow().value {
-                            if h.level == 2 {
-                                break;
-                            }
+                        if let comrak::nodes::NodeValue::Heading(h) = sibling.data.borrow().value
+                            && h.level == 2
+                        {
+                            break;
                         }
                         prev = sibling.previous_sibling();
                     }

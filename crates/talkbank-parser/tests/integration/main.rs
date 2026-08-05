@@ -16,6 +16,7 @@ mod common;
 mod chat_parser_trait;
 mod context_public_api;
 mod debug_roundtrip;
+mod dependent_tier_content_span;
 mod document_entrypoint_characterization;
 mod e203_invalid_form_marker_regression;
 mod e207_filler_suggestion_test;

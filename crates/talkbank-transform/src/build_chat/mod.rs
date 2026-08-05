@@ -37,6 +37,10 @@ pub enum BuildChatError {
     /// A downstream step (language-code parsing, per-utterance parse) failed.
     #[error("failed to build CHAT: {0}")]
     Build(String),
+    /// The supplied media name cannot be written to an `@Media` header and
+    /// read back unchanged.
+    #[error("invalid @Media filename: {0}")]
+    MediaFilename(#[from] talkbank_model::model::MediaFilenameError),
 }
 
 /// Build a validated CHAT file from a typed transcript description.
@@ -49,7 +53,7 @@ pub fn build_chat(desc: &TranscriptDescription) -> Result<ChatFile, BuildChatErr
     }
 
     let context = BuildChatContext::new(desc).map_err(BuildChatError::Build)?;
-    let mut lines = build_header_lines(desc, context.langs());
+    let mut lines = build_header_lines(desc, context.langs())?;
     lines.extend(
         build_utterance_lines(
             &desc.utterances,

@@ -116,7 +116,7 @@ fn jaccard(a: &HashMap<String, u32>, b: &HashMap<String, u32>) -> JaccardScore {
 /// any sane confidence threshold downstream.
 fn speaker_bag(chat: &ChatFile, speaker: &SpeakerCode) -> HashMap<String, u32> {
     let mut bag: HashMap<String, u32> = HashMap::new();
-    for line in chat.lines.0.iter() {
+    for line in chat.lines.as_slice().iter() {
         if let Line::Utterance(u) = line
             && &u.main.speaker == speaker
         {

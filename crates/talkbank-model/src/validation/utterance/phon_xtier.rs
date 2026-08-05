@@ -72,7 +72,7 @@ pub(crate) fn check_phon_xtiers(utterance: &Utterance, errors: &impl ErrorSink) 
 /// in those cases the per-word reconstruction check is skipped (count mismatches
 /// are reported separately by E725-E728).
 fn source_word(source: Option<&PhoTier>, i: usize) -> Option<&str> {
-    match source?.items.0.get(i)? {
+    match source?.items.as_slice().get(i)? {
         PhoItem::Word(word) => Some(word.as_str()),
         PhoItem::Group(_) => None,
     }
@@ -320,7 +320,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
     // E746: one group per %pho word.
     if reconstruction_clean
         && let Some(pho) = pho_tier
-        && xphoint.groups.len() != pho.items.0.len()
+        && xphoint.groups.len() != pho.items.len()
     {
         errors.report(
             ParseError::at_span(
@@ -330,7 +330,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
                 format!(
                     "%xphoint has {} group(s) but %pho has {} word(s)",
                     xphoint.groups.len(),
-                    pho.items.0.len()
+                    pho.items.len()
                 ),
             )
             .with_suggestion("Emit exactly one ' / '-separated group per %pho word"),

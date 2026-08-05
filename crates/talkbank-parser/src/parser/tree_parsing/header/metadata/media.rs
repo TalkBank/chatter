@@ -15,7 +15,9 @@ use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Sou
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{Header, MediaHeader, MediaStatus, MediaType, WarningText};
+use talkbank_model::model::{
+    Header, MediaFilename, MediaHeader, MediaStatus, MediaType, WarningText,
+};
 
 /// Build `Header::Unknown` for malformed `@Media` input.
 fn unknown_media_header(node: Node, source: &str, parse_reason: impl Into<String>) -> Header {
@@ -167,11 +169,30 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
         }
     };
 
-    // Extract media_type from typed child_3 (moved from child_2 pre-B2: the NEW
-    // backend models the `whitespaces` between the comma and media_type as its
-    // own child_2 position). All values accepted via MediaType::from_text();
+    // Whitespace between the filename and the comma, recorded as provenance
+    // rather than reported here: E767 is a VALIDATION rule, so it fires for
+    // every parser front end instead of only this one. child_1 is
+    // `optional($.whitespaces)`.
+    let whitespace_before_comma = match &contents_children.child_1.slot {
+        Some(NodeSlot::Present(space_node)) => {
+            let raw = space_node.raw_node();
+            Some(crate::error::Span::new(
+                raw.start_byte() as u32,
+                raw.end_byte() as u32,
+            ))
+        }
+        _ => None,
+    };
+
+    // Extract media_type from typed child_4.
+    //
+    // The position has moved twice. It was child_2 before the NEW backend
+    // modelled the `whitespaces` between comma and media_type as its own
+    // position (child_3), and moved again on 2026-08-05 when
+    // `optional($.whitespaces)` was added BEFORE the comma so a space there
+    // stops being an error. All values accepted via MediaType::from_text();
     // unsupported ones are flagged by the validator.
-    let media_type = match contents_children.child_3.slot {
+    let media_type = match contents_children.child_4.slot {
         // Happy path: correct node kind, decode its UTF-8 text.
         NodeSlot::Present(type_node) => {
             let ParseOutcome::Parsed(type_text) =
@@ -189,7 +210,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
                 SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
                 ErrorContext::new(source, child.start_byte()..child.end_byte(), "media_type"),
                 format!(
-                    "Expected media_type node at @Media content position 3, got {}",
+                    "Expected media_type node at @Media content position 4, got {}",
                     child.kind()
                 ),
             ));
@@ -212,7 +233,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
         }
     };
 
-    // Extract optional status from typed child_4, now a GROUP
+    // Extract optional status from typed child_5, a GROUP
     // (`Option<NodeSlot<MediaContentsChild4Children>>`) around the whole
     // `comma + whitespaces + media_status` triple (the OLD module's flat
     // `Option<NodeSlot<MediaStatusNode>>` no longer applies since whitespace is
@@ -223,7 +244,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // group) to `None` reproduces the OLD `and_then(NodeSlot::into_ok)` collapse
     // exactly for the VALID path.
     let status_group = contents_children
-        .child_4
+        .child_5
         .slot
         .and_then(|s| s.present_or_recover().ok());
     let status = match status_group
@@ -246,7 +267,21 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
 
     surface_unexpected(&contents_children.unexpected, source, errors);
 
+    // The grammar stops the filename at the comma, so a well-formed parse
+    // always satisfies the invariant. Going through the checked constructor
+    // anyway means a grammar change that broke that assumption surfaces as a
+    // diagnostic here rather than as a header that serializes back wrong.
+    let filename = match MediaFilename::parse(&filename) {
+        Ok(filename) => filename,
+        Err(err) => {
+            return unknown_media_header(node, source, format!("Invalid @Media filename: {err}"));
+        }
+    };
+
     let mut media_header = MediaHeader::new(filename, media_type);
+    if let Some(span) = whitespace_before_comma {
+        media_header = media_header.with_whitespace_before_comma(span);
+    }
     if let Some(s) = status {
         media_header = media_header.with_status(s);
     }

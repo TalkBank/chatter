@@ -117,7 +117,7 @@ fn parse_pho(input: &str) -> PhoParse {
 
     let mut items = Vec::new();
     let mut saw_pho_tier = false;
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
                 match &dt.tier {

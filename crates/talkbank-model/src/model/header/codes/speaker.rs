@@ -93,7 +93,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
     Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift,
 )]
 #[serde(transparent)]
-pub struct SpeakerCode(pub Arc<str>);
+pub struct SpeakerCode(Arc<str>);
 
 impl SpeakerCode {
     /// Construct and intern a speaker identifier.

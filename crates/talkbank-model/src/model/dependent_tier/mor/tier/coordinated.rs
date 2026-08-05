@@ -128,7 +128,7 @@ impl MorTier {
         }
 
         // Old chunk count for the entire range.
-        let old_chunks: usize = self.items.0[item_range.clone()]
+        let old_chunks: usize = self.items.as_slice()[item_range.clone()]
             .iter()
             .map(|m| m.count_chunks())
             .sum();
@@ -144,7 +144,7 @@ impl MorTier {
 
         // Chunk offset of the first chunk in the range, host-1-indexed
         // would be chunk_offset + 1; here we keep 0-indexed for slice math.
-        let chunk_offset: usize = self.items.0[..item_range.start]
+        let chunk_offset: usize = self.items.as_slice()[..item_range.start]
             .iter()
             .map(|m| m.count_chunks())
             .sum();

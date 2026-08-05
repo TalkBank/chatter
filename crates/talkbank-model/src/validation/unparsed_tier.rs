@@ -20,13 +20,18 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 /// `%xtst:` tier arrives as `xtst`).
 pub fn check_user_defined_tier_content(
     label: &str,
-    content: &str,
+    content: Option<&str>,
     span: Span,
     errors: &impl ErrorSink,
 ) {
     // E756: a tier declaring no content asserts an annotation that is
     // not there and fails to make sense.
-    if content.chars().all(|ch| ch.is_whitespace()) {
+    // Absent OR whitespace-only. `None` is the line that declared a tier and
+    // gave it nothing; before the model could represent that, this rule could
+    // only ever see the whitespace half.
+    let empty = content.is_none_or(|c| c.chars().all(|ch| ch.is_whitespace()));
+    if empty {
+        let content = content.unwrap_or("");
         let mut err = ParseError::new(
             ErrorCode::EmptyUserDefinedTier,
             Severity::Error,
@@ -47,10 +52,26 @@ mod tests {
     use super::*;
     use crate::ErrorCollector;
 
+    /// A tier line that declared nothing at all is invalid.
+    ///
+    /// POLICY, not an invariant a type could absorb: "a user-defined tier must
+    /// carry content" is a CHAT rule with a real alternative (accept it, as
+    /// CLAN does), so it is a rule the validator states rather than one the
+    /// model forbids. The model deliberately CAN represent this now; before it
+    /// could, each parser invented its own way round and the two disagreed.
+    #[test]
+    fn absent_content_is_reported() {
+        let errors = ErrorCollector::new();
+        check_user_defined_tier_content("xfoo", None, Span::DUMMY, &errors);
+        let reported = errors.into_vec();
+        assert_eq!(reported.len(), 1);
+        assert_eq!(reported[0].code, ErrorCode::EmptyUserDefinedTier);
+    }
+
     #[test]
     fn test_e756_empty_tier() {
         let errors = ErrorCollector::new();
-        check_user_defined_tier_content("xfoo", "", Span::DUMMY, &errors);
+        check_user_defined_tier_content("xfoo", Some(""), Span::DUMMY, &errors);
         let error_vec = errors.into_vec();
         assert_eq!(error_vec.len(), 1);
         assert_eq!(error_vec[0].code, ErrorCode::EmptyUserDefinedTier);
@@ -64,7 +85,7 @@ mod tests {
     #[test]
     fn test_e756_whitespace_only_tier() {
         let errors = ErrorCollector::new();
-        check_user_defined_tier_content("xtst", " \t", Span::DUMMY, &errors);
+        check_user_defined_tier_content("xtst", Some(" \t"), Span::DUMMY, &errors);
         let error_vec = errors.into_vec();
         assert_eq!(error_vec.len(), 1);
         assert_eq!(error_vec[0].code, ErrorCode::EmptyUserDefinedTier);
@@ -77,7 +98,7 @@ mod tests {
         // labels draw nothing here (their typed parsers own them upstream).
         for label in ["xfoo", "xpho", "xmor", "xcustom"] {
             let errors = ErrorCollector::new();
-            check_user_defined_tier_content(label, "test content", Span::DUMMY, &errors);
+            check_user_defined_tier_content(label, Some("test content"), Span::DUMMY, &errors);
             assert!(
                 errors.into_vec().is_empty(),
                 "user-defined tier {label} with content must be valid"

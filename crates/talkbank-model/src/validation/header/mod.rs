@@ -29,6 +29,13 @@ mod tests {
     use crate::validation::ValidationContext;
     use crate::{ErrorCode, ErrorCollector, Severity, Span};
 
+    /// Builds a fixture `@Media` filename, failing loudly on a literal that
+    /// does not satisfy the type's invariant.
+    fn media_filename(value: &str) -> crate::model::MediaFilename {
+        #[allow(clippy::expect_used)]
+        crate::model::MediaFilename::parse(value).expect("fixture @Media filename must be valid")
+    }
+
     /// Speaker IDs containing `:` are rejected as invalid.
     ///
     /// Colon is reserved by CHAT for tier-prefix syntax, so allowing it would make
@@ -173,7 +180,7 @@ mod tests {
         use crate::model::{MediaHeader, MediaType};
 
         let header = Header::Media(MediaHeader::new(
-            "test",
+            media_filename("test"),
             MediaType::Unsupported("hologram".to_string()),
         ));
 
@@ -191,7 +198,7 @@ mod tests {
         use crate::model::{MediaHeader, MediaStatus, MediaType};
 
         let header = Header::Media(
-            MediaHeader::new("test", MediaType::Audio)
+            MediaHeader::new(media_filename("test"), MediaType::Audio)
                 .with_status(MediaStatus::Unsupported("archived".to_string())),
         );
 
@@ -260,7 +267,8 @@ mod tests {
         use crate::model::{MediaHeader, MediaStatus, MediaType};
 
         let header = Header::Media(
-            MediaHeader::new("test", MediaType::Audio).with_status(MediaStatus::Unlinked),
+            MediaHeader::new(media_filename("test"), MediaType::Audio)
+                .with_status(MediaStatus::Unlinked),
         );
 
         let errors = ErrorCollector::new();

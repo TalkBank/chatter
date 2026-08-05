@@ -1,16 +1,16 @@
 use std::path::Path;
 
 use talkbank_model::model::{
-    BulletContent, Header, IDHeader, LanguageCode, LanguageCodes, Line, MediaHeader, MediaType,
-    ParticipantEntries, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
+    BulletContent, Header, IDHeader, LanguageCode, LanguageCodes, Line, MediaFilename, MediaHeader,
+    MediaType, ParticipantEntries, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
 };
 
-use super::TranscriptDescription;
+use super::{BuildChatError, TranscriptDescription};
 
 pub(super) fn build_header_lines(
     desc: &TranscriptDescription,
     langs: &[LanguageCode],
-) -> Vec<Line> {
+) -> Result<Vec<Line>, BuildChatError> {
     let participant_entries = build_participant_entries(desc);
     let id_headers = build_id_headers(desc, langs);
     let mut lines: Vec<Line> = vec![Line::header(Header::Utf8)];
@@ -56,7 +56,7 @@ pub(super) fn build_header_lines(
         }
     }
 
-    if let Some(media_header) = build_media_header(desc) {
+    if let Some(media_header) = build_media_header(desc)? {
         lines.push(Line::header(Header::Media(media_header)));
     }
 
@@ -85,7 +85,7 @@ pub(super) fn build_header_lines(
         }));
     }
 
-    lines
+    Ok(lines)
 }
 
 fn build_participant_entries(desc: &TranscriptDescription) -> Vec<ParticipantEntry> {
@@ -146,8 +146,17 @@ fn build_id_headers(desc: &TranscriptDescription, langs: &[LanguageCode]) -> Vec
         .collect()
 }
 
-fn build_media_header(desc: &TranscriptDescription) -> Option<MediaHeader> {
-    let media_name = desc.media_name.as_ref()?;
+/// Builds the `@Media` header, if the description names any media.
+///
+/// Fallible because the media name is EXTERNAL input (a caller hands over a
+/// path or a stem it got from somewhere else), and `@Media` cannot represent
+/// every string: the comma is its delimiter. Rejecting here is the whole
+/// point, since the alternative is a transcript whose own header reads back
+/// as a different filename than the one supplied.
+fn build_media_header(desc: &TranscriptDescription) -> Result<Option<MediaHeader>, BuildChatError> {
+    let Some(media_name) = desc.media_name.as_ref() else {
+        return Ok(None);
+    };
     let normalized_media_name = normalize_media_name(media_name);
     let media_type = match desc.media_type.as_deref() {
         Some("video") => MediaType::Video,
@@ -158,11 +167,12 @@ fn build_media_header(desc: &TranscriptDescription) -> Option<MediaHeader> {
         }
     };
 
-    let mut header = MediaHeader::new(normalized_media_name.as_str(), media_type);
+    let filename = MediaFilename::parse(&normalized_media_name)?;
+    let mut header = MediaHeader::new(filename, media_type);
     if let Some(status) = &desc.media_status {
         header = header.with_status(status.clone());
     }
-    Some(header)
+    Ok(Some(header))
 }
 
 fn normalize_media_name(raw: &str) -> String {

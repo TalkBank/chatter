@@ -327,31 +327,35 @@ pub fn walk_content_mut<'a>(
             }
             // Groups: descend into content
             UtteranceContent::Group(group) => {
-                walk_bracketed_content_mut(&mut group.content.content, domain, f);
+                walk_bracketed_content_mut(group.content.content.as_mut_slice(), domain, f);
             }
             UtteranceContent::AnnotatedGroup(annotated) => {
                 if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_content_mut(&mut annotated.inner.content.content, domain, f);
+                    walk_bracketed_content_mut(
+                        annotated.inner.content.content.as_mut_slice(),
+                        domain,
+                        f,
+                    );
                 }
             }
             UtteranceContent::PhoGroup(pho) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content_mut(&mut pho.content.content, domain, f);
+                    walk_bracketed_content_mut(pho.content.content.as_mut_slice(), domain, f);
                 }
             }
             UtteranceContent::SinGroup(sin) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content_mut(&mut sin.content.content, domain, f);
+                    walk_bracketed_content_mut(sin.content.content.as_mut_slice(), domain, f);
                 }
             }
             UtteranceContent::Quotation(quot) => {
-                walk_bracketed_content_mut(&mut quot.content.content, domain, f);
+                walk_bracketed_content_mut(quot.content.content.as_mut_slice(), domain, f);
             }
             UtteranceContent::Retrace(retrace) => {
                 // Retrace content is excluded from %mor (not morphologically analyzed),
                 // but included in %pho/%sin/%wor and for domain-unspecified walks.
                 if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content_mut(&mut retrace.content.content, domain, f);
+                    walk_bracketed_content_mut(retrace.content.content.as_mut_slice(), domain, f);
                 }
             }
         }
@@ -470,31 +474,35 @@ pub fn walk_words_mut<'a>(
                 f(WordItemMut::Separator(sep));
             }
             UtteranceContent::Group(group) => {
-                walk_bracketed_words_mut(&mut group.content.content, domain, f);
+                walk_bracketed_words_mut(group.content.content.as_mut_slice(), domain, f);
             }
             UtteranceContent::AnnotatedGroup(annotated) => {
                 if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_words_mut(&mut annotated.inner.content.content, domain, f);
+                    walk_bracketed_words_mut(
+                        annotated.inner.content.content.as_mut_slice(),
+                        domain,
+                        f,
+                    );
                 }
             }
             UtteranceContent::PhoGroup(pho) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words_mut(&mut pho.content.content, domain, f);
+                    walk_bracketed_words_mut(pho.content.content.as_mut_slice(), domain, f);
                 }
             }
             UtteranceContent::SinGroup(sin) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words_mut(&mut sin.content.content, domain, f);
+                    walk_bracketed_words_mut(sin.content.content.as_mut_slice(), domain, f);
                 }
             }
             UtteranceContent::Quotation(quot) => {
-                walk_bracketed_words_mut(&mut quot.content.content, domain, f);
+                walk_bracketed_words_mut(quot.content.content.as_mut_slice(), domain, f);
             }
             UtteranceContent::Retrace(retrace) => {
                 // Retrace content is excluded from %mor (not morphologically analyzed),
                 // but included in %pho/%sin/%wor and for domain-unspecified walks.
                 if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words_mut(&mut retrace.content.content, domain, f);
+                    walk_bracketed_words_mut(retrace.content.content.as_mut_slice(), domain, f);
                 }
             }
             UtteranceContent::Event(_)

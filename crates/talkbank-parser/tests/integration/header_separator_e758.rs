@@ -63,7 +63,7 @@ fn comment_header_separator(input: &str) -> TierSeparator {
     let chat = parser.parse_chat_file_streaming(input, &errors);
 
     let mut found = None;
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Header {
             header, separator, ..
         } = line

@@ -24,7 +24,7 @@ use super::super::{
 use super::options::ChatOptionFlag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 /// Ordered payload of an `@Languages` header.
@@ -38,9 +38,25 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct LanguageCodes(pub Vec<LanguageCode>);
+pub struct LanguageCodes(Vec<LanguageCode>);
 
 impl LanguageCodes {
+    /// The entries, borrowed.
+    ///
+    /// Added when the inner field was closed, so reading stays available while
+    /// construction does not.
+    pub fn as_slice(&self) -> &[LanguageCode] {
+        &self.0
+    }
+
+    /// Appends every code of `other`, in order.
+    ///
+    /// A NAMED length-changing operation, added when `DerefMut` was removed
+    /// from this family so a future invariant can be enforced here.
+    pub fn extend(&mut self, other: impl IntoIterator<Item = LanguageCode>) {
+        self.0.extend(other);
+    }
+
     /// Wraps an already parsed `@Languages` sequence.
     pub fn new(codes: Vec<LanguageCode>) -> Self {
         Self(codes)
@@ -71,13 +87,6 @@ impl Deref for LanguageCodes {
     /// Borrows the underlying ordered language-code list.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for LanguageCodes {
-    /// Mutably borrows the underlying language-code list.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -159,9 +168,26 @@ impl crate::validation::Validate for LanguageCodes {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ParticipantEntries(pub Vec<ParticipantEntry>);
+pub struct ParticipantEntries(Vec<ParticipantEntry>);
 
 impl ParticipantEntries {
+    /// The entries, borrowed.
+    ///
+    /// Added when the inner field was closed, so reading stays available while
+    /// construction does not.
+    pub fn as_slice(&self) -> &[ParticipantEntry] {
+        &self.0
+    }
+
+    /// The entries, mutably, for ELEMENT mutation only.
+    ///
+    /// `&mut [T]`, not `&mut Vec<T>`: entries may be rewritten in place but
+    /// not added or removed, which is what makes a future invariant on this
+    /// list enforceable rather than bypassable.
+    pub fn as_mut_slice(&mut self) -> &mut [ParticipantEntry] {
+        &mut self.0
+    }
+
     /// Wraps parsed participant entries in source order.
     pub fn new(entries: Vec<ParticipantEntry>) -> Self {
         Self(entries)
@@ -179,13 +205,6 @@ impl Deref for ParticipantEntries {
     /// Borrows the underlying ordered participant-entry list.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for ParticipantEntries {
-    /// Mutably borrows the underlying participant-entry list.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -260,9 +279,19 @@ impl crate::validation::Validate for ParticipantEntries {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ChatOptionFlags(pub Vec<ChatOptionFlag>);
+pub struct ChatOptionFlags(Vec<ChatOptionFlag>);
 
 impl ChatOptionFlags {
+    /// Appends one flag.
+    ///
+    /// A NAMED length-changing operation, added when `DerefMut` was removed
+    /// from this family. `@Options` is a closed set with real rules about
+    /// which flags may co-occur, so this is exactly the seam where such a rule
+    /// would live.
+    pub fn push(&mut self, flag: ChatOptionFlag) {
+        self.0.push(flag);
+    }
+
     /// Wraps parsed option flags in source order.
     pub fn new(options: Vec<ChatOptionFlag>) -> Self {
         Self(options)
@@ -280,13 +309,6 @@ impl Deref for ChatOptionFlags {
     /// Borrows the underlying ordered option-flag list.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for ChatOptionFlags {
-    /// Mutably borrows the underlying option-flag list.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

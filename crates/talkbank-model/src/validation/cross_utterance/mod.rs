@@ -249,7 +249,7 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
         // Replicate the core logic of analyze_file_overlaps on &[Utterance]
         let mut per_utterance: Vec<PerUtteranceOverlap> = Vec::new();
         for utt in utterances {
-            let info = extract_overlap_info(&utt.main.content.content.0);
+            let info = extract_overlap_info(utt.main.content.content.as_slice());
             let bullet = utt
                 .main
                 .content
@@ -369,7 +369,7 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
         // Control-flow invariant: `is_none()` short-circuits the
         // continue above; reaching this line guarantees `Some(...)`.
         #[allow(clippy::unwrap_used)]
-        let index_label = format!(" (index {})", orphan.region.index.unwrap().0);
+        let index_label = format!(" (index {})", orphan.region.index.unwrap().get());
         errors.report(
             ParseError::new(
                 ErrorCode::UnbalancedOverlap,
@@ -397,7 +397,7 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
         let utt = &utterances[orphan.utterance_index];
         // Same control-flow invariant as the orphaned_tops loop above.
         #[allow(clippy::unwrap_used)]
-        let index_label = format!(" (index {})", orphan.region.index.unwrap().0);
+        let index_label = format!(" (index {})", orphan.region.index.unwrap().get());
         errors.report(
             ParseError::new(
                 ErrorCode::UnbalancedOverlap,

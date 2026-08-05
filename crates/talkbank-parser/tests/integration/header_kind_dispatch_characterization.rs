@@ -117,7 +117,7 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
             )
         })
         .collect();
-    (line_tags(&chat.lines.0), diags)
+    (line_tags(chat.lines.as_slice()), diags)
 }
 
 /// The exact line structure produced by the pre-migration parser for the

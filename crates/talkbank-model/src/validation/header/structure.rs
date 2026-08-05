@@ -407,7 +407,7 @@ fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl Error
     for (header, span) in headers {
         if let Header::Participants { entries } = header {
             let mut seen: HashSet<&str> = HashSet::new();
-            for entry in &entries.0 {
+            for entry in entries.as_slice() {
                 let code = entry.speaker_code.as_str();
                 if !seen.insert(code) {
                     let mut err = ParseError::new(

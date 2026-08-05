@@ -210,27 +210,52 @@ fn walk_content_visiting(
                 scan_word_visiting(&replaced.word, word_count, visitor, in_retrace);
             }
             UtteranceContent::Group(group) => {
-                walk_bracketed_visiting(&group.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    group.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             UtteranceContent::AnnotatedGroup(group) => {
                 walk_bracketed_visiting(
-                    &group.inner.content.content.0,
+                    group.inner.content.content.as_slice(),
                     word_count,
                     visitor,
                     in_retrace,
                 );
             }
             UtteranceContent::Quotation(q) => {
-                walk_bracketed_visiting(&q.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    q.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             UtteranceContent::PhoGroup(g) => {
-                walk_bracketed_visiting(&g.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    g.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             UtteranceContent::SinGroup(g) => {
-                walk_bracketed_visiting(&g.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    g.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             UtteranceContent::Retrace(retrace) => {
-                walk_bracketed_visiting(&retrace.content.content.0, word_count, visitor, true);
+                walk_bracketed_visiting(
+                    retrace.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    true,
+                );
             }
             UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Event(_)
@@ -277,23 +302,43 @@ fn walk_bracketed_visiting(
             }
             BracketedItem::AnnotatedGroup(annotated) => {
                 walk_bracketed_visiting(
-                    &annotated.inner.content.content.0,
+                    annotated.inner.content.content.as_slice(),
                     word_count,
                     visitor,
                     in_retrace,
                 );
             }
             BracketedItem::PhoGroup(g) => {
-                walk_bracketed_visiting(&g.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    g.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             BracketedItem::SinGroup(g) => {
-                walk_bracketed_visiting(&g.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    g.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             BracketedItem::Quotation(q) => {
-                walk_bracketed_visiting(&q.content.content.0, word_count, visitor, in_retrace);
+                walk_bracketed_visiting(
+                    q.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    in_retrace,
+                );
             }
             BracketedItem::Retrace(retrace) => {
-                walk_bracketed_visiting(&retrace.content.content.0, word_count, visitor, true);
+                walk_bracketed_visiting(
+                    retrace.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    true,
+                );
             }
             BracketedItem::Event(_)
             | BracketedItem::AnnotatedEvent(_)
@@ -488,27 +533,52 @@ fn walk_content(
                 }
             }
             UtteranceContent::Group(group) => {
-                walk_bracketed(&group.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    group.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             UtteranceContent::AnnotatedGroup(group) => {
                 walk_bracketed(
-                    &group.inner.content.content.0,
+                    group.inner.content.content.as_slice(),
                     word_count,
                     markers,
                     in_retrace,
                 );
             }
             UtteranceContent::Quotation(q) => {
-                walk_bracketed(&q.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    q.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             UtteranceContent::PhoGroup(g) => {
-                walk_bracketed(&g.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    g.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             UtteranceContent::SinGroup(g) => {
-                walk_bracketed(&g.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    g.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             UtteranceContent::Retrace(retrace) => {
-                walk_bracketed(&retrace.content.content.0, word_count, markers, true);
+                walk_bracketed(
+                    retrace.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    true,
+                );
             }
             UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Event(_)
@@ -555,23 +625,43 @@ fn walk_bracketed(
             }
             BracketedItem::AnnotatedGroup(annotated) => {
                 walk_bracketed(
-                    &annotated.inner.content.content.0,
+                    annotated.inner.content.content.as_slice(),
                     word_count,
                     markers,
                     in_retrace,
                 );
             }
             BracketedItem::PhoGroup(g) => {
-                walk_bracketed(&g.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    g.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             BracketedItem::SinGroup(g) => {
-                walk_bracketed(&g.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    g.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             BracketedItem::Quotation(q) => {
-                walk_bracketed(&q.content.content.0, word_count, markers, in_retrace);
+                walk_bracketed(
+                    q.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    in_retrace,
+                );
             }
             BracketedItem::Retrace(retrace) => {
-                walk_bracketed(&retrace.content.content.0, word_count, markers, true);
+                walk_bracketed(
+                    retrace.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    true,
+                );
             }
             BracketedItem::Event(_)
             | BracketedItem::AnnotatedEvent(_)
@@ -703,12 +793,12 @@ mod tests {
             )),
             UtteranceContent::OverlapPoint(OverlapPoint::new(
                 OverlapPointKind::TopOverlapBegin,
-                Some(OverlapIndex(2)),
+                Some(OverlapIndex::new(2)),
             )),
             make_word("two"),
             UtteranceContent::OverlapPoint(OverlapPoint::new(
                 OverlapPointKind::TopOverlapEnd,
-                Some(OverlapIndex(2)),
+                Some(OverlapIndex::new(2)),
             )),
         ];
         let info = extract_overlap_info(&content);
@@ -719,7 +809,7 @@ mod tests {
         assert_eq!(info.regions[0].begin_at_word, Some(0));
         assert_eq!(info.regions[0].end_at_word, Some(1));
         // Second region: index 2
-        assert_eq!(info.regions[1].index, Some(OverlapIndex(2)));
+        assert_eq!(info.regions[1].index, Some(OverlapIndex::new(2)));
         assert_eq!(info.regions[1].begin_at_word, Some(1));
         assert_eq!(info.regions[1].end_at_word, Some(2));
     }

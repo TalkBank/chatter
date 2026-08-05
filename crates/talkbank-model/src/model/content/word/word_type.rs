@@ -76,8 +76,25 @@ impl PartialEq for CachedStr {
 ///
 /// # Alignment
 ///
-/// Words participate in tier alignment with %mor, %pho, and other dependent tiers.
-/// See [`crate::alignment`] for alignment algorithms.
+/// Words participate in tier alignment with %mor, %pho, and other dependent
+/// tiers. **Do not hand-roll the walk or the filter.** Use
+/// [`walk_words`](crate::alignment::helpers::walk_words) to visit them and
+/// [`counts_for_tier`](crate::alignment::helpers::counts_for_tier) to decide
+/// which ones a given tier domain aligns against.
+///
+/// Deciding which words align splits into two questions, and only one of them
+/// is easy to guess. WHICH CATEGORIES count is a short list a careful reader
+/// will reproduce. WHICH PARTS OF THE TREE you visit is spread across a dozen
+/// content variants, differs by tier domain, and a `match` arm you forget to
+/// write compiles cleanly and drops a whole subtree in silence.
+///
+/// A downstream implementation that guessed the category list correctly and
+/// hand-rolled the traversal shipped three bugs it had not diagnosed: words
+/// inside `‹…›` phonological groups vanished from its token stream, `[e]`
+/// -excluded material was counted so valid utterances reported false
+/// mismatches, and every CA separator was counted although only tag, vocative
+/// and comma carry `%mor` items. Its own tests passed throughout, because on
+/// flat utterances the two implementations agree.
 #[derive(Clone, Debug, PartialEq, Deserialize, SemanticEq, SpanShift)]
 pub struct Word {
     /// Source location (byte offsets in original input).

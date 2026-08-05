@@ -422,7 +422,8 @@ pub fn tokenize_syl_word(word: &str) -> Result<Vec<SylToken>, SylWordError> {
         let Some(code_char) = after.chars().next() else {
             return Err(SylWordError::EmptyCode);
         };
-        let phone = NonEmptyString::new(phone_str).ok_or(SylWordError::EmptyPhone(code_char))?;
+        let phone =
+            NonEmptyString::new(phone_str).map_err(|_| SylWordError::EmptyPhone(code_char))?;
         let code = PositionCode::try_from(code_char).map_err(SylWordError::IllegalCode)?;
         tokens.push(SylToken::Unit(SyllableUnit { phone, code }));
         rest = &after[code_char.len_utf8()..];
@@ -719,7 +720,7 @@ fn parse_xphoint_group(group: &str) -> Result<XphointGroup, XphointParseError> {
         let bullet_tok = tokens
             .get(i + 1)
             .ok_or_else(|| XphointParseError::MissingBullet(phone_tok.to_string()))?;
-        let phone = NonEmptyString::new(phone_tok).ok_or(XphointParseError::EmptyPhone)?;
+        let phone = NonEmptyString::new(phone_tok).map_err(|_| XphointParseError::EmptyPhone)?;
         let bullet = parse_xphoint_bullet(bullet_tok)?;
         phones.push(PhoneInterval { phone, bullet });
         i += 2;
@@ -798,13 +799,13 @@ fn parse_alignment_pair(s: &str) -> Result<AlignmentPair, PhoalnParseError> {
     let source = if source_str == "∅" || source_str.is_empty() {
         None
     } else {
-        Some(NonEmptyString::new(source_str).ok_or(PhoalnParseError::EmptySegment)?)
+        Some(NonEmptyString::new(source_str).map_err(|_| PhoalnParseError::EmptySegment)?)
     };
 
     let target = if target_str == "∅" || target_str.is_empty() {
         None
     } else {
-        Some(NonEmptyString::new(target_str).ok_or(PhoalnParseError::EmptySegment)?)
+        Some(NonEmptyString::new(target_str).map_err(|_| PhoalnParseError::EmptySegment)?)
     };
 
     Ok(AlignmentPair { source, target })
@@ -835,7 +836,7 @@ pub enum PhoalnParseError {
 pub fn parse_syl_content(content: &str) -> Vec<NonEmptyString> {
     content
         .split_whitespace()
-        .filter_map(NonEmptyString::new)
+        .filter_map(|token| NonEmptyString::new(token).ok())
         .collect()
 }
 

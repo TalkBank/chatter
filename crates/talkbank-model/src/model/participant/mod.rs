@@ -70,7 +70,9 @@
 
 mod accessors;
 mod core;
+mod declared;
 #[cfg(test)]
 mod tests;
 
 pub use core::Participant;
+pub use declared::DeclaredSpeaker;

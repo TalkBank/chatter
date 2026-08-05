@@ -106,7 +106,7 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
             )
         })
         .collect();
-    (line_reprs(&chat.lines.0), diags)
+    (line_reprs(chat.lines.as_slice()), diags)
 }
 
 /// A stray inline header (`@Foo:`) that the grammar matches structurally as
@@ -219,7 +219,7 @@ fn headers_media_fixture_parses_with_zero_diagnostics() {
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }, ParticipantEntry { speaker_code: SpeakerCode("MOT"), name: None, role: ParticipantRole("Mother") }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("sample"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 2, months: Some(0), days: None, raw: "2;00." }), sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("sample"), speaker: SpeakerCode("MOT"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
-        r#"Media(MediaHeader { filename: MediaFilename("headers-media"), media_type: Video, status: Some(Unlinked) })"#,
+        r#"Media(MediaHeader { filename: MediaFilename("headers-media"), media_type: Video, status: Some(Unlinked), whitespace_before_comma: None })"#,
         r#"Videos { videos: VideoSpec("1a, 1b, 1c") }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Media headers: @Media with video type and unlinked status, @Videos" })]) } }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: media_header, media_contents, media_filename, media_type," }), Continuation, Text(BulletContentText { text: "media_status, video_value, unlinked_value, videos_header" })]) } }"#,
@@ -247,7 +247,7 @@ fn headers_comments_fixture_parses_with_zero_diagnostics() {
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }, ParticipantEntry { speaker_code: SpeakerCode("MOT"), name: None, role: ParticipantRole("Mother") }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 3, months: Some(0), days: None, raw: "3;00." }), sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("MOT"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
-        r#"Media(MediaHeader { filename: MediaFilename("headers-comments"), media_type: Video, status: Some(Unlinked) })"#,
+        r#"Media(MediaHeader { filename: MediaFilename("headers-comments"), media_type: Video, status: Some(Unlinked), whitespace_before_comma: None })"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Comment and warning headers with multi-line continuation" })]) } }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: comment_header, warning_header, anything," }), Continuation, Text(BulletContentText { text: "text_with_bullets_and_pics, continuation, rest_of_line" })]) } }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI points to the shelf" }), Bullet(MediaTiming { start_ms: 1234, end_ms: 1567 })]) } }"#,

@@ -96,6 +96,16 @@ pub(crate) fn check_header(
         }
         Header::Media(media_header) => {
             check_unsupported_media(media_header, span, errors);
+            // E767 and E768 are properties of THIS header's payload, like
+            // E535/E536 above, so they belong on this arm rather than in a
+            // separate file-level sweep. Placing them here is also what makes
+            // them reach `validate_headers_only`, the LSP's entry point: E767
+            // was invisible in the editor for its whole first day because the
+            // file-level sweep never runs there.
+            check_media_whitespace_before_comma(media_header, span, errors);
+            media_header
+                .filename
+                .report_representability_issues(span, errors);
         }
         Header::Number { number } => {
             check_unsupported_number(number, span, errors);
@@ -180,6 +190,28 @@ fn check_unsupported_media(
         err.location.span = span;
         errors.report(err);
     }
+}
+
+/// E767: whitespace between the `@Media` filename and its comma.
+///
+/// The span is recorded as parser provenance on the header, so this reads a
+/// fact both front ends supply rather than re-deriving it from text; that is
+/// what keeps the two parsers reporting the same thing.
+fn check_media_whitespace_before_comma(
+    media_header: &crate::model::MediaHeader,
+    _span: Span,
+    errors: &impl ErrorSink,
+) {
+    let Some(space) = media_header.whitespace_before_comma else {
+        return;
+    };
+    errors.report(crate::ParseError::new(
+        crate::ErrorCode::MediaWhitespaceBeforeComma,
+        crate::Severity::Error,
+        crate::SourceLocation::at_offset(space.start as usize),
+        crate::ErrorContext::new("", 0..0, "media_filename"),
+        "Whitespace before the comma in @Media: the filename ends where the comma begins",
+    ));
 }
 
 /// E537: Flag unsupported `@Number` value.

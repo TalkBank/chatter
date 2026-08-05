@@ -12,7 +12,7 @@ use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use crate::Line;
@@ -321,7 +321,56 @@ impl ChatFile<NotValidated> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ChatFileLines(pub Vec<Line>);
+pub struct ChatFileLines(Vec<Line>);
+
+impl ChatFileLines {
+    /// The lines, borrowed.
+    pub fn as_slice(&self) -> &[Line] {
+        &self.0
+    }
+
+    /// Inserts a line at `index`, shifting the rest right.
+    ///
+    /// A NAMED length-changing operation. With `DerefMut` gone this and the
+    /// other named mutators are the only ways to change the line count, which
+    /// is what lets a future invariant (a CHAT file's headers precede its
+    /// utterances, `@Begin`/`@End` bracket the body) be enforced here rather
+    /// than bypassed through the raw `Vec`.
+    ///
+    /// # Panics
+    ///
+    /// If `index > len`, like `Vec::insert`.
+    pub fn insert(&mut self, index: usize, line: Line) {
+        self.0.insert(index, line);
+    }
+
+    /// Removes and returns the line at `index`, shifting the rest left.
+    ///
+    /// The other named length-changing operation; see [`Self::insert`].
+    ///
+    /// # Panics
+    ///
+    /// If `index >= len`, like `Vec::remove`.
+    pub fn remove(&mut self, index: usize) -> Line {
+        self.0.remove(index)
+    }
+
+    /// The lines, mutably.
+    ///
+    /// Mutation was already possible through the `pub` inner field, so this is
+    /// the same capability behind a named door rather than a new one.
+    ///
+    /// NOTE, and read this before relying on the closed field for anything:
+    /// this type also implements `DerefMut<Target = Vec<_>>`, which hands out
+    /// the whole `Vec` API. Closing the tuple field therefore prevents literal
+    /// construction and destructuring and NOTHING ELSE; it does not reserve
+    /// room for a future invariant, because `push`, `retain`, `clear` and the
+    /// rest remain reachable. An earlier version of this comment claimed
+    /// otherwise and was wrong.
+    pub fn as_mut_slice(&mut self) -> &mut [Line] {
+        &mut self.0
+    }
+}
 
 impl ChatFileLines {
     /// Wrap line values while preserving file order.
@@ -346,13 +395,6 @@ impl Deref for ChatFileLines {
     /// Borrows the underlying line vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for ChatFileLines {
-    /// Mutably borrows the underlying line vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

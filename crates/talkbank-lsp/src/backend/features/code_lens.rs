@@ -9,9 +9,14 @@ use tower_lsp::lsp_types::*;
 /// Generates code lenses showing utterance count per speaker above @Participants.
 pub fn code_lens(chat_file: &ChatFile, doc: &str) -> Option<Vec<CodeLens>> {
     // Count utterances per speaker.
+    //
+    // Iterate the DECLARED roster, not `chat_file.participants`: that map is
+    // the `@Participants`-to-`@ID` join, so a speaker declared without an
+    // `@ID` is absent from it and would get no lens at all, even while
+    // speaking. In an editor that is exactly the file being worked on.
     let mut counts: Vec<(String, usize)> = Vec::new();
-    for (code, _participant) in &chat_file.participants {
-        let speaker_str = code.as_str();
+    for declared in chat_file.declared_speakers() {
+        let speaker_str = declared.code().as_str();
         let count = chat_file
             .utterances()
             .filter(|u| u.main.speaker.as_str() == speaker_str)

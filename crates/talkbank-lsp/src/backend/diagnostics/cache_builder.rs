@@ -73,7 +73,7 @@ pub fn build_validation_cache(chat_file: &mut ChatFile, filename: Option<&str>) 
     let mut utterance_errors = Vec::new();
     let mut utterance_scoped_signature = Vec::new();
     let mut utterance_bullet_signature = Vec::new();
-    for line in chat_file.lines.iter_mut() {
+    for line in chat_file.lines.as_mut_slice().iter_mut() {
         if let Line::Utterance(utterance) = line {
             utterance_errors.push(validate_single_utterance(utterance, &context));
             utterance_scoped_signature.push(scoped_marker_signature(utterance));
@@ -120,7 +120,7 @@ pub fn build_validation_cache_reuse_headers(
     let mut utterance_errors = Vec::new();
     let mut utterance_scoped_signature = Vec::new();
     let mut utterance_bullet_signature = Vec::new();
-    for line in chat_file.lines.iter_mut() {
+    for line in chat_file.lines.as_mut_slice().iter_mut() {
         if let Line::Utterance(utterance) = line {
             utterance_errors.push(validate_single_utterance(utterance, &context));
             utterance_scoped_signature.push(scoped_marker_signature(utterance));

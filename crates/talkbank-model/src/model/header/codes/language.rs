@@ -80,7 +80,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
     Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift,
 )]
 #[serde(transparent)]
-pub struct LanguageCode(pub Arc<str>);
+pub struct LanguageCode(Arc<str>);
 
 /// Why constructing a [`LanguageCode`] failed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

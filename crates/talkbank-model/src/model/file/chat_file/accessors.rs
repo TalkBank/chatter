@@ -9,7 +9,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Participants_Header>
 
 use crate::model::header::IDHeader;
-use crate::model::{Participant, Utterance};
+use crate::model::{DeclaredSpeaker, Participant, Utterance};
 use crate::validation::ValidationState;
 use crate::{Header, Span, WriteChat};
 use tracing::{debug, info};
@@ -138,6 +138,11 @@ impl<S: ValidationState> ChatFile<S> {
     ///
     /// Order follows map iteration and should not be assumed stable for UI ordering.
     ///
+    /// **This is the `@ID` join, not the roster.** A speaker declared in
+    /// `@Participants` with no `@ID` header is absent here. For "who is in
+    /// this transcript", use
+    /// [`declared_speakers`](Self::declared_speakers) instead.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -149,6 +154,53 @@ impl<S: ValidationState> ChatFile<S> {
     /// ```
     pub fn all_participants(&self) -> Vec<&Participant> {
         self.participants.values().collect()
+    }
+
+    /// Iterates every speaker DECLARED in `@Participants`, in declaration
+    /// order, each enriched with its `@ID` metadata when that header exists.
+    ///
+    /// **Prefer this to [`all_participants`](Self::all_participants) for any
+    /// question about who is in the transcript.** The two differ exactly when
+    /// the file is invalid, and this one is the roster.
+    /// [`participants`](Self::participants) is keyed and populated from the
+    /// `@ID` join, so a speaker declared without an `@ID` raises E522 and is
+    /// then simply absent from the map: a consumer iterating the map sees
+    /// fewer speakers than the file declares, with nothing to say so. Here
+    /// that speaker is present with
+    /// [`id_metadata`](crate::model::DeclaredSpeaker::id_metadata) `None`.
+    ///
+    /// Returns an empty iterator when the file has no `@Participants` header,
+    /// which is itself invalid CHAT.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use talkbank_model::model::ChatFile;
+    /// # let chat_file = ChatFile::new(vec![]);
+    /// for speaker in chat_file.declared_speakers() {
+    ///     match speaker.id_metadata() {
+    ///         Some(meta) => println!("{} ({}) age {:?}", speaker.code(), speaker.role(), meta.age()),
+    ///         None => println!("{} ({}) has no @ID header", speaker.code(), speaker.role()),
+    ///     }
+    /// }
+    /// ```
+    pub fn declared_speakers(&self) -> impl Iterator<Item = DeclaredSpeaker<'_>> {
+        self.participant_entries()
+            .into_iter()
+            .flatten()
+            .map(|entry| DeclaredSpeaker::new(entry, self.participants.get(&entry.speaker_code)))
+    }
+
+    /// The `@Participants` payload, in declared order, if the file has one.
+    ///
+    /// Sibling of [`id_headers`](Self::id_headers), and there for the same
+    /// stated reason: a reader that wants the declaration list should not
+    /// hand-roll the `Header::Participants` match.
+    pub fn participant_entries(&self) -> Option<&crate::model::ParticipantEntries> {
+        self.headers().find_map(|header| match header {
+            Header::Participants { entries } => Some(entries),
+            _ => None,
+        })
     }
 
     /// Returns number of participant entries currently materialized.

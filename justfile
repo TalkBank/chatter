@@ -39,15 +39,42 @@ test:
 # ran the whole doctest suite twice over. Doctests are merged into one binary
 # per crate (edition 2024), so they are cheap to RUN; the cost is the rustdoc
 # compile, which is what the inner loop skips.
-test-all: test check-feature-off
+test-all: test check-feature-off test-spec
     cargo test --doc --workspace
+    cargo test -p talkbank-derive --features ui-tests --tests ui_tests
+
+# The spec workspace, which `--workspace` above does not reach.
+#
+# `spec/tools` generates the tree-sitter corpus tests, the Rust parser tests
+# and the validation fixture corpus, so a break here stops the regeneration
+# every other gate depends on. It went untested by CI and by this justfile
+# until 2026-08-04.
+test-spec:
+    cargo test --manifest-path spec/Cargo.toml --workspace
 
 # The `validation-runner`-off configuration of talkbank-transform (the
 # SQL-free surface downstream consumers opt into with
 # `default-features = false`). No in-workspace consumer builds it, so
 # without this gate feature unification would let it rot silently.
+#
+# ITS OWN TARGET DIRECTORY, DELIBERATELY. `--no-default-features` changes
+# feature unification across the whole shared dependency graph, so sharing
+# `target/` with every other recipe makes the two evict each other. That is the
+# same "two cargo unit configurations, one target dir, no reuse" trap as
+# running `cargo check` before `cargo test`.
+#
+# Measured on ming, 2026-08-04, crates recompiled per alternation:
+#
+#                          shared target/     own target dir
+#   check-feature-off        68  (17.7 s)      1  ( 1.7 s)
+#   the next `just test`    133  (43.3 s)      5  (20.2 s)
+#
+# So an alternation went from 201 crate rebuilds to 6, and from about 61 s to
+# 22 s. The cost is disk: target/feature-off is 1.4 GB beside target/'s 13 GB,
+# plus one cold build of it (181 crates, 21 s).
+
 check-feature-off:
-    cargo test -p talkbank-transform --no-default-features --tests
+    CARGO_TARGET_DIR=target/feature-off cargo test -p talkbank-transform --no-default-features --tests
 
 # Line/region/function coverage over the whole workspace via cargo-llvm-cov,
 # using cargo test (matches the project's test convention). Prints a
@@ -91,13 +118,20 @@ clippy:
     # per-test-file allow headers). One flag set = one build profile.
     cargo clippy --workspace --all-targets --locked
 
-# Format the workspace.
+# Format BOTH workspaces.
+#
+# `cargo fmt --all` means "every member of THIS workspace", not "every crate in
+# the repository", and `spec/` is a separate workspace. Formatting only the root
+# left spec/ ungated from the day it was split out: by 2026-08-04 nine of its
+# files had drifted, and nothing ever said so.
 fmt:
     cargo fmt --all
+    cargo fmt --manifest-path spec/Cargo.toml --all
 
-# Check formatting (CI-style; non-mutating).
+# Check formatting (CI-style; non-mutating). Both workspaces, same reason.
 fmt-check:
     cargo fmt --all -- --check
+    cargo fmt --manifest-path spec/Cargo.toml --all -- --check
 
 # Sync CI workflow Rust-version pins to their sources of truth
 # (rust-toolchain.toml for the toolchain, Cargo.toml rust-version for the

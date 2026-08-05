@@ -4,7 +4,7 @@
 //! that should produce parse errors.
 
 use comrak::nodes::{AstNode, NodeValue};
-use comrak::{parse_document, Arena, Options};
+use comrak::{Arena, Options, parse_document};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
@@ -32,6 +32,38 @@ pub enum Status {
     NotImplemented,
     /// Code deprecated/replaced by another; examples are skipped.
     Deprecated,
+    /// Rule IS implemented, but no CHAT input can trigger it, so it cannot
+    /// have a fixture and the corpus gate must not demand one.
+    ///
+    /// This exists because the honest alternatives were both wrong. Leaving
+    /// such a spec as `Implemented` with no example made it vanish from the
+    /// loader entirely (see `load_all`), taking it out of reach of the very
+    /// gate meant to catch an untested rule; marking it `NotImplemented`
+    /// would state something false about a rule that fires. A spec in this
+    /// state owes a NAMED out-of-corpus regression test in its status note,
+    /// since the corpus cannot carry one.
+    ///
+    /// First user: E768, whose value cannot appear in a `.cha` file because
+    /// both parsers end an `@Media` filename at the comma.
+    UnreachableFromChat,
+}
+
+/// Whether a path names an error spec, as opposed to prose living in the same
+/// directory.
+///
+/// A spec is `E<digits>...md` or `W<digits>...md`. This is what lets
+/// `load_all` fail closed: without a way to tell a spec from a README, every
+/// parse failure had to be tolerated, and tolerating them is what hid E768
+/// from the coverage gate.
+fn is_error_spec_filename(path: &std::path::Path) -> bool {
+    let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    let mut chars = stem.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    matches!(first, 'E' | 'W') && chars.next().is_some_and(|c| c.is_ascii_digit())
 }
 
 impl FromStr for Status {
@@ -41,6 +73,7 @@ impl FromStr for Status {
             "implemented" => Ok(Self::Implemented),
             "not_implemented" => Ok(Self::NotImplemented),
             "deprecated" => Ok(Self::Deprecated),
+            "unreachable_from_chat" => Ok(Self::UnreachableFromChat),
             other => Err(UnknownMetadataValue {
                 field: "Status",
                 value: other.to_owned(),
@@ -239,10 +272,21 @@ impl ErrorCorpusSpec {
         {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                match Self::load(path) {
-                    Ok(spec) => specs.push(spec),
-                    Err(e) => eprintln!("Warning: Failed to load {}: {}", path.display(), e),
+                // Only files NAMED like a spec are specs. `spec/errors/` also
+                // holds documentation (README, the enhancement guide), and
+                // those must be skipped rather than parsed.
+                if !is_error_spec_filename(path) {
+                    continue;
                 }
+                // FAIL CLOSED. This used to be `eprintln!("Warning: ...")`,
+                // which meant a spec file that failed to parse silently left
+                // the corpus, taking any gate that would have judged it with
+                // it. A warning on stderr during code generation is
+                // indistinguishable from noise; a spec that does not parse is
+                // a defect in the spec.
+                let spec = Self::load(path)
+                    .map_err(|e| format!("Failed to load {}: {}", path.display(), e))?;
+                specs.push(spec);
             }
         }
 
@@ -456,12 +500,10 @@ impl ErrorCorpusSpec {
             )
         })?;
 
-        if examples.is_empty() {
-            return Err(format!(
-                "Missing Example chat code block in {}",
-                path.display()
-            ));
-        }
+        // Deliberately NOT an error: parse what is there and let the
+        // coverage gate rule on it. Erroring here made `load_all` drop the
+        // spec, which is how an example-less spec slipped past the gate whose
+        // whole job is to notice one.
 
         let _expected_behavior = expected_behavior_parts.join("\n");
         let _chat_rule = normalize_whitespace(&chat_rule_parts.join(" "));
@@ -643,11 +685,9 @@ mod tests {
     #[test]
     fn spec_retains_its_source_path() {
         let markdown = spec_markdown("");
-        let spec = ErrorCorpusSpec::parse_markdown(
-            &markdown,
-            Path::new("spec/errors/E999_test.md"),
-        )
-        .expect("spec should parse");
+        let spec =
+            ErrorCorpusSpec::parse_markdown(&markdown, Path::new("spec/errors/E999_test.md"))
+                .expect("spec should parse");
         assert_eq!(spec.source_path_display(), "spec/errors/E999_test.md");
     }
 
@@ -695,7 +735,10 @@ mod tests {
             .examples
             .first()
             .expect("comma-form spec should yield one example");
-        assert_eq!(example.error_code.as_ref().map(|c| c.as_str()), Some("E249"));
+        assert_eq!(
+            example.error_code.as_ref().map(|c| c.as_str()),
+            Some("E249")
+        );
         assert_eq!(example.name, "Bare @s shortcut with no secondary language");
         assert_eq!(spec.examples.len(), 1);
     }
@@ -711,7 +754,10 @@ mod tests {
             .examples
             .first()
             .expect("colon-form spec should yield one example");
-        assert_eq!(example.error_code.as_ref().map(|c| c.as_str()), Some("E999"));
+        assert_eq!(
+            example.error_code.as_ref().map(|c| c.as_str()),
+            Some("E999")
+        );
         assert_eq!(example.name, "Test error");
     }
 
@@ -757,7 +803,15 @@ mod tests {
             let Some(first_line) = content.lines().find(|l| !l.trim().is_empty()) else {
                 continue;
             };
-            if is_error_spec_title(first_line) && has_example_chat_block(&content) {
+            // An example is NO LONGER part of being loadable. It used to be:
+            // `parse_markdown` rejected a spec with no `## Example`, so this
+            // count had to exclude such files or the assertion would never
+            // hold. That symmetry is exactly what hid the problem, since a
+            // spec missing an example was subtracted from BOTH sides and the
+            // guard could not see it go. The invariant is now the stronger
+            // one it always should have been: every file with an E###/W###
+            // title must load.
+            if is_error_spec_title(first_line) {
                 count += 1;
             }
         }
@@ -785,26 +839,6 @@ mod tests {
             break;
         }
         saw_digit
-    }
-
-    /// True when the markdown has at least one ` ```chat ` fence that sits
-    /// under an `## Example` (or `## Example ...`) section, mirroring the
-    /// loader's own rule that only chat code blocks inside `Section::Example`
-    /// become the spec's `input`. A chat block under any other heading
-    /// (e.g. `## Minimal Reproduction`) does not count, exactly as the
-    /// loader ignores it.
-    fn has_example_chat_block(content: &str) -> bool {
-        let mut in_example_section = false;
-        for line in content.lines() {
-            if let Some(heading) = line.strip_prefix("## ") {
-                in_example_section = heading == "Example" || heading.starts_with("Example ");
-                continue;
-            }
-            if in_example_section && line.trim_start().starts_with("```chat") {
-                return true;
-            }
-        }
-        false
     }
 
     /// Count guard: every `.md` file in `spec/errors` that carries an

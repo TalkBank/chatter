@@ -998,6 +998,32 @@ pub enum ErrorCode {
     #[code("E766")]
     LinkerNotUtteranceInitial,
 
+    /// Whitespace between the `@Media` filename and the comma after it.
+    ///
+    /// The comma separates the filename from the media type, so the filename
+    /// ends where the comma begins. Real CLAN rejects the space too (CHECK
+    /// 148), and an unambiguous style violation still follows CHECK as an
+    /// error.
+    ///
+    /// The construct parses deliberately, so this rule can name it and point at
+    /// the space. Before 2026-08-05 the header simply failed to match and the
+    /// failure surfaced as [`UnknownHeader`] plus a "Missing media_type node"
+    /// complaint about a line that visibly ended in `, audio`: fallout rather
+    /// than a judgment, and misleading twice over.
+    ///
+    /// [`UnknownHeader`]: Self::UnknownHeader
+    #[code("E767")]
+    MediaWhitespaceBeforeComma,
+    /// `@Media` filename cannot be written to a header and read back
+    /// unchanged.
+    ///
+    /// The problems are enumerated once, by `MediaFilenameProblem`; naming a
+    /// subset here is how this comment went stale on its first commit.
+    /// Unreachable through either parser, which stop the filename at the
+    /// comma; the reachable path is a `ChatFile` deserialized from JSON.
+    #[code("E768")]
+    MediaFilenameNotRepresentable,
+
     // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================

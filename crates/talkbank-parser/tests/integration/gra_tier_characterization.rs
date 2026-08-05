@@ -97,7 +97,7 @@ fn parse_gra(input: &str) -> (Vec<(usize, usize, String)>, bool, Vec<Diag>) {
 
     let mut relations = Vec::new();
     let mut saw_gra_tier = false;
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
                 if let DependentTier::Gra(t) = &dt.tier {

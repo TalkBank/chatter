@@ -9,7 +9,7 @@ keywords = ["incremental", "parsing", "tree-sitter", "talkbank"]
 categories = ["parser-implementations", "parsing", "text-editors"]
 repository = "https://github.com/TalkBank/chatter"
 homepage = "https://talkbank.org"
-edition = "2021"
+edition.workspace = true
 autoexamples = false
 
 build = "bindings/rust/build.rs"

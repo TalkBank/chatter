@@ -9,6 +9,124 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-05
+
+**Validation verdicts: CHANGED, in the permissive direction.** Files that
+earlier versions wrongly REJECTED now parse: an unquoted `@Media` filename may
+contain dots, parentheses, interior spaces and non-ASCII characters. Nothing
+that used to pass now fails. The corpus differential over a 2,136-file
+stratified sample of the reference corpora reports no new error code and no
+count increase on any code, and no newly-failing roundtrip file.
+
+Three rules changed with no effect on any known transcript. E767 (new) reports
+whitespace before the `@Media` comma; those files were already invalid, and what
+changes is the diagnostic. E768 (new) cannot be reached from a `.cha` file at
+all. E602 became E756 on empty user-defined tiers, a construct that occurs zero
+times in the wild corpus.
+
+This release closes the library's newtype surface ahead of 1.0, so it carries a
+lot of breaking API change and very little behaviour change.
+
+### Fixed
+
+- **`@Media` rejected legal media filenames.** `media_filename` was an ASCII
+  allowlist (`[a-zA-Z0-9_-]+`), so a dot, a space, a parenthesis or any non-ASCII
+  character made the header fail to match. The failure surfaced as E330 "Missing
+  media_type node" on a line that visibly ended in `, audio`, and as E525 about a
+  header chatter had recognised perfectly well. A filename is now defined the way
+  the format defines it, as everything up to the comma that introduces the media
+  type, with the quoted form still available for URLs (which may contain commas).
+  This was costing real transcription runs: a media file named in Chinese, or
+  containing a space, could not be referenced at all.
+- **A `%mor` tier could be silently dropped on an empty user-defined tier.**
+  `UserDefinedDependentTier::content` was a `NonEmptyString`, so the model could
+  not represent a `%x` tier with empty content and the two parsers disagreed about
+  what to do with one. The state is now representable and rejected by a validation
+  rule (E756) rather than being unrepresentable and handled twice.
+- **The validation cache could panic on drop** inside an async runtime. This was
+  the second half of the nesting bug fixed in 0.8.0: the first half covered the
+  call, this one covers teardown.
+- **A `%mor` clone was a no-op**, cloning a reference rather than the owning
+  vector it was meant to copy.
+- **A declared speaker with no `@ID` was reported as undeclared.** The
+  "Speaker *X not declared in @Participants" check read the
+  `@Participants`-to-`@ID` join rather than the `@Participants` header, so for
+  a speaker declared without an `@ID` it asserted the opposite of the file. The
+  missing `@ID` is a real fault and E522 already reported it correctly. The
+  neighbouring "@Participants header missing or has no participants" check had
+  the same confusion: an empty join and an absent header are different facts.
+- **E767 never fired in the editor.** It was implemented as a file-level sweep,
+  and the LSP calls `validate_headers_only`, which does not run those. Both
+  `@Media` payload rules now live on the per-header dispatcher that every entry
+  point calls, so the CLI and the editor report the same thing. The LSP's
+  per-speaker code lens had a quieter version of the roster bug: a speaker
+  without an `@ID` got no lens while speaking.
+- **A spec file had been failing to load silently.**
+  `E502_wor_cascade_regression.md` carried a malformed title, and the loader
+  downgraded every load failure to a warning on stderr, so it simply left the
+  corpus unnoticed. The loader now fails closed on a spec it cannot parse, and
+  distinguishes a spec from the prose that shares its directory.
+
+### Added
+
+- **`ChatFile::declared_speakers()`** returns every speaker declared in
+  `@Participants`, in declaration order, each enriched with its `@ID` metadata
+  when present. `participants` is populated from the `@Participants`-to-`@ID`
+  join, so a speaker declared without an `@ID` raised E522 and was then absent
+  from the map: consumers saw fewer speakers than the file declares. Prefer this
+  for "who is in this transcript"; `all_participants()` remains the `@ID` join.
+- **`ChatFile::participant_entries()`**, the named `@Participants` extraction,
+  alongside the existing `id_headers()`.
+- **`MorWord::analysis()`** borrows the analysis half of a `%mor` item
+  (`lemma[-Feature]*`) so a consumer whose token model keeps the tag and the
+  analysis in separate fields need not serialize the whole item and strip the
+  `POS|` prefix back off. `MorWord::write_chat` now delegates to it, so the two
+  renderings cannot drift.
+- **`DependentTierEntry::kind()`, `span()` and `content_span()`**, the last
+  giving the byte range of a tier's content without its label or terminator.
+- **`MediaFilename::parse()`, `unquoted()`, and `MediaFilenameProblem`.**
+- **E767**: whitespace between the `@Media` filename and its comma. Reported
+  from the validation layer so both parser front ends raise it from one
+  implementation.
+- **E768**: an `@Media` filename that cannot be written to a header and read
+  back unchanged. Unreachable from CHAT by construction; it guards the JSON
+  ingress, where a document can carry a value no transcript could express.
+- **`string_newtype_read_impls!`**, the read and render surface shared by every
+  string newtype, so a newtype WITH an invariant can share it instead of copying
+  it.
+- **`Status: unreachable_from_chat`** for error specs: a rule that IS
+  implemented but that no CHAT input can trigger, so it carries no corpus
+  fixture and owes a named out-of-corpus test instead. This closes a hole in
+  the gate meant to stop an implemented rule shipping untested: a spec with no
+  example used to fail to parse, and the loader turned that into a warning, so
+  the gate never saw the one case it names. Both directions are now checked, a
+  spec marked unreachable that carries an example is also an error.
+
+### Changed
+
+- **BREAKING: no model newtype exposes its inner field.** Every newtype in the
+  model, including every one generated by `string_newtype!`, now has a private
+  field. Code reading `.0` uses `as_str()` / `as_slice()` / `raw()`; code
+  mutating through it uses the named accessors.
+- **BREAKING: `DerefMut` is gone from the collection newtypes.** While it
+  existed, a private field bought nothing: any caller could still push, clear or
+  replace the contents. `as_mut_slice()` allows element mutation without allowing
+  the collection to be resized.
+- **BREAKING: `MediaHeader::new` takes a `MediaFilename`,** not
+  `impl Into<MediaFilename>`, and `MediaFilename` has no `new`, no `From<&str>`
+  and no `From<String>`. `parse` is the only way in. An `@Media` filename
+  containing the delimiter was constructible, and `build_chat` built one.
+- **BREAKING: `build_header_lines` and `build_media_header` are fallible,** and
+  `BuildChatError` gains a `MediaFilename` variant, because a caller-supplied
+  media name is external input that `@Media` cannot always represent.
+- **BREAKING: `UserDefinedDependentTier::content` is no longer a
+  `NonEmptyString`.**
+- **BREAKING: the crates are edition 2024.**
+- Deserialization of `MediaFilename` is lenient, like every other checked
+  newtype in the model: the serde boundary reconstructs what the document held
+  and validation reports the violation with a code and a span.
+
+
 ## [0.8.0] - 2026-08-03
 
 **Validation verdicts: UNCHANGED.** No rule was added, removed or altered, and

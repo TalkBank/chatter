@@ -119,7 +119,7 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
     let mut per_utterance: Vec<PerUtteranceOverlap> = Vec::new();
     for line in lines {
         if let Line::Utterance(utt) = line {
-            let info = extract_overlap_info(&utt.main.content.content.0);
+            let info = extract_overlap_info(utt.main.content.content.as_slice());
             let bullet = utt
                 .main
                 .content
@@ -240,7 +240,7 @@ mod tests {
     }
 
     fn overlap_idx(kind: OverlapPointKind, idx: u32) -> UtteranceContent {
-        UtteranceContent::OverlapPoint(OverlapPoint::new(kind, Some(OverlapIndex(idx))))
+        UtteranceContent::OverlapPoint(OverlapPoint::new(kind, Some(OverlapIndex::new(idx))))
     }
 
     fn to_lines(utts: Vec<Utterance>) -> Vec<Line> {
@@ -363,7 +363,10 @@ mod tests {
         assert_eq!(analysis.groups[0].top.region.index, None);
         assert_eq!(analysis.groups[0].bottoms.len(), 1);
         // Indexed group
-        assert_eq!(analysis.groups[1].top.region.index, Some(OverlapIndex(2)));
+        assert_eq!(
+            analysis.groups[1].top.region.index,
+            Some(OverlapIndex::new(2))
+        );
         assert_eq!(analysis.groups[1].bottoms.len(), 1);
     }
 

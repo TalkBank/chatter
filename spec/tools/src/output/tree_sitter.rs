@@ -331,7 +331,9 @@ pub fn generate_error_corpus_files(
         for warning in &no_error_warnings {
             eprintln!("  - {}", warning);
         }
-        eprintln!("  (Grammar may be too permissive for these errors; they are only caught at the Rust parser layer)\n");
+        eprintln!(
+            "  (Grammar may be too permissive for these errors; they are only caught at the Rust parser layer)\n"
+        );
     }
 
     // Print warnings about specs with MISSING nodes (test format limitation)
@@ -343,7 +345,9 @@ pub fn generate_error_corpus_files(
         for warning in &missing_warnings {
             eprintln!("  - {}", warning);
         }
-        eprintln!("  (Tree-sitter test format cannot represent MISSING nodes; these are tested by Rust parser tests)\n");
+        eprintln!(
+            "  (Tree-sitter test format cannot represent MISSING nodes; these are tested by Rust parser tests)\n"
+        );
     }
 
     Ok(files)

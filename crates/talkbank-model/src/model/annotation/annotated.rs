@@ -34,7 +34,7 @@ use crate::model::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 /// Scoped annotations attached to an `Annotated<T>` wrapper.
@@ -50,7 +50,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 )]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct AnnotatedContentAnnotations(pub Vec<ContentAnnotation>);
+pub struct AnnotatedContentAnnotations(Vec<ContentAnnotation>);
 
 impl AnnotatedContentAnnotations {
     /// Wraps scoped annotations for an [`Annotated`] payload.
@@ -74,13 +74,6 @@ impl Deref for AnnotatedContentAnnotations {
     /// Borrows the underlying annotation vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for AnnotatedContentAnnotations {
-    /// Mutably borrows the underlying annotation vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

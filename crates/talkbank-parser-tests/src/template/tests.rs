@@ -318,7 +318,7 @@ fn require_id_header(
 
     let found = chat_file.lines.iter().any(|line| match line.as_header() {
         Some(Header::ID(id)) => {
-            id.language.0.contains(&expected_language)
+            id.language.as_slice().contains(&expected_language)
                 && id.corpus == expected_corpus
                 && id.speaker == expected_speaker
                 && id.role == expected_role

@@ -30,9 +30,9 @@ fn pho_tier_round_trip_pho() {
     let tier = PhoTier::new(
         PhoTierType::Pho,
         vec![
-            PhoItem::Word(PhoWord("wʌn".into())),
-            PhoItem::Word(PhoWord("tu".into())),
-            PhoItem::Word(PhoWord("θɹi".into())),
+            PhoItem::Word(PhoWord::new("wʌn")),
+            PhoItem::Word(PhoWord::new("tu")),
+            PhoItem::Word(PhoWord::new("θɹi")),
         ],
     );
     let output = tier.to_chat_string();
@@ -49,9 +49,9 @@ fn pho_tier_round_trip_mod() {
     let tier = PhoTier::new(
         PhoTierType::Mod,
         vec![
-            PhoItem::Word(PhoWord("wʌn".into())),
-            PhoItem::Word(PhoWord("tu".into())),
-            PhoItem::Word(PhoWord("θri".into())),
+            PhoItem::Word(PhoWord::new("wʌn")),
+            PhoItem::Word(PhoWord::new("tu")),
+            PhoItem::Word(PhoWord::new("θri")),
         ],
     );
     let output = tier.to_chat_string();

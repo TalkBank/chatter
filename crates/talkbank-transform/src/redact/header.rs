@@ -8,7 +8,7 @@ use super::REDACTED_TEXT;
 pub(crate) fn sanitize_header(header: &mut Header) {
     match header {
         Header::Participants { entries } => {
-            for entry in entries.iter_mut() {
+            for entry in entries.as_mut_slice().iter_mut() {
                 entry.name = None;
             }
         }

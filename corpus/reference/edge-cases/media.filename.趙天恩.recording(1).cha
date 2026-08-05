@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	yue
+@Participants:	CHI Target_Child
+@ID:	yue|corpus|CHI|3;00.00|female|||Target_Child|||
+@Media:	media.filename.趙天恩.recording(1), audio, unlinked
+@Comment:	Media filename exercising the delimiter-based media_filename token
+@Comment:	Constructs: media_header with dots, CJK and parentheses, media_status
+@Comment:	The allowlist this replaced made every one of these unrepresentable
+*CHI:	你好 .
+@End

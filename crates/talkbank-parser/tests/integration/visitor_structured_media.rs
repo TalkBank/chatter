@@ -56,7 +56,7 @@ fn media_headers_and_diags(input: &str) -> (Vec<String>, Vec<(String, String)>) 
     let chat = parser.parse_chat_file_streaming(input, &errors);
     let headers = chat
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|l| match l {
             Line::Header { header, .. } if is_media(header) => Some(format!("{header:?}")),
@@ -79,7 +79,7 @@ fn media_header_no_status_decodes_to_exact_payload() {
     assert_eq!(
         headers,
         vec![
-            r#"Media(MediaHeader { filename: MediaFilename("media-bullets"), media_type: Video, status: None })"#
+            r#"Media(MediaHeader { filename: MediaFilename("media-bullets"), media_type: Video, status: None, whitespace_before_comma: None })"#
                 .to_string(),
         ],
         "@Media filename+type-only must reproduce the pre-migration payload"
@@ -98,7 +98,7 @@ fn media_header_with_status_decodes_to_exact_payload() {
     assert_eq!(
         headers,
         vec![
-            r#"Media(MediaHeader { filename: MediaFilename("headers-media"), media_type: Video, status: Some(Unlinked) })"#
+            r#"Media(MediaHeader { filename: MediaFilename("headers-media"), media_type: Video, status: Some(Unlinked), whitespace_before_comma: None })"#
                 .to_string(),
         ],
         "@Media filename+type+status must reproduce the pre-migration payload"

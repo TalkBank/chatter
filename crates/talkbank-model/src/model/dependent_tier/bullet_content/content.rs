@@ -6,7 +6,7 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use super::BulletContentSegment;
@@ -132,7 +132,7 @@ impl BulletContent {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct BulletContentSegments(pub Vec<BulletContentSegment>);
+pub struct BulletContentSegments(Vec<BulletContentSegment>);
 
 impl BulletContentSegments {
     /// Wraps segments while preserving transcript order.
@@ -155,13 +155,6 @@ impl Deref for BulletContentSegments {
     /// Borrows the underlying segment vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for BulletContentSegments {
-    /// Mutably borrows the underlying segment vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

@@ -94,8 +94,11 @@ fn format_l0_message(first: &ParseError, total: usize) -> String {
 
 /// L1 checks: structural completeness.
 fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError>) {
-    // Check @Participants present with at least one participant
-    if file.participants.is_empty() {
+    // Check @Participants present with at least one participant.
+    // Same reason as the roster check below: an `@Participants` header whose
+    // speakers all lack `@ID` headers leaves the join empty, which is not the
+    // same fact as the header being absent.
+    if file.declared_speakers().next().is_none() {
         errors.push(ValidationError {
             message: "@Participants header missing or has no participants".to_string(),
             level: ValidityLevel::StructurallyComplete,
@@ -126,9 +129,18 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
                 });
             }
 
-            // Check speaker is declared in participants
+            // Check speaker is declared in participants.
+            //
+            // The ROSTER is the `@Participants` header, not `file.participants`,
+            // which is the `@Participants`-to-`@ID` join and therefore drops a
+            // speaker whose `@ID` is missing. Asking the map returned the
+            // opposite of the truth for such a speaker: "not declared in
+            // @Participants" about one that is. The missing `@ID` is a real
+            // fault and E522 reports it, at the right level of detail.
             let speaker_code = utt.main.speaker.as_str();
-            let declared = file.participants.keys().any(|k| k.as_str() == speaker_code);
+            let declared = file
+                .declared_speakers()
+                .any(|s| s.code().as_str() == speaker_code);
             if !declared {
                 errors.push(ValidationError {
                     message: format!("Speaker *{speaker_code} not declared in @Participants"),
@@ -486,6 +498,66 @@ mod tests {
              has_coordinate = {has_coordinate}\n\
              has_error_code = {has_error_code}\n\
              has_excerpt    = {has_excerpt}"
+        );
+    }
+
+    /// A speaker declared in `@Participants` with no `@ID` must NOT be
+    /// reported as undeclared. It is declared; what is missing is its `@ID`,
+    /// which E522 reports separately and correctly.
+    ///
+    /// `ChatFile::participants` is the `@Participants`-to-`@ID` join, so such
+    /// a speaker is absent from that map, and asking the map "is this speaker
+    /// declared" returned the opposite of the truth. The roster lives in the
+    /// `@Participants` header, which is what `declared_speakers()` reads.
+    #[test]
+    fn a_speaker_declared_without_an_id_is_not_reported_as_undeclared() {
+        // MOT is declared and speaks; only its @ID is missing.
+        let chat = parse_chat_file(
+            "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tCHI Target_Child, MOT Mother\n\
+@ID:\teng|test|CHI|3;|male|||Target_Child|||\n\
+*CHI:\thello .\n*MOT:\thi .\n@End\n",
+        );
+
+        assert!(
+            !chat.participants.contains_key("MOT"),
+            "precondition: the @ID join drops MOT, which is why the old check was wrong"
+        );
+
+        let errors = match validate_to_level(&chat, &[], ValidityLevel::StructurallyComplete) {
+            Ok(()) => Vec::new(),
+            Err(errors) => errors,
+        };
+        let undeclared: Vec<&str> = errors
+            .iter()
+            .map(|e| e.message.as_str())
+            .filter(|m| m.contains("not declared in @Participants"))
+            .collect();
+        assert!(
+            undeclared.is_empty(),
+            "MOT is declared in @Participants; got {undeclared:?}"
+        );
+    }
+
+    /// The converse still holds: a speaker that really is absent from
+    /// `@Participants` is still reported.
+    #[test]
+    fn an_undeclared_speaker_is_still_reported() {
+        let chat = parse_chat_file(
+            "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tCHI Target_Child\n\
+@ID:\teng|test|CHI|3;|male|||Target_Child|||\n\
+*CHI:\thello .\n*XXX:\thi .\n@End\n",
+        );
+
+        let errors = validate_to_level(&chat, &[], ValidityLevel::StructurallyComplete)
+            .expect_err("an undeclared speaker must fail the structural gate");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.message.contains("*XXX not declared in @Participants")),
+            "got {:?}",
+            errors.iter().map(|e| &e.message).collect::<Vec<_>>()
         );
     }
 }

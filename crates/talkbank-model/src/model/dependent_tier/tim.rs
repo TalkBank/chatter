@@ -157,7 +157,7 @@ impl<'de> Deserialize<'de> for TimTier {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
         let content = NonEmptyString::new(&s)
-            .ok_or_else(|| serde::de::Error::custom("TimTier content cannot be empty"))?;
+            .map_err(|_| serde::de::Error::custom("TimTier content cannot be empty"))?;
         Ok(Self::from_text(content))
     }
 }

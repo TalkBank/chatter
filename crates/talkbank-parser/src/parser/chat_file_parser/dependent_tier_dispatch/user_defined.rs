@@ -127,7 +127,7 @@ fn apply_x_tier(
             let e756_label = format!("x{}", tier_label);
             talkbank_model::validation::check_user_defined_tier_content(
                 &e756_label,
-                "",
+                None,
                 span,
                 errors,
             );
@@ -163,8 +163,8 @@ fn apply_x_tier(
 
     // Content must be non-empty
     let content = match NonEmptyString::new(content_text) {
-        Some(c) => c,
-        None => {
+        Ok(c) => c,
+        Err(_) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
@@ -238,7 +238,7 @@ fn apply_x_tier(
 
     let tier = DependentTier::UserDefined(crate::model::UserDefinedDependentTier {
         label,
-        content,
+        content: Some(content),
         span,
     });
 
@@ -320,20 +320,14 @@ fn apply_unsupported_tier(
         .map(str::trim)
         .unwrap_or("");
 
-    let content = match NonEmptyString::new(content_str) {
-        Some(c) => c,
-        None => {
-            // Empty unsupported tier, skip it
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
-                format!("Empty unsupported dependent tier %{}", label_text),
-            ));
-            return true;
-        }
-    };
+    // An empty tier is KEPT, carrying `None`, rather than dropped with a
+    // generic parse error. It used to be dropped because the model could not
+    // represent the empty case; now that it can, the tier survives with the
+    // truth in it and E756 reports it during validation, which is where a
+    // "this line declares nothing" rule belongs. Dropping it also lost the
+    // label, and left this parser disagreeing with the re2c one, which kept a
+    // fabricated tier instead.
+    let content = NonEmptyString::new(content_str).ok();
 
     let label = NonEmptyString::new_unchecked(label_text);
     let span = crate::error::Span::new(tier_node.start_byte() as u32, tier_node.end_byte() as u32);

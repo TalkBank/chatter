@@ -267,7 +267,7 @@ mod tests {
     fn overlap_precedes_with_index() {
         let ann = parse_overlap_precedes_token("[<2]").unwrap();
         assert!(
-            matches!(ann, ContentAnnotation::OverlapBegin(o) if o.index.map(|i| i.0) == Some(2))
+            matches!(ann, ContentAnnotation::OverlapBegin(o) if o.index.map(|i| i.get()) == Some(2))
         );
     }
 
@@ -282,7 +282,9 @@ mod tests {
     #[test]
     fn overlap_follows_with_index() {
         let ann = parse_overlap_follows_token("[>3]").unwrap();
-        assert!(matches!(ann, ContentAnnotation::OverlapEnd(o) if o.index.map(|i| i.0) == Some(3)));
+        assert!(
+            matches!(ann, ContentAnnotation::OverlapEnd(o) if o.index.map(|i| i.get()) == Some(3))
+        );
     }
 
     /// Tests overlap with spaces.

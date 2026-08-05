@@ -281,10 +281,10 @@ fn parse_corpus_file(
     let chat_example = filtered_lines.join("\n");
 
     // Fallback: extract error code from filename if no directive found
-    if error_code.is_none() {
-        if let Some(code) = extract_code_from_filename(path) {
-            error_code = Some(code);
-        }
+    if error_code.is_none()
+        && let Some(code) = extract_code_from_filename(path)
+    {
+        error_code = Some(code);
     }
 
     Ok(ErrorCorpusFile {

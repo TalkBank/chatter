@@ -55,7 +55,7 @@ mod tests {
 
         let xtra1 = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xtra").unwrap(),
-            content: NonEmptyString::new("first").unwrap(),
+            content: Some(NonEmptyString::new("first").unwrap()),
             span: talkbank_model::Span::DUMMY,
         });
         replace_or_add_tier(&mut tiers, xtra1);
@@ -63,7 +63,7 @@ mod tests {
 
         let xtra2 = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xtra").unwrap(),
-            content: NonEmptyString::new("second").unwrap(),
+            content: Some(NonEmptyString::new("second").unwrap()),
             span: talkbank_model::Span::DUMMY,
         });
         replace_or_add_tier(&mut tiers, xtra2);
@@ -72,11 +72,11 @@ mod tests {
         let DependentTier::UserDefined(ud) = &tiers[0].tier else {
             panic!("expected UserDefined tier");
         };
-        assert_eq!(ud.content.as_ref(), "second");
+        assert_eq!(ud.content.as_deref(), Some("second"));
 
         let xcod = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xcod").unwrap(),
-            content: NonEmptyString::new("code").unwrap(),
+            content: Some(NonEmptyString::new("code").unwrap()),
             span: talkbank_model::Span::DUMMY,
         });
         replace_or_add_tier(&mut tiers, xcod);
@@ -144,7 +144,7 @@ mod tests {
 
         let appended = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xtra").unwrap(),
-            content: NonEmptyString::new("new").unwrap(),
+            content: Some(NonEmptyString::new("new").unwrap()),
             span: talkbank_model::Span::DUMMY,
         });
         replace_or_add_tier(&mut tiers, appended);

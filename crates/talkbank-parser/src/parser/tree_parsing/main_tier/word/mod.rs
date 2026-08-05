@@ -122,7 +122,7 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
 
     // If no content items were collected, use raw_text as a single Text item
     if content_items.is_empty()
-        && let Some(wt) = WordText::new(raw_text)
+        && let Ok(wt) = WordText::new(raw_text)
     {
         content_items.push(WordContent::Text(wt));
     }
@@ -218,8 +218,8 @@ fn fold_phonetic(content_items: SmallVec<[WordContent; 2]>) -> SmallVec<[WordCon
         }
     }
     match WordPhonetic::new(&phonetic) {
-        Some(form) => smallvec::smallvec![WordContent::Phonetic(form)],
-        None => content_items,
+        Ok(form) => smallvec::smallvec![WordContent::Phonetic(form)],
+        Err(_) => content_items,
     }
 }
 
@@ -235,7 +235,7 @@ fn build_word_contents(
         match child.kind() {
             "word_segment" => {
                 let text = extract_utf8_text(child, source, errors, "word_segment", "");
-                if let Some(wt) = WordText::new(text) {
+                if let Ok(wt) = WordText::new(text) {
                     items.push(WordContent::Text(wt));
                 }
             }
@@ -247,7 +247,7 @@ fn build_word_contents(
                     if inner.kind() == "word_segment" {
                         let text =
                             extract_utf8_text(inner, source, errors, "shortening_content", "");
-                        if let Some(ws) = WordShortening::new(text) {
+                        if let Ok(ws) = WordShortening::new(text) {
                             items.push(WordContent::Shortening(ws));
                         }
                     }

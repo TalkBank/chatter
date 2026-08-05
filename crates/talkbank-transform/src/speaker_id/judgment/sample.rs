@@ -86,7 +86,7 @@ pub fn sample_session(
     let mut groups: Vec<(SpeakerCode, Vec<String>)> = Vec::new();
     let mut index_of: HashMap<SpeakerCode, usize> = HashMap::new();
 
-    for line in chat.lines.0.iter() {
+    for line in chat.lines.as_slice().iter() {
         if let Line::Utterance(u) = line {
             let code = u.main.speaker.clone();
             let idx = match index_of.get(&code) {

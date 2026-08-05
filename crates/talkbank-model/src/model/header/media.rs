@@ -27,16 +27,48 @@ pub struct MediaHeader {
     /// Optional availability status (`missing`, `unlinked`, `notrans`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<MediaStatus>,
+
+    /// Source span of illegal whitespace between the filename and the comma,
+    /// if any. `None` when the comma follows the filename directly.
+    ///
+    /// PROVENANCE ONLY, exactly like `TierSeparator::trailing_space` carries
+    /// the E758 fact: whether a space sat before the comma is a property of
+    /// the source text, not of the header, so it is skipped on the wire, in
+    /// the schema and in semantic comparison. It is retained because E767 has
+    /// to report it, and a rule that lives in VALIDATION fires for every parser
+    /// front end, whereas the same rule emitted from one parser's lowering
+    /// fires only there. That is not hypothetical: E767 was emitted from the
+    /// tree-sitter lowering when it was introduced, and the re2c front end
+    /// silently did not report it, which is the same drift this crate already
+    /// recorded for E758.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[semantic_eq(skip)]
+    pub whitespace_before_comma: Option<crate::Span>,
 }
 
 impl MediaHeader {
     /// Builds an `@Media` payload with required fields.
-    pub fn new(filename: impl Into<MediaFilename>, media_type: MediaType) -> Self {
+    ///
+    /// Takes a [`MediaFilename`] rather than anything string-like, so the
+    /// only way to reach this constructor is through
+    /// [`MediaFilename::parse`], which is where the "can this be written to a
+    /// `@Media` line and read back" question is answered.
+    pub fn new(filename: MediaFilename, media_type: MediaType) -> Self {
         Self {
-            filename: filename.into(),
+            filename,
             media_type,
             status: None,
+            whitespace_before_comma: None,
         }
+    }
+
+    /// Records illegal whitespace between the filename and the comma.
+    ///
+    /// Mirrors `TierSeparator::with_trailing_space`; see the field docs.
+    pub fn with_whitespace_before_comma(mut self, span: crate::Span) -> Self {
+        self.whitespace_before_comma = Some(span);
+        self
     }
 
     /// Sets optional media-link status metadata.

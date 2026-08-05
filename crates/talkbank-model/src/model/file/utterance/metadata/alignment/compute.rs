@@ -105,7 +105,7 @@ impl Utterance {
         let health = self.parse_health;
 
         let (mor_items, mor_span) = if let Some(tier) = self.mor_tier() {
-            (Some(tier.items.0.clone()), tier.span)
+            (Some(tier.items.to_vec()), tier.span)
         } else {
             (None, Span::DUMMY)
         };
@@ -174,7 +174,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.pho_tier() {
-            let item_count = tier.items.0.len();
+            let item_count = tier.items.len();
             if health.can_align_main_to_pho() {
                 metadata.pho = Some(build_phonology_alignment_from_counts(
                     &self.main,
@@ -219,7 +219,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.mod_tier() {
-            let item_count = tier.items.0.len();
+            let item_count = tier.items.len();
             if health.can_align_main_to_mod() {
                 metadata.mod_ = Some(build_phonology_alignment_from_counts(
                     &self.main,
@@ -250,7 +250,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.sin_tier() {
-            let item_count = tier.items.0.len();
+            let item_count = tier.items.len();
             if health.can_align_main_to_sin() {
                 metadata.sin = Some(build_sin_alignment_from_counts(
                     &self.main, item_count, sin_span,
@@ -285,7 +285,7 @@ impl Utterance {
                     modsyl.word_count(),
                     modsyl_span,
                     "%modsyl",
-                    mod_tier.items.0.len(),
+                    mod_tier.items.len(),
                     mod_span,
                     "%mod",
                     ErrorCode::ModsylModCountMismatch,
@@ -316,7 +316,7 @@ impl Utterance {
                     phosyl.word_count(),
                     phosyl_span,
                     "%phosyl",
-                    pho_tier.items.0.len(),
+                    pho_tier.items.len(),
                     pho_span,
                     "%pho",
                     ErrorCode::PhosylPhoCountMismatch,
@@ -345,8 +345,8 @@ impl Utterance {
             let phoaln_wc = phoaln.word_count();
             if health.can_align_phoaln() {
                 let mut alignment = crate::alignment::PhoAlignment::new();
-                let mod_count = self.mod_tier().map(|t| t.items.0.len());
-                let pho_count = self.pho_tier().map(|t| t.items.0.len());
+                let mod_count = self.mod_tier().map(|t| t.items.len());
+                let pho_count = self.pho_tier().map(|t| t.items.len());
 
                 // Each %xphoaln word consumes a word slot on %mod, %pho, or
                 // both; a one-sided pause word (spec §2 rule 5) consumes a

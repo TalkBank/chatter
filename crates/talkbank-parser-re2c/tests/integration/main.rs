@@ -18,6 +18,7 @@ mod fixture_utils;
 mod full_corpus_parse_test;
 mod golden_parse;
 mod lexer_tests;
+mod media_whitespace_provenance;
 mod model_study;
 mod parser_fixtures;
 mod quick_divergence_check;

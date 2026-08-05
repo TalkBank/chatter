@@ -8,7 +8,7 @@ use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use super::super::WriteChat;
@@ -144,9 +144,18 @@ impl WriteChat for SinTier {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct SinItems(pub Vec<SinItem>);
+pub struct SinItems(Vec<SinItem>);
 
 impl SinItems {
+    /// The items, borrowed.
+    ///
+    /// Kept when the inner field was closed, because reading it was already
+    /// part of this type's contract and losing that would be a regression
+    /// rather than a tightening.
+    pub fn as_slice(&self) -> &[SinItem] {
+        &self.0
+    }
+
     /// Wraps ordered `%sin` items without reinterpreting alignment.
     pub fn new(items: Vec<SinItem>) -> Self {
         Self(items)
@@ -164,13 +173,6 @@ impl Deref for SinItems {
     /// Borrows the underlying `%sin` item vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for SinItems {
-    /// Mutably borrows the underlying `%sin` item vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

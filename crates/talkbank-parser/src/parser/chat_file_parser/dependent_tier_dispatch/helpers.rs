@@ -101,8 +101,8 @@ fn decode_body_text(
     };
 
     match NonEmptyString::new(text) {
-        Some(content) => ParseOutcome::parsed(content),
-        None => {
+        Ok(content) => ParseOutcome::parsed(content),
+        Err(_) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,

@@ -1,4 +1,4 @@
-# E502 false positive: %wor parse error cascades to entire file
+# E502: false positive, a %wor parse error cascades to the entire file
 
 ## Description
 

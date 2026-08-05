@@ -82,7 +82,7 @@ fn test_participant_convenience_methods() {
     assert!(
         participant
             .languages()
-            .0
+            .as_slice()
             .iter()
             .any(|c| c.as_str() == "eng")
     );

@@ -6,9 +6,17 @@
 //! the desktop app could not validate anything at all: `UnifiedCache::open`
 //! builds its own runtime and calls `block_on`, and nesting runtimes panics.
 //!
-//! This is a REGRESSION GUARD, not the fix. The fix is for the runtime to be
-//! owned by the application boundary rather than manufactured inside the cache,
-//! which makes the nesting unrepresentable instead of merely tested for.
+//! This is a REGRESSION GUARD, and it is now belt beside braces rather than the
+//! only protection. An earlier version of this note prescribed a different fix
+//! (move the runtime out to the application boundary); what actually landed is
+//! CONFINEMENT: `talkbank_cache::blocking::block_on` moves the work to a thread
+//! with no ambient runtime, and `ConfinedRuntime` owns the runtime without ever
+//! lending it out, so `Runtime::block_on` cannot be reached on a thread that is
+//! already driving one. The nesting is unrepresentable, not merely tested for.
+//!
+//! The test stays because the guarantee spans a crate boundary the compiler
+//! does not check: nothing stops a future maintainer introducing a second
+//! runtime somewhere else on this path.
 use talkbank_cache::UnifiedCache;
 
 #[test]

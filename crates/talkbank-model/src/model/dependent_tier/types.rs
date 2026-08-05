@@ -264,8 +264,17 @@ impl std::fmt::Display for TextTier {
 pub struct UserDefinedDependentTier {
     /// The tier label including the 'x' prefix (e.g., "xmor" for %xmor).
     pub label: NonEmptyString,
-    /// The free-form text content of the tier.
-    pub content: NonEmptyString,
+    /// The free-form text content of the tier, or `None` when the line
+    /// declared a tier and gave it nothing.
+    ///
+    /// `Option` because the empty case is REAL CHAT that a parser can meet, and
+    /// E756 exists to report it. While this was `NonEmptyString` the state the
+    /// rule checks for was unrepresentable, so each parser had to invent a way
+    /// round it: the re2c parser fabricated a single space (which tripped E756
+    /// by accident, right answer for the wrong reason) and the tree-sitter
+    /// parser dropped the tier and reported a generic parse error instead. The
+    /// two disagreed because the model gave them no honest option.
+    pub content: Option<NonEmptyString>,
 
     /// Source span for error reporting (not serialized to JSON)
     #[serde(skip)]
@@ -321,14 +330,17 @@ impl super::WriteChat for DependentTier {
 
             // User-defined tier (%xLABEL:\tcontent)
             // Label already includes 'x' prefix (e.g., "xmor" for %xmor)
-            DependentTier::UserDefined(tier) => {
-                write!(w, "%{}:\t{}", tier.label, tier.content)
-            }
+            DependentTier::UserDefined(tier) => match &tier.content {
+                Some(content) => write!(w, "%{}:\t{}", tier.label, content),
+                // An empty tier roundtrips as the bare line it came from.
+                None => write!(w, "%{}:\t", tier.label),
+            },
 
             // Unsupported/unknown tier, same serialization as UserDefined
-            DependentTier::Unsupported(tier) => {
-                write!(w, "%{}:\t{}", tier.label, tier.content)
-            }
+            DependentTier::Unsupported(tier) => match &tier.content {
+                Some(content) => write!(w, "%{}:\t{}", tier.label, content),
+                None => write!(w, "%{}:\t", tier.label),
+            },
         }
     }
 }

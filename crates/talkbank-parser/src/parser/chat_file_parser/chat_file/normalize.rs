@@ -10,7 +10,7 @@
 
 use crate::model::{
     BracketedContent, BracketedItem, Header, Line, MainTier, ReplacedWord, UtteranceContent, Word,
-    WordCategory, WordContent, WordShortening, WordText,
+    WordCategory, WordContent, WordText,
 };
 
 /// Return whether the `@Options` header enables CA mode.
@@ -41,7 +41,7 @@ pub(super) fn normalize_ca_omissions(lines: &mut [Line]) {
 /// This function only handles omission-token normalization; broader CA-mode validation behavior
 /// (including terminator policy) is handled elsewhere.
 pub(crate) fn normalize_ca_omissions_main_tier(main: &mut MainTier) {
-    for content in &mut main.content.content {
+    for content in main.content.content.as_mut_slice() {
         normalize_ca_omission_content(content);
     }
 }
@@ -177,9 +177,10 @@ fn normalize_ca_omission_word(word: &mut Word) {
         let WordContent::Shortening(shortening) = word.content[shortening_index].clone() else {
             return;
         };
-        let WordShortening(inner) = shortening;
-        word.content
-            .replace_at(shortening_index, WordContent::Text(WordText(inner)));
+        word.content.replace_at(
+            shortening_index,
+            WordContent::Text(WordText::from(shortening)),
+        );
         word.category = Some(WordCategory::CAOmission);
     }
 }

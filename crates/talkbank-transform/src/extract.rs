@@ -56,7 +56,7 @@ pub fn extract_words(chat_file: &ChatFile, domain: TierDomain) -> Vec<ExtractedU
             collect_utterance_content(&utterance.main.content.content, domain, &mut words);
             results.push(ExtractedUtterance {
                 speaker,
-                utterance_index: UtteranceIdx(utt_idx),
+                utterance_index: UtteranceIdx::new(utt_idx),
                 words,
             });
             utt_idx += 1;
@@ -94,7 +94,7 @@ pub fn collect_utterance_content(
                 out.push(ExtractedWord {
                     text: ChatCleanedText::from_separator(sep),
                     raw_text: ChatRawText::from_separator(sep),
-                    utterance_word_index: WordIdx(out.len()),
+                    utterance_word_index: WordIdx::new(out.len()),
                     form_type: None,
                     lang: None,
                 });
@@ -120,7 +120,7 @@ fn collect_alignable_word(
     out.push(ExtractedWord {
         text: ChatCleanedText::from_word(word),
         raw_text: ChatRawText::from_word_raw(word),
-        utterance_word_index: WordIdx(out.len()),
+        utterance_word_index: WordIdx::new(out.len()),
         form_type: word.form_type.clone(),
         lang: word.lang.clone(),
     });
@@ -139,7 +139,7 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                         out.push(ExtractedWord {
                             text: ChatCleanedText::from_word(word),
                             raw_text: ChatRawText::from_word_raw(word),
-                            utterance_word_index: WordIdx(out.len()),
+                            utterance_word_index: WordIdx::new(out.len()),
                             form_type: word.form_type.clone(),
                             lang: word.lang.clone(),
                         });
@@ -149,7 +149,7 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                 out.push(ExtractedWord {
                     text: ChatCleanedText::from_word(&entry.word),
                     raw_text: ChatRawText::from_word_raw(&entry.word),
-                    utterance_word_index: WordIdx(out.len()),
+                    utterance_word_index: WordIdx::new(out.len()),
                     form_type: entry.word.form_type.clone(),
                     lang: entry.word.lang.clone(),
                 });
@@ -163,7 +163,7 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                 out.push(ExtractedWord {
                     text: ChatCleanedText::from_word(&entry.word),
                     raw_text: ChatRawText::from_word_raw(&entry.word),
-                    utterance_word_index: WordIdx(out.len()),
+                    utterance_word_index: WordIdx::new(out.len()),
                     form_type: entry.word.form_type.clone(),
                     lang: entry.word.lang.clone(),
                 });
@@ -216,9 +216,9 @@ mod tests {
         let chat = parse_chat(&one_utterance("the dog ran ."));
         let result = extract_words(&chat, TierDomain::Mor);
         assert_eq!(result[0].words.len(), 3);
-        assert_eq!(result[0].words[0].utterance_word_index, WordIdx(0));
-        assert_eq!(result[0].words[1].utterance_word_index, WordIdx(1));
-        assert_eq!(result[0].words[2].utterance_word_index, WordIdx(2));
+        assert_eq!(result[0].words[0].utterance_word_index, WordIdx::new(0));
+        assert_eq!(result[0].words[1].utterance_word_index, WordIdx::new(1));
+        assert_eq!(result[0].words[2].utterance_word_index, WordIdx::new(2));
     }
 
     #[test]
@@ -237,9 +237,9 @@ mod tests {
         );
         let result = extract_words(&chat, TierDomain::Mor);
         assert_eq!(result.len(), 3, "expected 3 utterances");
-        assert_eq!(result[0].utterance_index, UtteranceIdx(0));
-        assert_eq!(result[1].utterance_index, UtteranceIdx(1));
-        assert_eq!(result[2].utterance_index, UtteranceIdx(2));
+        assert_eq!(result[0].utterance_index, UtteranceIdx::new(0));
+        assert_eq!(result[1].utterance_index, UtteranceIdx::new(1));
+        assert_eq!(result[2].utterance_index, UtteranceIdx::new(2));
     }
 
     #[test]

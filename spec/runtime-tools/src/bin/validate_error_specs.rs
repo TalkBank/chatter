@@ -105,10 +105,10 @@ fn validate_all_specs(args: &Args) -> Result<(), String> {
             }
         };
 
-        if let Some(ref filter) = args.filter {
-            if !filter.iter().any(|f| f == code) {
-                continue;
-            }
+        if let Some(ref filter) = args.filter
+            && !filter.iter().any(|f| f == code)
+        {
+            continue;
         }
 
         let status = &spec.metadata.status;

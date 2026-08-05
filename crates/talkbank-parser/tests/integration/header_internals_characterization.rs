@@ -102,7 +102,7 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
             )
         })
         .collect();
-    (line_reprs(&chat.lines.0), diags)
+    (line_reprs(chat.lines.as_slice()), diags)
 }
 
 #[test]

@@ -12,6 +12,22 @@ use crate::validation::ValidationState;
 
 use super::ChatFile;
 
+/// The `@Media` headers in this file, each with its span.
+///
+/// Six checks in this module needed this and each open-coded the same
+/// `Header::Media` match; this is the one place the variant is named. It is an
+/// iterator rather than an `Option` because the extraction should not be the
+/// thing that decides "at most one `@Media`": a caller that wants only the
+/// first says `.next()` and says so.
+fn media_headers<'a>(
+    headers: &'a [(&'a Header, crate::Span)],
+) -> impl Iterator<Item = (&'a crate::model::MediaHeader, crate::Span)> + 'a {
+    headers.iter().filter_map(|(header, span)| match header {
+        Header::Media(media_header) => Some((media_header, *span)),
+        _ => None,
+    })
+}
+
 /// Return whether any `@Options` header enables CA mode.
 ///
 /// CA mode relaxes some structural constraints and is propagated into the
@@ -49,10 +65,7 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
     // Find the first @Media header with no status. Multiple @Media headers
     // would individually need checking, but in practice a file has at most
     // one, and if any is unqualified, the check fires at that header's span.
-    let unqualified_media = headers.iter().find_map(|(header, span)| match header {
-        Header::Media(m) if m.status.is_none() => Some((m, *span)),
-        _ => None,
-    });
+    let unqualified_media = media_headers(headers).find(|(media, _)| media.status.is_none());
     let Some((_media, span)) = unqualified_media else {
         // No @Media, or @Media has a status, check does not apply.
         return;
@@ -112,9 +125,7 @@ pub(super) fn check_timing_has_media<S: ValidationState>(
 ) {
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
-    let has_media_header = headers
-        .iter()
-        .any(|(header, _)| matches!(header, Header::Media(_)));
+    let has_media_header = media_headers(headers).next().is_some();
     if has_media_header {
         // Any @Media declaration (qualified or not) satisfies this check;
         // status-vs-timing contradictions belong to E544/E552.
@@ -167,7 +178,7 @@ pub(super) fn check_utterance_language_declared<S: ValidationState>(
 ) {
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
-    let declared = &file.languages.0;
+    let declared = file.languages.as_slice();
     if declared.is_empty() {
         return;
     }
@@ -275,10 +286,9 @@ pub(super) fn check_media_unlinked_has_no_timing<S: ValidationState>(
     // Find the first @Media header whose status is `unlinked`. A file has at
     // most one @Media in practice; if any is `unlinked`, the check fires at
     // that header's span.
-    let unlinked_span = headers.iter().find_map(|(header, span)| match header {
-        Header::Media(m) if matches!(m.status, Some(MediaStatus::Unlinked)) => Some(*span),
-        _ => None,
-    });
+    let unlinked_span = media_headers(headers)
+        .find(|(media, _)| matches!(media.status, Some(MediaStatus::Unlinked)))
+        .map(|(_, span)| span);
     let Some(span) = unlinked_span else {
         // No @Media, or its status is not `unlinked`: check does not apply.
         return;
@@ -331,25 +341,25 @@ pub(super) fn check_media_filename_match(
 ) {
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
-    // Find @Media header
-    for (header, span) in headers {
-        if let Header::Media(media_header) = header {
-            // CLAN exempts remote URL media references from the filename-match
-            // rule (verified against real CLAN: `@Media: "https://..."` yields no
-            // CHECK 157), so a URL points at remote media and a local-basename
-            // match is meaningless. The "is this a URL" decision lives on the
-            // MediaFilename newtype, not inline here.
-            if media_header.filename.is_remote_url() {
-                break;
-            }
+    // Only the FIRST @Media header is checked against the file name, which is
+    // what CLAN does; a file carries at most one in practice.
+    if let Some((media_header, span)) = media_headers(headers).next() {
+        // CLAN exempts remote URL media references from the filename-match
+        // rule (verified against real CLAN: `@Media: "https://..."` yields no
+        // CHECK 157), so a URL points at remote media and a local-basename
+        // match is meaningless. The "is this a URL" decision lives on the
+        // MediaFilename newtype, not inline here.
+        if media_header.filename.is_remote_url() {
+            return;
+        }
 
-            let media_filename = media_header.filename.as_str();
+        let media_filename = media_header.filename.as_str();
 
-            // Compare media filename with provided filename (case-insensitive)
-            if !media_filename.eq_ignore_ascii_case(file_name) {
-                let media_type_str = media_header.media_type.as_str();
+        // Compare media filename with provided filename (case-insensitive)
+        if !media_filename.eq_ignore_ascii_case(file_name) {
+            let media_type_str = media_header.media_type.as_str();
 
-                let mut err = ParseError::new(
+            let mut err = ParseError::new(
                     ErrorCode::MediaFilenameMismatch,
                     Severity::Error,
                     SourceLocation::at_offset(span.start as usize),
@@ -363,12 +373,8 @@ pub(super) fn check_media_filename_match(
                     "Update @Media header to: @Media:\t{}, {}",
                     file_name, media_type_str
                 ));
-                err.location.span = *span;
-                errors.report(err);
-            }
-
-            // Only check the first @Media header
-            break;
+            err.location.span = span;
+            errors.report(err);
         }
     }
 }
@@ -385,12 +391,12 @@ pub(super) fn check_cross_header_consistency<S: ValidationState>(
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
     // Collect declared languages from @Languages header
-    let declared_languages: HashSet<&LanguageCode> = file.languages.0.iter().collect();
+    let declared_languages: HashSet<&LanguageCode> = file.languages.as_slice().iter().collect();
 
     for (header, span) in headers {
         if let Header::ID(id_header) = header {
             // CHECK 122: @ID language not in @Languages
-            for id_lang in &id_header.language.0 {
+            for id_lang in id_header.language.as_slice() {
                 if !declared_languages.is_empty() && !declared_languages.contains(id_lang) {
                     let lang_str = id_lang.as_str();
                     let mut err = ParseError::new(

@@ -5042,6 +5042,18 @@
           "name": "media_filename"
         },
         {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "whitespaces"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
           "type": "SYMBOL",
           "name": "comma"
         },
@@ -5102,7 +5114,7 @@
         },
         {
           "type": "PATTERN",
-          "value": "[a-zA-Z0-9_-]+"
+          "value": "[^,\"\\r\\n \\t]([^,\\r\\n]*[^,\\r\\n \\t])?"
         }
       ]
     },

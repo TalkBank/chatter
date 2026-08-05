@@ -7,7 +7,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use super::super::WriteChat;
@@ -96,14 +96,14 @@ pub enum SinItem {
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Tier>
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct SinToken(pub NonEmptyString);
+pub struct SinToken(NonEmptyString);
 
 impl SinToken {
     /// Create a new token, returning `None` if the text is empty.
     ///
     /// This constructor is useful for user-input paths where empty values are
     /// expected and should be handled without panics.
-    pub fn new(text: impl AsRef<str>) -> Option<Self> {
+    pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }
 
@@ -155,9 +155,13 @@ impl Validate for SinToken {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct SinGroupGestures(pub Vec<SinToken>);
+pub struct SinGroupGestures(Vec<SinToken>);
 
 impl SinGroupGestures {
+    /// The gestures, borrowed.
+    pub fn as_slice(&self) -> &[SinToken] {
+        &self.0
+    }
     /// Create a new gesture group from a list of tokens.
     ///
     /// Order is preserved because grouped `%sin` serialization is positional and
@@ -184,13 +188,6 @@ impl Deref for SinGroupGestures {
     }
 }
 
-impl DerefMut for SinGroupGestures {
-    /// Mutably borrows the underlying gesture-token list.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 impl From<Vec<SinToken>> for SinGroupGestures {
     /// Wraps gesture tokens without allocating.
     ///
@@ -203,6 +200,14 @@ impl From<Vec<SinToken>> for SinGroupGestures {
 
 impl Validate for SinGroupGestures {
     /// Group-level semantic checks are performed when validating `%sin` alignment.
+    ///
+    /// Deliberately empty, and note what that means for the tokens: this does
+    /// NOT descend into them, so [`SinToken`]'s non-empty invariant is
+    /// enforced by nothing once a value arrives through the lenient serde
+    /// boundary. `SinToken::validate` exists and is correct; it simply has no
+    /// caller, since nothing calls this impl either. Filling this body alone
+    /// would not help. Recorded rather than fixed because wiring the `%sin`
+    /// validation chain is a real piece of work, not a cleanup.
     fn validate(&self, _context: &ValidationContext, _errors: &impl ErrorSink) {}
 }
 

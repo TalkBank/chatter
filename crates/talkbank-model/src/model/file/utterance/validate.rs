@@ -174,7 +174,7 @@ impl Validate for Utterance {
             if let DependentTier::UserDefined(tier) = &entry.tier {
                 crate::validation::check_user_defined_tier_content(
                     &tier.label,
-                    &tier.content,
+                    tier.content.as_deref(),
                     tier.span,
                     errors,
                 );

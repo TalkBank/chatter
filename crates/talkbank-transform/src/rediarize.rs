@@ -292,10 +292,10 @@ pub fn rediarize_content(
 pub fn rediarize(chat: &ChatFile, turns: &[DiarizationTurn]) -> (ChatFile, RediarizeOutcome) {
     let mut outcome = RediarizeOutcome::default();
     let mut used_tracks: HashSet<SpeakerCode> = HashSet::new();
-    let mut rewritten: Vec<Line> = Vec::with_capacity(chat.lines.0.len());
+    let mut rewritten: Vec<Line> = Vec::with_capacity(chat.lines.as_slice().len());
     let mut utterance_index = 0usize;
 
-    for line in chat.lines.0.iter() {
+    for line in chat.lines.as_slice().iter() {
         match line {
             Line::Utterance(u) => {
                 let index = utterance_index;

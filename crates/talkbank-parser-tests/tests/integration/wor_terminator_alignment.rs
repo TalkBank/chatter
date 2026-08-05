@@ -64,7 +64,7 @@ fn test_wor_tier_terminator_not_counted_in_real_parse() -> Result<(), TestError>
 
     // Debug: main tier
     println!("=== Main Tier ===");
-    println!("Content items: {}", main.content.content.0.len());
+    println!("Content items: {}", main.content.content.as_slice().len());
     println!("Terminator: {:?}", main.content.terminator);
     println!(
         "Total alignable (for Wor domain): {}",

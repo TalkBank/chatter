@@ -77,7 +77,7 @@ fn append_missing_explicit_language_declarations<S: ValidationState>(
     };
 
     chat_file.languages.extend(missing.iter().cloned());
-    if let Line::Header { header, .. } = &mut chat_file.lines[header_idx]
+    if let Line::Header { header, .. } = &mut chat_file.lines.as_mut_slice()[header_idx]
         && let Header::Languages { codes } = header.as_mut()
     {
         codes.extend(missing.iter().cloned());
@@ -179,7 +179,7 @@ fn rewrite_main_tier_language_switch(
     // `target_language`, so it is safe, and necessary, to clear
     // every `@s` marker that resolves there.
     walk_words_mut(
-        &mut main_tier.content.content,
+        main_tier.content.content.as_mut_slice(),
         None,
         &mut |item| match item {
             WordItemMut::Word(word) => {

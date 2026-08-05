@@ -47,7 +47,7 @@ pub(crate) fn check_overlap_index_values(
 
     // Collect all overlap points via the shared traversal.
     // The regions give us the index values; we validate each one.
-    let info = extract_overlap_info(&utterance.main.content.content.0);
+    let info = extract_overlap_info(utterance.main.content.content.as_slice());
     for region in &info.regions {
         if let Some(index) = region.index {
             // Validate the index value (must be 2-9).
@@ -78,7 +78,7 @@ fn check_overlap_pairing(
     _context: &ValidationContext,
     _errors: &impl ErrorSink,
 ) {
-    let info = extract_overlap_info(&utterance.main.content.content.0);
+    let info = extract_overlap_info(utterance.main.content.content.as_slice());
 
     for region in &info.regions {
         if region.begin_at_word.is_some() && region.end_at_word.is_none() {

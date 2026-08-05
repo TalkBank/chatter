@@ -12,6 +12,7 @@
 mod check_validity_parity;
 mod config_path_check_parity;
 mod conformance_inventory_current;
+mod declared_speakers;
 mod dev_equivalence;
 mod direct_parser_roundtrip_corpus;
 mod error_coverage;
@@ -24,6 +25,7 @@ mod generated_traversal_current;
 mod generated_traversal_parity;
 mod golden_tiers_validation;
 mod golden_words_validation;
+mod headers_only_validation;
 mod offset_tests;
 mod parse_chat_file_terminates;
 mod parse_error_corpus;

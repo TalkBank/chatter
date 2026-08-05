@@ -59,7 +59,7 @@ fn situation_types_headers_and_diags(input: &str) -> (Vec<String>, Vec<(String, 
     let chat = parser.parse_chat_file_streaming(input, &errors);
     let headers = chat
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|l| match l {
             Line::Header { header, .. } if is_situation_or_types(header) => {

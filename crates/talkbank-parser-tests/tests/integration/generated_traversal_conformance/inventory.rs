@@ -751,7 +751,7 @@ impl_inspect_choice!(LongFeatureChoice {
 });
 impl_inspect_choice!(MediaFilenameChoice {
     DoubleQuote,
-    AZAZ09
+    RNTRNRNT
 });
 impl_inspect_choice!(MediaStatusChoice {
     MissingValue,
@@ -1483,7 +1483,7 @@ impl_inspect_struct!(MainTierChildren {
     child_4,
     child_5
 });
-impl_inspect_struct!(MediaContentsChild4Children {
+impl_inspect_struct!(MediaContentsChild5Children {
     child_0,
     child_1,
     child_2
@@ -1493,7 +1493,8 @@ impl_inspect_struct!(MediaContentsChildren {
     child_1,
     child_2,
     child_3,
-    child_4
+    child_4,
+    child_5
 });
 impl_inspect_struct!(MediaFilenameDoubleQuoteChildren {
     child_0,

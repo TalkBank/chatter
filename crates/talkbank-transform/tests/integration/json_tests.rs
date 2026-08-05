@@ -187,3 +187,84 @@ fn render_error_with_named_source_includes_filename() {
         Err(e) => panic!("Unexpected error type: {e}"),
     }
 }
+
+// ===== E768: the JSON ingress is the only door to an unrepresentable filename =====
+
+/// A `@Media` filename containing the delimiter is reported as E768 when it
+/// arrives through JSON.
+///
+/// This is the regression test named in `spec/errors/E768_...md`'s status note,
+/// and it lives here rather than in the generated CHAT-fixture corpus because
+/// no `.cha` file can express the value: both parsers end the filename at the
+/// comma. Deserialization is deliberately lenient per the codebase's
+/// serde-boundary convention (see `LanguageCode::deserialize_empty_is_lenient`),
+/// so the model reconstructs whatever the document held and validation is what
+/// reports the violation, with a code and a span.
+#[test]
+fn media_filename_from_json_is_reported() {
+    use talkbank_model::model::ChatFile;
+    use talkbank_model::{ErrorCode, ErrorCollector};
+
+    let chat = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
+        @ID:\teng|corpus|CHI|||||Child|||\n@Media:\trecording, audio\n\
+        *CHI:\thello .\n@End\n";
+    let json = chat_to_json(chat, ParseValidateOptions::default(), false)
+        .expect("valid CHAT converts to JSON");
+
+    // Edit the JSON, not the CHAT: put the delimiter inside the filename, which
+    // is precisely the value no transcript could have carried.
+    let mut doc: serde_json::Value = serde_json::from_str(&json).expect("emitted JSON parses");
+    set_media_filename(&mut doc, "take1,take2");
+
+    let file: ChatFile = serde_json::from_value(doc)
+        .expect("deserialization is lenient by convention: the model must still be reconstructed");
+    let admitted = file.headers().find_map(|h| match h {
+        talkbank_model::model::Header::Media(m) => Some(m.filename.as_str()),
+        _ => None,
+    });
+    assert_eq!(
+        admitted,
+        Some("take1,take2"),
+        "precondition: the lenient boundary really does admit the value"
+    );
+
+    let errors = ErrorCollector::new();
+    file.validate(&errors, None);
+    let codes: Vec<ErrorCode> = errors.into_vec().into_iter().map(|e| e.code).collect();
+    assert!(
+        codes.contains(&ErrorCode::MediaFilenameNotRepresentable),
+        "expected E768 for a filename containing the @Media delimiter, got {codes:?}"
+    );
+}
+
+/// Overwrites the `@Media` filename everywhere a serialized `ChatFile` records
+/// it: the header line, and the extracted top-level `media` field.
+///
+/// Walks the JSON rather than string-replacing so the test cannot silently
+/// start editing some other field that happens to share the value. Only the
+/// header-line edit is load-bearing (validation reads the lines, never the
+/// extracted `media` field); the second is written so the document stays
+/// self-consistent, the way a real hand-edited or tool-generated one would be.
+/// Each site asserts where it is edited, so a failure names the site rather
+/// than a count that cannot distinguish them.
+fn set_media_filename(doc: &mut serde_json::Value, filename: &str) {
+    let new_name = || serde_json::Value::String(filename.to_string());
+
+    let extracted = doc
+        .get_mut("media")
+        .and_then(|m| m.get_mut("filename"))
+        .expect("a serialized ChatFile with @Media carries the extracted media field");
+    *extracted = new_name();
+
+    let lines = doc
+        .get_mut("lines")
+        .and_then(|l| l.as_array_mut())
+        .expect("a ChatFile document has a lines array");
+    let header_filename = lines
+        .iter_mut()
+        .filter_map(|line| line.get_mut("header"))
+        .filter(|header| header.get("type").and_then(|t| t.as_str()) == Some("media"))
+        .find_map(|header| header.get_mut("filename"))
+        .expect("the document has a media header line carrying a filename");
+    *header_filename = new_name();
+}

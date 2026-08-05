@@ -33,11 +33,11 @@ const I_CAP_REWRITES: &[(&str, &str)] = &[
 /// Apply English capitalization (pronoun "I" + utterance-initial) to every
 /// main tier of `chat`, in place.
 pub fn capitalize_english(chat: &mut ChatFile) {
-    for line in chat.lines.0.iter_mut() {
+    for line in chat.lines.as_mut_slice().iter_mut() {
         let Line::Utterance(utt) = line else {
             continue;
         };
-        let content = utt.main.content.content.0.as_mut_slice();
+        let content = utt.main.content.content.as_mut_slice();
         let mut initial_done = false;
         walk_words_mut(content, None, &mut |item| {
             let WordItemMut::Word(word) = item else {
@@ -69,7 +69,7 @@ pub fn capitalize_english(chat: &mut ChatFile) {
             }
 
             if next != current
-                && let Some(text) = WordText::new(next)
+                && let Ok(text) = WordText::new(next)
             {
                 word.content.replace_at(idx, WordContent::Text(text));
             }

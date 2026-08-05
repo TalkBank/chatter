@@ -49,10 +49,10 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
-use generators::spec::error::ErrorKind;
 use generators::spec::ErrorSpec;
+use generators::spec::error::ErrorKind;
 use talkbank_model::ErrorCode;
 
 /// CLI arguments: the spec directory to read and the generated Rust file to
@@ -174,9 +174,9 @@ fn main() -> Result<()> {
     for code in ErrorCode::iter() {
         let code_str = code.as_str();
         let variant_name = format!("{code:?}");
-        let (kind, source_file) = by_code
-            .get(code_str)
-            .ok_or_else(|| anyhow::anyhow!("{code_str}: missing from by_code after divergence check"))?;
+        let (kind, source_file) = by_code.get(code_str).ok_or_else(|| {
+            anyhow::anyhow!("{code_str}: missing from by_code after divergence check")
+        })?;
 
         let variant = kind.diagnostic_kind_variant();
         *counts.entry(variant).or_insert(0) += 1;

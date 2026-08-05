@@ -50,6 +50,17 @@ const EVENT_SEGMENT_FORBIDDEN = EVENT_SEGMENT_FORBIDDEN_BASE
 // Matches non-empty content that doesn't start or end with whitespace.
 // Used by: id_corpus, id_group, id_education, id_custom_field, and id_age catch-all.
 const TRIMMED_PIPE_FIELD = /[^ \t\|\r\n]([^\|\r\n]*[^ \t\|\r\n])?/;
+
+// The same shape for a COMMA-delimited field: everything up to the delimiter,
+// interior spaces kept, edge whitespace excluded. Used by `media_filename`.
+// A leading `"` is excluded so the quoted alternative wins unambiguously; a
+// TRAILING quote is not, because "up to the comma" is the whole rule and a name
+// may legitimately end in one.
+//
+// Named, and referenced by name from the re2c lexer's mirror of it, because the
+// unnamed version of this literal drifted from that mirror within one commit of
+// being written.
+const TRIMMED_COMMA_FIELD = /[^,"\r\n \t]([^,\r\n]*[^,\r\n \t])?/;
 const EVENT_SEGMENT_RE = new RegExp(`[^${EVENT_SEGMENT_FORBIDDEN}]+`);
 
 // Word segment character exclusions, built from symbol registry.
@@ -2045,6 +2056,12 @@ export default grammar({
     // mediaTypes: (MEDIA_TYPE COMMA_SPACE)* MEDIA_TYPE
     media_contents: $ => seq(
       $.media_filename,
+      // Whitespace before the comma is TOLERATED and excluded from the
+      // filename. `name , audio` is a typing accident, not a file called
+      // "name "; rejecting it produced the confusing E330 this rule was
+      // widened to fix, and folding the space into the filename would corrupt
+      // the value and break the E531 basename match.
+      optional($.whitespaces),
       $.comma,
       $.whitespaces,
       $.media_type,
@@ -2055,10 +2072,30 @@ export default grammar({
       ))
     ),
 
-    // Media filename - can be quoted URLs or simple filenames
+    // Media filename: quoted (URLs, or names containing commas) or bare.
+    //
+    // The bare form is defined by its DELIMITER, not by an alphabet: a media
+    // filename is everything up to the comma that introduces the media type.
+    // It used to be /[a-zA-Z0-9_-]+/, an allowlist, which made a dot, a space,
+    // a parenthesis or any non-ASCII character unrepresentable, and reported
+    // the failure as E330 "Missing media_type node" on lines that plainly had
+    // one. That cost a Cantonese user two completed ASR runs in the week of
+    // 2026-08-04, and made CJK media filenames categorically impossible, which
+    // no spec justifies: a recording may be named in the language of the people
+    // recorded. An allowlist is a value standing in for "is a legal filename"
+    // and the two drift by construction, so this is deliberately NOT a wider
+    // allowlist.
+    //
+    // Excluded from the bare form, each for a reason:
+    //   `,`      the delimiter itself. A filename containing a comma must be
+    //            quoted; the quoted alternative is the escape hatch.
+    //   \r \n    a filename cannot span lines.
+    //   leading and trailing space/tab, so `name , audio` yields `name`.
+    //            Interior spaces are fine: `name with space` is one filename.
+    //   leading `"` so the quoted alternative wins unambiguously.
     media_filename: $ => choice(
-      seq($.double_quote, /[^"\r\n]+/, $.double_quote),  // Quoted URLs like "https://..."
-      /[a-zA-Z0-9_-]+/         // Simple filenames like "media-file"
+      seq($.double_quote, /[^"\r\n]+/, $.double_quote),
+      TRIMMED_COMMA_FIELD
     ),
 
     media_type: $ => choice($.video_value, $.audio_value, $.missing_value, $.generic_media_type),

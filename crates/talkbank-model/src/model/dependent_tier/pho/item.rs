@@ -11,7 +11,7 @@ use crate::validation::{Validate, ValidationContext};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 /// Phonological tier content item
@@ -85,7 +85,7 @@ pub enum PhoItem {
 /// # Reference
 ///
 /// - [Phonology tier](https://talkbank.org/0info/manuals/CHAT.html#Phonology)
-pub struct PhoGroupWords(pub Vec<PhoWord>);
+pub struct PhoGroupWords(Vec<PhoWord>);
 
 impl PhoGroupWords {
     /// Creates a new group of phonological words.
@@ -111,13 +111,6 @@ impl Deref for PhoGroupWords {
     /// Borrows the underlying phonological-word vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for PhoGroupWords {
-    /// Mutably borrows the underlying phonological-word vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

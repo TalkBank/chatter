@@ -213,15 +213,31 @@ pub struct ScopedExplanation {
 /// - <https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope>
 /// - <https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope>
 #[serde(transparent)]
-pub struct OverlapMarkerIndex(pub u8);
+pub struct OverlapMarkerIndex(u8);
 
 impl OverlapMarkerIndex {
     /// Create an overlap marker index from a digit payload.
     ///
-    /// Range validation (`1..=9`) is performed by [`Validate`] so parser paths
-    /// can construct first and report context-rich diagnostics later.
+    /// NOTHING CURRENTLY ENFORCES THE `1..=9` RANGE. The [`Validate`] impl
+    /// below implements it, but no model field holds an `OverlapMarkerIndex`
+    /// and there is no generic traversal that visits nested newtypes, so that
+    /// impl has no caller and never runs. This comment used to assert the
+    /// enforcement as fact; it is corrected rather than deleted because the
+    /// gap is worth knowing about. Give the type a real home and wire its
+    /// validation, or move the range into a fallible constructor here.
     pub fn new(index: u8) -> Self {
         Self(index)
+    }
+
+    /// The digit payload.
+    ///
+    /// Reading it was already part of the contract while the inner field was
+    /// `pub`. The field stays private so the range invariant this type is
+    /// meant to carry (`1..=9`, see the note on [`new`](Self::new): written in
+    /// `Validate`, reached by nothing) can move into construction later
+    /// without that being a breaking change.
+    pub fn get(self) -> u8 {
+        self.0
     }
 }
 

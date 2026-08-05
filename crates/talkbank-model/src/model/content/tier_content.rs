@@ -21,7 +21,7 @@ use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 /// Shared utterance-like content structure.
@@ -370,9 +370,22 @@ impl Default for TierContent {
 /// # Reference
 ///
 /// - [Utterance linkers](https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers)
-pub struct TierLinkers(pub Vec<Linker>);
+pub struct TierLinkers(Vec<Linker>);
 
 impl TierLinkers {
+    /// Appends one item.
+    pub fn push(&mut self, item: Linker) {
+        self.0.push(item);
+    }
+    /// The items, borrowed.
+    ///
+    /// Kept when the inner field was closed, because reading it was already
+    /// part of this type's contract and losing that would be a regression
+    /// rather than a tightening.
+    pub fn as_slice(&self) -> &[Linker] {
+        &self.0
+    }
+
     /// Wraps linker values while preserving caller-provided order.
     pub fn new(linkers: Vec<Linker>) -> Self {
         Self(linkers)
@@ -390,13 +403,6 @@ impl Deref for TierLinkers {
     /// Borrows the underlying linker vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for TierLinkers {
-    /// Mutably borrows the underlying linker vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -456,9 +462,56 @@ impl crate::validation::Validate for TierLinkers {
 ///
 /// - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
 /// - [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)
-pub struct TierContentItems(pub Vec<UtteranceContent>);
+pub struct TierContentItems(Vec<UtteranceContent>);
 
 impl TierContentItems {
+    /// Moves every item of `other` onto the end of this list.
+    ///
+    /// Takes `Self` rather than `Vec<_>` so the operation stays in domain
+    /// types. A NAMED length-changing operation; see [`Self::pop`].
+    pub fn append(&mut self, other: Self) {
+        self.0.extend(other.0);
+    }
+
+    /// Removes and returns the last item.
+    ///
+    /// A NAMED length-changing operation. With `DerefMut` gone this is the only
+    /// way to shorten the list, which is what lets a future invariant be
+    /// enforced here rather than bypassed through the raw `Vec`.
+    pub fn pop(&mut self) -> Option<UtteranceContent> {
+        self.0.pop()
+    }
+
+    /// The items, owned.
+    pub fn into_vec(self) -> Vec<UtteranceContent> {
+        self.0
+    }
+
+    /// The items, borrowed.
+    ///
+    /// Kept when the inner field was closed, because reading it was already
+    /// part of this type's contract and losing that would be a regression
+    /// rather than a tightening.
+    pub fn as_slice(&self) -> &[UtteranceContent] {
+        &self.0
+    }
+
+    /// The items, mutably.
+    ///
+    /// Mutation was already possible through the `pub` inner field, so this is
+    /// the same capability behind a named door rather than a new one.
+    ///
+    /// NOTE, and read this before relying on the closed field for anything:
+    /// this type also implements `DerefMut<Target = Vec<_>>`, which hands out
+    /// the whole `Vec` API. Closing the tuple field therefore prevents literal
+    /// construction and destructuring and NOTHING ELSE; it does not reserve
+    /// room for a future invariant, because `push`, `retain`, `clear` and the
+    /// rest remain reachable. An earlier version of this comment claimed
+    /// otherwise and was wrong.
+    pub fn as_mut_slice(&mut self) -> &mut [UtteranceContent] {
+        &mut self.0
+    }
+
     /// Wraps utterance content items in their on-tier order.
     pub fn new(content: Vec<UtteranceContent>) -> Self {
         Self(content)
@@ -476,13 +529,6 @@ impl Deref for TierContentItems {
     /// Borrows the underlying utterance-content vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for TierContentItems {
-    /// Mutably borrows the underlying utterance-content vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -604,9 +650,40 @@ impl Validate for TierContentItems {
 /// # Reference
 ///
 /// - [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)
-pub struct TierPostcodes(pub Vec<Postcode>);
+pub struct TierPostcodes(Vec<Postcode>);
 
 impl TierPostcodes {
+    /// The postcodes, mutably.
+    pub fn as_mut_slice(&mut self) -> &mut [Postcode] {
+        &mut self.0
+    }
+
+    /// The postcodes, owned.
+    pub fn into_vec(self) -> Vec<Postcode> {
+        self.0
+    }
+
+    /// Moves every postcode of `other` onto the end of this list.
+    ///
+    /// Takes `Self` rather than an iterator so the operation stays in domain
+    /// types, and is NAMED because it changes the length.
+    pub fn append(&mut self, other: Self) {
+        self.0.extend(other.0);
+    }
+
+    /// Appends one item.
+    pub fn push(&mut self, item: Postcode) {
+        self.0.push(item);
+    }
+    /// The items, borrowed.
+    ///
+    /// Kept when the inner field was closed, because reading it was already
+    /// part of this type's contract and losing that would be a regression
+    /// rather than a tightening.
+    pub fn as_slice(&self) -> &[Postcode] {
+        &self.0
+    }
+
     /// Wraps postcode annotations while preserving transcript order.
     pub fn new(postcodes: Vec<Postcode>) -> Self {
         Self(postcodes)
@@ -624,13 +701,6 @@ impl Deref for TierPostcodes {
     /// Borrows the underlying postcode vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for TierPostcodes {
-    /// Mutably borrows the underlying postcode vector.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

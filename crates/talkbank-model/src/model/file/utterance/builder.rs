@@ -210,7 +210,7 @@ impl Utterance {
     pub fn with_user_defined(self, label: NonEmptyString, content: NonEmptyString) -> Self {
         self.add_dependent_tier(DependentTier::UserDefined(UserDefinedDependentTier {
             label,
-            content,
+            content: Some(content),
             span: crate::Span::DUMMY,
         }))
     }

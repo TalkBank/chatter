@@ -93,8 +93,14 @@ mod tests {
 
         std::fs::write(dir.join("stale.txt"), "old")?;
         clear_owned(&dir)?;
-        assert!(!dir.join("stale.txt").exists(), "stale output must be cleared");
-        assert!(dir.join(OWNERSHIP_MARKER).exists(), "the claim must survive");
+        assert!(
+            !dir.join("stale.txt").exists(),
+            "stale output must be cleared"
+        );
+        assert!(
+            dir.join(OWNERSHIP_MARKER).exists(),
+            "the claim must survive"
+        );
         Ok(())
     }
 

@@ -70,9 +70,31 @@ jobs:
           # Distinct caches per job so the rust and book jobs don't
           # invalidate each other.
           shared-key: rust-job
+          # BOTH workspaces. The action's default is `. -> target`, which
+          # caches the root only, and `spec/` is a separate workspace with its
+          # own target dir and 207 locked dependencies (oxc, tera, comrak,
+          # tree-sitter). Without this line the spec test step below rebuilds
+          # every one of them from source on every push and PR, forever.
+          #
+          # Deliberately NOT sharing one CARGO_TARGET_DIR between the two
+          # workspaces, which would also dedupe the crates they have in common.
+          # Two workspaces can resolve different features for a shared
+          # dependency, and then they evict each other's artifacts on every
+          # alternation. That is the exact trap measured in `check-feature-off`
+          # on 2026-08-04 (201 crate rebuilds per alternation); a cold cache is
+          # cheaper than a thrashing one.
+          workspaces: |
+            . -> target
+            spec -> spec/target
 
+      # Both workspaces: `--all` covers the members of ONE workspace, and
+      # `spec/` is its own. Checking only the root left spec/ unformatted and
+      # unnoticed for as long as it has existed.
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
+
+      - name: cargo fmt --check (spec workspace)
+        run: cargo fmt --manifest-path spec/Cargo.toml --all -- --check
 
       - name: cargo build
         run: cargo build --workspace --all-targets --locked
@@ -86,6 +108,23 @@ jobs:
       - name: cargo test --doc --workspace
         timeout-minutes: 15
         run: cargo test --doc --workspace --locked
+
+      # The spec workspace was NEVER built or tested by CI until 2026-08-04,
+      # in any job. It is not peripheral: `spec/tools` generates the
+      # tree-sitter corpus tests, the Rust parser tests and the validation
+      # fixture corpus, so a break here silently stops the regeneration that
+      # every one of those gates depends on. `--workspace` covers one
+      # workspace, and this is a second one.
+      - name: cargo test (spec workspace)
+        timeout-minutes: 15
+        run: cargo test --manifest-path spec/Cargo.toml --workspace --locked
+
+      # The trybuild UI suite is `#[ignore]`d without this feature, because it
+      # spawns a cargo build per fixture and is over half of the workspace's
+      # whole test execution time. CI is exactly where it should run.
+      - name: cargo test (proc-macro UI suite)
+        timeout-minutes: 15
+        run: cargo test -p talkbank-derive --features ui-tests --tests ui_tests --locked
 
       # Single-pass clippy (unified 2026-07-08). Production strictness
       # lives in the workspace [lints] deny table; test relaxation
@@ -107,6 +146,15 @@ jobs:
       # warnings once before, 2026-05-29; leisure needs a pulse).
       - name: cargo clippy (single pass; red only on panic-policy denies)
         run: cargo clippy --workspace --all-targets --locked
+
+      # The spec workspace had fmt and test in CI but NEVER clippy, so its
+      # lint debt accumulated unseen: 20 warnings by 2026-08-05, all
+      # machine-applicable, in the tooling that GENERATES the corpus tests,
+      # the parser tests and the validation fixtures. Same two-tier severity
+      # as the main pass above; this exists so the count cannot silently
+      # climb again.
+      - name: cargo clippy (spec workspace)
+        run: cargo clippy --manifest-path spec/Cargo.toml --all-targets --locked
 
   # Pins the wasm-cleanliness contract: talkbank-model and the pure-Rust
   # re2c parser must keep compiling for wasm32 (no C toolchain, no

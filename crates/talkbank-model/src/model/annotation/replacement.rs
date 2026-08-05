@@ -32,7 +32,7 @@
 use super::{ContentAnnotation, Word, WriteChat};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 /// Ordered list of words in a replacement annotation (`[: word1 word2]`).
@@ -44,7 +44,30 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ReplacementWords(pub Vec<Word>);
+pub struct ReplacementWords(Vec<Word>);
+
+impl ReplacementWords {
+    /// The words, borrowed.
+    pub fn as_slice(&self) -> &[Word] {
+        &self.0
+    }
+
+    /// The words, mutably.
+    ///
+    /// Mutation was already possible through the `pub` inner field, so this is
+    /// the same capability behind a named door rather than a new one.
+    ///
+    /// NOTE, and read this before relying on the closed field for anything:
+    /// this type also implements `DerefMut<Target = Vec<_>>`, which hands out
+    /// the whole `Vec` API. Closing the tuple field therefore prevents literal
+    /// construction and destructuring and NOTHING ELSE; it does not reserve
+    /// room for a future invariant, because `push`, `retain`, `clear` and the
+    /// rest remain reachable. An earlier version of this comment claimed
+    /// otherwise and was wrong.
+    pub fn as_mut_slice(&mut self) -> &mut [Word] {
+        &mut self.0
+    }
+}
 
 impl ReplacementWords {
     /// Wraps replacement tokens in transcript order.
@@ -67,13 +90,6 @@ impl Deref for ReplacementWords {
     /// Exposes the underlying words for read-only collection operations.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for ReplacementWords {
-    /// Exposes the underlying words for in-place mutation.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -214,7 +230,7 @@ impl crate::validation::Validate for ReplacementWords {
 )]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ReplacedWordAnnotations(pub Vec<ContentAnnotation>);
+pub struct ReplacedWordAnnotations(Vec<ContentAnnotation>);
 
 impl ReplacedWordAnnotations {
     /// Wraps scoped annotations attached to a replaced word.
@@ -234,13 +250,6 @@ impl Deref for ReplacedWordAnnotations {
     /// Exposes annotations as a read-only slice-like vector.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for ReplacedWordAnnotations {
-    /// Exposes annotations for in-place mutation.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

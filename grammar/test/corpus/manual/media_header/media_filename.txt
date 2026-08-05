@@ -1,0 +1,614 @@
+============================================================
+media_header: bare filename with a dot (attested: BA3 writes media stems verbatim)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+@Media:	SD02_recording.take1, audio
+*CHI:	hello .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (id_sex
+            (female_value))
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (media_header
+        (media_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (media_contents
+          (media_filename)
+          (comma)
+          (whitespaces)
+          (media_type
+            (audio_value)))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+media_header: bare filename with CJK (attested: HK Cantonese corpus)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+@Media:	SD02_趙天恩_Recording, audio
+*CHI:	hello .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (id_sex
+            (female_value))
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (media_header
+        (media_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (media_contents
+          (media_filename)
+          (comma)
+          (whitespaces)
+          (media_type
+            (audio_value)))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+media_header: bare filename with an interior space (attested: STD14_MAIN_Cat Retell)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+@Media:	STD14_MAIN_Cat Retell, audio
+*CHI:	hello .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (id_sex
+            (female_value))
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (media_header
+        (media_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (media_contents
+          (media_filename)
+          (comma)
+          (whitespaces)
+          (media_type
+            (audio_value)))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+media_header: bare filename with a close paren (attested: SD11__Srep_Mixed_Cloe_And_Srep))
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+@Media:	SD11__Srep_Mixed_Cloe_And_Srep), audio
+*CHI:	hello .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (id_sex
+            (female_value))
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (media_header
+        (media_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (media_contents
+          (media_filename)
+          (comma)
+          (whitespaces)
+          (media_type
+            (audio_value)))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+media_header: space before the comma is not part of the filename
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+@Media:	SD02_recording , audio
+*CHI:	hello .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (id_sex
+            (female_value))
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (media_header
+        (media_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (media_contents
+          (media_filename)
+          (whitespaces)
+          (comma)
+          (whitespaces)
+          (media_type
+            (audio_value)))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+media_header: quoted URL keeps working
+============================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+@Media:	"https://example.org/a,b.wav", audio
+*CHI:	hello .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (id_sex
+            (female_value))
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (media_header
+        (media_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (media_contents
+          (media_filename
+            (double_quote)
+            (double_quote))
+          (comma)
+          (whitespaces)
+          (media_type
+            (audio_value)))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))

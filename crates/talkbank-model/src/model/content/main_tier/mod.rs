@@ -153,7 +153,7 @@ impl MainTier {
 
     /// Appends one linker.
     pub fn with_linker(mut self, linker: Linker) -> Self {
-        self.content.linkers.0.push(linker);
+        self.content.linkers.push(linker);
         self
     }
 
@@ -178,7 +178,7 @@ impl MainTier {
 
     /// Appends one postcode.
     pub fn with_postcode(mut self, postcode: Postcode) -> Self {
-        self.content.postcodes.0.push(postcode);
+        self.content.postcodes.push(postcode);
         self
     }
 

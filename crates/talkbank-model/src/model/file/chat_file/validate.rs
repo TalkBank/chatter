@@ -170,6 +170,10 @@ fn run_validation_checks<S: ValidationState>(
         check_separator_trailing_space(file, errors);
     }
 
+    // E767: whitespace between the @Media filename and its comma (CLAN
+    // CHECK 148). Unconditional, and here rather than in a parser lowering so
+    // both front ends report it from one implementation.
+
     // E701, E704: Validate temporal constraints on media bullets.
     crate::validation::temporal::validate_temporal_constraints(file, errors);
 

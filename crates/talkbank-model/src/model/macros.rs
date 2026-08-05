@@ -7,34 +7,20 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
-/// Macro to generate simple string newtype wrappers with common trait implementations.
+/// The READ and RENDER surface shared by every `SmolStr`-backed string
+/// newtype: `as_str`, `WriteChat`, `Display`, `Deref<Target = str>`, `AsRef<str>`.
 ///
-/// Uses `SmolStr` for inline storage of short strings (≤23 bytes) and O(1) clone.
-///
-/// This macro generates:
-/// - Basic newtype struct with Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq, Eq, Hash
-/// - `new(impl Into<SmolStr>)` and `as_str()` methods
-/// - WriteChat trait implementation
-/// - Display trait implementation
-/// - Deref to str implementation
-/// - `AsRef<str>` implementation
-/// - `From<String>` and `From<&str>` implementations
+/// Separated from [`string_newtype!`] so a newtype WITH an invariant can share
+/// it. Such a type must not have the infallible `new` / `From<String>` /
+/// `From<&str>` that `string_newtype!` also emits, since an invariant with an
+/// infallible constructor beside it is a suggestion rather than an invariant;
+/// but nothing about borrowing or rendering differs, and hand-copying these
+/// five impls per checked type is how they drift. `MediaFilename` is the first
+/// caller (see `header_strings.rs`).
 #[macro_export]
-macro_rules! string_newtype {
-    ($(#[$meta:meta])* $vis:vis struct $name:ident;) => {
-        #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema, Debug, Clone, PartialEq, Eq, Hash, talkbank_derive::SemanticEq, talkbank_derive::SpanShift)]
-        $(#[$meta])*
-        $vis struct $name(pub smol_str::SmolStr);
-
+macro_rules! string_newtype_read_impls {
+    ($name:ident) => {
         impl $name {
-            /// Constructs a new wrapper value from owned or borrowed text.
-            ///
-            /// This constructor performs no normalization so lexical content is
-            /// preserved exactly as provided by callers.
-            pub fn new(value: impl Into<smol_str::SmolStr>) -> Self {
-                Self(value.into())
-            }
-
             /// Borrows the wrapped value as `&str`.
             ///
             /// This is the preferred accessor for formatting and validation code.
@@ -49,7 +35,6 @@ macro_rules! string_newtype {
                 w.write_str(&self.0)
             }
         }
-
         impl std::fmt::Display for $name {
             /// Displays the wrapped string without additional formatting.
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -70,6 +55,42 @@ macro_rules! string_newtype {
             /// Returns a borrowed `str` view of the wrapped value.
             fn as_ref(&self) -> &str {
                 &self.0
+            }
+        }
+    };
+}
+
+/// Macro to generate simple string newtype wrappers with common trait implementations.
+///
+/// Uses `SmolStr` for inline storage of short strings (≤23 bytes) and O(1) clone.
+///
+/// For newtypes with NO invariant: every value of the inner type is a legal
+/// value of the newtype, which is why the constructors here are infallible. A
+/// type that can reject its input must not use this macro; it invokes
+/// [`string_newtype_read_impls!`] for the shared surface and writes its own
+/// checked constructor.
+///
+/// This macro generates:
+/// - Basic newtype struct with Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq, Eq, Hash
+/// - Everything in [`string_newtype_read_impls!`]: `as_str`, WriteChat, Display, Deref, `AsRef<str>`
+/// - An infallible `new(impl Into<SmolStr>)`
+/// - `From<String>` and `From<&str>` implementations
+#[macro_export]
+macro_rules! string_newtype {
+    ($(#[$meta:meta])* $vis:vis struct $name:ident;) => {
+        #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema, Debug, Clone, PartialEq, Eq, Hash, talkbank_derive::SemanticEq, talkbank_derive::SpanShift)]
+        $(#[$meta])*
+        $vis struct $name(smol_str::SmolStr);
+
+        $crate::string_newtype_read_impls!($name);
+
+        impl $name {
+            /// Constructs a new wrapper value from owned or borrowed text.
+            ///
+            /// This constructor performs no normalization so lexical content is
+            /// preserved exactly as provided by callers.
+            pub fn new(value: impl Into<smol_str::SmolStr>) -> Self {
+                Self(value.into())
             }
         }
 

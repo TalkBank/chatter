@@ -45,6 +45,14 @@ pub struct ValidationManifest {
     /// by the generator; consumed by the runner's coverage gate.
     #[serde(default)]
     pub implemented_specs_without_examples: Vec<String>,
+
+    /// Specs marked `unreachable_from_chat` that nonetheless carry an example.
+    ///
+    /// An example means some CHAT input reaches the rule, so the status is
+    /// wrong. Without this, the new status would be a way to opt any rule out
+    /// of its fixture obligation.
+    #[serde(default)]
+    pub unreachable_specs_with_examples: Vec<String>,
 }
 
 #[cfg(test)]
@@ -61,6 +69,7 @@ mod tests {
                 source_spec: "spec/errors/E370_retrace_missing_content.md".to_string(),
             }],
             implemented_specs_without_examples: Vec::new(),
+            unreachable_specs_with_examples: Vec::new(),
         };
         let json = serde_json::to_string_pretty(&m).expect("serialize");
         // Codes and status serialize transparently as JSON strings.

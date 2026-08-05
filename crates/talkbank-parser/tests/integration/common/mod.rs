@@ -70,7 +70,7 @@ pub fn parse_utterances_and_diags(input: &str) -> (Vec<Utterance>, Vec<DiagRecor
     let file = parser.parse_chat_file_streaming(input, &errors);
     let utterances = file
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|line| match line {
             Line::Utterance(utt) => Some(utt.as_ref().clone()),

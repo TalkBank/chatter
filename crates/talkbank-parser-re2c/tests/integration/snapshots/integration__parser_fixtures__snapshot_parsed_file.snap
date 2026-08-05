@@ -1,5 +1,6 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 599
 expression: file
 ---
 lines:
@@ -21,9 +22,12 @@ lines:
         HeaderPrefix: "@Participants:\t"
       content:
         - ParticipantWord: CHI
+        - Whitespace: " "
         - ParticipantWord: Child
         - Comma: ","
+        - Whitespace: " "
         - ParticipantWord: MOT
+        - Whitespace: " "
         - ParticipantWord: Mother
   - Header:
       prefix:

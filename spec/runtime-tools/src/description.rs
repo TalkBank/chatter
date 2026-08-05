@@ -1,7 +1,7 @@
 //! Generate informative descriptions for CHAT construct examples
 
-use talkbank_model::model::{WordCategory, WordContent};
 use talkbank_model::ErrorCollector;
+use talkbank_model::model::{WordCategory, WordContent};
 use talkbank_model::{ParseErrors, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
 use thiserror::Error;
@@ -146,12 +146,18 @@ fn generate_chatfile_description(input: &str) -> Result<String, DescriptionError
                 .iter()
                 .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
             {
-                return Err(parse_error("chat file", talkbank_model::ParseErrors::from(diagnostics)));
+                return Err(parse_error(
+                    "chat file",
+                    talkbank_model::ParseErrors::from(diagnostics),
+                ));
             }
             file
         }
         talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
-            return Err(parse_error("chat file", talkbank_model::ParseErrors::from(diagnostics)));
+            return Err(parse_error(
+                "chat file",
+                talkbank_model::ParseErrors::from(diagnostics),
+            ));
         }
     };
 

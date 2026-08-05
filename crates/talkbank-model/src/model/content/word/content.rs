@@ -197,11 +197,39 @@ impl Validate for WordContent {
 /// - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct WordText(pub NonEmptyString);
+pub struct WordText(NonEmptyString);
+
+impl From<WordShortening> for WordText {
+    /// A shortening's text, promoted to plain text.
+    ///
+    /// Infallible on purpose, and allowed to be: both types wrap a
+    /// `NonEmptyString`, so the invariant transfers unchanged and there is
+    /// nothing to re-check. This exists because the CA-omission normalizer
+    /// needs the conversion, and used to get it by destructuring both newtypes'
+    /// public fields, which is the access that made those fields `pub` in the
+    /// first place.
+    fn from(shortening: WordShortening) -> Self {
+        Self(shortening.0)
+    }
+}
+
+impl TryFrom<&str> for WordText {
+    type Error = crate::model::EmptyText;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
 
 impl WordText {
     /// Builds `WordText` when `text` is non-empty.
-    pub fn new(text: impl AsRef<str>) -> Option<Self> {
+    ///
+    /// # Errors
+    ///
+    /// [`crate::model::EmptyText`] if `text` is empty. The inner field is
+    /// private, so this and `new_unchecked` are the only ways in and the
+    /// non-emptiness invariant actually holds.
+    pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }
 
@@ -247,11 +275,25 @@ impl Validate for WordText {
 /// 2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct WordPhonetic(pub NonEmptyString);
+pub struct WordPhonetic(NonEmptyString);
+
+impl TryFrom<&str> for WordPhonetic {
+    type Error = crate::model::EmptyText;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
 
 impl WordPhonetic {
     /// Builds `WordPhonetic` when `text` is non-empty.
-    pub fn new(text: impl AsRef<str>) -> Option<Self> {
+    ///
+    /// # Errors
+    ///
+    /// [`crate::model::EmptyText`] if `text` is empty. The inner field is
+    /// private, so this and `new_unchecked` are the only ways in and the
+    /// non-emptiness invariant actually holds.
+    pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }
 
@@ -299,11 +341,25 @@ impl Validate for WordPhonetic {
 /// - [Shortenings](https://talkbank.org/0info/manuals/CHAT.html#Shortenings)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct WordShortening(pub NonEmptyString);
+pub struct WordShortening(NonEmptyString);
+
+impl TryFrom<&str> for WordShortening {
+    type Error = crate::model::EmptyText;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
 
 impl WordShortening {
     /// Builds shortening text when `text` is non-empty.
-    pub fn new(text: impl AsRef<str>) -> Option<Self> {
+    ///
+    /// # Errors
+    ///
+    /// [`crate::model::EmptyText`] if `text` is empty. The inner field is
+    /// private, so this and `new_unchecked` are the only ways in and the
+    /// non-emptiness invariant actually holds.
+    pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }
 

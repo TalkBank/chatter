@@ -366,7 +366,7 @@ impl<'a> From<&ast::PhoWordParsed<'a>> for talkbank_model::model::PhoWord {
 pub(crate) fn normalize_ca_omissions_in_lines(lines: &mut [talkbank_model::model::Line]) {
     for line in lines {
         if let talkbank_model::model::Line::Utterance(utterance) = line {
-            for content in &mut utterance.main.content.content {
+            for content in utterance.main.content.content.as_mut_slice() {
                 normalize_ca_omission(content);
             }
         }
@@ -383,22 +383,22 @@ pub(crate) fn normalize_ca_omission(content: &mut UtteranceContent) {
             normalize_ca_omission_word(&mut replaced.word);
         }
         UtteranceContent::Group(group) => {
-            for item in &mut group.content.content {
+            for item in group.content.content.as_mut_slice() {
                 normalize_ca_omission_bracketed_item(item);
             }
         }
         UtteranceContent::AnnotatedGroup(annotated) => {
-            for item in &mut annotated.inner.content.content {
+            for item in annotated.inner.content.content.as_mut_slice() {
                 normalize_ca_omission_bracketed_item(item);
             }
         }
         UtteranceContent::Retrace(retrace) => {
-            for item in &mut retrace.content.content {
+            for item in retrace.content.content.as_mut_slice() {
                 normalize_ca_omission_bracketed_item(item);
             }
         }
         UtteranceContent::Quotation(quote) => {
-            for item in &mut quote.content.content {
+            for item in quote.content.content.as_mut_slice() {
                 normalize_ca_omission_bracketed_item(item);
             }
         }

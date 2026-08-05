@@ -7,7 +7,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use talkbank_derive::SpanShift;
 
 use super::super::LanguageCode;
@@ -133,7 +133,7 @@ impl LanguageMetadata {
     /// Callers should add entries in alignable-word order so `word_index`
     /// remains comparable with alignment metadata (`%mor/%gra/%pho/%wor`).
     pub fn add_word(&mut self, info: WordLanguageInfo) {
-        self.word_languages.0.push(info);
+        self.word_languages.push(info);
     }
 
     /// Look up language metadata by alignable word index.
@@ -210,9 +210,17 @@ impl LanguageMetadata {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct WordLanguageInfos(pub Vec<WordLanguageInfo>);
+pub struct WordLanguageInfos(Vec<WordLanguageInfo>);
 
 impl WordLanguageInfos {
+    /// Appends one word's language record.
+    ///
+    /// A NAMED length-changing operation, added when `DerefMut` was removed
+    /// from this family.
+    pub fn push(&mut self, info: WordLanguageInfo) {
+        self.0.push(info);
+    }
+
     /// Wrap a vector of per-word language entries.
     ///
     /// This constructor is mostly used by parser/build pipelines that already
@@ -239,16 +247,6 @@ impl Deref for WordLanguageInfos {
     /// `Vec` ergonomics in analysis code.
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for WordLanguageInfos {
-    /// Expose the underlying vector for in-place mutation.
-    ///
-    /// Mutations should preserve `word_index` invariants expected by alignment
-    /// and language-resolution consumers.
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

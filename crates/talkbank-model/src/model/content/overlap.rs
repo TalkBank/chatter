@@ -162,9 +162,17 @@ pub enum OverlapPointKind {
 ///
 /// Reference:
 /// - <https://talkbank.org/0info/manuals/CHAT.html#CA_Overlaps>
-pub struct OverlapIndex(pub u32);
+pub struct OverlapIndex(u32);
 
 impl OverlapIndex {
+    /// The index value.
+    ///
+    /// Matches the `.get()` convention the crate already uses for scalar
+    /// newtypes (`MorItemCount`, `MorAlignableWordCount`, `OverlapMarkerIndex`).
+    pub fn get(self) -> u32 {
+        self.0
+    }
+
     /// Wrap raw index value; range checks are performed by validation.
     ///
     /// Construction is intentionally permissive so parser paths can preserve

@@ -14,6 +14,19 @@ readme = "README.md"
 [lib]
 proc-macro = true
 
+[features]
+# The trybuild UI suite, off by default.
+#
+# `ui_tests::ui` compiles a directory of fixture crates through a real cargo
+# invocation, so it costs about 16 seconds. Measured 2026-08-04: that is over
+# HALF of the whole workspace's 32 seconds of test execution, and the other 30
+# tests in the same binary run in 0.00 s. It is real coverage of proc-macro
+# error messages and must keep running, but not in the inner loop.
+#
+# Same posture as batchalign's `ml-golden` feature: the exclusion lives in the
+# code, not in a runner config a fresh checkout might not have.
+ui-tests = []
+
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

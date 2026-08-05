@@ -405,9 +405,13 @@ pub fn parse_file_with_errors<'a>(
                 {
                     let tok = tokens[pos].clone();
                     pos += 1;
-                    if !matches!(tok, Token::Whitespace(_)) {
-                        content.push(tok);
-                    }
+                    // ALL tokens, whitespace included, as the field's own doc
+                    // says. Dropping whitespace here used to be invisible and
+                    // lossy: the `@Media` converter could not see a space
+                    // before the comma, so E767 was unreportable from this
+                    // front end and the two parsers silently disagreed.
+                    // Consumers that read positions skip it explicitly.
+                    content.push(tok);
                 }
                 if pos < tokens.len()
                     && TokenDiscriminants::from(&tokens[pos]) == TokenDiscriminants::Newline
@@ -632,9 +636,19 @@ fn parse_dependent_tiers<'a>(
 
         let tier_tokens = &tokens[content_start..content_end];
 
-        // Malformed tier: no content after prefix (e.g., `%mor\n` without `:\t`).
-        // Report E602 and produce a fallback text tier.
-        if tier_tokens.is_empty() {
+        // Malformed tier: no colon-tab at all (e.g. `%mor\n`), which is what
+        // E602 means and what its spec example shows.
+        //
+        // The test used to be `tier_tokens.is_empty()`, which ALSO caught a
+        // well-formed but empty tier (`%xfoo:\t`), reporting "missing
+        // colon-tab?" about a line that plainly has one. Two different
+        // constructs under one code, with a message written for only the first.
+        // Measured 2026-08-04: that made this parser emit E602 where the
+        // tree-sitter parser emitted nothing, on top of the E756 they both
+        // emitted. An empty-but-well-formed tier now falls through to the
+        // normal path, is built with `content: None`, and is reported by E756
+        // during validation, which is the rule that actually describes it.
+        if tier_tokens.is_empty() && !prefix_text.ends_with(":\t") {
             errors.report(ParseError::new(
                 talkbank_model::errors::codes::ErrorCode::MalformedTierHeader,
                 talkbank_model::Severity::Error,

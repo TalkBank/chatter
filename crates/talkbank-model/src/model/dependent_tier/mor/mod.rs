@@ -26,4 +26,4 @@ pub use analysis::{MorFeature, MorStem, PosCategory, clan_to_ud_upos};
 pub use chunk::{MorChunk, MorChunkKind};
 pub use item::Mor;
 pub use tier::{MorTier, MorTierType};
-pub use word::MorWord;
+pub use word::{MorAnalysis, MorWord};

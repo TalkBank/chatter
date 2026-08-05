@@ -5,9 +5,18 @@
 
 /// Index of an utterance among utterances in one CHAT file, 0-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct UtteranceIdx(pub usize);
+pub struct UtteranceIdx(usize);
 
 impl UtteranceIdx {
+    /// Wraps a 0-based utterance index.
+    ///
+    /// Added when the inner field was closed. Construction is now explicit,
+    /// which is what would let this type reject a nonsensical index later
+    /// without that being a breaking change.
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+
     /// Returns the wrapped raw index value.
     pub fn raw(self) -> usize {
         self.0
@@ -22,9 +31,18 @@ impl std::fmt::Display for UtteranceIdx {
 
 /// Index of a word within one extracted utterance domain, 0-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WordIdx(pub usize);
+pub struct WordIdx(usize);
 
 impl WordIdx {
+    /// Wraps a 0-based word index.
+    ///
+    /// Added when the inner field was closed. Construction is now explicit,
+    /// which is what would let this type reject a nonsensical index later
+    /// without that being a breaking change.
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+
     /// Returns the wrapped raw index value.
     pub fn raw(self) -> usize {
         self.0

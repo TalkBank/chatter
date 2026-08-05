@@ -72,7 +72,10 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 role,
                 education,
                 custom,
-            }) = h.content.first()
+            }) = h
+                .content
+                .iter()
+                .find(|t| !matches!(t, Token::Whitespace(_)))
             {
                 // Language field can be comma-separated: "eng, ara". Filter
                 // empty pieces (e.g. a malformed "eng,,ara") before
@@ -126,7 +129,10 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 design,
                 activity,
                 group,
-            }) = h.content.first()
+            }) = h
+                .content
+                .iter()
+                .find(|t| !matches!(t, Token::Whitespace(_)))
             {
                 return Header::Types(TypesHeader::new(*design, *activity, *group));
             }
@@ -144,21 +150,58 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 .filter(|t| matches!(t, Token::MediaWord(_) | Token::MediaFilename(_)))
                 .map(|t| t.text())
                 .collect();
-            if words.len() >= 2 {
-                let mut mh = MediaHeader::new(
-                    words[0], // Into<MediaFilename>
-                    MediaType::from_text(words[1]),
-                );
-                if words.len() >= 3 {
-                    mh = mh.with_status(MediaStatus::from_text(words[2]));
+            // Whitespace between the filename and the FIRST comma. Recorded as
+            // provenance so the validation rule (E767) fires for this front end
+            // too; the tree-sitter parser records the same fact from its
+            // `optional($.whitespaces)` child. Reporting it from one parser's
+            // lowering is what made the two disagree when E767 was introduced.
+            let whitespace_before_comma = h
+                .content
+                .iter()
+                .take_while(|t| !matches!(t, Token::Comma(_)))
+                .any(|t| matches!(t, Token::Whitespace(_)));
+            // The lexer splits on the comma, so a well-formed header always
+            // satisfies the filename invariant; going through the checked
+            // constructor keeps this parser honest if that ever stops holding,
+            // and keeps it reporting what the tree-sitter front end reports,
+            // which degrades the same way for the same reasons.
+            //
+            // The two failures are kept DISTINCT rather than collapsed into one
+            // "malformed" verdict: too few fields and an unusable filename are
+            // different things to tell a transcriber, and the previous `.ok()`
+            // made an invalid filename indistinguishable from a missing comma.
+            let media = match words.as_slice() {
+                // The slice pattern is what licences reading the second field,
+                // so the arity check and the use cannot drift apart.
+                [filename, media_type, ..] => {
+                    match talkbank_model::model::MediaFilename::parse(filename) {
+                        Ok(filename) => Ok((filename, *media_type)),
+                        Err(err) => Err(err.to_string()),
+                    }
                 }
-                Header::Media(mh)
-            } else {
-                Header::Unknown {
+                _ => Err("malformed @Media".to_string()),
+            };
+            match media {
+                Ok((filename, media_type)) => {
+                    let mut mh = MediaHeader::new(filename, MediaType::from_text(media_type));
+                    if whitespace_before_comma {
+                        // No offsets in this front end's tokens, so the span is
+                        // the one it can supply. See the Span::DUMMY note in the
+                        // illegal-states program: this parser has no span
+                        // provenance at all, which is a known gap rather than a
+                        // local shortcut.
+                        mh = mh.with_whitespace_before_comma(talkbank_model::Span::DUMMY);
+                    }
+                    if let Some(status) = words.get(2) {
+                        mh = mh.with_status(MediaStatus::from_text(status));
+                    }
+                    Header::Media(mh)
+                }
+                Err(parse_reason) => Header::Unknown {
                     text: WarningText::new(all_content),
-                    parse_reason: Some("malformed @Media".to_string()),
+                    parse_reason: Some(parse_reason),
                     suggested_fix: None,
-                }
+                },
             }
         }
         Token::HeaderPrefix(p) if p.contains("@Comment") => Header::Comment {

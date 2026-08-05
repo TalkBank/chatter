@@ -427,7 +427,7 @@ impl TreeSitterParser {
         else {
             return ParseOutcome::rejected();
         };
-        let Some(item) = tier.items.0.into_iter().next() else {
+        let Some(item) = tier.items.into_vec().into_iter().next() else {
             return ParseOutcome::rejected();
         };
         match item {

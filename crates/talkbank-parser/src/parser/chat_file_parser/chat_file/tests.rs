@@ -45,7 +45,12 @@ fn cat_spa_header_parses_to_two_declared_languages() -> Result<(), String> {
                  @End";
     let chat_file = parse_chat_file_or_err(input)?;
 
-    let langs: Vec<&str> = chat_file.languages.0.iter().map(|c| c.as_str()).collect();
+    let langs: Vec<&str> = chat_file
+        .languages
+        .as_slice()
+        .iter()
+        .map(|c| c.as_str())
+        .collect();
 
     assert_eq!(langs, vec!["cat", "spa"]);
     Ok(())

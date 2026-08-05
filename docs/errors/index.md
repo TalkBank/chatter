@@ -874,7 +874,7 @@ When a %wor tier contains invalid content (e.g., an action marker like &=head:no
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E502](E502.md) | false positive: %wor parse error cascades to entire file | error | ✅ |
+| [E502](E502.md) | false positive, a %wor parse error cascades to the entire file | error | ✅ |
 
 ## Header validation (E5x)
 
@@ -1851,6 +1851,22 @@ Linkers (+", ++, +<, +^, +,, +≈, +≋) connect an utterance to the PREVIOUS ut
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E766](E766.md) | linker not utterance-initial | error | ✅ |
+
+## Header validation (E7x)
+
+In @Media the comma separates the filename from the media type, and the filename ends where the comma begins:
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E767](E767.md) | whitespace before the comma in @Media | error | ✅ |
+
+## Header validation (E7x)
+
+@Media names a file, then a comma, then the media type. The filename is delimited by that comma, so a handful of strings cannot survive a round trip through the header even though nothing stops a tool from putting them there. The exact set is owned by MediaFilenameProblem, whose variants each carry their own explanation; it is deliberately not restated here, because a second copy drifts. It did: the first draft of this file listed four problems and omitted Empty, which problem_with returns and this rule reports.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E768](E768.md) | @Media filename cannot be written and read back unchanged | error | ? |
 
 ## Alignment count mismatch (E9x)
 

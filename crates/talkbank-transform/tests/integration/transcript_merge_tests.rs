@@ -757,8 +757,16 @@ fn merge_language_mismatch_returns_err() {
             // The payload preserves each file's declared codes so the
             // operator can see *which* language pair was in conflict
             // without re-reading the inputs.
-            let f1_codes: Vec<String> = file1.0.iter().map(|c| c.as_str().to_string()).collect();
-            let f2_codes: Vec<String> = file2.0.iter().map(|c| c.as_str().to_string()).collect();
+            let f1_codes: Vec<String> = file1
+                .as_slice()
+                .iter()
+                .map(|c| c.as_str().to_string())
+                .collect();
+            let f2_codes: Vec<String> = file2
+                .as_slice()
+                .iter()
+                .map(|c| c.as_str().to_string())
+                .collect();
             assert_eq!(
                 f1_codes,
                 vec!["eng".to_string()],

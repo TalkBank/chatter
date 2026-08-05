@@ -67,7 +67,7 @@ mod time;
 mod user_defined_tier;
 
 // Re-export NonEmptyString
-pub use non_empty_string::NonEmptyString;
+pub use non_empty_string::{EmptyText, NonEmptyString};
 pub use time::MediaTiming;
 
 // Re-export provenance types
@@ -88,7 +88,7 @@ pub use file::{
 };
 
 // Re-export participant type
-pub use participant::Participant;
+pub use participant::{DeclaredSpeaker, Participant};
 
 // Re-export header types
 pub use header::{
@@ -117,6 +117,9 @@ pub use header::{
     LanguageCodes,
     LanguageName,
     LocationDescription,
+    MediaFilename,
+    MediaFilenameError,
+    MediaFilenameProblem,
     MediaHeader,
     MediaStatus,
     MediaType,
@@ -252,6 +255,7 @@ pub use dependent_tier::{
     IntTier,
     // MOR
     Mor,
+    MorAnalysis,
     MorChunk,
     MorChunkKind,
     MorFeature,

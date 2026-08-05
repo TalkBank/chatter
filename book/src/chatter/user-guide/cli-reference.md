@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-08-03 14:03 EDT
+**Last modified:** 2026-08-03 17:28 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -275,6 +275,40 @@ chatter cache clear --all --dry-run
 ```
 
 The validation cache lives under the platform cache directory and stores per-file validation results. `validate --force` refreshes cache state for the specified path.
+
+### What the cache does and does not speed up
+
+**Files that passed are remembered; files with errors are re-checked every
+time.** This is deliberate, and it is worth knowing because it decides how fast
+a re-run feels.
+
+A file that validated cleanly is skipped entirely on the next run, as long as
+its contents have not changed. A file that had errors is validated again from
+scratch, because the cache remembers only THAT a file had errors, never what
+they were: the codes, the line numbers, the quoted source and the suggestions
+have to be produced by actually reading the file. Storing them instead would
+mean showing you an older release's wording for an error that has since been
+improved, which is worse than waiting.
+
+In practice this costs nothing on a corpus in good shape. A full run over the
+~106,000 kept TalkBank transcripts takes about 6 seconds when cached, because
+only ~141 files have errors to re-check. It is noticeable in the opposite
+situation, part way through cleaning up a corpus where most files still fail, or
+just after a new release tightens a rule. Two things help there: narrow the
+target to the directory you are working in rather than the whole corpus, and fix
+files as you go, since each one that passes joins the fast path permanently.
+
+Two other things reset the cache, both expected:
+
+- **Editing a file.** The cache follows file contents, so a changed file is
+  always re-validated, and reverting a change restores the earlier result.
+- **Upgrading Chatter.** A new release can change what counts as valid, so
+  every cached result from an older version is retired and the first run after
+  an upgrade is a full one. Later runs are fast again. The previous version's
+  results are kept, so downgrading does not force another full run.
+
+`--suppress` does not reset anything: it changes what is printed, not what is
+checked, so runs differing only in `--suppress` share the same cached results.
 
 ## `debug`
 

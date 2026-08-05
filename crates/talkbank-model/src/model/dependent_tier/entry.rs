@@ -44,6 +44,70 @@ pub struct DependentTierEntry {
 }
 
 impl DependentTierEntry {
+    /// The tier's label, without the `%` or the colon (`"mor"`, `"xfoo"`).
+    ///
+    /// Forwards to [`DependentTier::kind`]. Added because callers iterating
+    /// `Utterance::dependent_tiers` reach for the kind far more often than they
+    /// match on the entry, so `entry.tier.kind()` was the common spelling of a
+    /// question about the entry (upstream request, rustling, 2026-07-31).
+    ///
+    /// Deliberately an inherent forward rather than a `Deref` to
+    /// [`DependentTier`]: matching on a tier needs the concrete enum, so the
+    /// type keeps making callers say `.tier` when they mean the tier itself.
+    pub fn kind(&self) -> &str {
+        self.tier.kind()
+    }
+
+    /// The tier's source span, INCLUDING its `%label:` prefix.
+    ///
+    /// Forwards to [`DependentTier::span`], with the same reasoning as
+    /// [`Self::kind`]. For the content without the prefix, see
+    /// [`Self::content_span`].
+    pub fn span(&self) -> crate::Span {
+        self.tier.span()
+    }
+
+    /// The span of the tier's CONTENT: no `%label:`, no separator, no newline.
+    ///
+    /// [`Self::span`] covers the whole line, so a consumer wanting the tier
+    /// text has been slicing that and then splitting on `:` to drop the prefix
+    /// (upstream request, rustling, 2026-07-31). That split is a small parser
+    /// in every consumer, and gets the trailing newline wrong besides.
+    ///
+    /// DERIVED, not recorded, and the distinction matters if this ever
+    /// disagrees with the source. The prefix is `%` + [`Self::kind`] + `:`,
+    /// whose lengths are known exactly; the separator is a single tab unless
+    /// the entry recorded illegal trailing whitespace, in which case that
+    /// span's end IS where the content begins; and a trailing newline is
+    /// dropped if present. The parser knows all of this precisely and could
+    /// record it instead, which would be the better shape; deriving it here
+    /// avoids adding a provenance field to every one of the twenty-odd tier
+    /// types for a papercut.
+    ///
+    /// Returns `None` when the tier carries no real span, which is every tier
+    /// from the re2c front end (it has no byte offsets at all) and any
+    /// synthesised tier.
+    pub fn content_span(&self) -> Option<crate::Span> {
+        let whole = self.span();
+        if whole.start == whole.end {
+            return None;
+        }
+        // `%` + label + `:`
+        let after_label = whole.start + 1 + self.kind().len() as u32 + 1;
+        let start = match self.separator.trailing_space() {
+            Some(space) => space.end,
+            None => after_label + 1, // the tab
+        };
+        let mut end = whole.end;
+        if end > start {
+            end -= 1; // the newline the whole-line span includes
+        }
+        if start >= end {
+            return None;
+        }
+        Some(crate::Span::new(start, end))
+    }
+
     /// Wraps `tier` with a clean separator (single tab, no trailing spaces).
     pub fn new(tier: DependentTier) -> Self {
         Self {

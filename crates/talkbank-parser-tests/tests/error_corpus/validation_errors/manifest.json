@@ -1923,6 +1923,22 @@
       "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
     },
     {
+      "fixture": "E767_whitespace_before_the_comma_in_Media.cha",
+      "expected_codes": [
+        "E767"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E767_media_whitespace_before_comma.md"
+    },
+    {
+      "fixture": "E767_whitespace_before_the_comma_in_Media_2.cha",
+      "expected_codes": [
+        "E767"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E767_media_whitespace_before_comma.md"
+    },
+    {
       "fixture": "W108_Auto_generated_from_corpus.cha",
       "expected_codes": [
         "W108"
@@ -1931,5 +1947,6 @@
       "source_spec": "spec/errors/W108_auto.md"
     }
   ],
-  "implemented_specs_without_examples": []
+  "implemented_specs_without_examples": [],
+  "unreachable_specs_with_examples": []
 }

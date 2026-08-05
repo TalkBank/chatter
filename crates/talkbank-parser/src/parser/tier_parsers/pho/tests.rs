@@ -11,9 +11,9 @@ use talkbank_model::model::{PhoTier, PhoTierType, WriteChat};
 fn test_pho_tier_construction() {
     use talkbank_model::model::{PhoItem, PhoWord};
     let items = vec![
-        PhoItem::Word(PhoWord("wʌn".into())),
-        PhoItem::Word(PhoWord("tu".into())),
-        PhoItem::Word(PhoWord("θɹi".into())),
+        PhoItem::Word(PhoWord::new("wʌn")),
+        PhoItem::Word(PhoWord::new("tu")),
+        PhoItem::Word(PhoWord::new("θɹi")),
     ];
     let tier = PhoTier::new(PhoTierType::Pho, items);
     assert_eq!(tier.items.len(), 3);
@@ -43,11 +43,11 @@ fn test_empty_tier() {
 #[test]
 fn test_single_token() -> Result<(), String> {
     use talkbank_model::model::{PhoItem, PhoWord};
-    let items = vec![PhoItem::Word(PhoWord("hɛloʊ".into()))];
+    let items = vec![PhoItem::Word(PhoWord::new("hɛloʊ"))];
     let tier = PhoTier::new(PhoTierType::Pho, items);
     assert_eq!(tier.len(), 1);
     match &tier.items[0] {
-        PhoItem::Word(word) => assert_eq!(word.0, "hɛloʊ"),
+        PhoItem::Word(word) => assert_eq!(word.as_str(), "hɛloʊ"),
         _ => return Err("Expected Word item".to_string()),
     }
     Ok(())
@@ -58,14 +58,14 @@ fn test_single_token() -> Result<(), String> {
 fn test_unicode_tokens() -> Result<(), String> {
     use talkbank_model::model::{PhoItem, PhoWord};
     let items = vec![
-        PhoItem::Word(PhoWord("ʃə".into())),
-        PhoItem::Word(PhoWord("ɪz".into())),
-        PhoItem::Word(PhoWord("naɪs".into())),
+        PhoItem::Word(PhoWord::new("ʃə")),
+        PhoItem::Word(PhoWord::new("ɪz")),
+        PhoItem::Word(PhoWord::new("naɪs")),
     ];
     let tier = PhoTier::new(PhoTierType::Pho, items);
     assert_eq!(tier.len(), 3);
     match &tier.items[0] {
-        PhoItem::Word(word) => assert_eq!(word.0, "ʃə"),
+        PhoItem::Word(word) => assert_eq!(word.as_str(), "ʃə"),
         _ => return Err("Expected Word item".to_string()),
     }
     Ok(())

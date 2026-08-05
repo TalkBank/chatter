@@ -12,4 +12,4 @@
 #[path = "word.rs"]
 mod word_item;
 
-pub use word_item::MorWord;
+pub use word_item::{MorAnalysis, MorWord};

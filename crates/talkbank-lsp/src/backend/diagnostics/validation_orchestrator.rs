@@ -168,7 +168,7 @@ pub(crate) async fn validate_and_publish(
                                 break;
                             };
 
-                            chat_file.lines[*line_idx] = Line::utterance(utterance);
+                            chat_file.lines.as_mut_slice()[*line_idx] = Line::utterance(utterance);
                         }
 
                         let parse_errors = parse_errors.into_vec();
@@ -194,7 +194,7 @@ pub(crate) async fn validate_and_publish(
                                     for idx in &affected_indices {
                                         if let Some(line_idx) = line_indices.get(*idx)
                                             && let Line::Utterance(utterance) =
-                                                &mut chat_file.lines[*line_idx]
+                                                &mut chat_file.lines.as_mut_slice()[*line_idx]
                                         {
                                             cache_entry.utterance_errors[*idx] =
                                                 validate_single_utterance(
@@ -414,7 +414,7 @@ pub(crate) async fn validate_and_publish(
                                         collect_utterance_line_indices(&chat_file);
                                     if let Some(&line_idx) = new_line_indices.get(splice_idx)
                                         && let Line::Utterance(utterance) =
-                                            &mut chat_file.lines[line_idx]
+                                            &mut chat_file.lines.as_mut_slice()[line_idx]
                                     {
                                         cache_entry.utterance_errors[splice_idx] =
                                             validate_single_utterance(

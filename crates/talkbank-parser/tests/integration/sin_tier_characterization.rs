@@ -90,9 +90,13 @@ enum SinItemRepr {
 fn item_repr(item: &SinItem) -> SinItemRepr {
     match item {
         SinItem::Token(token) => SinItemRepr::Token(token.as_ref().to_string()),
-        SinItem::SinGroup(gestures) => {
-            SinItemRepr::Group(gestures.0.iter().map(|t| t.as_ref().to_string()).collect())
-        }
+        SinItem::SinGroup(gestures) => SinItemRepr::Group(
+            gestures
+                .as_slice()
+                .iter()
+                .map(|t| t.as_ref().to_string())
+                .collect(),
+        ),
     }
 }
 
@@ -114,7 +118,7 @@ fn parse_sin(input: &str) -> SinParse {
 
     let mut items = Vec::new();
     let mut saw_sin_tier = false;
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
                 if let DependentTier::Sin(t) = &dt.tier {

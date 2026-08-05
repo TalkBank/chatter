@@ -1,5 +1,5 @@
 //! Generator: tree-sitter-node-types 0.1.0 (generate_typed_traversal)
-//! Source grammar digest (sha256): grammar.json=c5d6480e1de3d51c8f7f04c729f8fd69d345d05251f07b336c4118c18a0cae7d node-types.json=7b3ac2d08f2d94ace122333d5113072c2bed00722f5cc1323db6e240812bf2a5
+//! Source grammar digest (sha256): grammar.json=ce7a9d18f2578eaad324779a7ea62df4fd3940bfd3cadcb920b73775d478dce1 node-types.json=7b3ac2d08f2d94ace122333d5113072c2bed00722f5cc1323db6e240812bf2a5
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -18162,7 +18162,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
 
 // Task 7 extract contract: pub fn extract_media_contents<'tree>(node: MediaContentsNode<'tree>) -> MediaContentsChildren<'tree>
 #[derive(Debug, Clone)]
-pub struct MediaContentsChild4Children<'tree> {
+pub struct MediaContentsChild5Children<'tree> {
     /// Positional member 0.
     pub child_0: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 1.
@@ -18175,19 +18175,21 @@ pub struct MediaContentsChild4Children<'tree> {
     /// (spec Section 7). Never dropped.
     pub unexpected: Vec<tree_sitter::Node<'tree>>,
 }
-impl<'tree> MediaContentsChild4Children<'tree> {}
+impl<'tree> MediaContentsChild5Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct MediaContentsChildren<'tree> {
     /// Positional member 0.
     pub child_0: Positioned<'tree, NodeSlot<'tree, MediaFilenameNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_2: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, MediaTypeNode<'tree>>>,
+    pub child_3: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, Option<NodeSlot<'tree, MediaContentsChild4Children<'tree>>>>,
+    pub child_4: Positioned<'tree, NodeSlot<'tree, MediaTypeNode<'tree>>>,
+    /// Positional member 5.
+    pub child_5: Positioned<'tree, Option<NodeSlot<'tree, MediaContentsChild5Children<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18230,6 +18232,51 @@ pub fn extract_media_contents<'tree>(
         };
         let child_1 = {
             let leading_extras = __cur.take_leading_extras();
+            let slot = if optional_split_inner(
+                &ReconShape::Kind("whitespaces"),
+                &cont_of(&[
+                    ReconShape::Kind("comma"),
+                    ReconShape::Kind("whitespaces"),
+                    ReconShape::Kind("media_type"),
+                    ReconShape::Optional(&ReconShape::Seq(&[
+                        ReconShape::Kind("comma"),
+                        ReconShape::Kind("whitespaces"),
+                        ReconShape::Kind("media_status"),
+                    ])),
+                ]),
+                __cur.all(),
+                __cur.index(),
+                __cur.memo(),
+            )
+            .0
+            {
+                Some(if let Some(__c) = __cur.peek() {
+                    if __c.is_error() {
+                        __cur.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "whitespaces" {
+                        __cur.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(WhitespacesNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                })
+            } else {
+                None
+            };
+            Positioned {
+                leading_extras,
+                slot,
+            }
+        };
+        let child_2 = {
+            let leading_extras = __cur.take_leading_extras();
             let slot = if let Some(__c) = __cur.peek() {
                 if __c.is_error() {
                     __cur.advance();
@@ -18252,7 +18299,7 @@ pub fn extract_media_contents<'tree>(
                 slot,
             }
         };
-        let child_2 = {
+        let child_3 = {
             let leading_extras = __cur.take_leading_extras();
             let slot = if let Some(__c) = __cur.peek() {
                 if __c.is_error() {
@@ -18276,7 +18323,7 @@ pub fn extract_media_contents<'tree>(
                 slot,
             }
         };
-        let child_3 = {
+        let child_4 = {
             let leading_extras = __cur.take_leading_extras();
             let slot = if let Some(__c) = __cur.peek() {
                 if __c.is_error() {
@@ -18300,7 +18347,7 @@ pub fn extract_media_contents<'tree>(
                 slot,
             }
         };
-        let child_4 = {
+        let child_5 = {
             let leading_extras = __cur.take_leading_extras();
             let slot = if optional_split_inner(
                 &ReconShape::Seq(&[
@@ -18407,7 +18454,7 @@ pub fn extract_media_contents<'tree>(
                             };
                             let trailing_extras: Vec<Extra<'tree>> = Vec::new();
                             let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
-                            MediaContentsChild4Children {
+                            MediaContentsChild5Children {
                                 child_0,
                                 child_1,
                                 child_2,
@@ -18444,6 +18491,7 @@ pub fn extract_media_contents<'tree>(
             child_2,
             child_3,
             child_4,
+            child_5,
             trailing_extras,
             unexpected,
         }
@@ -18470,8 +18518,8 @@ impl<'tree> MediaFilenameDoubleQuoteChildren<'tree> {}
 pub enum MediaFilenameChoice<'tree> {
     /// Alternative `DoubleQuote`.
     DoubleQuote(MediaFilenameDoubleQuoteChildren<'tree>),
-    /// Alternative `AZAZ09`.
-    AZAZ09(LeafText<'tree>),
+    /// Alternative `RNTRNRNT`.
+    RNTRNRNT(LeafText<'tree>),
 }
 #[derive(Debug, Clone)]
 pub struct MediaFilenameChildren<'tree> {
@@ -18602,7 +18650,7 @@ pub fn extract_media_filename<'tree>(
                     }
                     Some((1, _)) => {
                         if let Some(__v) = Some(LeafText(__raw)) {
-                            NodeSlot::Present(MediaFilenameChoice::AZAZ09(__v))
+                            NodeSlot::Present(MediaFilenameChoice::RNTRNRNT(__v))
                         } else {
                             NodeSlot::Absent
                         }

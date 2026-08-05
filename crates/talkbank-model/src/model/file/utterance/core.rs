@@ -61,6 +61,14 @@ use crate::{
 /// );
 /// // Dependent tiers can be added via builder methods
 /// ```
+// Walking the content: use `alignment::helpers::walk_words` with the tier
+// domain you care about, and `counts_for_tier` to decide which words that
+// domain aligns against. See the Alignment section of `Word`'s rustdoc for why
+// hand-rolling the traversal goes wrong; that one is kept as a doc comment
+// because `Word`'s schema description stops before it, while everything in
+// THIS type's doc comment is published verbatim as the `Utterance`
+// description in schema/chat-file.schema.json, where Rust API guidance is
+// noise to the reader.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct Utterance {
     /// Headers that precede this utterance.

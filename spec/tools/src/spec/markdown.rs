@@ -4,7 +4,7 @@
 //! Uses comrak for AST-based parsing with roundtrip support via format_commonmark.
 
 use comrak::nodes::{AstNode, NodeValue};
-use comrak::{format_commonmark, parse_document, Arena, Options};
+use comrak::{Arena, Options, format_commonmark, parse_document};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -173,11 +173,11 @@ impl MarkdownExample {
 
         // Find and replace CST code block
         for node in root.descendants() {
-            if let NodeValue::CodeBlock(code_block) = &mut node.data.borrow_mut().value {
-                if code_block.info == "cst" {
-                    code_block.literal = new_cst.to_string();
-                    break;
-                }
+            if let NodeValue::CodeBlock(code_block) = &mut node.data.borrow_mut().value
+                && code_block.info == "cst"
+            {
+                code_block.literal = new_cst.to_string();
+                break;
             }
         }
 

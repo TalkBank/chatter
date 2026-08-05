@@ -12,10 +12,23 @@
 
 //! Integration tests for the desktop app's validation pipeline and event bridge.
 //!
-//! These tests exercise the same code paths as the Tauri commands but without
-//! the Tauri runtime; they call `validate_target_streaming()` directly and
-//! verify the `FrontendEvent` serialization matches what the React frontend
-//! expects.
+//! Most of these call `validate_target_streaming()` directly on a plain thread
+//! and verify that `FrontendEvent` serialization matches what the React
+//! frontend expects.
+//!
+//! **That is not sufficient on its own, and this header used to say so as
+//! though it were a design.** It read "exercise the same code paths as the
+//! Tauri commands but without the Tauri runtime", which described precisely the
+//! gap that let Chatter Desktop ship unable to validate anything for four
+//! weeks: Tauri drives an `async fn` command ON its runtime, the cache nested a
+//! runtime inside that, and it panicked every time. Every test here passed
+//! throughout, because none of them had ever entered an async context.
+//!
+//! So any test of behaviour that could depend on the CALLING CONTEXT belongs in
+//! the "from inside the async runtime" section at the end of this file, which
+//! drives the code through `tauri::async_runtime::block_on` exactly as Tauri
+//! would. A test that cannot reach the failing context proves nothing about it,
+//! however many assertions it makes.
 //!
 //! Run with: `cargo test -p chatter-desktop --test validation_bridge`
 

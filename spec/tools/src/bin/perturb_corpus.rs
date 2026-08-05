@@ -294,12 +294,13 @@ fn apply_perturbation(source: &str, perturbation: &Perturbation) -> Option<Strin
             let mut lines: Vec<String> = source.lines().map(|s| s.to_string()).collect();
             let mut found = false;
             for line in &mut lines {
-                if line.starts_with('*') && !found {
-                    if let Some(colon_pos) = line.find(':') {
-                        let rest = &line[colon_pos..];
-                        *line = format!("*XXX{}", rest);
-                        found = true;
-                    }
+                if line.starts_with('*')
+                    && !found
+                    && let Some(colon_pos) = line.find(':')
+                {
+                    let rest = &line[colon_pos..];
+                    *line = format!("*XXX{}", rest);
+                    found = true;
                 }
             }
             if !found {
@@ -357,15 +358,15 @@ fn apply_perturbation(source: &str, perturbation: &Perturbation) -> Option<Strin
             let mut lines: Vec<String> = source.lines().map(|s| s.to_string()).collect();
             let mut found = false;
             for line in &mut lines {
-                if line.starts_with("%mor:") && !found {
-                    if let Some(tab_pos) = line.find('\t') {
-                        let content = &line[tab_pos + 1..];
-                        // Remove first word (up to first space)
-                        if let Some(space_pos) = content.find(' ') {
-                            *line =
-                                format!("{}{}", &line[..tab_pos + 1], &content[space_pos + 1..]);
-                            found = true;
-                        }
+                if line.starts_with("%mor:")
+                    && !found
+                    && let Some(tab_pos) = line.find('\t')
+                {
+                    let content = &line[tab_pos + 1..];
+                    // Remove first word (up to first space)
+                    if let Some(space_pos) = content.find(' ') {
+                        *line = format!("{}{}", &line[..tab_pos + 1], &content[space_pos + 1..]);
+                        found = true;
                     }
                 }
             }

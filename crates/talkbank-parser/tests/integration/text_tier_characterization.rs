@@ -130,7 +130,7 @@ fn parse_text_tiers_and_diags(input: &str) -> (Vec<(&'static str, Vec<String>)>,
     let chat = parser.parse_chat_file_streaming(input, &errors);
 
     let mut tiers = Vec::new();
-    for line in &chat.lines.0 {
+    for line in chat.lines.as_slice() {
         if let Line::Utterance(u) = line {
             for dt in &u.dependent_tiers {
                 if let Some(entry) = text_tier(&dt.tier) {

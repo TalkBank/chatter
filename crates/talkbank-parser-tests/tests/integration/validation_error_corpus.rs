@@ -78,10 +78,14 @@ struct ManifestEntry {
 #[derive(Deserialize)]
 struct Manifest {
     fixtures: Vec<ManifestEntry>,
-    /// Implemented validation specs that produced no example. Reported as a
-    /// coverage warning (report-only gate).
+    /// Implemented validation specs that produced no example, so nothing
+    /// tests the rule.
     #[serde(default)]
     implemented_specs_without_examples: Vec<String>,
+    /// Specs marked `unreachable_from_chat` that carry an example anyway,
+    /// which means CHAT input does reach them and the status is wrong.
+    #[serde(default)]
+    unreachable_specs_with_examples: Vec<String>,
 }
 
 /// The validation corpus dir under this crate (where the generator writes).
@@ -198,9 +202,23 @@ fn validation_errors_detected() -> Result<(), TestError> {
     if !coverage_gaps.is_empty() {
         sections.push(format!(
             "{} implemented validation specs lack examples (add a triggering \
-             example, or set Status: not_implemented with a reason):\n  {}",
+             example; or Status: not_implemented with a reason; or, only when \
+             no CHAT input can reach the rule at all, Status: \
+             unreachable_from_chat naming its out-of-corpus test):\n  {}",
             coverage_gaps.len(),
             coverage_gaps.join("\n  ")
+        ));
+    }
+    // The converse of the escape hatch: an `unreachable_from_chat` spec that
+    // has an example is reachable, so the status is wrong. Without this the
+    // new state would be a way to opt any rule out of its fixture.
+    let mislabelled = &manifest.unreachable_specs_with_examples;
+    if !mislabelled.is_empty() {
+        sections.push(format!(
+            "{} specs marked unreachable_from_chat carry an example, so CHAT \
+             input does reach them and the status is wrong:\n  {}",
+            mislabelled.len(),
+            mislabelled.join("\n  ")
         ));
     }
     if !sections.is_empty() {

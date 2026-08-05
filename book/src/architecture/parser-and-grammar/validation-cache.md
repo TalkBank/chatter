@@ -1,7 +1,7 @@
 # Validation Cache
 
 **Status:** Current
-**Last modified:** 2026-08-03 14:03 EDT
+**Last modified:** 2026-08-03 17:28 EDT
 
 The CHAT-core validation cache, used by `chatter validate` and the
 LSP server. Distinct from the audio-task cache used by upstream
@@ -36,7 +36,7 @@ flowchart TD
 | `mmap` | 256 MB | Fast random access for 95k+ entries |
 | Invalidation | Rules-version field + content hash + 30-day TTL | Rule-set or schema changes auto-invalidate; content edits invalidate per-file; stale entries pruned |
 | Reachability prune | On open: keep the opening version plus one predecessor | Rows under any other version can never be bound again; without this the file grew by a corpus per release |
-| Bridge | Embedded single-threaded tokio runtime | Sync workers call `rt.block_on()` for async SQLite |
+| Bridge | Embedded single-threaded tokio runtime, entered only via `blocking::block_on` | Sync workers block on async SQLite. Never `Runtime::block_on` directly: a caller that is itself driving a runtime (a Tauri `async fn` command) would nest one runtime in another and panic, which is what stopped the desktop app validating anything between v0.6.0 and v0.8.0. Such a call is run on a thread with no ambient runtime instead |
 | Init serialization | Advisory file lock (`talkbank-cache.init.lock`) | Exactly one opener performs first-time create + migrate; see below |
 
 ## Schema
@@ -132,6 +132,52 @@ now a fact of the crate graph: `talkbank-transform` (home of
 `PresentationPolicy`) depends on `talkbank-cache`, so the cache crate cannot
 name the type, and folding one in is a dependency cycle rather than a judgement
 call.
+
+## Only a clean file skips work, and that asymmetry is deliberate
+
+A cache hit on a VALID file skips the parse entirely: the row says the file
+produced no diagnostics, and "no diagnostics" is the whole of what a caller
+needs, so there is nothing left to reconstruct.
+
+A file recorded as INVALID is re-parsed and re-validated on every run
+(`worker.rs`, the `CacheOutcome::Valid` arm is the only one that short-circuits).
+The row stores one bit, not the diagnostics, so the bit alone cannot produce the
+codes, spans, source snippets, or suggestions the user actually asked for. The
+cache can say THAT a file failed; only a real run can say HOW.
+
+**This is intended, and it should not be "fixed" by caching diagnostics.** The
+reasons, in order of weight:
+
+1. **A diagnostic is not a fact about the file alone.** It carries spans into the
+   file's bytes and rendered source context, so a cached diagnostic is only
+   valid against the exact bytes that produced it. That is already what the
+   content hash guarantees, but it makes the cached value large and structured
+   rather than one bit, and every change to a message, a span, or a suggestion
+   silently invalidates a store that has no way to know it.
+2. **The bit is the part that is stable across releases; the rendering is not.**
+   Diagnostics are deliberately improved release to release. A cache keyed on
+   the rule selection correctly serves the verdict across such a change, but
+   would serve STALE TEXT for the same key, which is worse than slow: a user
+   would see last release's wording and last release's suggestion.
+3. **The asymmetry costs nothing on a healthy corpus and self-corrects.** The
+   kept corpus is ~106,000 files with ~141 invalid, so re-validation touches
+   0.1% of the work; a full warm run is about 6 seconds. As files get fixed they
+   move into the fast path on their own.
+
+The cost is real only where MOST files are invalid, which is the case during a
+cleanup campaign or when a rule has just been tightened. If that ever needs to
+be fast, the answer is not to cache diagnostics but to make the invalid path
+cheaper, or to give the campaign its own narrower target than the whole corpus.
+
+**When measuring cache behaviour, do not build a synthetic corpus by copying
+files under new names.** Renaming breaks the `@Media` filename check (E531), so
+the copies validate as INVALID, and a benchmark built that way measures the
+re-validation path while appearing to measure the hit path. Measured on a real
+subtree the difference is stark: 9,263 real files take 29.0 s cold and 0.5 s
+warm at a 100% hit rate, while the same files flattened under generated names
+report a 28% hit rate and a warm run barely faster than cold. Use a real corpus
+subtree; `scripts/debug/chatter_validate_scaling.sh` in the operator workspace
+documents this and the sorted-file-list trap beside it.
 
 ## Reachability pruning
 

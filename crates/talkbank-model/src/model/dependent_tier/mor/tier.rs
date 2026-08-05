@@ -141,7 +141,7 @@ impl MorTier {
 
     /// Borrows the list of morphological items.
     pub fn items(&self) -> &[Mor] {
-        &self.items.0
+        self.items.as_slice()
     }
 
     /// Consumes the tier and returns the underlying morphological items.

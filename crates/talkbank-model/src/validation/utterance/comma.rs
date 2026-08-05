@@ -187,28 +187,32 @@ fn word_start(item: &ContentItem<'_>) -> Option<u32> {
 pub(crate) fn check_comma_glued_to_next(utterance: &Utterance, errors: &impl ErrorSink) {
     let mut prev_comma_span: Option<crate::Span> = None;
 
-    walk_content(&utterance.main.content.content.0, None, &mut |item| {
-        if let Some(comma_span) = prev_comma_span
-            && comma_span != crate::Span::DUMMY
-            && let Some(start) = word_start(&item)
-            && start == comma_span.end
-        {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::CommaGluedToNextWord,
-                    Severity::Error,
-                    SourceLocation::new(comma_span),
-                    ErrorContext::new(",", comma_span, ","),
-                    "Comma must be followed by a space or end-of-line",
-                )
-                .with_suggestion("Add a space after the comma"),
-            );
-        }
-        prev_comma_span = match item {
-            ContentItem::Separator(Separator::Comma { span }) => Some(*span),
-            _ => None,
-        };
-    });
+    walk_content(
+        utterance.main.content.content.as_slice(),
+        None,
+        &mut |item| {
+            if let Some(comma_span) = prev_comma_span
+                && comma_span != crate::Span::DUMMY
+                && let Some(start) = word_start(&item)
+                && start == comma_span.end
+            {
+                errors.report(
+                    ParseError::new(
+                        ErrorCode::CommaGluedToNextWord,
+                        Severity::Error,
+                        SourceLocation::new(comma_span),
+                        ErrorContext::new(",", comma_span, ","),
+                        "Comma must be followed by a space or end-of-line",
+                    )
+                    .with_suggestion("Add a space after the comma"),
+                );
+            }
+            prev_comma_span = match item {
+                ContentItem::Separator(Separator::Comma { span }) => Some(*span),
+                _ => None,
+            };
+        },
+    );
 }
 
 /// E258: Validate that no two comma separators appear consecutively in
@@ -220,11 +224,14 @@ pub(crate) fn check_comma_glued_to_next(utterance: &Utterance, errors: &impl Err
 pub(crate) fn check_consecutive_commas(utterance: &Utterance, errors: &impl ErrorSink) {
     let mut prev_comma_span: Option<crate::Span> = None;
 
-    walk_content(&utterance.main.content.content.0, None, &mut |item| {
-        match item {
-            ContentItem::Separator(Separator::Comma { span }) => {
-                if let Some(_prev_span) = prev_comma_span {
-                    errors.report(
+    walk_content(
+        utterance.main.content.content.as_slice(),
+        None,
+        &mut |item| {
+            match item {
+                ContentItem::Separator(Separator::Comma { span }) => {
+                    if let Some(_prev_span) = prev_comma_span {
+                        errors.report(
                         ParseError::new(
                             ErrorCode::ConsecutiveCommas,
                             Severity::Error,
@@ -236,13 +243,14 @@ pub(crate) fn check_consecutive_commas(utterance: &Utterance, errors: &impl Erro
                             "Use a single comma, or replace ,, with the tag marker \u{201E} (U+201E)",
                         ),
                     );
+                    }
+                    prev_comma_span = Some(*span);
                 }
-                prev_comma_span = Some(*span);
+                // Any non-comma content item resets the consecutive check.
+                _ => {
+                    prev_comma_span = None;
+                }
             }
-            // Any non-comma content item resets the consecutive check.
-            _ => {
-                prev_comma_span = None;
-            }
-        }
-    });
+        },
+    );
 }
