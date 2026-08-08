@@ -16,6 +16,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Option>
 
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
 use crate::model::{Bullet, ChatFile, UtteranceContent, Word};
 use crate::validation::ValidationState;
 use crate::{ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
@@ -98,46 +102,35 @@ fn collect_bullets<S: ValidationState>(file: &ChatFile<S>) -> Vec<BulletInfo<'_>
     bullets
 }
 
-/// Returns whether utterance content includes at least one transcribed word.
+/// Returns whether utterance content includes at least one transcribed word,
+/// at any depth.
 ///
-/// Returns false for turns containing only untranscribed material (xxx, yyy, www).
-/// CLAN CHECK skips such turns for speaker self-overlap (E704) validation.
+/// False only for turns whose every word is untranscribed (`xxx`, `yyy`,
+/// `www`) or that hold no words at all. CLAN CHECK skips such turns for
+/// speaker self-overlap (E704), because a `www` scaffolding span carries a
+/// broad bullet without representing timeable lexical content.
+///
+/// # Why this is not two hand-written matches any more
+///
+/// It was, and both were wrong. The utterance half ended in `_ => false`, so
+/// `Retrace` and `AnnotatedRetrace` counted as untranscribed and an utterance
+/// whose only real words sat inside a retrace was dropped from E704 entirely.
+/// The bracketed half recursed into NOTHING, so a word one level down inside a
+/// group was invisible to it. Retraced speech was said out loud and occupies
+/// real time; that is the whole subject of a timing check.
+///
+/// Classifying through [`ContentStructure`] means this predicate cannot hold a
+/// different opinion about which variants are containers than the traversals
+/// around it, which is the drift that produced both bugs.
 fn has_transcribed_content(content: &[UtteranceContent]) -> bool {
-    /// Returns `true` for a lexical word token with usable transcription.
-    fn word_is_transcribed(word: &Word) -> bool {
-        word.untranscribed().is_none() && !word.cleaned_text().is_empty()
-    }
-
-    content.iter().any(|item| match item {
-        UtteranceContent::Word(word) => word_is_transcribed(word),
-        UtteranceContent::AnnotatedWord(annotated) => word_is_transcribed(&annotated.inner),
-        UtteranceContent::ReplacedWord(replaced) => {
-            word_is_transcribed(&replaced.word)
-                || replaced.replacement.words.iter().any(word_is_transcribed)
-        }
-        UtteranceContent::Group(group) => has_transcribed_bracketed(&group.content),
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            has_transcribed_bracketed(&annotated.inner.content)
-        }
-        UtteranceContent::PhoGroup(pho) => has_transcribed_bracketed(&pho.content),
-        UtteranceContent::SinGroup(sin) => has_transcribed_bracketed(&sin.content),
-        UtteranceContent::Quotation(quot) => has_transcribed_bracketed(&quot.content),
-        _ => false,
-    })
+    content
+        .iter()
+        .any(|item| item.structure().any_word(&word_is_transcribed))
 }
 
-/// Returns whether bracketed content includes at least one transcribed word token.
-fn has_transcribed_bracketed(content: &crate::model::BracketedContent) -> bool {
-    use crate::model::BracketedItem;
-    content.content.iter().any(|item| match item {
-        BracketedItem::Word(word) => {
-            word.untranscribed().is_none() && !word.cleaned_text().is_empty()
-        }
-        BracketedItem::AnnotatedWord(annotated) => {
-            annotated.inner.untranscribed().is_none() && !annotated.inner.cleaned_text().is_empty()
-        }
-        _ => false,
-    })
+/// Returns `true` for a lexical word token with usable transcription.
+fn word_is_transcribed(word: &Word) -> bool {
+    word.untranscribed().is_none() && !word.cleaned_text().is_empty()
 }
 
 /// Validate per-speaker start-time monotonicity (`E701`, CLAN Error 83).
@@ -263,7 +256,11 @@ fn bullet_text(bullet: &Bullet) -> String {
 #[cfg(test)]
 mod tests {
     use super::has_transcribed_content;
-    use crate::model::{UtteranceContent, Word, WordCategory};
+    use crate::Span;
+    use crate::model::{
+        Annotated, BracketedContent, BracketedItem, Group, Retrace, RetraceKind, UtteranceContent,
+        Word, WordCategory,
+    };
 
     // Note: Full integration tests should go in talkbank-model/tests/
 
@@ -294,5 +291,61 @@ mod tests {
         )))];
 
         assert!(!has_transcribed_content(&content));
+    }
+
+    /// Retraced speech was SAID, so it is timeable.
+    ///
+    /// A `_ => false` catch-all sent `Retrace` and `AnnotatedRetrace` to "not
+    /// transcribed", so an utterance whose only real words sat inside a retrace
+    /// was dropped from the E704 speaker-self-overlap check entirely.
+    ///
+    /// Demonstrated at the CLI before this test was written: two `*CHI:` lines
+    /// with bullets overlapping by 1000 ms, well past the 500 ms tolerance,
+    /// reported E704 when the first line read `the dog barked .` and reported
+    /// NOTHING when it read `<the dog> [//] xxx .`. The permanent guard lives
+    /// here rather than in a `.cha` fixture because this file already owns the
+    /// unit tests for this predicate, and because any bulleted fixture also
+    /// trips an incidental media code that would muddy a spec example.
+    #[test]
+    fn retraced_words_are_timeable_content() {
+        let retraced = Retrace {
+            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(
+                Word::new_unchecked("dog", "dog"),
+            ))]),
+            kind: RetraceKind::Full,
+            is_group: true,
+            span: Span::from_usize(0, 0),
+        };
+        let content = vec![
+            UtteranceContent::Retrace(Box::new(retraced)),
+            // Everything OUTSIDE the retrace is untranscribed, so the retrace
+            // is the only thing that can make this utterance timeable.
+            UtteranceContent::Word(Box::new(Word::new_unchecked("xxx", "xxx"))),
+        ];
+
+        assert!(has_transcribed_content(&content));
+    }
+
+    /// The bracketed half recursed into nothing at all, so a word one level
+    /// down inside a group was invisible to it.
+    #[test]
+    fn words_nested_inside_a_bracketed_group_are_timeable_content() {
+        let inner = Group {
+            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(
+                Word::new_unchecked("dog", "dog"),
+            ))]),
+            span: Span::from_usize(0, 0),
+            trailing_space: None,
+        };
+        let outer = Group {
+            content: BracketedContent::new(vec![BracketedItem::AnnotatedGroup(Annotated::new(
+                inner,
+            ))]),
+            span: Span::from_usize(0, 0),
+            trailing_space: None,
+        };
+        let content = vec![UtteranceContent::Group(outer)];
+
+        assert!(has_transcribed_content(&content));
     }
 }

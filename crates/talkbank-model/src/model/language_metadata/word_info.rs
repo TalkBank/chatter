@@ -53,29 +53,20 @@ impl WordLanguages {
             Self::Unresolved => Vec::new(),
         }
     }
-
-    /// Return `true` for explicit code-mixed assignments.
-    ///
-    /// This maps to CHAT markers like `@s:eng+spa` where one token is treated
-    /// as jointly belonging to multiple languages.
-    pub fn is_code_mixed(&self) -> bool {
-        matches!(self, Self::Multiple(_))
-    }
-
-    /// Return `true` for explicitly ambiguous assignments.
-    ///
-    /// This maps to CHAT markers like `@s:eng&spa` where the transcriber left
-    /// uncertainty between candidate languages.
-    pub fn is_ambiguous(&self) -> bool {
-        matches!(self, Self::Ambiguous(_))
-    }
 }
 
 /// Language metadata for a single word.
 ///
-/// Stores the resolved language(s) and source for one alignable word
-/// in the main tier. The `word_index` corresponds to the position in
-/// the alignable content (same indexing used for tier alignment).
+/// Stores the resolved language(s) and source for one word of the main tier.
+///
+/// Position is the record's position in [`LanguageMetadata::word_languages`],
+/// which serializes as a JSON array, so a consumer reads it with `enumerate()`.
+/// There is deliberately no stored index. One existed, documented as "the same
+/// indexing used for tier alignment", and that could not be true: Mor excludes
+/// retraces and Pho counts them, so no single integer indexes both. Nothing
+/// enforced it and nothing read it, so when the walk skipped containers every
+/// following record carried a position for a different word and no test, type
+/// or reader could see it.
 ///
 /// This structure is used for:
 /// - **Code-switching analysis**: Identify which words are in which language(s)
@@ -86,7 +77,6 @@ impl WordLanguages {
 ///
 /// # Fields
 ///
-/// - `word_index`: Zero-based index in alignable content (words + groups + terminator)
 /// - `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous
 /// - `source`: How the language was determined (see [`LanguageSource`])
 ///
@@ -139,9 +129,6 @@ impl WordLanguages {
 /// - [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, SpanShift)]
 pub struct WordLanguageInfo {
-    /// Zero-based index of the word in alignable content
-    pub word_index: usize,
-
     /// Resolved language(s): Single, Multiple (code-mixed), or Ambiguous
     pub languages: WordLanguages,
 
@@ -150,95 +137,13 @@ pub struct WordLanguageInfo {
 }
 
 impl WordLanguageInfo {
-    /// Construct per-word language metadata from explicit pieces.
+    /// Build a record.
     ///
-    /// Use this when callers already resolved both language payload and source
-    /// and just need to materialize the strongly-typed model value.
-    pub fn new(word_index: usize, languages: WordLanguages, source: LanguageSource) -> Self {
-        Self {
-            word_index,
-            languages,
-            source,
-        }
-    }
-
-    /// Construct a single-language entry sourced from `@Languages`.
-    ///
-    /// This is the default path for unmarked words in utterances with a known
-    /// tier baseline language.
-    pub fn default_language(word_index: usize, language: impl Into<LanguageCode>) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Single(language.into()),
-            source: LanguageSource::Default,
-        }
-    }
-
-    /// Construct a single-language entry sourced from `[- code]`.
-    ///
-    /// Use this when utterance-level scope markers override file-level defaults.
-    pub fn tier_scoped(word_index: usize, language: impl Into<LanguageCode>) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Single(language.into()),
-            source: LanguageSource::TierScoped,
-        }
-    }
-
-    /// Construct a single-language entry sourced from explicit word marker.
-    ///
-    /// This captures `@s:code` cases where one language is named directly on the token.
-    pub fn word_explicit(word_index: usize, language: impl Into<LanguageCode>) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Single(language.into()),
-            source: LanguageSource::WordExplicit,
-        }
-    }
-
-    /// Construct a code-mixed entry from explicit marker.
-    ///
-    /// This captures explicit multi-language tokens such as `@s:eng+spa`.
-    pub fn word_explicit_multiple(word_index: usize, languages: Vec<LanguageCode>) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Multiple(languages),
-            source: LanguageSource::WordExplicit,
-        }
-    }
-
-    /// Construct an ambiguous-language entry from explicit marker.
-    ///
-    /// This captures explicit ambiguous markers such as `@s:eng&spa`.
-    pub fn word_explicit_ambiguous(word_index: usize, languages: Vec<LanguageCode>) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Ambiguous(languages),
-            source: LanguageSource::WordExplicit,
-        }
-    }
-
-    /// Construct a single-language entry sourced from `@s` shortcut.
-    ///
-    /// The language value should be the post-toggle resolved target, not the
-    /// currently active tier language.
-    pub fn word_shortcut(word_index: usize, language: impl Into<LanguageCode>) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Single(language.into()),
-            source: LanguageSource::WordShortcut,
-        }
-    }
-
-    /// Construct an unresolved language entry.
-    ///
-    /// Use this when language could not be inferred safely and callers should
-    /// avoid fabricating fallback semantics.
-    pub fn unresolved(word_index: usize) -> Self {
-        Self {
-            word_index,
-            languages: WordLanguages::Unresolved,
-            source: LanguageSource::Unresolved,
-        }
+    /// `pub(crate)` on purpose: the public way to add a word is
+    /// `LanguageMetadata::add_word`, so the vector's order stays the order the
+    /// walk produced. Eight public constructors used to exist, seven of them
+    /// dead and all eight taking a caller-supplied position.
+    pub(crate) fn new(languages: WordLanguages, source: LanguageSource) -> Self {
+        Self { languages, source }
     }
 }

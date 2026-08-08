@@ -52,6 +52,12 @@ fn is_comma_licensing(item: &UtteranceContent) -> bool {
         UtteranceContent::Retrace(retrace) => {
             retrace.content.content.iter().any(is_spoken_bracketed_item)
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => annotated
+            .inner
+            .content
+            .content
+            .iter()
+            .any(is_spoken_bracketed_item),
         // Events, separators, actions, markers, etc. do not license commas.
         UtteranceContent::Event(_)
         | UtteranceContent::AnnotatedEvent(_)
@@ -94,6 +100,12 @@ fn is_spoken_bracketed_item(item: &BracketedItem) -> bool {
         BracketedItem::Retrace(retrace) => {
             retrace.content.content.iter().any(is_spoken_bracketed_item)
         }
+        BracketedItem::AnnotatedRetrace(annotated) => annotated
+            .inner
+            .content
+            .content
+            .iter()
+            .any(is_spoken_bracketed_item),
         // Events, actions, separators, markers, etc. do not license commas.
         BracketedItem::Event(_)
         | BracketedItem::AnnotatedEvent(_)

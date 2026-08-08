@@ -999,6 +999,385 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "--- Annotations on each side of the marker, WITHOUT a replacement ---",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "The marker run is a left-associative chain, so a code written before",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "the marker is on the retraced material and one written after is on",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "the retrace. Every pre-existing case above carries a replacement,",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "where both parsers agreed anyway, so nothing here was exercised and",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "the two backends diverged silently for 12,226 corpus occurrences.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "cleaned_text": "dog",
+                    "content": [
+                      {
+                        "content": "dog",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "dog",
+                    "scoped_annotations": [
+                      {
+                        "code": "p:w",
+                        "type": "error"
+                      }
+                    ],
+                    "type": "annotated_word"
+                  }
+                ]
+              },
+              "kind": "partial",
+              "type": "retrace"
+            },
+            {
+              "cleaned_text": "dog",
+              "content": [
+                {
+                  "content": "dog",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "dog",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "cleaned_text": "dog",
+                    "content": [
+                      {
+                        "content": "dog",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "dog",
+                    "type": "word"
+                  }
+                ]
+              },
+              "kind": "partial",
+              "scoped_annotations": [
+                {
+                  "code": "p:w",
+                  "type": "error"
+                }
+              ],
+              "type": "annotated_retrace"
+            },
+            {
+              "cleaned_text": "dog",
+              "content": [
+                {
+                  "content": "dog",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "dog",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "content": {
+                      "content": [
+                        {
+                          "cleaned_text": "the",
+                          "content": [
+                            {
+                              "content": "the",
+                              "type": "text"
+                            }
+                          ],
+                          "raw_text": "the",
+                          "type": "word"
+                        },
+                        {
+                          "cleaned_text": "dog",
+                          "content": [
+                            {
+                              "content": "dog",
+                              "type": "text"
+                            }
+                          ],
+                          "raw_text": "dog",
+                          "type": "word"
+                        }
+                      ]
+                    },
+                    "scoped_annotations": [
+                      {
+                        "code": "s:r",
+                        "type": "error"
+                      }
+                    ],
+                    "type": "annotated_group"
+                  }
+                ]
+              },
+              "kind": "partial",
+              "type": "retrace"
+            },
+            {
+              "cleaned_text": "the",
+              "content": [
+                {
+                  "content": "the",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "the",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "dog",
+              "content": [
+                {
+                  "content": "dog",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "dog",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "cleaned_text": "then",
+                    "content": [
+                      {
+                        "content": "then",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "then",
+                    "scoped_annotations": [
+                      {
+                        "text": "pause",
+                        "type": "percentcomment"
+                      }
+                    ],
+                    "type": "annotated_word"
+                  }
+                ]
+              },
+              "kind": "full",
+              "type": "retrace"
+            },
+            {
+              "cleaned_text": "and",
+              "content": [
+                {
+                  "content": "and",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "and",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "now",
+              "content": [
+                {
+                  "content": "now",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "now",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "cleaned_text": "then",
+                    "content": [
+                      {
+                        "content": "then",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "then",
+                    "scoped_annotations": [
+                      {
+                        "type": "overlap_begin"
+                      }
+                    ],
+                    "type": "annotated_word"
+                  }
+                ]
+              },
+              "kind": "full",
+              "type": "retrace"
+            },
+            {
+              "cleaned_text": "and",
+              "content": [
+                {
+                  "content": "and",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "and",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "now",
+              "content": [
+                {
+                  "content": "now",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "now",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

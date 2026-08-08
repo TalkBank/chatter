@@ -5,6 +5,7 @@
 
 use super::super::Utterance;
 use crate::Severity;
+use crate::model::Quotation;
 use crate::model::dependent_tier::DependentTier;
 use crate::model::language_metadata::WordLanguages;
 use crate::model::{
@@ -270,6 +271,60 @@ fn test_compute_language_metadata_recurses_into_groups() -> Result<(), String> {
     );
     assert_eq!(metadata.word_languages[2].source, LanguageSource::Default);
     assert!(metadata.is_code_switching());
+    Ok(())
+}
+
+/// A word inside a QUOTATION is a word, and gets a language record.
+///
+/// The walk recursed into `Group`/`AnnotatedGroup` and sent every other
+/// container to `_ => {}`, so words inside a quotation, phonological group,
+/// sign group or retrace got no record AND did not advance the index counter.
+/// The second half is the damage: the counter is shared, so every word after
+/// a quotation carried a `word_index` for a different word.
+///
+/// Asserts the COUNT and the per-word resolution. It used to also assert that
+/// the stored index equalled the vector position; that field is gone, because
+/// it was the vector position, and a test asserting two things stay equal is a
+/// standing confession that one of them should not exist.
+#[test]
+fn test_compute_language_metadata_recurses_into_every_container() -> Result<(), String> {
+    let quoted = Word::new_unchecked("ni3", "ni3");
+    let quotation = Quotation::new(BracketedContent::new(vec![BracketedItem::Word(Box::new(
+        quoted,
+    ))]));
+
+    let main_tier = MainTier::new(
+        "CHI",
+        vec![
+            UtteranceContent::Word(Box::new(Word::new_unchecked("hao3", "hao3"))),
+            UtteranceContent::Quotation(quotation),
+            UtteranceContent::Word(Box::new(Word::new_unchecked("ma", "ma"))),
+        ],
+        Terminator::Period { span: Span::DUMMY },
+    );
+
+    let mut utterance = Utterance::new(main_tier);
+    let declared_languages = codes(&["zho"]);
+    utterance.compute_language_metadata(declared_languages.first(), &declared_languages);
+
+    let metadata = utterance
+        .language_metadata
+        .as_computed()
+        .ok_or_else(|| "Expected language metadata".to_string())?;
+
+    assert_eq!(
+        metadata.word_languages.len(),
+        3,
+        "the quoted word must get a record too"
+    );
+    // The quoted word is the middle one, so its presence is also an assertion
+    // about ORDER: in-order traversal puts it between the two plain words.
+    let sources: Vec<_> = metadata
+        .word_languages
+        .iter()
+        .map(|info| info.source.clone())
+        .collect();
+    assert_eq!(sources, vec![LanguageSource::Default; 3]);
     Ok(())
 }
 

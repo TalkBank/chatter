@@ -252,6 +252,14 @@ pub fn walk_content<'a>(
                     walk_bracketed_content(&retrace.content.content, domain, f);
                 }
             }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form. The annotations sit on the
+                // wrapper, are not words, and are not walked; only the retraced
+                // content is.
+                if !matches!(domain, Some(TierDomain::Mor)) {
+                    walk_bracketed_content(&annotated.inner.content.content, domain, f);
+                }
+            }
         }
     }
 }
@@ -358,6 +366,18 @@ pub fn walk_content_mut<'a>(
                     walk_bracketed_content_mut(retrace.content.content.as_mut_slice(), domain, f);
                 }
             }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form. The annotations sit on the
+                // wrapper, are not words, and are not walked; only the retraced
+                // content is.
+                if !matches!(domain, Some(TierDomain::Mor)) {
+                    walk_bracketed_content_mut(
+                        annotated.inner.content.content.as_mut_slice(),
+                        domain,
+                        f,
+                    );
+                }
+            }
         }
     }
 }
@@ -423,6 +443,14 @@ pub fn walk_words<'a>(
                 // but included in %pho/%sin/%wor and for domain-unspecified walks.
                 if !matches!(domain, Some(TierDomain::Mor)) {
                     walk_bracketed_words(&retrace.content.content, domain, f);
+                }
+            }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form. The annotations sit on the
+                // wrapper, are not words, and are not walked; only the retraced
+                // content is.
+                if !matches!(domain, Some(TierDomain::Mor)) {
+                    walk_bracketed_words(&annotated.inner.content.content, domain, f);
                 }
             }
             // Non-word items: events, pauses, actions, overlap markers, bullets,
@@ -503,6 +531,18 @@ pub fn walk_words_mut<'a>(
                 // but included in %pho/%sin/%wor and for domain-unspecified walks.
                 if !matches!(domain, Some(TierDomain::Mor)) {
                     walk_bracketed_words_mut(retrace.content.content.as_mut_slice(), domain, f);
+                }
+            }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form. The annotations sit on the
+                // wrapper, are not words, and are not walked; only the retraced
+                // content is.
+                if !matches!(domain, Some(TierDomain::Mor)) {
+                    walk_bracketed_words_mut(
+                        annotated.inner.content.content.as_mut_slice(),
+                        domain,
+                        f,
+                    );
                 }
             }
             UtteranceContent::Event(_)

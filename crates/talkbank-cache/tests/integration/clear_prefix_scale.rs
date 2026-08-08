@@ -9,7 +9,7 @@
 //! original implementation fetched EVERY `file_path` in the cache into
 //! memory and then issued an individual autocommitted `DELETE` per
 //! matching file. On the operator's real cache (136k distinct paths)
-//! that turned `chatter validate --force ~/0tb/data` into minutes of
+//! that turned `chatter validate --force <corpus-root>` into minutes of
 //! silent CPU before validation began. The corpus differential could
 //! never catch this class because it always runs on fresh isolated
 //! caches; this test exercises the big-warm-cache path directly.

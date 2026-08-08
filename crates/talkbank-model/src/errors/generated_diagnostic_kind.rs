@@ -80,10 +80,12 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::InvalidOverlapIndex => DiagnosticKind::Invalidity,     // E373: E373_auto.md
         ErrorCode::ContentAnnotationParseError => DiagnosticKind::Invalidity, // E375: E375_auto.md
         ErrorCode::ReplacementParseError => DiagnosticKind::Invalidity,   // E376: E376_auto.md
-        ErrorCode::MorParseError => DiagnosticKind::Invalidity,           // E382: E382_auto.md
-        ErrorCode::ReplacementOnFragment => DiagnosticKind::Invalidity,   // E387: E387_auto.md
-        ErrorCode::ReplacementOnNonword => DiagnosticKind::Invalidity,    // E388: E388_auto.md
-        ErrorCode::ReplacementOnFiller => DiagnosticKind::Invalidity,     // E389: E389_auto.md
+        ErrorCode::RetraceWithNoMaterial => DiagnosticKind::Invalidity, // E377: E377_retrace_with_no_material.md
+        ErrorCode::RetraceWithoutWords => DiagnosticKind::Invalidity, // E378: E378_retrace_without_words.md
+        ErrorCode::MorParseError => DiagnosticKind::Invalidity,       // E382: E382_auto.md
+        ErrorCode::ReplacementOnFragment => DiagnosticKind::Invalidity, // E387: E387_auto.md
+        ErrorCode::ReplacementOnNonword => DiagnosticKind::Invalidity, // E388: E388_auto.md
+        ErrorCode::ReplacementOnFiller => DiagnosticKind::Invalidity, // E389: E389_auto.md
         ErrorCode::ReplacementContainsOmission => DiagnosticKind::Invalidity, // E390: E390_auto.md
         ErrorCode::ReplacementContainsUntranscribed => DiagnosticKind::Invalidity, // E391: E391_auto.md
         ErrorCode::MissingFormType => DiagnosticKind::Invalidity, // E202: E202_auto.md

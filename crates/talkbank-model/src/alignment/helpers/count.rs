@@ -245,6 +245,16 @@ fn count_alignable_item(item: &UtteranceContent, domain: TierDomain, in_retrace:
                 count_bracketed_alignable_content(&retrace.content, domain, true)
             }
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            // Same rule as the bare form: the annotations sit on the
+            // wrapper and are not alignable, so only the retraced content
+            // is considered.
+            if domain == TierDomain::Mor {
+                0
+            } else {
+                count_bracketed_alignable_content(&annotated.inner.content, domain, true)
+            }
+        }
         // All remaining variants are non-alignable for every dependent tier:
         // events, markers, formatting, freecodes, overlap points, internal bullets.
         UtteranceContent::Event(_)
@@ -326,6 +336,16 @@ fn count_bracketed_item(item: &BracketedItem, domain: TierDomain, in_retrace: bo
                 0
             } else {
                 count_bracketed_alignable_content(&retrace.content, domain, true)
+            }
+        }
+        BracketedItem::AnnotatedRetrace(annotated) => {
+            // Same rule as the bare form: the annotations sit on the
+            // wrapper and are not alignable, so only the retraced content
+            // is considered.
+            if domain == TierDomain::Mor {
+                0
+            } else {
+                count_bracketed_alignable_content(&annotated.inner.content, domain, true)
             }
         }
         // All remaining variants are non-alignable inside bracketed content:
@@ -514,6 +534,19 @@ fn extract_alignable_from_item(
                 extract_alignable_from_bracketed_content(&retrace.content, domain, true, output);
             }
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            // Same rule as the bare form: the annotations sit on the
+            // wrapper and are not alignable, so only the retraced content
+            // is considered.
+            if domain != TierDomain::Mor {
+                extract_alignable_from_bracketed_content(
+                    &annotated.inner.content,
+                    domain,
+                    true,
+                    output,
+                );
+            }
+        }
         // All remaining variants produce no alignable items:
         // events, markers, formatting, freecodes, overlap points, internal bullets.
         UtteranceContent::Event(_)
@@ -619,6 +652,19 @@ fn extract_alignable_from_bracketed_item(
             // Retrace content is excluded from %mor but extracted for %pho/%sin/%wor.
             if domain != TierDomain::Mor {
                 extract_alignable_from_bracketed_content(&retrace.content, domain, true, output);
+            }
+        }
+        BracketedItem::AnnotatedRetrace(annotated) => {
+            // Same rule as the bare form: the annotations sit on the
+            // wrapper and are not alignable, so only the retraced content
+            // is considered.
+            if domain != TierDomain::Mor {
+                extract_alignable_from_bracketed_content(
+                    &annotated.inner.content,
+                    domain,
+                    true,
+                    output,
+                );
             }
         }
         // All remaining variants produce no alignable items inside bracketed content:

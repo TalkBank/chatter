@@ -402,6 +402,11 @@ pub(crate) fn normalize_ca_omission(content: &mut UtteranceContent) {
                 normalize_ca_omission_bracketed_item(item);
             }
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            for item in annotated.inner.content.content.as_mut_slice() {
+                normalize_ca_omission_bracketed_item(item);
+            }
+        }
         _ => {}
     }
 }
@@ -414,6 +419,19 @@ pub(crate) fn normalize_ca_omission_bracketed_item(item: &mut BracketedItem) {
         }
         BracketedItem::ReplacedWord(replaced) => {
             normalize_ca_omission_word(&mut replaced.word);
+        }
+        // Both retrace forms recurse. Neither did before: the bare one was
+        // already missing here while the utterance-level walk above handled
+        // it, so this side skipped normalisation inside every retrace.
+        BracketedItem::Retrace(retrace) => {
+            for item in retrace.content.content.as_mut_slice() {
+                normalize_ca_omission_bracketed_item(item);
+            }
+        }
+        BracketedItem::AnnotatedRetrace(annotated) => {
+            for item in annotated.inner.content.content.as_mut_slice() {
+                normalize_ca_omission_bracketed_item(item);
+            }
         }
         _ => {}
     }

@@ -52,6 +52,9 @@ impl UtteranceContent {
             UtteranceContent::NonvocalEnd(marker) => marker.write_chat(w),
             UtteranceContent::NonvocalSimple(marker) => marker.write_chat(w),
             UtteranceContent::Retrace(retrace) => retrace.write_chat(w),
+            // See the note in `BracketedItem`'s writer: the wrapper's own
+            // writer already places the annotations after the marker.
+            UtteranceContent::AnnotatedRetrace(annotated) => annotated.write_chat(w),
             UtteranceContent::OtherSpokenEvent(event) => event.write_chat(w),
         }
     }

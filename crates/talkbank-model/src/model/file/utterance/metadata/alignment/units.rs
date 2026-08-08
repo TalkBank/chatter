@@ -1,5 +1,5 @@
 use crate::Utterance;
-use crate::model::{AlignmentUnit, AlignmentUnits};
+use crate::model::{AlignmentUnit, AlignmentUnits, BracketedItem};
 use crate::validation::ValidationContext;
 
 impl AlignmentUnits {
@@ -206,14 +206,41 @@ fn count_main_item_units(
         UtteranceContent::AnnotatedAction(_) => {
             usize::from(domain == crate::alignment::TierDomain::Sin)
         }
-        UtteranceContent::Retrace(retrace) => {
-            if domain == crate::alignment::TierDomain::Mor {
-                0
-            } else {
-                count_bracketed_units(&retrace.content.content, domain, true)
-            }
+        UtteranceContent::Retrace(retrace) => retraced_units(&retrace.content.content, domain),
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            retraced_units(&annotated.inner.content.content, domain)
         }
-        _ => 0,
+        // Listed rather than caught by `_`. The catch-all this replaces sent
+        // `AnnotatedRetrace` to zero when the variant was added, so this
+        // counter and `alignment::helpers::count` disagreed about the same
+        // 8,766 utterances and nothing failed to compile.
+        UtteranceContent::Event(_)
+        | UtteranceContent::AnnotatedEvent(_)
+        | UtteranceContent::Freecode(_)
+        | UtteranceContent::OverlapPoint(_)
+        | UtteranceContent::InternalBullet(_)
+        | UtteranceContent::LongFeatureBegin(_)
+        | UtteranceContent::LongFeatureEnd(_)
+        | UtteranceContent::UnderlineBegin(_)
+        | UtteranceContent::UnderlineEnd(_)
+        | UtteranceContent::NonvocalBegin(_)
+        | UtteranceContent::NonvocalEnd(_)
+        | UtteranceContent::NonvocalSimple(_)
+        | UtteranceContent::OtherSpokenEvent(_) => 0,
+    }
+}
+
+/// Units contributed by retraced material.
+///
+/// Retraced content is excluded from %mor (it was not morphologically
+/// analysed) but counted for %pho/%sin/%wor, because the words were
+/// phonologically produced. One owner, because the rule was written out at
+/// four call sites and each was a place it could drift.
+fn retraced_units(content: &[BracketedItem], domain: crate::alignment::TierDomain) -> usize {
+    if domain == crate::alignment::TierDomain::Mor {
+        0
+    } else {
+        count_bracketed_units(content, domain, true)
     }
 }
 
@@ -306,14 +333,24 @@ fn count_bracketed_units(
             ),
             BracketedItem::Pause(_) => 0,
             BracketedItem::AnnotatedAction(_) | BracketedItem::Action(_) => 0,
-            BracketedItem::Retrace(retrace) => {
-                if domain == crate::alignment::TierDomain::Mor {
-                    0
-                } else {
-                    count_bracketed_units(&retrace.content.content, domain, true)
-                }
+            BracketedItem::Retrace(retrace) => retraced_units(&retrace.content.content, domain),
+            BracketedItem::AnnotatedRetrace(annotated) => {
+                retraced_units(&annotated.inner.content.content, domain)
             }
-            _ => 0,
+            // Exhaustive for the same reason as above.
+            BracketedItem::Event(_)
+            | BracketedItem::AnnotatedEvent(_)
+            | BracketedItem::OverlapPoint(_)
+            | BracketedItem::InternalBullet(_)
+            | BracketedItem::Freecode(_)
+            | BracketedItem::LongFeatureBegin(_)
+            | BracketedItem::LongFeatureEnd(_)
+            | BracketedItem::UnderlineBegin(_)
+            | BracketedItem::UnderlineEnd(_)
+            | BracketedItem::NonvocalBegin(_)
+            | BracketedItem::NonvocalEnd(_)
+            | BracketedItem::NonvocalSimple(_)
+            | BracketedItem::OtherSpokenEvent(_) => 0,
         })
         .sum()
 }

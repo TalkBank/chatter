@@ -46,6 +46,15 @@ workspace = true
 # `bootstrap_spec_examples` is omitted deliberately: it DOES carry tests.
 
 [[bin]]
+# `test = false` like every sibling: without it cargo builds AND LAUNCHES this
+# binary during `cargo test` purely to run zero tests, which on macOS also pays
+# the per-binary first-execution assessment this workspace spent a week
+# diagnosing. Autodiscovery had it running on every `just test`.
+name = "audit_content_catch_alls"
+path = "src/bin/audit_content_catch_alls.rs"
+test = false
+
+[[bin]]
 name = "audit_check_parity"
 path = "src/bin/audit_check_parity.rs"
 test = false

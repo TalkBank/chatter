@@ -173,3 +173,55 @@ pub fn parse_json(output: &Output) -> Result<Value, TestError> {
     serde_json::from_slice(&output.stdout)
         .map_err(|error| TestError::Failure(format!("expected JSON output: {error}")))
 }
+
+/// What `chatter validate` must say about a fixture.
+///
+/// This replaces a bare `valid: bool` that three integration modules each
+/// carried a copy of. `false` asserted only that SOMETHING was reported, so a
+/// test written for one rule passed when a different rule fired instead, and
+/// nothing in the source said which rule the test was actually about.
+///
+/// There is deliberately no "invalid, code unchecked" variant. One existed for
+/// a few hours as a migration staging post while the 11 inherited `false` call
+/// sites were converted; each one's real code was then determined by running
+/// the fixture (E220 for digit-bearing words, E762 and E763 for the two
+/// prefix-marker rules), and the variant was deleted. A weak assertion nothing
+/// can express is better than one that is merely discouraged.
+pub enum Verdict {
+    Valid,
+    /// Invalid, and this specific code must appear. Naming the code by VARIANT
+    /// rather than by a string means retiring or renaming it breaks the test at
+    /// compile time instead of silently matching nothing.
+    Rejected(talkbank_model::ErrorCode),
+}
+
+/// Write `content` to a temp file and assert `chatter validate`'s verdict.
+///
+/// The count is on stdout and the diagnostic on stderr, so a specific-code
+/// expectation asserts on both streams: `Invalid: 1` pins that the file was
+/// rejected at invalidity severity, and `error[CODE]` pins which rule did it.
+/// Neither implies the other.
+pub fn assert_validation(name: &str, content: &str, expected: Verdict) -> Result<(), TestError> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(name);
+    std::fs::write(&path, content)?;
+
+    let assertion = chatter_cmd().arg("validate").arg(&path).assert();
+    match expected {
+        Verdict::Valid => {
+            assertion
+                .success()
+                .stdout(predicates::str::contains("Invalid: 0"));
+        }
+        Verdict::Rejected(code) => {
+            assertion
+                .failure()
+                .stdout(predicates::str::contains("Invalid: 1"))
+                .stderr(predicates::str::contains(format!(
+                    "error[{}]",
+                    code.as_str()
+                )));
+        }
+    }
+    Ok(())
+}

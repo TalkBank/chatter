@@ -291,6 +291,7 @@ fn pure_word_sequence_from_bracketed(content: &BracketedContent) -> Option<Vec<S
             | BracketedItem::AnnotatedAction(_)
             | BracketedItem::AnnotatedGroup(_)
             | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_)
             | BracketedItem::PhoGroup(_)
             | BracketedItem::SinGroup(_)
             | BracketedItem::Quotation(_)

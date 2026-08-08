@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|3;00.00|male|||Target_Child|||
+@Comment:	ERROR: nesting is nesting at any depth, through any container
+*CHI:	“a ‹“b”› c” .
+@End

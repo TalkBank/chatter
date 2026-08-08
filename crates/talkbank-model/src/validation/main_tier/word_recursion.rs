@@ -64,6 +64,12 @@ pub(crate) fn validate_words_at_every_depth(
             UtteranceContent::Retrace(retrace) => {
                 validate_bracketed(&retrace.content.content, context, errors)
             }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same handling as the bare form: the wrapper carries only
+                // the annotations written after the marker, and the retraced
+                // content is unchanged.
+                validate_bracketed(&annotated.inner.content.content, context, errors)
+            }
             UtteranceContent::PhoGroup(group) => {
                 validate_bracketed(&group.content.content, context, errors)
             }
@@ -117,6 +123,12 @@ fn validate_bracketed(
             }
             BracketedItem::Retrace(retrace) => {
                 validate_bracketed(&retrace.content.content, context, errors)
+            }
+            BracketedItem::AnnotatedRetrace(annotated) => {
+                // Same handling as the bare form: the wrapper carries only
+                // the annotations written after the marker, and the retraced
+                // content is unchanged.
+                validate_bracketed(&annotated.inner.content.content, context, errors)
             }
             BracketedItem::PhoGroup(group) => {
                 validate_bracketed(&group.content.content, context, errors)

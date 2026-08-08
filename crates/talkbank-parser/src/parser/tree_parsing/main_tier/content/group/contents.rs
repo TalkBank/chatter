@@ -45,7 +45,7 @@ pub(crate) fn parse_group_contents(
             match child.kind() {
                 CONTENT_ITEM => {
                     for content in parse_nested_content(child, source, errors) {
-                        if let Some(group_content) = convert_to_group_content(content) {
+                        if let Ok(group_content) = convert_to_group_content(content) {
                             group_items.push(group_content);
                         }
                     }
@@ -69,7 +69,7 @@ pub(crate) fn parse_group_contents(
                 | FALLING_TO_MID
                 | FALLING_TO_LOW => {
                     for content in parse_nested_content(child, source, errors) {
-                        if let Some(group_content) = convert_to_group_content(content) {
+                        if let Ok(group_content) = convert_to_group_content(content) {
                             group_items.push(group_content);
                         }
                     }
@@ -92,38 +92,48 @@ pub(crate) fn parse_group_contents(
 
 /// Convert `UtteranceContent` into `BracketedItem` when the content is valid inside a bracketed tier.
 ///
-/// Not all `UtteranceContent` variants can appear in bracketed contexts-bare groups, for example, are disallowed.
-/// This helper makes those restrictions explicit and returns `None` when the content should remain in the main tier.
-pub(crate) fn convert_to_group_content(content: UtteranceContent) -> Option<BracketedItem> {
+/// Not all `UtteranceContent` variants can appear in bracketed contexts: a bare
+/// group, for example, is disallowed. Those come back as `Err` CARRYING THE
+/// GROUP rather than as `None`, because the one caller that cannot proceed
+/// without it (folding a retrace over `<a b> [/]`, where the retrace takes the
+/// brackets over via `is_group`) would otherwise have to clone the content just
+/// to get it back. An `Option` here discarded the only thing the failure knew.
+pub(crate) fn convert_to_group_content(
+    content: UtteranceContent,
+) -> Result<BracketedItem, crate::model::Group> {
     match content {
-        UtteranceContent::Word(word) => Some(BracketedItem::Word(word)),
-        UtteranceContent::AnnotatedWord(ann) => Some(BracketedItem::AnnotatedWord(ann)),
-        UtteranceContent::ReplacedWord(rw) => Some(BracketedItem::ReplacedWord(rw)),
-        UtteranceContent::Event(event) => Some(BracketedItem::Event(event)),
-        UtteranceContent::AnnotatedEvent(ann) => Some(BracketedItem::AnnotatedEvent(ann)),
-        UtteranceContent::Pause(pause) => Some(BracketedItem::Pause(pause)),
-        UtteranceContent::AnnotatedAction(ann) => Some(BracketedItem::AnnotatedAction(ann)),
-        // Bare groups cannot appear inside bracketed content - they must have annotations
-        UtteranceContent::Group(_group) => None,
-        UtteranceContent::OverlapPoint(marker) => Some(BracketedItem::OverlapPoint(marker)),
-        UtteranceContent::Separator(sep) => Some(BracketedItem::Separator(sep.clone())),
-        UtteranceContent::InternalBullet(bullet) => Some(BracketedItem::InternalBullet(bullet)),
-        UtteranceContent::Freecode(freecode) => Some(BracketedItem::Freecode(freecode)),
-        UtteranceContent::LongFeatureBegin(marker) => Some(BracketedItem::LongFeatureBegin(marker)),
-        UtteranceContent::LongFeatureEnd(marker) => Some(BracketedItem::LongFeatureEnd(marker)),
-        UtteranceContent::NonvocalBegin(marker) => Some(BracketedItem::NonvocalBegin(marker)),
-        UtteranceContent::NonvocalEnd(marker) => Some(BracketedItem::NonvocalEnd(marker)),
-        UtteranceContent::NonvocalSimple(marker) => Some(BracketedItem::NonvocalSimple(marker)),
-        UtteranceContent::UnderlineBegin(marker) => Some(BracketedItem::UnderlineBegin(marker)),
-        UtteranceContent::UnderlineEnd(marker) => Some(BracketedItem::UnderlineEnd(marker)),
+        UtteranceContent::Word(word) => Ok(BracketedItem::Word(word)),
+        UtteranceContent::AnnotatedWord(ann) => Ok(BracketedItem::AnnotatedWord(ann)),
+        UtteranceContent::ReplacedWord(rw) => Ok(BracketedItem::ReplacedWord(rw)),
+        UtteranceContent::Event(event) => Ok(BracketedItem::Event(event)),
+        UtteranceContent::AnnotatedEvent(ann) => Ok(BracketedItem::AnnotatedEvent(ann)),
+        UtteranceContent::Pause(pause) => Ok(BracketedItem::Pause(pause)),
+        UtteranceContent::AnnotatedAction(ann) => Ok(BracketedItem::AnnotatedAction(ann)),
+        // Bare groups cannot appear inside bracketed content: they must carry
+        // annotations. Handed back so the caller can use it.
+        UtteranceContent::Group(group) => Err(group),
+        UtteranceContent::OverlapPoint(marker) => Ok(BracketedItem::OverlapPoint(marker)),
+        UtteranceContent::Separator(sep) => Ok(BracketedItem::Separator(sep.clone())),
+        UtteranceContent::InternalBullet(bullet) => Ok(BracketedItem::InternalBullet(bullet)),
+        UtteranceContent::Freecode(freecode) => Ok(BracketedItem::Freecode(freecode)),
+        UtteranceContent::LongFeatureBegin(marker) => Ok(BracketedItem::LongFeatureBegin(marker)),
+        UtteranceContent::LongFeatureEnd(marker) => Ok(BracketedItem::LongFeatureEnd(marker)),
+        UtteranceContent::NonvocalBegin(marker) => Ok(BracketedItem::NonvocalBegin(marker)),
+        UtteranceContent::NonvocalEnd(marker) => Ok(BracketedItem::NonvocalEnd(marker)),
+        UtteranceContent::NonvocalSimple(marker) => Ok(BracketedItem::NonvocalSimple(marker)),
+        UtteranceContent::UnderlineBegin(marker) => Ok(BracketedItem::UnderlineBegin(marker)),
+        UtteranceContent::UnderlineEnd(marker) => Ok(BracketedItem::UnderlineEnd(marker)),
         UtteranceContent::OtherSpokenEvent(event) => {
-            Some(BracketedItem::OtherSpokenEvent(event.clone()))
+            Ok(BracketedItem::OtherSpokenEvent(event.clone()))
         }
         // Groups CAN contain annotated groups (e.g., retraces inside pho groups)
-        UtteranceContent::AnnotatedGroup(ann) => Some(BracketedItem::AnnotatedGroup(ann)),
-        UtteranceContent::Retrace(retrace) => Some(BracketedItem::Retrace(retrace)),
-        UtteranceContent::PhoGroup(pho) => Some(BracketedItem::PhoGroup(pho)),
-        UtteranceContent::SinGroup(sin) => Some(BracketedItem::SinGroup(sin)),
-        UtteranceContent::Quotation(quot) => Some(BracketedItem::Quotation(quot)),
+        UtteranceContent::AnnotatedGroup(ann) => Ok(BracketedItem::AnnotatedGroup(ann)),
+        UtteranceContent::Retrace(retrace) => Ok(BracketedItem::Retrace(retrace)),
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            Ok(BracketedItem::AnnotatedRetrace(annotated))
+        }
+        UtteranceContent::PhoGroup(pho) => Ok(BracketedItem::PhoGroup(pho)),
+        UtteranceContent::SinGroup(sin) => Ok(BracketedItem::SinGroup(sin)),
+        UtteranceContent::Quotation(quot) => Ok(BracketedItem::Quotation(quot)),
     }
 }

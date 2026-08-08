@@ -9,6 +9,7 @@ mod bracketed;
 mod utterance;
 
 use super::types::RenderedSpans;
+use crate::Span;
 use crate::model::MainTier;
 use crate::model::WriteChat;
 use utterance::render_utterance_content;
@@ -62,4 +63,59 @@ pub fn render_with_spans(main_tier: &MainTier) -> RenderedSpans {
     }
 
     RenderedSpans { retrace_spans }
+}
+
+// ---------------------------------------------------------------------------
+// Shared rendering primitives
+// ---------------------------------------------------------------------------
+//
+// These three lived as byte-identical private copies in `bracketed.rs` and
+// `utterance.rs`, and the retrace body was written FOUR times across the two
+// (once per enum, twice per enum once `AnnotatedRetrace` arrived). One owner
+// each, so a change to marker rendering or to span capture cannot land in
+// three places and miss the fourth.
+
+/// Render scoped annotations (none of which are retrace markers post-redesign).
+pub(super) fn render_scoped_annotations<'a>(
+    annotations: impl IntoIterator<Item = &'a crate::model::ContentAnnotation>,
+    rendered: &mut String,
+) {
+    for ann in annotations {
+        rendered.push(' ');
+        ann.write_chat(rendered).ok();
+    }
+}
+
+/// Write into `rendered` and return the written byte span.
+///
+/// This keeps span bookkeeping consistent across every rendering branch.
+pub(super) fn write_with_span<F>(rendered: &mut String, mut write: F) -> Span
+where
+    F: FnMut(&mut String) -> std::fmt::Result,
+{
+    let start = rendered.len();
+    write(rendered).ok();
+    let end = rendered.len();
+    Span::from_usize(start, end)
+}
+
+/// Render one retrace and record its marker span.
+///
+/// `Retrace::write_chat` cannot serve here: it has no way to hand back the
+/// marker's byte span, which is the entire purpose of this renderer.
+pub(super) fn render_retrace(
+    retrace: &crate::model::Retrace,
+    rendered: &mut String,
+    retrace_spans: &mut Vec<Span>,
+) {
+    if retrace.is_group {
+        rendered.push('<');
+    }
+    bracketed::render_bracketed_content(&retrace.content, rendered, retrace_spans);
+    if retrace.is_group {
+        rendered.push('>');
+    }
+    rendered.push(' ');
+    let span = write_with_span(rendered, |w| retrace.kind.write_chat(w));
+    retrace_spans.push(span);
 }

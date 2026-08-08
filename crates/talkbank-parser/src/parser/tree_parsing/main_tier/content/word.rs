@@ -10,9 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
 use crate::error::ErrorSink;
-use crate::model::{
-    Annotated, BracketedContent, BracketedItem, ReplacedWord, Retrace, UtteranceContent,
-};
+use crate::model::{ReplacedWord, UtteranceContent};
 use crate::node_types::{BASE_ANNOTATIONS, REPLACEMENT, STANDALONE_WORD, WHITESPACES};
 use talkbank_model::ParseOutcome;
 use talkbank_model::Span;
@@ -20,6 +18,7 @@ use tree_sitter::Node;
 
 use super::super::annotations::{parse_replacement, parse_scoped_annotations};
 use super::super::word::convert_word_node;
+use super::marker_chain::fold_marker_chain;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::expect_child;
 
@@ -49,9 +48,11 @@ pub(crate) fn parse_word_content(
     let child_count = node.child_count();
     let mut word = None;
     let mut replacement = ParseOutcome::rejected();
-    let mut retrace_kind = None;
-    // Pre-allocate: words typically have 0-3 annotations
-    let mut annotations = Vec::with_capacity(2);
+    // The markers written after the word, already resolved around the retrace
+    // marker. ONE value rather than an `annotations` list beside a
+    // `retrace_kind`, because those two were a partition of one ordered
+    // sequence and could not say which side of the marker an annotation sat on.
+    let mut markers = Vec::new();
     let mut idx: u32 = 0;
 
     // Position 0: standalone_word (required)
@@ -87,11 +88,9 @@ pub(crate) fn parse_word_content(
                 // Note: phonological_replacement was legacy and doesn't exist in current grammar
                 BASE_ANNOTATIONS => {
                     // Parse the base_annotations container node
-                    let parsed = parse_scoped_annotations(child, source, errors);
-                    annotations.extend(parsed.content);
-                    if parsed.retrace.is_some() {
-                        retrace_kind = parsed.retrace;
-                    }
+                    // The grammar admits at most one `base_annotations` child,
+                    // so this assigns rather than accumulates.
+                    markers = parse_scoped_annotations(child, source, errors);
                     idx += 1;
                 }
                 _ => {
@@ -109,54 +108,17 @@ pub(crate) fn parse_word_content(
         }
     }
 
-    if let Some(w) = word {
-        if let ParseOutcome::Parsed(repl) = replacement {
-            // Word with replacement [: ...]
-            let replaced = ReplacedWord::new(w, repl).with_scoped_annotations(annotations);
-            if let Some(kind) = retrace_kind {
-                // Replaced word inside a retrace: word [: replacement] [* error] [//]
-                // Wrap the ReplacedWord in a Retrace node so it is excluded from
-                // %mor alignment counting. The span extends to the enclosing
-                // node's end so it covers the retrace marker brackets (the
-                // group-retrace path already does; E757's glue detection
-                // relies on the span ending at the final `]`).
-                let span = Span::new(replaced.span.start, node.end_byte() as u32);
-                let bracketed =
-                    BracketedContent::new(vec![BracketedItem::ReplacedWord(Box::new(replaced))]);
-                let retrace = Retrace::new(bracketed, kind).with_span(span);
-                ParseOutcome::parsed(UtteranceContent::Retrace(Box::new(retrace)))
-            } else {
-                ParseOutcome::parsed(UtteranceContent::ReplacedWord(Box::new(replaced)))
-            }
-        } else if let Some(kind) = retrace_kind {
-            // Single-word retrace: wrap word in BracketedContent. The span
-            // extends to the enclosing node's end so it covers the retrace
-            // marker brackets (the group-retrace path already does; E757's
-            // glue detection relies on the span ending at the final `]`).
-            let span = Span::new(w.span.start, node.end_byte() as u32);
-            let bracketed = BracketedContent::new(vec![BracketedItem::Word(Box::new(w))]);
-            let retrace = Retrace::new(bracketed, kind)
-                .with_annotations(annotations)
-                .with_span(span);
-            ParseOutcome::parsed(UtteranceContent::Retrace(Box::new(retrace)))
-        } else if annotations.is_empty() {
-            // Bare word
-            ParseOutcome::parsed(UtteranceContent::Word(Box::new(w)))
-        } else {
-            // Word with non-retrace annotations. The wrapper span runs from
-            // the word's start to the enclosing node's end, so it covers the
-            // trailing `[...]` codes, exactly as the retrace paths above and
-            // as the annotated event/action/group paths already do. It was
-            // left DUMMY here until 2026-07-29, which made every diagnostic
-            // located on an annotated word point at nothing and kept E757's
-            // glue detection from seeing these shapes at all.
-            let span = Span::new(w.span.start, node.end_byte() as u32);
-            let annotated = Annotated::new(w)
-                .with_scoped_annotations(annotations)
-                .with_span(span);
-            ParseOutcome::parsed(UtteranceContent::AnnotatedWord(Box::new(annotated)))
+    let Some(w) = word else {
+        return ParseOutcome::rejected();
+    };
+    // The whole construct, word through final `]`. E757's glue detection relies
+    // on a wrapper's span ending at the last bracket, so the fold uses it too.
+    let whole = Span::new(w.span.start, node.end_byte() as u32);
+    let core = match replacement {
+        ParseOutcome::Parsed(repl) => {
+            UtteranceContent::ReplacedWord(Box::new(ReplacedWord::new(w, repl)))
         }
-    } else {
-        ParseOutcome::rejected()
-    }
+        _ => UtteranceContent::Word(Box::new(w)),
+    };
+    ParseOutcome::parsed(fold_marker_chain(core, markers, whole))
 }

@@ -34,10 +34,7 @@
 //! languages; word-internal 35,802, all Hebrew (BermanLong); word-initial 0;
 //! standalone 0.
 
-use predicates::prelude::*;
-use std::fs;
 use talkbank_parser_tests::test_error::TestError;
-use tempfile::tempdir;
 
 /// Build a one-utterance file with the given `@Languages` header and words.
 ///
@@ -61,40 +58,26 @@ fn chat_file(languages: &str, words: &str) -> String {
     )
 }
 
-/// Run `chatter validate` on a file with the given content and assert the verdict.
-fn assert_validation(name: &str, content: &str, valid: bool) -> Result<(), TestError> {
-    let dir = tempdir()?;
-    let file_path = dir.path().join(name);
-    fs::write(&file_path, content)?;
-
-    let assertion = crate::common::chatter_cmd()
-        .arg("validate")
-        .arg(&file_path)
-        .assert();
-    if valid {
-        assertion
-            .success()
-            .stdout(predicate::str::contains("Invalid: 0"));
-    } else {
-        assertion
-            .failure()
-            .stdout(predicate::str::contains("Invalid: 1"));
-    }
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // Rule 1: position, language-independent
 // ---------------------------------------------------------------------------
 
 #[test]
 fn validate_rejects_a_standalone_prefix_marker_as_a_word() -> Result<(), TestError> {
-    assert_validation("standalone.cha", &chat_file("eng", "the # dog"), false)
+    crate::common::assert_validation(
+        "standalone.cha",
+        &chat_file("eng", "the # dog"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerIllegalPosition),
+    )
 }
 
 #[test]
 fn validate_rejects_a_word_opening_with_the_prefix_marker() -> Result<(), TestError> {
-    assert_validation("initial.cha", &chat_file("eng", "the #dog"), false)
+    crate::common::assert_validation(
+        "initial.cha",
+        &chat_file("eng", "the #dog"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerIllegalPosition),
+    )
 }
 
 /// The positional rule holds even in the languages that use the marker.
@@ -103,10 +86,10 @@ fn validate_rejects_a_word_opening_with_the_prefix_marker() -> Result<(), TestEr
 /// pass the two tests above, which would leave the actual invariant unstated.
 #[test]
 fn validate_rejects_a_standalone_prefix_marker_in_hebrew_too() -> Result<(), TestError> {
-    assert_validation(
+    crate::common::assert_validation(
         "standalone_heb.cha",
         &chat_file("heb", "ha# # kelev"),
-        false,
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerIllegalPosition),
     )
 }
 
@@ -116,17 +99,29 @@ fn validate_rejects_a_standalone_prefix_marker_in_hebrew_too() -> Result<(), Tes
 
 #[test]
 fn validate_accepts_a_word_final_prefix_marker_in_hebrew() -> Result<(), TestError> {
-    assert_validation("heb.cha", &chat_file("heb", "ha# kelev"), true)
+    crate::common::assert_validation(
+        "heb.cha",
+        &chat_file("heb", "ha# kelev"),
+        crate::common::Verdict::Valid,
+    )
 }
 
 #[test]
 fn validate_accepts_a_word_final_prefix_marker_in_arabic() -> Result<(), TestError> {
-    assert_validation("ara.cha", &chat_file("ara", "l# walad"), true)
+    crate::common::assert_validation(
+        "ara.cha",
+        &chat_file("ara", "l# walad"),
+        crate::common::Verdict::Valid,
+    )
 }
 
 #[test]
 fn validate_rejects_a_word_final_prefix_marker_in_english() -> Result<(), TestError> {
-    assert_validation("eng.cha", &chat_file("eng", "sun# dog"), false)
+    crate::common::assert_validation(
+        "eng.cha",
+        &chat_file("eng", "sun# dog"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerLanguageNotAllowed),
+    )
 }
 
 /// The gate reads the WORD's language, not the file header.
@@ -135,10 +130,10 @@ fn validate_rejects_a_word_final_prefix_marker_in_english() -> Result<(), TestEr
 /// contain a Hebrew word, and that word brings its own rules with it.
 #[test]
 fn validate_accepts_a_hebrew_marked_word_inside_an_english_file() -> Result<(), TestError> {
-    assert_validation(
+    crate::common::assert_validation(
         "switch.cha",
         &chat_file("eng, heb", "the ha#@s:heb kelev@s:heb"),
-        true,
+        crate::common::Verdict::Valid,
     )
 }
 
@@ -151,10 +146,10 @@ fn validate_accepts_a_hebrew_marked_word_inside_an_english_file() -> Result<(), 
 #[test]
 fn validate_rejects_a_marker_word_tagged_as_a_switch_to_a_language_without_the_marker()
 -> Result<(), TestError> {
-    assert_validation(
+    crate::common::assert_validation(
         "mistagged.cha",
         &chat_file("heb, eng", "ha#@s:eng kelev"),
-        false,
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerLanguageNotAllowed),
     )
 }
 
@@ -166,7 +161,11 @@ fn validate_rejects_a_marker_word_tagged_as_a_switch_to_a_language_without_the_m
 /// implementing it by accident.
 #[test]
 fn validate_accepts_a_word_internal_prefix_marker_in_hebrew() -> Result<(), TestError> {
-    assert_validation("internal_heb.cha", &chat_file("heb", "mi#ha#shuk"), true)
+    crate::common::assert_validation(
+        "internal_heb.cha",
+        &chat_file("heb", "mi#ha#shuk"),
+        crate::common::Verdict::Valid,
+    )
 }
 
 /// A word-internal marker still fails in a language that does not use it.
@@ -175,5 +174,9 @@ fn validate_accepts_a_word_internal_prefix_marker_in_hebrew() -> Result<(), Test
 /// the digits rule is; position is rule 1's concern, not rule 2's.
 #[test]
 fn validate_rejects_a_word_internal_prefix_marker_in_english() -> Result<(), TestError> {
-    assert_validation("internal_eng.cha", &chat_file("eng", "sun#shine"), false)
+    crate::common::assert_validation(
+        "internal_eng.cha",
+        &chat_file("eng", "sun#shine"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerLanguageNotAllowed),
+    )
 }

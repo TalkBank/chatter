@@ -514,12 +514,76 @@
       "source_spec": "spec/errors/E372_auto.md"
     },
     {
+      "fixture": "E372_Nested_quotation_2.cha",
+      "expected_codes": [
+        "E372"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E372_auto.md"
+    },
+    {
+      "fixture": "E372_Nested_quotation_3.cha",
+      "expected_codes": [
+        "E372"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E372_auto.md"
+    },
+    {
       "fixture": "E373_InvalidOverlapIndex.cha",
       "expected_codes": [
         "E373"
       ],
       "status": "implemented",
       "source_spec": "spec/errors/E373_auto.md"
+    },
+    {
+      "fixture": "E377_A_retracing_marker_with_no_material_of_its_own.cha",
+      "expected_codes": [
+        "E377"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
+    },
+    {
+      "fixture": "E377_A_retracing_marker_with_no_material_of_its_own_2.cha",
+      "expected_codes": [
+        "E377"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
+    },
+    {
+      "fixture": "E377_A_retracing_marker_with_no_material_of_its_own_3.cha",
+      "expected_codes": [
+        "E377"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
+    },
+    {
+      "fixture": "E378_A_retracing_marker_over_material_with_no_words.cha",
+      "expected_codes": [
+        "E378"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E378_retrace_without_words.md"
+    },
+    {
+      "fixture": "E378_A_retracing_marker_over_material_with_no_words_2.cha",
+      "expected_codes": [
+        "E378"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E378_retrace_without_words.md"
+    },
+    {
+      "fixture": "E378_A_retracing_marker_over_material_with_no_words_3.cha",
+      "expected_codes": [
+        "E378"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E378_retrace_without_words.md"
     },
     {
       "fixture": "E387_Auto_generated_from_corpus.cha",

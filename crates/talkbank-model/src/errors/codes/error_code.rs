@@ -216,6 +216,30 @@ pub enum ErrorCode {
     /// Failed to parse replacement annotation content.
     #[code("E376")]
     ReplacementParseError,
+    /// A retracing marker whose only content is another retracing marker.
+    ///
+    /// A marker retraces the material immediately to its left, and a marker is
+    /// not material. Ruled an error by the CHAT maintainer, 2026-08-07.
+    ///
+    /// Named for the SHAPE, not a spelling. The lowering folds a marker run
+    /// into a left-associative chain, so the unbracketed `на [//] [/] на` and
+    /// the bracketed `<<a> [/]> [//]` produce the same tree and one rule
+    /// catches both; an `AdjacentRetraceMarkers` name described only the first
+    /// and read as a different, narrower rule than the one that ships.
+    #[code("E377")]
+    RetraceWithNoMaterial,
+    /// A retracing marker applied to material containing no words at all.
+    ///
+    /// A marker retraces the WORDS to its left, and a laugh is not a word.
+    /// Ruled by the CHAT maintainer, 2026-08-07: "No, not legal. You can't
+    /// retrace a laugh."
+    ///
+    /// Disjoint from `RetraceWithNoMaterial` despite the neighbouring names.
+    /// That one is a marker over a lone marker, whose inner retrace still holds
+    /// words; this one is material with no word anywhere beneath it. The
+    /// repairs differ too: drop a marker there, retrace the words here.
+    #[code("E378")]
+    RetraceWithoutWords,
     /// Failed to parse `%mor` tier content.
     #[code("E382")]
     MorParseError,

@@ -11,7 +11,8 @@ write `tauri.conf.json`. Two files still carry a literal copy of the version and
 must never drift from it:
 
   * apps/chatter-desktop/package.json  "version"  (the npm side)
-  * CHANGELOG.md                       a `## [X.Y.Z]` section
+  * CHANGELOG.md                       a `## [X.Y.Z]` section AND its
+                                       matching `[X.Y.Z]:` link reference
 
 Why this matters: the desktop release's latest.json (the Tauri auto-updater
 manifest) takes its version from the git TAG, while the bundle takes its version
@@ -100,9 +101,23 @@ def set_json_version(path: Path, version: str) -> None:
     path.write_text(new)
 
 
-def changelog_has(version: str) -> bool:
-    pattern = rf"^## \[{re.escape(version)}\]"
-    return re.search(pattern, CHANGELOG.read_text(), re.MULTILINE) is not None
+def changelog_gaps(version: str) -> list[str]:
+    """Both halves a CHANGELOG entry needs: the section, and its link reference.
+
+    A `## [X.Y.Z]` heading whose `[X.Y.Z]: <url>` definition is missing renders
+    as literal bracketed text rather than as a broken link, so the book's
+    lychee pass reports zero errors and a reader sees only slightly odd
+    punctuation. Five consecutive releases (v0.6.0 through v0.9.1) shipped that
+    way before anyone noticed, because this gate owned one half of a fact that
+    is written in two places.
+    """
+    text = CHANGELOG.read_text()
+    gaps: list[str] = []
+    if re.search(rf"^## \[{re.escape(version)}\]", text, re.MULTILINE) is None:
+        gaps.append(f"a `## [{version}]` section")
+    if re.search(rf"^\[{re.escape(version)}\]: \S", text, re.MULTILINE) is None:
+        gaps.append(f"a `[{version}]:` link reference")
+    return gaps
 
 
 def bump_canonical(version: str) -> None:
@@ -134,14 +149,16 @@ def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = 
             if fix:
                 set_json_version(path, want)
 
-    if not changelog_has(want):
+    gaps = changelog_gaps(want)
+    if gaps:
         if changelog_reminder_only:
             # `--bump` runs BEFORE the human writes the section; the `--check`
             # gate (CI, and the tag script) still enforces it afterwards.
-            print(f"next: write the `## [{want}]` CHANGELOG section")
+            print(f"next: write {' and '.join(gaps)} in CHANGELOG.md")
         else:
             # A changelog entry is human-written, so this is never auto-fixable.
-            drift.append(f"CHANGELOG.md  missing a `## [{want}]` section")
+            for gap in gaps:
+                drift.append(f"CHANGELOG.md  missing {gap}")
 
     if release_tag is not None:
         tag_version = release_tag[1:] if release_tag.startswith("v") else release_tag

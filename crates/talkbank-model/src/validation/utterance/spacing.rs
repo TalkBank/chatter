@@ -63,6 +63,7 @@ fn word_family_start(item: &UtteranceContent) -> Option<u32> {
         | UtteranceContent::Group(_)
         | UtteranceContent::AnnotatedGroup(_)
         | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_)
         | UtteranceContent::PhoGroup(_)
         | UtteranceContent::SinGroup(_)
         | UtteranceContent::Quotation(_)
@@ -100,6 +101,9 @@ fn glued_code_end(item: &UtteranceContent) -> Option<u32> {
     }
     match item {
         UtteranceContent::Retrace(retrace) => Some(retrace.span.end),
+        // Ends with the `]` of its last annotation, like every other
+        // annotated variant, so it shares their helper.
+        UtteranceContent::AnnotatedRetrace(annotated) => annotated_end(annotated),
         UtteranceContent::AnnotatedWord(annotated) => annotated_end(annotated),
         UtteranceContent::AnnotatedGroup(annotated) => annotated_end(annotated),
         UtteranceContent::AnnotatedEvent(annotated) => annotated_end(annotated),
@@ -261,6 +265,7 @@ fn free_standing_end(item: &UtteranceContent) -> Option<u32> {
         | UtteranceContent::Group(_)
         | UtteranceContent::AnnotatedGroup(_)
         | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_)
         | UtteranceContent::PhoGroup(_)
         | UtteranceContent::SinGroup(_)
         | UtteranceContent::Quotation(_)

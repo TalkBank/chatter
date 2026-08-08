@@ -1,7 +1,7 @@
 # Retraces and Repetitions
 
 **Status:** Current
-**Last updated:** 2026-05-11 23:16 EDT
+**Last updated:** 2026-08-07 17:24 EDT
 
 Retraces mark content that the speaker said but then corrected, repeated,
 or abandoned. They are one of the most consequential constructs in CHAT
@@ -88,13 +88,36 @@ other content items:
 ```rust,ignore
 // crates/talkbank-model/src/model/content/retrace.rs
 pub struct Retrace {
-    pub content: BracketedContent,          // the retraced words
-    pub kind: RetraceKind,                  // Partial, Full, Multiple, Reformulation
-    pub is_group: bool,                     // <word> [/] vs word [/]
-    pub annotations: Vec<ContentAnnotation>,// non-retrace annotations after marker
+    pub content: BracketedContent,  // the retraced words
+    pub kind: RetraceKind,          // Partial, Full, Multiple, Reformulation
+    pub is_group: bool,             // <word> [/] vs word [/]
     pub span: Span,
 }
 ```
+
+### Where the annotations live
+
+There is deliberately no `annotations` field. A content item followed by a run
+of scoped markers is a LEFT-ASSOCIATIVE CHAIN: each marker scopes over
+everything to its left, so these two lines are different claims about the same
+two words.
+
+```text
+dog [* p:w] [/] dog     the error is on the abandoned attempt
+dog [/] [* p:w] dog     the error is on the retrace
+```
+
+Annotations written BEFORE the marker therefore annotate the retraced material
+and live inside `content`; annotations written AFTER it annotate the retrace and
+live on an `AnnotatedRetrace(Box<Annotated<Retrace>>)` wrapper, exactly parallel
+to `Group` / `AnnotatedGroup`.
+
+A single flat `annotations` field used to hold both, which made the two
+indistinguishable. `dog [* p:w] [/]` was silently written back as
+`dog [/] [* p:w]`, and a second adjacent marker overwrote the first, so
+`на [//] [/] на` became `на [/] на`. Neither was visible to `validate`, to
+`--roundtrip` (which tests idempotence of `serialize(parse(x))`, not fidelity to
+the input) or to `SemanticEq` (the two orderings WERE the same model).
 
 ### Why First-Class?
 
@@ -106,9 +129,13 @@ alignment counting, word extraction, or retokenization.
 
 Making `Retrace` a top-level `UtteranceContent` variant means:
 
-1. **The compiler enforces handling.** Every `match` on `UtteranceContent`
-   must have a `Retrace` arm. Forgetting to handle retraces is a compile
-   error, not a silent runtime bug.
+1. **The compiler enforces handling, WHERE the match is exhaustive.** Every
+   `match` on `UtteranceContent` must have a `Retrace` arm. The caveat is real:
+   when `AnnotatedRetrace` was added, five sites matching a retrace behind a
+   `_ =>` arm compiled unchanged and silently answered wrong, one of them the
+   gate in front of all retrace validation. A first-class variant guarantees
+   exhaustiveness only where the matches are already exhaustive, which is why
+   this codebase bans catch-alls over content enums.
 2. **Domain-aware gating is centralized.** The content walker checks the
    `Retrace` variant once, not at every annotation-inspection site.
 3. **Alignment counting is simple.** The count function returns `0` for
@@ -232,14 +259,50 @@ than for retrace-sensitive membership.
 
 ## Validation
 
-### Cross-Utterance Retrace Validation
+### The three retrace rules
 
-The retrace validators in `validation/retrace/` check:
+`validation/retrace/` runs three checks over ONE traversal of the tier
+(`visit.rs`), which reaches every retrace including those nested inside another
+retrace's content.
 
-- **Collection:** `collection/utterance.rs` and `collection/bracketed.rs`
-  walk the content tree to find all `Retrace` nodes
-- **Detection:** `detection.rs` provides `utterance_item_has_retrace()`
-  for quick retrace presence checks
+| Code | Rule | Example rejected |
+|------|------|------------------|
+| E370 | A marker must be FOLLOWED by the repeated or corrected material. | `<the> [/] .` |
+| E377 | A marker's content may not be nothing but another marker. | `на [//] [/] на` |
+| E378 | A marker's content must contain a word, at any depth. | `&=laughs [//] water` |
+
+E377 and E378 are disjoint despite the neighbouring names. In `a [//] [/] a` the
+inner retrace still holds a word, so E378 stays silent; in `<&=sigh> [/] &=sigh`
+there is no second marker, so E377 stays silent. The repairs differ too: drop a
+marker for E377, retrace the words rather than the vocalization for E378.
+
+Both were adjudicated with the CHAT maintainer on 2026-08-07. On adjacent
+markers: "clearly a mistake ... It's an error." On a marker over an event: "No,
+not legal. You can't retrace a laugh." He gave the legal alternative half an
+hour earlier in the same thread, and it is why E378 tests for absent WORDS
+rather than for a present event:
+
+```text
+*PAR:	<the floor on the &=laughs water> [//] the floor on the xxx .
+```
+
+E378 recurses because 205 corpus retraces hold their words one level down, in an
+annotated group or a quotation (`<<the dog> [?]> [/] the dog`), and a rule
+testing the immediate children would reject every one of them. Untranscribed
+material counts as words on purpose: `xxx`, `yyy` and `www` lower as words, so
+retracing speech nobody could make out stays valid.
+
+**Which variants are containers is owned in one place for these rules**,
+`model::content::structure::ContentStructure`. It is written that way because
+two hand-written copies of that knowledge disagreed about `PhoGroup` and
+`SinGroup`, which silently stopped E377 firing inside `‹...›` with no test able
+to see it.
+
+Be precise about the scope, because an earlier draft of this paragraph was not:
+the retrace validators classify through it, and the alignment walkers do not.
+They need to know WHICH container they are in, so a tier domain can skip a
+phonological group but not a quotation, and `Container` deliberately does not
+carry that. Settling those payloads is the prerequisite for migrating them.
 
 ### Alignment Validation (E705)
 

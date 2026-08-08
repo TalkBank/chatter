@@ -13,6 +13,8 @@ use std::fmt::Write;
 ///
 /// Spacing mirrors CHAT serialization rules so captured spans align with the
 /// exact text fed into retrace diagnostics.
+use super::{render_scoped_annotations, write_with_span};
+
 pub fn render_bracketed_content(
     content: &BracketedContent,
     rendered: &mut String,
@@ -129,43 +131,16 @@ pub fn render_bracketed_item(
         }
         BracketedItem::Retrace(retrace) => {
             // Render retrace content with optional angle brackets
-            if retrace.is_group {
-                rendered.push('<');
-            }
-            render_bracketed_content(&retrace.content, rendered, retrace_spans);
-            if retrace.is_group {
-                rendered.push('>');
-            }
-            // Capture the retrace marker span for validation diagnostics
-            rendered.push(' ');
-            let span = write_with_span(rendered, |w| retrace.kind.write_chat(w));
-            retrace_spans.push(span);
-            // Render any additional non-retrace annotations
-            render_scoped_annotations(retrace.annotations.iter(), rendered);
+            super::render_retrace(retrace, rendered, retrace_spans);
+        }
+        BracketedItem::AnnotatedRetrace(annotated) => {
+            // Identical to the bare form, then the wrapper's own
+            // annotations, which are exactly the ones written AFTER the
+            // marker. Annotations written BEFORE it live inside `content`
+            // and were already rendered by the recursion above.
+            let retrace = &annotated.inner;
+            super::render_retrace(retrace, rendered, retrace_spans);
+            render_scoped_annotations(annotated.scoped_annotations.iter(), rendered);
         }
     }
-}
-
-/// Render scoped annotations (none of which are retrace markers post-redesign).
-fn render_scoped_annotations<'a>(
-    annotations: impl IntoIterator<Item = &'a crate::model::ContentAnnotation>,
-    rendered: &mut String,
-) {
-    for ann in annotations {
-        rendered.push(' ');
-        ann.write_chat(rendered).ok();
-    }
-}
-
-/// Write into `rendered` and return the written byte span.
-///
-/// This keeps span bookkeeping consistent across bracketed rendering branches.
-fn write_with_span<F>(rendered: &mut String, mut write: F) -> Span
-where
-    F: FnMut(&mut String) -> std::fmt::Result,
-{
-    let start = rendered.len();
-    write(rendered).ok();
-    let end = rendered.len();
-    Span::from_usize(start, end)
 }

@@ -257,6 +257,17 @@ fn walk_content_visiting(
                     true,
                 );
             }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form: the annotations sit on the
+                // wrapper and are not alignable, so only the retraced content
+                // is considered.
+                walk_bracketed_visiting(
+                    annotated.inner.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    true,
+                );
+            }
             UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Event(_)
             | UtteranceContent::Pause(_)
@@ -335,6 +346,17 @@ fn walk_bracketed_visiting(
             BracketedItem::Retrace(retrace) => {
                 walk_bracketed_visiting(
                     retrace.content.content.as_slice(),
+                    word_count,
+                    visitor,
+                    true,
+                );
+            }
+            BracketedItem::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form: the annotations sit on the
+                // wrapper and are not alignable, so only the retraced content
+                // is considered.
+                walk_bracketed_visiting(
+                    annotated.inner.content.content.as_slice(),
                     word_count,
                     visitor,
                     true,
@@ -580,6 +602,17 @@ fn walk_content(
                     true,
                 );
             }
+            UtteranceContent::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form: the annotations sit on the
+                // wrapper and are not alignable, so only the retraced content
+                // is considered.
+                walk_bracketed(
+                    annotated.inner.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    true,
+                );
+            }
             UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Event(_)
             | UtteranceContent::Pause(_)
@@ -658,6 +691,17 @@ fn walk_bracketed(
             BracketedItem::Retrace(retrace) => {
                 walk_bracketed(
                     retrace.content.content.as_slice(),
+                    word_count,
+                    markers,
+                    true,
+                );
+            }
+            BracketedItem::AnnotatedRetrace(annotated) => {
+                // Same rule as the bare form: the annotations sit on the
+                // wrapper and are not alignable, so only the retraced content
+                // is considered.
+                walk_bracketed(
+                    annotated.inner.content.content.as_slice(),
                     word_count,
                     markers,
                     true,

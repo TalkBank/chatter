@@ -9,6 +9,113 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-07
+
+**Validation verdicts: CHANGED, in the stricter direction.** Two new error
+codes reject retrace constructions that previously passed silently, and two
+existing rules stopped being suppressed by the shape of the content they were
+asked about. Adjudicated over all 107,376 corpus files: E377 fires 53 times in
+42 files and E378 15 times in 12 files, all real transcription defects and
+queued for data cleanup; restoring E372 and E704 costs **zero** new instances,
+so those two are pure correctness.
+
+**Library APIs: BREAKING.** `Retrace` loses its `annotations` field, both
+content enums gain an `AnnotatedRetrace` variant, and per-word language records
+lose `word_index`. Pre-1.0, so this is a minor bump.
+
+Every fix below except the `merge` one is the same defect: a traversal carrying
+its own private list of which content variants contain other content, plus a
+catch-all arm for everything the list forgot. Five such traversals existed.
+
+### Added
+
+- **E377 `RetraceWithNoMaterial`.** A retracing marker whose material is
+  another marker, so it retraces nothing of its own. One rule covers the
+  unbracketed `на [//] [/] на` and the bracketed `<<a> [/]> [//]`, because the
+  lowering folds both into the same tree; naming it for the shape rather than
+  for a spelling is what makes that possible. Deliberately narrow: 11,163
+  retraces in the corpora sit inside another retrace and only **4** wrap a lone
+  marker, so a "no retrace inside a retrace" rule would have rejected ordinary
+  stutter chains (`<the [/] the piece> [//] the people`) in exactly the aphasia
+  and fluency corpora that study them.
+- **E378 `RetraceWithoutWords`.** The retraced material must contain a word at
+  some depth. Phrased against absent WORDS rather than a present event, so
+  `<the floor on the &=laughs water> [//]` stays legal while `<&=sigh> [/]`
+  does not. The boundary falls out of what the model already calls a word:
+  `0det [/] 0det dog` is legal (an omitted determiner is lexical content),
+  `<xxx> [/] xxx` is legal (untranscribed speech is speech), and
+  `0 [=! snuffles] [/] ok` is not.
+
+### Fixed
+
+- **A retracing marker's position among its annotations was discarded.**
+  `dog [* p:w] [/] dog` and `dog [/] [* p:w] dog` are different claims: the
+  first codes the error on the abandoned attempt, the second on the retrace.
+  chatter built the identical model for both and wrote the first back as the
+  second. **12,226** places in the corpora put an annotation immediately before
+  a retrace marker. A second adjacent marker had nowhere to go at all, so
+  `на [//] [/] на` round-tripped as `на [/] на`, losing a marker outright in
+  **105** places across 46 files, 31 of them bilingual or language-impairment
+  corpora where disfluency is the research variable.
+- **E704 (overlapping bullets) was silently disabled** on any utterance whose
+  content held a retrace or a group. The predicate for "does this utterance say
+  anything timeable" recursed into neither, so two speakers' bullets could
+  overlap by a full second and report nothing whenever either line contained a
+  retrace.
+- **E372 (nested quotation) was invisible below every container except an
+  annotated group.** `“a <“b”> [/] c”` is a quotation inside a retrace inside a
+  quotation, and reported nothing.
+- **Per-word language metadata skipped every word inside a quotation,
+  phonological group, sign group or retrace**, in a tool whose per-word
+  language resolution is the point. `hao3 “ni3” <ma> [/] ma` produced records
+  for two words out of four.
+- **The re2c backend diverged from tree-sitter on marker runs.** It split a run
+  where tree-sitter folds it, dropped retrace markers on events, and never
+  raised E377 at all, despite three doc comments saying it did. The
+  parser-equivalence gate now covers all three.
+- **`chatter merge` dropped donor `@Comment` rows** when the reference file had
+  none of its own.
+- **Five missing CHANGELOG link references.** Every release from v0.6.0 to
+  v0.9.1 shipped a `## [X.Y.Z]` heading with no matching `[X.Y.Z]:` definition.
+  It renders as literal bracketed text rather than as a broken link, so the
+  book's link check reports zero errors and cannot see it. The version gate now
+  requires both halves of the entry.
+
+### Changed
+
+- **`Retrace::annotations` is gone.** Annotated retraces are
+  `AnnotatedRetrace(Box<Annotated<Retrace>>)` in both content enums, parallel
+  to the existing `Group`/`AnnotatedGroup` pair. Parser lowering is now a left
+  fold over the marker run, one wrapper per marker, which absorbed three
+  hand-rolled copies of the same tail.
+- **Adjacency is validated, not refused at parse time.** Folding the offending
+  input faithfully means it still round-trips, so a file that trips E377 stays
+  recoverable rather than being partly discarded during recovery.
+- **Per-word language records no longer carry `word_index`**, and
+  `get_word_language` is removed. The records are a `#[serde(transparent)]`
+  list, so a consumer reads position with `enumerate()`. The stored index was a
+  second representation of that position whose documentation claimed it matched
+  the tier-alignment domains; it cannot, because `%mor` excludes retraces and
+  `%pho` counts them, so no single integer indexes both.
+- **`--parser re2c` is documented as reporting unreliable diagnostic
+  positions.** The lexer emits spans and the parser discards them; until that is
+  plumbed through, the flag is for cross-checking verdicts, not for locating
+  them.
+
+### Internal
+
+- **Design rule 3 (no `_ =>` catch-all over the content enums) is now enforced
+  by the compiler**, through `#![deny(clippy::wildcard_enum_match_arm)]` added
+  per file as each is cleaned, seven so far. A reintroduced catch-all is a
+  compile error at the exact line, which no scalar count could be.
+  `cargo run -p talkbank-parser-tests --bin audit_content_catch_alls`
+  inventories the 24 modules still to clean.
+- **`ContentStructure` is the single owner of which content contains what**,
+  carrying `WordRef` and `GroupRef` payloads so a caller can ask not merely
+  whether something is a container but which one. That set had been encoded
+  independently in 18 files, and two copies disagreeing about phonological and
+  sign groups is what let E377 escape from inside `‹...›`.
+
 ## [0.9.1] - 2026-08-05
 
 **Validation verdicts: UNCHANGED.** No rule was added, removed or altered, and
@@ -1134,7 +1241,13 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/TalkBank/chatter/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/TalkBank/chatter/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/TalkBank/chatter/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/TalkBank/chatter/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/TalkBank/chatter/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/TalkBank/chatter/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/TalkBank/chatter/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/TalkBank/chatter/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/TalkBank/chatter/compare/v0.4.0...v0.4.1

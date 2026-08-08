@@ -17,7 +17,7 @@
 //! ran a full-table `SELECT DISTINCT file_path` plus a per-file DELETE
 //! loop, so a corpus-sized invocation did O(n^2) work inside cache
 //! initialization, BEFORE the progress display started. On the operator's
-//! real cache (136k files) `chatter validate --force ~/0tb/data` sat at
+//! real cache (136k files) `chatter validate --force <corpus-root>` sat at
 //! 150% CPU with a blank screen indefinitely. The corpus differential
 //! never sees this because it always starts from an empty isolated cache;
 //! this test warms a real cache through the real binary first.

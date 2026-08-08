@@ -4,15 +4,28 @@
 //! and `book/src/architecture/merge-test-plan.md` for the cycle plan
 //! that drives this module's incremental growth.
 //!
-//! Phase A cycle 1 (this commit): minimal happy path, parse two
-//! files, partition utterances by retain set, sort by `start_ms`,
-//! serialize. No tier stripping, no header reconciliation beyond
-//! "use File 1's headers verbatim", no preconditions enforced, no
-//! domain newtypes. Later cycles tighten each behavior.
+//! Retained-set speakers' utterances come from File 1 and everything
+//! else from File 2, interleaved by start time, with File 1's headers
+//! extended by File 2's participants, `@ID` rows and `@Comment` rows.
 //!
-//! The signature exposed here is deliberately the bare minimum the
-//! cycle-1 smoke test needs; subsequent cycles will introduce
-//! `RetainSet`, `MergeError`, `--strip-tiers`, etc.
+//! Four preconditions REFUSE rather than merging: File 1 declaring no
+//! retained utterances, File 1 carrying no timeline to position File 2
+//! against, a non-retained speaker appearing in both files, and a
+//! donor participant colliding with a File 1 declaration that has real
+//! content or disagreeing metadata. Each is a case where the merge has
+//! no rule to choose, and choosing silently would damage a corpus.
+//!
+//! Two entry points, and the split matters. [`merge_chats`] takes and
+//! returns TEXT, for a caller holding two files on disk;
+//! [`merge_chat_files`] takes and returns the MODEL, for a caller that
+//! built or edited a `ChatFile` in memory. The second exists because
+//! serializing such a file only to have this module parse it again is
+//! re-parsing our own output, which quietly makes the serializer's
+//! canonicalization part of the merge's semantics.
+//!
+//! The earlier note here described a cycle-1 skeleton with no
+//! preconditions, no tier stripping and no domain newtypes. All three
+//! arrived; the note did not.
 
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::ParticipantRole;
@@ -169,15 +182,40 @@ pub fn merge_chats(
 ) -> Result<String, MergeError> {
     let f1 = parse_and_validate(file1_content, options.clone())?;
     let f2 = parse_and_validate(file2_content, options)?;
+    Ok(to_chat_string(&merge_chat_files(
+        &f1,
+        &f2,
+        retain,
+        strip_tiers,
+    )?))
+}
 
+/// Merge two ALREADY-PARSED CHAT files, returning the merged model.
+///
+/// The typed core of [`merge_chats`], which is now a thin wrapper that parses
+/// its two inputs and serializes the result.
+///
+/// Split out because a caller that has built or edited a [`ChatFile`] in memory
+/// has nowhere else to go: serializing it back to a string only to have this
+/// function re-parse it is re-parsing our own output, which this codebase bans
+/// for good reason (it makes the serializer's canonicalization part of the
+/// merge's semantics, silently). Returning the model rather than a string is
+/// the same argument at the other end: a caller that wants to keep working on
+/// the merged file should not have to parse it again either.
+pub fn merge_chat_files(
+    f1: &ChatFile,
+    f2: &ChatFile,
+    retain: &[SpeakerCode],
+    strip_tiers: &[String],
+) -> Result<ChatFile, MergeError> {
     // Precondition: donor (File 2) must not declare a language reference
     // (File 1) doesn't have. Donor under-claiming (ASR run in a fixed
     // language mode) is expected and fine; donor over-claiming is
     // suspicious enough to refuse (a wrong-file pairing, or a language
     // the annotator missed either way needs a human look, not a silent
     // merge). Exact-equality is the special case where both sets match.
-    let f1_langs = extract_languages(&f1);
-    let f2_langs = extract_languages(&f2);
+    let f1_langs = extract_languages(f1);
+    let f2_langs = extract_languages(f2);
     let donor_over_claims = f2_langs
         .as_slice()
         .iter()
@@ -249,7 +287,7 @@ pub fn merge_chats(
     // role/name metadata) or a refusal (File 1 has real content under
     // that code, or the two declarations disagree). Build the dedupe
     // set up front so the insertion filters below can consult it.
-    let f1_declared = declared_participants(&f1);
+    let f1_declared = declared_participants(f1);
     let mut dedupe_codes: std::collections::HashSet<SpeakerCode> = std::collections::HashSet::new();
     for line in f2.lines.as_slice().iter() {
         if let Line::Header { header, .. } = line
@@ -260,7 +298,7 @@ pub fn merge_chats(
                     continue;
                 }
                 if let Some(f1_entry) = f1_declared.get(&donor_entry.speaker_code) {
-                    let vestigial = utterance_count_for(&f1, &donor_entry.speaker_code) == 0;
+                    let vestigial = utterance_count_for(f1, &donor_entry.speaker_code) == 0;
                     let roles_match = f1_entry.role == donor_entry.role;
                     // Name is part of the dedupe metadata only when BOTH
                     // sides actually declare one; if either side has no
@@ -338,8 +376,8 @@ pub fn merge_chats(
     // We use these as the "insert after" points for the
     // corresponding File 2 rows. The helper centralizes the
     // shared shape (reverse-scan for last matching header).
-    let f1_last_id_idx = last_header_index(&f1, |h| matches!(h, Header::ID(_)));
-    let f1_last_comment_idx = last_header_index(&f1, |h| matches!(h, Header::Comment { .. }));
+    let f1_last_id_idx = last_header_index(f1, |h| matches!(h, Header::ID(_)));
+    let f1_last_comment_idx = last_header_index(f1, |h| matches!(h, Header::Comment { .. }));
 
     // Split File 1's lines into pre-@End headers and the @End marker.
     // The @Participants header (if any) is rewritten to concatenate
@@ -394,6 +432,31 @@ pub fn merge_chats(
         }
     }
 
+    // File 1 may have no row of the kind at all, and then the "insert after
+    // File 1's last one" rule above never fires and File 2's rows are DROPPED.
+    // That is silent data loss, and for `@Comment` it is loss of exactly the
+    // provenance the contract says to preserve: an ASR donor records its engine
+    // and run time there, and a hand-coded reference typically carries no
+    // `@Comment` at all, so the case is the common one rather than a corner.
+    //
+    // Found by porting a Python merge that had this fall-through and diffing
+    // the two outputs: 1,014 donor `@Comment` rows across 345 sessions appeared
+    // on the Python side and nowhere on ours.
+    // IDs before comments, so a file needing both fall-throughs still gets its
+    // `@ID` block above its `@Comment` block, which is where a reader looks.
+    //
+    // The `@ID` arm is DEFENSIVE and currently unreachable: a valid File 1 has
+    // an `@ID` row for every declared participant (E522), so the insertion
+    // point always exists. Kept for symmetry with the comment arm, and said
+    // here rather than left for a reader to work out, because a test for it
+    // passes whether or not the arm is present.
+    if f1_last_id_idx.is_none() {
+        pre_end_headers.extend(inserted_id_lines);
+    }
+    if f1_last_comment_idx.is_none() {
+        pre_end_headers.extend(inserted_comment_lines);
+    }
+
     // From File 2, take only utterances whose speaker is NOT in
     // `retain`. (Header reconciliation beyond "File 1 wins" is a
     // later cycle.) Strip dependent tiers in DEFAULT_STRIP_TIERS so
@@ -426,8 +489,7 @@ pub fn merge_chats(
         out_lines.push(end);
     }
 
-    let merged = ChatFile::new(out_lines);
-    Ok(to_chat_string(&merged))
+    Ok(ChatFile::new(out_lines))
 }
 
 /// Extract an utterance's main-tier `start_ms`. Returns `u64::MAX`

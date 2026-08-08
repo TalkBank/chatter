@@ -11,9 +11,19 @@
 //! *CHI: <I want> [/] I need cookie .     ← group retrace: "I want" corrected to "I need"
 //! *CHI: the [/] the dog .                ← word retrace: "the" repeated
 //! *CHI: I [//] he wants it .             ← full retrace: "I" corrected to "he"
-//! *CHI: <I want> [///] [//] I need .     ← multiple retrace
-//! *CHI: <I go> [/-] I want to go .       ← reformulation: different phrasing
+//! *CHI: <I go> [/-] I want to go .       ← `[/-]`, what chatter calls Reformulation
 //! ```
+//!
+//! This block used to show `<I want> [///] [//] I need .` as a legal "multiple
+//! retrace". It is not: Brian MacWhinney ruled two adjacent markers an error on
+//! 2026-08-07 ("clearly a mistake ... It's an error"), and the example is gone
+//! rather than corrected because there is no legal form of it.
+//!
+//! Note also that the variant NAMES are chatter's and are not the manual's:
+//! `RetraceKind::Multiple` is `[///]`, which the CHAT manual calls a
+//! reformulation, while `RetraceKind::Reformulation` is `[/-]`. Read the
+//! surface form, never the variant name, when reasoning about what a marker
+//! means.
 //!
 //! # Type Safety
 //!
@@ -32,7 +42,6 @@ use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use crate::Span;
-use crate::model::annotation::ContentAnnotation;
 use crate::model::content::bracketed::BracketedContent;
 
 /// Content that was spoken but then corrected/repeated.
@@ -45,8 +54,19 @@ use crate::model::content::bracketed::BracketedContent;
 ///
 /// - `content`, the retraced words (what the speaker said before correcting)
 /// - `kind`, what kind of retrace (repetition, correction, reformulation)
-/// - `annotations`, additional non-retrace annotations that follow the
-///   retrace marker (e.g., `[= explanation]` after `[/]`)
+///
+/// # Annotations are NOT a field here, deliberately
+///
+/// A content item followed by a run of scoped markers is a left-associative
+/// chain: each marker scopes over everything to its left. So an annotation
+/// BEFORE the marker annotates the retraced material and belongs inside
+/// `content` (as an `Annotated<Group>`), while an annotation AFTER the marker
+/// annotates the retrace and belongs on an `Annotated<Retrace>` wrapper.
+///
+/// A flat `annotations` field on this struct used to hold both, which made the
+/// two indistinguishable and silently rewrote `dog [* p:w] [/]` into
+/// `dog [/] [* p:w]`, a different claim about which stretch carried the error.
+/// See `docs/design/2026-08-07-retrace-model-and-the-lost-marker-position.md`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct Retrace {
     /// The retraced content (words the speaker corrected).
@@ -58,9 +78,6 @@ pub struct Retrace {
     /// Used for lossless roundtrip serialization.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_group: bool,
-    /// Additional non-retrace annotations (e.g., `[= explanation]` after `[/]`).
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub annotations: Vec<ContentAnnotation>,
     /// Source span for diagnostics.
     #[serde(skip)]
     #[schemars(skip)]
@@ -75,7 +92,6 @@ impl Retrace {
             content,
             kind,
             is_group: false,
-            annotations: Vec::new(),
             // No source location yet: callers that have one attach it with
             // `with_span`. Spelled out rather than defaulted, because this
             // sentinel makes `check_code_glued_to_following_content` skip the
@@ -87,12 +103,6 @@ impl Retrace {
     /// Mark as originally having angle brackets (`<content> [/]`).
     pub fn as_group(mut self) -> Self {
         self.is_group = true;
-        self
-    }
-
-    /// Add non-retrace annotations.
-    pub fn with_annotations(mut self, annotations: Vec<ContentAnnotation>) -> Self {
-        self.annotations = annotations;
         self
     }
 
@@ -162,11 +172,10 @@ impl crate::model::WriteChat for Retrace {
         // Write retrace marker
         w.write_char(' ')?;
         self.kind.write_chat(w)?;
-        // Write additional annotations
-        for ann in &self.annotations {
-            w.write_char(' ')?;
-            ann.write_chat(w)?;
-        }
+        // Annotations are NOT written here. One that followed the marker lives
+        // on an `Annotated<Retrace>` wrapper, which writes it; one that
+        // preceded the marker lives inside `content`, which has already
+        // written it. See the type doc above.
         Ok(())
     }
 }

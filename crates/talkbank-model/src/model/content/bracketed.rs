@@ -92,6 +92,12 @@ pub enum BracketedItem {
     AnnotatedGroup(Annotated<super::Group>),
     /// Nested retraced content, words the speaker said then corrected.
     Retrace(Box<super::Retrace>),
+    /// Retraced content carrying scoped annotations written AFTER its marker.
+    ///
+    /// See `UtteranceContent::AnnotatedRetrace`; the two enums mirror each
+    /// other and a shape legal on the tier is legal inside brackets.
+    #[serde(rename = "annotated_retrace")]
+    AnnotatedRetrace(Box<Annotated<super::Retrace>>),
     /// Nested phonological group ‹...›
     #[serde(rename = "pho_group")]
     PhoGroup(super::PhoGroup),
@@ -174,6 +180,9 @@ impl WriteChat for BracketedItem {
             BracketedItem::NonvocalEnd(marker) => marker.write_chat(w),
             BracketedItem::NonvocalSimple(marker) => marker.write_chat(w),
             BracketedItem::Retrace(retrace) => retrace.write_chat(w),
+            // `Annotated<T>` writes `inner` then each annotation, which IS the
+            // post-marker position, so no special case is needed here.
+            BracketedItem::AnnotatedRetrace(annotated) => annotated.write_chat(w),
             BracketedItem::OtherSpokenEvent(event) => event.write_chat(w),
         }
     }

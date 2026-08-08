@@ -95,11 +95,34 @@ Options:
 | `--quiet` | Only emit errors, suppress success messages |
 | `--max-errors N` | Stop after N errors across all files |
 | `--roundtrip` | Test serialization idempotency (developer tool) |
-| `--parser tree-sitter\|re2c` | Parser backend (default: tree-sitter; re2c is opt-in for faster batch validation) |
+| `--parser tree-sitter\|re2c` | Parser backend (default: tree-sitter; re2c is opt-in for faster batch validation). **Diagnostic line and column numbers are not reliable under `re2c`**, see the note below |
 | `--strict-linkers` | Enable strict cross-utterance linker pairing checks (E351-E355); off by default |
 | `--suppress xphon` | Silence the Phon `%x` dependent-tier checks (E725-E728, E735-E746), which run by default |
 | `--audit FILE` | Stream errors to JSONL file (bulk audit mode) |
 | `--suppress CODES` | Suppress error codes or groups (comma-separated) |
+
+> **`--parser re2c` reports unreliable diagnostic positions.**
+>
+> The re2c lexer DOES produce a source span for every token; the parser
+> discards it (`parser/mod.rs`, `lexer.map(|(tok, _span)| tok)`), so the
+> converter assigns every model node a dummy span and diagnostics that compute
+> a position from those spans point somewhere arbitrary. The same file
+> validated both ways:
+>
+> ```text
+> tree-sitter   error[E370] ... (line 7, column 13)     <- the offending tier
+> re2c          error[E370] ... (line 2, column 7)      <- points at @Begin
+> ```
+>
+> The VERDICT is trustworthy on both backends and the two are held to
+> structural equivalence by the parity oracle; only the reported location is
+> not. A wrong position that looks plausible is worse than none, so treat
+> `--parser re2c` as suitable for batch pass/fail and use the default backend
+> when you need to find the error in the file.
+>
+> Restoring the positions means carrying the lexer's spans through the token
+> slice rather than re-deriving them, which is bounded work rather than a
+> redesign.
 
 **Suppress groups:** `xphon` expands to the whole Phon `%x`
 dependent-tier validation surface (%xmodsyl/%xphosyl/%xphoaln/%xphoint,

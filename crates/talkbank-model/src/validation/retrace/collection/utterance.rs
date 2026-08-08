@@ -87,6 +87,22 @@ pub fn collect_utterance_content(
             });
             *retrace_index += 1;
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            // Same handling as the bare form: the wrapper carries only
+            // the annotations written after the marker, and the retraced
+            // content is unchanged.
+            bracketed::collect_bracketed_content(
+                &annotated.inner.content,
+                leaf_kinds,
+                retrace_checks,
+                retrace_index,
+            );
+            retrace_checks.push(RetraceCheck {
+                retrace_index: *retrace_index,
+                after_leaf_index: leaf_kinds.len(),
+            });
+            *retrace_index += 1;
+        }
         UtteranceContent::Separator(_)
         | UtteranceContent::OverlapPoint(_)
         | UtteranceContent::InternalBullet(_)

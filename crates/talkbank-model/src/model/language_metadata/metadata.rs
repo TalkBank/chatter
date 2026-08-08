@@ -11,21 +11,23 @@ use std::ops::Deref;
 use talkbank_derive::SpanShift;
 
 use super::super::LanguageCode;
-use super::{WordLanguageInfo, WordLanguages};
+use super::{LanguageSource, WordLanguageInfo, WordLanguages};
 use crate::ErrorSink;
 use crate::validation::{Validate, ValidationContext};
 
 /// Language metadata for an entire utterance.
 ///
-/// Tracks the resolved language for each alignable word in the main tier.
-/// Parallel to alignment metadata - indexed by alignable content position.
+/// Tracks the resolved language for each WORD of the main tier, at any depth,
+/// including inside quotations, phonological groups, sign groups and retraces.
 ///
 /// This structure stores:
 /// - **tier language**: utterance baseline (`[- code]` or `@Languages` primary)
 /// - **word languages**: resolved per-word language/provenance entries
 ///
-/// The `word_languages` vector is indexed the same way as alignment pairs,
-/// making it easy to correlate language information with aligned tier data.
+/// The vector is in in-order traversal order. It is NOT an alignment index:
+/// the tier domains disagree about what they count (Mor excludes retraces,
+/// Pho counts them), so correlating with `%mor`/`%gra` positions requires the
+/// alignment layer's own index types, not this order.
 ///
 /// # Structure
 ///
@@ -92,7 +94,7 @@ use crate::validation::{Validate, ValidationContext};
 ///
 /// **Per-word language lookup:**
 /// ```rust,ignore
-/// if let Some(info) = language_metadata.get_word_language(2) {
+/// if let Some(info) = language_metadata.word_languages.as_slice().get(2) {
 ///     println!("Word 2 is in language: {:?}", info.language);
 /// }
 /// ```
@@ -110,9 +112,9 @@ pub struct LanguageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tier_language: Option<LanguageCode>,
 
-    /// Resolved language/provenance for each alignable word.
+    /// Resolved language and provenance for each word, in traversal order.
     ///
-    /// Indexing is aligned with the utterance alignable-word domain.
+    /// Position in this vector is the only index; nothing stores one.
     pub word_languages: WordLanguageInfos,
 }
 
@@ -120,7 +122,7 @@ impl LanguageMetadata {
     /// Create metadata with a baseline tier language and no word entries.
     ///
     /// This constructor is typically used before word-level resolution begins.
-    /// Word assignments are appended incrementally as alignable content is traversed.
+    /// Appended in in-order traversal order as content is walked.
     pub fn new(tier_language: Option<LanguageCode>) -> Self {
         Self {
             tier_language,
@@ -130,18 +132,15 @@ impl LanguageMetadata {
 
     /// Append one resolved word-language entry.
     ///
-    /// Callers should add entries in alignable-word order so `word_index`
-    /// remains comparable with alignment metadata (`%mor/%gra/%pho/%wor`).
-    pub fn add_word(&mut self, info: WordLanguageInfo) {
-        self.word_languages.push(info);
-    }
-
-    /// Look up language metadata by alignable word index.
+    /// Append a word's resolved language.
     ///
-    /// This performs an index-keyed search over stored entries and returns the
-    /// first match. Missing entries indicate unresolved or unrecorded language state.
-    pub fn get_word_language(&self, index: usize) -> Option<&WordLanguageInfo> {
-        self.word_languages.iter().find(|w| w.word_index == index)
+    /// Takes the PIECES, not a built record, so a caller cannot construct an
+    /// entry out of band and push it. Position is the append position and is
+    /// not stored; a stored copy of it is what silently disagreed with this
+    /// list when the walk that filled it skipped containers.
+    pub fn add_word(&mut self, languages: WordLanguages, source: LanguageSource) {
+        self.word_languages
+            .push(WordLanguageInfo::new(languages, source));
     }
 
     /// Count word assignments by language code.
@@ -200,9 +199,8 @@ impl LanguageMetadata {
 
 /// Newtype wrapper around per-word language resolution entries for one utterance.
 ///
-/// The vector order follows alignable-word indexing used by the parser and
-/// alignment code, so `%mor`/`%gra` item positions can be compared with
-/// language switching decisions word-by-word.
+/// The vector is in in-order traversal order, one entry per word. It is not
+/// an alignment index; see [`LanguageMetadata`].
 ///
 /// References:
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>

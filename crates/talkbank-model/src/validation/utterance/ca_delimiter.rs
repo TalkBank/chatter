@@ -160,6 +160,9 @@ fn collect_ca_delimiters_from_content(
         UtteranceContent::Retrace(retrace) => {
             collect_ca_delimiters_from_bracketed(&retrace.content, delimiters);
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            collect_ca_delimiters_from_bracketed(&annotated.inner.content, delimiters);
+        }
         UtteranceContent::AnnotatedEvent(_)
         | UtteranceContent::Event(_)
         | UtteranceContent::Pause(_)
@@ -222,6 +225,9 @@ fn collect_ca_delimiters_from_bracketed_item(
         }
         BracketedItem::Retrace(retrace) => {
             collect_ca_delimiters_from_bracketed(&retrace.content, delimiters);
+        }
+        BracketedItem::AnnotatedRetrace(annotated) => {
+            collect_ca_delimiters_from_bracketed(&annotated.inner.content, delimiters);
         }
         BracketedItem::Event(_)
         | BracketedItem::AnnotatedEvent(_)

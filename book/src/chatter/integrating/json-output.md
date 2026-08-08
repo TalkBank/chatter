@@ -237,6 +237,36 @@ Key structural points:
   `dependent_tiers` and `alignments` are omitted when there is nothing
   to report.
 
+### `language_metadata`
+
+One entry per WORD of the main tier, in in-order traversal order, under
+`language_metadata.word_languages`:
+
+```json
+"language_metadata": {
+  "tier_language": "zho",
+  "word_languages": [
+    { "languages": { "single": "zho" }, "source": "default" },
+    { "languages": { "single": "eng" }, "source": "word_shortcut" }
+  ]
+}
+```
+
+Three properties worth knowing before consuming it:
+
+- **Every word at any depth**, including words inside quotations,
+  phonological groups, sign groups and retraces. A retraced word was spoken
+  and has a language, so it gets an entry.
+- **The produced form only.** For `dog [: cat]` the entry describes `dog`,
+  what the speaker actually said, not the correction.
+- **Position is the array subscript**, and nothing else. There is no index
+  field: read it with the equivalent of `enumerate()`. In particular this
+  order is **not** an alignment index. The tier domains disagree about what
+  they count (`%mor` excludes retraces, `%pho` counts them), so correlating
+  with `%mor` or `%gra` positions must go through `alignments`, not through
+  this order. A `word_index` field claiming otherwise existed until
+  2026-08-07 and was removed as derivable and misleading.
+
 ### Content Items
 
 `main.content.content` is a heterogeneous array. Each item has a `type` discriminator:

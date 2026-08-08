@@ -102,6 +102,12 @@ fn collect_wor_item(item: &UtteranceContent, in_retrace: bool, out: &mut Vec<Wor
         UtteranceContent::Retrace(retrace) => {
             collect_wor_bracketed_content(&retrace.content, true, out);
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            // Same handling as the bare form: the wrapper carries only
+            // the annotations written after the marker, and the retraced
+            // content is unchanged.
+            collect_wor_bracketed_content(&annotated.inner.content, true, out);
+        }
         UtteranceContent::Separator(sep) => {
             if is_tag_marker_separator(sep) {
                 out.push(WorItem::Separator {
@@ -175,6 +181,12 @@ fn collect_wor_bracketed_item(item: &BracketedItem, in_retrace: bool, out: &mut 
         }
         BracketedItem::Retrace(retrace) => {
             collect_wor_bracketed_content(&retrace.content, true, out);
+        }
+        BracketedItem::AnnotatedRetrace(annotated) => {
+            // Same handling as the bare form: the wrapper carries only
+            // the annotations written after the marker, and the retraced
+            // content is unchanged.
+            collect_wor_bracketed_content(&annotated.inner.content, true, out);
         }
         BracketedItem::Separator(sep) => {
             if is_tag_marker_separator(sep) {

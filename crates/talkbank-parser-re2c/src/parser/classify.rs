@@ -9,54 +9,154 @@ use crate::token::{Token, TokenDiscriminants};
 
 /// Convert a `WordWithAnnotations` to the appropriate `ContentItem`.
 ///
-/// If annotations include a retrace marker (`[/]`, `[//]`, etc.), ALL
-/// annotations are moved to the retrace level, the word inside the
-/// retrace gets no annotations. This matches grammar.js semantics
-/// where annotations attach to `word_with_optional_annotations`, not
-/// `standalone_word`.
+/// The marker run is a LEFT-ASSOCIATIVE CHAIN: each marker scopes over
+/// everything to its left. So `dog [* p:w] [/]` is a retrace of an
+/// error-marked word, `dog [/] [* p:w]` is an error-marked retrace, and
+/// `a [//] [/]` is a retrace of a retrace. Folding one wrapper per marker is
+/// the meaning of the surface rather than an encoding of it.
+///
+/// This used to find the FIRST marker and split around it, which silently
+/// dropped every marker after it: `a [//] [/] a` lowered as if the `[/]` were
+/// not written. The tree-sitter side folds
+/// (`talkbank-parser`'s `content/marker_chain.rs`), so the two backends
+/// disagreed, and the parity oracle could not see it because it runs over the
+/// reference corpus, which is valid CHAT by construction, and this shape is
+/// invalid. Covered now by `equivalence_marker_chain`.
 pub fn word_to_content_item<'a>(word: WordWithAnnotations<'a>) -> ContentItem<'a> {
-    let retrace_idx = word.annotations.iter().position(|a| a.is_retrace());
-    if let Some(idx) = retrace_idx {
-        let mut word = word;
-        let ann = word.annotations.remove(idx);
-        // `idx` came from `position(|a| a.is_retrace())` two lines
-        // above; `retrace_kind()` returns `Some` for any annotation
-        // that satisfies `is_retrace()`.
-        #[allow(clippy::expect_used)]
-        let kind = ann.retrace_kind().expect("is_retrace was true");
-        // grammar.js: word_with_optional_annotations has replacement AND base_annotations
-        // as separate fields. Replacement stays on the word; base_annotations (scoped
-        // markers like [?], [!], [= text]) go to retrace level.
-        // BUT: when replacement exists, scoped annotations go on the ReplacedWord,
-        // not on the retrace (TreeSitterParser behavior: ReplacedWord.with_scoped_annotations).
-        let has_replacement = word
-            .annotations
-            .iter()
-            .any(|a| matches!(a, ParsedAnnotation::Replacement(_)));
-        let mut retrace_annotations = Vec::new();
-        let mut word_annotations = Vec::new();
-        for ann in std::mem::take(&mut word.annotations) {
-            match &ann {
-                ParsedAnnotation::Replacement(_) => word_annotations.push(ann),
-                _ if has_replacement => {
-                    // When replacement exists, scoped annotations stay with the word
-                    // (they become ReplacedWord's scoped_annotations in the model)
-                    word_annotations.push(ann);
-                }
-                _ => retrace_annotations.push(ann),
+    if !word.annotations.iter().any(|a| a.is_retrace()) {
+        return ContentItem::Word(word);
+    }
+    let mut word = word;
+    // grammar.js gives `word_with_optional_annotations` a replacement field
+    // separate from `base_annotations`, so a replacement is part of the word
+    // wherever it was written and never travels up the chain.
+    //
+    // `extract_if` rather than `partition`: it pulls the replacements OUT and
+    // leaves the marker run in the buffer it already owns, so the common
+    // `dog [/]` shape allocates nothing extra. `partition` allocated a fresh
+    // Vec for the markers on every word-attached retrace, which is ~1.9M of
+    // them corpus-wide, about 0.8% of the parse phase's total allocations.
+    let mut markers = std::mem::take(&mut word.annotations);
+    word.annotations = markers
+        .extract_if(.., |a| matches!(a, ParsedAnnotation::Replacement(_)))
+        .collect();
+
+    Chain::Word(word).fold(markers).into_content_item()
+}
+
+/// What a marker fold has built so far.
+///
+/// One accumulator for all three seeds a marker run can start from (a word, an
+/// event, a bracketed group), rather than folding over `ContentItem`, whose
+/// other variants a marker run can never reach. That keeps `annotated_with`
+/// total with no catch-all.
+///
+/// Shared by all three fold sites in this crate. They were three separate
+/// algorithms: the word path folded, the event path partitioned markers out
+/// and so lost the annotation/marker interleaving, and the group path still
+/// split at the FIRST marker and dropped the rest, which is the exact bug the
+/// word path had been fixed for. Covered by `equivalence_marker_chain`.
+pub(crate) enum Chain<'a> {
+    /// A word, with whatever annotations have attached so far.
+    Word(WordWithAnnotations<'a>),
+    /// An event token, with its annotations.
+    Event(Token<'a>, Vec<ParsedAnnotation<'a>>),
+    /// A bracketed group, with its annotations.
+    Group(Vec<ContentItem<'a>>, Vec<ParsedAnnotation<'a>>),
+    /// At least one retrace marker has wrapped the chain.
+    Wrapped(Retrace<'a>),
+}
+
+impl<'a> Chain<'a> {
+    /// Fold an ordered marker run onto this seed, one wrapper per marker.
+    pub(crate) fn fold(self, markers: impl IntoIterator<Item = ParsedAnnotation<'a>>) -> Self {
+        markers
+            .into_iter()
+            .fold(self, |chain, marker| match marker.retrace_kind() {
+                Some(kind) => chain.retraced(kind),
+                None => chain.annotated_with(marker),
+            })
+    }
+
+    /// Attach a non-retrace annotation to whatever the chain currently is.
+    fn annotated_with(self, annotation: ParsedAnnotation<'a>) -> Self {
+        match self {
+            Chain::Word(mut word) => {
+                word.annotations.push(annotation);
+                Chain::Word(word)
+            }
+            Chain::Event(event, mut annotations) => {
+                annotations.push(annotation);
+                Chain::Event(event, annotations)
+            }
+            Chain::Group(contents, mut annotations) => {
+                annotations.push(annotation);
+                Chain::Group(contents, annotations)
+            }
+            Chain::Wrapped(mut retrace) => {
+                retrace.annotations.push(annotation);
+                Chain::Wrapped(retrace)
             }
         }
-        word.annotations = word_annotations;
-        let retrace = Retrace {
-            content: vec![ContentItem::Word(word)],
+    }
+
+    /// Wrap the chain in a retrace.
+    fn retraced(self, kind: RetraceKindParsed) -> Self {
+        // A group with no annotations of its own hands its brackets to the
+        // retrace, which is what `is_group` records. Nesting it instead would
+        // serialize `<<a b>> [/]`, a bracket pair nobody wrote.
+        //
+        // SHARED SEMANTICS, written twice. `talkbank-parser`'s
+        // `content::marker_chain::retrace` decides the same thing on the model
+        // type, so no constructor can own it for both. Drift here is silent and
+        // corrupts output, so the enforcement is the cross-parser test
+        // `equivalence_marker_chain`; change one of these two and run it.
+        if let Chain::Group(contents, annotations) = self {
+            if annotations.is_empty() {
+                return Chain::Wrapped(Retrace {
+                    content: contents,
+                    kind,
+                    is_group: true,
+                    synthesized_missing_annotation: false,
+                    annotations: Vec::new(),
+                });
+            }
+            return Chain::Wrapped(Retrace {
+                content: vec![ContentItem::Group(Group {
+                    contents,
+                    annotations,
+                })],
+                kind,
+                is_group: false,
+                synthesized_missing_annotation: false,
+                annotations: Vec::new(),
+            });
+        }
+        Chain::Wrapped(Retrace {
+            content: vec![self.into_content_item()],
             kind,
             is_group: false,
             synthesized_missing_annotation: false,
-            annotations: retrace_annotations,
-        };
-        ContentItem::Retrace(retrace)
-    } else {
-        ContentItem::Word(word)
+            annotations: Vec::new(),
+        })
+    }
+
+    pub(crate) fn into_content_item(self) -> ContentItem<'a> {
+        match self {
+            Chain::Word(word) => ContentItem::Word(word),
+            Chain::Event(event, annotations) => {
+                if annotations.is_empty() {
+                    ContentItem::Event(vec![event])
+                } else {
+                    ContentItem::AnnotatedEvent { event, annotations }
+                }
+            }
+            Chain::Group(contents, annotations) => ContentItem::Group(Group {
+                contents,
+                annotations,
+            }),
+            Chain::Wrapped(retrace) => ContentItem::Retrace(retrace),
+        }
     }
 }
 

@@ -6,29 +6,31 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::model::ContentAnnotation;
 use crate::node_types::WHITESPACES;
 use crate::parser::tree_parsing::parser_helpers::is_base_annotation;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::RetraceKind;
 use tree_sitter::Node;
 
 use super::single::{ParsedAnnotation, parse_single_annotation};
 
-/// Result of parsing a list of scoped annotations, separating content
-/// annotations from an optional retrace marker.
+/// Converts a `base_annotations` node into the ordered run of markers.
 ///
-/// In CHAT, at most one retrace marker can appear in an annotation list.
-/// The parser splits the annotations here so callers don't need to inspect
-/// annotation contents to detect retraces.
-pub(crate) struct ParsedAnnotations {
-    /// Non-retrace content annotations (e.g., `[*]`, `[= text]`, `[!]`)
-    pub content: Vec<ContentAnnotation>,
-    /// Optional retrace marker (`[/]`, `[//]`, `[///]`, `[/-]`, `[/?]`)
-    pub retrace: Option<RetraceKind>,
-}
-
-/// Converts a `base_annotations` node into `ParsedAnnotations`.
+/// ORDERED, and that is the whole point. The run is a left-associative chain:
+/// each marker scopes over everything to its left, so `dog [* p:w] [/]` (the
+/// error is on the abandoned attempt) and `dog [/] [* p:w]` (the error is on
+/// the retrace) are different claims about the same two words.
+///
+/// This used to return a PARTITION, `{ content: Vec<ContentAnnotation>,
+/// retrace: Option<RetraceKind> }`, whose docstring asserted in prose that "at
+/// most one retrace marker can appear in an annotation list". A partition of an
+/// ordered sequence can represent neither the interleaving nor a second marker,
+/// so the parser silently rewrote one ordering into the other (12,226 attested
+/// places in the corpora) and let a second marker overwrite the first (105
+/// places). Both were invisible to validate, to roundtrip and to `SemanticEq`.
+/// See `docs/design/2026-08-07-retrace-model-and-the-lost-marker-position.md`.
+///
+/// Nothing is judged here. An illegal run lowers faithfully and validation
+/// rejects it, so one rule covers both spellings and both parser backends.
 ///
 /// **Grammar Rule:**
 /// ```text
@@ -43,11 +45,10 @@ pub(crate) fn parse_scoped_annotations(
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
-) -> ParsedAnnotations {
+) -> Vec<ParsedAnnotation> {
     let child_count = node.child_count();
     // Pre-allocate: child_count / 2 pairs of (whitespace, annotation)
-    let mut content = Vec::with_capacity(child_count / 2);
-    let mut retrace = None;
+    let mut markers = Vec::with_capacity(child_count / 2);
     let mut idx = 0;
 
     // Grammar: repeat1(seq(whitespaces, base_annotation))
@@ -82,10 +83,7 @@ pub(crate) fn parse_scoped_annotations(
         {
             if is_base_annotation(child.kind()) {
                 if let ParseOutcome::Parsed(ann) = parse_single_annotation(child, source, errors) {
-                    match ann {
-                        ParsedAnnotation::Content(c) => content.push(c),
-                        ParsedAnnotation::Retrace(kind) => retrace = Some(kind),
-                    }
+                    markers.push(ann);
                 }
                 idx += 1;
             } else {
@@ -105,5 +103,5 @@ pub(crate) fn parse_scoped_annotations(
         }
     }
 
-    ParsedAnnotations { content, retrace }
+    markers
 }

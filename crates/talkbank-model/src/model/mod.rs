@@ -154,6 +154,7 @@ pub use header::{
 };
 
 // Re-export content types
+// Crate-internal: see `content::structure` for why this is not public API.
 pub use content::{
     Action,
     BracketedContent,
@@ -221,6 +222,7 @@ pub use content::{
     WordUnderlineBegin,
     WordUnderlineEnd,
 };
+pub(crate) use content::{ContentStructure, GroupRef};
 
 // Re-export annotation types
 pub use annotation::{

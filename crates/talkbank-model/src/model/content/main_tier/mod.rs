@@ -263,7 +263,7 @@ impl crate::validation::Validate for MainTier {
         use crate::validation::main_tier::{
             check_no_nested_quotations, check_no_pauses_in_pho_groups,
         };
-        use crate::validation::retrace::check_retraces_have_content;
+        use crate::validation::retrace::check_retraces;
 
         // Validate speaker
         let speaker_str = self.speaker.as_str();
@@ -409,8 +409,8 @@ impl crate::validation::Validate for MainTier {
             crate::validation::check_bullet(bullet, errors);
         }
 
-        // E370: Validate retraces are followed by content
-        check_retraces_have_content(self, errors);
+        // E370 and E377, over one traversal of the tier.
+        check_retraces(self, errors);
 
         // E371: Validate no pauses inside phonological groups
         check_no_pauses_in_pho_groups(self, errors);

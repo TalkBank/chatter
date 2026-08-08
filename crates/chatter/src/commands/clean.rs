@@ -20,7 +20,8 @@ use tracing::{Level, debug, info, span, warn};
 
 use crate::cli::OutputFormat;
 use talkbank_model::LineMap;
-use talkbank_model::model::{BracketedItem, MainTier, UtteranceContent, Word};
+use talkbank_model::alignment::helpers::{WordItem, walk_words};
+use talkbank_model::model::{MainTier, Word};
 
 /// A single word entry with raw and cleaned forms.
 #[derive(serde::Serialize)]
@@ -125,109 +126,21 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
 /// ensuring that punctuation, pauses, and other non-word constituents are skipped per the CHAT manual’s
 /// Main Tier blueprint.
 fn collect_words_from_main(main: &MainTier, out: &mut Vec<WordEntry>) {
-    for item in &main.content.content {
-        collect_words_from_utterance_content(item, out);
-    }
+    // `walk_words` with no tier domain is exactly this walk: it recurses into
+    // every group kind, quotations and both retrace forms, and skips pauses,
+    // events, markers and overlap points. Two hand-rolled matches used to say
+    // the same thing in 99 lines, and each new content variant had to be added
+    // to both of them as well as to the walker.
+    //
+    // Separators are yielded by the walker and dropped here, because `clean`
+    // surfaces only canonical words for alignment and NLP.
+    walk_words(&main.content.content, None, &mut |item| match item {
+        WordItem::Word(word) => push_word(word, out),
+        WordItem::ReplacedWord(replaced) => push_word(&replaced.word, out),
+        WordItem::Separator(_) => {}
+    });
 }
 
-/// Extract word entries from an `UtteranceContent` item, recursing into groups.
-///
-/// Uses the `UtteranceContent` enum to identify actual words, annotated words, and replacements while navigating
-/// into nested groups (pho/sin). Non-word kinds such as pauses, overlap points, and scoped annotations are omitted
-/// because the clean command only surfaces canonical talkbank words used for alignment/NLP.
-fn collect_words_from_utterance_content(item: &UtteranceContent, out: &mut Vec<WordEntry>) {
-    match item {
-        UtteranceContent::Word(w) => push_word(w, out),
-        UtteranceContent::AnnotatedWord(aw) => push_word(&aw.inner, out),
-        UtteranceContent::ReplacedWord(rw) => push_word(&rw.word, out),
-        // Groups: recurse into bracketed content
-        UtteranceContent::Group(g) => {
-            collect_words_from_bracketed(&g.content.content, out);
-        }
-        UtteranceContent::AnnotatedGroup(ag) => {
-            collect_words_from_bracketed(&ag.inner.content.content, out);
-        }
-        UtteranceContent::PhoGroup(pg) => {
-            collect_words_from_bracketed(&pg.content.content, out);
-        }
-        UtteranceContent::SinGroup(sg) => {
-            collect_words_from_bracketed(&sg.content.content, out);
-        }
-        UtteranceContent::Quotation(q) => {
-            collect_words_from_bracketed(&q.content.content, out);
-        }
-        UtteranceContent::Retrace(retrace) => {
-            collect_words_from_bracketed(&retrace.content.content, out);
-        }
-        // Non-word content: events, pauses, separators, overlap points, etc.
-        UtteranceContent::Event(_)
-        | UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Pause(_)
-        | UtteranceContent::AnnotatedAction(_)
-        | UtteranceContent::Freecode(_)
-        | UtteranceContent::Separator(_)
-        | UtteranceContent::OverlapPoint(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => {}
-    }
-}
-
-/// Extract word entries from `BracketedItem` content, recursing into nested groups.
-///
-/// Bracketed tiers (`%mor`, `%gra`, etc.) may contain nested words or groups; this helper reuses the
-/// same word extraction logic so the clean command can surface words regardless of tier nesting depth.
-fn collect_words_from_bracketed(items: &[BracketedItem], out: &mut Vec<WordEntry>) {
-    for item in items {
-        match item {
-            BracketedItem::Word(w) => push_word(w, out),
-            BracketedItem::AnnotatedWord(aw) => push_word(&aw.inner, out),
-            BracketedItem::ReplacedWord(rw) => push_word(&rw.word, out),
-            // Nested groups
-            BracketedItem::AnnotatedGroup(ag) => {
-                collect_words_from_bracketed(&ag.inner.content.content, out);
-            }
-            BracketedItem::PhoGroup(pg) => {
-                collect_words_from_bracketed(&pg.content.content, out);
-            }
-            BracketedItem::SinGroup(sg) => {
-                collect_words_from_bracketed(&sg.content.content, out);
-            }
-            BracketedItem::Quotation(q) => {
-                collect_words_from_bracketed(&q.content.content, out);
-            }
-            BracketedItem::Retrace(retrace) => {
-                collect_words_from_bracketed(&retrace.content.content, out);
-            }
-            // Non-word bracketed content
-            BracketedItem::Event(_)
-            | BracketedItem::AnnotatedEvent(_)
-            | BracketedItem::Pause(_)
-            | BracketedItem::Action(_)
-            | BracketedItem::AnnotatedAction(_)
-            | BracketedItem::OverlapPoint(_)
-            | BracketedItem::Separator(_)
-            | BracketedItem::InternalBullet(_)
-            | BracketedItem::Freecode(_)
-            | BracketedItem::LongFeatureBegin(_)
-            | BracketedItem::LongFeatureEnd(_)
-            | BracketedItem::UnderlineBegin(_)
-            | BracketedItem::UnderlineEnd(_)
-            | BracketedItem::NonvocalBegin(_)
-            | BracketedItem::NonvocalEnd(_)
-            | BracketedItem::NonvocalSimple(_)
-            | BracketedItem::OtherSpokenEvent(_) => {}
-        }
-    }
-}
-
-/// Pushes word.
 fn push_word(word: &Word, out: &mut Vec<WordEntry>) {
     out.push(WordEntry {
         raw: word.raw_text().to_string(),

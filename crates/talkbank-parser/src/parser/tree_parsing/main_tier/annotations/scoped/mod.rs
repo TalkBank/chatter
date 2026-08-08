@@ -16,3 +16,4 @@ mod single;
 mod symbols;
 
 pub(crate) use list::parse_scoped_annotations;
+pub(crate) use single::ParsedAnnotation;

@@ -7,12 +7,13 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
-use crate::model::{Annotated, BracketedContent, Group, Retrace, UtteranceContent};
+use crate::model::{BracketedContent, Group, UtteranceContent};
 use crate::node_types::{BASE_ANNOTATIONS, CONTENTS, GREATER_THAN, LESS_THAN, WHITESPACES};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::super::annotations::parse_scoped_annotations;
+use super::super::marker_chain::fold_marker_chain;
 use super::contents::parse_group_contents;
 
 /// Which group delimiter the offending whitespace touches; drives the
@@ -62,8 +63,10 @@ pub(crate) fn parse_group_content(
     let child_count = node.child_count();
     // Pre-allocate: group typically has 1-5 items, annotations typically 0-2
     let mut group_items = Vec::with_capacity(4);
-    let mut annotations = Vec::with_capacity(2);
-    let mut retrace_kind = None;
+    // One resolved value rather than an annotation list beside a retrace kind:
+    // those two were a partition of one ordered sequence and lost which side of
+    // the marker each annotation was written on.
+    let mut markers = Vec::new();
     let mut idx = 0;
 
     // Grammar: group_with_annotations: $ => seq(
@@ -186,9 +189,7 @@ pub(crate) fn parse_group_content(
         && let Some(child) = node.child(idx as u32)
     {
         if child.kind() == BASE_ANNOTATIONS {
-            let parsed = parse_scoped_annotations(child, source, errors);
-            annotations = parsed.content;
-            retrace_kind = parsed.retrace;
+            markers = parse_scoped_annotations(child, source, errors);
             idx += 1;
         } else {
             errors.report(ParseError::new(
@@ -232,19 +233,9 @@ pub(crate) fn parse_group_content(
     let bracketed = BracketedContent::new(group_items);
     let group = Group::new(bracketed).with_span(span);
 
-    if let Some(kind) = retrace_kind {
-        // Group retrace: <content> [/] etc.
-        let retrace = Retrace::new(group.content, kind)
-            .as_group()
-            .with_annotations(annotations)
-            .with_span(span);
-        ParseOutcome::parsed(UtteranceContent::Retrace(Box::new(retrace)))
-    } else if annotations.is_empty() {
-        ParseOutcome::parsed(UtteranceContent::Group(group))
-    } else {
-        let annotated = Annotated::new(group)
-            .with_scoped_annotations(annotations)
-            .with_span(span);
-        ParseOutcome::parsed(UtteranceContent::AnnotatedGroup(annotated))
-    }
+    ParseOutcome::parsed(fold_marker_chain(
+        UtteranceContent::Group(group),
+        markers,
+        span,
+    ))
 }

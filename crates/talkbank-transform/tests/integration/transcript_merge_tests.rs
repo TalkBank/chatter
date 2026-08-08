@@ -1112,3 +1112,90 @@ fn merge_refuses_when_donor_languages_exceed_reference() {
         "expected LanguageMismatch; got: {err}"
     );
 }
+
+// ============================================================================
+// Regression: File 1 with no row of a kind the donor has
+// ============================================================================
+
+/// File 1 with NO `@Comment` at all, which is the ordinary shape of a
+/// hand-coded reference transcript.
+const FIX_REF_NO_COMMENT: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@Media:\tnocomment, audio
+*CHI:\thello there . \u{15}500_1500\u{15}
+@End
+";
+
+/// A donor carrying exactly the provenance the merge contract promises to
+/// preserve: which engine produced it, and when.
+const FIX_ASR_WITH_PROVENANCE: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Investigator
+@ID:\teng|corpus|INV|||||Investigator|||
+@Media:\tnocomment, audio
+@Comment:\tASR engine rev. Unchecked output of ASR model.
+@Comment:\t[ba3 transcribe | asr=rev | 2026-07-10T14:51:52-04:00]
+*INV:\tgo on then . \u{15}2000_3000\u{15}
+@End
+";
+
+/// A donor `@Comment` must survive even when File 1 has none of its own.
+///
+/// The rule is "File 1's rows, then File 2's rows", and it was implemented as
+/// "insert File 2's rows after File 1's LAST row of that kind". With no such
+/// row there is no insertion point, and the donor's rows were dropped in
+/// silence.
+///
+/// That is not a corner case. A hand-coded reference usually carries no
+/// `@Comment` at all, so the common shape was the broken one, and what
+/// disappeared was exactly the provenance the merge exists to carry into the
+/// audit trail: 1,014 rows across one 345-session corpus.
+///
+/// Found by diffing this merge against an independent implementation of the
+/// same job rather than by any gate here, which is why the regression test is
+/// written from the outside in: it asserts the CONTENT survived, not which
+/// branch ran.
+#[test]
+fn donor_comments_survive_a_reference_that_has_none() {
+    let merged = merge_chats(
+        FIX_REF_NO_COMMENT,
+        FIX_ASR_WITH_PROVENANCE,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+        ParseValidateOptions::default(),
+    )
+    .expect("merge should succeed on valid inputs");
+
+    let comments: Vec<&str> = merged
+        .lines()
+        .filter(|line| line.starts_with("@Comment:"))
+        .collect();
+
+    assert_eq!(
+        comments.len(),
+        2,
+        "both donor @Comment rows should survive. got: {comments:?}"
+    );
+    assert!(
+        comments[0].contains("ASR engine"),
+        "donor rows keep their original order. got: {}",
+        comments[0]
+    );
+    assert!(
+        comments[1].contains("ba3 transcribe"),
+        "donor rows keep their original order. got: {}",
+        comments[1]
+    );
+}
+
+// There is deliberately NO sibling test for the `@ID` fall-through. One was
+// written and it passed with the fix REVERTED, which makes it worthless: a
+// valid File 1 always has an `@ID` row for every declared participant (E522),
+// so the insertion point always exists and the fall-through is unreachable for
+// any input the parser accepts. The arm stays in the code as the symmetric
+// case, and this note stays here so the next person does not write the same
+// test again.

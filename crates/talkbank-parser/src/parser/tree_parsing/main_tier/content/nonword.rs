@@ -16,6 +16,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::annotations::parse_scoped_annotations;
+use super::marker_chain::fold_marker_chain;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::expect_child;
 
@@ -38,7 +39,11 @@ pub(crate) fn parse_nonword_content(
 ) -> ParseOutcome<UtteranceContent> {
     let child_count = node.child_count();
     let mut parsed_nonword: Option<ParsedNonword> = None;
-    let mut annotations = Vec::with_capacity(2);
+    // The markers written after the nonword, resolved around the retrace
+    // marker. `Vec::new()` rather than `with_capacity`: most events carry no
+    // annotations at all, and the reserve was an unconditional allocation on
+    // every one. Matches what the word and group lowerings do.
+    let mut markers = Vec::new();
     let mut idx: u32 = 0;
 
     // Position 0: nonword (required)
@@ -89,11 +94,9 @@ pub(crate) fn parse_nonword_content(
                     idx += 1;
                 }
                 BASE_ANNOTATIONS => {
-                    // Parse the base_annotations container node.
-                    // Nonwords (events/actions) never carry retrace markers,
-                    // so we only take the content annotations.
-                    let parsed = parse_scoped_annotations(child, source, errors);
-                    annotations.extend(parsed.content);
+                    // The grammar admits at most one `base_annotations`
+                    // child, so this assigns rather than accumulates.
+                    markers = parse_scoped_annotations(child, source, errors);
                     idx += 1;
                 }
                 _ => {
@@ -110,32 +113,18 @@ pub(crate) fn parse_nonword_content(
         }
     }
 
-    // Convert to appropriate UtteranceContent variant
     ParseOutcome::from(parsed_nonword.map(|nonword| {
         let full_span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-
-        match nonword {
-            ParsedNonword::Event(event, _span) => {
-                if annotations.is_empty() {
-                    // Bare event
-                    UtteranceContent::Event(event)
-                } else {
-                    // Annotated event
-                    UtteranceContent::AnnotatedEvent(
-                        Annotated::new(event)
-                            .with_scoped_annotations(annotations)
-                            .with_span(full_span),
-                    )
-                }
-            }
+        let core = match nonword {
+            ParsedNonword::Event(event, _span) => UtteranceContent::Event(event),
+            // Actions are ALWAYS wrapped, even with no annotations. That is
+            // pre-existing behaviour and produces an `Annotated` with an empty
+            // list, which is the state a verifying constructor on `Annotated`
+            // would make unrepresentable; changing it is not this fold's job.
             ParsedNonword::Action(action, _span) => {
-                // Actions are ALWAYS wrapped in AnnotatedAction (even if no annotations)
-                UtteranceContent::AnnotatedAction(
-                    Annotated::new(action)
-                        .with_scoped_annotations(annotations)
-                        .with_span(full_span),
-                )
+                UtteranceContent::AnnotatedAction(Annotated::new(action).with_span(full_span))
             }
-        }
+        };
+        fold_marker_chain(core, markers, full_span)
     }))
 }

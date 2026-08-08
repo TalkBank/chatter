@@ -666,3 +666,87 @@ fn test_cache_clear_all() -> Result<(), TestError> {
     }
     Ok(())
 }
+
+/// A cache row written under one parser backend must never serve a run under
+/// the other.
+///
+/// The two backends are independent implementations and are permitted to
+/// disagree; that is the entire point of keeping the re2c parser as a
+/// specification oracle. A cache that ignores which one produced a verdict
+/// therefore hands back an answer the caller did not ask for.
+///
+/// Observed 2026-08-07 on `a [//] [/] a .`, before the fix: tree-sitter said
+/// Invalid, `--parser re2c` said Valid and wrote its row, and the next
+/// tree-sitter run reported VALID off a cache hit, contradicting itself with no
+/// input change.
+///
+/// Asserted as "no cross-backend cache hit" rather than as a specific verdict
+/// disagreement on purpose. A verdict-based test would pass the moment the two
+/// backends happened to agree about this construct, which is exactly when the
+/// key is still wrong and nobody notices.
+///
+/// # Why this is `#[ignore]` rather than fixed
+///
+/// The obvious fix, folding the backend label into the `version` string, was
+/// implemented and then REVERTED because it is measurably worse than the bug.
+/// `version_prune` retains exactly the current version plus ONE predecessor
+/// (`RetainedVersions`), and its rationale is entirely about build generations
+/// (downgrades, bisects, two builds sharing a machine). One binary can already
+/// reach two versions via `--strict-linkers`; adding a parser dimension makes
+/// four, against a window of two. Measured on a 5,000-file corpus rotating
+/// default / `--parser re2c` / `--strict-linkers`: from the third cycle on,
+/// EVERY run gets zero cache hits and deletes a full generation plus a VACUUM.
+/// That is the shape v0.6.0 was pulled over.
+///
+/// The parser dimension belongs in the ROW KEY (the `path_hash` suffix), which
+/// is how roundtrip rows already separate backends
+/// (`roundtrip_ops`, `get_cache_key_with_suffix`). That keeps live versions at
+/// two, needs no cold rotation, and retires the duplicate `parser_kind` column
+/// that validation rows currently bind `IS NULL`. It requires threading the
+/// backend onto the `UnifiedCache` handle, which is why it is not folded into
+/// the change that found it.
+///
+/// The same bug is live in the desktop (`commands.rs`, `cache_for_rules`),
+/// which exposes a backend toggle and memoizes one pool per `RulesVersion`, so
+/// switching backends mid-session serves the other backend's verdicts.
+#[test]
+#[ignore = "records a live bug: the validation cache key omits the parser backend. The obvious fix (folding the backend into the version string) is UNSAFE and measured to be worse than the bug; see the note above. Un-ignore when the parser moves into the row key instead."]
+fn a_row_written_by_one_parser_never_serves_the_other() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let file_path = dir.path().join("cross_backend.cha");
+    std::fs::write(
+        &file_path,
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+         @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tthe dog ran .\n@End\n",
+    )?;
+
+    // Populate the cache under the re2c backend.
+    let first = run_validate(&harness, &file_path, &["--parser", "re2c"])?;
+    let first_out = combined_output(&first);
+    if !first_out.contains("Cache misses: 1") {
+        return Err(TestError::Failure(format!(
+            "re2c run should have missed a cold cache, got:\n{first_out}"
+        )));
+    }
+
+    // The default backend must not be served that row.
+    let second = run_validate(&harness, &file_path, &[])?;
+    let second_out = combined_output(&second);
+    if !second_out.contains("Cache hits: 0") {
+        return Err(TestError::Failure(format!(
+            "tree-sitter run was served a row written by re2c; the cache key is \
+             missing the parser dimension. Output:\n{second_out}"
+        )));
+    }
+
+    // And the reverse direction, so a fix that keys only one way still fails.
+    let third = run_validate(&harness, &file_path, &["--parser", "re2c"])?;
+    let third_out = combined_output(&third);
+    if !third_out.contains("Cache hits: 1") {
+        return Err(TestError::Failure(format!(
+            "re2c should have hit its own row from the first run, got:\n{third_out}"
+        )));
+    }
+    Ok(())
+}

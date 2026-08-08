@@ -22,6 +22,6 @@ mod scoped;
 
 // Re-export public API
 pub(crate) use replacement::parse_replacement;
-pub(crate) use scoped::parse_scoped_annotations;
+pub(crate) use scoped::{ParsedAnnotation, parse_scoped_annotations};
 
 // Internal functions used by scoped.rs

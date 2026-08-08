@@ -190,7 +190,7 @@ fn parse_quotation_contents_items(
                 | FALLING_TO_MID
                 | FALLING_TO_LOW => {
                     for content in parse_nested_content(child, source, errors) {
-                        if let Some(group_content) = convert_to_group_content(content) {
+                        if let Ok(group_content) = convert_to_group_content(content) {
                             group_items.push(group_content);
                         }
                     }

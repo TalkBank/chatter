@@ -6,11 +6,15 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Overlaps>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters>
 
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
 mod word_recursion;
 
 pub(crate) use word_recursion::validate_words_at_every_depth;
 
-use crate::model::{BracketedItem, MainTier, UtteranceContent};
+use crate::model::{BracketedItem, ContentStructure, GroupRef, MainTier, UtteranceContent};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 /// Reject pauses that occur inside phonological groups (`‹...›`).
@@ -85,26 +89,38 @@ pub(crate) fn check_no_nested_quotations(main_tier: &MainTier, errors: &impl Err
     }
 }
 
-/// Recursively detect whether any nested item is a quotation.
+/// Recursively detect whether any nested item is a quotation, at ANY depth.
+///
+/// # Why this is not a hand-written match any more
+///
+/// It was, and it recursed into `AnnotatedGroup` and nothing else, sending
+/// every other container to `_ => {}`. So a quotation inside a retrace, a
+/// phonological group, a sign group, or another quotation was invisible:
+///
+/// ```text
+/// *CHI:	“I said “hello” there” .      reported E372
+/// *CHI:	“a <“b”> [/] c” .             reported NOTHING
+/// ```
+///
+/// The model for the second is quotation -> retrace -> quotation, which is the
+/// nesting this rule exists to reject. Classifying through [`ContentStructure`]
+/// means the predicate descends wherever the rest of the crate descends, and
+/// `GroupRef` is what lets it still tell a QUOTATION from any other container,
+/// which a bare `&BracketedContent` could not.
 fn has_nested_quotation(items: &[BracketedItem]) -> bool {
-    for item in items {
-        match item {
-            // Direct nested quotation
-            BracketedItem::Quotation(_) => return true,
-
-            // Recursively check nested groups
-            BracketedItem::AnnotatedGroup(group)
-                if has_nested_quotation(&group.inner.content.content) =>
-            {
-                return true;
-            }
-
-            // Other items don't contain quotations
-            _ => {}
+    items.iter().any(|item| {
+        // Bound once. Calling `structure()` again inside the arm re-derives
+        // what the match just destructured, and leaves two calls that a reader
+        // must keep in agreement.
+        let structure = item.structure();
+        match structure {
+            ContentStructure::Group(GroupRef::Quotation(_)) => true,
+            ContentStructure::Retrace(_) | ContentStructure::Group(_) => structure
+                .enclosed()
+                .is_some_and(|content| has_nested_quotation(&content.content)),
+            ContentStructure::Word(_) | ContentStructure::Other => false,
         }
-    }
-
-    false
+    })
 }
 
 /// Regression tests for main-tier structural checks in this module.

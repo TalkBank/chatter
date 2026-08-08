@@ -356,3 +356,89 @@ fn error_reporting_unhandled_tokens() {
         "malformed input should produce at least one diagnostic, got none"
     );
 }
+
+/// Both backends must lower a whole MARKER RUN, including the illegal shapes.
+///
+/// A content item followed by scoped markers is a left-associative chain: each
+/// marker scopes over everything to its left, so `dog [* p:w] [/]` and
+/// `dog [/] [* p:w]` are different claims. The tree-sitter side folds the chain
+/// (`content/marker_chain.rs`); this test is what keeps the oracle honest about
+/// whether re2c does the same.
+///
+/// # Why inline sources rather than a reference-corpus fixture
+///
+/// The parity oracle runs over `corpus/reference`, which is VALID CHAT by
+/// construction. The fold's whole premise is "lower illegal shapes faithfully
+/// and let validation judge them", which places every illegal shape
+/// permanently outside that corpus's reach. `a [//] [/] a` is exactly such a
+/// shape: it round-trips byte for byte and validation rejects it (E377). It
+/// cannot live in the reference corpus, and without a case like it here the
+/// oracle reports green while the two backends disagree.
+#[test]
+fn equivalence_marker_chain() {
+    let (ts, re2c) = both_parsers();
+
+    // Each is one main tier, wrapped in the minimum legal file.
+    let tiers = [
+        // Two markers with nothing between them. Ruled an error, and the
+        // parsers must still agree on the tree so ONE validation rule can
+        // judge it for both.
+        "a [//] [/] a .",
+        // An annotation before the marker annotates the retraced material.
+        "dog [* p:w] [/] dog .",
+        // ...and after it, the retrace. Different claim, different tree.
+        "dog [/] [* p:w] dog .",
+        // The group form of the same distinction.
+        "<the dog> [* s:r] [/] the dog .",
+        // A retrace over a bare event, six occurrences corpus-wide.
+        "I know it &=laughs [//] you were good .",
+        // TWO markers after a group. The existing group case below carries one
+        // marker, which is exactly the gap that let the group path stay on the
+        // old split-at-first-marker algorithm after the word path was folded.
+        "<a b> [//] [/] c .",
+        // A marker and then an annotation on an event: the interleaving the
+        // fold exists to preserve, on the path that partitions markers out.
+        "&=laughs [/] [* p:w] a .",
+        // A replacement alongside an error code, the dominant attested shape
+        // of annotation-before-marker. `classify.rs` hoists replacements out
+        // of the run before folding, so this pins that the hoist does not
+        // reorder what survives.
+        "dog [: cat] [* p:w] [/] dog .",
+        // The BRACKETED spelling of a retrace over an event, which is the form
+        // that actually dominates in the corpora and reaches the group seed
+        // rather than the event seed. Ruled illegal (E378), so like the
+        // adjacent-marker case above it can never appear in the reference
+        // corpus and only a case here can see the backends disagree.
+        "<&=sigh> [/] &=sigh ok .",
+        // A pause beside the event, so the group holds two non-word leaves
+        // rather than one. Attested verbatim in slabank-data.
+        "<(.) &=laughs> [//] ok .",
+    ];
+
+    let mut failed = Vec::new();
+    for tier in &tiers {
+        let content = format!(
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+             @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t{tier}\n@End\n"
+        );
+        let ts_errors = ErrorCollector::new();
+        let ts_file = ts.parse_chat_file_streaming(&content, &ts_errors);
+        let re2c_errors = ErrorCollector::new();
+        match re2c.parse_chat_file(&content, 0, &re2c_errors) {
+            ParseOutcome::Parsed(re2c_file) => {
+                if !ts_file.semantic_eq(&re2c_file) {
+                    failed.push(format!("semantic mismatch: {tier}"));
+                }
+            }
+            ParseOutcome::Rejected => failed.push(format!("re2c rejected, ts parsed: {tier}")),
+        }
+    }
+
+    assert!(
+        failed.is_empty(),
+        "the two backends disagree on {} of {} marker chains:\n  {}",
+        failed.len(),
+        tiers.len(),
+        failed.join("\n  ")
+    );
+}

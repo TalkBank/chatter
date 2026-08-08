@@ -26,6 +26,7 @@
 mod base;
 mod errors;
 mod group;
+mod marker_chain;
 mod nonword;
 mod pho_group;
 mod quotation;

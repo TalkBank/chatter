@@ -42,6 +42,7 @@ mod phon_xtier_validation_tests;
 mod pipeline_tests;
 mod prefix_marker_position_tests;
 mod rediarize_tests;
+mod retrace_marker_order_tests;
 mod sanity_scan_tests;
 mod speaker_id_tests;
 mod stack_limit_tests;

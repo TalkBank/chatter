@@ -33,7 +33,7 @@
 //!   cargo run --release --manifest-path spec/runtime-tools/Cargo.toml \
 //!     --bin ca_census -- \
 //!     --file-list /path/to/candidates.txt \
-//!     --data-root ~/0tb/data \
+//!     --data-root /path/to/corpora \
 //!     --out /path/to/ca-census.json
 //!
 //! The file list is a preselection of candidate paths (locating files with a

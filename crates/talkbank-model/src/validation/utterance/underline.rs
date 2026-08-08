@@ -110,6 +110,17 @@ fn walk_underline_balance_in_content(
                 errors,
             );
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            // Same handling as the bare form: the wrapper carries only
+            // the annotations written after the marker, and the retraced
+            // content is unchanged.
+            walk_underline_balance_in_bracketed(
+                &annotated.inner.content,
+                begin_spans,
+                fallback_span,
+                errors,
+            );
+        }
         UtteranceContent::AnnotatedEvent(_)
         | UtteranceContent::Event(_)
         | UtteranceContent::Pause(_)
@@ -198,6 +209,17 @@ fn walk_underline_balance_in_bracketed(
             BracketedItem::Retrace(retrace) => {
                 walk_underline_balance_in_bracketed(
                     &retrace.content,
+                    begin_spans,
+                    fallback_span,
+                    errors,
+                );
+            }
+            BracketedItem::AnnotatedRetrace(annotated) => {
+                // Same handling as the bare form: the wrapper carries only
+                // the annotations written after the marker, and the retraced
+                // content is unchanged.
+                walk_underline_balance_in_bracketed(
+                    &annotated.inner.content,
                     begin_spans,
                     fallback_span,
                     errors,

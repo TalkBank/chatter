@@ -542,6 +542,32 @@
       ],
       "type": "object"
     },
+    "Annotated5": {
+      "description": "Generic wrapper that adds scoped annotations to a content item.\n\nThis wrapper is used throughout CHAT to attach bracketed annotations to\nwords, events, groups, and actions. The annotations appear immediately\nafter the annotated element in CHAT format.\n\n# CHAT Format Examples\n\n```text\nwant [* m]                               Word error (missing word)\ngoing [* s]                              Word error (started utterance)\ndog [= explanation]                      Explanation annotation\n&=laughs [! loudly]                      Paralinguistic note\n<I want> [/] I need                      Repetition retracing\n<the dog> [//] the cat                   Correction retracing\nperro [= dog]                            Translation\n```\n\n# Type Parameter\n\n- `T` - The inner content type being annotated (Word, Event, Group, or Action)\n\n# Common Uses\n\n- `Annotated<Word>` - Word with error codes, explanations, or comments\n- `Annotated<Event>` - Event with paralinguistic notes\n- `Annotated<Group>` - Group with retracing markers\n- `Annotated<Action>` - Action with explanatory notes\n\n# References\n\n- [Scoped Symbols](https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols)\n- [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/BracketedContent",
+          "description": "The retraced content (words the speaker corrected)."
+        },
+        "is_group": {
+          "description": "Whether the original CHAT had angle brackets around the content.\n`<word> [/]` = true, `word [/]` = false.\nUsed for lossless roundtrip serialization.",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/RetraceKind",
+          "description": "What kind of retrace (repetition, correction, reformulation, etc.)"
+        },
+        "scoped_annotations": {
+          "$ref": "#/$defs/AnnotatedContentAnnotations",
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`."
+        }
+      },
+      "required": [
+        "content",
+        "kind"
+      ],
+      "type": "object"
+    },
     "AnnotatedContentAnnotations": {
       "description": "Scoped annotations attached to an `Annotated<T>` wrapper.\n\nWraps a `Vec<ContentAnnotation>` and provides collection-like access via `Deref`.\nMust contain at least one annotation (validated during the validation phase).\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>\n- <https://talkbank.org/0info/manuals/CHAT.html#Error_Coding>",
       "items": {
@@ -763,6 +789,26 @@
               "properties": {
                 "type": {
                   "const": "retrace",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Annotated5"
+            },
+            {
+              "description": "Retraced content carrying scoped annotations written AFTER its marker.\n\nSee `UtteranceContent::AnnotatedRetrace`; the two enums mirror each\nother and a shape legal on the tier is legal inside brackets.",
+              "properties": {
+                "type": {
+                  "const": "annotated_retrace",
                   "type": "string"
                 }
               },
@@ -2543,6 +2589,16 @@
         {
           "const": "E376",
           "description": "Failed to parse replacement annotation content.",
+          "type": "string"
+        },
+        {
+          "const": "E377",
+          "description": "A retracing marker whose only content is another retracing marker.\n\nA marker retraces the material immediately to its left, and a marker is\nnot material. Ruled an error by the CHAT maintainer, 2026-08-07.\n\nNamed for the SHAPE, not a spelling. The lowering folds a marker run\ninto a left-associative chain, so the unbracketed `на [//] [/] на` and\nthe bracketed `<<a> [/]> [//]` produce the same tree and one rule\ncatches both; an `AdjacentRetraceMarkers` name described only the first\nand read as a different, narrower rule than the one that ships.",
+          "type": "string"
+        },
+        {
+          "const": "E378",
+          "description": "A retracing marker applied to material containing no words at all.\n\nA marker retraces the WORDS to its left, and a laugh is not a word.\nRuled by the CHAT maintainer, 2026-08-07: \"No, not legal. You can't\nretrace a laugh.\"\n\nDisjoint from `RetraceWithNoMaterial` despite the neighbouring names.\nThat one is a marker over a lone marker, whose inner retrace still holds\nwords; this one is material with no word anywhere beneath it. The\nrepairs differ too: drop a marker there, retrace the words here.",
           "type": "string"
         },
         {
@@ -4653,7 +4709,7 @@
       "type": "array"
     },
     "LanguageMetadata": {
-      "description": "Language metadata for an entire utterance.\n\nTracks the resolved language for each alignable word in the main tier.\nParallel to alignment metadata - indexed by alignable content position.\n\nThis structure stores:\n- **tier language**: utterance baseline (`[- code]` or `@Languages` primary)\n- **word languages**: resolved per-word language/provenance entries\n\nThe `word_languages` vector is indexed the same way as alignment pairs,\nmaking it easy to correlate language information with aligned tier data.\n\n# Structure\n\n```text\nLanguageMetadata\n  ├─ tier_language: Option<LanguageCode>  (e.g., \"eng\")\n  └─ word_languages: Vec<WordLanguageInfo>\n       ├─ [0]: word_index=0, language=\"eng\", source=Default\n       ├─ [1]: word_index=1, language=\"spa\", source=WordShortcut\n       └─ ...\n```\n\n# CHAT Format Examples\n\n**Example 1: Single language utterance**\n\n```text\n@Languages: eng\n*CHI: I want cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`: All words have language=\"eng\", source=Default\n- `is_code_switching()`: false\n\n**Example 2: Code-switching utterance**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`:\n  - \"I\" → eng (Default)\n  - \"want\" → eng (Default)\n  - \"galletas\" → spa (WordShortcut)\n  - \"please\" → eng (WordShortcut)\n- `is_code_switching()`: true (uses both \"eng\" and \"spa\")\n\n**Example 3: Tier-scoped language change**\n\n```text\n@Languages: eng, fra\n*CHI: [- fra] je veux cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"fra\") (from `[- fra]` marker)\n- `word_languages`: All words have language=\"fra\", source=TierScoped\n- `is_code_switching()`: false\n\n# Use Cases\n\n**Code-switching detection:**\n```rust,ignore\nif language_metadata.is_code_switching() {\n    let counts = language_metadata.count_by_language();\n    println!(\"Utterance uses {} languages\", counts.len());\n}\n```\n\n**Per-word language lookup:**\n```rust,ignore\nif let Some(info) = language_metadata.get_word_language(2) {\n    println!(\"Word 2 is in language: {:?}\", info.language);\n}\n```\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)",
+      "description": "Language metadata for an entire utterance.\n\nTracks the resolved language for each WORD of the main tier, at any depth,\nincluding inside quotations, phonological groups, sign groups and retraces.\n\nThis structure stores:\n- **tier language**: utterance baseline (`[- code]` or `@Languages` primary)\n- **word languages**: resolved per-word language/provenance entries\n\nThe vector is in in-order traversal order. It is NOT an alignment index:\nthe tier domains disagree about what they count (Mor excludes retraces,\nPho counts them), so correlating with `%mor`/`%gra` positions requires the\nalignment layer's own index types, not this order.\n\n# Structure\n\n```text\nLanguageMetadata\n  ├─ tier_language: Option<LanguageCode>  (e.g., \"eng\")\n  └─ word_languages: Vec<WordLanguageInfo>\n       ├─ [0]: word_index=0, language=\"eng\", source=Default\n       ├─ [1]: word_index=1, language=\"spa\", source=WordShortcut\n       └─ ...\n```\n\n# CHAT Format Examples\n\n**Example 1: Single language utterance**\n\n```text\n@Languages: eng\n*CHI: I want cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`: All words have language=\"eng\", source=Default\n- `is_code_switching()`: false\n\n**Example 2: Code-switching utterance**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`:\n  - \"I\" → eng (Default)\n  - \"want\" → eng (Default)\n  - \"galletas\" → spa (WordShortcut)\n  - \"please\" → eng (WordShortcut)\n- `is_code_switching()`: true (uses both \"eng\" and \"spa\")\n\n**Example 3: Tier-scoped language change**\n\n```text\n@Languages: eng, fra\n*CHI: [- fra] je veux cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"fra\") (from `[- fra]` marker)\n- `word_languages`: All words have language=\"fra\", source=TierScoped\n- `is_code_switching()`: false\n\n# Use Cases\n\n**Code-switching detection:**\n```rust,ignore\nif language_metadata.is_code_switching() {\n    let counts = language_metadata.count_by_language();\n    println!(\"Utterance uses {} languages\", counts.len());\n}\n```\n\n**Per-word language lookup:**\n```rust,ignore\nif let Some(info) = language_metadata.word_languages.as_slice().get(2) {\n    println!(\"Word 2 is in language: {:?}\", info.language);\n}\n```\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)",
       "properties": {
         "tier_language": {
           "anyOf": [
@@ -4668,7 +4724,7 @@
         },
         "word_languages": {
           "$ref": "#/$defs/WordLanguageInfos",
-          "description": "Resolved language/provenance for each alignable word.\n\nIndexing is aligned with the utterance alignable-word domain."
+          "description": "Resolved language and provenance for each word, in traversal order.\n\nPosition in this vector is the only index; nothing stores one."
         }
       },
       "required": [
@@ -5695,15 +5751,8 @@
       "type": "array"
     },
     "Retrace": {
-      "description": "Content that was spoken but then corrected/repeated.\n\nThe type-level distinction from `AnnotatedGroup` ensures that alignment,\nretokenization, and word extraction can branch on the enum variant\ninstead of inspecting annotation contents at runtime.\n\n# Ownership\n\n- `content`, the retraced words (what the speaker said before correcting)\n- `kind`, what kind of retrace (repetition, correction, reformulation)\n- `annotations`, additional non-retrace annotations that follow the\n  retrace marker (e.g., `[= explanation]` after `[/]`)",
+      "description": "Content that was spoken but then corrected/repeated.\n\nThe type-level distinction from `AnnotatedGroup` ensures that alignment,\nretokenization, and word extraction can branch on the enum variant\ninstead of inspecting annotation contents at runtime.\n\n# Ownership\n\n- `content`, the retraced words (what the speaker said before correcting)\n- `kind`, what kind of retrace (repetition, correction, reformulation)\n\n# Annotations are NOT a field here, deliberately\n\nA content item followed by a run of scoped markers is a left-associative\nchain: each marker scopes over everything to its left. So an annotation\nBEFORE the marker annotates the retraced material and belongs inside\n`content` (as an `Annotated<Group>`), while an annotation AFTER the marker\nannotates the retrace and belongs on an `Annotated<Retrace>` wrapper.\n\nA flat `annotations` field on this struct used to hold both, which made the\ntwo indistinguishable and silently rewrote `dog [* p:w] [/]` into\n`dog [/] [* p:w]`, a different claim about which stretch carried the error.\nSee `docs/design/2026-08-07-retrace-model-and-the-lost-marker-position.md`.",
       "properties": {
-        "annotations": {
-          "description": "Additional non-retrace annotations (e.g., `[= explanation]` after `[/]`).",
-          "items": {
-            "$ref": "#/$defs/ContentAnnotation"
-          },
-          "type": "array"
-        },
         "content": {
           "$ref": "#/$defs/BracketedContent",
           "description": "The retraced content (words the speaker corrected)."
@@ -6915,6 +6964,26 @@
         {
           "allOf": [
             {
+              "$ref": "#/$defs/Annotated5"
+            },
+            {
+              "description": "Retraced content carrying scoped annotations written AFTER its marker.\n\nCHAT: `<a b> [/] [= gloss]`, `dog [/] [* p:w]`.\n\nExactly parallel to `Group` / `AnnotatedGroup`, and it exists because\nthe marker sequence is a left-associative chain: an annotation written\nBEFORE the marker scopes over the retraced material and therefore lives\ninside the retrace's own `content`, while one written AFTER scopes over\nthe retrace and lives here. Holding both in one flat list on `Retrace`\nmade the two indistinguishable and silently rewrote one into the other.",
+              "properties": {
+                "type": {
+                  "const": "annotated_retrace",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
               "$ref": "#/$defs/PhoGroup"
             },
             {
@@ -7899,7 +7968,7 @@
       "type": "array"
     },
     "WordLanguageInfo": {
-      "description": "Language metadata for a single word.\n\nStores the resolved language(s) and source for one alignable word\nin the main tier. The `word_index` corresponds to the position in\nthe alignable content (same indexing used for tier alignment).\n\nThis structure is used for:\n- **Code-switching analysis**: Identify which words are in which language(s)\n- **Code-mixing detection**: Identify words with @s:eng+fra style markers\n- **Ambiguity tracking**: Identify words with @s:eng&spa style markers\n- **Validation**: Ensure language markers are used correctly\n- **Data extraction**: Associate morphological annotations with language context\n\n# Fields\n\n- `word_index`: Zero-based index in alignable content (words + groups + terminator)\n- `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous\n- `source`: How the language was determined (see [`LanguageSource`])\n\n# CHAT Format Examples\n\n**Example 1: Code-switching with shortcuts**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- Word 0 \"I\": languages=Single(\"eng\"), source=Default\n- Word 1 \"want\": languages=Single(\"eng\"), source=Default\n- Word 2 \"galletas\": languages=Single(\"spa\"), source=WordShortcut\n- Word 3 \"please\": languages=Single(\"eng\"), source=WordShortcut\n- Word 4 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 2: Code-mixed word**\n\n```text\n@Languages: eng, spa\n*CHI: hello habla@s:eng+spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"habla\": languages=Multiple([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 3: Ambiguous word**\n\n```text\n@Languages: eng, spa\n*CHI: hello word@s:eng&spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"word\": languages=Ambiguous([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Second-Language Marker (single)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single)\n- [Second-Language Marker (multiple)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple)\n- [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)",
+      "description": "Language metadata for a single word.\n\nStores the resolved language(s) and source for one word of the main tier.\n\nPosition is the record's position in [`LanguageMetadata::word_languages`],\nwhich serializes as a JSON array, so a consumer reads it with `enumerate()`.\nThere is deliberately no stored index. One existed, documented as \"the same\nindexing used for tier alignment\", and that could not be true: Mor excludes\nretraces and Pho counts them, so no single integer indexes both. Nothing\nenforced it and nothing read it, so when the walk skipped containers every\nfollowing record carried a position for a different word and no test, type\nor reader could see it.\n\nThis structure is used for:\n- **Code-switching analysis**: Identify which words are in which language(s)\n- **Code-mixing detection**: Identify words with @s:eng+fra style markers\n- **Ambiguity tracking**: Identify words with @s:eng&spa style markers\n- **Validation**: Ensure language markers are used correctly\n- **Data extraction**: Associate morphological annotations with language context\n\n# Fields\n\n- `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous\n- `source`: How the language was determined (see [`LanguageSource`])\n\n# CHAT Format Examples\n\n**Example 1: Code-switching with shortcuts**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- Word 0 \"I\": languages=Single(\"eng\"), source=Default\n- Word 1 \"want\": languages=Single(\"eng\"), source=Default\n- Word 2 \"galletas\": languages=Single(\"spa\"), source=WordShortcut\n- Word 3 \"please\": languages=Single(\"eng\"), source=WordShortcut\n- Word 4 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 2: Code-mixed word**\n\n```text\n@Languages: eng, spa\n*CHI: hello habla@s:eng+spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"habla\": languages=Multiple([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 3: Ambiguous word**\n\n```text\n@Languages: eng, spa\n*CHI: hello word@s:eng&spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"word\": languages=Ambiguous([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Second-Language Marker (single)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single)\n- [Second-Language Marker (multiple)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple)\n- [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)",
       "properties": {
         "languages": {
           "$ref": "#/$defs/WordLanguages",
@@ -7908,23 +7977,16 @@
         "source": {
           "$ref": "#/$defs/LanguageSource",
           "description": "How the language was determined"
-        },
-        "word_index": {
-          "description": "Zero-based index of the word in alignable content",
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
         }
       },
       "required": [
-        "word_index",
         "languages",
         "source"
       ],
       "type": "object"
     },
     "WordLanguageInfos": {
-      "description": "Newtype wrapper around per-word language resolution entries for one utterance.\n\nThe vector order follows alignable-word indexing used by the parser and\nalignment code, so `%mor`/`%gra` item positions can be compared with\nlanguage switching decisions word-by-word.\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>\n- <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>",
+      "description": "Newtype wrapper around per-word language resolution entries for one utterance.\n\nThe vector is in in-order traversal order, one entry per word. It is not\nan alignment index; see [`LanguageMetadata`].\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>\n- <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>",
       "items": {
         "$ref": "#/$defs/WordLanguageInfo"
       },

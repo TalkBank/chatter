@@ -224,9 +224,14 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
 /// Every content item type has a proper model representation.
 /// Convert a linker token to a model Linker.
 pub(crate) fn linker_token_to_model(tok: &Token<'_>) -> Option<Linker> {
-    // re2c tokens carry only the matched text slice, not an absolute source
-    // offset, so linkers get Span::DUMMY here, matching this converter's
-    // convention for every other token (see the separator converter below).
+    // Every model node this converter builds gets Span::DUMMY, because
+    // `parser::tokenize` drops the lexer's spans (`lexer.map(|(tok, _span)|
+    // tok)`) before the parser ever sees them. The lexer DOES produce them:
+    // `Lexer::next` returns `(Token, LexerSpan)`. An earlier version of this
+    // comment said the tokens "carry only the matched text slice", which is
+    // false and which reached the user-facing CLI reference before it was
+    // caught, where it made restoring positions look impossible rather than
+    // merely unfinished.
     // Source-spacing rules (E758) are span-arithmetic gated on non-dummy
     // spans in the model path; the re2c oracle mirrors them via its own
     // token-stream scan, so a dummy span is correct here.
@@ -301,12 +306,19 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
             if r.is_group {
                 retrace = retrace.as_group();
             }
-            // Move non-retrace annotations from the AST to model retrace
+            // These are the annotations written AFTER the marker, which is
+            // exactly what an `Annotated<Retrace>` wrapper means. `classify.rs`
+            // splits the run at the marker's index, so the ones written before
+            // it are already on the retraced word inside `r.content` and never
+            // reach here.
             let scoped = annotations_to_scoped(&r.annotations);
-            if !scoped.is_empty() {
-                retrace = retrace.with_annotations(scoped);
+            if scoped.is_empty() {
+                UtteranceContent::Retrace(Box::new(retrace))
+            } else {
+                UtteranceContent::AnnotatedRetrace(Box::new(
+                    talkbank_model::model::Annotated::new(retrace).with_scoped_annotations(scoped),
+                ))
             }
-            UtteranceContent::Retrace(Box::new(retrace))
         }
         ast::ContentItem::Group(g) => {
             let content: Vec<BracketedItem> = g
@@ -628,11 +640,16 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Option<B
             if r.is_group {
                 retrace = retrace.as_group();
             }
+            // As at the tier-level site above: only the after-the-marker
+            // annotations reach here.
             let scoped = annotations_to_scoped(&r.annotations);
-            if !scoped.is_empty() {
-                retrace = retrace.with_annotations(scoped);
+            if scoped.is_empty() {
+                Some(BracketedItem::Retrace(Box::new(retrace)))
+            } else {
+                Some(BracketedItem::AnnotatedRetrace(Box::new(
+                    talkbank_model::model::Annotated::new(retrace).with_scoped_annotations(scoped),
+                )))
             }
-            Some(BracketedItem::Retrace(Box::new(retrace)))
         }
         ast::ContentItem::Annotation(Token::Freecode(s)) => {
             Some(BracketedItem::Freecode(Freecode::new(*s)))

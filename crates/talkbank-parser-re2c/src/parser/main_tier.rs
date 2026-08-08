@@ -12,7 +12,7 @@ use crate::ast::*;
 use crate::token::{Token, TokenDiscriminants};
 
 use super::classify::{
-    is_annotation, is_linker, is_separator, is_terminator, is_word_token,
+    Chain, is_annotation, is_linker, is_separator, is_terminator, is_word_token,
     token_to_parsed_annotation, word_to_content_item,
 };
 use super::dependent_tiers::{opt_newline, ws};
@@ -345,24 +345,24 @@ pub fn subtoken_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clo
 // ═══════════════════════════════════════════════════════════
 
 /// Parse an event with optional trailing annotations.
-/// Retrace markers on events are silently dropped (not semantically valid).
+///
+/// A retrace marker on an event used to be dropped here as "not semantically
+/// valid", which was a judgement made in a lowering. The tree-sitter side folds
+/// it (`content/marker_chain.rs`), so the two backends disagreed on
+/// `I know it &=laughs [//] you were good .`, a shape attested six times in the
+/// corpora. Lower it faithfully and let validation judge, which is the same
+/// rule the retrace work settled on everywhere else.
 fn event<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
     select! { tok @ Token::Event(_) => tok }
         .then(trailing_annotations())
         .map(|(event_tok, annotations)| {
-            // Drop retrace annotations on events
-            let annotations: Vec<_> = annotations
-                .into_iter()
-                .filter(|a| !a.is_retrace())
-                .collect();
-            if annotations.is_empty() {
-                ContentItem::Event(vec![event_tok])
-            } else {
-                ContentItem::AnnotatedEvent {
-                    event: event_tok,
-                    annotations,
-                }
-            }
+            // A retrace marker on an event used to be dropped here as "not
+            // semantically valid", which is a judgement made in a lowering.
+            // Folded like every other marker run so the two backends agree on
+            // the shape; validation judges it.
+            Chain::Event(event_tok, Vec::new())
+                .fold(annotations)
+                .into_content_item()
         })
 }
 
@@ -382,23 +382,7 @@ pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>
             .then_ignore(select! { Token::GreaterThan(_) => () })
             .then(trailing_annotations())
             .map(|(contents, annotations)| {
-                // Check for retrace annotation, if found, this is a retrace group
-                let retrace_idx = annotations.iter().position(|a| a.is_retrace());
-                if let Some(idx) = retrace_idx {
-                    let mut annotations = annotations;
-                    let ann = annotations.remove(idx);
-                    // `is_retrace()` guard above; `retrace_kind()`
-                    // returns `Some` for is_retrace annotations.
-                    #[allow(clippy::expect_used)]
-                    let kind = ann.retrace_kind().expect("is_retrace was true");
-                    ContentItem::Retrace(Retrace {
-                        content: contents,
-                        kind,
-                        is_group: true,
-                        synthesized_missing_annotation: false,
-                        annotations,
-                    })
-                } else if annotations.is_empty() {
+                if annotations.is_empty() {
                     // grammar.js: `group_with_annotations` REQUIRES at
                     // least one annotation. Tree-sitter recovers from a
                     // missing annotation by inserting a synthetic MISSING
@@ -417,10 +401,15 @@ pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>
                         annotations,
                     })
                 } else {
-                    ContentItem::Group(Group {
-                        contents,
-                        annotations,
-                    })
+                    // Every other shape is the ordinary marker fold. This arm
+                    // used to be a third hand-rolled algorithm that took only
+                    // the FIRST retrace marker and put the rest in the
+                    // retrace's annotation list, where lowering dropped them,
+                    // so `<a b> [//] [/]` lost the `[/]` on this backend after
+                    // the word path had already been fixed.
+                    Chain::Group(contents, Vec::new())
+                        .fold(annotations)
+                        .into_content_item()
                 }
             });
 

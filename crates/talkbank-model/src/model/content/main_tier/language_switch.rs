@@ -7,8 +7,8 @@
 
 use super::MainTier;
 use crate::model::LanguageCode;
+use crate::model::content::UtteranceContent;
 use crate::model::content::word::Word;
-use crate::model::content::{BracketedContent, BracketedItem, UtteranceContent};
 
 impl MainTier {
     /// Return the utterance-level language that would replace whole-tier
@@ -83,107 +83,28 @@ impl MainTier {
 /// per-word `lang.is_none() → return None` guard then refuses to
 /// auto-promote to `[- LANG]` whenever ANY uttered word lacks an
 /// explicit language attribution.
+/// Collect every word on the tier, for the language-switch check.
+///
+/// `walk_words` with no tier domain is exactly this walk: it recurses into
+/// every group kind, quotations and both retrace forms, and skips pauses,
+/// events, markers and overlap points. Two hand-rolled matches used to say the
+/// same thing, and each new content variant had to be added to both of them as
+/// well as to the walker; the sibling module at `main_tier/mod.rs` was already
+/// calling the walker.
+///
+/// A replaced word contributes BOTH sides: the word as produced and each word
+/// of its replacement, because either can carry the `@s` marker the caller is
+/// looking for. Separators carry no language and are dropped.
 fn collect_main_tier_words_for_language_check<'a>(
     content: &'a [UtteranceContent],
     out: &mut Vec<&'a Word>,
 ) {
-    for item in content {
-        collect_main_tier_word_item(item, out);
-    }
-}
-
-fn collect_main_tier_word_item<'a>(item: &'a UtteranceContent, out: &mut Vec<&'a Word>) {
-    match item {
-        UtteranceContent::Word(word) => out.push(word),
-        UtteranceContent::AnnotatedWord(annotated) => out.push(&annotated.inner),
-        UtteranceContent::ReplacedWord(replaced) => {
+    crate::alignment::helpers::walk_words(content, None, &mut |item| match item {
+        crate::alignment::helpers::WordItem::Word(word) => out.push(word),
+        crate::alignment::helpers::WordItem::ReplacedWord(replaced) => {
             out.push(&replaced.word);
-            for word in &replaced.replacement.words {
-                out.push(word);
-            }
+            out.extend(replaced.replacement.words.iter());
         }
-        UtteranceContent::Group(group) => {
-            collect_main_tier_bracketed_items(&group.content, out);
-        }
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            collect_main_tier_bracketed_items(&annotated.inner.content, out);
-        }
-        UtteranceContent::PhoGroup(pho) => {
-            collect_main_tier_bracketed_items(&pho.content, out);
-        }
-        UtteranceContent::SinGroup(sin) => {
-            collect_main_tier_bracketed_items(&sin.content, out);
-        }
-        UtteranceContent::Quotation(quotation) => {
-            collect_main_tier_bracketed_items(&quotation.content, out);
-        }
-        UtteranceContent::Retrace(retrace) => {
-            collect_main_tier_bracketed_items(&retrace.content, out);
-        }
-        // Non-word items: skip (they don't carry word-level @s markers).
-        UtteranceContent::Separator(_)
-        | UtteranceContent::Event(_)
-        | UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Pause(_)
-        | UtteranceContent::AnnotatedAction(_)
-        | UtteranceContent::Freecode(_)
-        | UtteranceContent::OverlapPoint(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => {}
-    }
-}
-
-fn collect_main_tier_bracketed_items<'a>(content: &'a BracketedContent, out: &mut Vec<&'a Word>) {
-    for entry in &content.content {
-        match entry {
-            BracketedItem::Word(word) => out.push(word),
-            BracketedItem::AnnotatedWord(annotated) => out.push(&annotated.inner),
-            BracketedItem::ReplacedWord(replaced) => {
-                out.push(&replaced.word);
-                for word in &replaced.replacement.words {
-                    out.push(word);
-                }
-            }
-            BracketedItem::AnnotatedGroup(annotated) => {
-                collect_main_tier_bracketed_items(&annotated.inner.content, out);
-            }
-            BracketedItem::PhoGroup(pho) => {
-                collect_main_tier_bracketed_items(&pho.content, out);
-            }
-            BracketedItem::SinGroup(sin) => {
-                collect_main_tier_bracketed_items(&sin.content, out);
-            }
-            BracketedItem::Quotation(quotation) => {
-                collect_main_tier_bracketed_items(&quotation.content, out);
-            }
-            BracketedItem::Retrace(retrace) => {
-                collect_main_tier_bracketed_items(&retrace.content, out);
-            }
-            // Non-word items: skip.
-            BracketedItem::Event(_)
-            | BracketedItem::AnnotatedEvent(_)
-            | BracketedItem::Pause(_)
-            | BracketedItem::Action(_)
-            | BracketedItem::AnnotatedAction(_)
-            | BracketedItem::OverlapPoint(_)
-            | BracketedItem::Separator(_)
-            | BracketedItem::InternalBullet(_)
-            | BracketedItem::Freecode(_)
-            | BracketedItem::LongFeatureBegin(_)
-            | BracketedItem::LongFeatureEnd(_)
-            | BracketedItem::UnderlineBegin(_)
-            | BracketedItem::UnderlineEnd(_)
-            | BracketedItem::NonvocalBegin(_)
-            | BracketedItem::NonvocalEnd(_)
-            | BracketedItem::NonvocalSimple(_)
-            | BracketedItem::OtherSpokenEvent(_) => {}
-        }
-    }
+        crate::alignment::helpers::WordItem::Separator(_) => {}
+    });
 }

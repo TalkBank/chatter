@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|3;00.00|male|||Target_Child|||
+@Comment:	ERROR: the model is quotation -> retrace -> quotation
+*CHI:	“a <“b”> [/] c” .
+@End

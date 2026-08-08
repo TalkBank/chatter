@@ -60,6 +60,11 @@ fn normalize_ca_omission_content(content: &mut UtteranceContent) {
         UtteranceContent::AnnotatedGroup(annotated) => {
             normalize_ca_omission_bracketed(&mut annotated.inner.content);
         }
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            // The wrapper's annotations hold no words; only the retraced
+            // content is normalised, exactly as for the bare form.
+            normalize_ca_omission_bracketed(&mut annotated.inner.content);
+        }
         UtteranceContent::Retrace(retrace) => {
             normalize_ca_omission_bracketed(&mut retrace.content);
         }
@@ -97,6 +102,9 @@ fn normalize_ca_omission_bracketed(content: &mut BracketedContent) {
                 normalize_ca_omission_replaced_word(replaced.as_mut());
             }
             BracketedItem::AnnotatedGroup(annotated) => {
+                normalize_ca_omission_bracketed(&mut annotated.inner.content);
+            }
+            BracketedItem::AnnotatedRetrace(annotated) => {
                 normalize_ca_omission_bracketed(&mut annotated.inner.content);
             }
             BracketedItem::Retrace(retrace) => {

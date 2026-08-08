@@ -27,4 +27,15 @@
 *CHI:	male [: female] [* s:r] [/] male [: female] [* s:r] .
 %mor:	adj|female-S1 .
 %gra:	1|0|ROOT 2|1|PUNCT
+@Comment:	--- Annotations on each side of the marker, WITHOUT a replacement ---
+@Comment:	The marker run is a left-associative chain, so a code written before
+@Comment:	the marker is on the retraced material and one written after is on
+@Comment:	the retrace. Every pre-existing case above carries a replacement,
+@Comment:	where both parsers agreed anyway, so nothing here was exercised and
+@Comment:	the two backends diverged silently for 12,226 corpus occurrences.
+*CHI:	dog [* p:w] [/] dog .
+*MOT:	dog [/] [* p:w] dog .
+*CHI:	<the dog> [* s:r] [/] the dog .
+*MOT:	then [% pause] [//] and now .
+*CHI:	then [<] [//] and now .
 @End

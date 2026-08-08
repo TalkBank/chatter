@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-03 13:30 EDT
+**Last modified:** 2026-08-07 10:59 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -154,6 +154,30 @@ comment, or a doc, the type is wrong. If the answer is the compiler, it
 is right.
 
 Not a licence to rewrite: apply it to what you touch and to new design.
+
+**Every touch is the mechanism.** There is no separate type-hygiene project
+before 1.0 and there will not be one. Every bug fix, every refactor, and every
+drive-by reading of code you happened to open carries the same standing
+obligation: leave the types better than you found them, and delete whatever the
+improved type has just made impossible to fail.
+
+**The test half is an explicit pre-1.0 goal: remove as many tests as possible
+by making illegal states unrepresentable.** A test guarding an invariant is a
+standing admission that nothing enforces it. When you meet one, ask whether a
+type could refuse the bad value outright. If it can, change the type and delete
+the test: a type cannot be forgotten, it covers callers the test never
+enumerated, and it fails at the point of the mistake instead of in CI. Apply
+this to tests you are merely passing through, not only to ones you are writing.
+
+What legitimately survives that question: **wire formats** (serde output no
+type pins), **roundtrips** between a formatter and a parser that are two
+separate functions, **measurements**, **policy** choices with real
+alternatives, and behaviour a signature cannot describe. A surviving test says
+which of those it is, in its own docstring.
+
+**Record what you notice even when you are not fixing it.** An unwritten
+observation is one the next reader has to make again, and the reader after
+that.
 
 ## Cross-cutting design rules
 

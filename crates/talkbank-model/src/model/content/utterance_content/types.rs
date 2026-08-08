@@ -90,6 +90,18 @@ pub enum UtteranceContent {
     ///
     /// CHAT: `<I want> [/] I need` or `word [/] word`
     Retrace(Box<Retrace>),
+    /// Retraced content carrying scoped annotations written AFTER its marker.
+    ///
+    /// CHAT: `<a b> [/] [= gloss]`, `dog [/] [* p:w]`.
+    ///
+    /// Exactly parallel to `Group` / `AnnotatedGroup`, and it exists because
+    /// the marker sequence is a left-associative chain: an annotation written
+    /// BEFORE the marker scopes over the retraced material and therefore lives
+    /// inside the retrace's own `content`, while one written AFTER scopes over
+    /// the retrace and lives here. Holding both in one flat list on `Retrace`
+    /// made the two indistinguishable and silently rewrote one into the other.
+    #[serde(rename = "annotated_retrace")]
+    AnnotatedRetrace(Box<Annotated<Retrace>>),
     /// Phonological group ‹...› (cannot have annotations)
     #[serde(rename = "pho_group")]
     PhoGroup(PhoGroup),

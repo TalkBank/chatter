@@ -38,10 +38,7 @@
 //! at all, E220 fires. The prefix-marker rule is probed too, so the same
 //! guarantee is pinned for a language-gated check added later.
 
-use predicates::prelude::*;
-use std::fs;
 use talkbank_parser_tests::test_error::TestError;
-use tempfile::tempdir;
 
 /// Build a one-utterance English file with the given main-tier content.
 fn chat_file(words: &str) -> String {
@@ -56,56 +53,42 @@ fn chat_file(words: &str) -> String {
     )
 }
 
-/// Run `chatter validate` and assert the verdict.
-fn assert_validation(name: &str, content: &str, valid: bool) -> Result<(), TestError> {
-    let dir = tempdir()?;
-    let file_path = dir.path().join(name);
-    fs::write(&file_path, content)?;
-
-    let assertion = crate::common::chatter_cmd()
-        .arg("validate")
-        .arg(&file_path)
-        .assert();
-    if valid {
-        assertion
-            .success()
-            .stdout(predicate::str::contains("Invalid: 0"));
-    } else {
-        assertion
-            .failure()
-            .stdout(predicate::str::contains("Invalid: 1"));
-    }
-    Ok(())
-}
-
 /// Baseline: the defect is about NESTING, so the un-nested case must already
 /// be rejected. If this ever fails, the probe rule itself has changed and the
 /// rest of the file proves nothing.
 #[test]
 fn a_digit_bearing_word_is_rejected_when_it_stands_alone() -> Result<(), TestError> {
-    assert_validation("flat.cha", &chat_file("hello3 dog"), false)
+    crate::common::assert_validation(
+        "flat.cha",
+        &chat_file("hello3 dog"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::IllegalDigits),
+    )
 }
 
 #[test]
 fn a_digit_bearing_word_is_rejected_inside_a_retrace() -> Result<(), TestError> {
-    assert_validation("retrace.cha", &chat_file("hello3 [/] hello dog"), false)
+    crate::common::assert_validation(
+        "retrace.cha",
+        &chat_file("hello3 [/] hello dog"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::IllegalDigits),
+    )
 }
 
 #[test]
 fn a_digit_bearing_word_is_rejected_inside_a_reformulation() -> Result<(), TestError> {
-    assert_validation(
+    crate::common::assert_validation(
         "reformulation.cha",
         &chat_file("hello3 [//] hello dog"),
-        false,
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::IllegalDigits),
     )
 }
 
 #[test]
 fn a_digit_bearing_word_is_rejected_inside_an_angle_group() -> Result<(), TestError> {
-    assert_validation(
+    crate::common::assert_validation(
         "group.cha",
         &chat_file("<hello3 there> [/] hello there dog"),
-        false,
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::IllegalDigits),
     )
 }
 
@@ -113,7 +96,11 @@ fn a_digit_bearing_word_is_rejected_inside_an_angle_group() -> Result<(), TestEr
 /// added after the walker fix cannot regress back to flat iteration.
 #[test]
 fn a_prefix_marker_word_is_rejected_inside_a_retrace() -> Result<(), TestError> {
-    assert_validation("marker_retrace.cha", &chat_file("sun# [/] sun dog"), false)
+    crate::common::assert_validation(
+        "marker_retrace.cha",
+        &chat_file("sun# [/] sun dog"),
+        crate::common::Verdict::Rejected(talkbank_model::ErrorCode::PrefixMarkerLanguageNotAllowed),
+    )
 }
 
 /// Control: nesting must not make a LEGAL word illegal.
@@ -122,15 +109,19 @@ fn a_prefix_marker_word_is_rejected_inside_a_retrace() -> Result<(), TestError> 
 /// that simply rejects nested content, and the suite would not notice.
 #[test]
 fn a_legal_word_stays_legal_inside_a_retrace() -> Result<(), TestError> {
-    assert_validation("legal_retrace.cha", &chat_file("hello [/] hello dog"), true)
+    crate::common::assert_validation(
+        "legal_retrace.cha",
+        &chat_file("hello [/] hello dog"),
+        crate::common::Verdict::Valid,
+    )
 }
 
 /// Control: a legal word inside an angle group stays legal.
 #[test]
 fn a_legal_word_stays_legal_inside_an_angle_group() -> Result<(), TestError> {
-    assert_validation(
+    crate::common::assert_validation(
         "legal_group.cha",
         &chat_file("<hello there> [/] hello there dog"),
-        true,
+        crate::common::Verdict::Valid,
     )
 }

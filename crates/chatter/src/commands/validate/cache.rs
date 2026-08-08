@@ -67,7 +67,7 @@ pub(crate) fn initialize_validation_cache(
         // One batched clear over the resolved file list. Never loop
         // per-file clears here: each `clear_prefix` call was a full-table
         // scan, so the loop this replaces was quadratic in corpus size and
-        // pinned `validate --force ~/0tb/data` at 100% CPU behind a blank
+        // pinned `validate --force <corpus-root>` at 100% CPU behind a blank
         // screen (v0.5.0 DOA, 2026-07-30; regression test
         // `force_refresh_scales_to_corpus_sized_input`).
         match cache.clear_paths(files) {
