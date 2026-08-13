@@ -49,10 +49,21 @@ fn clear_prefix_is_bulk_not_per_file() {
     let elapsed = started.elapsed();
 
     assert_eq!(removed, 4000, "every entry under the prefix is cleared");
+    // A HANG DETECTOR, per CLAUDE.md danger rule 9b: an order of magnitude
+    // above a healthy run, never a snug fit. `removed == 4000` above is the
+    // counted assertion, but it cannot tell a bulk DELETE from a per-file loop
+    // (both remove 4000), so a timing check still earns its place here. What it
+    // must not do is fail on a slow machine: the sibling test in
+    // `chatter/tests/integration/force_refresh_scale_tests.rs` had a 15 s
+    // ceiling, took 2.5 s locally, and turned the Windows matrix red at 15.29 s
+    // doing entirely correct work.
+    //
+    // The invariant that would retire this is a statement counter on the cache,
+    // asserting the clear costs O(1) statements regardless of entry count.
     assert!(
-        elapsed < Duration::from_secs(2),
-        "clear_prefix must be a bulk operation; {elapsed:?} for 4000 entries \
-         means the per-file delete loop is back"
+        elapsed < Duration::from_secs(60),
+        "clear_prefix took {elapsed:?} for 4000 entries, which is hang \
+         territory: the per-file delete loop is back"
     );
 }
 

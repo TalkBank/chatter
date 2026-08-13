@@ -60,10 +60,30 @@ fn force_refresh_scales_to_corpus_sized_input() -> Result<(), TestError> {
     let elapsed = started.elapsed();
     assert_success(&forced, "forced validate over generated corpus");
 
+    // A HANG DETECTOR, not a speed test, which is the only form of timing
+    // assertion this project allows (CLAUDE.md danger rule 9b).
+    //
+    // The ceiling is an ORDER OF MAGNITUDE above a healthy run, not a snug
+    // fit, because a wall-clock threshold tuned to one machine fails on
+    // another and gets called flaky. The previous ceiling was 15 s; a Windows
+    // CI runner took 15.29 s doing entirely correct work and turned the matrix
+    // red, which is the failure mode the rule describes rather than a
+    // regression.
+    //
+    // The bug it pins made `--force` hang INDEFINITELY at 150% CPU on a real
+    // 136k-file cache: `clear_prefix` ran once per resolved file, each doing a
+    // full-table scan. Anything of that shape blows past 120 s on any machine,
+    // and nothing healthy approaches it.
+    //
+    // The better assertion is counted work, per the same rule: the number of
+    // cache-clearing statements must not grow with the file count. That needs
+    // a statement counter the cache does not currently expose, and adding one
+    // is the real fix; this ceiling is the interim that cannot cry wolf.
     assert!(
-        elapsed < Duration::from_secs(15),
-        "validate --force took {elapsed:?} for 6000 warmed files; the \
-         cache-refresh phase is doing superlinear work again (v0.5.0 DOA class)"
+        elapsed < Duration::from_secs(120),
+        "validate --force took {elapsed:?} for 6000 warmed files, which is \
+         hang territory: the cache-refresh phase is doing superlinear work \
+         again (v0.5.0 DOA class)"
     );
     Ok(())
 }
