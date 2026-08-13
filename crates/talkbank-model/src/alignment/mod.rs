@@ -115,7 +115,9 @@ mod location_tests;
 
 // Re-export public API
 pub use gra::{GraAlignment, GraAlignmentPair, align_mor_to_gra};
-pub use helpers::{TierDomain, count_tier_positions_until};
+pub use helpers::{
+    TierDomain, count_tier_positions_until, counts_for_tier, walk_words, walk_words_mut,
+};
 pub use indices::{
     GraHeadRef, GraIndex, MainWordIndex, MorChunkIndex, MorItemIndex, PhoItemIndex,
     SemanticWordIndex1, SemanticWordIndexError, SinItemIndex,

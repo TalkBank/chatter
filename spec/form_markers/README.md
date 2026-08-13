@@ -1,7 +1,7 @@
 # Form Marker Registry
 
 **Status:** Current
-**Last updated:** 2026-08-11 16:20 EDT
+**Last updated:** 2026-08-12 22:55 EDT
 
 `form_marker_registry.json` is the single owner of the CHAT special-form marker
 set: the `@` suffix a word can carry (`gumma@c`, `b@l`, `word@z:rtfd`).

@@ -29,6 +29,14 @@ its line. That is the only way out, deliberately.
 The stated date is older than the date of the last commit that touched the
 file. That is mechanical and needs no judgement: if the bytes changed after the
 date the page claims, the claim is false.
+
+A SQUASH RE-DATES EVERY FILE IT TOUCHES. `git log -1` then reports the squash
+commit for content that did not change, so every doc in the range whose header
+predates the squash is flagged. The headers are not wrong about the content;
+they are wrong about the published history, which is what a reader of the repo
+sees. Stamp the affected docs with the squash date, and only after confirming
+each one is actually current: six were affected by the 2026-08-12 squash, all
+of them documenting work inside it.
 """
 
 from __future__ import annotations

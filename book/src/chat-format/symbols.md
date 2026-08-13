@@ -1,7 +1,7 @@
 # Symbols
 
 **Status:** Reference
-**Last modified:** 2026-08-11 20:55 EDT
+**Last modified:** 2026-08-12 22:55 EDT
 
 CHAT uses a rich set of symbols for transcription conventions. This
 page documents the symbol categories and the symbol registry that

@@ -1,7 +1,7 @@
 # spec/tools - Core Generators Crate
 
 **Status:** Current
-**Last modified:** 2026-08-11 20:40 EDT
+**Last modified:** 2026-08-12 22:55 EDT
 
 ## Read the book first
 

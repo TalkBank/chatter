@@ -66,7 +66,6 @@ crates/talkbank-lsp/CLAUDE.md
 crates/talkbank-lsp/DEBUGGING.md
 crates/talkbank-lsp/README.md
 crates/talkbank-model/README.md
-crates/talkbank-parser-re2c/CLAUDE.md
 crates/talkbank-parser-re2c/README.md
 crates/talkbank-parser-re2c/docs/parity-report.md
 crates/talkbank-parser-tests/clan-check-reference/check-error-codes.md

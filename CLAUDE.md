@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-11 16:20 EDT
+**Last modified:** 2026-08-12 22:55 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and

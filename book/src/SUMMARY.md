@@ -103,4 +103,5 @@
 - [JSON Output Reference](chatter/integrating/json-output.md)
 - [JSON Schema](chatter/integrating/json-schema.md)
 - [Diagnostic Contract](chatter/integrating/diagnostic-contract.md)
+- [What a Version Bump Promises](chatter/integrating/versioning.md)
 - [Merge Override File Format](chatter/integrating/merge-overrides.md)

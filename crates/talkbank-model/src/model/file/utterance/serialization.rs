@@ -11,6 +11,20 @@
 use super::Utterance;
 use crate::WriteChat;
 
+/// Walking an utterance's content.
+///
+/// **Do not hand-roll the walk or the word filter.** Use
+/// [`walk_words`](crate::alignment::walk_words) with the [`TierDomain`] you
+/// care about, and [`counts_for_tier`](crate::alignment::counts_for_tier) to
+/// decide which words that domain aligns against. The Alignment section of
+/// [`Word`](crate::model::Word)'s rustdoc explains why hand-rolling the
+/// traversal goes wrong, with the three bugs it produced downstream.
+///
+/// This guidance lives on an impl block rather than on the `Utterance` struct
+/// because that struct's doc comment is published verbatim as the `Utterance`
+/// description in `schema/chat-file.schema.json`, where Rust API guidance is
+/// noise to a schema reader. Rustdoc shows this on the type's page; schemars
+/// does not see it.
 impl Utterance {
     /// Serialize to an owned CHAT string.
     pub fn to_chat(&self) -> String {
