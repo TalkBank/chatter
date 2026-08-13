@@ -1,59 +1,76 @@
 # Testing and Quality Gates
 
 **Status:** Current
-**Last modified:** 2026-06-21 21:33 EDT
+**Last modified:** 2026-08-12 21:00 EDT
 
-This page summarizes the **current** relationship between local verification and
-the repository CI workflows.
+How local verification relates to CI. The local commands themselves live in
+[Developer Verification Checks](dev-checks.md), which is their single owner;
+this page says which of them CI repeats and which it does not.
 
 ## Local pre-merge contract
 
-There is no repo-local `make verify` wrapper in this checkout today. The local
-contract is the command set documented in [Setup](setup.md) and
-[Developer Verification Checks](dev-checks.md):
-
-```bash
-cargo fmt --all -- --check
-cargo build --workspace --all-targets --locked
-cargo test --workspace
-cargo test --doc
-```
-
-plus grammar/spec/parser-specific checks when you touch those surfaces.
+Run the pre-push set from [dev-checks](dev-checks.md#before-pushing). In short:
+`just fmt-check`, `just test`, `just check-feature-off`,
+`cargo test --doc --workspace`, `just test-spec`, `just book`, plus whatever
+your surface adds.
 
 ## Never-regress gates
 
-Beyond the formatting/build/test sweep above, the CHAT core has four
-**never-regress gates** that must stay green for any change touching the
-grammar, parser, model, validation, serialization, or alignment: parser
-equivalence, roundtrip idempotency, reference-corpus 100%, and the
-error-code spec tests. Each has a fast, targeted command. They are defined,
-with the exact command and what each protects, under
-[Testing, Never-Regress Gates](testing.md#never-regress-gates).
-A red gate is a bug until proven otherwise, never a test expectation to
-quietly update.
+The CHAT core has five gates that must stay green for any change touching the
+grammar, parser, model, validation, serialization or alignment: parser
+equivalence, roundtrip idempotency (which carries reference-corpus coverage in
+the same test), the generated spec tests, the validation error corpus, and the
+gate registry. Each has a fast targeted command, listed with what it protects
+under [Testing, Never-Regress Gates](testing.md#never-regress-gates).
 
-## Root CI contract
+Those commands take `--tests <filter>`, not `--test <name>`: each crate has one
+integration binary, and the per-file target names the book used to give have
+not existed for some time, so every one of them errored out.
 
-The main CI workflow (`.github/workflows/ci.yml`) is the authoritative shared
-signal for this repo. Today it covers:
+**A red gate is a bug until proven otherwise, never a test expectation to
+quietly update.** That rule has teeth in both directions: a diagnostic that
+LOOKS better after a change earns the same scrutiny as one that looks worse.
+A specific, plausible-looking error message was once defended as a loss when
+the corruption producing it was fixed.
 
-- Rust build, test, and clippy
-- mdBook build
+## What CI actually runs
 
-Additional workflows cover cross-platform build coverage and rolling-clippy
-drift checks.
+`.github/workflows/ci.yml` is the authoritative shared signal, and it has more
+jobs than this page used to admit:
 
-Because the old local wrapper pipeline has not been ported into this repo,
-historical references to numbered gates such as `G0-G14` should be treated as
-legacy labels from the predecessor workspace, not as the current command
-surface here.
+| Job | Checks |
+|---|---|
+| `rust` | build, test, clippy, and the `spec/` workspace |
+| `wasm` | the re2c parser still compiles for `wasm32` |
+| `book` | mdBook build plus a lychee link check |
+| `rust-version-sync` | version pins in workflows, and doc date headers |
+| `app-version-sync` | the desktop app version tracks the workspace version |
+| `shellcheck` | every tracked shell script, default severity |
+| `grammar` | the grammar's own checks |
+| `dependency-audit` | dependency advisories |
 
-## Additional CI-only checks
+Separate workflows cover cross-platform builds (`cross-platform.yml`), rolling
+clippy drift (`clippy-rolling.yml`), crates.io readiness, and the release and
+desktop pipelines.
 
-These are required CI signals or workflow checks that are not identical to the
-local command set:
+## What CI does NOT cover
 
-- cross-platform release/build coverage
-- weekly rolling-clippy drift checks
-- workflow-specific smoke tests attached to release automation
+Worth knowing, because these are the gaps where a local run is the only signal:
+
+- **The vendored re2c lexer.** No workflow installs re2c, so nothing verifies
+  that the committed lexer matches `lexer.re`. `just verify-vendored-lexer` is
+  the only check, and it must be run by hand. `build.rs` used to claim a CI job
+  did this; there has never been one.
+- **The corpus differential.** Any change touching the grammar, parser
+  lowering, or serialization is expected to pass it before a push. It is an
+  operator-run gate against real corpus data, not a CI job, and a failure is a
+  tripwire demanding adjudication rather than an automatic block.
+- **A consumer's behaviour after regenerating a generated module.** A
+  differential over generated TEXT is blind to a change in behaviour precisely
+  when the text is expected to change; only running the consumer's own suite
+  sees it.
+
+## Legacy labels
+
+References to numbered gates such as `G0-G14` come from the predecessor
+workspace and name nothing here. There is no Makefile in this repository.

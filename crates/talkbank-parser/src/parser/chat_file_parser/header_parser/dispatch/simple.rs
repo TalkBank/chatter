@@ -102,7 +102,7 @@ pub(super) enum SimpleContent {
 /// pre-migration `get_required_content_by_kind(...).into_option()` behaviour
 /// through this exact helper. Hence `pub(super)`.
 pub(super) fn read_simple_content<'tree, T: AsRawNode<'tree>>(
-    content_slot: NodeSlot<'tree, T>,
+    content_slot: &NodeSlot<'tree, T>,
     header_actual: Node<'tree>,
     input: &str,
     content_kind: &str,
@@ -159,7 +159,7 @@ pub(super) fn date(
     // malformed dates.
     let children = extract_date_header(DateHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         DATE_CONTENTS,
@@ -188,7 +188,7 @@ pub(super) fn tape_location(
 ) -> ParseOutcome<Header> {
     let children = extract_tape_location_header(TapeLocationHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -220,7 +220,7 @@ pub(super) fn time_duration(
     // E541 for malformed durations.
     let children = extract_time_duration_header(TimeDurationHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         TIME_DURATION_CONTENTS,
@@ -251,7 +251,7 @@ pub(super) fn time_start(
     // `time_duration_contents`). Validator reports E542 for malformed start times.
     let children = extract_time_start_header(TimeStartHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         TIME_DURATION_CONTENTS,
@@ -280,7 +280,7 @@ pub(super) fn location(
 ) -> ParseOutcome<Header> {
     let children = extract_location_header(LocationHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -309,7 +309,7 @@ pub(super) fn room_layout(
 ) -> ParseOutcome<Header> {
     let children = extract_room_layout_header(RoomLayoutHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -338,7 +338,7 @@ pub(super) fn transcriber(
 ) -> ParseOutcome<Header> {
     let children = extract_transcriber_header(TranscriberHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -367,7 +367,7 @@ pub(super) fn warning(
 ) -> ParseOutcome<Header> {
     let children = extract_warning_header(WarningHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -396,7 +396,7 @@ pub(super) fn activities(
 ) -> ParseOutcome<Header> {
     let children = extract_activities_header(ActivitiesHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -425,7 +425,7 @@ pub(super) fn bck(
 ) -> ParseOutcome<Header> {
     let children = extract_bck_header(BckHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -454,7 +454,7 @@ pub(super) fn page(
 ) -> ParseOutcome<Header> {
     let children = extract_page_header(PageHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         PAGE_NUMBER,
@@ -483,7 +483,7 @@ pub(super) fn videos(
 ) -> ParseOutcome<Header> {
     let children = extract_videos_header(VideosHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -508,7 +508,7 @@ pub(super) fn videos(
 pub(super) fn t(header_actual: Node, input: &str, errors: &impl ErrorSink) -> ParseOutcome<Header> {
     let children = extract_t_header(THeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         FREE_TEXT,

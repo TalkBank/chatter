@@ -9,6 +9,7 @@
 use std::collections::HashSet;
 
 use super::ChatFile;
+use super::transcript_name::TranscriptName;
 use crate::validation::{RuleSelection, Validate, ValidationState};
 use crate::{ErrorSink, ParseError};
 use crate::{Header, Line};
@@ -113,7 +114,7 @@ fn run_validation_checks<S: ValidationState>(
     file: &ChatFile<S>,
     context: &crate::validation::ValidationContext,
     errors: &impl crate::ErrorSink,
-    filename: Option<&str>,
+    name: TranscriptName<'_>,
 ) {
     use crate::validation::{cross_utterance, header};
 
@@ -137,8 +138,9 @@ fn run_validation_checks<S: ValidationState>(
     }
 
     // Validate cross-utterance patterns.
-    let utterances_vec: Vec<crate::model::Utterance> = file.utterances().cloned().collect();
-    cross_utterance::check_cross_utterance_patterns_with_sink(&utterances_vec, context, errors);
+    // The file itself: the checks build their own proved sequence from it, so
+    // no caller can hand them one assembled some other way.
+    cross_utterance::check_cross_utterance_patterns_with_sink(file, context, errors);
 
     // E362: Validate bullet timestamp monotonicity across utterances.
     // Skip monotonicity check if bullets mode is enabled.
@@ -177,9 +179,11 @@ fn run_validation_checks<S: ValidationState>(
     // E701, E704: Validate temporal constraints on media bullets.
     crate::validation::temporal::validate_temporal_constraints(file, errors);
 
-    // E531: Validate media filename matches file name (if provided).
-    if let Some(file_name) = filename {
-        check_media_filename_match(&headers_with_spans, file_name, errors);
+    // E531: the `@Media` filename must match the transcript's own name. Runs
+    // only when the caller says the transcript HAS a name; `Anonymous` is a
+    // deliberate answer, not a missing one (see `transcript_name`).
+    if let Some(stem) = name.stem() {
+        check_media_filename_match(&headers_with_spans, stem.as_str(), errors);
     }
 }
 
@@ -191,7 +195,7 @@ impl<S: ValidationState> ChatFile<S> {
     pub fn validate_headers_only(
         &self,
         errors: &impl ErrorSink,
-        filename: Option<&str>,
+        name: TranscriptName<'_>,
     ) -> crate::validation::ValidationContext {
         use crate::validation::header;
 
@@ -218,9 +222,9 @@ impl<S: ValidationState> ChatFile<S> {
             header::check_header(header, *span, &context, errors);
         }
 
-        // E531: Validate media filename matches file name (if provided)
-        if let Some(file_name) = filename {
-            check_media_filename_match(&headers_with_spans, file_name, errors);
+        // E531: see the sibling call in `run_validation_checks`.
+        if let Some(stem) = name.stem() {
+            check_media_filename_match(&headers_with_spans, stem.as_str(), errors);
         }
 
         context
@@ -339,7 +343,8 @@ impl<S: ValidationState> ChatFile<S> {
     /// # Parameters
     ///
     /// * `errors` - Error sink for streaming validation errors
-    /// * `filename` - Optional filename (without extension) for E531 validation
+    /// * `name` - What the transcript is called, or `TranscriptName::Anonymous`
+    ///   when it has no name. Decides whether E531 (`@Media` filename match) runs.
     ///
     /// # Example
     ///
@@ -351,7 +356,7 @@ impl<S: ValidationState> ChatFile<S> {
     /// let errors = sink.into_vec();
     /// ```
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
-    pub fn validate(&self, errors: &impl crate::ErrorSink, filename: Option<&str>) {
+    pub fn validate(&self, errors: &impl crate::ErrorSink, name: TranscriptName<'_>) {
         let header_count = self.header_count();
         let utterance_count = self.utterance_count();
         tracing::debug!(
@@ -370,7 +375,7 @@ impl<S: ValidationState> ChatFile<S> {
             RuleSelection::new(),
         );
 
-        run_validation_checks(self, &context, errors, filename);
+        run_validation_checks(self, &context, errors, name);
 
         tracing::debug!("Streaming validation complete");
     }
@@ -394,7 +399,8 @@ impl<S: ValidationState> ChatFile<S> {
     ///
     /// * `rules` - Which validation rules to run
     /// * `errors` - Error sink for streaming validation errors
-    /// * `filename` - Optional filename (without extension) for E531 validation
+    /// * `name` - What the transcript is called, or `TranscriptName::Anonymous`
+    ///   when it has no name. Decides whether E531 (`@Media` filename match) runs.
     ///
     /// # Example
     ///
@@ -413,7 +419,7 @@ impl<S: ValidationState> ChatFile<S> {
         &self,
         rules: RuleSelection,
         errors: &impl crate::ErrorSink,
-        filename: Option<&str>,
+        name: TranscriptName<'_>,
     ) {
         let header_count = self.header_count();
         let utterance_count = self.utterance_count();
@@ -428,7 +434,7 @@ impl<S: ValidationState> ChatFile<S> {
             self.participants.keys().cloned().collect();
         let context = build_validation_context(participant_ids, &self.languages, &headers, rules);
 
-        run_validation_checks(self, &context, errors, filename);
+        run_validation_checks(self, &context, errors, name);
 
         tracing::debug!("Streaming validation with rule selection complete");
     }
@@ -480,16 +486,17 @@ impl<S: ValidationState> ChatFile<S> {
     /// # Parameters
     ///
     /// * `errors` - Error sink for streaming validation errors
-    /// * `filename` - Optional filename (without extension) for E531 validation
+    /// * `name` - What the transcript is called, or `TranscriptName::Anonymous`
+    ///   when it has no name. Decides whether E531 (`@Media` filename match) runs.
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
     pub fn validate_with_alignment(
         &mut self,
         errors: &impl crate::ErrorSink,
-        filename: Option<&str>,
+        name: TranscriptName<'_>,
     ) {
         self.precompute_alignments();
         tracing::debug!("running streaming validation");
-        self.validate(errors, filename)
+        self.validate(errors, name)
     }
 
     /// Validate this CHAT file with alignment/language precomputation AND an
@@ -506,17 +513,18 @@ impl<S: ValidationState> ChatFile<S> {
     ///
     /// * `rules` - Which validation rules to run
     /// * `errors` - Error sink for streaming validation errors
-    /// * `filename` - Optional filename (without extension) for E531 validation
+    /// * `name` - What the transcript is called, or `TranscriptName::Anonymous`
+    ///   when it has no name. Decides whether E531 (`@Media` filename match) runs.
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
     pub fn validate_with_alignment_and_rules(
         &mut self,
         rules: RuleSelection,
         errors: &impl crate::ErrorSink,
-        filename: Option<&str>,
+        name: TranscriptName<'_>,
     ) {
         self.precompute_alignments();
         tracing::debug!("running streaming validation with an explicit rule selection");
-        self.validate_with_rules(rules, errors, filename)
+        self.validate_with_rules(rules, errors, name)
     }
 }
 
@@ -524,10 +532,11 @@ impl<S: ValidationState> ChatFile<S> {
 impl<S: ValidationState> Validate for ChatFile<S> {
     /// Delegates trait-based validation to full ChatFile validation pipeline.
     fn validate(&self, _context: &crate::validation::ValidationContext, errors: &impl ErrorSink) {
-        // Delegate to the full validation method (without filename check)
-        // The filename parameter is only used for E531 media filename validation,
-        // which is optional and only relevant when validating from a file path.
-        self.validate(errors, None);
+        // The `Validate` trait has no room for a name, so this path is
+        // genuinely anonymous and says so: rules about the transcript's own
+        // file name (E531) do not run through the trait. A caller that has a
+        // name calls `ChatFile::validate` directly.
+        self.validate(errors, TranscriptName::Anonymous);
     }
 }
 

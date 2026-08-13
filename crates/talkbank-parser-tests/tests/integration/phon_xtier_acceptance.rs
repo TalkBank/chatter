@@ -36,6 +36,7 @@
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::ParseOutcome;
+use talkbank_model::model::TranscriptName;
 use talkbank_parser::TreeSitterParser;
 
 /// Parse + validate a CHAT document and return every diagnostic code.
@@ -51,7 +52,7 @@ fn diagnostic_codes(content: &str) -> Vec<String> {
     match parse_result {
         ParseOutcome::Parsed(mut chat_file) => {
             let validation_errors = ErrorCollector::new();
-            chat_file.validate_with_alignment(&validation_errors, None);
+            chat_file.validate_with_alignment(&validation_errors, TranscriptName::Anonymous);
             codes.extend(
                 validation_errors
                     .to_vec()

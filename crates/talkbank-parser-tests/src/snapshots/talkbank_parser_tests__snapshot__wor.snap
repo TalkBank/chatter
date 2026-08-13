@@ -1,10 +1,12 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
   "languages": [
-    "eng"
+    "eng",
+    "zho"
   ],
   "lines": [
     {
@@ -22,7 +24,8 @@ expression: snapshot
     {
       "header": {
         "codes": [
-          "eng"
+          "eng",
+          "zho"
         ],
         "type": "languages"
       },
@@ -99,6 +102,48 @@ expression: snapshot
           "segments": [
             {
               "text": "Constructs: wor_dependent_tier, wor_tier_prefix, wor_tier_body, wor_word_item",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "The third pair is ATTESTED, copied from a real Cantonese corpus file:",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "a %wor tier opening with a language precode, which grammar.js allows via",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "wor_tier_body's optional language_code field. It is here because the two",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "synthesized pairs above never exercised it, and the re2c backend could not",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "parse it at all (510 E316 over a 2% corpus sample) while tree-sitter could.",
               "type": "text"
             }
           ]
@@ -297,6 +342,64 @@ expression: snapshot
           }
         },
         "speaker": "MOT"
+      }
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "bullet": null,
+            "items": [
+              {
+                "cleaned_text": "我",
+                "content": [
+                  {
+                    "content": "我",
+                    "type": "text"
+                  }
+                ],
+                "inline_bullet": {
+                  "end_ms": 566219,
+                  "start_ms": 565499
+                },
+                "kind": "word",
+                "raw_text": "我"
+              }
+            ],
+            "language_code": "zho",
+            "terminator": {
+              "type": "period"
+            }
+          },
+          "type": "Wor"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "bullet": {
+            "end_ms": 566219,
+            "start_ms": 565499
+          },
+          "content": [
+            {
+              "cleaned_text": "我",
+              "content": [
+                {
+                  "content": "我",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "我",
+              "type": "word"
+            }
+          ],
+          "language_code": "zho",
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
       }
     },
     {

@@ -233,18 +233,6 @@ pub fn severity(kind: DiagnosticKind, profile: ValidationProfile) -> Option<Seve
 mod tests {
     use super::*;
 
-    /// Exercises [`kind_of`] over every known [`ErrorCode`] (via the
-    /// generated [`ErrorCode::iter`]). The exhaustiveness guarantee itself
-    /// is enforced at COMPILE time by the `match` in `kind_of` having no
-    /// wildcard arm; this test is a runtime smoke check that the lookup
-    /// does not panic for any code and stays in sync with `ErrorCode::all`.
-    #[test]
-    fn every_error_code_has_a_registered_kind() {
-        for code in ErrorCode::iter() {
-            let _kind = kind_of(*code);
-        }
-    }
-
     /// Pins the exact spec-derived classification: every code is
     /// `Invalidity` EXCEPT the three named here. A change to this test is a
     /// deliberate reclassification (edit the code's spec file's `Kind`

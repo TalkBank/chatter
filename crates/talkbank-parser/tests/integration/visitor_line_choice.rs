@@ -101,8 +101,8 @@ fn extract_line_classifies_header_and_utterance() {
     let mut utterance_lines = 0usize;
     let mut unexpected = Vec::new();
 
-    for (i, elem) in doc_children.child_3.slot.iter().enumerate() {
-        let line_node: LineNode = match &elem.slot {
+    for (i, elem) in doc_children.child_3.slot().iter().enumerate() {
+        let line_node: LineNode = match &elem.slot() {
             NodeSlot::Present(node) => *node,
             other => panic!("line repeat element {i} should be Present, got {other:?}"),
         };
@@ -114,7 +114,7 @@ fn extract_line_classifies_header_and_utterance() {
 
         // The Task-B2 target call: classify the line's content by TYPE.
         let line_children = extract_line(line_node);
-        match &line_children.content.slot {
+        match &line_children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(_)) => header_lines += 1,
             NodeSlot::Present(LineChoice::Utterance(_)) => utterance_lines += 1,
             other => unexpected.push(format!("line {i}: {other:?}")),

@@ -67,7 +67,7 @@ pub fn parse_mor_tier_inner(
     let children = extract_mor_dependent_tier(MorDependentTierNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot {
+    match children.child_2.slot() {
         NodeSlot::Present(contents) => {
             parse_mor_contents_body(contents.0, source, tier_type, span, errors)
         }
@@ -139,29 +139,29 @@ fn parse_mor_contents_body(
 ) -> ParseOutcome<MorTier> {
     let contents = extract_mor_contents(MorContentsNode(mor_contents_node));
 
-    match contents.child_0.slot {
+    match contents.child_0.slot() {
         NodeSlot::Present(MorContentsChild0Choice::MorContent(items_children)) => {
             let mut had_item_failure = false;
-            let mut items: Vec<Mor> = Vec::with_capacity(items_children.child_1.slot.len() + 1);
+            let mut items: Vec<Mor> = Vec::with_capacity(items_children.child_1.slot().len() + 1);
 
             push_mor_content_item(
-                items_children.child_0.slot,
+                items_children.child_0.slot(),
                 source,
                 errors,
                 &mut items,
                 &mut had_item_failure,
             );
-            for element in items_children.child_1.slot {
-                match element.slot {
+            for element in items_children.child_1.slot() {
+                match element.slot() {
                     NodeSlot::Present(pair) => {
                         push_mor_separator(
-                            pair.child_0.slot,
+                            pair.child_0.slot(),
                             source,
                             errors,
                             &mut had_item_failure,
                         );
                         push_mor_content_item(
-                            pair.child_1.slot,
+                            pair.child_1.slot(),
                             source,
                             errors,
                             &mut items,
@@ -175,7 +175,7 @@ fn parse_mor_contents_body(
                     // regardless, per the project no-`_`-on-project-enums
                     // rule.
                     NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                        errors.report(unexpected_node_error(raw, source, "mor_contents"));
+                        errors.report(unexpected_node_error(*raw, source, "mor_contents"));
                         had_item_failure = true;
                     }
                     NodeSlot::Absent => {}
@@ -183,11 +183,11 @@ fn parse_mor_contents_body(
             }
             surface_unexpected(&items_children.unexpected, source, errors);
 
-            let terminator = match items_children.child_2.slot {
+            let terminator = match items_children.child_2.slot() {
                 Some(NodeSlot::Present(group)) => {
-                    push_mor_separator(group.child_0.slot, source, errors, &mut had_item_failure);
+                    push_mor_separator(group.child_0.slot(), source, errors, &mut had_item_failure);
                     let decoded = decode_mor_terminator(
-                        group.child_1.slot,
+                        group.child_1.slot(),
                         source,
                         errors,
                         &mut had_item_failure,
@@ -196,12 +196,12 @@ fn parse_mor_contents_body(
                     decoded
                 }
                 Some(NodeSlot::Missing(raw)) => {
-                    check_not_missing(raw, source, errors, "mor_contents");
+                    check_not_missing(*raw, source, errors, "mor_contents");
                     had_item_failure = true;
                     None
                 }
                 Some(NodeSlot::Error(raw)) | Some(NodeSlot::Unexpected(raw)) => {
-                    errors.report(unexpected_node_error(raw, source, "mor_contents"));
+                    errors.report(unexpected_node_error(*raw, source, "mor_contents"));
                     had_item_failure = true;
                     None
                 }
@@ -209,7 +209,7 @@ fn parse_mor_contents_body(
             };
 
             push_mor_trailing_whitespace(
-                contents.child_1.slot,
+                contents.child_1.slot(),
                 source,
                 errors,
                 &mut had_item_failure,
@@ -228,10 +228,10 @@ fn parse_mor_contents_body(
         }
         NodeSlot::Present(MorContentsChild0Choice::BreakForCoding(term_choice)) => {
             let mut had_item_failure = false;
-            let terminator = Some(terminator_from_new_choice(&term_choice));
+            let terminator = Some(terminator_from_new_choice(term_choice));
 
             push_mor_trailing_whitespace(
-                contents.child_1.slot,
+                contents.child_1.slot(),
                 source,
                 errors,
                 &mut had_item_failure,
@@ -249,11 +249,11 @@ fn parse_mor_contents_body(
             )
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_contents");
+            check_not_missing(*raw, source, errors, "mor_contents");
             ParseOutcome::Rejected
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_contents"));
+            errors.report(unexpected_node_error(*raw, source, "mor_contents"));
             ParseOutcome::Rejected
         }
         NodeSlot::Absent => {
@@ -323,7 +323,7 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
 ///   `unexpected_node_error`; reproduced identically.
 /// - `Absent`: no child at this position; nothing reported, nothing pushed.
 fn push_mor_content_item<'tree>(
-    slot: NodeSlot<'tree, MorContentNode<'tree>>,
+    slot: &NodeSlot<'tree, MorContentNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<Mor>,
@@ -335,11 +335,11 @@ fn push_mor_content_item<'tree>(
             ParseOutcome::Rejected => *had_item_failure = true,
         },
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_contents");
+            check_not_missing(*raw, source, errors, "mor_contents");
             *had_item_failure = true;
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_contents"));
+            errors.report(unexpected_node_error(*raw, source, "mor_contents"));
             *had_item_failure = true;
         }
         NodeSlot::Absent => {}
@@ -355,7 +355,7 @@ fn push_mor_content_item<'tree>(
 /// gate reported for ANY child (item, separator, or terminator alike), and
 /// mark the whole tier failed.
 fn push_mor_separator<'tree>(
-    slot: NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     had_item_failure: &mut bool,
@@ -363,11 +363,11 @@ fn push_mor_separator<'tree>(
     match slot {
         NodeSlot::Present(_) | NodeSlot::Absent => {}
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_contents");
+            check_not_missing(*raw, source, errors, "mor_contents");
             *had_item_failure = true;
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_contents"));
+            errors.report(unexpected_node_error(*raw, source, "mor_contents"));
             *had_item_failure = true;
         }
     }
@@ -380,7 +380,7 @@ fn push_mor_separator<'tree>(
 /// diagnostic mechanism as [`push_mor_separator`] for consistency, mirroring
 /// the removed loop's uniform "check every child" gate.
 fn push_mor_trailing_whitespace<'tree>(
-    slot: Option<NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    slot: &Option<NodeSlot<'tree, WhitespacesNode<'tree>>>,
     source: &str,
     errors: &impl ErrorSink,
     had_item_failure: &mut bool,
@@ -388,11 +388,11 @@ fn push_mor_trailing_whitespace<'tree>(
     match slot {
         None | Some(NodeSlot::Present(_)) | Some(NodeSlot::Absent) => {}
         Some(NodeSlot::Missing(raw)) => {
-            check_not_missing(raw, source, errors, "mor_contents");
+            check_not_missing(*raw, source, errors, "mor_contents");
             *had_item_failure = true;
         }
         Some(NodeSlot::Error(raw)) | Some(NodeSlot::Unexpected(raw)) => {
-            errors.report(unexpected_node_error(raw, source, "mor_contents"));
+            errors.report(unexpected_node_error(*raw, source, "mor_contents"));
             *had_item_failure = true;
         }
     }
@@ -406,20 +406,20 @@ fn push_mor_trailing_whitespace<'tree>(
 /// SAME uniform `check_not_missing`-first gate to the terminator child as to
 /// every other child in `mor_contents`.
 fn decode_mor_terminator<'tree>(
-    slot: NodeSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>,
+    slot: &NodeSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     had_item_failure: &mut bool,
 ) -> Option<Terminator> {
     match slot {
-        NodeSlot::Present(choice) => Some(terminator_from_new_choice(&choice)),
+        NodeSlot::Present(choice) => Some(terminator_from_new_choice(choice)),
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_contents");
+            check_not_missing(*raw, source, errors, "mor_contents");
             *had_item_failure = true;
             None
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_contents"));
+            errors.report(unexpected_node_error(*raw, source, "mor_contents"));
             *had_item_failure = true;
             None
         }

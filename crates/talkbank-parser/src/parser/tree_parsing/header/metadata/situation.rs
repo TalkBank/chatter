@@ -8,6 +8,7 @@ use crate::node_types::SITUATION_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::parser_helpers::present;
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
@@ -63,7 +64,7 @@ pub fn parse_situation_header(node: Node, source: &str, errors: &impl ErrorSink)
     // "missing situation text" diagnostic at the HEADER NODE span, exactly as the
     // pre-migration `find_child_by_kind` None branch did.
     let children = extract_situation_header(SituationHeaderNode(node));
-    let Some(free_text) = children.child_2.slot.present_or_recover().ok() else {
+    let Some(free_text) = present(children.child_2.slot()) else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,

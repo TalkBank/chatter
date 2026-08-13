@@ -4,6 +4,10 @@
 //! produces the corresponding AST type from `ast.rs`.
 //!
 //! Tier parsers: %mor, %gra, %pho, %sin, text tiers.
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use chumsky::prelude::*;
 
@@ -12,7 +16,7 @@ use crate::token::Token;
 
 use crate::token::TokenDiscriminants;
 
-use super::classify::{is_separator, is_terminator};
+use super::classify::is_terminator;
 use super::main_tier;
 
 /// Chumsky input type: a slice of tokens borrowed from the lexer output.
@@ -228,23 +232,42 @@ pub fn text_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, TextTierParsed<'a>>
 fn timing_bullet<'a>() -> impl Parser<'a, Tokens<'a>, (u64, u64)> + Clone {
     select! {
         Token::MediaBullet { start_time, end_time, .. } => {
-            let s: u64 = start_time.parse().unwrap_or(0);
-            let e: u64 = end_time.parse().unwrap_or(0);
+            let (s, e) = crate::convert::bullet_times(start_time, end_time);
             (s, e)
         },
     }
 }
 
 /// Parse a `%wor` tier body: words with optional timing bullets.
-pub fn wor_tier_parser<'a>()
--> impl Parser<'a, Tokens<'a>, (Vec<WorItemParsed<'a>>, Option<Token<'a>>)> + Clone {
+pub fn wor_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, WorTierParsed<'a>> + Clone {
     let terminator = select! {
         tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
     };
 
-    let separator = select! {
-        tok if is_separator(Some(TokenDiscriminants::from(&tok))) => WorItemParsed::Separator(tok),
-    };
+    // `%wor` may open with a language precode, exactly as the main tier may:
+    // `grammar.js`'s `wor_tier_body` declares an optional `language_code`
+    // field, and real transcripts use it heavily (`%wor:\t[- zho] ...` in the
+    // Chinese and bilingual corpora). Without this the whole tier failed to
+    // parse: 510 E316 across 8 of 2,158 sampled files, every one of which
+    // tree-sitter reads cleanly. Same shape as `main_tier::tier_body_parser`.
+    let langcode = select! { tok @ Token::Langcode(_) => tok }.then_ignore(ws());
+
+    // Same owner as the main tier: `SeparatorKindParsed::from_token`. This used
+    // to gate on `classify::is_separator`, a second copy of the same fifteen
+    // tokens, whose drift would have surfaced as an E316 on valid CHAT.
+    let separator = any().try_map(|tok: Token<'a>, _span| {
+        SeparatorKindParsed::from_token(&tok)
+            .map(WorItemParsed::Separator)
+            .ok_or_else(Default::default)
+    });
+
+    /// A `%wor` entry with no word behind it: a placeholder, not a parsed word.
+    fn placeholder_word(bullet: Option<(u64, u64)>) -> WorItemParsed<'static> {
+        WorItemParsed::Word {
+            word: WordWithAnnotations::default(),
+            bullet,
+        }
+    }
 
     // A word (rich or legacy) followed by optional timing bullet
     let word_with_bullet = choice((main_tier::rich_word(), main_tier::subtoken_word()))
@@ -257,67 +280,70 @@ pub fn wor_tier_parser<'a>()
                     if let Some(ContentItem::Word(w)) = r.content.into_iter().next() {
                         WorItemParsed::Word { word: w, bullet }
                     } else {
-                        // Shouldn't happen, but handle gracefully
-                        WorItemParsed::Word {
-                            word: WordWithAnnotations {
-                                category: None,
-                                body: vec![],
-                                form_marker: None,
-                                lang: None,
-                                pos_tag: None,
-                                annotations: vec![],
-                                raw_text: "",
-                            },
-                            bullet,
-                        }
+                        placeholder_word(bullet)
                     }
                 }
                 ContentItem::Action { zero, .. } => WorItemParsed::Word {
                     word: WordWithAnnotations {
                         category: Some(WordCategory::Omission),
-                        body: vec![],
-                        form_marker: None,
-                        lang: None,
-                        pos_tag: None,
-                        annotations: vec![],
-                        raw_text: zero.text(),
+                        raw_text: zero,
+                        ..WordWithAnnotations::default()
                     },
                     bullet,
                 },
-                _ => WorItemParsed::Word {
-                    word: WordWithAnnotations {
-                        category: None,
-                        body: vec![],
-                        form_marker: None,
-                        lang: None,
-                        pos_tag: None,
-                        annotations: vec![],
-                        raw_text: "",
-                    },
-                    bullet,
-                },
+                // Unreachable: `choice((rich_word(), subtoken_word()))` has range
+                // `Word | Retrace | Action`, all handled above. Spelled out so a
+                // widening of that range is a compile error here. The real fix is
+                // narrowing what those parsers RETURN, which would delete this
+                // list and `placeholder_word` with it; `classify.rs`'s `Chain` is
+                // the in-repo precedent for exactly that.
+                ContentItem::Pause(_)
+                | ContentItem::Freecode(_)
+                | ContentItem::OrphanAnnotation(_)
+                | ContentItem::Separator(_)
+                | ContentItem::OverlapPoint { .. }
+                | ContentItem::Group(_)
+                | ContentItem::Quotation(_)
+                | ContentItem::Event(_)
+                | ContentItem::AnnotatedEvent { .. }
+                | ContentItem::MediaBullet { .. }
+                | ContentItem::UnderlineBegin
+                | ContentItem::UnderlineEnd
+                | ContentItem::OtherSpokenEvent { .. }
+                | ContentItem::PhoGroup(_)
+                | ContentItem::SinGroup(_)
+                | ContentItem::LongFeatureBegin(_)
+                | ContentItem::LongFeatureEnd(_)
+                | ContentItem::NonvocalBegin(_)
+                | ContentItem::NonvocalEnd(_)
+                | ContentItem::NonvocalSimple(_) => placeholder_word(bullet),
             }
         });
 
     // Skip orphan bullets
     let skip_bullet = select! { Token::MediaBullet { .. } => () };
 
+    // An orphan bullet yields no item at all. It used to yield a SEPARATOR
+    // holding a whitespace token, a sentinel that was also a legal value, which
+    // the collector then removed by matching that exact fake. Typing the
+    // variant made that unrepresentable; `Option` says the same thing honestly.
     let wor_item = choice((
-        word_with_bullet,
-        separator,
-        skip_bullet.to(WorItemParsed::Separator(Token::Whitespace(""))), // placeholder, filtered
+        word_with_bullet.map(Some),
+        separator.map(Some),
+        skip_bullet.to(None),
     ));
 
-    ws().ignore_then(wor_item.padded_by(ws()).repeated().collect::<Vec<_>>())
+    ws().ignore_then(langcode.or_not())
+        .then(wor_item.padded_by(ws()).repeated().collect::<Vec<_>>())
         .then(ws().ignore_then(terminator).or_not())
         .then_ignore(ws())
         .then_ignore(opt_newline())
-        .map(|(items, terminator)| {
-            // Filter out placeholder items from orphan bullets
-            let items = items
-                .into_iter()
-                .filter(|item| !matches!(item, WorItemParsed::Separator(Token::Whitespace(_))))
-                .collect();
-            (items, terminator)
+        .map(|((langcode, items), terminator)| {
+            let items: Vec<WorItemParsed<'a>> = items.into_iter().flatten().collect();
+            WorTierParsed {
+                langcode,
+                items,
+                terminator,
+            }
         })
 }

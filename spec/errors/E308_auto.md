@@ -11,6 +11,7 @@ Invalid speaker format
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

@@ -18,6 +18,7 @@ use talkbank_model::{ErrorCode, ErrorCollector, ErrorSink, ParseError, ParseErro
 use talkbank_parser::TreeSitterParser;
 
 use super::error::PipelineError;
+use talkbank_model::model::TranscriptName;
 
 /// The rule set a `ParseValidateOptions` asks for.
 ///
@@ -81,6 +82,27 @@ pub fn parse_and_validate_with_parser(
     content: &str,
     options: ParseValidateOptions,
 ) -> Result<ChatFile, PipelineError> {
+    parse_and_validate_named(parser, content, options, TranscriptName::Anonymous)
+}
+
+/// Parse and validate content whose transcript name is known.
+///
+/// The name decides whether the rules that compare the transcript against its
+/// own file name run, E531 above all. The content-only entry points above pass
+/// [`TranscriptName::Anonymous`], which is correct for a string that came from
+/// nowhere in particular; [`super::io::parse_file_and_validate`] reads from
+/// disk and passes the real one.
+///
+/// This exists because `parse_and_validate*` used to pass `None` and carry a
+/// FOLLOW-UP comment saying E531 therefore did not run for `to-json` or any
+/// other pipeline consumer. The comment stood in place of the fix for as long
+/// as it existed, which is the failure mode a hazard note always has.
+pub fn parse_and_validate_named(
+    parser: &TreeSitterParser,
+    content: &str,
+    options: ParseValidateOptions,
+    name: TranscriptName<'_>,
+) -> Result<ChatFile, PipelineError> {
     let parse_errors = ErrorCollector::new();
 
     let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, &parse_errors);
@@ -115,17 +137,10 @@ pub fn parse_and_validate_with_parser(
         // one.
         let rules = rule_selection(options.strict_linkers);
 
-        // NOTE: the filename is passed as `None` here, so the @Media filename
-        // match (E531, CLAN CHECK 157) does NOT run on this path. This function
-        // takes content, not a path, so it has no datafile basename to compare
-        // against. The CLI `validate` path runs E531 via the validation_runner
-        // worker (which does have the path). FOLLOW-UP: thread an
-        // `Option<&str>` filename through `parse_and_validate_with_parser` so
-        // `to-json` and other pipeline consumers also run E531.
         if options.alignment {
-            chat_file.validate_with_alignment_and_rules(rules, &validation_errors, None);
+            chat_file.validate_with_alignment_and_rules(rules, &validation_errors, name);
         } else {
-            chat_file.validate_with_rules(rules, &validation_errors, None);
+            chat_file.validate_with_rules(rules, &validation_errors, name);
         }
 
         let validation_error_vec = validation_errors.into_vec();
@@ -188,6 +203,41 @@ pub fn parse_and_validate_streaming_with_parser(
     options: ParseValidateOptions,
     errors: &impl ErrorSink,
 ) -> Result<ChatFile, PipelineError> {
+    parse_and_validate_streaming_named(parser, content, options, errors, TranscriptName::Anonymous)
+}
+
+/// Streaming variant that names the transcript after the file it came from.
+///
+/// The convenience the CLI wants: it already holds the path, and should not
+/// have to construct a parser just to say what the transcript is called.
+pub fn parse_and_validate_streaming_for_path(
+    path: &std::path::Path,
+    content: &str,
+    options: ParseValidateOptions,
+    errors: &impl ErrorSink,
+) -> Result<ChatFile, PipelineError> {
+    let parser =
+        TreeSitterParser::new().map_err(|e| PipelineError::ParserCreation(format!("{e}")))?;
+    parse_and_validate_streaming_named(
+        &parser,
+        content,
+        options,
+        errors,
+        TranscriptName::for_path(path),
+    )
+}
+
+/// Streaming variant for a transcript whose name is known.
+///
+/// See [`parse_and_validate_named`] for why the name is a parameter rather
+/// than an `Option` filled in with `None`.
+pub fn parse_and_validate_streaming_named(
+    parser: &TreeSitterParser,
+    content: &str,
+    options: ParseValidateOptions,
+    errors: &impl ErrorSink,
+    name: TranscriptName<'_>,
+) -> Result<ChatFile, PipelineError> {
     let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, errors);
 
     let mut chat_file = match chat_file_outcome {
@@ -206,9 +256,9 @@ pub fn parse_and_validate_streaming_with_parser(
         let rules = rule_selection(options.strict_linkers);
 
         if options.alignment {
-            chat_file.validate_with_alignment_and_rules(rules, errors, None);
+            chat_file.validate_with_alignment_and_rules(rules, errors, name);
         } else {
-            chat_file.validate_with_rules(rules, errors, None);
+            chat_file.validate_with_rules(rules, errors, name);
         }
     }
 

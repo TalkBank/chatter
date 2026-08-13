@@ -12,8 +12,8 @@ use crate::ast::*;
 use crate::token::{Token, TokenDiscriminants};
 
 use super::classify::{
-    Chain, is_annotation, is_linker, is_separator, is_terminator, is_word_token,
-    token_to_parsed_annotation, word_to_content_item,
+    Chain, is_linker, is_terminator, is_word_token, token_to_parsed_annotation,
+    word_to_content_item,
 };
 use super::dependent_tiers::{opt_newline, ws};
 use super::word_body::parse_word_body;
@@ -47,9 +47,9 @@ fn display_text(tok: &Token<'_>) -> String {
 
 /// Parse a single annotation token into `ParsedAnnotation`.
 fn annotation<'a>() -> impl Parser<'a, Tokens<'a>, ParsedAnnotation<'a>> + Clone {
-    select! {
-        tok if is_annotation(Some(TokenDiscriminants::from(&tok))) => token_to_parsed_annotation(tok),
-    }
+    any().try_map(|tok: Token<'a>, _span| {
+        token_to_parsed_annotation(tok).ok_or_else(Default::default)
+    })
 }
 
 /// Parse trailing annotations: optional whitespace then annotations.
@@ -67,63 +67,87 @@ fn trailing_annotations<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ParsedAnnotatio
 /// Parse a pause token.
 fn pause<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
     select! {
-        tok @ Token::PauseLong(_) => ContentItem::Pause(tok),
-        tok @ Token::PauseMedium(_) => ContentItem::Pause(tok),
-        tok @ Token::PauseShort(_) => ContentItem::Pause(tok),
-        tok @ Token::PauseTimed(_) => ContentItem::Pause(tok),
+        Token::PauseLong(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Long),
+        Token::PauseMedium(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Medium),
+        Token::PauseShort(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Short),
+        Token::PauseTimed(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Timed(s)),
     }
 }
 
 /// Parse a separator token.
+///
+/// Routed through `SeparatorKindParsed::from_token`, the one owner of which
+/// token is which separator, rather than repeating that list here.
 fn separator<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
-    select! {
-        tok if is_separator(Some(TokenDiscriminants::from(&tok))) => ContentItem::Separator(tok),
-    }
+    any().try_map(|tok: Token<'a>, _span| {
+        // The parser's error type carries no payload, so a non-separator is
+        // simply "this alternative did not match", which is what `choice`
+        // wants: the next alternative gets the token.
+        SeparatorKindParsed::from_token(&tok)
+            .map(ContentItem::Separator)
+            .ok_or_else(Default::default)
+    })
 }
 
 /// Parse an overlap point token.
 fn overlap_point<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
     select! {
-        tok @ Token::OverlapTopBegin(_) => ContentItem::OverlapPoint(tok),
-        tok @ Token::OverlapTopEnd(_) => ContentItem::OverlapPoint(tok),
-        tok @ Token::OverlapBottomBegin(_) => ContentItem::OverlapPoint(tok),
-        tok @ Token::OverlapBottomEnd(_) => ContentItem::OverlapPoint(tok),
+        Token::OverlapTopBegin(s) => overlap_item(OverlapKind::TopBegin, s),
+        Token::OverlapTopEnd(s) => overlap_item(OverlapKind::TopEnd, s),
+        Token::OverlapBottomBegin(s) => overlap_item(OverlapKind::BottomBegin, s),
+        Token::OverlapBottomEnd(s) => overlap_item(OverlapKind::BottomEnd, s),
     }
 }
 
 /// Parse structural marker tokens (underlines, long features, nonvocals).
 fn structural_markers<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
     select! {
-        tok @ Token::UnderlineBegin(_) => ContentItem::UnderlineBegin(tok),
-        tok @ Token::UnderlineEnd(_) => ContentItem::UnderlineEnd(tok),
-        tok @ Token::LongFeatureBegin(_) => ContentItem::LongFeatureBegin(tok),
-        tok @ Token::LongFeatureEnd(_) => ContentItem::LongFeatureEnd(tok),
-        tok @ Token::NonvocalBegin(_) => ContentItem::NonvocalBegin(tok),
-        tok @ Token::NonvocalEnd(_) => ContentItem::NonvocalEnd(tok),
-        tok @ Token::NonvocalSimple(_) => ContentItem::NonvocalSimple(tok),
+        Token::UnderlineBegin(_) => ContentItem::UnderlineBegin,
+        Token::UnderlineEnd(_) => ContentItem::UnderlineEnd,
+        Token::LongFeatureBegin(s) => ContentItem::LongFeatureBegin(s),
+        Token::LongFeatureEnd(s) => ContentItem::LongFeatureEnd(s),
+        Token::NonvocalBegin(s) => ContentItem::NonvocalBegin(s),
+        Token::NonvocalEnd(s) => ContentItem::NonvocalEnd(s),
+        Token::NonvocalSimple(s) => ContentItem::NonvocalSimple(s),
     }
 }
 
 /// Parse a freecode annotation.
 fn freecode<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
-    select! { tok @ Token::Freecode(_) => ContentItem::Annotation(tok) }
+    select! { Token::Freecode(s) => ContentItem::Freecode(s) }
 }
 
 /// Parse an other-spoken-event: &*SPK:word
 fn other_spoken_event<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
-    select! { tok @ Token::OtherSpokenEvent { .. } => ContentItem::OtherSpokenEvent(tok) }
+    select! {
+        Token::OtherSpokenEvent { speaker, text } => ContentItem::OtherSpokenEvent { speaker, text }
+    }
 }
 
 /// Parse inline media bullet (within content, not utterance-end).
 fn inline_media_bullet<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
-    select! { tok @ Token::MediaBullet { .. } => ContentItem::MediaBullet(tok) }
+    select! {
+        Token::MediaBullet { start_time, end_time, .. } => ContentItem::MediaBullet {
+            start: start_time,
+            end: end_time,
+        }
+    }
 }
 
 /// Parse a bare annotation token as content.
+///
+/// An annotation with nothing to its left is not grammatical: `grammar.js`'s
+/// `base_content_item` offers only `word_with_optional_annotations` and
+/// `nonword_with_optional_annotations`, so an annotation is always ATTACHED.
+/// This production exists solely so the re2c side can carry the invalid
+/// construct far enough to report E759 with a useful message, which is what
+/// the tree-sitter side does through its error nodes.
 fn bare_annotation<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
-    select! {
-        tok if is_annotation(Some(TokenDiscriminants::from(&tok))) => ContentItem::Annotation(tok),
-    }
+    any().try_map(|tok: Token<'a>, _span| {
+        token_to_parsed_annotation(tok)
+            .map(ContentItem::OrphanAnnotation)
+            .ok_or_else(Default::default)
+    })
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -322,7 +346,7 @@ pub fn subtoken_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clo
                 && let Some(zt) = zero_tok
             {
                 return ContentItem::Action {
-                    zero: zt,
+                    zero: zt.text(),
                     annotations,
                 };
             }
@@ -539,4 +563,15 @@ pub fn main_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, MainTier<'a>> + Clo
         .then_ignore(tier_sep)
         .then(tier_body_parser())
         .map(|(speaker, tier_body)| MainTier { speaker, tier_body })
+}
+
+/// Build an overlap content item, resolving the index digit once.
+///
+/// The "index is the second character" rule had been written three times in
+/// the converter; recording it at construction leaves one owner.
+fn overlap_item<'a>(kind: OverlapKind, raw: &'a str) -> ContentItem<'a> {
+    ContentItem::OverlapPoint {
+        kind,
+        index: raw.chars().nth(1).and_then(|c| c.to_digit(10)),
+    }
 }

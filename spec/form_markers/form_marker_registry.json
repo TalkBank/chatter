@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "description": "Canonical inventory of CHAT special-form markers (the `@` suffix on a word)",
+  "authorities": {
+    "manual_table": "https://talkbank.org/0info/manuals/CHAT.html#Special_Form_Markers",
+    "sanctioned_set": "clan-info/lib/depfile.cut, the main-line `*@...` entries",
+    "note": "The manual gives MEANINGS; depfile.cut gives what is SANCTIONED and is the more current of the two. Where they disagree, depfile.cut wins and the disagreement is recorded on the row."
+  },
+  "markers": [
+    {
+      "marker": "b",
+      "variant": "B",
+      "gloss": "Babbling",
+      "manual_anchor": "Babbling_Marker",
+      "example_stem": "abame",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "c",
+      "variant": "C",
+      "gloss": "Child-invented form",
+      "manual_anchor": "ChildInvented_Marker",
+      "example_stem": "gumma",
+      "example_note": "meaning sticky",
+      "label": "forbidden"
+    },
+    {
+      "marker": "d",
+      "variant": "D",
+      "gloss": "Dialect form",
+      "manual_anchor": "DialectForm_Marker",
+      "example_stem": "younz",
+      "example_note": "meaning you",
+      "label": "forbidden"
+    },
+    {
+      "marker": "f",
+      "variant": "F",
+      "gloss": "Family-specific form",
+      "manual_anchor": "FamilySpecificForm_Marker",
+      "example_stem": "bunko",
+      "example_note": "meaning broken",
+      "label": "forbidden"
+    },
+    {
+      "marker": "fp",
+      "variant": "FP",
+      "gloss": "Filled pause",
+      "manual_anchor": "FilledPause_Marker",
+      "example_stem": "um",
+      "example_note": null,
+      "label": "forbidden",
+      "deprecated": {
+        "use_instead": "&-um",
+        "reason": "filled pauses are excluded from grammatical analysis"
+      }
+    },
+    {
+      "marker": "g",
+      "variant": "G",
+      "gloss": "General special form",
+      "manual_anchor": "GeneralSpecialForm_Marker",
+      "example_stem": "gongga",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "i",
+      "variant": "I",
+      "gloss": "Interjection, interaction",
+      "manual_anchor": "Interjection_Marker",
+      "example_stem": "uhhuh",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "k",
+      "variant": "K",
+      "gloss": "Multiple letters",
+      "manual_anchor": "Kana_Marker",
+      "example_stem": "abcd",
+      "example_note": "mnemonic is \"kana\": a Japanese kana is one symbol for a whole syllable",
+      "label": "forbidden"
+    },
+    {
+      "marker": "l",
+      "variant": "L",
+      "gloss": "Letter",
+      "manual_anchor": "Letter_Marker",
+      "example_stem": "b",
+      "example_note": "the letter b",
+      "label": "forbidden"
+    },
+    {
+      "marker": "ls",
+      "variant": "LS",
+      "gloss": "Letter plural",
+      "manual_anchor": "Letter_Plural_Marker",
+      "example_stem": "p",
+      "example_note": "the plural of a letter",
+      "label": "forbidden"
+    },
+    {
+      "marker": "n",
+      "variant": "N",
+      "gloss": "Neologism",
+      "manual_anchor": "Neologism_Marker",
+      "example_stem": "breaked",
+      "example_note": "meaning broke",
+      "label": "forbidden"
+    },
+    {
+      "marker": "o",
+      "variant": "O",
+      "gloss": "Onomatopoeia",
+      "manual_anchor": "Onomatopoeia_Marker",
+      "example_stem": "woofwoof",
+      "example_note": "a dog barking",
+      "label": "forbidden"
+    },
+    {
+      "marker": "p",
+      "variant": "P",
+      "gloss": "Phonologically consistent form",
+      "manual_anchor": "PCF_Marker",
+      "example_stem": "aga",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "q",
+      "variant": "Q",
+      "gloss": "Metalinguistic use",
+      "manual_anchor": "MetalinguisticReference_Marker",
+      "example_stem": "if",
+      "example_note": "as in `no if@q-s or but@q-s`, when citing words",
+      "label": "forbidden"
+    },
+    {
+      "marker": "sas",
+      "variant": "SAS",
+      "gloss": "Sign and speech",
+      "manual_anchor": "SignAndSpeech_Marker",
+      "example_stem": "apple",
+      "example_note": "signs and says apple",
+      "label": "forbidden"
+    },
+    {
+      "marker": "si",
+      "variant": "SI",
+      "gloss": "Singing",
+      "manual_anchor": "Singing_Marker",
+      "example_stem": "lalala",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "sl",
+      "variant": "SL",
+      "gloss": "Signed language",
+      "manual_anchor": "SignLanguage_Marker",
+      "example_stem": "apple",
+      "example_note": "signs apple",
+      "label": "forbidden"
+    },
+    {
+      "marker": "t",
+      "variant": "T",
+      "gloss": "Test word",
+      "manual_anchor": "TestWord_Marker",
+      "example_stem": "wug",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "u",
+      "variant": "U",
+      "gloss": "Unibet transcription",
+      "manual_anchor": "Unibet_Marker",
+      "example_stem": "binga",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "wp",
+      "variant": "WP",
+      "gloss": "Word play",
+      "manual_anchor": "WordPlay_Marker",
+      "example_stem": "goobarumba",
+      "example_note": null,
+      "label": "forbidden"
+    },
+    {
+      "marker": "x",
+      "variant": "X",
+      "gloss": "Excluded words",
+      "manual_anchor": "Excluded_Marker",
+      "example_stem": "stuff",
+      "example_note": null,
+      "label": "forbidden",
+      "manual_disagreement": "The manual's Letters column writes `@x:*`, implying a label, but its own Example column writes bare `stuff@x` and depfile.cut sanctions bare `*@x` beside `*@s:*` and `*@z:*`. `@x:foo` is rejected (E203); do not \"fix\" this to match the manual's table."
+    },
+    {
+      "marker": "z",
+      "variant": "UserDefined",
+      "gloss": "User-defined code",
+      "manual_anchor": "User_Special_Form",
+      "example_stem": "word",
+      "example_note": "any user code",
+      "label": {
+        "required": {
+          "example_label": "rtfd"
+        }
+      }
+    }
+  ]
+}

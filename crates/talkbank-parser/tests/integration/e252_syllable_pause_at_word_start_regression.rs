@@ -26,6 +26,9 @@
 //! emits E252 because the pause has no preceding spoken material. No raw-text or
 //! ERROR-text scan is involved. The word must NOT become a generic E316.
 
+use talkbank_model::model::FileStem;
+use talkbank_model::model::TranscriptName;
+
 /// A leading syllable pause `^banana` must be flagged with E252 via typed-model
 /// validation, and must NOT regress to a generic unparsable-content E316.
 ///
@@ -37,8 +40,10 @@
 fn leading_syllable_pause_emits_e252_not_e316() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t^banana .\n@End\n";
 
-    let diags =
-        crate::common::parse_validate_and_collect_diagnostics(input, Some("e252_regression"));
+    let diags = crate::common::parse_validate_and_collect_diagnostics(
+        input,
+        TranscriptName::Named(FileStem::from_str("e252_regression")),
+    );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(

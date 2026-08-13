@@ -58,6 +58,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::simple::{SimpleContent, read_simple_content};
+use crate::parser::tree_parsing::parser_helpers::present;
 
 /// Construct a best-effort `Header::Unknown` when a special header fails to parse.
 fn unknown_header_from_node(
@@ -90,7 +91,7 @@ pub(super) fn comment(
     // diagnostic for a missing content child (it silently fell through to
     // Header::Unknown), so the non-Present (else) path is likewise SILENT.
     let children = extract_comment_header(CommentHeaderNode(header_actual));
-    let outcome = match children.child_2.slot.present_or_recover().ok() {
+    let outcome = match present(children.child_2.slot()) {
         Some(content) => ParseOutcome::parsed(Header::Comment {
             content: parse_bullet_content(content.raw_node(), input, errors),
         }),
@@ -113,7 +114,7 @@ pub(super) fn number(
 ) -> ParseOutcome<Header> {
     let children = extract_number_header(NumberHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         NUMBER_OPTION,
@@ -143,7 +144,7 @@ pub(super) fn recording_quality(
 ) -> ParseOutcome<Header> {
     let children = extract_recording_quality_header(RecordingQualityHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         RECORDING_QUALITY_OPTION,
@@ -173,7 +174,7 @@ pub(super) fn transcription(
 ) -> ParseOutcome<Header> {
     let children = extract_transcription_header(TranscriptionHeaderNode(header_actual));
     let outcome = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         TRANSCRIPTION_OPTION,
@@ -207,7 +208,7 @@ pub(super) fn birth_of(
     // the pre-migration two-step `get_required_content_by_kind` chain did.
     let children = extract_birth_of_header(BirthOfHeaderNode(header_actual));
     let participant = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         SPEAKER,
@@ -227,7 +228,7 @@ pub(super) fn birth_of(
         }
     };
     let date = match read_simple_content(
-        children.child_4.slot,
+        children.child_4.slot(),
         header_actual,
         input,
         DATE_CONTENTS,
@@ -261,7 +262,7 @@ pub(super) fn birthplace_of(
 ) -> ParseOutcome<Header> {
     let children = extract_birthplace_of_header(BirthplaceOfHeaderNode(header_actual));
     let participant = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         SPEAKER,
@@ -281,7 +282,7 @@ pub(super) fn birthplace_of(
         }
     };
     let place = match read_simple_content(
-        children.child_4.slot,
+        children.child_4.slot(),
         header_actual,
         input,
         FREE_TEXT,
@@ -315,7 +316,7 @@ pub(super) fn l1_of(
 ) -> ParseOutcome<Header> {
     let children = extract_l1_of_header(L1OfHeaderNode(header_actual));
     let participant = match read_simple_content(
-        children.child_2.slot,
+        children.child_2.slot(),
         header_actual,
         input,
         SPEAKER,
@@ -335,7 +336,7 @@ pub(super) fn l1_of(
         }
     };
     let language = match read_simple_content(
-        children.child_4.slot,
+        children.child_4.slot(),
         header_actual,
         input,
         LANGUAGE_CODE,
@@ -389,7 +390,7 @@ pub(super) fn options(
     // list. Validation reports E533 on the resulting empty @Options list
     // downstream.
     let children = extract_options_header(OptionsHeaderNode(header_actual));
-    let flags = match children.child_2.slot.present_or_recover().ok() {
+    let flags = match present(children.child_2.slot()) {
         Some(contents) => option_flags(contents.raw_node(), input),
         None => Vec::new(),
     };

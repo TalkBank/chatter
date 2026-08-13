@@ -17,6 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use talkbank_cache::{CacheOutcome, ValidationCache};
+use talkbank_model::model::TranscriptName;
 use talkbank_model::{ChatFile, ChatParser, ErrorSink, ParseOutcome};
 use talkbank_model::{ParseError, Severity};
 use talkbank_parser::TreeSitterParser;
@@ -435,16 +436,21 @@ fn validate_single_file_streaming(
     // Parse with error collection.
     let mut chat_file = parser.parse_chat_file_streaming(content, &collector);
 
-    // The datafile basename (stem, no extension) is what `@Media`'s filename
-    // must match; pass it so `check_media_filename_match` (E531) can run. The
-    // file is being validated from disk, so the stem is always available here.
-    // (Passing `None` silently disabled E531 for the whole CLI, CLAN CHECK 157.)
-    let file_stem = file_path.file_stem().and_then(|s| s.to_str());
+    // The transcript is being validated from disk, so it HAS a name, and
+    // `@Media`'s filename must match it (E531, CLAN CHECK 157).
+    //
+    // This used to be `file_path.file_stem().and_then(|s| s.to_str())` written
+    // straight into an `Option<&str>` parameter, which reads as though it
+    // always works: a path with no file name, or a name that is not UTF-8,
+    // silently produced `None` and turned E531 off again, inside the very site
+    // that had been fixed because passing `None` turned it off for the whole
+    // CLI. `TranscriptName::for_path` states that fallback in one place instead.
+    let name = TranscriptName::for_path(file_path);
 
     if check_alignment {
-        chat_file.validate_with_alignment_and_rules(rules, &collector, file_stem);
+        chat_file.validate_with_alignment_and_rules(rules, &collector, name);
     } else {
-        chat_file.validate_with_rules(rules, &collector, file_stem);
+        chat_file.validate_with_rules(rules, &collector, name);
     }
 
     (collector.into_vec(), Some(chat_file))

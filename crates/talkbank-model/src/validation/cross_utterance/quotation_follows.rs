@@ -5,8 +5,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#QuotationFollows_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#QuotedNewLine_Terminator>
 
+use super::FileUtterances;
 use super::helpers::has_quoted_linker;
-use crate::model::{Terminator, Utterance};
+use crate::model::Terminator;
 use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
 /// Validate Pattern A quotation-follows sequencing for one utterance index.
@@ -16,14 +17,19 @@ use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 /// After a `+"/.` terminator, the next utterance by the same speaker must
 /// start with `+"`. The checker also rejects mixed sequences that combine
 /// quotation-follows and quotation-precedes terminators in one chain.
-pub(super) fn check_quotation_follows(utterances: &[Utterance], idx: usize) -> Vec<ParseError> {
+pub(super) fn check_quotation_follows(
+    utterances: &FileUtterances<'_>,
+    idx: usize,
+) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let utterance = &utterances[idx];
+    let Some(utterance) = utterances.get(idx) else {
+        return Vec::new();
+    };
     let speaker = utterance.main.speaker.as_str();
 
     // Find next utterance by same speaker
-    let next_same_speaker = utterances[idx + 1..]
-        .iter()
+    let next_same_speaker = utterances
+        .following(idx)
         .find(|u| u.main.speaker.as_str() == speaker);
 
     if let Some(next_utt) = next_same_speaker {
@@ -52,7 +58,7 @@ pub(super) fn check_quotation_follows(utterances: &[Utterance], idx: usize) -> V
         } else {
             // Check for mixed patterns: ALL +" utterances after +"/. should not end with +".
             // Continue checking subsequent same-speaker +" utterances
-            for check_utt in utterances[idx + 1..].iter() {
+            for check_utt in utterances.following(idx) {
                 if check_utt.main.speaker.as_str() != speaker {
                     continue; // Skip different speakers
                 }

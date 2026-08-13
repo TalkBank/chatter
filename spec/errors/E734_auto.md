@@ -15,6 +15,7 @@ is a timing-annotation tier and is never validated for count mismatches.
 - **Level**: tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

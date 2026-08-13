@@ -32,7 +32,7 @@ pub fn parse_gpx_tier(node: Node, source: &str, errors: &impl ErrorSink) -> GpxT
     let children = extract_gpx_dependent_tier(GpxDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

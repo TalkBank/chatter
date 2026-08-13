@@ -10,8 +10,10 @@ A %gra (grammatical relations) tier appears without a corresponding %mor (morpho
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E604
 
 ```chat
 @UTF8

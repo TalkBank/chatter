@@ -11,8 +11,10 @@ An `@ID` header contains a sex field value that is not one of the recognized val
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E542
 
 ```chat
 @UTF8

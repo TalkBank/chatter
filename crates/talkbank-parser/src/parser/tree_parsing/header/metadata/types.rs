@@ -72,15 +72,19 @@ pub fn parse_types_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // short-circuit on the first missing field) is preserved.
     let children = extract_types_header(TypesHeaderNode(node));
 
-    let ParseOutcome::Parsed(design) =
-        read_types_field(children.child_2.slot, node, source, errors, "types_design")
-    else {
+    let ParseOutcome::Parsed(design) = read_types_field(
+        children.child_2.slot(),
+        node,
+        source,
+        errors,
+        "types_design",
+    ) else {
         surface_unexpected(&children.unexpected, source, errors);
         return unknown_types_header(node, source, "Missing design field in @Types header");
     };
 
     let ParseOutcome::Parsed(activity) = read_types_field(
-        children.child_6.slot,
+        children.child_6.slot(),
         node,
         source,
         errors,
@@ -90,9 +94,13 @@ pub fn parse_types_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
         return unknown_types_header(node, source, "Missing activity field in @Types header");
     };
 
-    let ParseOutcome::Parsed(group) =
-        read_types_field(children.child_10.slot, node, source, errors, "types_group")
-    else {
+    let ParseOutcome::Parsed(group) = read_types_field(
+        children.child_10.slot(),
+        node,
+        source,
+        errors,
+        "types_group",
+    ) else {
         surface_unexpected(&children.unexpected, source, errors);
         return unknown_types_header(node, source, "Missing group field in @Types header");
     };
@@ -113,7 +121,7 @@ pub fn parse_types_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
 /// The slot match is EXHAUSTIVE over every `NodeSlot` variant; there is
 /// deliberately no `_` catch-all that could silently drop a recovery slot.
 fn read_types_field<'tree, T: AsRawNode<'tree>>(
-    slot: NodeSlot<'tree, T>,
+    slot: &NodeSlot<'tree, T>,
     node: Node,
     source: &str,
     errors: &impl ErrorSink,

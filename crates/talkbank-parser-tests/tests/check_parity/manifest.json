@@ -282,18 +282,21 @@
    "check_code": 28,
    "check_message": "Unmatched ( found on the tier.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out since 11-02-98 (check.cpp 4992, inside the dated comment block); unix and GUI builds alike can never emit it. Unbalanced parentheses surface through other codes today."
   },
   {
    "check_code": 29,
    "check_message": "Unmatched ) found on the tier.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out since 11-02-98 (check.cpp 4993, same comment block as CHECK 28); never emitted by any current build."
   },
   {
    "check_code": 30,
    "check_message": "Text is illegal.",
    "status": "no_obligation",
+   "no_obligation_reason": "unreachable_in_file_mode",
    "note": "Compiled but unreachable in file mode: firing requires check_MatchTierName to return a colon-less declared header (ts->col FALSE) for a line that ALSO carries trailing text, but the match (check.cpp 1706, partcmp pattern mode) compares the WHOLE trimmed line against the declared name, so any trailing text makes the lookup fail first (empirically: '@Blank extra', '@New Episode extra', and tab-separated variants all emit (17) tier-not-declared, plus (132) for the tab forms, never (30)). No stock-depfile colon-less header contains a pattern wildcard that could match a longer line."
   },
   {
@@ -319,6 +322,7 @@
    "check_code": 33,
    "check_message": "Either illegal date or time or symbol is not declared in depfile.",
    "status": "no_obligation",
+   "no_obligation_reason": "unreachable_in_file_mode",
    "note": "Compiled but unreachable with the stock depfile: check_matchplate returns 33 only when a tier's declared pattern list mixes an @d/@t date-time pattern with OTHER patterns after it and the value fails everything (check.cpp 1543); when the date-time pattern is last, the specific codes 34/35 return instead. Every stock depfile @d/@t list is date-time-only (@Date, @Birth of #, @Time Duration, %tim), so failures yield (34)/(35), never (33): empirically @Date/@Birth/@ID garbage all emit (34). Reachable only via a custom user depadd."
   },
   {
@@ -375,18 +379,21 @@
    "check_code": 39,
    "check_message": "Code tier must NOT follow header tier.",
    "status": "no_obligation",
+   "no_obligation_reason": "no_emission_path",
    "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24 covering check_err, the check_trans_err macro, and helper return-code channels); only the case-39 printer in the check_mess table exists. Tier-ordering violations surface through other codes today."
   },
   {
    "check_code": 40,
    "check_message": "Duplicate code tiers per one main tier are NOT allowed.",
    "status": "no_obligation",
+   "no_obligation_reason": "no_emission_path",
    "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24, same method as code 39). chatter models per-tier duplication rules on its own terms where they make sense."
   },
   {
    "check_code": 41,
    "check_message": "Parentheses around words are illegal.",
    "status": "no_obligation",
+   "no_obligation_reason": "no_emission_path",
    "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24). Parenthesis misuse surfaces via codes 55/111 (grounded elsewhere in this manifest); modern CHAT parenthetical shortenings are a parsed construct in chatter."
   },
   {
@@ -463,6 +470,7 @@
    "check_code": 49,
    "check_message": "Upper case letters are not allowed inside a word.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out 2019-04-23 ('do not check for upper case letters', check.cpp 3447 inside that comment block); never emitted by current builds. chatter's own capitalization rules live in the validator, adjudicated separately."
   },
   {
@@ -511,6 +519,7 @@
    "check_code": 54,
    "check_message": "Only one \"@End\" can be in a file.",
    "status": "no_obligation",
+   "no_obligation_reason": "unreachable_in_file_mode",
    "note": "Compiled but unreachable in file mode: the duplicate-@End counter (check.cpp 2274, end > 1) sits AFTER the any-tier-after-@End check (check.cpp 2242), which emits (44) and breaks the scan the moment any speaker/header line follows @End, including a second @End. Empirically a duplicate @End yields (44) only. chatter rejects the construct with E501 (duplicate @End / content after @End).",
    "fixture": "CHECK_054_duplicate_end.cha",
    "expected_chatter_codes": [
@@ -523,10 +532,9 @@
    "fixture": "CHECK_055_unmatched_open_paren_word.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E316"
    ],
-   "note": "More '(' than ')' inside a single word (check.cpp:4571, pb>lpb after word scan). chatter rejects 'ab(c d .' via unparsable-content/terminator errors."
+   "note": "More '(' than ')' inside a single word (check.cpp:4571, pb>lpb after word scan). chatter rejects 'ab(c d .' via unparsable-content/terminator errors. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
   },
   {
    "check_code": 56,
@@ -534,10 +542,9 @@
    "fixture": "CHECK_056_unmatched_close_paren_word.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E316"
    ],
-   "note": "More ')' than '(' inside a single word (check.cpp:4572, pb<lpb). chatter rejects 'ab)c d .' via unparsable-content/terminator errors."
+   "note": "More ')' than '(' inside a single word (check.cpp:4572, pb<lpb). chatter rejects 'ab)c d .' via unparsable-content/terminator errors. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
   },
   {
    "check_code": 57,
@@ -553,6 +560,7 @@
    "check_code": 58,
    "check_message": "Tier name is longer than 8 characters.",
    "status": "no_obligation",
+   "no_obligation_reason": "no_emission_path",
    "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24). The 8-character tier-name limit is a retired-era constraint; chatter's tier-name rules are its own."
   },
   {
@@ -689,10 +697,9 @@
    "status": "parity",
    "expected_chatter_codes": [
     "E375",
-    "E305",
     "E342"
    ],
-   "note": "Utterance whose content is ONLY a scoped annotation ([=! laughs] .). Empirically grounded 2026-07-24: real CLAN emits (73)+(70); chatter rejects (E306 empty-utterance core, with E305/E342/E375 cascade). IMPORTANT adjudicated scope: CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances (both validators ACCEPT those; verified live), so the old 'pause-only utterance' framing of this gap was wrong. Expected codes refreshed 2026-07-30 (E306 -> E375, E305, E342): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
+   "note": "Utterance whose content is ONLY a scoped annotation ([=! laughs] .). Empirically grounded 2026-07-24: real CLAN emits (73)+(70); chatter rejects (E306 empty-utterance core, with E305/E342/E375 cascade). IMPORTANT adjudicated scope: CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances (both validators ACCEPT those; verified live), so the old 'pause-only utterance' framing of this gap was wrong. Expected codes refreshed 2026-07-30 (E306 -> E375, E305, E342): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
   },
   {
    "check_code": 71,
@@ -728,6 +735,7 @@
    "check_code": 74,
    "check_message": "Only one tab after ':' is allowed.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Sole call site commented out on 2004-04-27 (check.cpp 1762, '// 2004-04-27 if (check_err(74,...))'): deliberately retired 22 years ago; no build can emit it. chatter's tier-separator rules (single :\\t) are enforced by the grammar."
   },
   {
@@ -745,11 +753,10 @@
    "check_code": 76,
    "check_message": "Only one letter is allowed with '@l'.",
    "fixture": "CHECK_076_multi_letter_at_l.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E754"
-   ],
-   "note": "An '@l' letter-marker word whose stem is more than one letter (check.cpp 2532, check_isOneLetter). Fixture 'ab@l .'; chatter accepts (exit 0). The one-letter constraint on @l is a gap. CLOSED 2026-07-15 per the 2026-07-14 REPLICATE ruling: chatter rejects a multi-character stem under @l as E754 (spec/errors/E754_letter_form_multiple_letters.md); main-tier scope matches CHECK, so the wild multi-letter @l tokens in dependent-tier/gloss contexts stay unflagged; digraph question logged for the corpus authority."
+   "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
+   "expected_chatter_codes": [],
+   "note": "An '@l' letter-marker word whose stem is more than one letter. RETIRED ON BOTH SIDES. CLAN retired error 76 on 2026-08-07 (\"CHECK: allow multiple characters before @l\"); check_isOneLetter and its call site sit inside a dated comment block, so no unix build emits it. chatter retired its own E754 on 2026-08-11, independently and for a stated reason: the rule counted CHARACTERS, a digraph is one letter written with two (Welsh 'll', Dutch 'ij'), so it reported a spurious error on valid CHAT and could not do better because it never saw the word's language. Both validators now accept the construct, so expected_chatter_codes is empty and the fixture pins that agreement."
   },
   {
    "check_code": 77,
@@ -795,6 +802,7 @@
    "check_code": 81,
    "check_message": "Bullet must follow utterance delimiter or be followed by end-of-line.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out 2025-07-04 (check.cpp 4791, dated comment block); bullet-placement validity is covered by the still-live bullet codes (73, 118 was also retired the same day)."
   },
   {
@@ -863,6 +871,7 @@
    "check_code": 88,
    "check_message": "Illegal use of compounds and special form markers.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out since 2009-06-08 (check.cpp 3414, dated comment block); never emitted by current builds. chatter's compound/form-marker rules are adjudicated per live CHECK codes 65/66 instead."
   },
   {
@@ -930,12 +939,14 @@
    "check_code": 95,
    "check_message": "Illegal use of capitalized words in compounds.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out (check.cpp 3300, undated comment block guarding check_err(95) behind the retired capWFound flag, itself part of the 2019-04-23 upper-case retirement); never emitted by current builds."
   },
   {
    "check_code": 96,
    "check_message": "Word color is now illegal.",
    "status": "no_obligation",
+   "no_obligation_reason": "unreachable_in_file_mode",
    "note": "Compiled but unreachable: the emit site (check.cpp 3462) is the @Languages branch of check_CheckWords, but @Languages values are validated by check_isLangMatch (check.cpp 2165), which deliberately SPLITS each token at '=' and validates only the language-code part, accepting the legacy word-color suffix; the word-level walker never visits @Languages in file mode. Empirically '@Languages: eng=blue' and 'eng, fra=blue' pass unix CHECK clean. chatter rejects the construct as malformed header content (E320), correctly stricter.",
    "fixture": "CHECK_096_word_color_languages.cha",
    "expected_chatter_codes": [
@@ -987,7 +998,8 @@
    "check_code": 101,
    "check_message": "This item must be followed or preceded by text.",
    "status": "no_obligation",
-   "note": "GUI-only: the emit path sits in/behind the #ifndef UNX CA-character region of check_CheckWords (unix builds compile with -DUNX and exclude it); unix CHECK is the authoritative parity bar. See clan-check-reference/gui-vs-unix-check.md. GUI CHECK flags a CA marker (e.g. pitch-shift arrow) standing alone with no stem text; unix CHECK is silent. chatter rejects the bare marker as unparsable main-tier content (E316), covering the construct.",
+   "no_obligation_reason": "gui_only",
+   "note": "GUI-only: the sole call site (check.cpp 3016) sits inside the #ifndef UNX CA-character region of check_CheckWords, so `unifdef -DUNX` blanks it and no unix binary contains it. DERIVABLE since 2026-08-11: the generator runs unifdef before scanning, so the reference reports zero live sites and this reason is checked rather than trusted.",
    "fixture": "CHECK_101_ca_marker_no_stem.cha",
    "expected_chatter_codes": [
     "E316"
@@ -1017,12 +1029,14 @@
    "check_code": 104,
    "check_message": "Please select \"CAfont\" or \"Ascender Uni Duo\" font for CA file as per \"@Options:\" tier.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Both call sites commented out (check.cpp 5483/5542, inside comment blocks); the font-selection advice is GUI-editor-era and never emitted by current builds. Fonts are not a CHAT-validity property; chatter has no analogue by design."
   },
   {
    "check_code": 105,
    "check_message": "Please select \"Charis SIL\" font for IPA file as per \"@Options:\" tier.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Both call sites commented out (check.cpp 5487/5546, same comment blocks as CHECK 104); never emitted. Same adjudication as 104: font choice is not validity."
   },
   {
@@ -1149,6 +1163,7 @@
    "check_code": 118,
    "check_message": "Utterance delimiter must precede final bullet.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out 2025-07-04 (check.cpp 4623, dated comment block, retired together with 81); never emitted by current builds. Delimiter-before-bullet ordering remains covered by the live bullet/delimiter codes."
   },
   {
@@ -1423,6 +1438,7 @@
    "check_code": 145,
    "check_message": "This intonational marker should be outside paired markers.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out 2019-04-17 with the comment 'leave this to CHATTER' (check.cpp 4602): CLAN explicitly delegated this rule's future to this project. Never emitted by current builds. If the paired-marker interaction rule is wanted, it is a fresh chatter rule to design, not a parity obligation."
   },
   {
@@ -1471,16 +1487,16 @@
    "fixture": "CHECK_150_paren_before_code.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E305",
     "E316"
    ],
-   "note": "A ')' with no matching '(' in the non-skip material scanned back from a [...] code. chatter rejects 'dog) [/] dog' as unparsable (E316 on ') [/] dog')."
+   "note": "A ')' with no matching '(' in the non-skip material scanned back from a [...] code. chatter rejects 'dog) [/] dog' as unparsable (E316 on ') [/] dog'). E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
   },
   {
    "check_code": 151,
    "check_message": "This word has only repetition segments.",
    "status": "no_obligation",
-   "note": "GUI-only: the emit path sits behind the #ifndef UNX CA-character region of check_CheckWords (unix builds compile with -DUNX and exclude it); unix CHECK is the authoritative parity bar and cannot emit it, so no obligation exists. See clan-check-reference/gui-vs-unix-check.md. chatter ADOPTED the rule on its own authority (maintainer ruling 2026-07-15): a fully U+21AB-wrapped word with no stem is rejected as E753 (spec/errors/E753_word_only_repetition_segments.md); word-category prefix markers (&- filler etc.) count as a stem, keeping the wild corpus's 2 filler-wrapped tokens valid.",
+   "no_obligation_reason": "unreachable_in_file_mode",
+   "note": "Compiled into the unix build but never reached. RECLASSIFIED 2026-08-11 from `gui_only`, which was wrong about the mechanism: the check_err(151,...) site is at check.cpp 2980, inside helper check_isThereStem, which ends before the #ifndef UNX region begins at 2991. The site therefore survives `unifdef -DUNX`. What the region excludes is the helper's ONLY caller, at 3013, so under -DUNX the function is compiled and never invoked. The earlier note's phrase \"the emit path sits behind the #ifndef UNX region\" was accurate as prose and wrong as a classification.",
    "fixture": "CHECK_151_only_repetition_segments.cha",
    "expected_chatter_codes": [
     "E753"
@@ -1510,6 +1526,7 @@
    "check_code": 154,
    "check_message": "Please add \"unlinked\" to @Media header.",
    "status": "no_obligation",
+   "no_obligation_reason": "commented_out",
    "note": "Call site commented out after four days in service ('in 2018-10-03 out 2018-10-07', check.cpp 5752); never emitted by current builds. Media/bullet consistency is adjudicated under the live codes (112 ruling of 2026-07-14 covers the meaningful direction: bullets require @Media)."
   },
   {

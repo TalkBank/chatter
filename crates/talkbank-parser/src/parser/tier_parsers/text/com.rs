@@ -30,7 +30,7 @@ pub fn parse_com_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ComT
     let children = extract_com_dependent_tier(ComDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

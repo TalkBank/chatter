@@ -16986,7 +16986,8 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
+                    0x0E ..= 0x5A |
+                    0x5C |
                     0x5E ..= 0x7F => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
@@ -22597,7 +22598,8 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
+                    0x0E ..= 0x5A |
+                    0x5C |
                     0x5E ..= 0x7F => {
                         self.cursor += 1;
                         yystate = 1143;

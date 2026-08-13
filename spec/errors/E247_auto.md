@@ -11,6 +11,7 @@ Auto-generated from corpus
 - **Level**: word
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

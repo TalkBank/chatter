@@ -270,10 +270,15 @@ mod tests {
         assert_eq!(expand_decade_eng(10), "tens");
     }
 
-    /// Boundary-condition tests beyond the fixture range. Larger
-    /// values should still produce sensible output, even if
-    /// num2words would format them differently; we promise no
-    /// crash, no allocation explosion.
+    /// SURVIVES: behaviour a signature cannot describe. The return type says
+    /// a `String` comes back; it cannot say the arithmetic inside does not
+    /// overflow. Integer overflow panics in debug builds and wraps in release,
+    /// and no lint catches either, so a large-input probe is the only thing
+    /// standing between a caller and a panic on `expand_ordinal_eng(1_000_000)`.
+    ///
+    /// Deliberately asserts nothing about the OUTPUT: what large ordinals
+    /// should read like is unsettled, and pinning today's rendering would
+    /// freeze an answer nobody has chosen.
     #[test]
     fn ordinal_large_values_dont_crash() {
         let _ = expand_ordinal_eng(10_000);

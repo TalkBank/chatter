@@ -2,7 +2,11 @@
 //!
 //! Validates CA overlap markers (⌈⌉⌊⌋) within individual utterances:
 //! - **E373**: Invalid overlap index (must be 2-9 if present)
-//! - **E348**: Unpaired overlap marker (opening without closing or vice versa)
+//!
+//! NOT E348. This module claimed to check it and did not: the pairing function
+//! walked the tree and both its branches were empty, so `MissingOverlapEnd` is
+//! constructed nowhere in the workspace. Within one utterance an unpaired
+//! marker is legitimate; across utterances it is E347's business.
 //!
 //! Uses [`extract_overlap_info`] from `alignment::helpers::overlap` for the
 //! content traversal, same traversal used by the alignment pipeline,
@@ -21,14 +25,21 @@ use crate::validation::{Validate, ValidationContext};
 
 /// Validate overlap markers within one utterance.
 ///
-/// Checks both index validity (E373) and pairing completeness (E348).
+/// Checks index validity (E373). Pairing is a cross-utterance question; see
+/// the note in the body and `validation/cross_utterance/`.
 pub(crate) fn check_overlap_markers(
     utterance: &Utterance,
     context: &ValidationContext,
     errors: &impl ErrorSink,
 ) {
     check_overlap_index_values(utterance, context, errors);
-    check_overlap_pairing(utterance, context, errors);
+    // No pairing check. `check_overlap_pairing` used to sit here: it walked the
+    // whole utterance, allocated the marker list, paired it, and then did
+    // nothing, because BOTH of its arms had been emptied. Its own comments say
+    // why, and they are right: an opening marker with no close, or a close with
+    // no opening, is a legitimate cross-utterance overlap span, and pairing
+    // ACROSS utterances is E347's job in `validation/cross_utterance/`. There is
+    // no within-utterance pairing rule left to enforce.
 }
 
 /// Validate overlap-point indices throughout one utterance tree (E373).
@@ -60,37 +71,6 @@ pub(crate) fn check_overlap_index_values(
                 Some(index),
             );
             point.validate(&index_context, errors);
-        }
-    }
-}
-
-/// Check that overlap markers are properly paired within the utterance (E348).
-///
-/// Reports E348 when:
-/// - An opening marker (⌈ or ⌊) has no matching closing marker (⌉ or ⌋)
-/// - A closing marker appears without a preceding opening marker
-///
-/// Note: onset-only marking (⌈ without ⌉) is a legitimate CA practice in
-/// some corpora. This check reports it as a warning, not an error, because
-/// the convention varies between research groups.
-fn check_overlap_pairing(
-    utterance: &Utterance,
-    _context: &ValidationContext,
-    _errors: &impl ErrorSink,
-) {
-    let info = extract_overlap_info(utterance.main.content.content.as_slice());
-
-    for region in &info.regions {
-        if region.begin_at_word.is_some() && region.end_at_word.is_none() {
-            // Opening without closing in this utterance, legitimate
-            // cross-utterance overlap span. The matching close marker will
-            // appear on a later utterance from the same speaker. The
-            // cross-utterance check (E347) handles pairing across utterances.
-        } else if region.begin_at_word.is_none() && region.end_at_word.is_some() {
-            // Closing without opening in this utterance, legitimate
-            // cross-utterance overlap span. The matching open marker was
-            // on a preceding utterance from the same speaker. The
-            // cross-utterance check (E347) handles pairing across utterances.
         }
     }
 }

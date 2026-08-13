@@ -9,6 +9,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use talkbank_model::model::TranscriptName;
 
 use talkbank_model::ChatFile;
 use talkbank_model::{ErrorCollector, ParseError};
@@ -57,8 +58,13 @@ pub(super) fn load_alignment_context(input: &PathBuf) -> Result<AlignmentContext
     // Compute alignments for all utterances and report validation issues,
     // appended after the parse diagnostics collected above.
     let errors = ErrorCollector::new();
-    let filename = input.to_str();
-    chat_file.validate_with_alignment(&errors, filename);
+    // `TranscriptName::for_path`, not `input.to_str()`. This used to pass the
+    // WHOLE PATH where E531 expects the transcript's stem, so `@Media: foo`
+    // was compared against `/corpus/eng/foo.cha` and could never match: every
+    // media-linked transcript shown through this command reported a spurious
+    // filename mismatch. The type is what surfaced it; an `Option<&str>`
+    // accepted both strings equally.
+    chat_file.validate_with_alignment(&errors, TranscriptName::for_path(input));
     validation_errors.extend(errors.into_vec());
 
     Ok(AlignmentContext {

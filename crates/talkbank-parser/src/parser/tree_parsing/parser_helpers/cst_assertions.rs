@@ -350,3 +350,47 @@ pub fn extract_utf8_text<'a>(
         }
     }
 }
+
+/// The value of a slot that is `Present`, borrowed, or `None` for every
+/// recovery state.
+///
+/// `NodeSlot::present_or_recover` CONSUMES the slot, and slots are reached
+/// through `Positioned::slot()`, which borrows. Eight call sites bridged that
+/// with `.slot().clone().present_or_recover().ok()`, a clone taken solely to
+/// satisfy a by-value signature and then thrown away, which also forced a
+/// `T: Clone` bound onto two generic helpers that had no other use for it.
+///
+/// This is the borrowing form, exhaustive over all five states in ONE place, so
+/// the recovery states stay spelled out (the crate bans `_` arms on this enum)
+/// without spelling them out eight times.
+///
+/// Use `present_or_recover` where the RECOVERY variant is wanted; use this
+/// where the call site only asks "is it there".
+pub(crate) fn present<'a, 'tree, T>(
+    slot: &'a crate::generated_traversal::NodeSlot<'tree, T>,
+) -> Option<&'a T> {
+    use crate::generated_traversal::NodeSlot;
+    match slot {
+        NodeSlot::Present(value) => Some(value),
+        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+            None
+        }
+    }
+}
+
+/// The first direct child of `node` whose kind is `kind`.
+///
+/// One owner for a five-line idiom that had grown three byte-identical private
+/// copies (header dispatch, the `@Types` header, the `@PID` header) plus a
+/// fourth inline use. None of them is reachable from the others, so each new
+/// need produced another copy; that is how the third one came to exist.
+///
+/// This is NOT the banned `node.kind()` hand-walk. That ban is about driving
+/// the PARSE by scanning kinds instead of the generated typed traversal. This
+/// looks inside a node the traversal does not type: an ERROR node's recovered
+/// children, or a header whose internals predate the migration.
+pub(crate) fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
+    let mut cursor = node.walk();
+    node.children(&mut cursor)
+        .find(|child| child.kind() == kind)
+}

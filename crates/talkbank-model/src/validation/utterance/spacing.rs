@@ -16,6 +16,10 @@
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Pauses>
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use crate::alignment::helpers::{ContentItem, walk_content};
 use crate::model::{Utterance, UtteranceContent};
@@ -24,27 +28,6 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 /// The source end byte of a content item, when the item is a word whose
 /// trailing edge can glue a following pause. Non-word items return
 /// `None`: CHECK 57 fires on the word-then-`(` shape specifically.
-fn word_end(item: &ContentItem<'_>) -> Option<u32> {
-    match item {
-        ContentItem::Word(word) => Some(word.span.end),
-        ContentItem::ReplacedWord(replaced) => Some(replaced.word.span.end),
-        ContentItem::Separator(_)
-        | ContentItem::Event(_)
-        | ContentItem::Pause(_)
-        | ContentItem::Action(_)
-        | ContentItem::OverlapPoint(_)
-        | ContentItem::OtherSpokenEvent(_)
-        | ContentItem::Freecode(_)
-        | ContentItem::InternalBullet(_)
-        | ContentItem::LongFeatureBegin(_)
-        | ContentItem::LongFeatureEnd(_)
-        | ContentItem::UnderlineBegin(_)
-        | ContentItem::UnderlineEnd(_)
-        | ContentItem::NonvocalBegin(_)
-        | ContentItem::NonvocalEnd(_)
-        | ContentItem::NonvocalSimple(_) => None,
-    }
-}
 
 /// The source start byte of a top-level item whose leading edge can be
 /// glued onto a preceding code's `]` (the word family). Other variants
@@ -213,7 +196,7 @@ pub(crate) fn check_prefixed_form_glued_to_preceding_word(
                     .with_suggestion("Add a space between the word and the prefixed form"),
                 );
             }
-            prev_word_end = word_end(&item);
+            prev_word_end = item.word_span().map(|span| span.end);
         },
     );
 }
@@ -300,7 +283,36 @@ fn glued_target_start(item: &UtteranceContent) -> Option<u32> {
             .filter(|span| *span != crate::Span::DUMMY)
             .map(|span| span.start),
         UtteranceContent::Pause(pause) => Some(pause.span.start),
-        _ => None,
+        // Everything else is either handled by `word_family_start` above or
+        // legitimately takes preceding material. Listed rather than `_ =>` so a
+        // new content variant is a compile error here: this function decides
+        // what may not be glued onto a preceding item, and a variant that falls
+        // silently into `None` is a rule that stops applying without anyone
+        // noticing. Mirrors `free_standing_end` directly above.
+        UtteranceContent::Word(_)
+        | UtteranceContent::AnnotatedWord(_)
+        | UtteranceContent::ReplacedWord(_)
+        | UtteranceContent::Event(_)
+        | UtteranceContent::AnnotatedEvent(_)
+        | UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedAction(_)
+        | UtteranceContent::OverlapPoint(_)
+        | UtteranceContent::Freecode(_)
+        | UtteranceContent::InternalBullet(_)
+        | UtteranceContent::LongFeatureBegin(_)
+        | UtteranceContent::LongFeatureEnd(_)
+        | UtteranceContent::UnderlineBegin(_)
+        | UtteranceContent::UnderlineEnd(_)
+        | UtteranceContent::NonvocalBegin(_)
+        | UtteranceContent::NonvocalEnd(_)
+        | UtteranceContent::NonvocalSimple(_)
+        | UtteranceContent::OtherSpokenEvent(_) => None,
     }
 }
 
@@ -369,7 +381,7 @@ pub(crate) fn check_pause_glued_to_word(utterance: &Utterance, errors: &impl Err
                     .with_suggestion("Add a space between the word and the pause"),
                 );
             }
-            prev_word_end = word_end(&item);
+            prev_word_end = item.word_span().map(|span| span.end);
         },
     );
 }

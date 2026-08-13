@@ -5,8 +5,8 @@
 Missing required element
 
 ## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-04 08:15 EDT
+- **Status**: implemented
+- **Last updated**: 2026-08-11 16:20 EDT
 
 - **Error Code**: E342
 - **Category**: Word validation
@@ -18,12 +18,20 @@ Missing required element
 
 **Source**: `E2xx_word_errors/E211_replacement_missing_corrected.cha`
 **Trigger**: Replacement containing 0 (omission marker)
-**Expected Error Codes**: E390
+**Expected Error Codes**: E342
 
-Note: The replacement `[: 0]` contains an omission marker (`0`), which
-triggers E390 (ReplacementContainsOmission) rather than E316 (UnparsableContent)
-or E342 (MissingRequiredElement). The parser successfully parses the replacement
-and then validates its content.
+Note: `helo [: 0] world .` is malformed at BOTH layers, and this is a
+parser-layer spec, so it declares the parser-layer code. The grammar has no
+word_segment for the `0`, so tree-sitter recovers with a MISSING node and the
+parser reports E342 ("recovery is not validity"). Validation then separately
+reports E390 (ReplacementContainsOmission), which is the more informative
+diagnosis and is declared by E390's own spec; a parser-layer test cannot see it,
+because it only inspects parse diagnostics.
+
+Updated 2026-08-11: this declared E390 alone, and had been unreachable since
+whenever E342_auto's status became `implemented` without the generated tests
+being regenerated, so four E342 tests sat `#[ignore]`d and nothing noticed the
+expectation was for a layer this test does not run.
 
 ```chat
 @UTF8
@@ -39,7 +47,17 @@ and then validates its content.
 
 **Source**: `E7xx_tier_parsing/E704_empty_mor_pos.cha`
 **Trigger**: %mor chunk with empty part-of-speech before pipe
-**Expected Error Codes**: E316, E702
+**Expected Error Codes**: E760
+
+Updated 2026-08-11. This declared E316 (unparsable content) and E702 (invalid
+morphology format), and emits neither: it now emits E760, which names the
+actual defect ("MOR item '|hello' has an empty part-of-speech field") and
+carries the rule in its help text. A generic "unparsable content" standing in
+for a specific rule is the documented tell of a validator that has not yet been
+taught the rule, so replacing it was the improvement; the expectation here was
+simply left behind. It also emits E600 as a WARNING, saying why main-to-%mor
+alignment was skipped, which is a consequence rather than a second defect and
+so is not declared.
 
 ```chat
 @UTF8

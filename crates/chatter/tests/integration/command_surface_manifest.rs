@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 
 use crate::common::{
     CliHarness,
-    command_surface::{SURFACE_GROUPS, SurfaceScope},
+    command_surface::{SURFACE_GROUPS, SurfaceScope, UNPUBLISHED_TOP_LEVEL},
 };
 
 fn listed_commands(help: &str) -> BTreeSet<String> {
@@ -46,7 +46,15 @@ fn listed_commands(help: &str) -> BTreeSet<String> {
             break;
         }
 
+        // A command entry begins at EXACTLY two spaces of indent. Wrapped
+        // continuation lines of a long description are indented far further, and
+        // taking the first word of any indented line swept them in: a
+        // description mentioning ASR yielded a phantom command `ASR`. That went
+        // unnoticed because the only assertion was manifest ⊆ live, where extra
+        // junk in `live` is harmless. It becomes fatal the moment the other
+        // direction is checked, which is the direction that catches real drift.
         if line.starts_with("  ")
+            && !line.starts_with("   ")
             && !trimmed.is_empty()
             && let Some(command) = trimmed.split_whitespace().next()
         {
@@ -105,6 +113,80 @@ fn top_level_help_lists_all_manifested_commands() {
     assert!(
         !commands.contains("analyze"),
         "stale removed command `analyze` reappeared in top-level help"
+    );
+}
+
+/// Every top-level command is accounted for: published, or excluded with a
+/// reason. This is the direction the manifest could not check.
+///
+/// `top_level_help_lists_all_manifested_commands` asserts manifest ⊆ help,
+/// which catches a command being REMOVED. Nothing asserted help ⊆ manifest, so
+/// a command could be ADDED to the CLI and belong to no group, carry no
+/// coverage expectation, and appear in no documentation, with every gate green.
+#[test]
+fn every_top_level_command_is_published_or_declared_unpublished() {
+    let live = listed_commands(&help_output(&["--help"]));
+    let published = manifest_commands(SurfaceScope::TopLevel);
+    let unpublished: BTreeSet<&str> = UNPUBLISHED_TOP_LEVEL
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+
+    for command in &live {
+        // `help` is clap's own built-in, not part of chatter's surface.
+        if command == "help" {
+            continue;
+        }
+        assert!(
+            published.contains(command.as_str()) || unpublished.contains(command.as_str()),
+            "top-level command `{command}` is in `chatter --help` but is neither in the \
+             release-facing manifest nor declared unpublished. Add it to SURFACE_GROUPS with \
+             coverage expectations, or to UNPUBLISHED_TOP_LEVEL with the reason it is excluded."
+        );
+    }
+
+    // The exclusion list must not rot either: a name here that no longer
+    // exists is a stale exclusion silently covering nothing.
+    for (command, reason) in UNPUBLISHED_TOP_LEVEL {
+        assert!(
+            live.contains(*command),
+            "`{command}` is declared unpublished ({reason}) but no longer appears in \
+             `chatter --help`; remove the stale exclusion"
+        );
+        assert!(
+            !published.contains(command),
+            "`{command}` is both manifested as published and declared unpublished"
+        );
+    }
+}
+
+/// Every PUBLISHED command appears in the CLI reference page.
+///
+/// A command a user cannot find is, for that user, a command that does not
+/// exist. `update` shipped in the binary and in the manifest while the CLI
+/// reference never named it once, which no gate could see, because the only
+/// documentation check in this repo is a blocklist of strings known to be dead:
+/// it detects a doc mentioning something REMOVED and is structurally blind to a
+/// doc omitting something ADDED.
+///
+/// Deliberately scoped to published commands. The experimental ones are listed
+/// on the page as a group, and holding them to per-command documentation would
+/// be asserting a policy nobody has adopted.
+#[test]
+fn published_commands_appear_in_the_cli_reference() {
+    let page_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../book/src/chatter/user-guide/cli-reference.md");
+    let page = std::fs::read_to_string(&page_path)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", page_path.display()));
+
+    let missing: Vec<&str> = manifest_commands(SurfaceScope::TopLevel)
+        .into_iter()
+        .filter(|command| !page.contains(&format!("chatter {command}")))
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "published commands missing from book/src/chatter/user-guide/cli-reference.md: {missing:?}"
     );
 }
 

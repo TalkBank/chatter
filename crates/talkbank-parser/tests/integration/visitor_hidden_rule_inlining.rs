@@ -96,8 +96,8 @@ fn extract_id_contents_classifies_real_flat_children_present() {
 
     // Find the first @ID line and extract its id_contents node.
     let mut id_contents_seen = 0usize;
-    for elem in &doc_children.child_3.slot {
-        let NodeSlot::Present(line_node) = &elem.slot else {
+    for elem in doc_children.child_3.slot() {
+        let NodeSlot::Present(line_node) = elem.slot() else {
             continue;
         };
 
@@ -108,7 +108,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
         // OWN variant (no separate `classify_header` round-trip needed: the
         // nested choice already names the concrete header kind).
         let line_children = extract_line(*line_node);
-        let id_header_node = match &line_children.content.slot {
+        let id_header_node = match line_children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(
                 LineActivitiesHeaderChoice::IdHeader(node),
             )) => *node,
@@ -119,7 +119,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
         let id_header_children = extract_id_header(id_header_node);
         let id_contents_node = id_header_children
             .child_2
-            .slot
+            .slot()
             .raw_node()
             .expect("an @ID header must have an id_contents node");
 
@@ -133,18 +133,18 @@ fn extract_id_contents_classifies_real_flat_children_present() {
         // `Unexpected`; post-fix they expect "id_languages" / "pipe" and are
         // `Present`.
         assert!(
-            matches!(id_contents.child_0.slot, NodeSlot::Present(_)),
+            matches!(id_contents.child_0.slot(), NodeSlot::Present(_)),
             "id_contents child_0 (id_languages) must be Present after hidden-rule \
              inlining (was Unexpected against the phantom `_id_identity_fields` kind), \
              got {:?}",
-            id_contents.child_0.slot
+            id_contents.child_0.slot()
         );
         assert!(
-            matches!(id_contents.child_1.slot, NodeSlot::Present(_)),
+            matches!(id_contents.child_1.slot(), NodeSlot::Present(_)),
             "id_contents child_1 (first pipe) must be Present after hidden-rule \
              inlining (was Unexpected against the phantom `_id_demographic_fields` kind), \
              got {:?}",
-            id_contents.child_1.slot
+            id_contents.child_1.slot()
         );
     }
 

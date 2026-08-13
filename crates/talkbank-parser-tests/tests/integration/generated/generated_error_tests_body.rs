@@ -432,7 +432,7 @@ fn test_e307_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
     }
     let diagnostics = product.diagnostics();
 
-    let expected_codes = vec!["E370"];
+    let expected_codes = vec!["E246"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
         let has_expected = diagnostics.iter().any(|err| err.code == expected);
@@ -469,7 +469,7 @@ fn test_e309_auto_begin_languages_eng_0() -> Result<(), talkbank_parser_tests::t
     Ok(())
 }
 
-#[ignore = "Status: not_implemented (E311)"]
+
 /// Tests expected behavior.
 #[test]
 fn test_e311_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
@@ -484,7 +484,33 @@ fn test_e311_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
     }
     let diagnostics = product.diagnostics();
 
-    let expected_codes = vec!["E316"];
+    let expected_codes = vec!["E311"];
+    for code in expected_codes {
+        let expected = talkbank_model::ErrorCode::new(code);
+        let has_expected = diagnostics.iter().any(|err| err.code == expected);
+        assert!(has_expected, "Expected error code {}, but got: {:?}",
+            code, diagnostics.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
+    }
+
+    Ok(())
+}
+
+
+/// Tests expected behavior.
+#[test]
+fn test_e311_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    let product = parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello [: world .\n@End");
+
+    // Reproduces the pre-`ParseProduct` fail-on-any-error-diagnostic
+    // contract: an error-spec example is expected to trigger at least one
+    // error-severity diagnostic, whether or not a model was also built.
+    if !product.has_error_diagnostics() {
+        return Err(talkbank_parser_tests::test_error::TestError::Failure("Expected parse error but parsing succeeded".to_string()));
+    }
+    let diagnostics = product.diagnostics();
+
+    let expected_codes = vec!["E311"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
         let has_expected = diagnostics.iter().any(|err| err.code == expected);
@@ -1093,7 +1119,7 @@ fn test_e331_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
     Ok(())
 }
 
-#[ignore = "Status: not_implemented (E342)"]
+
 /// Tests expected behavior.
 #[test]
 fn test_e342_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::test_error::TestError> {
@@ -1108,7 +1134,7 @@ fn test_e342_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
     }
     let diagnostics = product.diagnostics();
 
-    let expected_codes = vec!["E390"];
+    let expected_codes = vec!["E342"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
         let has_expected = diagnostics.iter().any(|err| err.code == expected);
@@ -1119,7 +1145,7 @@ fn test_e342_auto_utf8_begin_languages_0() -> Result<(), talkbank_parser_tests::
     Ok(())
 }
 
-#[ignore = "Status: not_implemented (E342)"]
+
 /// Tests expected behavior.
 #[test]
 fn test_e342_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::test_error::TestError> {
@@ -1134,7 +1160,7 @@ fn test_e342_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::
     }
     let diagnostics = product.diagnostics();
 
-    let expected_codes = vec!["E316", "E702"];
+    let expected_codes = vec!["E760"];
     for code in expected_codes {
         let expected = talkbank_model::ErrorCode::new(code);
         let has_expected = diagnostics.iter().any(|err| err.code == expected);
@@ -1145,7 +1171,7 @@ fn test_e342_auto_utf8_begin_languages_1() -> Result<(), talkbank_parser_tests::
     Ok(())
 }
 
-#[ignore = "Status: not_implemented (E342)"]
+
 /// Tests expected behavior.
 #[test]
 fn test_e342_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::test_error::TestError> {
@@ -1171,7 +1197,7 @@ fn test_e342_auto_utf8_begin_languages_2() -> Result<(), talkbank_parser_tests::
     Ok(())
 }
 
-#[ignore = "Status: not_implemented (E342)"]
+
 /// Tests expected behavior.
 #[test]
 fn test_e342_auto_utf8_begin_languages_3() -> Result<(), talkbank_parser_tests::test_error::TestError> {

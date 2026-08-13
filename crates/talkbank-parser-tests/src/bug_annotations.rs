@@ -104,9 +104,12 @@ mod tests {
     /// Tests load golden bugs.
     #[test]
     fn test_load_golden_bugs() -> Result<(), TestError> {
-        let bugs = GoldenBugs::load().map_err(|err| TestError::Failure(err.to_string()))?;
-        // Should successfully load (even if empty)
-        assert!(bugs.bugs.is_empty() || !bugs.bugs.is_empty());
+        // Loading is the assertion: `?` fails the test on a malformed or
+        // unreadable file, and an empty list is a legitimate result. An
+        // `assert!(x.is_empty() || !x.is_empty())` here would read as a check
+        // while being true of every possible value, which is the one vacuous
+        // assertion a search for `assert` cannot find.
+        let _bugs = GoldenBugs::load().map_err(|err| TestError::Failure(err.to_string()))?;
         Ok(())
     }
 

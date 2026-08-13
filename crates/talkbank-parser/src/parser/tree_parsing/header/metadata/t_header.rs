@@ -7,6 +7,7 @@ use crate::node_types::{FREE_TEXT, T_HEADER};
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::parser_helpers::find_child_by_kind;
 use talkbank_model::model::{Header, TDescription, WarningText};
 
 /// Build `Header::Unknown` for malformed `@T` input.
@@ -75,11 +76,4 @@ pub fn parse_t_header(node: Node, source: &str, errors: &impl ErrorSink) -> Head
     Header::T {
         text: TDescription::new(text),
     }
-}
-
-/// Find first direct child matching `kind`.
-fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .find(|child| child.kind() == kind)
 }

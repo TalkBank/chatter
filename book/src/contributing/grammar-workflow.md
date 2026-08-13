@@ -1,7 +1,7 @@
 # Grammar Workflow
 
 **Status:** Current
-**Last modified:** 2026-05-29 18:36 EDT
+**Last modified:** 2026-08-12 19:55 EDT
 
 The tree-sitter grammar at `grammar/grammar.js` is the formal definition of the CHAT format. Changes require careful validation.
 
@@ -12,16 +12,19 @@ step must pass before committing a grammar change.
 flowchart TD
     edit(["Edit grammar/grammar.js"])
     generate["tree-sitter generate\n→ src/parser.c\n→ src/node-types.json"]
+    traversal["regenerate the typed traversal\n→ generated_traversal.rs"]
     grammar_test["tree-sitter test\n(corpus tests)"]
     rust_test["cargo test -p talkbank-parser\n(CST-to-model conversion)"]
     equiv["parser equivalence\n(corpus/reference/ files)"]
     spec_check{"Grammar change\naffects spec examples?"}
-    test_gen["spec/tools generators\n→ grammar/test/corpus/\n→ parser-tests/tests/generated/\n→ docs/errors/"]
+    test_gen["spec/tools generators\n→ grammar/test/corpus/generated/\n→ parser-tests generated tests\n→ validation fixture corpus"]
+    differential["corpus differential\n(before any push)"]
     commit(["Commit"])
 
-    edit --> generate --> grammar_test --> rust_test --> equiv --> spec_check
-    spec_check -->|Yes| test_gen --> commit
-    spec_check -->|No| commit
+    edit --> generate --> traversal --> grammar_test --> rust_test --> equiv --> spec_check
+    spec_check -->|Yes| test_gen --> differential
+    spec_check -->|No| differential
+    differential --> commit
 ```
 
 ## Step-by-Step Procedure
@@ -43,7 +46,47 @@ tree-sitter generate
 
 This produces `src/parser.c` and `src/node-types.json`. Never edit these files by hand.
 
-### 3. Run Grammar Tests
+`tree-sitter test` does NOT detect a stale `parser.c`, so nothing downstream
+can be trusted until this has run.
+
+### 3. Regenerate the Typed Traversal
+
+`crates/talkbank-parser/src/generated_traversal.rs` is the single generated
+visitor the whole production parser dispatches through, produced from the
+grammar's JSON by `tree-sitter-grammar-utils`. A grammar change that alters
+node types or their positions makes it stale.
+
+```sh
+cargo run --example generate_typed_traversal -p tree-sitter-node-types -- \
+  <CHATTER>/grammar/src/grammar.json \
+  <CHATTER>/grammar/src/node-types.json \
+  --edition 2024 \
+  --toolchain 1.97.1 \
+  > <CHATTER>/crates/talkbank-parser/src/generated_traversal.rs
+```
+
+Run from a CLEAN checkout of that repository: the header records the
+generator's own git describe, and a dirty tree is stamped `-dirty` on purpose.
+The generator runs `rustfmt` on its output, so no separate `cargo fmt` step is
+needed. Never hand-edit the file; if the output is wrong, fix the generator as
+a general change and regenerate.
+
+**The staleness guard proves less than it looks.**
+`generated_traversal_is_current` recomputes the digests of `grammar.json` and
+`node-types.json`, so it catches a forgotten regeneration after a GRAMMAR
+change. Its inputs are those two files, so it cannot see the generator at all:
+a module emitted by an older backend passes indefinitely, and the guard is not
+wrong to pass it. It is answering a different question from the one its name
+invites you to ask.
+
+Which generator wrote the file is answered by the file, in its own header
+comment. A bare semver there does not identify a build (the committed module
+reads `tree-sitter-node-types 0.1.0`, and there is more than one 0.1.0), which
+is why newer generator builds stamp the generator's source commit beside the
+version. When the question is which backend produced the module, read that
+header rather than trusting a green suite.
+
+### 4. Run Grammar Tests
 
 ```bash
 tree-sitter test
@@ -53,7 +96,7 @@ Every test under `grammar/test/corpus/` must pass. Tests live there
 and are partially auto-generated from specs (primarily via
 `gen_tree_sitter_tests`).
 
-### 4. Run Parser Tests
+### 5. Run Parser Tests
 
 ```bash
 cargo test -p talkbank-parser
@@ -61,7 +104,7 @@ cargo test -p talkbank-parser
 
 This verifies the Rust parser wrapper handles all CST nodes correctly.
 
-### 5. Run Parser Equivalence
+### 6. Run Parser Equivalence
 
 ```bash
 cargo test -p talkbank-parser-tests parser_equivalence
@@ -69,7 +112,7 @@ cargo test -p talkbank-parser-tests parser_equivalence
 
 Every file in the reference corpus must parse correctly. Each `.cha` file is its own test, so failures are reported per file.
 
-### 6. Regenerate Spec Tests
+### 7. Regenerate Spec Tests
 
 If the grammar change affects any spec examples:
 
@@ -90,13 +133,29 @@ still depend on the spec pipeline.
 
 Do this when the grammar change actually affects generated artifacts.
 
-### 7. Update node_types.rs
+### 8. Check the corpus differential
 
-If new node types were added to the grammar, the generated `node_types.rs` in `talkbank-parser` needs updating. The spec tools handle this via `node-types.json`.
+Any change touching the grammar, parser lowering, or serialization runs the
+operator's corpus differential before a push. It diffs per-code validate counts
+and roundtrip-failing file sets against the fleet's archived binary over real
+corpus data.
 
-## Critical Policy
+It is a TRIPWIRE demanding adjudication, not an absolute blocker: corpus data is
+not guaranteed valid CHAT, so every new error instance is classified as either
+INTENDED (a deliberately stricter rule correctly flagging bad data: ship, and
+the files join the cleanup queue) or UNINTENDED (a regression: do not ship).
 
-The reference corpus at `corpus/reference/` must pass parser equivalence at 100%. If a grammar change breaks even one file, revert immediately. The reference corpus is the ultimate arbiter of correctness.
+## The reference corpus is a regression signal, NOT a validity authority
+
+`corpus/reference/` must stay green, but this page used to call it "the
+ultimate arbiter of correctness" and tell you to revert immediately on a single
+failure. That is wrong, and acting on it would entrench bad data.
+
+The corpus is SYNTHESIZED. When a change makes it reject a file, adjudicate the
+FILE against the real authorities (`spec/`, the grammar, and real corpus data)
+and fix the data, or move it to `spec/errors/` if the construct is genuinely
+invalid. Weakening the parser to keep a reference file green is the one
+response that is always wrong. The roundtrip gate stays green either way.
 
 ## Common Patterns
 

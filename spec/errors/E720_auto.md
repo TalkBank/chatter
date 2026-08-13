@@ -16,6 +16,7 @@ for an utterance. `%gra` aligns 1-to-1 with `%mor` chunks (not items, a
 - **Kind**: Invalidity
 
 ## Example
+**Expected Error Codes**: E720
 
 ```chat
 @UTF8

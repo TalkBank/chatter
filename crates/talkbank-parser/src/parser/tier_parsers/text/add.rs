@@ -29,7 +29,7 @@ pub fn parse_add_tier(node: Node, source: &str, errors: &impl ErrorSink) -> AddT
     let children = extract_add_dependent_tier(AddDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

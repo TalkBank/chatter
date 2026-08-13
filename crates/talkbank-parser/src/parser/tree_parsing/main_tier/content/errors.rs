@@ -9,15 +9,147 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
-use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
-use crate::node_types::{CONTENT_ITEM, LINKER_QUICK_UPTAKE, WHITESPACES};
+use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::node_types::{CONTENT_ITEM, LINKER_QUICK_UPTAKE, TAB, WHITESPACES};
+use crate::parser::tree_parsing::parser_helpers::{find_child_by_kind, surface_unexpected};
 use talkbank_model::chars::{
     LEFT_DOUBLE_QUOTE, LEFT_SINGLE_QUOTE, RIGHT_DOUBLE_QUOTE, RIGHT_SINGLE_QUOTE,
 };
 use tree_sitter::Node;
 
+/// Where in the main tier a recovery node was found, stated by the caller that
+/// knows it.
+///
+/// # Why this is a parameter and not something we look up
+///
+/// A recovery node's KIND OF FAULT is a fact about the user's file. Which
+/// classifier it reached used to be a fact about tree-sitter's recovery: the
+/// same construct was named precisely when it landed in one position and
+/// reported as generic "unparsable content" when it landed in another, and
+/// nothing in any type said the two were the same question.
+///
+/// So when a generator fix changed where absorbed ERROR nodes are placed, six
+/// error codes silently degraded to E316 with every gate green: each code still
+/// had a passing test, because the same construct at a different position still
+/// took the old route. The tests could not see it, because the thing that
+/// changed was not any value they asserted on.
+///
+/// # What it does and does not guarantee
+///
+/// It fixes the ORDER in which classifications are tried, per region, in one
+/// place. That is the whole claim, and it is worth being exact about, because
+/// an earlier draft of this doc said a caller outside the body "cannot reach
+/// word-level classification", which the code contradicts three lines into
+/// [`classify_outside_body_recovery`]: word classification is the FALLBACK
+/// there. A comment asserting an invariant the type does not carry is the tell
+/// this module exists to remove, so it should not appear in the module's own
+/// documentation.
+///
+/// What the enum does buy: a new region cannot be added without every match on
+/// it failing to compile, and there is one place to read to learn what any
+/// region does. What it cannot buy: it cannot stop a caller naming the WRONG
+/// region, which is why each variant says exactly which node it lives under.
+/// The stronger form would derive the region from the typed carrier the caller
+/// already holds, so possession IS the proof; that is recorded as follow-up
+/// rather than done here.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum MainTierRegion {
+    /// A direct child of `main_tier` that is not inside `tier_body`: the region
+    /// holding the speaker prefix and anything recovery leaves beside it.
+    /// Faults here are STRUCTURAL first, because a word cannot be a direct
+    /// child of `main_tier`, so the line's SHAPE is the likelier fault.
+    ///
+    /// Named for the region rather than for the prefix: the classifier runs
+    /// over every direct ERROR child, including material after the tab, and
+    /// `SpeakerPrefix` read at a call site as "inside the prefix".
+    OutsideBody,
+    /// Inside `tier_body` or `contents`: spoken material, where word-level
+    /// classification applies.
+    Body,
+}
+
+/// Classify a recovery node found in `region`.
+///
+/// Single entry point, so the answer depends on the region the caller states
+/// rather than on where recovery placed the node.
+pub(crate) fn classify_main_tier_recovery(
+    error_node: Node,
+    source: &str,
+    region: MainTierRegion,
+) -> ParseError {
+    match region {
+        MainTierRegion::OutsideBody => classify_outside_body_recovery(error_node, source),
+        MainTierRegion::Body => analyze_word_error(error_node, source),
+    }
+}
+
+/// Surface a main-tier carrier's Unexpected sink, classifying recovery nodes by
+/// `region` rather than generically.
+///
+/// One owner for all nine main-tier sinks. Before this, exactly one of them
+/// branched on `is_error()` and the other eight handed everything to
+/// [`surface_unexpected`], which maps every ERROR to E316 regardless of where
+/// it was found. That is the affordance inversion this module exists to remove:
+/// the region-blind call was the short one, so it stayed the default, and the
+/// region-aware handling was a hand-written special case at the single site
+/// whose failure someone had happened to notice.
+///
+/// Non-ERROR unexpected children still go to [`surface_unexpected`]: they are
+/// not recovery nodes and no region-specific classification applies to them.
+pub(crate) fn surface_main_tier_sink(
+    unexpected: &[Node],
+    region: MainTierRegion,
+    source: &str,
+    errors: &impl ErrorSink,
+) {
+    for node in unexpected {
+        if node.is_error() {
+            errors.report(classify_main_tier_recovery(*node, source, region));
+        } else {
+            surface_unexpected(std::slice::from_ref(node), source, errors);
+        }
+    }
+}
+
+/// Classify a recovery node found OUTSIDE `tier_body`, as a direct child of
+/// `main_tier`.
+///
+/// The tab after the speaker code is the tier DELIMITER, so a second one
+/// mid-line (CLAN CHECK 132) breaks the line's structure and no word-level code
+/// can say so. This was previously reported as a structural error only by
+/// accident: a recovery node displaced `tier_body` into an `Unexpected` slot,
+/// and the ordering complaint that produced happened to be true. With the
+/// displacement fixed, `tier_body` is Present and correct, so the fault has to
+/// be named directly rather than inferred from a broken shape.
+///
+/// The tab is found by looking for a `tab` CHILD of the recovery node, not by
+/// searching its text: a tab inside a word or a comment is not this fault, and
+/// a substring search cannot tell the difference.
+fn classify_outside_body_recovery(error_node: Node, source: &str) -> ParseError {
+    if find_child_by_kind(error_node, TAB).is_some() {
+        return ParseError::new(
+            ErrorCode::StructuralOrderError,
+            Severity::Error,
+            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
+            ErrorContext::new(source, error_node.start_byte()..error_node.end_byte(), "\t"),
+            "Unexpected tab inside the main tier: the tab after the speaker code is the tier \
+             delimiter, so a further tab breaks the line's structure"
+                .to_string(),
+        )
+        .with_suggestion("Separate words with spaces; use the tab only after the speaker code");
+    }
+
+    analyze_word_error(error_node, source)
+}
+
 /// Classifies a word/content `ERROR` node into a specific `ParseError`.
-pub(crate) fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
+///
+/// Private on purpose. Reaching it means going through
+/// [`classify_main_tier_recovery`] and naming a region, so the pre-fix
+/// affordance (call the word classifier wherever you happen to be) no longer
+/// exists. Leaving it reachable would have left the cheaper path the old one,
+/// and the guarantee would hold only where someone remembered to opt in.
+fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     let error_text = match error_node.utf8_text(source.as_bytes()) {
         Ok(text) => text,
         Err(_) => {

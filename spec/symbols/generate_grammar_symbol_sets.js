@@ -131,9 +131,26 @@ export const EVENT_SEGMENT_FORBIDDEN_COMMON = ${JSON.stringify(eventSegmentForbi
 `;
 }
 
+// `--check` renders and COMPARES, writing nothing and exiting non-zero on
+// drift. It exists so a test can gate these outputs: the generators write to
+// fixed repository paths, so a gate that simply ran them would mutate the tree
+// it is checking. Until 2026-08-11 nothing verified these files at all, and a
+// hand-edit to a generated symbol set was undetectable.
+const CHECK_ONLY = process.argv.includes('--check');
+
 function writeIfChanged(filePath, content) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null;
+  if (CHECK_ONLY) {
+    if (existing !== content) {
+      console.error(
+        `STALE: ${filePath} does not match spec/symbols/symbol_registry.json. ` +
+          'Regenerate with `just symbols-gen`.',
+      );
+      process.exit(1);
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   if (existing !== content) {
     fs.writeFileSync(filePath, content, 'utf8');
   }
@@ -144,7 +161,7 @@ function main() {
   const content = renderGeneratedFile(registry);
   const outputPath = path.join(repoRoot, 'grammar', 'src', 'generated_symbol_sets.js');
   writeIfChanged(outputPath, content);
-  console.log(`updated: ${path.relative(repoRoot, outputPath)}`);
+  console.log(`${CHECK_ONLY ? 'current' : 'updated'}: ${path.relative(repoRoot, outputPath)}`);
 }
 
 main();

@@ -201,6 +201,10 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
 /// Case (a): A valid file with headers and utterances should produce the exact
 /// expected line order and ZERO diagnostics. This pins the
 /// `Present(Header(_))` and `Present(Utterance(_))` arms of the new dispatch.
+///
+/// It also covers the document ENTRYPOINT: both go through
+/// `parse_chat_file_streaming`, so a separate entry-point copy of this case
+/// could not fail without this one failing too.
 #[test]
 fn valid_file_parses_to_expected_line_structure_and_zero_diagnostics() {
     let (tags, diags) = parse_lines_and_diags(VALID_MINIMAL);

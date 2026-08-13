@@ -4,6 +4,7 @@
 use crate::ast;
 use crate::token::Token;
 use talkbank_model::Span;
+use talkbank_model::model::content::word::ca::normalize_ca_omissions_in_lines;
 use talkbank_model::model::*;
 
 use super::*;
@@ -20,7 +21,7 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>) -> MainTier {
         .tier_body
         .terminator
         .as_ref()
-        .map(|t| token_to_terminator(t));
+        .and_then(|t| token_to_terminator(t));
 
     let mut main_tier = MainTier::new(speaker, content_items, terminator);
 
@@ -36,9 +37,7 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>) -> MainTier {
             ..
         } = bullet_tok
     {
-        let start_ms: u64 = start_time.parse().unwrap_or(0);
-        let end_ms: u64 = end_time.parse().unwrap_or(0);
-        main_tier = main_tier.with_bullet(Bullet::new(start_ms, end_ms));
+        main_tier = main_tier.with_bullet(bullet_from_times(start_time, end_time));
     }
 
     // Linkers
@@ -52,14 +51,14 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>) -> MainTier {
         main_tier = main_tier.with_linkers(linkers);
     }
 
-    // Language code ([- lang])
-    if let Some(ref langcode_tok) = mt.tier_body.langcode {
-        // Token carries tag-extracted language code directly (e.g., "zho")
-        let code = langcode_tok.text();
-        if !code.is_empty() {
-            main_tier = main_tier
-                .with_language_code(LanguageCode::new(code).expect("checked non-empty above"));
-        }
+    // Language code ([- lang]). The token carries the tag-extracted code
+    // directly ("zho"). Declined rather than `expect`ed on the impossible
+    // empty case: a parser has no business panicking on input, and the
+    // `[- ` lexer rule requires at least one character anyway.
+    if let Some(langcode_tok) = &mt.tier_body.langcode
+        && let Ok(code) = LanguageCode::new(langcode_tok.text())
+    {
+        main_tier = main_tier.with_language_code(code);
     }
 
     // Postcodes
@@ -147,29 +146,8 @@ pub fn dependent_tier_to_model(
         ast::DependentTierParsed::Sin(sin) => {
             talkbank_model::model::DependentTier::Sin(convert_sin_tier(sin))
         }
-        ast::DependentTierParsed::Wor { items, terminator } => {
-            use talkbank_model::model::dependent_tier::wor::WorItem;
-            let wor_items: Vec<WorItem> = items
-                .iter()
-                .map(|item| match item {
-                    ast::WorItemParsed::Word { word, bullet } => {
-                        let mut w = word_from_parsed(word);
-                        if let Some((start_ms, end_ms)) = bullet {
-                            w = w.with_inline_bullet(Bullet::new(*start_ms, *end_ms));
-                        }
-                        WorItem::Word(Box::new(w))
-                    }
-                    ast::WorItemParsed::Separator(tok) => WorItem::Separator {
-                        text: tok.text().to_string(),
-                        span: Span::DUMMY,
-                    },
-                })
-                .collect();
-            let mut wor = WorTier::new(wor_items);
-            if let Some(t) = terminator {
-                wor.terminator = Some(token_to_terminator(t));
-            }
-            talkbank_model::model::DependentTier::Wor(wor)
+        ast::DependentTierParsed::Wor(wor_parsed) => {
+            talkbank_model::model::DependentTier::Wor(wor_tier_to_model(wor_parsed))
         }
         ast::DependentTierParsed::Text { prefix, content } => {
             let bc = tokens_to_bullet_content(content);
@@ -240,11 +218,22 @@ pub fn dependent_tier_to_model(
                         talkbank_model::dependent_tier::TimTier::from_text(text),
                     )
                 }
-                // %wor tier, word tier with timing bullets
+                // %wor tier, word tier with timing bullets.
+                //
+                // This is the FALLBACK path: a `%wor` line reaches here only
+                // after `wor_tier_parser` already failed and the line became a
+                // text tier, so re-lexing the reconstructed text is a second
+                // attempt at something that has failed once. It is kept for now
+                // (removing it means passing the original `&[Token]` through,
+                // which touches every text-tier branch) but it no longer
+                // fabricates: a tier that will not parse propagates `None`
+                // exactly as a malformed `%mor` does, rather than becoming a
+                // `%wor` tier with no words.
                 "wor" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    let wor = crate::convert::wor_tier_from_input(&raw_text);
-                    talkbank_model::model::DependentTier::Wor(wor)
+                    talkbank_model::model::DependentTier::Wor(crate::convert::wor_tier_from_input(
+                        &raw_text,
+                    )?)
                 }
                 // Phon project syllabification tiers (with or without x prefix)
                 "modsyl" | "xmodsyl" => {
@@ -415,4 +404,48 @@ impl<'a> From<&ast::ChatFile<'a>> for talkbank_model::model::ChatFile {
 
         talkbank_model::model::ChatFile::with_participants(lines, participants)
     }
+}
+
+/// Lower a parsed `%wor` tier to the model.
+///
+/// The one lowering, shared by the file-level path and by
+/// `wor_tier_from_input`. Before 2026-08-08 those were two different
+/// conversions and the second one dropped timing bullets, language precodes
+/// and terminators on the floor.
+pub(crate) fn wor_tier_to_model(parsed: &ast::WorTierParsed<'_>) -> WorTier {
+    use talkbank_model::model::dependent_tier::wor::WorItem;
+
+    let wor_items: Vec<WorItem> = parsed
+        .items
+        .iter()
+        .map(|item| match item {
+            ast::WorItemParsed::Word { word, bullet } => {
+                let mut w = word_from_parsed(word);
+                if let Some((start_ms, end_ms)) = bullet {
+                    w = w.with_inline_bullet(Bullet::new(*start_ms, *end_ms));
+                }
+                WorItem::Word(Box::new(w))
+            }
+            ast::WorItemParsed::Separator(kind) => WorItem::Separator {
+                text: kind.chat_text().to_string(),
+                span: Span::DUMMY,
+            },
+        })
+        .collect();
+
+    let mut wor = WorTier::new(wor_items);
+    // The lexer hands back the code alone (`zho`); the brackets and the `- `
+    // are already stripped by the `[- ` rule's tag capture. That rule requires
+    // at least one character, so the empty case cannot arrive; it is declined
+    // rather than `expect`ed, because a parser has no business panicking on
+    // input and the tier's own diagnostics still fire.
+    if let Some(tok) = &parsed.langcode
+        && let Ok(code) = talkbank_model::model::LanguageCode::new(tok.text())
+    {
+        wor.language_code = Some(code);
+    }
+    if let Some(t) = &parsed.terminator {
+        wor.terminator = token_to_terminator(t);
+    }
+    wor
 }

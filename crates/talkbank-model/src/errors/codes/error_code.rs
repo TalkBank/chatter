@@ -4,6 +4,22 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 
+/// Whether a check is enforced by this binary, or only documented.
+///
+/// A closed two-state fact about an [`ErrorCode`], living beside the code
+/// itself. It used to live in the CLI as a hand-maintained list of 43 code
+/// STRINGS whose own doc said it "must be kept in sync" with
+/// `spec/errors/*.md`. It was not in sync: 15 of 225 codes were reported
+/// wrongly, in both directions, by the command whose only job is telling users
+/// which checks run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckStatus {
+    /// Enforced: the check fires when its condition is detected.
+    Active,
+    /// Documented in `spec/errors/` but not yet enforced.
+    Planned,
+}
+
 /// Standard error codes for CHAT parsing and validation.
 ///
 /// This enum uses the `#[error_code_enum]` procedural macro which generates:
@@ -28,6 +44,7 @@ pub enum ErrorCode {
     TestError,
     /// Input string is empty.
     #[code("E003")]
+    #[status(planned)]
     EmptyString,
 
     // =========================================================================
@@ -35,7 +52,114 @@ pub enum ErrorCode {
     // =========================================================================
     /// Invalid line format in the CHAT file.
     #[code("E101")]
+    #[status(planned)]
     InvalidLineFormat,
+
+    // =========================================================================
+    // Word Errors (E2xx)
+    // =========================================================================
+    /// Missing form type on special word.
+    #[code("E202")]
+    MissingFormType,
+    /// Invalid form type value.
+    #[code("E203")]
+    InvalidFormType,
+    /// Unknown annotation type in word.
+    #[code("E207")]
+    UnknownAnnotation,
+    /// Replacement annotation is empty.
+    #[code("E208")]
+    EmptyReplacement,
+    /// Spoken content portion of word is empty.
+    #[code("E209")]
+    EmptySpokenContent,
+    /// Illegal replacement for fragment (deprecated: use E387).
+    #[code("E210")]
+    IllegalReplacementForFragment,
+    /// Invalid word format.
+    #[code("E212")]
+    #[status(planned)]
+    InvalidWordFormat,
+    /// Untranscribed marker in replacement (deprecated: use E391).
+    #[code("E213")]
+    UntranscribedInReplacement,
+    /// Empty annotated scoped annotations.
+    #[code("E214")]
+    #[status(planned)]
+    EmptyAnnotatedContentAnnotations,
+    /// Illegal digits in word content.
+    #[code("E220")]
+    IllegalDigits,
+    /// Unbalanced CA (Conversation Analysis) delimiter.
+    #[code("E230")]
+    UnbalancedCADelimiter,
+    /// Unbalanced shortening markers.
+    #[code("E231")]
+    UnbalancedShortening,
+    /// Invalid compound marker position.
+    #[code("E232")]
+    InvalidCompoundMarkerPosition,
+    /// Empty part in compound word.
+    #[code("E233")]
+    EmptyCompoundPart,
+    /// Illegal use of untranscribed marker.
+    #[code("E241")]
+    IllegalUntranscribed,
+    /// Unbalanced quotation marks within a word.
+    #[code("E242")]
+    UnbalancedQuotation,
+    /// Illegal characters in word content.
+    #[code("E243")]
+    IllegalCharactersInWord,
+    /// Consecutive stress markers in word.
+    #[code("E244")]
+    ConsecutiveStressMarkers,
+    /// Stress marker not placed before spoken material.
+    #[code("E245")]
+    StressNotBeforeSpokenMaterial,
+    /// Lengthening marker not placed after spoken material.
+    #[code("E246")]
+    #[status(planned)]
+    LengtheningNotAfterSpokenMaterial,
+    /// Multiple primary stress markers in one word.
+    #[code("E247")]
+    MultiplePrimaryStress,
+    /// Tertiary language needs an explicit language code.
+    #[code("E248")]
+    TertiaryLanguageNeedsExplicitCode,
+    /// Missing language context for language-tagged word.
+    #[code("E249")]
+    MissingLanguageContext,
+    /// Secondary stress marker without primary stress.
+    #[code("E250")]
+    SecondaryStressWithoutPrimary,
+    /// Word content text is empty.
+    #[code("E251")]
+    #[status(planned)]
+    EmptyWordContentText,
+    /// Syllable pause not between spoken material.
+    #[code("E252")]
+    SyllablePauseNotBetweenSpokenMaterial,
+    /// Word content is empty.
+    #[code("E253")]
+    EmptyWordContent,
+    // E254 (UndeclaredExplicitWordLanguage) was RETIRED 2026-07-15: an
+    // explicit word-level `@s:CODE` deliberately carries no requirement to
+    // be declared in `@Languages` (docs/design/2026-07-15-at-s-language-
+    // declaration-decision.md part 1). The number is not reused.
+    /// Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`.
+    #[code("E255")]
+    WholeUtteranceLanguageSwitchShouldUsePrecode,
+    /// Curly single quotation mark (U+2018 or U+2019) used as a word
+    /// character; CHAT requires the ASCII apostrophe. CLAN CHECK 138/139.
+    #[code("E256")]
+    IllegalCurlyQuote,
+    /// Consecutive commas (`,,`), should use single comma or `‚` (CLAN CHECK 107)
+    #[code("E258")]
+    ConsecutiveCommas,
+    /// Comma after non-spoken content (paralinguistic event, filler, nonword, placeholder, omitted word)
+    #[code("E259")]
+    CommaAfterNonSpokenContent,
 
     // =========================================================================
     // Parser Errors (E3xx)
@@ -45,12 +169,15 @@ pub enum ErrorCode {
     MissingMainTier,
     /// Expected tree-sitter node is missing.
     #[code("E302")]
+    #[status(planned)]
     MissingNode,
     /// General syntax error in CHAT input.
     #[code("E303")]
+    #[status(planned)]
     SyntaxError,
     /// Missing speaker code on main tier line.
     #[code("E304")]
+    #[status(planned)]
     MissingSpeaker,
     /// Missing utterance terminator (`.`, `?`, `!`, etc.).
     #[code("E305")]
@@ -66,15 +193,24 @@ pub enum ErrorCode {
     UndeclaredSpeaker,
     /// Unexpected syntax encountered during parsing.
     #[code("E309")]
+    #[status(planned)]
     UnexpectedSyntax,
     /// Parser failed to produce a valid parse tree.
     #[code("E310")]
+    #[status(planned)]
     ParseFailed,
     /// Unexpected node type in the parse tree.
+    ///
+    /// No longer planned as of 2026-08-11: an unclosed replacement bracket
+    /// (`*CHI:\t[: unclosed [* error] .`) reaches it and reports "Unclosed
+    /// replacement bracket". Its spec had stayed `not_implemented` on the
+    /// strength of a note saying tree-sitter recovery made it unreachable
+    /// because E316 fired first, which the parser had since outgrown.
     #[code("E311")]
     UnexpectedNode,
     /// Unclosed bracket in annotation or word content.
     #[code("E312")]
+    #[status(planned)]
     UnclosedBracket,
     /// Unclosed parenthesis in annotation or word content.
     #[code("E313")]
@@ -90,24 +226,30 @@ pub enum ErrorCode {
     UnparsableContent,
     /// Line could not be parsed.
     #[code("E319")]
+    #[status(planned)]
     UnparsableLine,
     /// Header line could not be parsed.
     #[code("E320")]
+    #[status(planned)]
     UnparsableHeader,
     /// Utterance could not be parsed.
     #[code("E321")]
+    #[status(planned)]
     UnparsableUtterance,
     /// Empty colon with no content following it.
     #[code("E322")]
+    #[status(planned)]
     EmptyColon,
     /// Missing colon after speaker code.
     #[code("E323")]
+    #[status(planned)]
     MissingColonAfterSpeaker,
     /// Unrecognized error in utterance content.
     #[code("E324")]
     UnrecognizedUtteranceError,
     /// Unexpected child node in utterance.
     #[code("E325")]
+    #[status(planned)]
     UnexpectedUtteranceChild,
     /// Unexpected line type in CHAT file.
     #[code("E326")]
@@ -117,42 +259,52 @@ pub enum ErrorCode {
     TreeParsingError,
     /// Unexpected node encountered in a specific parsing context.
     #[code("E331")]
+    #[status(planned)]
     UnexpectedNodeInContext,
     /// Unknown base content type in word.
     #[code("E340")]
     UnknownBaseContent,
     /// Unbalanced quotation marks spanning across utterances.
     #[code("E341")]
+    #[status(planned)]
     UnbalancedQuotationCrossUtterance,
     /// Tree-sitter inserted a MISSING placeholder for a required element.
     #[code("E342")]
     MissingRequiredElement,
     /// Invalid nesting of scoped annotations.
     #[code("E344")]
+    #[status(planned)]
     InvalidContentAnnotationNesting,
     /// Unmatched scoped annotation end marker.
     #[code("E346")]
+    #[status(planned)]
     UnmatchedContentAnnotationEnd,
     /// Unbalanced overlap markers.
     #[code("E347")]
     UnbalancedOverlap,
     /// Missing overlap end marker.
     #[code("E348")]
+    #[status(planned)]
     MissingOverlapEnd,
     /// Missing opening quotation mark.
     #[code("E351")]
+    #[status(planned)]
     MissingQuoteBegin,
     /// Missing closing quotation mark.
     #[code("E352")]
+    #[status(planned)]
     MissingQuoteEnd,
     /// Missing context for other-completion annotation.
     #[code("E353")]
+    #[status(planned)]
     MissingOtherCompletionContext,
     /// Missing trailing-off terminator.
     #[code("E354")]
+    #[status(planned)]
     MissingTrailingOffTerminator,
     /// Interleaved scoped annotations (overlapping scopes).
     #[code("E355")]
+    #[status(planned)]
     InterleavedContentAnnotations,
     /// Unmatched underline begin marker.
     #[code("E356")]
@@ -168,6 +320,7 @@ pub enum ErrorCode {
     UnmatchedLongFeatureEnd,
     /// Invalid media bullet format.
     #[code("E360")]
+    #[status(planned)]
     InvalidMediaBullet,
     /// Invalid timestamp value in media bullet.
     #[code("E361")]
@@ -180,9 +333,11 @@ pub enum ErrorCode {
     InvalidPostcode,
     /// Malformed word content.
     #[code("E364")]
+    #[status(planned)]
     MalformedWordContent,
     /// Malformed tier content.
     #[code("E365")]
+    #[status(planned)]
     MalformedTierContent,
     // E366 (long feature begin/end label mismatch) was RETIRED 2026-07-31
     // (spec/ErrorCode divergence closure): its only reference anywhere in
@@ -258,108 +413,6 @@ pub enum ErrorCode {
     /// Replacement text contains untranscribed marker (`xxx`/`yyy`/`www`).
     #[code("E391")]
     ReplacementContainsUntranscribed,
-
-    // =========================================================================
-    // Word Errors (E2xx)
-    // =========================================================================
-    /// Missing form type on special word.
-    #[code("E202")]
-    MissingFormType,
-    /// Invalid form type value.
-    #[code("E203")]
-    InvalidFormType,
-    /// Unknown annotation type in word.
-    #[code("E207")]
-    UnknownAnnotation,
-    /// Replacement annotation is empty.
-    #[code("E208")]
-    EmptyReplacement,
-    /// Spoken content portion of word is empty.
-    #[code("E209")]
-    EmptySpokenContent,
-    /// Illegal replacement for fragment (deprecated: use E387).
-    #[code("E210")]
-    IllegalReplacementForFragment,
-    /// Invalid word format.
-    #[code("E212")]
-    InvalidWordFormat,
-    /// Untranscribed marker in replacement (deprecated: use E391).
-    #[code("E213")]
-    UntranscribedInReplacement,
-    /// Empty annotated scoped annotations.
-    #[code("E214")]
-    EmptyAnnotatedContentAnnotations,
-    /// Illegal digits in word content.
-    #[code("E220")]
-    IllegalDigits,
-    /// Unbalanced CA (Conversation Analysis) delimiter.
-    #[code("E230")]
-    UnbalancedCADelimiter,
-    /// Unbalanced shortening markers.
-    #[code("E231")]
-    UnbalancedShortening,
-    /// Invalid compound marker position.
-    #[code("E232")]
-    InvalidCompoundMarkerPosition,
-    /// Empty part in compound word.
-    #[code("E233")]
-    EmptyCompoundPart,
-    /// Illegal use of untranscribed marker.
-    #[code("E241")]
-    IllegalUntranscribed,
-    /// Unbalanced quotation marks within a word.
-    #[code("E242")]
-    UnbalancedQuotation,
-    /// Illegal characters in word content.
-    #[code("E243")]
-    IllegalCharactersInWord,
-    /// Consecutive stress markers in word.
-    #[code("E244")]
-    ConsecutiveStressMarkers,
-    /// Stress marker not placed before spoken material.
-    #[code("E245")]
-    StressNotBeforeSpokenMaterial,
-    /// Lengthening marker not placed after spoken material.
-    #[code("E246")]
-    LengtheningNotAfterSpokenMaterial,
-    /// Multiple primary stress markers in one word.
-    #[code("E247")]
-    MultiplePrimaryStress,
-    /// Tertiary language needs an explicit language code.
-    #[code("E248")]
-    TertiaryLanguageNeedsExplicitCode,
-    /// Missing language context for language-tagged word.
-    #[code("E249")]
-    MissingLanguageContext,
-    /// Secondary stress marker without primary stress.
-    #[code("E250")]
-    SecondaryStressWithoutPrimary,
-    /// Word content text is empty.
-    #[code("E251")]
-    EmptyWordContentText,
-    /// Syllable pause not between spoken material.
-    #[code("E252")]
-    SyllablePauseNotBetweenSpokenMaterial,
-    /// Word content is empty.
-    #[code("E253")]
-    EmptyWordContent,
-    // E254 (UndeclaredExplicitWordLanguage) was RETIRED 2026-07-15: an
-    // explicit word-level `@s:CODE` deliberately carries no requirement to
-    // be declared in `@Languages` (docs/design/2026-07-15-at-s-language-
-    // declaration-decision.md part 1). The number is not reused.
-    /// Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`.
-    #[code("E255")]
-    WholeUtteranceLanguageSwitchShouldUsePrecode,
-    /// Curly single quotation mark (U+2018 or U+2019) used as a word
-    /// character; CHAT requires the ASCII apostrophe. CLAN CHECK 138/139.
-    #[code("E256")]
-    IllegalCurlyQuote,
-    /// Consecutive commas (`,,`), should use single comma or `‚` (CLAN CHECK 107)
-    #[code("E258")]
-    ConsecutiveCommas,
-    /// Comma after non-spoken content (paralinguistic event, filler, nonword, placeholder, omitted word)
-    #[code("E259")]
-    CommaAfterNonSpokenContent,
 
     // =========================================================================
     // Dependent Tier Structural Errors (E4xx)
@@ -594,6 +647,7 @@ pub enum ErrorCode {
     TierBeginTimeNotMonotonic,
     /// Invalid morphology format on `%mor` tier.
     #[code("E702")]
+    #[status(planned)]
     InvalidMorphologyFormat,
     // E703 (unexpected node in morphology tier) was RETIRED 2026-07-31,
     // same closure and same reason as E700: no emit site ever constructed
@@ -613,9 +667,11 @@ pub enum ErrorCode {
     MorCountMismatchTooMany,
     /// `%mor` tier terminator presence does not match main tier.
     #[code("E707")]
+    #[status(planned)]
     MorTerminatorPresenceMismatch,
     /// Malformed grammar relation on `%gra` tier.
     #[code("E708")]
+    #[status(planned)]
     MalformedGrammarRelation,
     /// Invalid index in grammar relation.
     #[code("E709")]
@@ -625,6 +681,7 @@ pub enum ErrorCode {
     UnexpectedGrammarNode,
     /// `%mor` word has empty stem, POS category, prefix, or suffix.
     #[code("E711")]
+    #[status(planned)]
     MorEmptyContent,
     /// `%gra` word index is out of range.
     #[code("E712")]
@@ -680,6 +737,7 @@ pub enum ErrorCode {
     /// overlapping timing. Unlike speaker self-overlap (E704), this applies
     /// across different speakers.
     #[code("E729")]
+    #[status(planned)]
     BulletOverlap,
     /// Bullet timing gap exceeds threshold (CLAN Error 85).
     ///
@@ -687,6 +745,7 @@ pub enum ErrorCode {
     /// acceptable discontinuity threshold. Only reported in bullet consistency
     /// mode (`+c0`).
     #[code("E730")]
+    #[status(planned)]
     BulletGap,
     /// Speaker's bullet start time is before their own previous bullet end time
     /// (CLAN Error 133).
@@ -694,11 +753,13 @@ pub enum ErrorCode {
     /// Supplements the overlap-marker-based E704 with actual bullet timing
     /// check for same-speaker self-overlap.
     #[code("E731")]
+    #[status(planned)]
     SpeakerBulletSelfOverlap,
     /// Missing bullet on tier when bullet consistency mode is active (CLAN Error 110).
     ///
     /// When `+c0` or `+c1` is specified, every main tier must have timing.
     #[code("E732")]
+    #[status(planned)]
     MissingBullet,
     /// `%mod` tier has fewer words than main tier.
     ///
@@ -859,14 +920,17 @@ pub enum ErrorCode {
     #[code("E753")]
     WordOnlyRepetitionSegments,
 
-    /// The `@l` letter form marks a single spoken letter, but the word's
-    /// stem has more than one character. Sequences belong under `@k`
-    /// (letter sequence) or `@ls` (letter plural). Replicates CLAN CHECK
-    /// error 76 (`check_isOneLetter`); the digraph question (one letter
-    /// orthographically, two characters) is deferred, not decided here.
-    #[code("E754")]
-    LetterFormMultipleLetters,
-
+    // E754 (LetterFormMultipleLetters) was RETIRED 2026-08-11. It required the
+    // `@l` letter form to carry exactly one letter of stem, but it counted
+    // CHARACTERS, and a digraph is one letter written with two (Welsh `ll`,
+    // Dutch `ij`, Hungarian `sz`), so it reported a spurious error on valid
+    // CHAT and could not do better: the check never saw the word's language.
+    // Counting letters properly needs per-language letter inventories chatter
+    // does not hold, and the distinction buys nothing downstream, since
+    // batchalign's %mor synthesis maps `@l` and `@k` to the same `n:let` tag.
+    // CLAN reached the same conclusion independently four days earlier
+    // ("2026-08-07: CHECK: allow multiple characters before @l", retiring its
+    // error 76). The number is not reused.
     /// A `[- CODE]` utterance-level language is not declared in
     /// `@Languages`. Utterance-level presence is substantial, unlike a
     /// word-level `@s:CODE` insertion, which deliberately carries no
@@ -1049,6 +1113,14 @@ pub enum ErrorCode {
     MediaFilenameNotRepresentable,
 
     // =========================================================================
+    // Generic/Unknown. Position is irrelevant: the macro resolves the
+    // fallback by NAME, matching the variant called `UnknownError`.
+    // =========================================================================
+    /// Unknown or unrecognized error code (fallback).
+    #[code("E999")]
+    #[status(planned)]
+    UnknownError,
+    // =========================================================================
     // Warnings (Wxxx)
     // =========================================================================
     /// Speaker code not found in `@Participants` (non-fatal).
@@ -1072,13 +1144,6 @@ pub enum ErrorCode {
     // divergence closure): its only reference anywhere in the workspace was
     // the generated DiagnosticKind registry arm itself, no emit site ever
     // constructed it. The number is retired and not reused.
-
-    // =========================================================================
-    // Generic/Unknown (MUST be last for fallback in new())
-    // =========================================================================
-    /// Unknown or unrecognized error code (fallback).
-    #[code("E999")]
-    UnknownError,
 }
 
 /// The Phon `%x` dependent-tier validation codes, as one group.
@@ -1106,3 +1171,17 @@ pub const XPHON_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::XphointPhoneReconstructionMismatch, // E745
     ErrorCode::XphointGroupCountMismatch,          // E746
 ];
+
+impl ErrorCode {
+    /// Whether this check is enforced or merely documented.
+    ///
+    /// Derived from the `#[status(planned)]` attributes on the variants, so
+    /// there is nothing to keep in sync by hand. `SpecStatusGate` in
+    /// `talkbank-parser-tests` holds the attributes to `spec/errors/*.md`.
+    pub fn check_status(&self) -> CheckStatus {
+        match Self::planned().iter().find(|planned| *planned == self) {
+            Some(_) => CheckStatus::Planned,
+            None => CheckStatus::Active,
+        }
+    }
+}

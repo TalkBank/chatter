@@ -101,11 +101,14 @@ fn main() -> Result<(), TestError> {
     }
 
     if args.check_only {
-        println!(
-            "⚠ Found {} invalid words (use without --check-only to clean)",
-            invalid_words.len()
-        );
-        return Ok(());
+        // An ERROR, not a printed warning. This returned `Ok(())`, so the one
+        // mode whose entire purpose is detection exited 0 on the state it
+        // detected, and any script or human trusting the exit code saw a pass.
+        return Err(TestError::Failure(format!(
+            "{} invalid word(s) in {}; run without --check-only to clean",
+            invalid_words.len(),
+            args.input.display()
+        )));
     }
 
     // Write cleaned file

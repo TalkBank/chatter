@@ -18,6 +18,7 @@ structurally via the `Drifted` variant, not via `ParseError`.
 - **Level**: tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

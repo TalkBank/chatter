@@ -1,7 +1,7 @@
 # Symbols
 
 **Status:** Reference
-**Last modified:** 2026-05-29 18:43 EDT
+**Last modified:** 2026-08-11 20:55 EDT
 
 CHAT uses a rich set of symbols for transcription conventions. This
 page documents the symbol categories and the symbol registry that
@@ -113,35 +113,29 @@ Common codes: `eng` (English), `fra` (French), `deu` (German), `spa` (Spanish), 
 
 ### @ Markers (Word-Level)
 
-The authoritative form-marker set is `FormType` in
-`crates/talkbank-model/src/model/content/word/form.rs`. Current
-variants:
+The form-marker set has ONE owner:
+`spec/form_markers/form_marker_registry.json`. The `FormType` enum, both
+directions of its marker mapping, the re2c lexer's code set and the table below
+are all generated from it, so a marker cannot exist in one and not another.
 
-| Marker | Meaning |
-|--------|---------|
-| `@a` | Approximate / phonologically consistent form |
-| `@b` | Babbling |
-| `@c` | Child-invented form |
-| `@d` | Dialect form |
-| `@f` | Family-specific form |
-| `@fp` | Filled pause (deprecated, use `&-um` etc.) |
-| `@g` | Gemination / general special form |
-| `@i` | Interjection |
-| `@k` | Letter sequence (kinship) |
-| `@l` | Single letter |
-| `@ls` | Letter plural |
-| `@n` | Neologism |
-| `@o` | Onomatopoeia |
-| `@p` | Proper name |
-| `@q` | Metalinguistic reference |
-| `@sas` | Second-attempt success |
-| `@si` | Singing |
-| `@sl` | Slang |
-| `@t` | Test word |
-| `@u` | Unibet transcription |
-| `@wp` | Word play |
-| `@x` | Complex / excluded |
-| `@z:<label>` | User-defined special form (carries an arbitrary label) |
+{{#include generated/form-markers.md}}
+
+Every meaning above is taken from the "Special Form Markers" table in the CHAT
+manual, and each links to that marker's own anchor there. They were corrected
+wholesale on 2026-08-11: six had been glossed with plausible expansions of the
+letters rather than their actual meanings, so `@k` read as "kinship" (it is
+"kana", multiple letters), `@p` as "proper name" (it is a phonologically
+consistent form), `@sl` as "slang" (it is signed language), `@sas` as
+"second attempt success" (it is sign and speech), `@g` as "gemination" (it is
+the general special form), and `@ls` as "letter sequence" (it is the letter
+plural; the sequence is `@k`). If you find another that disagrees with the
+manual, the manual wins.
+
+`@a` was removed on 2026-08-11. The corpus authority eliminated it from every
+file on 2024-09-03 together with `@e` and `@lp`; the other two were dropped
+from chatter at the time and `@a` was overlooked. It has no main-tier
+occurrences in any corpus, and appears in neither `depfile.cut` nor the
+manual's table.
 
 The second-language qualifier `@s:LANG` is a separate construct (see
 the L2 morphotag section of the Batchalign book); it is not part of

@@ -10,6 +10,6 @@ mod rules_fingerprint;
 /// Temporal/media bullet validation constants.
 pub mod temporal;
 
-pub use error_code::{ErrorCode, XPHON_ERROR_CODES};
+pub use error_code::{CheckStatus, ErrorCode, XPHON_ERROR_CODES};
 pub use rules_fingerprint::validation_rules_fingerprint;
 pub use temporal::*;

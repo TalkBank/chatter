@@ -12,6 +12,7 @@ use crate::node_types::MEDIA_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::parser_helpers::present;
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
@@ -101,7 +102,13 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // non-Present recovery state funnels to the same "Missing media_contents"
     // diagnostic + Header::Unknown.
     let header_children = extract_media_header(MediaHeaderNode(node));
-    let Some(contents) = header_children.child_2.slot.present_or_recover().ok() else {
+    let Some(contents) = header_children
+        .child_2
+        .slot()
+        .clone()
+        .present_or_recover()
+        .ok()
+    else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
@@ -122,7 +129,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
 
     // Extract filename from typed child_0 (unchanged index).
     // All values accepted via decode_child_text(); the validator flags semantic issues.
-    let filename = match contents_children.child_0.slot {
+    let filename = match contents_children.child_0.slot() {
         // Happy path: correct node kind, decode its UTF-8 text via raw_node().
         NodeSlot::Present(filename_node) => {
             match decode_child_text(filename_node.raw_node(), source, errors, "media_filename") {
@@ -173,7 +180,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // rather than reported here: E767 is a VALIDATION rule, so it fires for
     // every parser front end instead of only this one. child_1 is
     // `optional($.whitespaces)`.
-    let whitespace_before_comma = match &contents_children.child_1.slot {
+    let whitespace_before_comma = match contents_children.child_1.slot() {
         Some(NodeSlot::Present(space_node)) => {
             let raw = space_node.raw_node();
             Some(crate::error::Span::new(
@@ -192,7 +199,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // `optional($.whitespaces)` was added BEFORE the comma so a space there
     // stops being an error. All values accepted via MediaType::from_text();
     // unsupported ones are flagged by the validator.
-    let media_type = match contents_children.child_4.slot {
+    let media_type = match contents_children.child_4.slot() {
         // Happy path: correct node kind, decode its UTF-8 text.
         NodeSlot::Present(type_node) => {
             let ParseOutcome::Parsed(type_text) =
@@ -245,11 +252,12 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // exactly for the VALID path.
     let status_group = contents_children
         .child_5
-        .slot
+        .slot()
+        .clone()
         .and_then(|s| s.present_or_recover().ok());
     let status = match status_group
         .as_ref()
-        .and_then(|group| group.child_2.slot.clone().present_or_recover().ok())
+        .and_then(|group| present(group.child_2.slot()))
     {
         Some(status_node) => {
             let ParseOutcome::Parsed(status_text) =

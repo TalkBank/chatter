@@ -16,6 +16,7 @@ into the operationally correct form.
 - **Level**: main_tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1: Two-word whole-utterance switch
 

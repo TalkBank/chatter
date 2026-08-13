@@ -100,11 +100,11 @@ fn parse_pho_tier_inner(
     {
         PhoTierType::Pho => {
             let children = extract_pho_dependent_tier(PhoDependentTierNode(node));
-            (children.child_2.slot, children.unexpected)
+            (children.child_2.slot().clone(), children.unexpected)
         }
         PhoTierType::Mod => {
             let children = extract_mod_dependent_tier(ModDependentTierNode(node));
-            (children.child_2.slot, children.unexpected)
+            (children.child_2.slot().clone(), children.unexpected)
         }
     };
     surface_unexpected(&unexpected, source, errors);
@@ -138,14 +138,14 @@ fn parse_pho_tier_inner(
 /// [`push_pho_separator`].
 fn parse_pho_groups(pho_groups: Node, source: &str, errors: &impl ErrorSink) -> Vec<PhoItem> {
     let groups = extract_pho_groups(PhoGroupsNode(pho_groups));
-    let mut items: Vec<PhoItem> = Vec::with_capacity(groups.child_1.slot.len() + 1);
+    let mut items: Vec<PhoItem> = Vec::with_capacity(groups.child_1.slot().len() + 1);
 
-    push_pho_group(groups.child_0.slot, source, errors, &mut items);
-    for element in groups.child_1.slot {
-        match element.slot {
+    push_pho_group(groups.child_0.slot(), source, errors, &mut items);
+    for element in groups.child_1.slot() {
+        match element.slot() {
             NodeSlot::Present(pair) => {
-                push_pho_separator(pair.child_0.slot, source, errors, "pho_groups");
-                push_pho_group(pair.child_1.slot, source, errors, &mut items);
+                push_pho_separator(pair.child_0.slot(), source, errors, "pho_groups");
+                push_pho_group(pair.child_1.slot(), source, errors, &mut items);
                 surface_unexpected(&pair.unexpected, source, errors);
             }
             // The generated repeat classifies a whole item as `Present` /
@@ -153,7 +153,7 @@ fn parse_pho_groups(pho_groups: Node, source: &str, errors: &impl ErrorSink) -> 
             // finding); matched exhaustively regardless, per the no-`_`-on-
             // project-enums rule.
             NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "pho_groups"));
+                errors.report(unexpected_node_error(*raw, source, "pho_groups"));
             }
             NodeSlot::Absent => {}
         }
@@ -184,7 +184,7 @@ fn parse_pho_groups(pho_groups: Node, source: &str, errors: &impl ErrorSink) -> 
 /// (`parse_pho_tier_inner` is only entered when the tier node has no tree-sitter
 /// error); they are handled explicitly for exhaustiveness.
 fn push_pho_group<'tree>(
-    slot: NodeSlot<'tree, PhoGroupNode<'tree>>,
+    slot: &NodeSlot<'tree, PhoGroupNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
@@ -198,10 +198,10 @@ fn push_pho_group<'tree>(
             ));
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "pho_groups");
+            check_not_missing(*raw, source, errors, "pho_groups");
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "pho_groups"));
+            errors.report(unexpected_node_error(*raw, source, "pho_groups"));
         }
         NodeSlot::Absent => {}
     }

@@ -4,8 +4,12 @@
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Words>
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
 
-use crate::alignment::helpers::{ContentItem, walk_content};
+use crate::alignment::helpers::walk_content;
 use crate::model::{BracketedItem, Separator, Utterance, UtteranceContent, Word};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
@@ -168,27 +172,6 @@ pub(crate) fn check_comma_after_non_spoken(utterance: &Utterance, errors: &impl 
 /// exempt in CLAN CHECK 92, and every such construct places its own
 /// character after the comma anyway, so word starts are the only
 /// adjacency that matters.
-fn word_start(item: &ContentItem<'_>) -> Option<u32> {
-    match item {
-        ContentItem::Word(word) => Some(word.span.start),
-        ContentItem::ReplacedWord(replaced) => Some(replaced.word.span.start),
-        ContentItem::Separator(_)
-        | ContentItem::Event(_)
-        | ContentItem::Pause(_)
-        | ContentItem::Action(_)
-        | ContentItem::OverlapPoint(_)
-        | ContentItem::OtherSpokenEvent(_)
-        | ContentItem::Freecode(_)
-        | ContentItem::InternalBullet(_)
-        | ContentItem::LongFeatureBegin(_)
-        | ContentItem::LongFeatureEnd(_)
-        | ContentItem::UnderlineBegin(_)
-        | ContentItem::UnderlineEnd(_)
-        | ContentItem::NonvocalBegin(_)
-        | ContentItem::NonvocalEnd(_)
-        | ContentItem::NonvocalSimple(_) => None,
-    }
-}
 
 /// E749: a comma must be followed by a space or end-of-line (CLAN CHECK
 /// 92). Fires when the item after a comma, in document order via
@@ -203,9 +186,11 @@ pub(crate) fn check_comma_glued_to_next(utterance: &Utterance, errors: &impl Err
         utterance.main.content.content.as_slice(),
         None,
         &mut |item| {
+            // No `!= Span::DUMMY` guard: `comma_span()` already refuses a
+            // position-less comma, so the two comma checks cannot disagree
+            // about it the way they used to.
             if let Some(comma_span) = prev_comma_span
-                && comma_span != crate::Span::DUMMY
-                && let Some(start) = word_start(&item)
+                && let Some(start) = item.word_span().map(|span| span.start)
                 && start == comma_span.end
             {
                 errors.report(
@@ -219,10 +204,7 @@ pub(crate) fn check_comma_glued_to_next(utterance: &Utterance, errors: &impl Err
                     .with_suggestion("Add a space after the comma"),
                 );
             }
-            prev_comma_span = match item {
-                ContentItem::Separator(Separator::Comma { span }) => Some(*span),
-                _ => None,
-            };
+            prev_comma_span = item.comma_span();
         },
     );
 }
@@ -240,28 +222,26 @@ pub(crate) fn check_consecutive_commas(utterance: &Utterance, errors: &impl Erro
         utterance.main.content.content.as_slice(),
         None,
         &mut |item| {
-            match item {
-                ContentItem::Separator(Separator::Comma { span }) => {
-                    if let Some(_prev_span) = prev_comma_span {
-                        errors.report(
+            // Any non-comma content item resets the consecutive check, which
+            // `comma_span()` says by answering `None`.
+            if let Some(span) = item.comma_span() {
+                if prev_comma_span.is_some() {
+                    errors.report(
                         ParseError::new(
                             ErrorCode::ConsecutiveCommas,
                             Severity::Error,
-                            SourceLocation::new(*span),
-                            ErrorContext::new(",,", *span, ","),
+                            SourceLocation::new(span),
+                            ErrorContext::new(",,", span, ","),
                             "Consecutive commas in utterance",
                         )
                         .with_suggestion(
                             "Use a single comma, or replace ,, with the tag marker \u{201E} (U+201E)",
                         ),
                     );
-                    }
-                    prev_comma_span = Some(*span);
                 }
-                // Any non-comma content item resets the consecutive check.
-                _ => {
-                    prev_comma_span = None;
-                }
+                prev_comma_span = Some(span);
+            } else {
+                prev_comma_span = None;
             }
         },
     );

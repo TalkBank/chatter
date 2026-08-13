@@ -30,22 +30,6 @@
 use std::path::{Path, PathBuf};
 use talkbank_model::model::{SemanticEq, WriteChat};
 use talkbank_parser::TreeSitterParser;
-use walkdir::WalkDir;
-
-/// Find all .cha files in a directory tree.
-fn find_cha_files(dir: &Path) -> Vec<PathBuf> {
-    WalkDir::new(dir)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("cha"))
-        })
-        .map(|entry| entry.path().to_path_buf())
-        .collect()
-}
 
 /// Files containing constructs the direct parser does not support.
 const DIRECT_PARSER_SKIP: &[&str] = &[];
@@ -105,14 +89,8 @@ fn direct_parser_roundtrip_reference_corpus() {
         corpus_dir.display()
     );
 
-    let mut files = find_cha_files(&corpus_dir);
-    files.sort();
-
-    assert!(
-        !files.is_empty(),
-        "No .cha files found in {}",
-        corpus_dir.display()
-    );
+    let files = talkbank_parser_tests::construct_coverage::cha_files_under(&corpus_dir)
+        .expect("reference corpus holds .cha files");
 
     let parser = TreeSitterParser::new().expect("Failed to create TreeSitterParser");
 

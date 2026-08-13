@@ -13,6 +13,7 @@ Compound marker (`+`) cannot be at the start of a word. Valid compounds have the
 - **Level**: word
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

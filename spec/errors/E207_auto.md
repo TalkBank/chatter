@@ -11,6 +11,7 @@ Unknown scoped annotation marker
 - **Level**: word
 - **Layer**: parser
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

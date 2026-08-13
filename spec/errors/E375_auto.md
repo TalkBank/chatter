@@ -11,6 +11,7 @@ Scoped annotation parse error
 - **Level**: utterance
 - **Layer**: parser
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

@@ -46,8 +46,7 @@ pub use overlap_groups::{
 };
 pub use rules::should_align_replaced_word_in_pho_sin;
 pub use rules::{
-    annotations_have_alignment_ignore, counts_for_tier, counts_for_tier_in_context,
-    is_tag_marker_separator, should_skip_group,
+    annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator, should_skip_group,
 };
 pub use walk::{
     ContentItem, ContentItemMut, WordItem, WordItemMut, walk_content, walk_content_mut, walk_words,

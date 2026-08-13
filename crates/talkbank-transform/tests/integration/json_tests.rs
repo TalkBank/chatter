@@ -13,6 +13,7 @@
 //! Integration tests for JSON serialization, schema validation, and error rendering.
 
 use talkbank_model::ParseValidateOptions;
+use talkbank_model::model::TranscriptName;
 use talkbank_transform::json::{
     is_schema_validation_available, schema_load_error, to_json_pretty_unvalidated,
     to_json_unvalidated, validate_json_string,
@@ -229,7 +230,7 @@ fn media_filename_from_json_is_reported() {
     );
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let codes: Vec<ErrorCode> = errors.into_vec().into_iter().map(|e| e.code).collect();
     assert!(
         codes.contains(&ErrorCode::MediaFilenameNotRepresentable),

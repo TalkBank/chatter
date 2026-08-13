@@ -61,7 +61,7 @@ pub(super) fn visit_every_retrace(main_tier: &MainTier, visit: &mut impl FnMut(&
 /// a container in one copy and a leaf in the other.
 fn visit_structure(structure: ContentStructure<'_>, visit: &mut impl FnMut(&Retrace)) {
     if let ContentStructure::Retrace(retrace) = structure {
-        visit(retrace);
+        visit(retrace.inner());
     }
     if let Some(content) = structure.enclosed() {
         for item in content.content.iter() {

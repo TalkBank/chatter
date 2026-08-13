@@ -36,6 +36,8 @@
 //! (both codes have other, unrelated origins elsewhere in the validator).
 
 use std::path::{Path, PathBuf};
+use talkbank_model::model::FileStem;
+use talkbank_model::model::TranscriptName;
 
 use talkbank_model::{ErrorCollector, ParseOutcome, RuleSelection};
 use talkbank_parser::TreeSitterParser;
@@ -53,7 +55,10 @@ fn corpus_dir() -> PathBuf {
 /// caller below: the point is that the CONFIG-PATH FUNCTION ITSELF must
 /// still run the full check sequence, independent of what the config
 /// actually overrides.
-fn codes_through_config_path(content: &str, stem: Option<&str>) -> Result<Vec<String>, TestError> {
+fn codes_through_config_path(
+    content: &str,
+    name: TranscriptName<'_>,
+) -> Result<Vec<String>, TestError> {
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
     let parse_errors = ErrorCollector::new();
     let parse_result = parser.parse_chat_file_fragment(content, 0, &parse_errors);
@@ -70,7 +75,7 @@ fn codes_through_config_path(content: &str, stem: Option<&str>) -> Result<Vec<St
     };
 
     let validation_errors = ErrorCollector::new();
-    chat_file.validate_with_rules(RuleSelection::new(), &validation_errors, stem);
+    chat_file.validate_with_rules(RuleSelection::new(), &validation_errors, name);
     codes.extend(
         validation_errors
             .to_vec()
@@ -90,8 +95,8 @@ fn assert_fixture_code_fires_through_config_path(
     let path = dir.join(format!("{fixture_stem}.cha"));
     let content = std::fs::read_to_string(&path)
         .map_err(|err| TestError::Failure(format!("failed to read {}: {err}", path.display())))?;
-    let stem = Path::new(fixture_stem).file_stem().and_then(|s| s.to_str());
-    let codes = codes_through_config_path(&content, stem)?;
+    let codes =
+        codes_through_config_path(&content, TranscriptName::for_path(Path::new(fixture_stem)))?;
     assert!(
         codes.iter().any(|c| c == expected_code),
         "{fixture_stem}: expected {expected_code} through validate_with_config, got {codes:?}"
@@ -149,7 +154,10 @@ fn cross_header_id_language_not_in_languages_fires_through_config_path() -> Resu
 *CHI:\tbonjour .
 @End
 ";
-    let codes = codes_through_config_path(content, Some("cross_header_language"))?;
+    let codes = codes_through_config_path(
+        content,
+        TranscriptName::Named(FileStem::from_str("cross_header_language")),
+    )?;
     assert!(
         codes.iter().any(|c| c == "E519"),
         "expected E519 (CHECK 122, @ID language not in @Languages) through \
@@ -177,7 +185,10 @@ fn cross_header_id_role_disagrees_with_participants_fires_through_config_path()
 *MOT:\thi .
 @End
 ";
-    let codes = codes_through_config_path(content, Some("cross_header_role"))?;
+    let codes = codes_through_config_path(
+        content,
+        TranscriptName::Named(FileStem::from_str("cross_header_role")),
+    )?;
     assert!(
         codes.iter().any(|c| c == "E532"),
         "expected E532 (CHECK 142, @ID role disagrees with @Participants) through \

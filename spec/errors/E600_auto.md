@@ -24,6 +24,7 @@ checks are skipped, producing two E600 warnings for the same utterance.
 **Trigger**: `abc|0|ROOT` in `%gra`, a non-numeric index causes the tree-sitter
 grammar to reject the token, creating an ERROR node. The error recovery recognizes
 this as a `%gra:` tier with parse errors and emits E600.
+**Expected Error Codes**: E600
 
 ```chat
 @UTF8

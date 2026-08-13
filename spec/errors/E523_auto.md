@@ -11,6 +11,7 @@ Orphan @ID header
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

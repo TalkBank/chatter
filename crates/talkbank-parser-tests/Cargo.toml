@@ -44,12 +44,17 @@ workspace = true
 # purely to run zero tests, which on macOS also pays a per-binary
 # first-execution assessment. Declared explicitly so the cost is visible.
 # `bootstrap_spec_examples` is omitted deliberately: it DOES carry tests.
+#
+# The flag is target SELECTION, not a note about cost, and that has bitten
+# once: it also excludes a target from the set `--tests` chooses, so a
+# `#[test]` written inside one of these bins passes under `--bins` and is
+# invisible to the command CI runs. The answer is NOT to flip the flag per
+# bin. A bin that needs a gate puts its logic in a library module and its
+# assertion in `tests/integration/`, the way `conformance_inventory` and
+# `content_catch_alls` do; then this rule stays uniform and nobody has to
+# reason about cargo target selection to be sure a check runs.
 
 [[bin]]
-# `test = false` like every sibling: without it cargo builds AND LAUNCHES this
-# binary during `cargo test` purely to run zero tests, which on macOS also pays
-# the per-binary first-execution assessment this workspace spent a week
-# diagnosing. Autodiscovery had it running on every `just test`.
 name = "audit_content_catch_alls"
 path = "src/bin/audit_content_catch_alls.rs"
 test = false

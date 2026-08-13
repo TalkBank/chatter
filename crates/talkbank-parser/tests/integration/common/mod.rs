@@ -11,6 +11,7 @@
 //! helper no test file references at all should be deleted).
 #![allow(dead_code)]
 
+use talkbank_model::model::TranscriptName;
 use talkbank_model::model::{Line, Utterance};
 use talkbank_model::{ErrorCollector, ParseError, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
@@ -35,11 +36,17 @@ pub fn parse_and_collect_errors(input: &str) -> Vec<ParseError> {
 /// On `ParseOutcome::Rejected`, panics with a diagnostic that includes the
 /// input, so callers can pin "must not regress to Rejected" via the panic.
 ///
-/// The `corpus_tag` is a label attached to validation diagnostics; it does not
+/// The `name` decides whether rules about the transcript's own file name
+/// (E531) run; most fixtures are strings with no name and pass
+/// `TranscriptName::Anonymous`. The parameter used to be called `corpus_tag`
+/// and typed `Option<&str>`, which described it as a label rather than as the
+/// transcript's name, so nothing suggested it switched a rule on or off.
+///
+/// The old doc said the tag does not
 /// affect which errors are emitted.
 pub fn parse_validate_and_collect_diagnostics(
     input: &str,
-    corpus_tag: Option<&str>,
+    name: TranscriptName<'_>,
 ) -> Vec<(String, String)> {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let parse_errors = ErrorCollector::new();
@@ -48,7 +55,7 @@ pub fn parse_validate_and_collect_diagnostics(
     match outcome {
         ParseOutcome::Parsed(mut chat_file) => {
             let validation_errors = ErrorCollector::new();
-            chat_file.validate_with_alignment(&validation_errors, corpus_tag);
+            chat_file.validate_with_alignment(&validation_errors, name);
             collected.extend(validation_errors.into_vec());
         }
         ParseOutcome::Rejected => {

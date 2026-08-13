@@ -66,7 +66,7 @@ pub(super) fn extract_pho_group_items(
 ) -> Vec<PhoItem> {
     let children = extract_pho_group(PhoGroupNode(node));
     surface_unexpected(&children.unexpected, source, errors);
-    match children.content.slot {
+    match children.content.slot() {
         NodeSlot::Present(PhoGroupChoice::PhoWords(pho_words)) => {
             // Extract text from pho_words (handles pho_word + '+' + pho_word structure).
             let text = extract_utf8_text(pho_words.raw_node(), source, errors, "pho_words", "");
@@ -82,7 +82,7 @@ pub(super) fn extract_pho_group_items(
             // `child_2` (`›`); only `child_1` carries content. Surface the seq's
             // own `unexpected` sink (R2) before descending.
             surface_unexpected(&seq.unexpected, source, errors);
-            match seq.child_1.slot {
+            match seq.child_1.slot() {
                 NodeSlot::Present(grouped_content) => {
                     let words = extract_pho_grouped_content_words(
                         grouped_content.raw_node(),
@@ -128,14 +128,14 @@ pub(super) fn extract_pho_grouped_content_words<'a>(
     errors: &impl ErrorSink,
 ) -> Vec<&'a str> {
     let contents = extract_pho_grouped_content(PhoGroupedContentNode(node));
-    let mut words: Vec<&'a str> = Vec::with_capacity(contents.child_1.slot.len() + 1);
+    let mut words: Vec<&'a str> = Vec::with_capacity(contents.child_1.slot().len() + 1);
 
-    push_pho_word(contents.child_0.slot, source, errors, &mut words);
-    for element in contents.child_1.slot {
-        match element.slot {
+    push_pho_word(contents.child_0.slot(), source, errors, &mut words);
+    for element in contents.child_1.slot() {
+        match element.slot() {
             NodeSlot::Present(pair) => {
-                push_pho_separator(pair.child_0.slot, source, errors, "pho_grouped_content");
-                push_pho_word(pair.child_1.slot, source, errors, &mut words);
+                push_pho_separator(pair.child_0.slot(), source, errors, "pho_grouped_content");
+                push_pho_word(pair.child_1.slot(), source, errors, &mut words);
                 surface_unexpected(&pair.unexpected, source, errors);
             }
             // The generated repeat classifies a whole item as `Present` /
@@ -143,7 +143,7 @@ pub(super) fn extract_pho_grouped_content_words<'a>(
             // finding); matched exhaustively regardless, per the no-`_`-on-
             // project-enums rule.
             NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "pho_grouped_content"));
+                errors.report(unexpected_node_error(*raw, source, "pho_grouped_content"));
             }
             NodeSlot::Absent => {}
         }
@@ -168,7 +168,7 @@ pub(super) fn extract_pho_grouped_content_words<'a>(
 /// whitespace on well-formed input. `context` is the enclosing rule name, so
 /// the diagnostic matches the sibling content-slot diagnostics.
 pub(super) fn push_pho_separator<'tree>(
-    slot: NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
@@ -176,10 +176,10 @@ pub(super) fn push_pho_separator<'tree>(
     match slot {
         NodeSlot::Present(_) | NodeSlot::Absent => {}
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, context);
+            check_not_missing(*raw, source, errors, context);
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, context));
+            errors.report(unexpected_node_error(*raw, source, context));
         }
     }
 }
@@ -201,7 +201,7 @@ pub(super) fn push_pho_separator<'tree>(
 /// (this runs only for a `Present` `pho_grouped_content` inside an error-free
 /// tier); they are handled explicitly for exhaustiveness.
 fn push_pho_word<'a>(
-    slot: NodeSlot<'a, PhoWordsNode<'a>>,
+    slot: &NodeSlot<'a, PhoWordsNode<'a>>,
     source: &'a str,
     errors: &impl ErrorSink,
     words: &mut Vec<&'a str>,
@@ -214,10 +214,10 @@ fn push_pho_word<'a>(
             }
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "pho_grouped_content");
+            check_not_missing(*raw, source, errors, "pho_grouped_content");
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "pho_grouped_content"));
+            errors.report(unexpected_node_error(*raw, source, "pho_grouped_content"));
         }
         NodeSlot::Absent => {}
     }

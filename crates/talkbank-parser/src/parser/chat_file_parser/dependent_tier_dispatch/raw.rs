@@ -59,10 +59,10 @@ pub(super) fn apply_raw_tier(
     match tier_kind {
         ORT_DEPENDENT_TIER => {
             let children = extract_ort_dependent_tier(OrtDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -77,10 +77,10 @@ pub(super) fn apply_raw_tier(
         }
         ENG_DEPENDENT_TIER => {
             let children = extract_eng_dependent_tier(EngDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -95,10 +95,10 @@ pub(super) fn apply_raw_tier(
         }
         GLS_DEPENDENT_TIER => {
             let children = extract_gls_dependent_tier(GlsDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -113,10 +113,10 @@ pub(super) fn apply_raw_tier(
         }
         ALT_DEPENDENT_TIER => {
             let children = extract_alt_dependent_tier(AltDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -131,10 +131,10 @@ pub(super) fn apply_raw_tier(
         }
         COH_DEPENDENT_TIER => {
             let children = extract_coh_dependent_tier(CohDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -149,10 +149,10 @@ pub(super) fn apply_raw_tier(
         }
         DEF_DEPENDENT_TIER => {
             let children = extract_def_dependent_tier(DefDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -167,10 +167,10 @@ pub(super) fn apply_raw_tier(
         }
         ERR_DEPENDENT_TIER => {
             let children = extract_err_dependent_tier(ErrDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -185,10 +185,10 @@ pub(super) fn apply_raw_tier(
         }
         FAC_DEPENDENT_TIER => {
             let children = extract_fac_dependent_tier(FacDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -203,10 +203,10 @@ pub(super) fn apply_raw_tier(
         }
         FLO_DEPENDENT_TIER => {
             let children = extract_flo_dependent_tier(FloDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -221,10 +221,10 @@ pub(super) fn apply_raw_tier(
         }
         PAR_DEPENDENT_TIER => {
             let children = extract_par_dependent_tier(ParDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -239,10 +239,10 @@ pub(super) fn apply_raw_tier(
         }
         TIM_DEPENDENT_TIER => {
             let children = extract_tim_dependent_tier(TimDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -260,10 +260,10 @@ pub(super) fn apply_raw_tier(
         }
         MODSYL_DEPENDENT_TIER => {
             let children = extract_modsyl_dependent_tier(ModsylDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -281,10 +281,10 @@ pub(super) fn apply_raw_tier(
         }
         PHOSYL_DEPENDENT_TIER => {
             let children = extract_phosyl_dependent_tier(PhosylDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -302,10 +302,10 @@ pub(super) fn apply_raw_tier(
         }
         PHOALN_DEPENDENT_TIER => {
             let children = extract_phoaln_dependent_tier(PhoalnDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,
@@ -340,10 +340,10 @@ pub(super) fn apply_raw_tier(
         }
         XPHOINT_DEPENDENT_TIER => {
             let children = extract_xphoint_dependent_tier(XphointDependentTierNode(tier_node));
-            let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+            let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
             if let ParseOutcome::Parsed(content) = read_tier_body_text(
                 tier_node,
-                children.child_2.slot,
+                children.child_2.slot(),
                 &children.unexpected,
                 input,
                 errors,

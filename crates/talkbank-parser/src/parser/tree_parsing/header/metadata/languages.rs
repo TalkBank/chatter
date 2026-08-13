@@ -12,6 +12,7 @@ use crate::node_types::LANGUAGES_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::parser_helpers::present;
 use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
@@ -152,7 +153,7 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
     // non-Present recovery state to the same "Missing languages_contents"
     // diagnostic.
     let children = extract_languages_header(LanguagesHeaderNode(node));
-    let Some(contents_node) = children.child_2.slot.present_or_recover().ok() else {
+    let Some(contents_node) = present(children.child_2.slot()) else {
         errors.report(ParseError::new(
             ErrorCode::EmptyLanguagesHeader,
             Severity::Error,
@@ -183,7 +184,7 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
     // position the pre-existing panic bug lived at: a MISSING placeholder here
     // is now a type-distinct `NodeSlot::Missing`, never reaching
     // `LanguageCode::new`.
-    match contents_children.child_0.slot {
+    match contents_children.child_0.slot() {
         NodeSlot::Present(code_node) => {
             if let ParseOutcome::Parsed(text) =
                 decode_child_text(code_node.raw_node(), source, errors, "language_code")
@@ -196,7 +197,7 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
             // `check_not_missing` emits for the analogous first-@Participants
             // position, instead of ever calling `LanguageCode::new` on the
             // placeholder's empty text.
-            check_not_missing(missing_node, source, errors, "languages_contents");
+            check_not_missing(*missing_node, source, errors, "languages_contents");
         }
         NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
             errors.report(ParseError::new(
@@ -231,13 +232,13 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
     // item level; see `generated_traversal.rs`'s
     // `extract_languages_contents`), but every state is still matched
     // exhaustively per the project rule against `_ =>` on typed enums.
-    for item in &contents_children.child_1.slot {
-        match &item.slot {
+    for item in contents_children.child_1.slot() {
+        match item.slot() {
             NodeSlot::Present(group) => {
                 // Leading whitespace before the comma is purely structural
                 // (matches the OLD walk's silent skip loop): every state is a
                 // no-op, matched explicitly so it is never silently dropped.
-                match group.child_0.slot.clone() {
+                match group.child_0.slot() {
                     None => {}
                     Some(
                         NodeSlot::Present(_)
@@ -249,10 +250,10 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
                 }
 
                 // Comma (structural, required within a Present group).
-                match group.child_1.slot.clone() {
+                match group.child_1.slot() {
                     NodeSlot::Present(_) => {}
                     NodeSlot::Missing(missing_node) => {
-                        check_not_missing(missing_node, source, errors, "languages_contents");
+                        check_not_missing(*missing_node, source, errors, "languages_contents");
                     }
                     NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
                         errors.report(ParseError::new(
@@ -272,10 +273,10 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
 
                 // Whitespace after the comma (structural, required within a
                 // Present group).
-                match group.child_2.slot.clone() {
+                match group.child_2.slot() {
                     NodeSlot::Present(_) => {}
                     NodeSlot::Missing(missing_node) => {
-                        check_not_missing(missing_node, source, errors, "languages_contents");
+                        check_not_missing(*missing_node, source, errors, "languages_contents");
                     }
                     NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
                         errors.report(ParseError::new(
@@ -299,7 +300,7 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
                 // The repeated language code: the SAME fix as `child_0` above
                 // applies here (a MISSING placeholder is type-distinct and
                 // never reaches `LanguageCode::new`).
-                match group.child_3.slot.clone() {
+                match group.child_3.slot() {
                     NodeSlot::Present(code_node) => {
                         if let ParseOutcome::Parsed(text) =
                             decode_child_text(code_node.raw_node(), source, errors, "language_code")
@@ -314,7 +315,7 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
                         }
                     }
                     NodeSlot::Missing(missing_node) => {
-                        check_not_missing(missing_node, source, errors, "languages_contents");
+                        check_not_missing(*missing_node, source, errors, "languages_contents");
                     }
                     NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
                         errors.report(ParseError::new(

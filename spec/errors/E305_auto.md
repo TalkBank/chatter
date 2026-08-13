@@ -13,6 +13,7 @@ Main tier is missing its required utterance terminator.
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

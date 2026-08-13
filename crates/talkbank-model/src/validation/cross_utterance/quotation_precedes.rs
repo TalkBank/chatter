@@ -8,22 +8,27 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SelfCompletion_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
+use super::FileUtterances;
 use super::helpers::has_quoted_linker;
-use crate::model::Utterance;
 use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
 /// Validates `+".` quotation-precedes terminators against prior `+"` linkers.
 ///
 /// The rule requires at least one preceding same-speaker utterance marked as
 /// quoted speech, otherwise the terminator is considered structurally orphaned.
-pub(super) fn check_quotation_precedes(utterances: &[Utterance], idx: usize) -> Vec<ParseError> {
+pub(super) fn check_quotation_precedes(
+    utterances: &FileUtterances<'_>,
+    idx: usize,
+) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let utterance = &utterances[idx];
+    let Some(utterance) = utterances.get(idx) else {
+        return Vec::new();
+    };
     let speaker = utterance.main.speaker.as_str();
 
     // Find previous utterance(s) by same speaker
     let mut found_quoted = false;
-    for prev_utt in utterances[..idx].iter().rev() {
+    for prev_utt in utterances.preceding(idx) {
         if prev_utt.main.speaker.as_str() == speaker {
             if has_quoted_linker(prev_utt) {
                 found_quoted = true;

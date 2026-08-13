@@ -22,6 +22,7 @@ error recovery cascade triggered by long invalid %wor content.
 - **Layer**: parser
 - **Root Cause**: tree-sitter error recovery threshold exceeded by long invalid %wor
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Minimal Reproduction
 

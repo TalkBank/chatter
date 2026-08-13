@@ -194,6 +194,55 @@ symbols-gen:
     node {{ justfile_directory() }}/spec/symbols/generate_grammar_symbol_sets.js
     node {{ justfile_directory() }}/spec/symbols/generate_rust_symbol_sets.js
 
+# Fail when a doc's `Last modified` header is older than the doc itself.
+#
+# A ratchet, not a sweep: `scripts/doc-dates-baseline.txt` records the pages
+# already stale when this was introduced (116 of them, 56 in the book), and the
+# check fails on any NEW one and on any baseline entry that has been fixed but
+# left listed, so the list can only shrink. Do not bulk-stamp dates to empty it;
+# read the page first.
+doc-dates:
+    python3 {{ justfile_directory() }}/scripts/check_doc_dates.py
+
+# What state is the spec system in? Derived from the same code the gates use.
+#
+# Answers the questions that used to need a grep: how many specs there are and
+# what they declare, how many examples are verified, how many are DEFERRED, how
+# many assert nothing at all, the CLAN CHECK parity counts, and which gate
+# checks which artifact.
+spec-status:
+    cargo run --quiet --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin spec_status
+
+# Regenerate every site that carries the CHAT form-marker inventory.
+#
+# Loading the registry validates it, so there is no separate validate step: a
+# generator cannot run over an unchecked registry. The gate that fails when a
+# committed artifact disagrees is `generated_form_marker_sites_are_current` in
+# spec/tools, which calls these same renderers.
+form-markers-gen:
+    cargo run --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin gen_form_markers
+
+# Verify the committed re2c lexer matches lexer.re (and everything it includes).
+#
+# There is NO CI job for this: no workflow installs re2c, so this is the only
+# check that exists, and it has to be run by hand after any change to lexer.re
+# or to the generated form-marker code set it includes. It takes under a second.
+verify-vendored-lexer:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ justfile_directory() }}/crates/talkbank-parser-re2c
+    regenerated="$(mktemp)"
+    trap 'rm -f "$regenerated"' EXIT
+    re2rust -W -Wno-nondeterministic-tags --input-encoding utf8 --utf8 \
+        --no-generation-date --conditions -o "$regenerated" src/lexer.re
+    if cmp -s "$regenerated" src/generated/lexer.rs; then
+        echo "vendored lexer is current"
+    else
+        echo "STALE: src/generated/lexer.rs does not match src/lexer.re." >&2
+        echo "Regenerate it with the invocation in build.rs, in the same commit." >&2
+        exit 1
+    fi
+
 # Check first-wave crates.io publication readiness for the foundation crates.
 crates-io-foundation-check:
     bash {{ justfile_directory() }}/scripts/release/check-foundation-publication-readiness.sh --allow-dirty

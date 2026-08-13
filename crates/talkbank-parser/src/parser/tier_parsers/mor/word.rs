@@ -44,7 +44,7 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
     let children = extract_mor_word(MorWordNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    let pos = match children.child_0.slot {
+    let pos = match children.child_0.slot() {
         NodeSlot::Present(pos_node) => {
             let field = pos_node.0;
             match field.utf8_text(source.as_bytes()) {
@@ -80,11 +80,11 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
             }
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_word");
+            check_not_missing(*raw, source, errors, "mor_word");
             None
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_word"));
+            errors.report(unexpected_node_error(*raw, source, "mor_word"));
             None
         }
         NodeSlot::Absent => None,
@@ -93,17 +93,17 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
     // The pipe separator is purely structural (removed loop: `kind::PIPE =>
     // {}`); Missing/Error/Unexpected still report, matching the removed
     // loop's uniform per-child gate.
-    match children.child_1.slot {
+    match children.child_1.slot() {
         NodeSlot::Present(_) | NodeSlot::Absent => {}
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_word");
+            check_not_missing(*raw, source, errors, "mor_word");
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_word"));
+            errors.report(unexpected_node_error(*raw, source, "mor_word"));
         }
     }
 
-    let lemma = match children.child_2.slot {
+    let lemma = match children.child_2.slot() {
         NodeSlot::Present(lemma_node) => {
             let field = lemma_node.0;
             match field.utf8_text(source.as_bytes()) {
@@ -139,19 +139,19 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
             }
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "mor_word");
+            check_not_missing(*raw, source, errors, "mor_word");
             None
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_word"));
+            errors.report(unexpected_node_error(*raw, source, "mor_word"));
             None
         }
         NodeSlot::Absent => None,
     };
 
     let mut features = Vec::new();
-    for element in children.child_3.slot {
-        match element.slot {
+    for element in children.child_3.slot() {
+        match element.slot() {
             NodeSlot::Present(feature_node) => {
                 if let ParseOutcome::Parsed(Some(feature)) =
                     parse_mor_feature(feature_node.0, source, errors)
@@ -163,10 +163,10 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
             // EVERY child, including feature positions, so a MISSING
             // `mor_feature` never reached `parse_mor_feature` at all.
             NodeSlot::Missing(raw) => {
-                check_not_missing(raw, source, errors, "mor_word");
+                check_not_missing(*raw, source, errors, "mor_word");
             }
             NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "mor_word"));
+                errors.report(unexpected_node_error(*raw, source, "mor_word"));
             }
             NodeSlot::Absent => {}
         }
@@ -225,26 +225,26 @@ fn parse_mor_feature(
     let children = extract_mor_feature(MorFeatureNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_0.slot {
+    match children.child_0.slot() {
         NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent => {}
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_feature"));
+            errors.report(unexpected_node_error(*raw, source, "mor_feature"));
         }
     }
 
-    match children.child_1.slot {
+    match children.child_1.slot() {
         NodeSlot::Present(value_node) => {
             if let Some(feature) = decode_feature_value(value_node.0, source, errors) {
                 return ParseOutcome::parsed(Some(feature));
             }
         }
         NodeSlot::Missing(raw) => {
-            if let Some(feature) = decode_feature_value(raw, source, errors) {
+            if let Some(feature) = decode_feature_value(*raw, source, errors) {
                 return ParseOutcome::parsed(Some(feature));
             }
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_feature"));
+            errors.report(unexpected_node_error(*raw, source, "mor_feature"));
         }
         NodeSlot::Absent => {}
     }

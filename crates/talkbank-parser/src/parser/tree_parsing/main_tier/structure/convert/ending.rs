@@ -26,12 +26,13 @@ use crate::generated_traversal::{
 };
 use crate::model::{Bullet, Postcode, Terminator};
 use crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use crate::parser::tree_parsing::postcode::parse_postcode_node;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-use super::super::super::content::analyze_word_error;
+use super::super::super::content::{
+    MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
+};
 use super::super::terminator::{span_of, terminator_from_new_choice};
 
 /// The utterance-end tail parsed from an `utterance_end` node: the optional
@@ -71,10 +72,14 @@ pub(super) fn parse_utterance_end(
     // variant carries a raw `Node` (not a typed choice), matching `Error` /
     // `Unexpected` below, unlike the OLD flattened `Option<NodeSlot<..>>` where
     // `Missing` still carried the typed choice.
-    let terminator = match end.child_0.slot {
-        Some(NodeSlot::Present(choice)) => Some(terminator_from_new_choice(&choice)),
+    let terminator = match end.child_0.slot() {
+        Some(NodeSlot::Present(choice)) => Some(terminator_from_new_choice(choice)),
         Some(NodeSlot::Error(error_node)) => {
-            errors.report(analyze_word_error(error_node, source));
+            errors.report(classify_main_tier_recovery(
+                *error_node,
+                source,
+                MainTierRegion::Body,
+            ));
             None
         }
         Some(NodeSlot::Missing(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent) | None => None,
@@ -91,19 +96,24 @@ pub(super) fn parse_utterance_end(
     // loop which acted only on `postcode`-kind children); a `Missing` / `Error` /
     // `Unexpected` / absent `final_codes` slot yields no postcodes.
     let mut postcodes: Vec<Postcode> = Vec::new();
-    match end.child_1.slot {
+    match end.child_1.slot() {
         Some(NodeSlot::Present(final_codes)) => {
-            let codes = extract_final_codes(final_codes);
+            let codes = extract_final_codes(*final_codes);
             push_postcode_from_final_codes_group(
-                codes.child_0.slot,
+                codes.child_0.slot(),
                 source,
                 errors,
                 &mut postcodes,
             );
-            for element in codes.child_1.slot {
-                push_postcode_from_final_codes_group(element.slot, source, errors, &mut postcodes);
+            for element in codes.child_1.slot() {
+                push_postcode_from_final_codes_group(
+                    element.slot(),
+                    source,
+                    errors,
+                    &mut postcodes,
+                );
             }
-            surface_unexpected(&codes.unexpected, source, errors);
+            surface_main_tier_sink(&codes.unexpected, MainTierRegion::Body, source, errors);
         }
         Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
@@ -121,10 +131,10 @@ pub(super) fn parse_utterance_end(
     // marker) the E360 diagnostic is emitted byte-identically to the removed
     // flat loop, so the file still fails validation. Every other slot state
     // (at either nesting level) yields no bullet, no diagnostic.
-    let bullet = match end.child_2.slot {
+    let bullet = match end.child_2.slot() {
         Some(NodeSlot::Present(group)) => {
-            surface_unexpected(&group.unexpected, source, errors);
-            match group.child_1.slot {
+            surface_main_tier_sink(&group.unexpected, MainTierRegion::Body, source, errors);
+            match group.child_1.slot() {
                 NodeSlot::Present(bullet_node) => {
                     let raw = bullet_node.raw_node();
                     match parse_bullet_node_timestamps(raw, source, errors) {
@@ -151,7 +161,7 @@ pub(super) fn parse_utterance_end(
     // OLD backend's `--skip whitespaces` absorbed this silently): structural
     // only, carries no terminator, postcode, or bullet, so every slot state is a
     // no-op. Matched explicitly so no state is silently dropped.
-    match end.child_3.slot {
+    match end.child_3.slot() {
         Some(
             NodeSlot::Present(_)
             | NodeSlot::Missing(_)
@@ -165,7 +175,7 @@ pub(super) fn parse_utterance_end(
     // child_4 (`newline`, required; was `child_3` under OLD). Structural only: it
     // carries no terminator, postcode, or bullet, so every slot state is a no-op.
     // Matched explicitly so the required newline slot is never silently dropped.
-    match end.child_4.slot {
+    match end.child_4.slot() {
         NodeSlot::Present(_)
         | NodeSlot::Missing(_)
         | NodeSlot::Error(_)
@@ -173,9 +183,15 @@ pub(super) fn parse_utterance_end(
         | NodeSlot::Absent => {}
     }
 
-    // Surface the carrier's own `unexpected` sink (R2). Empty on every fixture
-    // probed so far; load-bearing once the whole-tree backstop is deleted.
-    surface_unexpected(&end.unexpected, source, errors);
+    // Surface the carrier's own `unexpected` sink (R2), classified by region.
+    //
+    // This is NOT the empty set the comment here used to claim. The same
+    // sentence stood over `tier_body`'s sink until a generator fix started
+    // absorbing ERROR nodes at the cursor position, which put real content in
+    // it and degraded six error codes to E316. "Empty on every fixture probed
+    // so far" was a statement about our fixtures, not about the grammar, and it
+    // was read as the latter for months.
+    surface_main_tier_sink(&end.unexpected, MainTierRegion::Body, source, errors);
 
     UtteranceEndTail {
         terminator,
@@ -196,22 +212,22 @@ trait FinalCodesGroup<'tree> {
     /// The group's `unexpected` sink (R2).
     fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>];
     /// The group's `postcode` slot (`child_1`, after the leading whitespace).
-    fn postcode_slot(self) -> NodeSlot<'tree, PostcodeNode<'tree>>;
+    fn postcode_slot(&self) -> &NodeSlot<'tree, PostcodeNode<'tree>>;
 }
 impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild0Children<'tree> {
     fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>] {
         &self.unexpected
     }
-    fn postcode_slot(self) -> NodeSlot<'tree, PostcodeNode<'tree>> {
-        self.child_1.slot
+    fn postcode_slot(&self) -> &NodeSlot<'tree, PostcodeNode<'tree>> {
+        self.child_1.slot()
     }
 }
 impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild1Children<'tree> {
     fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>] {
         &self.unexpected
     }
-    fn postcode_slot(self) -> NodeSlot<'tree, PostcodeNode<'tree>> {
-        self.child_1.slot
+    fn postcode_slot(&self) -> &NodeSlot<'tree, PostcodeNode<'tree>> {
+        self.child_1.slot()
     }
 }
 
@@ -221,14 +237,19 @@ impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild1Children<'tree> {
 /// `postcode` slot is not `Present`) yields no postcode, matching the removed
 /// flat loop which acted only on `postcode`-kind children.
 fn push_postcode_from_final_codes_group<'tree, G: FinalCodesGroup<'tree>>(
-    group_slot: NodeSlot<'tree, G>,
+    group_slot: &NodeSlot<'tree, G>,
     source: &str,
     errors: &impl ErrorSink,
     postcodes: &mut Vec<Postcode>,
 ) {
     match group_slot {
         NodeSlot::Present(group) => {
-            surface_unexpected(group.group_unexpected(), source, errors);
+            surface_main_tier_sink(
+                group.group_unexpected(),
+                MainTierRegion::Body,
+                source,
+                errors,
+            );
             match group.postcode_slot() {
                 NodeSlot::Present(postcode_node) => {
                     if let ParseOutcome::Parsed(postcode) =

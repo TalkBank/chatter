@@ -40,8 +40,8 @@ pub fn parse_header_node(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let children = extract_header(header_node);
-    let outcome = match children.content.slot {
-        NodeSlot::Present(choice) => dispatch_header_choice(choice, input, errors),
+    let outcome = match children.content.slot() {
+        NodeSlot::Present(choice) => dispatch_header_choice(choice.clone(), input, errors),
         // `dispatch_line` only routes a Present concrete `header` subtype node
         // here, so these slots are unreachable in practice. The pre-migration
         // code (supertypes mode of `resolve_header_node`) always produced a

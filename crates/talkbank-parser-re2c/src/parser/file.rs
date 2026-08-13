@@ -796,9 +796,7 @@ fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok((items, terminator)) => {
-                    dep_tiers.push(DependentTierParsed::Wor { items, terminator })
-                }
+                Ok(wor) => dep_tiers.push(DependentTierParsed::Wor(wor)),
                 Err(_) => {
                     report_error(
                         errors,
@@ -832,16 +830,13 @@ fn parse_dependent_tiers<'a>(
 /// case of CHECK 52 has no token variant in this front end and is
 /// covered by the tree-sitter side only.
 fn report_annotation_at_utterance_start(items: &[ContentItem<'_>], errors: &impl ErrorSink) {
+    // Asked of the annotation's own type rather than by listing seven token
+    // variants here; `is_postfix` is the property, and `chat_text` reproduces
+    // the marker as written even though the lexer tag-extracts most payloads.
     let offending = match items.first() {
-        Some(ContentItem::Annotation(
-            Token::RetraceComplete(s)
-            | Token::RetracePartial(s)
-            | Token::RetraceMultiple(s)
-            | Token::RetraceReformulation(s)
-            | Token::OverlapPrecedes(s)
-            | Token::OverlapFollows(s)
-            | Token::Replacement(s),
-        )) => Some(*s),
+        Some(ContentItem::OrphanAnnotation(annotation)) if annotation.is_postfix() => {
+            Some(annotation.chat_text())
+        }
         _ => None,
     };
     if let Some(code_text) = offending {
@@ -862,13 +857,9 @@ fn report_annotation_at_utterance_start(items: &[ContentItem<'_>], errors: &impl
 }
 
 fn has_synthesized_missing_annotation(items: &[ContentItem<'_>]) -> bool {
-    items.iter().any(|item| match item {
-        ContentItem::Retrace(r) => {
-            r.synthesized_missing_annotation || has_synthesized_missing_annotation(&r.content)
-        }
-        ContentItem::Group(g) => has_synthesized_missing_annotation(&g.contents),
-        ContentItem::Quotation(q) => has_synthesized_missing_annotation(&q.contents),
-        _ => false,
+    items.iter().any(|item| {
+        matches!(item, ContentItem::Retrace(r) if r.synthesized_missing_annotation)
+            || has_synthesized_missing_annotation(item.children())
     })
 }
 

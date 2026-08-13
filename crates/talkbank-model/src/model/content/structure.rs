@@ -19,13 +19,21 @@
 //! other walkers under `validation/` and `alignment/` carry one each. Adding a
 //! container variant is a compile error HERE and a silent omission THERE.
 //!
-//! Migrating them is not mechanical, and the reason is worth recording before
-//! someone tries: `Word` and `Container` are payload-free, while the walkers
-//! that would adopt them need `&Word` (so they can validate its annotations)
-//! or need to know WHICH container they are in (so a tier domain can skip
-//! `PhoGroup` but not `Quotation`). Settling those payloads is the
-//! prerequisite for the next migration, and is why this type is `pub(crate)`
-//! rather than public API on a crate heading for 1.0.
+//! Migrating them is not mechanical, and the reason was worth recording: `Word`
+//! and `Container` were payload-free, while the walkers that would adopt them
+//! need `&Word` (to validate its annotations) or need to know WHICH container
+//! they are in (so a tier domain can skip `PhoGroup` but not `Quotation`).
+//!
+//! **Those payloads are settled** (`WordRef`, `GroupRef`, `RetraceRef`,
+//! `LeafRef`), so the type is PUBLIC as of v0.11.0. It was `pub(crate)` while
+//! they were unsettled, and that privacy had a cost this crate does not pay
+//! but its consumers do: every downstream walker re-derived the container set
+//! by hand, and two of them were wrong within a day of v0.10.0 adding
+//! `AnnotatedRetrace`. One dropped a retrace out of an utterance-segmentation
+//! pass, reviving a stranding bug on a real corpus; the other stopped
+//! descending into annotated retraces entirely. Both compiled clean, because a
+//! hand-written match with a catch-all cannot notice a new variant. Public,
+//! this type turns that class into a compile error at every consumer.
 //!
 //! # Why one classification instead of three predicates
 //!
@@ -44,10 +52,48 @@
 // a content enum means a future variant compiles clean and answers wrong.
 // Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
 #![deny(clippy::wildcard_enum_match_arm)]
+use crate::model::annotation::ContentAnnotation;
 use crate::model::{
     Annotated, BracketedContent, BracketedItem, Group, PhoGroup, Quotation, ReplacedWord, Retrace,
     SinGroup, UtteranceContent, Word,
 };
+
+/// A model node that CARRIES scoped annotations.
+///
+/// # Why a trait rather than an arm per variant
+///
+/// The first version of the annotation accessor decided each variant by hand,
+/// and got `ReplacedWord` wrong: it answered "no annotations" for
+/// `dog [: cat] [* p:w]`, whose annotations two rendering paths and the
+/// alignment units already read. Nothing objected, because a hand-written arm
+/// list is a mapping from variant to answer with no tie to whether that node
+/// actually has the field.
+///
+/// One implementation per node TYPE moves the answer to where the field is.
+/// A node that carries annotations implements this and cannot be given `&[]`
+/// by a distracted caller; a node that does not carry them has no impl to
+/// write, so `&[]` at the call site is checkable by looking at one struct.
+///
+/// Implemented for both annotation carriers, which wrap the same
+/// `Vec<ContentAnnotation>` in two different newtypes
+/// (`AnnotatedContentAnnotations`, `ReplacedWordAnnotations`); that duplication
+/// is why the two were never connected in the first place.
+pub trait ScopedAnnotated {
+    /// The annotations scoped to this node, empty when it carries none.
+    fn scoped_annotations(&self) -> &[ContentAnnotation];
+}
+
+impl<T> ScopedAnnotated for Annotated<T> {
+    fn scoped_annotations(&self) -> &[ContentAnnotation] {
+        &self.scoped_annotations
+    }
+}
+
+impl ScopedAnnotated for ReplacedWord {
+    fn scoped_annotations(&self) -> &[ContentAnnotation] {
+        &self.scoped_annotations
+    }
+}
 
 /// What a content item is, structurally, to something walking the tree.
 ///
@@ -55,19 +101,101 @@ use crate::model::{
 /// item", not "what is it"; callers that need the payload of a specific
 /// variant still match on the enum itself.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum ContentStructure<'a> {
+pub enum ContentStructure<'a> {
     /// A word, in any of its forms. Untranscribed material (`xxx`, `yyy`,
     /// `www`) lowers as a word and is deliberately included; whether that
     /// counts is the caller's question, not this classification's.
     Word(WordRef<'a>),
     /// A retrace, which is also a container: the material it retraces is its
     /// own `content`.
-    Retrace(&'a Retrace),
+    Retrace(RetraceRef<'a>),
     /// A container that is not a retrace, keeping its kind and payload.
     Group(GroupRef<'a>),
-    /// A leaf that is neither: events, pauses, actions, CA markers, bullets,
-    /// freecodes, and the long-feature and nonvocal delimiters.
-    Other,
+    /// A leaf enclosing no further content: events, pauses, actions, CA
+    /// markers, bullets, freecodes, and the long-feature and nonvocal
+    /// delimiters.
+    Leaf(LeafRef<'a>),
+}
+
+/// The two spellings of a retrace, each keeping its payload.
+///
+/// `Retrace(&Retrace)` reached the annotated spelling through
+/// `&annotated.inner`, DISCARDING the annotations that follow the marker. That
+/// is this module's own Shape C: a total function silently dropping
+/// information, in the type whose job is to be the one owner. It is also why
+/// `iisrp_session_profile` had to hand-roll a `carries_annotations` walker in
+/// August 2026: the owner could not answer the question.
+#[derive(Debug, Clone, Copy)]
+pub enum RetraceRef<'a> {
+    /// `<a b> [/]`
+    Bare(&'a Retrace),
+    /// `<a b> [/] [* p:w]`
+    Annotated(&'a Annotated<Retrace>),
+}
+
+impl<'a> RetraceRef<'a> {
+    /// The annotations scoped to this retrace.
+    ///
+    /// Every ref type answers this, so a consumer holding one does not have to
+    /// route back through [`ContentStructure`] or re-match the enum, which is
+    /// the hand-rolled walk this module exists to remove.
+    #[inline]
+    pub fn scoped_annotations(self) -> &'a [ContentAnnotation] {
+        match self {
+            Self::Annotated(annotated) => annotated.scoped_annotations(),
+            Self::Bare(_) => &[],
+        }
+    }
+
+    /// The retrace node itself, in either spelling.
+    #[inline]
+    pub fn inner(self) -> &'a Retrace {
+        match self {
+            Self::Bare(retrace) => retrace,
+            Self::Annotated(annotated) => &annotated.inner,
+        }
+    }
+}
+
+/// Whether a leaf is material a listener would HEAR.
+///
+/// A CHAT fact, so the model owns it. It was written out per variant in
+/// `validation::retrace::collection`, twice, once per content enum, sixteen
+/// arms that had to agree and were bound by nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeafContent {
+    /// Events, pauses and other spoken events: audible material.
+    Spoken,
+    /// Separators, overlap points, bullets, freecodes, actions, and the
+    /// long-feature, underline and nonvocal delimiters: notation ABOUT the
+    /// utterance rather than speech in it.
+    Notation,
+}
+
+/// A leaf: content that encloses nothing further.
+///
+/// A STRUCT, not an enum, and that is the whole point. Two independent facts
+/// are true of every leaf, and the predecessor `Unannotated | Event | Action`
+/// made one of them the discriminant and hid the other: it named IDENTITY
+/// while encoding ANNOTATION STATE, so a bare `&=laughs` was `Unannotated` and
+/// a consumer matching `Event` silently missed the commoner spelling. Both
+/// facts are fields now, so neither can be read as the other.
+#[derive(Debug, Clone, Copy)]
+pub struct LeafRef<'a> {
+    /// Whether this leaf is audible material.
+    pub content: LeafContent,
+    /// The annotations scoped to it, empty when it carries none.
+    pub annotations: &'a [ContentAnnotation],
+}
+
+impl<'a> LeafRef<'a> {
+    /// A leaf carrying no annotations.
+    const fn bare(content: LeafContent) -> Self {
+        Self {
+            content,
+            annotations: &[],
+        }
+    }
 }
 
 /// The three spellings of a word, each keeping its payload.
@@ -87,7 +215,7 @@ pub(crate) enum ContentStructure<'a> {
 /// target, and which one a caller wants is caller-specific. [`WordRef::words`]
 /// is there for callers that want all of them.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum WordRef<'a> {
+pub enum WordRef<'a> {
     /// `dog`
     Bare(&'a Word),
     /// `dog [* p:w]`
@@ -103,7 +231,7 @@ impl<'a> WordRef<'a> {
     /// words, because a caller asking "is there a real word here" should see
     /// both and a caller asking "what was said" should take the first.
     #[inline]
-    pub(crate) fn words(self) -> impl Iterator<Item = &'a Word> {
+    pub fn words(self) -> impl Iterator<Item = &'a Word> {
         let (head, tail) = match self {
             Self::Bare(word) => (word, None),
             Self::Annotated(annotated) => (&annotated.inner, None),
@@ -132,7 +260,7 @@ impl<'a> WordRef<'a> {
 /// from a flattened `&BracketedContent`. Note that `BracketedItem` has no bare
 /// group variant, so `Angle` arises only from main-tier content.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum GroupRef<'a> {
+pub enum GroupRef<'a> {
     /// `<...>` with no scoped annotations.
     Angle(&'a Group),
     /// `<...> [...]`
@@ -146,9 +274,18 @@ pub(crate) enum GroupRef<'a> {
 }
 
 impl<'a> GroupRef<'a> {
+    /// The annotations scoped to this group.
+    #[inline]
+    pub fn scoped_annotations(self) -> &'a [ContentAnnotation] {
+        match self {
+            Self::AnnotatedAngle(annotated) => annotated.scoped_annotations(),
+            Self::Angle(_) | Self::Quotation(_) | Self::Pho(_) | Self::Sin(_) => &[],
+        }
+    }
+
     /// The content this group encloses.
     #[inline]
-    pub(crate) fn content(self) -> &'a BracketedContent {
+    pub fn content(self) -> &'a BracketedContent {
         match self {
             Self::Angle(group) => &group.content,
             Self::AnnotatedAngle(annotated) => &annotated.inner.content,
@@ -165,11 +302,11 @@ impl<'a> ContentStructure<'a> {
     /// Folds the two container-bearing variants together for walkers that only
     /// need to recurse and do not care which kind of container they are in.
     #[inline]
-    pub(crate) fn enclosed(self) -> Option<&'a BracketedContent> {
+    pub fn enclosed(self) -> Option<&'a BracketedContent> {
         match self {
-            Self::Retrace(retrace) => Some(&retrace.content),
+            Self::Retrace(retrace) => Some(&retrace.inner().content),
             Self::Group(group) => Some(group.content()),
-            Self::Word(_) | Self::Other => None,
+            Self::Word(_) | Self::Leaf(_) => None,
         }
     }
 }
@@ -194,7 +331,7 @@ impl<'a> ContentStructure<'a> {
     /// than words, so it is a genuinely different question and folding it in
     /// would need a second predicate parameter that two of the three callers
     /// would pass as "always false".
-    pub(crate) fn any_word(self, predicate: &impl Fn(&Word) -> bool) -> bool {
+    pub fn any_word(self, predicate: &impl Fn(&Word) -> bool) -> bool {
         match self {
             Self::Word(word) => word.words().any(predicate),
             Self::Retrace(_) | Self::Group(_) => self.enclosed().is_some_and(|content| {
@@ -203,7 +340,47 @@ impl<'a> ContentStructure<'a> {
                     .iter()
                     .any(|item| item.structure().any_word(predicate))
             }),
-            Self::Other => false,
+            Self::Leaf(_) => false,
+        }
+    }
+}
+
+impl<'a> ContentStructure<'a> {
+    /// The annotations scoped to THIS item, empty when it carries none.
+    ///
+    /// One owner for the annotation axis, which this type used to answer
+    /// inconsistently: an annotated group kept its annotations, an annotated
+    /// retrace had them dropped on the way in, and an annotated event or
+    /// action became a payload-free `Other`. A downstream crate wanting "does
+    /// this carry annotations" therefore had to hand-roll a 22-arm match, and
+    /// did.
+    ///
+    /// Scoped to the item itself, NOT to anything beneath it: a caller asking
+    /// about a container's contents walks [`ContentStructure::enclosed`].
+    pub fn scoped_annotations(self) -> &'a [ContentAnnotation] {
+        match self {
+            Self::Word(word) => word.scoped_annotations(),
+            Self::Retrace(retrace) => retrace.scoped_annotations(),
+            Self::Group(group) => group.scoped_annotations(),
+            Self::Leaf(leaf) => leaf.annotations,
+        }
+    }
+}
+
+impl<'a> WordRef<'a> {
+    /// The annotations scoped to this word.
+    ///
+    /// Delegates to [`ScopedAnnotated`] for both carriers. `Bare` is the only
+    /// spelling with no impl to call, and `Word` has no annotations field, so
+    /// the empty slice there is a fact about the struct rather than a decision
+    /// made here. The predecessor decided all three by hand and answered wrong
+    /// for `Replaced`.
+    #[inline]
+    pub fn scoped_annotations(self) -> &'a [ContentAnnotation] {
+        match self {
+            Self::Annotated(annotated) => annotated.scoped_annotations(),
+            Self::Replaced(replaced) => replaced.scoped_annotations(),
+            Self::Bare(_) => &[],
         }
     }
 }
@@ -215,13 +392,23 @@ impl UtteranceContent {
     /// walk in the crate, and `[profile.release]` here deliberately carries no
     /// LTO, so a cross-codegen-unit call would not be inlined on its own.
     #[inline]
-    pub(crate) fn structure(&self) -> ContentStructure<'_> {
+    pub fn structure(&self) -> ContentStructure<'_> {
         match self {
             Self::Word(word) => ContentStructure::Word(WordRef::Bare(word)),
             Self::AnnotatedWord(annotated) => ContentStructure::Word(WordRef::Annotated(annotated)),
             Self::ReplacedWord(replaced) => ContentStructure::Word(WordRef::Replaced(replaced)),
-            Self::Retrace(retrace) => ContentStructure::Retrace(retrace),
-            Self::AnnotatedRetrace(annotated) => ContentStructure::Retrace(&annotated.inner),
+            Self::Retrace(retrace) => ContentStructure::Retrace(RetraceRef::Bare(retrace)),
+            Self::AnnotatedRetrace(annotated) => {
+                ContentStructure::Retrace(RetraceRef::Annotated(annotated))
+            }
+            Self::AnnotatedEvent(annotated) => ContentStructure::Leaf(LeafRef {
+                content: LeafContent::Spoken,
+                annotations: annotated.scoped_annotations(),
+            }),
+            Self::AnnotatedAction(annotated) => ContentStructure::Leaf(LeafRef {
+                content: LeafContent::Notation,
+                annotations: annotated.scoped_annotations(),
+            }),
             Self::Group(group) => ContentStructure::Group(GroupRef::Angle(group)),
             Self::AnnotatedGroup(annotated) => {
                 ContentStructure::Group(GroupRef::AnnotatedAngle(annotated))
@@ -232,11 +419,10 @@ impl UtteranceContent {
             // Listed rather than caught by `_`: a catch-all here would route a
             // future container variant to "leaf", which is the exact drift this
             // module exists to end.
-            Self::Event(_)
-            | Self::AnnotatedEvent(_)
-            | Self::Pause(_)
-            | Self::AnnotatedAction(_)
-            | Self::Freecode(_)
+            Self::Event(_) | Self::Pause(_) | Self::OtherSpokenEvent(_) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::Spoken))
+            }
+            Self::Freecode(_)
             | Self::Separator(_)
             | Self::OverlapPoint(_)
             | Self::InternalBullet(_)
@@ -246,8 +432,9 @@ impl UtteranceContent {
             | Self::UnderlineEnd(_)
             | Self::NonvocalBegin(_)
             | Self::NonvocalEnd(_)
-            | Self::NonvocalSimple(_)
-            | Self::OtherSpokenEvent(_) => ContentStructure::Other,
+            | Self::NonvocalSimple(_) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::Notation))
+            }
         }
     }
 }
@@ -255,25 +442,34 @@ impl UtteranceContent {
 impl BracketedItem {
     /// Classify this item for traversal. See [`ContentStructure`].
     #[inline]
-    pub(crate) fn structure(&self) -> ContentStructure<'_> {
+    pub fn structure(&self) -> ContentStructure<'_> {
         match self {
             Self::Word(word) => ContentStructure::Word(WordRef::Bare(word)),
             Self::AnnotatedWord(annotated) => ContentStructure::Word(WordRef::Annotated(annotated)),
             Self::ReplacedWord(replaced) => ContentStructure::Word(WordRef::Replaced(replaced)),
-            Self::Retrace(retrace) => ContentStructure::Retrace(retrace),
-            Self::AnnotatedRetrace(annotated) => ContentStructure::Retrace(&annotated.inner),
+            Self::Retrace(retrace) => ContentStructure::Retrace(RetraceRef::Bare(retrace)),
+            Self::AnnotatedRetrace(annotated) => {
+                ContentStructure::Retrace(RetraceRef::Annotated(annotated))
+            }
             Self::AnnotatedGroup(annotated) => {
                 ContentStructure::Group(GroupRef::AnnotatedAngle(annotated))
             }
             Self::Quotation(quotation) => ContentStructure::Group(GroupRef::Quotation(quotation)),
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
+            Self::AnnotatedEvent(annotated) => ContentStructure::Leaf(LeafRef {
+                content: LeafContent::Spoken,
+                annotations: annotated.scoped_annotations(),
+            }),
+            Self::AnnotatedAction(annotated) => ContentStructure::Leaf(LeafRef {
+                content: LeafContent::Notation,
+                annotations: annotated.scoped_annotations(),
+            }),
             // Exhaustive for the same reason as above.
-            Self::Event(_)
-            | Self::AnnotatedEvent(_)
-            | Self::Pause(_)
-            | Self::Action(_)
-            | Self::AnnotatedAction(_)
+            Self::Event(_) | Self::Pause(_) | Self::OtherSpokenEvent(_) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::Spoken))
+            }
+            Self::Action(_)
             | Self::OverlapPoint(_)
             | Self::Separator(_)
             | Self::InternalBullet(_)
@@ -284,8 +480,9 @@ impl BracketedItem {
             | Self::UnderlineEnd(_)
             | Self::NonvocalBegin(_)
             | Self::NonvocalEnd(_)
-            | Self::NonvocalSimple(_)
-            | Self::OtherSpokenEvent(_) => ContentStructure::Other,
+            | Self::NonvocalSimple(_) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::Notation))
+            }
         }
     }
 }

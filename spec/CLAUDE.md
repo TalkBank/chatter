@@ -1,7 +1,20 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-07-29 09:36 EDT
+**Last modified:** 2026-08-11 20:40 EDT
+
+## Read the book first
+
+The CONTRIBUTOR-facing documentation is authoritative and complete:
+
+- [`book/src/architecture/spec-system.md`](../book/src/architecture/spec-system.md),
+  what every field does, what is generated, and what checks what.
+- [`book/src/contributing/spec-workflow.md`](../book/src/contributing/spec-workflow.md),
+  the procedure, with every command written out.
+
+Start any spec question with `just spec-status`, which derives its answers from
+the same code the gates use. This file carries only what is specific to working
+here as an agent; where it and the book overlap, the book wins.
 
 ## How This Works
 
@@ -193,6 +206,7 @@ cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_spe
 | `gen_rust_tests` | `crates/talkbank-parser-tests/tests/integration/generated/*.rs` from constructs + errors |
 | `gen_validation_corpus` | Validation fixture corpus + `manifest.json` from `spec/errors/` (one fixture per example, asserting that example's own Expected Error Codes) |
 | `gen_error_docs` | `docs/errors/*.md` from errors |
+| `gen_form_markers` | Every site carrying the CHAT form-marker inventory, from `spec/form_markers/form_marker_registry.json`: the model's `FormType` enum, the re2c lexer's code set, and the book's table. Run it as `just form-markers-gen`; see `spec/form_markers/README.md` for the two follow-ups it cannot do (the vendored re2c lexer and the JSON Schema). |
 | `validate_spec` | Validates spec format integrity (no output) |
 | `corpus_node_coverage` | Reports which grammar node types are exercised by `corpus/reference/` |
 | `coverage` | Reports spec coverage and error-code coverage |

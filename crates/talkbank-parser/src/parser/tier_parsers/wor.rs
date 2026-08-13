@@ -80,11 +80,11 @@ pub fn parse_wor_tier(node: Node, source: &str, errors: &impl ErrorSink) -> WorT
     let children = extract_wor_dependent_tier(WorDependentTierNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot {
+    match children.child_2.slot() {
         NodeSlot::Present(body) => {
             parse_wor_tier_body(body.raw_node(), source, errors).with_span(span)
         }
-        NodeSlot::Missing(raw) => parse_wor_tier_body(raw, source, errors).with_span(span),
+        NodeSlot::Missing(raw) => parse_wor_tier_body(*raw, source, errors).with_span(span),
         NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
             WorTier::new(Vec::new()).with_span(span)
         }
@@ -109,11 +109,11 @@ fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> Wor
     // langcode contributes a code, every other state (a malformed group, an absent
     // group) yields none, exactly as the old loop only acted on a real
     // `LANGCODE`-kind child. Surface the nested group's own `unexpected` sink (R2).
-    let language_code = match children.language_code.slot {
+    let language_code = match children.language_code.slot() {
         Some(NodeSlot::Present(group)) => {
             surface_unexpected(&group.unexpected, source, errors);
-            match group.child_0.slot {
-                NodeSlot::Present(langcode) => extract_langcode(langcode, source),
+            match group.child_0.slot() {
+                NodeSlot::Present(langcode) => extract_langcode(*langcode, source),
                 NodeSlot::Missing(_)
                 | NodeSlot::Error(_)
                 | NodeSlot::Unexpected(_)
@@ -132,12 +132,12 @@ fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> Wor
     // gra/pho/sin separator helpers; the NEW backend models it explicitly since it
     // does not use `--skip whitespaces`). Iterate the typed elements, pairing each
     // bullet with its preceding word.
-    let mut items: Vec<WorItem> = Vec::with_capacity(children.child_1.slot.len());
-    for element in children.child_1.slot {
-        match element.slot {
+    let mut items: Vec<WorItem> = Vec::with_capacity(children.child_1.slot().len());
+    for element in children.child_1.slot() {
+        match element.slot() {
             NodeSlot::Present(pair) => {
-                push_wor_item(pair.child_0.slot, source, errors, &mut items);
-                push_wor_separator(pair.child_1.slot, source, errors, "wor_tier_body");
+                push_wor_item(pair.child_0.slot(), source, errors, &mut items);
+                push_wor_separator(pair.child_1.slot(), source, errors, "wor_tier_body");
                 surface_unexpected(&pair.unexpected, source, errors);
             }
             // The generated repeat classifies a whole item as `Present` / `Error`
@@ -145,7 +145,7 @@ fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> Wor
             // finding); matched exhaustively regardless, per the no-`_`-on-project-
             // enums rule. Unreachable from the boundary.
             NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "wor_tier_body"));
+                errors.report(unexpected_node_error(*raw, source, "wor_tier_body"));
             }
             NodeSlot::Absent => {}
         }
@@ -156,8 +156,8 @@ fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> Wor
     // (the NEW-backend twin; wor's terminator is `WorTierBodyChild2Choice`). `None`
     // (absent from the source), `Missing`, `Error`, or `Unexpected` yield no
     // terminator, matching the old behavior when no terminator child was seen.
-    let terminator = match children.child_2.slot {
-        Some(NodeSlot::Present(choice)) => Some(terminator_from_new_choice(&choice)),
+    let terminator = match children.child_2.slot() {
+        Some(NodeSlot::Present(choice)) => Some(terminator_from_new_choice(choice)),
         Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
         )
@@ -167,7 +167,7 @@ fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> Wor
     // `child_3` (`newline`, required): structural only, no model representation.
     // Every slot state is a no-op, matched explicitly so the required newline slot
     // is never silently dropped (as the old `NEWLINE => {}` arm did).
-    match children.child_3.slot {
+    match children.child_3.slot() {
         NodeSlot::Present(_)
         | NodeSlot::Missing(_)
         | NodeSlot::Error(_)
@@ -197,7 +197,7 @@ fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> Wor
 /// the enclosing rule name, so the diagnostic matches the sibling item-slot
 /// diagnostics.
 fn push_wor_separator<'tree>(
-    slot: NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
@@ -205,10 +205,10 @@ fn push_wor_separator<'tree>(
     match slot {
         NodeSlot::Present(_) | NodeSlot::Absent => {}
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, context);
+            check_not_missing(*raw, source, errors, context);
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, context));
+            errors.report(unexpected_node_error(*raw, source, context));
         }
     }
 }
@@ -243,7 +243,7 @@ fn push_wor_separator<'tree>(
 /// error); they are handled explicitly for exhaustiveness, reproducing the old
 /// behavior without inventing new diagnostics.
 fn push_wor_item(
-    slot: NodeSlot<'_, WorTierBodyChild1Child0Choice<'_>>,
+    slot: &NodeSlot<'_, WorTierBodyChild1Child0Choice<'_>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<WorItem>,
@@ -283,7 +283,7 @@ fn push_wor_item(
             }
         },
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "wor_tier_body"));
+            errors.report(unexpected_node_error(*raw, source, "wor_tier_body"));
         }
         NodeSlot::Missing(_) | NodeSlot::Absent => {}
     }

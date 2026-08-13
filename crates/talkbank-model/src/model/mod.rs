@@ -83,8 +83,8 @@ pub use intern::{
 
 // Re-export file types
 pub use file::{
-    ChatFile, ChatFileLines, Line, ParseHealth, ParseHealthState, ParseHealthTier, Utterance,
-    UtteranceLanguage, UtteranceLanguageMetadata,
+    ChatFile, ChatFileLines, FileStem, Line, ParseHealth, ParseHealthState, ParseHealthTier,
+    TranscriptName, Utterance, UtteranceLanguage, UtteranceLanguageMetadata,
 };
 
 // Re-export participant type
@@ -168,6 +168,7 @@ pub use content::{
     CAElementType,
     Event,
     EventType,
+    FormMarkerPayload,
     FormType,
     Freecode,
     Group,
@@ -222,7 +223,7 @@ pub use content::{
     WordUnderlineBegin,
     WordUnderlineEnd,
 };
-pub(crate) use content::{ContentStructure, GroupRef};
+pub use content::{ContentStructure, GroupRef, LeafContent, LeafRef, RetraceRef, WordRef};
 
 // Re-export annotation types
 pub use annotation::{

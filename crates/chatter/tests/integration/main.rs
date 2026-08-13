@@ -48,3 +48,4 @@ mod speaker_id_tests;
 mod stack_limit_tests;
 mod stateful_cli_integration;
 mod update_command_tests;
+mod utterance_initial_annotation_tests;

@@ -546,7 +546,7 @@ Missing required element
 
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
-| [E342](E342.md) | Missing required element | error | ⏳ |
+| [E342](E342.md) | Missing required element | error | ✅ |
 
 ## Main tier structure (E3x)
 
@@ -787,6 +787,22 @@ Failed to parse replacement annotation content. The [: replacement annotation co
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E376](E376.md) | Replacement parse error | error | ✅ |
+
+## retrace (E3x)
+
+A retracing marker whose only content is another retracing marker, so it has no material of its own to retrace. A marker retraces the words immediately to its left, and a marker is not words.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E377](E377.md) | A retracing marker with no material of its own | error | ✅ |
+
+## retrace (E3x)
+
+A retracing marker ([/], [//], [///], [/-]) applied to material that contains no words. A marker retraces the WORDS immediately to its left, and a laugh is not a word, so there is nothing for it to refer to.
+
+| Code | Name | Severity | Status |
+|------|------|----------|--------|
+| [E378](E378.md) | A retracing marker over material with no words | error | ✅ |
 
 ## Dependent tier parsing (E3x)
 
@@ -1747,14 +1763,6 @@ A word whose entire spoken material sits inside segment-repetition delimiters (�
 | Code | Name | Severity | Status |
 |------|------|----------|--------|
 | [E753](E753.md) | Word consisting only of repetition segments | error | ✅ |
-
-## Main tier words (E7x)
-
-The @l special form marks a single spoken LETTER (b@l, reading a letter aloud). Multi-character content has its own form, @k (letter sequence) or @ls (letter plural), so a stem of more than one character under @l is a mis-marked form: ab@l should be ab@k. Replicates CLAN CHECK error 76 ("There should be only one letter before @l.", check.cpp check_isOneLetter), per maintainer ruling 2026-07-14: replicate CHECK's one-character rule now; the deeper digraph question (Spanish ch, Dutch ij: one letter orthographically, two characters) is logged for the corpus authority and NOT decided here.
-
-| Code | Name | Severity | Status |
-|------|------|----------|--------|
-| [E754](E754.md) | Letter form @l with more than one letter | error | ✅ |
 
 ## header_validation (E7x)
 

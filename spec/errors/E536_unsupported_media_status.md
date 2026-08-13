@@ -11,8 +11,10 @@ An `@Media` header contains a status value that is not one of the recognized val
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E536
 
 ```chat
 @UTF8

@@ -18,10 +18,12 @@ This covers two sub-cases:
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 
 **Trigger**: A line that doesn't start with @, \*, or % (unsupported\_line)
+**Expected Error Codes**: E326
 
 ```chat
 @UTF8

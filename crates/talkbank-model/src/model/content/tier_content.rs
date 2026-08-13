@@ -581,6 +581,19 @@ impl Validate for TierContentItems {
             .any(|item| !matches!(item, UtteranceContent::Separator(_)));
 
         if !has_meaningful_content {
+            // Same exemption as the `is_empty()` branch above, for the same
+            // reason, and it was missing here. Recovery does not always leave
+            // the content list EMPTY: an utterance opening with an annotation
+            // (`*CHI:\t[: closed] .`) recovers to a single zero-width
+            // separator, so it fell into this branch instead and was told
+            // twice that it has no content, on a line that visibly has some.
+            //
+            // One fact, "recovery emptied this content list", was handled in
+            // one branch and not its sibling. Real CLAN CHECK reports exactly
+            // one thing for that input; chatter reported four.
+            if context.main_parse_tainted {
+                return;
+            }
             errors.report(
                 ParseError::new(
                     ErrorCode::EmptyUtterance,

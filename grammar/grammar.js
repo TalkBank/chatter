@@ -1345,15 +1345,20 @@ export default grammar({
     // Separate from word_segment so it's visible in the CST.
     lengthening: $ => token(prec(5, /:{1,}/)),
 
-    // Form marker: @letter codes with optional :suffix.
-    // Examples: @b, @c, @z:grm, @n:eng, @fp:is
-    // The full set from the CHAT manual plus @z (user-defined).
-    // Form marker: @b, @c, @z:grm, @n:eng, @fp:is, etc.
-    // Consumes ALL alphabetic chars after @ so invalid markers like @dima
-    // become a single token (validated by Rust parser, not silently split).
-    // Excludes bare @s which must go to word_lang_suffix.
-    // Valid: @u @b @c @d @f @fp @g @i @k @l @ls @n @o @p @q @sas @si @sl @t @wp @x @z
-    // Invalid but parsed: @dima @ap @junk (flagged by Rust as E203)
+    // Form marker: @code with an optional :label. Examples: @b, @c, @z:grm.
+    //
+    // This rule deliberately does NOT enumerate the valid codes: it consumes
+    // ALL alphabetic characters after @, so an invalid marker like @dima
+    // becomes one token that the Rust parser rejects as E203, rather than
+    // being silently split into a valid marker plus stray text. Bare @s is
+    // excluded because it belongs to word_lang_suffix.
+    //
+    // The valid set therefore lives nowhere in this file. It has one owner,
+    // spec/form_markers/form_marker_registry.json, from which the model enum
+    // and the re2c lexer are generated. A list here would be a copy that
+    // nothing checks, which is what it was: it was written before @a was
+    // retired and never mentioned @a at all, so the grammar and the model
+    // disagreed for two years with nothing able to see it.
     form_marker: $ => token.immediate(
       /@(?:s[a-zA-Z][-a-zA-Z]*|[a-rt-zA-RT-Z][-a-zA-Z]*)(?::[a-zA-Z0-9_]+)?/
     ),

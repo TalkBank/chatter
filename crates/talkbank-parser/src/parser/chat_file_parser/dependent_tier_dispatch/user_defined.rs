@@ -76,10 +76,10 @@ fn apply_x_tier(
     // Grammar: x_dependent_tier = x_tier_prefix, tier_sep, text_with_bullets, newline
     // x_tier_prefix is a single token matching /%x[a-zA-Z][a-zA-Z0-9]*/
     let children = extract_x_dependent_tier(XDependentTierNode(tier_node));
-    let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
     surface_unexpected(&children.unexpected, input, errors);
 
-    let full_prefix = match found_node(&children.child_0.slot) {
+    let full_prefix = match found_node(children.child_0.slot()) {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => text,
             Err(_) => {
@@ -119,7 +119,7 @@ fn apply_x_tier(
     // path and the validation path emit the identical E756 diagnostic. The
     // label carries the leading 'x' (a `%xtst` tier validates as "xtst"),
     // matching the label stored on a pushed `UserDefined` tier below.
-    let body_slot = match children.child_2.slot.as_ref() {
+    let body_slot = match children.child_2.slot().as_ref() {
         Some(slot) => slot,
         None => {
             let span =
@@ -271,11 +271,11 @@ fn apply_unsupported_tier(
     errors: &impl ErrorSink,
 ) -> bool {
     let children = extract_unsupported_dependent_tier(UnsupportedDependentTierNode(tier_node));
-    let separator = super::helpers::dependent_tier_separator(&children.child_1.slot);
+    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
     surface_unexpected(&children.unexpected, input, errors);
 
     // Extract the tier prefix (e.g. "%custom") from the unsupported_tier_prefix child.
-    let label_text = match found_node(&children.child_0.slot) {
+    let label_text = match found_node(children.child_0.slot()) {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => {
                 // Strip the leading '%'

@@ -56,8 +56,12 @@ pub struct ErrorMetadata {
     pub kind: ErrorKind,
 }
 
-/// Serde default for `ErrorMetadata::status` -- specs without an explicit
-/// `Status` field are assumed to be implemented.
+/// Serde default for `ErrorMetadata::status`.
+///
+/// Retained ONLY for the serde path (specs deserialized from structured data
+/// rather than parsed from markdown). The markdown loader, which is how every
+/// spec in this repository is read, now REQUIRES the bullet and reports the
+/// file that lacks it.
 fn default_status() -> String {
     "implemented".to_string()
 }
@@ -213,6 +217,14 @@ pub struct ErrorExample {
     /// Expected error codes
     #[serde(default)]
     pub expected_codes: Vec<String>,
+    /// The fixture path the example was taken from, as its `**Source**` line
+    /// gives it, when it has one.
+    ///
+    /// Its STEM is the transcript's name, which decides whether rules about
+    /// the file's own name run (E531). An example with no `**Source**` is
+    /// genuinely anonymous.
+    #[serde(default)]
+    pub source: Option<String>,
     /// Expected error message (or substring)
     pub expected_message: String,
     /// Optional labels for multi-span errors
@@ -227,6 +239,29 @@ pub struct ErrorLabel {
     pub span: String,
     /// Label text: "speaker used here", "@Participants declared here", etc.
     pub text: String,
+}
+
+/// Does a following sibling of this code block declare expected codes?
+///
+/// The loader reads `**Expected Error Codes**` from the siblings BEFORE a code
+/// fence. A spec that puts the line after the fence therefore declares nothing,
+/// while reading, to a human, as fully specified. This detects that so the
+/// loader can refuse it instead of silently accepting an example that cannot
+/// fail.
+fn raw_after_fence_declares_codes(node: &comrak::nodes::AstNode<'_>) -> bool {
+    let mut next = node.next_sibling();
+    while let Some(sibling) = next {
+        if let comrak::nodes::NodeValue::Heading(heading) = sibling.data.borrow().value
+            && heading.level <= 2
+        {
+            return false;
+        }
+        if extract_text_from_children(sibling).contains("Expected Error Codes:") {
+            return true;
+        }
+        next = sibling.next_sibling();
+    }
+    false
 }
 
 impl ErrorSpec {
@@ -293,11 +328,27 @@ impl ErrorSpec {
                         context = "utterance".to_string();
                     }
 
-                    // Try to find "Expected Error Codes" in preceding siblings
+                    // Try to find "Expected Error Codes" and "Source" in the
+                    // preceding siblings. `Source` names the fixture the example
+                    // came from, and its stem is what the transcript is CALLED:
+                    // the rules that compare a transcript against its own file
+                    // name (E531) need it, and the runner used to invent a stem
+                    // because this line was parsed by nobody.
                     let mut expected_codes = Vec::new();
+                    let mut source = None;
                     let mut prev = node.previous_sibling();
                     while let Some(sibling) = prev {
                         let text = extract_text_from_children(sibling);
+                        if let Some(pos) = text.find("Source:") {
+                            // The FIRST WHITESPACE-DELIMITED TOKEN, not the rest
+                            // of the line. Comrak collapses a paragraph's soft
+                            // line breaks, so `**Source**`, `**Trigger**` and
+                            // `**Expected Error Codes**` arrive as one line and
+                            // `lines().next()` swallowed all three. A source is
+                            // a path, which never contains a space.
+                            let rest = &text[pos + "Source:".len()..];
+                            source = rest.split_whitespace().next().map(str::to_string);
+                        }
                         if let Some(pos) = text.find("Expected Error Codes:") {
                             let rest = &text[pos + "Expected Error Codes:".len()..];
                             let codes_str = rest.lines().next().unwrap_or("");
@@ -317,10 +368,24 @@ impl ErrorSpec {
                         prev = sibling.previous_sibling();
                     }
 
+                    // A field placed AFTER the code fence is invisible: this
+                    // loop reads PRECEDING siblings only. E757 declared its
+                    // codes below the fence in two examples, so they were
+                    // silently ignored and the examples asserted nothing while
+                    // looking fully specified. Refuse that rather than drop it.
+                    if expected_codes.is_empty() && raw_after_fence_declares_codes(node) {
+                        return Err(format!(
+                            "an example declares `**Expected Error Codes**` AFTER its \
+                             ```chat fence, where the loader cannot see it, so the \
+                             example would assert nothing. Move the line above the fence."
+                        ));
+                    }
+
                     examples.push(ErrorExample {
                         input,
                         context,
                         expected_codes,
+                        source,
                         expected_message: String::new(),
                         expected_labels: Vec::new(),
                     });
@@ -373,10 +438,16 @@ impl ErrorSpec {
                     .cloned()
                     .unwrap_or_else(|| "parser".to_string()),
                 description: description.clone(),
-                status: metadata
-                    .get("Status")
-                    .cloned()
-                    .unwrap_or_else(|| "implemented".to_string()),
+                status: metadata.get("Status").cloned().ok_or_else(|| {
+                    format!(
+                        "{}: no `- **Status**:` bullet. Every spec must declare one \
+                         (implemented / not_implemented / deprecated / \
+                         unreachable_from_chat). This used to default to \
+                         `implemented`, so a spec that said nothing had an answer \
+                         invented for it, and 104 of 238 specs declared nothing.",
+                        path.display()
+                    )
+                })?,
                 kind,
             },
             errors: vec![error_def],
@@ -506,6 +577,19 @@ impl ErrorDefinition {
 }
 
 impl ErrorExample {
+    /// The transcript's name, taken from the `**Source**` line's stem.
+    ///
+    /// `None` when the example declares no source, which is the honest answer:
+    /// an example that names no file has no file name, and rules about the
+    /// file's name do not apply to it.
+    pub fn source_stem(&self) -> Option<&str> {
+        self.source
+            .as_deref()
+            .and_then(|source| source.rsplit('/').next())
+            .map(|file| file.strip_suffix(".cha").unwrap_or(file))
+            .filter(|stem| !stem.is_empty())
+    }
+
     /// Generate a sanitized name for this example.
     ///
     /// Uses NFKC normalization to convert uncommon codepoints, then

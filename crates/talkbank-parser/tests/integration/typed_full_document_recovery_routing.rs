@@ -106,7 +106,7 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
     // child_3: repeat(line). The recovery-aware engine absorbs the mid-repeat
     // ERROR as an element and keeps consuming the trailing valid line, so the
     // run is FIVE elements ending at the real end_header.
-    let line_elements = &children.child_3.slot;
+    let line_elements = &children.child_3.slot();
     assert_eq!(
         line_elements.len(),
         5,
@@ -118,16 +118,16 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
     // Elements 0..3 are Present(line).
     for (idx, elem) in line_elements.iter().take(3).enumerate() {
         assert!(
-            matches!(elem.slot, NodeSlot::Present(_)),
+            matches!(elem.slot(), NodeSlot::Present(_)),
             "line element {idx} must be Present, got {:?}",
-            elem.slot
+            elem.slot()
         );
     }
 
     // Element 3 is the @Date: ERROR, ABSORBED as a repeat element (NodeSlot::Error),
     // at the exact @Date: span (87..93). Before the fix this ERROR was stranded
     // into the following required slot / the unexpected sink.
-    match &line_elements[3].slot {
+    match &line_elements[3].slot() {
         NodeSlot::Error(node) => {
             assert_eq!(
                 (node.start_byte() as u32, node.end_byte() as u32),
@@ -141,7 +141,7 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
     }
 
     // Element 4 is the trailing blank line, still Present (not stranded).
-    match &line_elements[4].slot {
+    match &line_elements[4].slot() {
         NodeSlot::Present(line) => {
             assert_eq!(
                 (line.0.start_byte() as u32, line.0.end_byte() as u32),
@@ -154,7 +154,7 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
 
     // child_4: end_header. The real @End reaches its own slot as Present, NOT
     // eaten as an Error by the mislaid ERROR.
-    match &children.child_4.slot {
+    match &children.child_4.slot() {
         NodeSlot::Present(end_header) => {
             assert_eq!(
                 (

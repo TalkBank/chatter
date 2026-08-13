@@ -84,7 +84,8 @@ pub(crate) fn header_separator(header_node: Node) -> TierSeparator {
     if sep_node.kind() != HEADER_SEP {
         return TierSeparator::CLEAN;
     }
-    let trailing = extract_header_sep(HeaderSepNode(sep_node)).child_2.slot;
+    let sep_children = extract_header_sep(HeaderSepNode(sep_node));
+    let trailing = sep_children.child_2.slot();
     match trailing {
         Some(NodeSlot::Present(sep)) => {
             let raw = sep.raw_node();

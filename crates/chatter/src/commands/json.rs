@@ -15,6 +15,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use talkbank_model::model::TranscriptName;
 use talkbank_model::model::{ChatFile, WriteChat};
 use talkbank_transform::paths::is_chat_transcript_path;
 use tracing::{Level, debug, info, span, warn};
@@ -73,7 +74,12 @@ pub fn chat_to_json(
             debug!("Skipping JSON Schema validation (--skip-schema-validation)");
             talkbank_transform::chat_to_json_unvalidated(&content, options, pretty)
         } else {
-            talkbank_transform::chat_to_json(&content, options, pretty)
+            talkbank_transform::chat_to_json_named(
+                &content,
+                options,
+                pretty,
+                TranscriptName::for_path(input),
+            )
         };
         match result {
             Ok(json_str) => {
@@ -395,7 +401,12 @@ fn convert_one_file(
     let json = if skip_schema_validation {
         talkbank_transform::chat_to_json_unvalidated(&content, options, pretty)
     } else {
-        talkbank_transform::chat_to_json(&content, options, pretty)
+        talkbank_transform::chat_to_json_named(
+            &content,
+            options,
+            pretty,
+            TranscriptName::for_path(cha_path),
+        )
     };
 
     match json {

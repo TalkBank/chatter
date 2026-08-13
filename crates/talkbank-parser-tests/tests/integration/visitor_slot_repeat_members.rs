@@ -95,7 +95,7 @@ fn languages_contents_repeat_member_enumerates_every_code() {
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "languages_header" {
             let header = extract_languages_header(LanguagesHeaderNode(node));
-            let NodeSlot::Present(contents) = &header.child_2.slot else {
+            let NodeSlot::Present(contents) = header.child_2.slot() else {
                 panic!("@Languages header must have a Present languages_contents child");
             };
             let children = extract_languages_contents(*contents);
@@ -103,7 +103,8 @@ fn languages_contents_repeat_member_enumerates_every_code() {
             // The FIRST language code is the single `child_0` slot.
             let first = children
                 .child_0
-                .slot
+                .slot()
+                .clone()
                 .present_or_recover()
                 .ok()
                 .map(|n| node_text(n.0, &source));
@@ -120,10 +121,10 @@ fn languages_contents_repeat_member_enumerates_every_code() {
             // ITS OWN `child_3` (not `child_1`, per the field-index remap above).
             let codes: Vec<&str> = children
                 .child_1
-                .slot
+                .slot()
                 .iter()
-                .filter_map(|element| match &element.slot {
-                    NodeSlot::Present(group) => match &group.child_3.slot {
+                .filter_map(|element| match element.slot() {
+                    NodeSlot::Present(group) => match group.child_3.slot() {
                         NodeSlot::Present(code_node) => Some(node_text(code_node.0, &source)),
                         _ => None,
                     },
@@ -140,9 +141,9 @@ fn languages_contents_repeat_member_enumerates_every_code() {
             // `child_0` -- the NEW backend's `child_0` is the optional leading
             // whitespace) is Present too.
             assert!(
-                children.child_1.slot.iter().all(|element| matches!(
-                    &element.slot,
-                    NodeSlot::Present(group) if matches!(group.child_1.slot, NodeSlot::Present(_))
+                children.child_1.slot().iter().all(|element| matches!(
+                    element.slot(),
+                    NodeSlot::Present(group) if matches!(group.child_1.slot(), NodeSlot::Present(_))
                 )),
                 "each repeat element's comma delimiter must be Present"
             );

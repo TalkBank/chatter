@@ -14,6 +14,7 @@ use talkbank_model::WriteChat;
 
 use super::error::PipelineError;
 use super::parse::parse_and_validate;
+use talkbank_model::model::TranscriptName;
 
 /// Parse, validate, and serialize to JSON with schema validation.
 ///
@@ -54,8 +55,26 @@ pub fn chat_to_json(
     options: ParseValidateOptions,
     pretty: bool,
 ) -> Result<String, PipelineError> {
-    // Parse and validate
-    let chat_file = parse_and_validate(content, options)?;
+    chat_to_json_named(content, options, pretty, TranscriptName::Anonymous)
+}
+
+/// Convert CHAT to JSON for a transcript whose name is known.
+///
+/// The name decides whether the rules comparing the transcript against its own
+/// file name run, E531 above all. A caller that read the content from a path
+/// has a name and should pass it: `chat_to_json` took only content, so
+/// `chatter to-json` validated every transcript anonymously and silently
+/// skipped E531, which is what the FOLLOW-UP note in `pipeline/parse.rs` was
+/// about.
+pub fn chat_to_json_named(
+    content: &str,
+    options: ParseValidateOptions,
+    pretty: bool,
+    name: TranscriptName<'_>,
+) -> Result<String, PipelineError> {
+    let parser = talkbank_parser::TreeSitterParser::new()
+        .map_err(|e| PipelineError::ParserCreation(format!("{e}")))?;
+    let chat_file = super::parse::parse_and_validate_named(&parser, content, options, name)?;
 
     // Serialize to JSON with schema validation
     let json = if pretty {

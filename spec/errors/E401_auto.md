@@ -11,6 +11,7 @@ Duplicate dependent tiers
 - **Level**: tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

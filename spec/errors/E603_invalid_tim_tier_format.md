@@ -11,8 +11,10 @@ A `%tim` dependent tier contains content that does not match the expected time f
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Unmodeled
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E603
 
 ```chat
 @UTF8

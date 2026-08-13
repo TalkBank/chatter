@@ -1,5 +1,12 @@
+// Every match over the content enums in this file is exhaustive, so the lint
+// costs nothing today and makes it stay that way: a new `UtteranceContent` or
+// `BracketedItem` variant becomes a COMPILE ERROR here rather than a silent
+// `_ =>` that answers wrong. Four such catch-alls have already shipped as
+// defects; see `talkbank-parser-tests/src/content_catch_alls.rs`.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use crate::Utterance;
-use crate::model::{AlignmentUnit, AlignmentUnits, BracketedItem};
+use crate::model::{AlignmentUnit, AlignmentUnits};
 use crate::validation::ValidationContext;
 
 impl AlignmentUnits {
@@ -97,260 +104,30 @@ impl AlignmentUnits {
     }
 }
 
+/// One `AlignmentUnit` per alignable position, indexed in traversal order.
+///
+/// # This file used to count for itself
+///
+/// Lines 107-329 were a second implementation of the alignment counting rules:
+/// `count_main_item_units` / `count_bracketed_units` / `retraced_units`,
+/// arm-for-arm identical to `alignment::helpers::count`'s
+/// `count_alignable_item` / `count_bracketed_item` over all 26 content variants
+/// and all 26 bracketed variants. Two owners of one rule.
+///
+/// The cost is not hypothetical and this file recorded it: the two copies had
+/// already disagreed about `AnnotatedRetrace` across 8,766 utterances, and
+/// nothing failed to compile. That note is the argument for deleting the copy,
+/// not for keeping a comment about it.
+///
+/// What is built here carries no information the count does not: every unit is
+/// `{ index, span: None }` with `index` running `0..total`, and the only reader
+/// of any `main_*` field in the workspace asks it for `.len()`. So the units
+/// are the count, written longhand.
 fn build_main_units(
     content: &[crate::model::UtteranceContent],
     domain: crate::alignment::TierDomain,
 ) -> Vec<AlignmentUnit> {
-    let mut units = Vec::new();
-    let mut index = 0;
-    for item in content {
-        let count = count_main_item_units(item, domain, false);
-        if count > 0 {
-            for _ in 0..count {
-                units.push(AlignmentUnit { index, span: None });
-                index += 1;
-            }
-        }
-    }
-    units
-}
-
-fn count_main_item_units(
-    item: &crate::model::UtteranceContent,
-    domain: crate::alignment::TierDomain,
-    in_retrace: bool,
-) -> usize {
-    use crate::alignment::helpers::{annotations_have_alignment_ignore, is_tag_marker_separator};
-    use crate::alignment::helpers::{counts_for_tier_in_context, should_skip_group};
-    use crate::model::UtteranceContent;
-
-    match item {
-        UtteranceContent::Word(word) => {
-            usize::from(counts_for_tier_in_context(word, domain, in_retrace))
-        }
-        UtteranceContent::AnnotatedWord(annotated) => {
-            if domain == crate::alignment::TierDomain::Mor
-                && annotations_have_alignment_ignore(&annotated.scoped_annotations)
-            {
-                0
-            } else {
-                usize::from(counts_for_tier_in_context(
-                    &annotated.inner,
-                    domain,
-                    in_retrace,
-                ))
-            }
-        }
-        UtteranceContent::ReplacedWord(replaced) => match domain {
-            crate::alignment::TierDomain::Mor => {
-                if annotations_have_alignment_ignore(&replaced.scoped_annotations) {
-                    0
-                } else if !replaced.replacement.words.is_empty() {
-                    replaced
-                        .replacement
-                        .words
-                        .iter()
-                        .filter(|word| counts_for_tier_in_context(word, domain, in_retrace))
-                        .count()
-                } else {
-                    usize::from(counts_for_tier_in_context(
-                        &replaced.word,
-                        domain,
-                        in_retrace,
-                    ))
-                }
-            }
-            crate::alignment::TierDomain::Wor => usize::from(counts_for_tier_in_context(
-                &replaced.word,
-                domain,
-                in_retrace,
-            )),
-            crate::alignment::TierDomain::Pho | crate::alignment::TierDomain::Sin => usize::from(
-                crate::alignment::helpers::should_align_replaced_word_in_pho_sin(
-                    &replaced.word,
-                    !replaced.replacement.words.is_empty(),
-                ),
-            ),
-        },
-        UtteranceContent::Group(group) => {
-            count_bracketed_units(&group.content.content, domain, in_retrace)
-        }
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            if should_skip_group(&annotated.scoped_annotations, domain) {
-                0
-            } else {
-                count_bracketed_units(&annotated.inner.content.content, domain, in_retrace)
-            }
-        }
-        UtteranceContent::PhoGroup(pho) => match domain {
-            crate::alignment::TierDomain::Mor | crate::alignment::TierDomain::Wor => {
-                count_bracketed_units(&pho.content.content, domain, in_retrace)
-            }
-            crate::alignment::TierDomain::Pho => 1,
-            crate::alignment::TierDomain::Sin => 0,
-        },
-        UtteranceContent::SinGroup(sin) => match domain {
-            crate::alignment::TierDomain::Mor | crate::alignment::TierDomain::Wor => {
-                count_bracketed_units(&sin.content.content, domain, in_retrace)
-            }
-            crate::alignment::TierDomain::Sin => 1,
-            crate::alignment::TierDomain::Pho => 0,
-        },
-        UtteranceContent::Quotation(quotation) => {
-            count_bracketed_units(&quotation.content.content, domain, in_retrace)
-        }
-        UtteranceContent::Separator(sep) => {
-            usize::from(domain == crate::alignment::TierDomain::Mor && is_tag_marker_separator(sep))
-        }
-        UtteranceContent::Pause(_) => usize::from(domain == crate::alignment::TierDomain::Pho),
-        UtteranceContent::AnnotatedAction(_) => {
-            usize::from(domain == crate::alignment::TierDomain::Sin)
-        }
-        UtteranceContent::Retrace(retrace) => retraced_units(&retrace.content.content, domain),
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            retraced_units(&annotated.inner.content.content, domain)
-        }
-        // Listed rather than caught by `_`. The catch-all this replaces sent
-        // `AnnotatedRetrace` to zero when the variant was added, so this
-        // counter and `alignment::helpers::count` disagreed about the same
-        // 8,766 utterances and nothing failed to compile.
-        UtteranceContent::Event(_)
-        | UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Freecode(_)
-        | UtteranceContent::OverlapPoint(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => 0,
-    }
-}
-
-/// Units contributed by retraced material.
-///
-/// Retraced content is excluded from %mor (it was not morphologically
-/// analysed) but counted for %pho/%sin/%wor, because the words were
-/// phonologically produced. One owner, because the rule was written out at
-/// four call sites and each was a place it could drift.
-fn retraced_units(content: &[BracketedItem], domain: crate::alignment::TierDomain) -> usize {
-    if domain == crate::alignment::TierDomain::Mor {
-        0
-    } else {
-        count_bracketed_units(content, domain, true)
-    }
-}
-
-fn count_bracketed_units(
-    items: &[crate::model::BracketedItem],
-    domain: crate::alignment::TierDomain,
-    in_retrace: bool,
-) -> usize {
-    use crate::alignment::helpers::counts_for_tier_in_context;
-    use crate::alignment::helpers::{annotations_have_alignment_ignore, is_tag_marker_separator};
-    use crate::alignment::helpers::{should_align_replaced_word_in_pho_sin, should_skip_group};
-    use crate::model::BracketedItem;
-
-    items
-        .iter()
-        .map(|item| match item {
-            BracketedItem::Word(word) => {
-                usize::from(counts_for_tier_in_context(word, domain, in_retrace))
-            }
-            BracketedItem::AnnotatedWord(annotated) => {
-                if domain == crate::alignment::TierDomain::Mor
-                    && annotations_have_alignment_ignore(&annotated.scoped_annotations)
-                {
-                    0
-                } else {
-                    usize::from(counts_for_tier_in_context(
-                        &annotated.inner,
-                        domain,
-                        in_retrace,
-                    ))
-                }
-            }
-            BracketedItem::ReplacedWord(replaced) => match domain {
-                crate::alignment::TierDomain::Mor => {
-                    if annotations_have_alignment_ignore(&replaced.scoped_annotations) {
-                        0
-                    } else if !replaced.replacement.words.is_empty() {
-                        replaced
-                            .replacement
-                            .words
-                            .iter()
-                            .filter(|word| counts_for_tier_in_context(word, domain, in_retrace))
-                            .count()
-                    } else {
-                        usize::from(counts_for_tier_in_context(
-                            &replaced.word,
-                            domain,
-                            in_retrace,
-                        ))
-                    }
-                }
-                crate::alignment::TierDomain::Wor => usize::from(counts_for_tier_in_context(
-                    &replaced.word,
-                    domain,
-                    in_retrace,
-                )),
-                crate::alignment::TierDomain::Pho | crate::alignment::TierDomain::Sin => {
-                    usize::from(should_align_replaced_word_in_pho_sin(
-                        &replaced.word,
-                        !replaced.replacement.words.is_empty(),
-                    ))
-                }
-            },
-            BracketedItem::AnnotatedGroup(annotated) => {
-                if should_skip_group(&annotated.scoped_annotations, domain) {
-                    0
-                } else {
-                    count_bracketed_units(&annotated.inner.content.content, domain, in_retrace)
-                }
-            }
-            BracketedItem::PhoGroup(pho) => match domain {
-                crate::alignment::TierDomain::Mor | crate::alignment::TierDomain::Wor => {
-                    count_bracketed_units(&pho.content.content, domain, in_retrace)
-                }
-                crate::alignment::TierDomain::Pho => 1,
-                crate::alignment::TierDomain::Sin => 0,
-            },
-            BracketedItem::SinGroup(sin) => match domain {
-                crate::alignment::TierDomain::Mor | crate::alignment::TierDomain::Wor => {
-                    count_bracketed_units(&sin.content.content, domain, in_retrace)
-                }
-                crate::alignment::TierDomain::Sin => 1,
-                crate::alignment::TierDomain::Pho => 0,
-            },
-            BracketedItem::Quotation(quotation) => {
-                count_bracketed_units(&quotation.content.content, domain, in_retrace)
-            }
-            BracketedItem::Separator(sep) => usize::from(
-                domain == crate::alignment::TierDomain::Mor && is_tag_marker_separator(sep),
-            ),
-            BracketedItem::Pause(_) => 0,
-            BracketedItem::AnnotatedAction(_) | BracketedItem::Action(_) => 0,
-            BracketedItem::Retrace(retrace) => retraced_units(&retrace.content.content, domain),
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                retraced_units(&annotated.inner.content.content, domain)
-            }
-            // Exhaustive for the same reason as above.
-            BracketedItem::Event(_)
-            | BracketedItem::AnnotatedEvent(_)
-            | BracketedItem::OverlapPoint(_)
-            | BracketedItem::InternalBullet(_)
-            | BracketedItem::Freecode(_)
-            | BracketedItem::LongFeatureBegin(_)
-            | BracketedItem::LongFeatureEnd(_)
-            | BracketedItem::UnderlineBegin(_)
-            | BracketedItem::UnderlineEnd(_)
-            | BracketedItem::NonvocalBegin(_)
-            | BracketedItem::NonvocalEnd(_)
-            | BracketedItem::NonvocalSimple(_)
-            | BracketedItem::OtherSpokenEvent(_) => 0,
-        })
-        .sum()
+    (0..crate::alignment::helpers::count_tier_positions(content, domain))
+        .map(|index| AlignmentUnit { index, span: None })
+        .collect()
 }

@@ -11,8 +11,10 @@ An `@Number` header contains a value that is not one of the recognized number op
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E537
 
 ```chat
 @UTF8

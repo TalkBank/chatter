@@ -10,8 +10,10 @@ The marker 'xx' is used for untranscribed speech, but this is not allowed in CHA
 - **Level**: word
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E241
 
 ```chat
 @UTF8

@@ -67,6 +67,7 @@ use crate::node_types::ID_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::parser_helpers::present;
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
@@ -97,14 +98,14 @@ fn decode_field_text(node: Node, source: &str, errors: &impl ErrorSink) -> Parse
 /// the sanctioned 2g-style improvement: it cannot reach a VALID input (a
 /// well-formed `id_header` always yields `Present` required fields).
 fn required_field<'tree, T: AsRawNode<'tree>>(
-    slot: NodeSlot<'tree, T>,
+    slot: &NodeSlot<'tree, T>,
     id_contents: Node,
     source: &str,
     errors: &impl ErrorSink,
     error_code: ErrorCode,
     error_message: &str,
 ) -> ParseOutcome<String> {
-    let Some(node) = slot.present_or_recover().ok() else {
+    let Some(node) = present(slot) else {
         errors.report(ParseError::new(
             error_code,
             Severity::Error,
@@ -137,11 +138,11 @@ fn required_field<'tree, T: AsRawNode<'tree>>(
 /// optional NEVER errors, exactly as before. Matched EXHAUSTIVELY, with no `_`
 /// catch-all that could silently drop a recovery node.
 fn optional_field<'tree, T: AsRawNode<'tree>>(
-    slot: Option<NodeSlot<'tree, T>>,
+    slot: &Option<NodeSlot<'tree, T>>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<String>> {
-    match slot.and_then(|s| s.present_or_recover().ok()) {
+    match slot.as_ref().and_then(present) {
         Some(node) => decode_field_text(node.raw_node(), source, errors).map(Some),
         None => ParseOutcome::parsed(None),
     }
@@ -167,7 +168,13 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
     // keeps only a Present id_contents; every non-Present recovery state funnels
     // to the pre-migration `find_child_by_kind(node, ID_CONTENTS) == None` branch.
     let header_children = extract_id_header(IdHeaderNode(node));
-    let Some(contents) = header_children.child_2.slot.present_or_recover().ok() else {
+    let Some(contents) = header_children
+        .child_2
+        .slot()
+        .clone()
+        .present_or_recover()
+        .ok()
+    else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
@@ -188,7 +195,7 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
     let contents = extract_id_contents(IdContentsNode(id_contents));
 
     let language = required_field(
-        contents.child_0.slot,
+        contents.child_0.slot(),
         id_contents,
         source,
         errors,
@@ -200,10 +207,10 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
     // the model is still built when the corpus is blank; an absent/empty corpus
     // leaves the constructor's empty `CorpusName`, which the Validate trait flags
     // as E514. (Reproduces the pre-migration `parse_optional_text_field` choice.)
-    let corpus = optional_field(contents.child_3.slot, source, errors);
+    let corpus = optional_field(contents.child_3.slot(), source, errors);
 
     let speaker = required_field(
-        contents.child_6.slot,
+        contents.child_6.slot(),
         id_contents,
         source,
         errors,
@@ -211,25 +218,25 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
         "Missing id_speaker field in @ID header",
     );
 
-    let age = optional_field(contents.child_9.slot, source, errors);
+    let age = optional_field(contents.child_9.slot(), source, errors);
 
     // Sex is classified to `Sex` HERE (unlike `ses` below, whose raw text defers
     // to the model constructor): the optional `id_sex` node's text -- known
     // (`male`/`female`) or generic alike -- is mapped through `Sex::from_text`
     // (`Unsupported` for unknown values, flagged as E542 by the validator).
-    let sex = match optional_field(contents.child_13.slot, source, errors) {
+    let sex = match optional_field(contents.child_13.slot(), source, errors) {
         ParseOutcome::Parsed(opt) => ParseOutcome::parsed(opt.map(|text| Sex::from_text(&text))),
         ParseOutcome::Rejected => ParseOutcome::rejected(),
     };
 
-    let group = optional_field(contents.child_17.slot, source, errors);
+    let group = optional_field(contents.child_17.slot(), source, errors);
 
     // Ses stays TEXT-based: the raw text is carried through and classified by
     // `SesValue::from_text` at model-construction time below (E546 for unknown).
-    let ses = optional_field(contents.child_21.slot, source, errors);
+    let ses = optional_field(contents.child_21.slot(), source, errors);
 
     let role = required_field(
-        contents.child_24.slot,
+        contents.child_24.slot(),
         id_contents,
         source,
         errors,
@@ -237,9 +244,9 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
         "Empty role field in @ID header: the role (8th field) must not be blank",
     );
 
-    let education = optional_field(contents.child_27.slot, source, errors);
+    let education = optional_field(contents.child_27.slot(), source, errors);
 
-    let custom_field = optional_field(contents.child_31.slot, source, errors);
+    let custom_field = optional_field(contents.child_31.slot(), source, errors);
 
     surface_unexpected(&header_children.unexpected, source, errors);
     surface_unexpected(&contents.unexpected, source, errors);

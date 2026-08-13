@@ -70,7 +70,7 @@ pub fn parse_utterance_node(
     // `Present`, a bare `Node` for `Missing` under the NEW closed `NodeSlot`),
     // matching the pre-migration `kind() == MAIN_TIER` branch, which did not
     // distinguish a MISSING placeholder.
-    match children.child_0.slot {
+    match children.child_0.slot() {
         NodeSlot::Present(main_tier) => {
             build_main_tier_from_node(
                 main_tier.raw_node(),
@@ -82,7 +82,7 @@ pub fn parse_utterance_node(
         }
         NodeSlot::Missing(main_tier_node) => {
             build_main_tier_from_node(
-                main_tier_node,
+                *main_tier_node,
                 input,
                 errors,
                 &mut utterance_builder,
@@ -92,10 +92,10 @@ pub fn parse_utterance_node(
         NodeSlot::Error(error_node) => {
             // An ERROR at the main-tier position routes to the same recovery
             // analysis the old hand-walk ran for any ERROR utterance child.
-            handle_utterance_error_node(error_node, input, errors, &mut parse_health);
+            handle_utterance_error_node(*error_node, input, errors, &mut parse_health);
         }
         NodeSlot::Unexpected(node) => {
-            report_unexpected_utterance_child(node, input, errors, &mut parse_health);
+            report_unexpected_utterance_child(*node, input, errors, &mut parse_health);
         }
         NodeSlot::Absent => {
             // No main-tier child at all: nothing to build. The utterance is
@@ -111,11 +111,11 @@ pub fn parse_utterance_node(
     // non-matching child stops the repeat and is swept into the carrier's own
     // `unexpected` sink instead of becoming a Vec element) but are handled
     // explicitly so the match stays exhaustive without a silent `_`-drop.
-    for element in children.child_1.slot {
-        match element.slot {
+    for element in children.child_1.slot() {
+        match element.slot() {
             NodeSlot::Present(tier_choice) => {
                 attach_dependent_tier_child(
-                    tier_choice,
+                    tier_choice.clone(),
                     input,
                     errors,
                     &mut utterance_builder,
@@ -133,10 +133,10 @@ pub fn parse_utterance_node(
                 parse_health.taint_all_alignment_dependents();
             }
             NodeSlot::Error(error_node) => {
-                handle_utterance_error_node(error_node, input, errors, &mut parse_health);
+                handle_utterance_error_node(*error_node, input, errors, &mut parse_health);
             }
             NodeSlot::Unexpected(node) => {
-                report_unexpected_utterance_child(node, input, errors, &mut parse_health);
+                report_unexpected_utterance_child(*node, input, errors, &mut parse_health);
             }
             NodeSlot::Absent => {}
         }
@@ -145,7 +145,10 @@ pub fn parse_utterance_node(
     // Surface the carrier's own `unexpected` sink (nodes that filled no grammar
     // position at all: neither `main_tier` nor a `dependent_tier` repeat
     // element) through the shared backstop-equivalent mapping, per the R2
-    // migration template. Empty on every fixture probed so far; load-bearing
+    // migration template. Believed empty on current fixtures, which is a
+    // statement about the fixtures rather than about the grammar: the identical
+    // claim over `tier_body`'s sink turned out to be false the moment a
+    // generator fix changed where recovery nodes land. Load-bearing
     // once the whole-tree backstop is deleted (Task D).
     surface_unexpected(&children.unexpected, input, errors);
 

@@ -29,7 +29,7 @@ pub fn parse_int_tier(node: Node, source: &str, errors: &impl ErrorSink) -> IntT
     let children = extract_int_dependent_tier(IntDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

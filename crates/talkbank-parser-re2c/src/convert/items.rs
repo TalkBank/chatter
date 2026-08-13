@@ -57,6 +57,12 @@ pub(crate) fn body_item_to_word_content(item: &WordBodyItem<'_>) -> WordContent 
             };
             WordContent::CAElement(CAElement::new(t))
         }
+        WordBodyItem::UnderlineBegin => {
+            WordContent::UnderlineBegin(talkbank_model::model::UnderlineMarker::new())
+        }
+        WordBodyItem::UnderlineEnd => {
+            WordContent::UnderlineEnd(talkbank_model::model::UnderlineMarker::new())
+        }
         WordBodyItem::CaDelimiter(kind) => {
             let t = match kind {
                 CaDelimiterKind::Unsure => CADelimiterType::Unsure,
@@ -142,10 +148,15 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
     // orthography: fold the lexed pieces into one opaque phonetic node,
     // mirroring the tree-sitter parser (option B of the 2026-07-13 UNIBET
     // design; scope is @u ONLY per the 2026-07-14 adjudication).
-    let is_u_form = w
+    // Read the marker ONCE. This used to be parsed here for the `@u` test and
+    // again below for the assignment, discarding the first result, so every
+    // form-marked word paid for two splits and two case folds, and every
+    // `@z:label` word built a `FormType::UserDefined` purely to drop it.
+    let declared = w
         .form_marker
-        .and_then(FormType::parse)
-        .is_some_and(|ft| matches!(ft, FormType::U));
+        .map(|marker| FormType::from_payload(FormMarkerPayload::after_at(marker)));
+
+    let is_u_form = matches!(declared, Some(Ok(FormType::U)));
     let content_items = if is_u_form {
         fold_phonetic(content_items)
     } else {
@@ -166,18 +177,19 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
         });
     }
 
-    // Form marker, tag-extracted content, direct to model
-    if let Some(marker) = w.form_marker {
-        if let Some(ft) = FormType::parse(marker) {
-            word = word.with_form_type(ft);
-        } else if let Some(label) = marker.strip_prefix("z:") {
-            // User-defined form REQUIRES the colon and a label: `@z:label`.
-            // `@z` without a colon (e.g. `@zzz`) is left WITHOUT a form_type so the
-            // shared model validation (talkbank-model validation/word/structure.rs)
-            // rejects it with E203, matching CLAN CHECK 147 and the tree-sitter
-            // parser. Setting a form_type here would mask it from that validation.
-            word = word.with_form_type(FormType::UserDefined(label.to_string()));
-        }
+    // Form marker, tag-extracted content, direct to model.
+    //
+    // The lexer hands over the payload WITHOUT the `@`, while the tree-sitter
+    // parser hands over its token WITH one. That is why the payload is a named
+    // type: both sides used to pass a bare `&str` into one function that
+    // accepted either shape, and each then re-derived the `@z:label` rule
+    // itself, one testing for `"@z:"` and the other for `"z:"`.
+    // Deliberately silent on the error path. An undeclared marker (`@zzz`, or
+    // `@z` with no label) is left WITHOUT a form_type so the shared model
+    // validation raises E203, matching CLAN CHECK 147 and the tree-sitter
+    // parser. Setting one would mask it from that check.
+    if let Some(Ok(declared)) = declared {
+        word = word.with_form_type(declared);
     }
 
     // Language suffix, typed enum, no string hacking. Each split piece is
@@ -251,23 +263,13 @@ pub(crate) fn linker_token_to_model(tok: &Token<'_>) -> Option<Linker> {
 pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
     match item {
         ast::ContentItem::Word(w) => word_with_annotations_to_model(w),
-        ast::ContentItem::Pause(tok) => {
-            let duration = match tok {
-                Token::PauseShort(_) => PauseDuration::Short,
-                Token::PauseMedium(_) => PauseDuration::Medium,
-                Token::PauseLong(_) => PauseDuration::Long,
-                Token::PauseTimed(s) => PauseDuration::Timed(PauseTimedDuration::new(*s)),
-                _ => PauseDuration::Short,
-            };
-            UtteranceContent::Pause(Pause::new(duration))
-        }
-        ast::ContentItem::Event(toks) => {
-            // The lexer emits a single Event token with the description text.
-            let event_text = toks.first().map(|t| t.text()).unwrap_or("");
+        ast::ContentItem::Pause(kind) => UtteranceContent::Pause(Pause::new(pause_duration(kind))),
+        ast::ContentItem::Event(event_text) => {
+            let event_text = *event_text;
             UtteranceContent::Event(Event::new(event_text))
         }
         ast::ContentItem::AnnotatedEvent { event, annotations } => {
-            let event_text = event.text();
+            let event_text = *event;
             let event_model = Event::new(event_text);
             let scoped = annotations_to_scoped(annotations);
             if scoped.is_empty() {
@@ -278,17 +280,18 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
                 )
             }
         }
-        ast::ContentItem::Separator(tok) => {
-            UtteranceContent::Separator(separator_token_to_model(tok))
+        ast::ContentItem::Separator(kind) => {
+            UtteranceContent::Separator(separator_from_kind(*kind))
         }
-        ast::ContentItem::Annotation(tok) => {
-            match tok {
-                Token::Freecode(s) => {
-                    // Token carries tag-extracted content directly
-                    UtteranceContent::Freecode(Freecode::new(*s))
-                }
-                _ => UtteranceContent::Freecode(Freecode::new(tok.text())),
-            }
+        ast::ContentItem::Freecode(text) => UtteranceContent::Freecode(Freecode::new(*text)),
+        // An annotation with nothing to scope over is invalid CHAT, reported as
+        // E759. It is preserved as a freecode carrying the marker text rather
+        // than dropped, which is what this converter already did; the change is
+        // that it is now a NAMED case instead of a `_ =>` that also swallowed
+        // real freecodes. The bracketed converter used to drop the same shape,
+        // so the two levels disagreed; they now agree.
+        ast::ContentItem::OrphanAnnotation(annotation) => {
+            UtteranceContent::Freecode(Freecode::new(annotation.chat_text()))
         }
         ast::ContentItem::Retrace(r) => {
             let kind = match r.kind {
@@ -297,11 +300,8 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
                 crate::ast::RetraceKindParsed::Multiple => RetraceKind::Multiple,
                 crate::ast::RetraceKindParsed::Reformulation => RetraceKind::Reformulation,
             };
-            let content: Vec<BracketedItem> = r
-                .content
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let content: Vec<BracketedItem> =
+                r.content.iter().map(content_item_to_bracketed).collect();
             let mut retrace = Retrace::new(BracketedContent::new(content), kind);
             if r.is_group {
                 retrace = retrace.as_group();
@@ -321,11 +321,8 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
             }
         }
         ast::ContentItem::Group(g) => {
-            let content: Vec<BracketedItem> = g
-                .contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let content: Vec<BracketedItem> =
+                g.contents.iter().map(content_item_to_bracketed).collect();
             let group = Group::new(BracketedContent::new(content));
             let scoped = annotations_to_scoped(&g.annotations);
             if scoped.is_empty() {
@@ -336,95 +333,52 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
             }
         }
         ast::ContentItem::Quotation(q) => {
-            let content: Vec<BracketedItem> = q
-                .contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let content: Vec<BracketedItem> =
+                q.contents.iter().map(content_item_to_bracketed).collect();
             UtteranceContent::Quotation(Quotation::new(BracketedContent::new(content)))
         }
-        ast::ContentItem::OverlapPoint(tok) => {
-            let raw = tok.text();
-            let kind = match tok {
-                Token::OverlapTopBegin(_) => OverlapPointKind::TopOverlapBegin,
-                Token::OverlapTopEnd(_) => OverlapPointKind::TopOverlapEnd,
-                Token::OverlapBottomBegin(_) => OverlapPointKind::BottomOverlapBegin,
-                Token::OverlapBottomEnd(_) => OverlapPointKind::BottomOverlapEnd,
-                _ => unreachable!(),
-            };
-            let index = raw
-                .chars()
-                .nth(1)
-                .and_then(|c| c.to_digit(10))
-                .map(OverlapIndex::new);
-            UtteranceContent::OverlapPoint(OverlapPoint::new(kind, index))
+        ast::ContentItem::OverlapPoint { kind, index } => {
+            UtteranceContent::OverlapPoint(overlap_point(*kind, *index))
         }
-        ast::ContentItem::MediaBullet(tok) => match tok {
-            Token::MediaBullet {
-                start_time,
-                end_time,
-                ..
-            } => {
-                let start_ms: u64 = start_time.parse().unwrap_or(0);
-                let end_ms: u64 = end_time.parse().unwrap_or(0);
-                UtteranceContent::InternalBullet(Bullet::new(start_ms, end_ms))
-            }
-            _ => unreachable!(),
-        },
-        ast::ContentItem::UnderlineBegin(_) => {
+        ast::ContentItem::MediaBullet { start, end } => {
+            UtteranceContent::InternalBullet(bullet_from_times(start, end))
+        }
+        ast::ContentItem::UnderlineBegin => {
             UtteranceContent::UnderlineBegin(UnderlineMarker::new())
         }
-        ast::ContentItem::UnderlineEnd(_) => UtteranceContent::UnderlineEnd(UnderlineMarker::new()),
-        ast::ContentItem::CaMarker(tok) => {
-            let raw = tok.text();
-            // CA markers at content level are wrapped as Word in the model
-            UtteranceContent::Word(Box::new(Word::new_unchecked(raw, raw).with_content(
-                WordContents::new(smallvec::smallvec![WordContent::Text(
-                    WordText::new_unchecked(raw)
-                )]),
-            )))
+        ast::ContentItem::UnderlineEnd => UtteranceContent::UnderlineEnd(UnderlineMarker::new()),
+        ast::ContentItem::LongFeatureBegin(label) => {
+            // The label alone ("X", not "&{l=X"); the lexer tag-extracts it.
+            UtteranceContent::LongFeatureBegin(LongFeatureBegin::new(LongFeatureLabel::new(*label)))
         }
-        ast::ContentItem::LongFeatureBegin(tok) => {
-            // Token carries tag-extracted label directly (e.g., "X" not "&{l=X")
-            UtteranceContent::LongFeatureBegin(LongFeatureBegin::new(LongFeatureLabel::new(
-                tok.text(),
-            )))
+        ast::ContentItem::LongFeatureEnd(label) => {
+            UtteranceContent::LongFeatureEnd(LongFeatureEnd::new(LongFeatureLabel::new(*label)))
         }
-        ast::ContentItem::LongFeatureEnd(tok) => {
-            UtteranceContent::LongFeatureEnd(LongFeatureEnd::new(LongFeatureLabel::new(tok.text())))
+        ast::ContentItem::NonvocalBegin(label) => {
+            UtteranceContent::NonvocalBegin(NonvocalBegin::new(NonvocalLabel::new(*label)))
         }
-        ast::ContentItem::NonvocalBegin(tok) => {
-            UtteranceContent::NonvocalBegin(NonvocalBegin::new(NonvocalLabel::new(tok.text())))
+        ast::ContentItem::NonvocalEnd(label) => {
+            UtteranceContent::NonvocalEnd(NonvocalEnd::new(NonvocalLabel::new(*label)))
         }
-        ast::ContentItem::NonvocalEnd(tok) => {
-            UtteranceContent::NonvocalEnd(NonvocalEnd::new(NonvocalLabel::new(tok.text())))
+        ast::ContentItem::NonvocalSimple(label) => {
+            UtteranceContent::NonvocalSimple(NonvocalSimple::new(NonvocalLabel::new(*label)))
         }
-        ast::ContentItem::NonvocalSimple(tok) => {
-            UtteranceContent::NonvocalSimple(NonvocalSimple::new(NonvocalLabel::new(tok.text())))
+        ast::ContentItem::OtherSpokenEvent { speaker, text } => {
+            UtteranceContent::OtherSpokenEvent(OtherSpokenEvent::new(*speaker, *text))
         }
-        ast::ContentItem::OtherSpokenEvent(tok) => match tok {
-            Token::OtherSpokenEvent { speaker, text } => {
-                UtteranceContent::OtherSpokenEvent(OtherSpokenEvent::new(*speaker, *text))
-            }
-            _ => unreachable!("OtherSpokenEvent content item must carry OtherSpokenEvent token"),
-        },
         ast::ContentItem::Action { annotations, .. } => {
             let scoped = annotations_to_scoped(annotations);
             let annotated = Annotated::new(Action::new()).with_scoped_annotations(scoped);
             UtteranceContent::AnnotatedAction(annotated)
         }
         ast::ContentItem::PhoGroup(contents) => {
-            let items: Vec<BracketedItem> = contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let items: Vec<BracketedItem> =
+                contents.iter().map(content_item_to_bracketed).collect();
             UtteranceContent::PhoGroup(PhoGroup::new(BracketedContent::new(items)))
         }
         ast::ContentItem::SinGroup(contents) => {
-            let items: Vec<BracketedItem> = contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let items: Vec<BracketedItem> =
+                contents.iter().map(content_item_to_bracketed).collect();
             UtteranceContent::SinGroup(SinGroup::new(BracketedContent::new(items)))
         }
     }
@@ -500,31 +454,105 @@ pub(crate) fn parse_word_to_model(text: &str) -> Word {
 }
 
 /// Convert a separator token to model Separator.
-pub(crate) fn separator_token_to_model(tok: &Token<'_>) -> Separator {
+pub(crate) fn separator_from_kind(kind: ast::SeparatorKindParsed) -> Separator {
     let s = Span::DUMMY;
-    match tok {
-        Token::Comma(_) => Separator::Comma { span: s },
-        Token::Semicolon(_) => Separator::Semicolon { span: s },
-        Token::Colon(_) => Separator::Colon { span: s },
-        Token::CaContinuationMarker(_) => Separator::CaContinuation { span: s },
-        Token::TagMarker(_) => Separator::Tag { span: s },
-        Token::VocativeMarker(_) => Separator::Vocative { span: s },
-        Token::UnmarkedEnding(_) => Separator::UnmarkedEnding { span: s },
-        Token::UptakeSymbol(_) => Separator::Uptake { span: s },
-        Token::CaNoBreak(_) => Separator::CaNoBreak { span: s },
-        Token::CaTechnicalBreak(_) => Separator::CaTechnicalBreak { span: s },
-        Token::RisingToHigh(_) => Separator::RisingToHigh { span: s },
-        Token::RisingToMid(_) => Separator::RisingToMid { span: s },
-        Token::LevelPitch(_) => Separator::Level { span: s },
-        Token::FallingToMid(_) => Separator::FallingToMid { span: s },
-        Token::FallingToLow(_) => Separator::FallingToLow { span: s },
-        Token::Lengthening(_) => Separator::Colon { span: s },
-        _ => Separator::Comma { span: s },
+    match kind {
+        ast::SeparatorKindParsed::Comma => Separator::Comma { span: s },
+        ast::SeparatorKindParsed::Semicolon => Separator::Semicolon { span: s },
+        ast::SeparatorKindParsed::Colon => Separator::Colon { span: s },
+        ast::SeparatorKindParsed::CaContinuation => Separator::CaContinuation { span: s },
+        ast::SeparatorKindParsed::Tag => Separator::Tag { span: s },
+        ast::SeparatorKindParsed::Vocative => Separator::Vocative { span: s },
+        ast::SeparatorKindParsed::UnmarkedEnding => Separator::UnmarkedEnding { span: s },
+        ast::SeparatorKindParsed::Uptake => Separator::Uptake { span: s },
+        ast::SeparatorKindParsed::CaNoBreak => Separator::CaNoBreak { span: s },
+        ast::SeparatorKindParsed::CaTechnicalBreak => Separator::CaTechnicalBreak { span: s },
+        ast::SeparatorKindParsed::RisingToHigh => Separator::RisingToHigh { span: s },
+        ast::SeparatorKindParsed::RisingToMid => Separator::RisingToMid { span: s },
+        ast::SeparatorKindParsed::Level => Separator::Level { span: s },
+        ast::SeparatorKindParsed::FallingToMid => Separator::FallingToMid { span: s },
+        ast::SeparatorKindParsed::FallingToLow => Separator::FallingToLow { span: s },
     }
 }
 
+/// The one place a parsed pause kind becomes a model duration.
+///
+/// Exhaustive, because the AST now carries the kind rather than a raw token.
+/// It replaces two copies of a match that ended in `_ => PauseDuration::Short`,
+/// which silently turned anything unexpected into `(.)`.
+fn pause_duration(kind: &ast::PauseKindParsed<'_>) -> PauseDuration {
+    match kind {
+        ast::PauseKindParsed::Short => PauseDuration::Short,
+        ast::PauseKindParsed::Medium => PauseDuration::Medium,
+        ast::PauseKindParsed::Long => PauseDuration::Long,
+        ast::PauseKindParsed::Timed(s) => PauseDuration::Timed(PauseTimedDuration::new(*s)),
+    }
+}
+
+// ── Leaf mappings shared by BOTH content levels ─────────────────
+//
+// `content_item_to_model` (tier level) and `content_item_to_bracketed` are two
+// matches over the same `ast::ContentItem`, and these three constructs carry
+// real logic rather than a bare variant rename. Writing that logic twice is the
+// same defect shape as the one the bracketed converter was just fixed for: two
+// copies of one rule, with nothing binding them. The "second character is the
+// digit" overlap-index rule in particular had been written three times in this
+// file.
+
+/// A parsed overlap kind and index as the model's `OverlapPoint`.
+///
+/// The kind arrives resolved from the parser, so there is no token to
+/// re-inspect and no impossible case to invent an answer for.
+fn overlap_point(kind: ast::OverlapKind, index: Option<u32>) -> OverlapPoint {
+    let model_kind = match kind {
+        ast::OverlapKind::TopBegin => OverlapPointKind::TopOverlapBegin,
+        ast::OverlapKind::TopEnd => OverlapPointKind::TopOverlapEnd,
+        ast::OverlapKind::BottomBegin => OverlapPointKind::BottomOverlapBegin,
+        ast::OverlapKind::BottomEnd => OverlapPointKind::BottomOverlapEnd,
+    };
+    OverlapPoint::new(model_kind, index.map(OverlapIndex::new))
+}
+
+/// The two timestamp texts of a media bullet, as a model `Bullet`.
+///
+/// `unwrap_or(0)` is retained deliberately and is NOT a silent default: the
+/// lexer's bullet rule matches digits only, so the parse can fail only on
+/// overflow of a number wider than `u64`, and 0 is the least surprising answer
+/// for a timestamp that cannot be represented. Unlike the pause default it
+/// replaced, this cannot be reached by any well-formed shape.
+pub(crate) fn bullet_from_times(start: &str, end: &str) -> Bullet {
+    let (start_ms, end_ms) = bullet_times(start, end);
+    Bullet::new(start_ms, end_ms)
+}
+
+/// The same parse for callers that need the raw pair rather than a `Bullet`.
+///
+/// Four sites had written this expression by hand, and only the one with a
+/// `Bullet` to build could share the wrapper above, so the justification for
+/// `unwrap_or(0)` documented one copy in four.
+pub(crate) fn bullet_times(start: &str, end: &str) -> (u64, u64) {
+    (start.parse().unwrap_or(0), end.parse().unwrap_or(0))
+}
+
 /// Convert a content item to a BracketedItem (for inside groups/quotations/retraces).
-pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Option<BracketedItem> {
+///
+/// Exhaustive over `ast::ContentItem`, and denied from regaining a catch-all.
+/// It HAD one, and it silently deleted ten variants from anything written
+/// inside `<...>`, a retrace, a quotation or a pho/sin group: both underline
+/// markers, all five scoped markers, CA markers, overlap points and media
+/// bullets. The model represents every one of them in `BracketedItem`, so this
+/// was pure loss, and it made the two parser backends disagree about whether a
+/// valid transcript was valid.
+///
+/// The guarantee is rustc's own exhaustiveness check, not a lint: with the
+/// catch-all gone, a new `ast::ContentItem` variant is an E0004 compile error
+/// here, which fires under `cargo test` rather than only in CI's clippy pass.
+/// `#[deny(clippy::wildcard_enum_match_arm)]` is deliberately NOT applied: it
+/// covers nested matches too, and several arms below legitimately match on
+/// `Token` (~180 variants), where enumeration buys nothing. Design rule 3 is
+/// about the CONTENT enums, and the textual catch-all ratchet in
+/// `talkbank-parser-tests` is what holds that line for this file.
+pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> BracketedItem {
     match item {
         ast::ContentItem::Word(w) => {
             let word = word_from_parsed(w);
@@ -551,77 +579,56 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Option<B
                     .filter_map(|(_, a)| parsed_annotation_to_scoped(a))
                     .collect();
                 let replaced = ReplacedWord::new(word, replacement).with_scoped_annotations(scoped);
-                Some(BracketedItem::ReplacedWord(Box::new(replaced)))
+                BracketedItem::ReplacedWord(Box::new(replaced))
             } else {
                 let scoped = annotations_to_scoped(&w.annotations);
                 if scoped.is_empty() {
-                    Some(BracketedItem::Word(Box::new(word)))
+                    BracketedItem::Word(Box::new(word))
                 } else {
                     let annotated = Annotated::new(word).with_scoped_annotations(scoped);
-                    Some(BracketedItem::AnnotatedWord(Box::new(annotated)))
+                    BracketedItem::AnnotatedWord(Box::new(annotated))
                 }
             }
         }
-        ast::ContentItem::Pause(tok) => {
-            let duration = match tok {
-                Token::PauseShort(_) => PauseDuration::Short,
-                Token::PauseMedium(_) => PauseDuration::Medium,
-                Token::PauseLong(_) => PauseDuration::Long,
-                Token::PauseTimed(s) => PauseDuration::Timed(PauseTimedDuration::new(*s)),
-                _ => PauseDuration::Short,
-            };
-            Some(BracketedItem::Pause(Pause::new(duration)))
-        }
-        ast::ContentItem::Event(toks) => {
-            let event_text = toks.first().map(|t| t.text()).unwrap_or("");
-            Some(BracketedItem::Event(Event::new(event_text)))
+        ast::ContentItem::Pause(kind) => BracketedItem::Pause(Pause::new(pause_duration(kind))),
+        ast::ContentItem::Event(event_text) => {
+            let event_text = *event_text;
+            BracketedItem::Event(Event::new(event_text))
         }
         ast::ContentItem::AnnotatedEvent { event, annotations } => {
-            let event_text = event.text();
+            let event_text = *event;
             let event_model = Event::new(event_text);
             let scoped = annotations_to_scoped(annotations);
             if scoped.is_empty() {
-                Some(BracketedItem::Event(event_model))
+                BracketedItem::Event(event_model)
             } else {
-                Some(BracketedItem::AnnotatedEvent(
+                BracketedItem::AnnotatedEvent(
                     Annotated::new(event_model).with_scoped_annotations(scoped),
-                ))
+                )
             }
         }
         ast::ContentItem::Action { annotations, .. } => {
             let scoped = annotations_to_scoped(annotations);
             let annotated = Annotated::new(Action::new()).with_scoped_annotations(scoped);
-            Some(BracketedItem::AnnotatedAction(annotated))
+            BracketedItem::AnnotatedAction(annotated)
         }
-        ast::ContentItem::OtherSpokenEvent(tok) => match tok {
-            Token::OtherSpokenEvent { speaker, text } => Some(BracketedItem::OtherSpokenEvent(
-                OtherSpokenEvent::new(*speaker, *text),
-            )),
-            _ => unreachable!(),
-        },
-        ast::ContentItem::Separator(tok) => {
-            let sep = separator_token_to_model(tok);
-            Some(BracketedItem::Separator(sep))
+        ast::ContentItem::OtherSpokenEvent { speaker, text } => {
+            BracketedItem::OtherSpokenEvent(OtherSpokenEvent::new(*speaker, *text))
+        }
+        ast::ContentItem::Separator(kind) => {
+            let sep = separator_from_kind(*kind);
+            BracketedItem::Separator(sep)
         }
         ast::ContentItem::Group(g) => {
-            let inner: Vec<BracketedItem> = g
-                .contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let inner: Vec<BracketedItem> =
+                g.contents.iter().map(content_item_to_bracketed).collect();
             let group = Group::new(BracketedContent::new(inner));
+            // `BracketedItem` has no bare `Group`, so an unannotated nested
+            // group becomes an `AnnotatedGroup` carrying an empty annotation
+            // list. This used to be an `if` whose two branches were identical,
+            // which read as though the empty case were handled differently.
             let scoped = annotations_to_scoped(&g.annotations);
-            if scoped.is_empty() {
-                // Bare nested group, not directly representable as BracketedItem,
-                // but AnnotatedGroup with empty annotations works
-                Some(BracketedItem::AnnotatedGroup(
-                    Annotated::new(group).with_scoped_annotations(scoped),
-                ))
-            } else {
-                Some(BracketedItem::AnnotatedGroup(
-                    Annotated::new(group).with_scoped_annotations(scoped),
-                ))
-            }
+            BracketedItem::AnnotatedGroup(Annotated::new(group).with_scoped_annotations(scoped))
         }
         ast::ContentItem::Retrace(r) => {
             let kind = match r.kind {
@@ -630,11 +637,8 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Option<B
                 crate::ast::RetraceKindParsed::Multiple => RetraceKind::Multiple,
                 crate::ast::RetraceKindParsed::Reformulation => RetraceKind::Reformulation,
             };
-            let inner: Vec<BracketedItem> = r
-                .content
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
+            let inner: Vec<BracketedItem> =
+                r.content.iter().map(content_item_to_bracketed).collect();
             let mut retrace =
                 talkbank_model::model::Retrace::new(BracketedContent::new(inner), kind);
             if r.is_group {
@@ -644,46 +648,58 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Option<B
             // annotations reach here.
             let scoped = annotations_to_scoped(&r.annotations);
             if scoped.is_empty() {
-                Some(BracketedItem::Retrace(Box::new(retrace)))
+                BracketedItem::Retrace(Box::new(retrace))
             } else {
-                Some(BracketedItem::AnnotatedRetrace(Box::new(
+                BracketedItem::AnnotatedRetrace(Box::new(
                     talkbank_model::model::Annotated::new(retrace).with_scoped_annotations(scoped),
-                )))
+                ))
             }
         }
-        ast::ContentItem::Annotation(Token::Freecode(s)) => {
-            Some(BracketedItem::Freecode(Freecode::new(*s)))
+        ast::ContentItem::Freecode(text) => BracketedItem::Freecode(Freecode::new(*text)),
+        // Preserved, matching the tier-level arm. This used to return `None`,
+        // so the same orphaned annotation survived at tier level and vanished
+        // inside a group.
+        ast::ContentItem::OrphanAnnotation(annotation) => {
+            BracketedItem::Freecode(Freecode::new(annotation.chat_text()))
         }
-        ast::ContentItem::Annotation(_) => None,
+        ast::ContentItem::OverlapPoint { kind, index } => {
+            BracketedItem::OverlapPoint(overlap_point(*kind, *index))
+        }
+        ast::ContentItem::MediaBullet { start, end } => {
+            BracketedItem::InternalBullet(bullet_from_times(start, end))
+        }
+        ast::ContentItem::UnderlineBegin => BracketedItem::UnderlineBegin(UnderlineMarker::new()),
+        ast::ContentItem::UnderlineEnd => BracketedItem::UnderlineEnd(UnderlineMarker::new()),
+        ast::ContentItem::LongFeatureBegin(label) => {
+            BracketedItem::LongFeatureBegin(LongFeatureBegin::new(LongFeatureLabel::new(*label)))
+        }
+        ast::ContentItem::LongFeatureEnd(label) => {
+            BracketedItem::LongFeatureEnd(LongFeatureEnd::new(LongFeatureLabel::new(*label)))
+        }
+        ast::ContentItem::NonvocalBegin(label) => {
+            BracketedItem::NonvocalBegin(NonvocalBegin::new(NonvocalLabel::new(*label)))
+        }
+        ast::ContentItem::NonvocalEnd(label) => {
+            BracketedItem::NonvocalEnd(NonvocalEnd::new(NonvocalLabel::new(*label)))
+        }
+        ast::ContentItem::NonvocalSimple(label) => {
+            BracketedItem::NonvocalSimple(NonvocalSimple::new(NonvocalLabel::new(*label)))
+        }
         ast::ContentItem::PhoGroup(contents) => {
-            let items: Vec<BracketedItem> = contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
-            Some(BracketedItem::PhoGroup(PhoGroup::new(
-                BracketedContent::new(items),
-            )))
+            let items: Vec<BracketedItem> =
+                contents.iter().map(content_item_to_bracketed).collect();
+            BracketedItem::PhoGroup(PhoGroup::new(BracketedContent::new(items)))
         }
         ast::ContentItem::SinGroup(contents) => {
-            let items: Vec<BracketedItem> = contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
-            Some(BracketedItem::SinGroup(SinGroup::new(
-                BracketedContent::new(items),
-            )))
+            let items: Vec<BracketedItem> =
+                contents.iter().map(content_item_to_bracketed).collect();
+            BracketedItem::SinGroup(SinGroup::new(BracketedContent::new(items)))
         }
         ast::ContentItem::Quotation(q) => {
-            let items: Vec<BracketedItem> = q
-                .contents
-                .iter()
-                .filter_map(|c| content_item_to_bracketed(c))
-                .collect();
-            Some(BracketedItem::Quotation(Quotation::new(
-                BracketedContent::new(items),
-            )))
+            let items: Vec<BracketedItem> =
+                q.contents.iter().map(content_item_to_bracketed).collect();
+            BracketedItem::Quotation(Quotation::new(BracketedContent::new(items)))
         }
-        _ => None,
     }
 }
 
@@ -758,24 +774,45 @@ pub(crate) fn parsed_annotation_to_scoped(
 // Terminator conversion
 // ═══════════════════════════════════════════════════════════════
 
-/// Convert a terminator token to model Terminator.
-pub fn token_to_terminator(tok: &Token<'_>) -> Terminator {
+/// Convert a terminator token to a model `Terminator`.
+///
+/// `None` for a token that is not a terminator. It used to fall back to
+/// `Terminator::Period`, which fabricated a sentence-final period out of
+/// whatever arrived: the same silent-wrong-answer shape as the pause and
+/// separator defaults, and here it invents PUNCTUATION that changes what the
+/// utterance means. An absent terminator is a condition the model can state
+/// and the validators already report.
+pub fn token_to_terminator(tok: &Token<'_>) -> Option<Terminator> {
+    ast::TerminatorKindParsed::from_token(tok).map(terminator_from_kind)
+}
+
+/// A resolved terminator kind as the model's `Terminator`.
+///
+/// Exhaustive: the kind arrives resolved, so there is no unmatched token to
+/// answer for. This replaced `_ => Terminator::Period`, which invented
+/// sentence-final punctuation out of whatever arrived.
+fn terminator_from_kind(kind: ast::TerminatorKindParsed) -> Terminator {
     let s = Span::DUMMY;
-    match tok {
-        Token::Period(_) => Terminator::Period { span: s },
-        Token::Question(_) => Terminator::Question { span: s },
-        Token::Exclamation(_) => Terminator::Exclamation { span: s },
-        Token::TrailingOff(_) => Terminator::TrailingOff { span: s },
-        Token::Interruption(_) => Terminator::Interruption { span: s },
-        Token::SelfInterruption(_) => Terminator::SelfInterruption { span: s },
-        Token::InterruptedQuestion(_) => Terminator::InterruptedQuestion { span: s },
-        Token::BrokenQuestion(_) => Terminator::BrokenQuestion { span: s },
-        Token::QuotedNewLine(_) => Terminator::QuotedNewLine { span: s },
-        Token::QuotedPeriodSimple(_) => Terminator::QuotedPeriodSimple { span: s },
-        Token::SelfInterruptedQuestion(_) => Terminator::SelfInterruptedQuestion { span: s },
-        Token::TrailingOffQuestion(_) => Terminator::TrailingOffQuestion { span: s },
-        Token::BreakForCoding(_) => Terminator::BreakForCoding { span: s },
-        _ => Terminator::Period { span: s },
+    match kind {
+        ast::TerminatorKindParsed::Period => Terminator::Period { span: s },
+        ast::TerminatorKindParsed::Question => Terminator::Question { span: s },
+        ast::TerminatorKindParsed::Exclamation => Terminator::Exclamation { span: s },
+        ast::TerminatorKindParsed::TrailingOff => Terminator::TrailingOff { span: s },
+        ast::TerminatorKindParsed::Interruption => Terminator::Interruption { span: s },
+        ast::TerminatorKindParsed::SelfInterruption => Terminator::SelfInterruption { span: s },
+        ast::TerminatorKindParsed::InterruptedQuestion => {
+            Terminator::InterruptedQuestion { span: s }
+        }
+        ast::TerminatorKindParsed::BrokenQuestion => Terminator::BrokenQuestion { span: s },
+        ast::TerminatorKindParsed::QuotedNewLine => Terminator::QuotedNewLine { span: s },
+        ast::TerminatorKindParsed::QuotedPeriodSimple => Terminator::QuotedPeriodSimple { span: s },
+        ast::TerminatorKindParsed::SelfInterruptedQuestion => {
+            Terminator::SelfInterruptedQuestion { span: s }
+        }
+        ast::TerminatorKindParsed::TrailingOffQuestion => {
+            Terminator::TrailingOffQuestion { span: s }
+        }
+        ast::TerminatorKindParsed::BreakForCoding => Terminator::BreakForCoding { span: s },
     }
 }
 

@@ -130,27 +130,27 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // `Positioned` re-nesting.
 
         // child_0: @UTF8 anchor.
-        self.lower_utf8_anchor(&children.child_0.slot);
+        self.lower_utf8_anchor(children.child_0.slot());
 
         // child_1: repeat(pre_begin_header). Each element is a concrete
         // pre-begin header choice, an ERROR, or a MISSING placeholder.
-        for element in &children.child_1.slot {
-            self.lower_pre_begin_header_slot(&element.slot);
+        for element in children.child_1.slot() {
+            self.lower_pre_begin_header_slot(element.slot());
         }
 
         // child_2: @Begin anchor.
-        self.lower_begin_anchor(&children.child_2.slot);
+        self.lower_begin_anchor(children.child_2.slot());
 
         // child_3: repeat(line). Each element is a `line` node (Present/Missing)
         // or an ERROR absorbed among the lines (the recovery-aware repeat keeps
         // consuming the trailing valid lines, so a mid-document ERROR does not
         // strand the tail into `unexpected`).
-        for element in &children.child_3.slot {
-            self.lower_line_slot(&element.slot);
+        for element in children.child_3.slot() {
+            self.lower_line_slot(element.slot());
         }
 
         // child_4: @End anchor.
-        self.lower_end_anchor(&children.child_4.slot);
+        self.lower_end_anchor(children.child_4.slot());
 
         // The carrier's `unexpected` sink holds any direct `full_document` child
         // that filled no grammar position. Surface it as the SAME recovery
@@ -347,7 +347,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// [`Self::surface_unexpected`]).
     fn dispatch_line(&mut self, line_node: tree_sitter::Node<'_>) {
         let children = extract_line(LineNode(line_node));
-        match &children.content.slot {
+        match children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(header_choice)) => {
                 // The `line` header case is the NESTED supertype choice
                 // `LineChoice::ActivitiesHeader(LineActivitiesHeaderChoice)` (34

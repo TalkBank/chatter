@@ -20,6 +20,52 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Attribute, Data, DeriveInput, Fields, Lit, Meta};
 
+/// Split `"E1000"` into `("E", 1000)`; `None` when the code is not a letter
+/// prefix followed by digits.
+fn code_sort_key(code: &str) -> Option<(&str, u32)> {
+    let split = code.find(|c: char| c.is_ascii_digit())?;
+    let (prefix, digits) = code.split_at(split);
+    digits.parse().ok().map(|number| (prefix, number))
+}
+
+/// Reject a declaration order that does not ascend by (prefix, number).
+///
+/// Returns the compile error to emit, or `None` when the order is sound. The
+/// error names both offending codes, because "some variant is out of order" is
+/// not something a reader of a 225-variant enum can act on.
+fn ascending_violation(variants: &[(&syn::Ident, String, Vec<&Attribute>)]) -> Option<TokenStream> {
+    let mut previous: Option<(&str, u32)> = None;
+    for (ident, code, _) in variants {
+        let Some(key) = code_sort_key(code) else {
+            return Some(
+                syn::Error::new_spanned(
+                    ident,
+                    format!("code {code:?} is not a letter prefix followed by digits"),
+                )
+                .to_compile_error(),
+            );
+        };
+        if let Some(before) = previous
+            && key <= before
+        {
+            return Some(
+                syn::Error::new_spanned(
+                    ident,
+                    format!(
+                        "error codes must be declared in ascending order: {}{} follows {}{}. \
+                         Declaration order IS the sort order (see the `Ord` derive), so move \
+                         this variant rather than relaxing the rule.",
+                        key.0, key.1, before.0, before.1
+                    ),
+                )
+                .to_compile_error(),
+            );
+        }
+        previous = Some(key);
+    }
+    None
+}
+
 /// Expand the `#[error_code_enum]` attribute into the generated enum API.
 pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
     let input: DeriveInput = match syn::parse2(input) {
@@ -42,6 +88,7 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
     };
 
     let mut variants_with_codes = Vec::new();
+    let mut planned_variants: Vec<&syn::Ident> = Vec::new();
     let mut unknown_variant = None;
 
     for variant in &data.variants {
@@ -78,6 +125,19 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
             }
         };
 
+        // `#[status(planned)]` marks a code whose spec is documented but not
+        // yet enforced. Absence means enforced, which is a default that would
+        // normally be a hazard (wrong invisibly); it is safe here only because
+        // `SpecStatusGate` compares every variant against `spec/errors/*.md`
+        // and fails on any disagreement in either direction.
+        let planned = variant.attrs.iter().any(|attr| {
+            attr.path().is_ident("status")
+                && matches!(&attr.meta, Meta::List(list) if list.tokens.to_string() == "planned")
+        });
+        if planned {
+            planned_variants.push(variant_name);
+        }
+
         if variant_name == "UnknownError" {
             unknown_variant = Some(variant_name.clone());
         }
@@ -86,10 +146,25 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         let other_attrs: Vec<&Attribute> = variant
             .attrs
             .iter()
-            .filter(|attr| !attr.path().is_ident("code"))
+            .filter(|attr| !attr.path().is_ident("code") && !attr.path().is_ident("status"))
             .collect();
 
         variants_with_codes.push((variant_name, code, other_attrs));
+    }
+
+    // Declaration order must ascend by (letter prefix, number), so that the
+    // DERIVED `Ord`, `all()`, `iter()` and any `BTreeSet<ErrorCode>` all agree
+    // by construction instead of by three separate conventions.
+    //
+    // Checked here rather than trusted: the enum had two descending adjacencies
+    // (`E391` then `E202`, `W108` then `E999`) while a comment two files away
+    // asserted it was ascending. A hand-written `Ord` comparing the code STRING
+    // was the first fix, and it was wrong in its own way, because a string
+    // compare is lexicographic and would sort a future `E1000` before `E202`.
+    // Ordering the declarations makes the derive correct and free, and makes
+    // this the only place the rule can be broken.
+    if let Some(err) = ascending_violation(&variants_with_codes) {
+        return err;
     }
 
     let unknown_ident = match unknown_variant {
@@ -146,10 +221,14 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         }
     });
     let variant_count = variants_with_codes.len();
+    let planned_count = planned_variants.len();
+    let planned_arms = planned_variants.iter().map(|variant_name| {
+        quote! { #enum_name::#variant_name }
+    });
 
     quote! {
         #(#attrs)*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
         #vis enum #enum_name {
             #(#enum_variants,)*
         }
@@ -209,6 +288,19 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
             pub fn iter() -> std::slice::Iter<'static, Self> {
                 Self::all().iter()
             }
+
+            /// Every variant marked `#[status(planned)]`: documented in
+            /// `spec/errors/` but not yet enforced by the validator.
+            ///
+            /// Generated from the attributes, so it cannot name a code that
+            /// does not exist and cannot misspell one, which a hand-written
+            /// list of code STRINGS could do and did.
+            pub fn planned() -> &'static [Self; #planned_count] {
+                const PLANNED: [#enum_name; #planned_count] = [
+                    #(#planned_arms,)*
+                ];
+                &PLANNED
+            }
         }
 
         impl std::fmt::Display for #enum_name {
@@ -217,5 +309,6 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
                 write!(f, "{}", self.as_str())
             }
         }
+
     }
 }

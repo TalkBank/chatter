@@ -25,7 +25,8 @@ pub(crate) mod supertypes;
 #[allow(unused_imports)]
 pub(crate) use cst_assertions::{
     assert_child_count_exact, assert_child_count_min, assert_child_kind, assert_child_kind_one_of,
-    check_not_missing, expect_child, expect_child_at, extract_utf8_text,
+    check_not_missing, expect_child, expect_child_at, extract_utf8_text, find_child_by_kind,
+    present,
 };
 pub(crate) use error_analysis::{
     analyze_dependent_tier_error, analyze_error_node, analyze_line_error,

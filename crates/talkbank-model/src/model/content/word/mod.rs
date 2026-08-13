@@ -39,7 +39,7 @@ pub use content::{
     WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType, WordSyllablePause,
     WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
-pub use form::FormType;
+pub use form::{FormMarkerPayload, FormType, UndeclaredFormMarker};
 pub use language::WordLanguageMarker;
 pub use untranscribed::UntranscribedStatus;
 pub use word_contents::WordContents;

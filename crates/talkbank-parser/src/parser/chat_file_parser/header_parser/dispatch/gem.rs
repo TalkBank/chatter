@@ -16,7 +16,7 @@
 //! / `EgHeaderChild1Children`, each `{ child_0: header_sep, child_1: free_text }`)
 //! because the whole `seq(header_sep, free_text)` pair is what is optional at the
 //! grammar level, not `free_text` alone. `g_header` is unaffected (its `free_text`
-//! is grammar-REQUIRED, so it stays a flat `child_2: NodeSlot<FreeTextNode>`, same
+//! is grammar-REQUIRED, so it stays a flat `child_2: &NodeSlot<FreeTextNode>`, same
 //! index as the OLD module). In every case the slot is mapped to the
 //! `Option<Node>` that `parse_gem_label` / `parse_optional_gem_label` expects,
 //! exhaustively, with no `_ =>` arm that silently drops variants: `Present` reads
@@ -40,6 +40,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::helpers::parse_optional_gem_label;
+use crate::parser::tree_parsing::parser_helpers::present;
 
 /// Parse optional GEM label payload from a pre-extracted `free_text` child node.
 ///
@@ -100,11 +101,12 @@ pub(super) fn bg(
     let children = extract_bg_header(BgHeaderNode(header_actual));
     let group = children
         .child_1
-        .slot
+        .slot()
+        .clone()
         .and_then(|s| s.present_or_recover().ok());
     let free_text_child = group
         .as_ref()
-        .and_then(|group| group.child_1.slot.clone().present_or_recover().ok())
+        .and_then(|group| present(group.child_1.slot()))
         .map(|w| w.raw_node());
     let outcome = match parse_gem_label(free_text_child, header_actual, input, errors) {
         ParseOutcome::Parsed(label) => ParseOutcome::parsed(Header::BeginGem { label }),
@@ -128,11 +130,12 @@ pub(super) fn eg(
     let children = extract_eg_header(EgHeaderNode(header_actual));
     let group = children
         .child_1
-        .slot
+        .slot()
+        .clone()
         .and_then(|s| s.present_or_recover().ok());
     let free_text_child = group
         .as_ref()
-        .and_then(|group| group.child_1.slot.clone().present_or_recover().ok())
+        .and_then(|group| present(group.child_1.slot()))
         .map(|w| w.raw_node());
     let outcome = match parse_gem_label(free_text_child, header_actual, input, errors) {
         ParseOutcome::Parsed(label) => ParseOutcome::parsed(Header::EndGem { label }),
@@ -148,7 +151,7 @@ pub(super) fn eg(
 /// `@G` -> `Header::LazyGem`.
 pub(super) fn g(header_actual: Node, input: &str, errors: &impl ErrorSink) -> ParseOutcome<Header> {
     // LEVEL 2: read the required free_text child through the typed positional slot
-    // (extract_g_header child_2: NodeSlot<FreeTextNode>, the SAME index as the OLD
+    // (extract_g_header child_2: &NodeSlot<FreeTextNode>, the SAME index as the OLD
     // module: g_header's free_text is grammar-required, so there is no optional
     // group to descend into here). `present_or_recover().ok()` maps Present to the
     // node and every non-Present recovery variant to None, the Option<Node>
@@ -156,7 +159,8 @@ pub(super) fn g(header_actual: Node, input: &str, errors: &impl ErrorSink) -> Pa
     let children = extract_g_header(GHeaderNode(header_actual));
     let free_text_child = children
         .child_2
-        .slot
+        .slot()
+        .clone()
         .present_or_recover()
         .ok()
         .map(|w| w.raw_node());

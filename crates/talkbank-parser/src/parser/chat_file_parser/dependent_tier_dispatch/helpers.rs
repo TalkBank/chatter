@@ -46,7 +46,7 @@ use tree_sitter::Node;
 /// (R2; a no-op on valid input, load-bearing for migration Task D).
 pub(crate) fn read_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: NodeSlot<'tree, T>,
+    body: &NodeSlot<'tree, T>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -58,7 +58,7 @@ where
 
     match body {
         NodeSlot::Present(text) => decode_body_text(tier_node, text.raw_node(), source, errors),
-        NodeSlot::Missing(raw) => decode_body_text(tier_node, raw, source, errors),
+        NodeSlot::Missing(raw) => decode_body_text(tier_node, *raw, source, errors),
         NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
@@ -134,7 +134,8 @@ pub(crate) fn dependent_tier_separator(slot: &NodeSlot<'_, TierSepNode<'_>>) -> 
     let NodeSlot::Present(tier_sep) = slot else {
         return TierSeparator::CLEAN;
     };
-    let trailing = extract_tier_sep(*tier_sep).child_2.slot;
+    let tier_sep_children = extract_tier_sep(*tier_sep);
+    let trailing = tier_sep_children.child_2.slot();
     match trailing {
         Some(NodeSlot::Present(sep_node)) => {
             let node = sep_node.raw_node();

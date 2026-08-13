@@ -50,6 +50,8 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -101,22 +103,64 @@ def set_json_version(path: Path, version: str) -> None:
     path.write_text(new)
 
 
-def changelog_gaps(version: str) -> list[str]:
-    """Both halves a CHANGELOG entry needs: the section, and its link reference.
+class Fixability(Enum):
+    """Whether `--fix` can repair one drift item, or a human must."""
 
-    A `## [X.Y.Z]` heading whose `[X.Y.Z]: <url>` definition is missing renders
-    as literal bracketed text rather than as a broken link, so the book's
-    lychee pass reports zero errors and a reader sees only slightly odd
-    punctuation. Five consecutive releases (v0.6.0 through v0.9.1) shipped that
-    way before anyone noticed, because this gate owned one half of a fact that
-    is written in two places.
+    AUTO = "auto"
+    """A version copy this script rewrites."""
+
+    MANUAL = "manual"
+    """Prose or a tag; `--fix` must still exit non-zero."""
+
+
+@dataclass(frozen=True)
+class Drift:
+    """One thing that disagrees with the canonical version.
+
+    Carries its own fixability instead of leaving the caller to recover it by
+    prefix-matching the message. The exit code used to be computed with
+    `d.startswith(("CHANGELOG.md", "release tag"))` over the display strings
+    this same function had just built, so rewording a message silently made
+    `--fix` exit 0 on a state it cannot fix.
+    """
+
+    message: str
+    fixability: Fixability
+
+
+def changelog_gaps(version: str) -> list[str]:
+    """Everything wrong with the CHANGELOG, as human-readable phrases.
+
+    ONE invariant, checked in both directions: every release named anywhere in
+    the file has BOTH a `## [X.Y.Z]` section and a matching `[X.Y.Z]: <url>`
+    link reference. The canonical version is folded into the required set, so
+    "the version being cut has a section" is not a separate check but the
+    single-element case of the same comparison.
+
+    That fold is the point. The two used to be separate, their domains
+    overlapped by construction, and one missing heading produced TWO drift
+    lines while `len(drift)` is printed as a count. Suppressing the duplicate
+    at the reporting layer fixed the symptom and left the overlap for whoever
+    adds a third check.
+
+    A heading whose definition is missing renders as literal bracketed text
+    rather than as a broken link, so the book's lychee pass reports zero errors
+    and a reader sees only slightly odd punctuation. Five consecutive releases
+    (v0.6.0 through v0.9.1) shipped that way, which is why this compares SETS
+    rather than looking up the version being released: the latter catches the
+    sixth and is blind to the five already there, and blind entirely to the
+    reverse error.
     """
     text = CHANGELOG.read_text()
+    headings = set(re.findall(r"^## \[([^\]]+)\]", text, re.MULTILINE)) - {"Unreleased"}
+    definitions = set(re.findall(r"^\[([^\]]+)\]: \S", text, re.MULTILINE)) - {"Unreleased"}
+    required = headings | definitions | {version}
+
     gaps: list[str] = []
-    if re.search(rf"^## \[{re.escape(version)}\]", text, re.MULTILINE) is None:
-        gaps.append(f"a `## [{version}]` section")
-    if re.search(rf"^\[{re.escape(version)}\]: \S", text, re.MULTILINE) is None:
-        gaps.append(f"a `[{version}]:` link reference")
+    for missing in sorted(required - headings):
+        gaps.append(f"a `## [{missing}]` section")
+    for missing in sorted(required - definitions):
+        gaps.append(f"a `[{missing}]:` link reference")
     return gaps
 
 
@@ -140,12 +184,12 @@ def bump_canonical(version: str) -> None:
 
 def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = False) -> int:
     want = canonical_version()
-    drift: list[str] = []
+    drift: list[Drift] = []
 
     for path in (PACKAGE_JSON,):
         have = json_version(path)
         if have != want:
-            drift.append(f"{path.relative_to(REPO)}  {have} -> {want}")
+            drift.append(Drift(f"{path.relative_to(REPO)}  {have} -> {want}", Fixability.AUTO))
             if fix:
                 set_json_version(path, want)
 
@@ -158,12 +202,14 @@ def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = 
         else:
             # A changelog entry is human-written, so this is never auto-fixable.
             for gap in gaps:
-                drift.append(f"CHANGELOG.md  missing {gap}")
+                drift.append(Drift(f"CHANGELOG.md  missing {gap}", Fixability.MANUAL))
 
     if release_tag is not None:
         tag_version = release_tag[1:] if release_tag.startswith("v") else release_tag
         if tag_version != want:
-            drift.append(f"release tag {release_tag} ({tag_version}) != version {want}")
+            drift.append(
+                Drift(f"release tag {release_tag} ({tag_version}) != version {want}", Fixability.MANUAL)
+            )
 
     if not drift:
         scope = f", tag {release_tag} ok" if release_tag else ""
@@ -173,10 +219,10 @@ def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = 
     verb = "fixed" if fix else "DRIFTED"
     print(f"{verb} ({len(drift)}): canonical version = {want}")
     for d in drift:
-        print(f"  {d}")
+        print(f"  {d.message}")
     # CHANGELOG and release-tag drift cannot be auto-fixed, so `--fix` still fails
     # when either is wrong; otherwise a successful rewrite is success.
-    unfixable = any(d.startswith(("CHANGELOG.md", "release tag")) for d in drift)
+    unfixable = any(d.fixability is Fixability.MANUAL for d in drift)
     return 1 if (not fix or unfixable) else 0
 
 

@@ -35,7 +35,10 @@ mod visitor_lowering;
 mod word;
 
 // Re-export helper functions
-pub(crate) use errors::{analyze_word_error, illegal_curly_quote_error, misplaced_linker_error};
+pub(crate) use errors::{
+    MainTierRegion, classify_main_tier_recovery, illegal_curly_quote_error, misplaced_linker_error,
+    surface_main_tier_sink,
+};
 
 // Re-export overlap_point parser for use in structure parsing
 pub(crate) use base::parse_overlap_point;

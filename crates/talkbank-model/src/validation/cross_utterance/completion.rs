@@ -28,6 +28,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SelfCompletion_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
+use super::FileUtterances;
 use crate::model::{LinkerKind, Terminator, Utterance};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use std::collections::HashMap;
@@ -55,7 +56,7 @@ use std::collections::HashMap;
 ///   `+/.` by construction, so no further check needed).
 /// - stack empty but `last_seen` present: E352 (wrong terminator).
 /// - speaker never seen: E351 (no preceding utterance).
-pub(super) fn check_self_completion_all(utterances: &[Utterance], errors: &impl ErrorSink) {
+pub(super) fn check_self_completion_all(utterances: &FileUtterances<'_>, errors: &impl ErrorSink) {
     // Stack of interruption indices per speaker (only `+/.` terminated).
     let mut interruption_stacks: HashMap<&str, Vec<usize>> = HashMap::new();
     // Most recent utterance index per speaker regardless of terminator.
@@ -144,9 +145,14 @@ fn has_self_completion_linker_internal(utterance: &Utterance) -> bool {
 /// Validate one `++` other-completion linker usage.
 ///
 /// Requires: Most recent utterance by DIFFERENT speaker ended with +... (trailing off)
-pub(super) fn check_other_completion(utterances: &[Utterance], idx: usize) -> Vec<ParseError> {
+pub(super) fn check_other_completion(
+    utterances: &FileUtterances<'_>,
+    idx: usize,
+) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let utterance = &utterances[idx];
+    let Some(utterance) = utterances.get(idx) else {
+        return Vec::new();
+    };
     let speaker = utterance.main.speaker.as_str();
 
     // Check if there's any preceding utterance at all
@@ -169,7 +175,9 @@ pub(super) fn check_other_completion(utterances: &[Utterance], idx: usize) -> Ve
     }
 
     // Get most recent utterance (regardless of speaker)
-    let prev_utt = &utterances[idx - 1];
+    let Some(prev_utt) = utterances.get(idx - 1) else {
+        return Vec::new();
+    };
 
     // Check if same speaker - should use +, instead
     if prev_utt.main.speaker.as_str() == speaker {

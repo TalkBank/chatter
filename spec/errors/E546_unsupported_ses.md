@@ -11,8 +11,10 @@ An `@ID` header contains an SES (socioeconomic status) field value that is not o
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E546
 
 ```chat
 @UTF8

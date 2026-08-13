@@ -14,6 +14,7 @@ A parsed Word object has empty content, the word node exists in the CST but cont
 - **Level**: word
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

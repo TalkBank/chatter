@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-08-03 17:28 EDT
+**Last modified:** 2026-08-12 22:20 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -24,6 +24,7 @@ flowchart TD
     chatter --> cache["cache\n(stats, clear)"]
     chatter --> schema["schema\n(JSON Schema output)"]
     chatter --> debug["debug\n(overlap-audit, linker-audit,\nfind, sanitize, fix-s)"]
+    chatter --> update["update\n(self-update, experimental)"]
 
     chatter --> merge["merge\n(experimental)"]
     chatter --> speakerid["speaker-id\n(experimental)"]
@@ -50,6 +51,7 @@ chatter cache stats
 chatter cache clear --prefix PATH
 chatter schema
 chatter debug ...
+chatter update                     # experimental: self-update to the latest release
 chatter merge FILE1 FILE2          # experimental: combine two transcripts
 chatter speaker-id INPUT           # experimental
 chatter rediarize INPUT --turns T  # experimental

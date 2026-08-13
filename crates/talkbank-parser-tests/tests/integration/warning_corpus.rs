@@ -30,6 +30,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use talkbank_model::model::TranscriptName;
 use talkbank_model::{ErrorCollector, Severity};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
@@ -120,7 +121,7 @@ Testing {} warning files...\n",
 
         // Validate (should produce expected warning)
         let diagnostics = ErrorCollector::new();
-        chat_file.validate(&diagnostics, None);
+        chat_file.validate(&diagnostics, TranscriptName::Anonymous);
 
         let warnings: Vec<String> = diagnostics
             .to_vec()

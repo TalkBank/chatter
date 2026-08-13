@@ -20,6 +20,7 @@ use crate::parser::tree_parsing::header::{
     parse_id_header, parse_languages_header, parse_media_header, parse_participants_header,
     parse_pid_header, parse_situation_header, parse_t_header, parse_types_header,
 };
+use crate::parser::tree_parsing::parser_helpers::find_child_by_kind;
 use talkbank_model::ParseOutcome;
 
 impl TreeSitterParser {
@@ -588,11 +589,4 @@ fn unknown_header_with_reason(
         parse_reason: Some(reason.into()),
         suggested_fix: suggested_fix.map(str::to_string),
     }
-}
-
-/// Return the first direct child with the requested `kind`.
-fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .find(|child| child.kind() == kind)
 }

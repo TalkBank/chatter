@@ -11,6 +11,7 @@ Participant entry should have both code and role
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

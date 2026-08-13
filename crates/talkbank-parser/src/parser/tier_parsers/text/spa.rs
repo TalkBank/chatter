@@ -29,7 +29,7 @@ pub fn parse_spa_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SpaT
     let children = extract_spa_dependent_tier(SpaDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

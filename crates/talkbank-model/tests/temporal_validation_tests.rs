@@ -22,7 +22,7 @@ use talkbank_model::Span;
 use talkbank_model::content::TierContentItems;
 use talkbank_model::model::{
     Bullet, ChatFile, Header, Line, MainTier, ParseHealthState, SpeakerCode, Terminator,
-    TierContent, TierSeparator, Utterance, UtteranceContent, UtteranceLanguage,
+    TierContent, TierSeparator, TranscriptName, Utterance, UtteranceContent, UtteranceLanguage,
     UtteranceLanguageMetadata, Word,
 };
 
@@ -105,7 +105,7 @@ fn test_e701_global_timeline_monotonicity_violation() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should have E701 error for same-speaker non-monotonicity
@@ -133,7 +133,7 @@ fn test_e701_cross_speaker_non_monotonic_does_not_fire() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should NOT have E701, different speakers overlapping is fine
@@ -159,7 +159,7 @@ fn test_e701_same_speaker_monotonic_passes() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should NOT have E701 error
@@ -185,7 +185,7 @@ fn test_e704_speaker_self_overlap_exceeds_tolerance() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should have E704 error (1000ms overlap exceeds 500ms tolerance)
@@ -194,6 +194,64 @@ fn test_e704_speaker_self_overlap_exceeds_tolerance() {
             .iter()
             .any(|e| e.code == ErrorCode::SpeakerSelfOverlap),
         "Expected E704 error for speaker self-overlap exceeding tolerance, got: {:#?}",
+        error_vec
+    );
+}
+
+/// SURVIVES: policy. Which side of 500 ms is tolerated is a choice with a real
+/// alternative (CLAN Error 133 parity), not an invariant a type could refuse.
+///
+/// These two pin the BOUNDARY, which the 1000 ms and 400 ms cases below and
+/// above cannot: `temporal.rs` reads `if overlap > SPEAKER_OVERLAP_TOLERANCE_MS`,
+/// so flipping that one operator to `>=` changes behaviour at exactly one value
+/// and every other test in this file stays green. An empty `#[test]` used to
+/// stand in for these, its body three comment lines naming 499 and 501, so it
+/// passed unconditionally while implying the edge was covered.
+#[test]
+fn e704_tolerates_an_overlap_exactly_at_the_threshold() {
+    // CHI 1000-2000, then CHI 1500-2500: exactly 500 ms of overlap.
+    let file = create_test_file(vec![
+        Line::header(Header::Utf8),
+        Line::header(Header::Begin),
+        Line::utterance(utterance(main_tier_with_bullet("CHI", 1000, 2000))),
+        Line::utterance(utterance(main_tier_with_bullet("CHI", 1500, 2500))),
+        Line::header(Header::End),
+    ]);
+
+    let errors = ErrorCollector::new();
+    file.validate(&errors, TranscriptName::Anonymous);
+    let error_vec = errors.into_vec();
+
+    assert!(
+        !error_vec
+            .iter()
+            .any(|e| e.code == ErrorCode::SpeakerSelfOverlap),
+        "an overlap of exactly the tolerance must be accepted, got: {:#?}",
+        error_vec
+    );
+}
+
+/// The other side of the same boundary; see the test above.
+#[test]
+fn e704_reports_an_overlap_one_millisecond_past_the_threshold() {
+    // CHI 1000-2000, then CHI 1499-2499: 501 ms of overlap.
+    let file = create_test_file(vec![
+        Line::header(Header::Utf8),
+        Line::header(Header::Begin),
+        Line::utterance(utterance(main_tier_with_bullet("CHI", 1000, 2000))),
+        Line::utterance(utterance(main_tier_with_bullet("CHI", 1499, 2499))),
+        Line::header(Header::End),
+    ]);
+
+    let errors = ErrorCollector::new();
+    file.validate(&errors, TranscriptName::Anonymous);
+    let error_vec = errors.into_vec();
+
+    assert!(
+        error_vec
+            .iter()
+            .any(|e| e.code == ErrorCode::SpeakerSelfOverlap),
+        "one millisecond past the tolerance must be reported, got: {:#?}",
         error_vec
     );
 }
@@ -211,7 +269,7 @@ fn test_e704_speaker_self_overlap_within_tolerance() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should NOT have E704 error (400ms overlap is within 500ms tolerance)
@@ -237,7 +295,7 @@ fn test_different_speakers_can_overlap() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should NOT have E704 error (different speakers)
@@ -268,7 +326,7 @@ fn test_e704_ignores_untranscribed_only_www_turns() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     assert!(
@@ -316,7 +374,7 @@ fn test_no_bullets_no_errors() {
     ]);
 
     let errors = ErrorCollector::new();
-    file.validate(&errors, None);
+    file.validate(&errors, TranscriptName::Anonymous);
     let error_vec = errors.into_vec();
 
     // Should not have temporal errors

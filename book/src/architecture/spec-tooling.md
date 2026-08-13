@@ -1,132 +1,72 @@
-# Spec Tooling and Generation Pipeline
+# Spec Tooling
 
 **Status:** Current
-**Last updated:** 2026-05-19 17:38 EDT
+**Last modified:** 2026-08-12 19:15 EDT
 
-## Objective
-Make `spec/` the reliable language-contract source while keeping generation
-deterministic, maintainable, and appropriately scoped.
+What the generator crates ARE. For the spec system's contract, which is what
+you need to write or change a spec, read
+[Spec System](spec-system.md); for the procedure,
+[Spec Workflow](../contributing/spec-workflow.md). This page covers only the
+tooling, so the three do not overlap.
 
-The goal is to separate:
+## Two crates, one workspace
 
-- grammar artifact generation
-- validation/error-doc generation
-- parser semantic testing (fragment and full-file)
+`spec/` is its own cargo workspace, so every command needs
+`--manifest-path spec/Cargo.toml`.
 
-Anything that still looks like bootstrap-era synthetic fragment orchestration
-is now audit-only unless a doc says it remains operational.
+| Crate | Owns | Depends on the parser? |
+|---|---|---|
+| `spec/tools` (`generators`) | reading specs and emitting artifacts | **No** |
+| `spec/runtime-tools` | anything needing the live parser or model | Yes |
 
-## Open structural concerns
+That split is the point. `spec/tools` reads markdown and JSON and writes tests,
+fixtures, docs and generated Rust; it never parses CHAT. Work that has to
+actually run the parser (verifying a spec example emits its codes, mining the
+corpus) lives in `spec/runtime-tools`, so ordinary generation does not drag the
+parser crates into the loop.
 
-- `spec/tools` still carries bootstrap-era Rust parser/model
-  dependencies that create circular or awkward workflow coupling.
-- Contributor workflows still over-assume that `make test-gen` is
-  the right reaction to every parser-related change.
-
-## Current Generation Pipeline
-
-```text
-spec constructs/errors
-  -> spec validators
-  -> generated grammar corpus tests
-  -> generated rust parser/validation tests
-  -> generated error docs
-  -> coverage dashboards and quality reports
-```
-
-That pipeline is still useful, but it is too broad to remain the single mental
-model for parser testing.
-
-## Desired Post-Bootstrap Split
+## Layout of `spec/tools`
 
 ```text
-grammar specs/templates
-  -> generated tree-sitter corpus tests
-
-error specs
-  -> generated validation/parser error tests
-  -> generated error docs
-
-fragment semantic fixtures and invariants
-  -> fragment-level parser tests
-
-reference corpus / curated full files
-  -> parser parity tests
+src/
+  bin/          one binary per generator
+  spec/         markdown spec loaders (constructs, errors)
+  output/       formatters (tree-sitter corpus, Rust tests, docs)
+  form_markers/ the form-marker registry: typed model, renderers, drift gate
+  templates/    Tera templates wrapping fragments into whole CHAT files
+  generated/    generated symbol sets (never edited by hand)
 ```
 
-## Structural Reorganization for `spec/tools` (proposed, not yet implemented)
+## Determinism, and what enforces it
 
-The intent here is to narrow `spec/tools`'s mission back to spec-driven
-artifact generation and validation rather than leaving it as a
-bootstrap-era staging ground for parser semantics. A proposed module
-split:
+Generation must be idempotent: a re-run with no source change produces no diff.
+Three things make that true rather than hoped for.
 
-- `input` (markdown/spec parsing)
-- `ir` (normalized internal representation)
-- `emit` (grammar tests, rust tests, docs)
-- `validate` (schema and semantic checks)
-- `sync` (grammar node-types and symbol-registry checks)
+- **Generators write only when content differs**, so a no-op run does not churn
+  mtimes.
+- **Rust output is formatted by the generator**, which runs `rustfmt` itself.
+  Otherwise `just fmt` and the generator each rewrite the same bytes forever,
+  both correct. Both registries do this.
+- **Drift gates compare committed artifacts against what the generators
+  produce**, calling the real generators rather than a second description of
+  their output. See [Spec System](spec-system.md) for the full list.
 
-Current layout (`crates: bin/, generated/, lib.rs, output/, spec/,
-templates/`) has not been migrated to this shape. Treat this section
-as a design target for future work rather than a description of the
-current source tree.
+## History, so the next reader is not misled
 
-## Legacy vs Active
+This page used to describe a bootstrap-era pipeline and a set of proposals. All
+of it was stale by mid-2026 and some of it was actively wrong:
 
-Keep these active:
+- It referred to `make test-gen` as the standard reaction to a parser change.
+  **There is no Makefile in this repository.** Run the `spec/tools` binaries
+  directly, or the `just` recipes.
+- It listed as an open concern that `spec/tools` "still carries bootstrap-era
+  Rust parser/model dependencies". That was resolved by the
+  `spec/runtime-tools` split; `spec/tools` depends on no parser or model crate.
+- It prescribed per-spec metadata (ownership, `draft`/`accepted`/`deprecated`)
+  that no loader has ever read. The real metadata, and what each field does, is
+  in [Spec System](spec-system.md).
+- It proposed an `input`/`ir`/`emit`/`validate`/`sync` module split that was
+  never implemented, and a `spec lint` binary that does not exist.
 
-- grammar corpus generation
-- error doc generation
-- symbol registry sync/validation
-- affected regeneration when a spec or grammar input truly changed
-
-Treat these as legacy audit paths:
-
-- synthetic tree-sitter fragment wrappers
-- bootstrap-era parser equivalence rituals
-
-## Determinism Requirements
-1. Stable ordering of generated outputs.
-2. Stable formatting of generated code/docs.
-3. Re-runs without source changes produce no diffs.
-
-## Drift Prevention Controls
-- Node type compatibility check:
-  - `spec/tools` must compile and run against current generated node constants.
-- Registry compatibility check:
-  - all symbol categories used in specs and grammar must be known in registry.
-- Generation integration check:
-  - full generation pass with clean tree must produce zero diff.
-- Boundary check:
-  - generated grammar/docs flows should not silently become the sole authority
-    for fragment parsing semantics.
-
-## Authoring Experience (proposed, not yet implemented)
-
-Spec authoring would benefit from:
-
-- Strict but simple spec templates for constructs and errors.
-- A `spec lint` command for immediate feedback (missing fields,
-  invalid tags, malformed examples, unknown error codes).
-- Clearer documentation of when `make test-gen` is actually needed and
-  when a small direct test is the right answer instead.
-
-The `spec lint` binary does not yet exist; the strict-validation work
-that exists today happens implicitly through `make test-gen` failures
-plus the spec validators in `spec/tools/src/bin/`.
-
-## Versioning and Metadata
-Each spec file should include:
-- ownership,
-- status (`draft`, `accepted`, `deprecated`),
-- parser/validation scope,
-- linked tests and generated outputs.
-
-## Acceptance Criteria
-- `spec/tools` is green and deterministic.
-- Every generation target has explicit provenance from source specs.
-- Drift between node types, specs, and generators is blocked in CI.
-- Spec contributors have a documented and automated happy path.
-- Small grammar changes no longer force a giant regeneration ritual by default.
-- Fragment parsing semantics are tested outside the generation pipeline.
+Aspirations are worth writing down, but not in a page a contributor reads as a
+description of the code.

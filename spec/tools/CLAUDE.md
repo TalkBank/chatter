@@ -1,7 +1,15 @@
 # spec/tools - Core Generators Crate
 
 **Status:** Current
-**Last modified:** 2026-06-16 20:33 EDT
+**Last modified:** 2026-08-11 20:40 EDT
+
+## Read the book first
+
+[`book/src/architecture/spec-system.md`](../../book/src/architecture/spec-system.md)
+is the authoritative description of the spec system and
+[`book/src/contributing/spec-workflow.md`](../../book/src/contributing/spec-workflow.md)
+is the procedure. `just spec-status` reports the live state. This file is the
+crate-level detail only.
 
 ## Overview
 Rust generators that turn CHAT specs into tests and documentation artifacts.
@@ -36,6 +44,7 @@ cargo test
 | `gen_rust_tests` | Generate Rust parser tests from `spec/errors/` |
 | `gen_validation_corpus` | Generate the validation fixture corpus + `manifest.json` from `spec/errors/` (data-driven runner) |
 | `gen_error_docs` | Generate error documentation from `spec/errors/` |
+| `gen_form_markers` | Generate the model enum, re2c code set and book table from the form-marker registry (`just form-markers-gen`) |
 | `validate_spec` | Validate a single spec file |
 
 ### Analysis (useful for maintainers)

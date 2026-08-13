@@ -46,6 +46,7 @@ still be rejected so the corpus stays canonically spaced.
 ## Example 2
 
 **Trigger**: a scoped annotation's closing bracket glued to the next word.
+**Expected Error Codes**: E757
 
 ```chat
 @UTF8
@@ -58,11 +59,10 @@ still be rejected so the corpus stays canonically spaced.
 @End
 ```
 
-**Expected Error Codes**: E757
-
 ## Example 3
 
 **Trigger**: an explanation code's closing bracket glued to the next word.
+**Expected Error Codes**: E757
 
 ```chat
 @UTF8
@@ -74,8 +74,6 @@ still be rejected so the corpus stays canonically spaced.
 @Comment:	ERROR: the explanation code is glued to the following word
 @End
 ```
-
-**Expected Error Codes**: E757
 
 ## Expected Behavior
 

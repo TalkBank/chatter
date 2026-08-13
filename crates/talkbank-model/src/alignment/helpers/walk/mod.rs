@@ -74,6 +74,56 @@ pub enum ContentItem<'a> {
     /// Simple nonvocal marker (`&{n=LABEL}`).
     NonvocalSimple(&'a NonvocalSimple),
 }
+impl ContentItem<'_> {
+    /// The SOURCE span of this item when it is a comma separator.
+    ///
+    /// `None` for a comma with no source position. Both callers exist to reason
+    /// about byte offsets, and under the re2c front end every separator carries
+    /// `Span::DUMMY` (`re2c/convert/items.rs` stamps it unconditionally), so a
+    /// comma that is real but position-less must not read as a position. One
+    /// caller guarded `!= Span::DUMMY` and the other did not, which meant `,,`
+    /// reported E258 at byte 0 under that parser. Folding the guard in here
+    /// makes the asymmetry unrepresentable rather than remembered.
+    pub fn comma_span(&self) -> Option<crate::Span> {
+        let Self::Separator(separator) = self else {
+            return None;
+        };
+        separator
+            .is_comma()
+            .then(|| separator.span())
+            .filter(|span| *span != crate::Span::DUMMY)
+    }
+
+    /// The SOURCE span of this item when it is a word-family item.
+    ///
+    /// One owner for a partition that `comma.rs::word_start` and
+    /// `spacing.rs::word_end` each spelled out over all 17 variants, differing
+    /// only in which end they read.
+    pub fn word_span(&self) -> Option<crate::Span> {
+        match self {
+            Self::Word(word) => Some(word.span),
+            // The ORIGINAL word's span, not the wrapper's: both callers
+            // read `replaced.word.span`, because the editorial replacement is
+            // not what occupies source position here.
+            Self::ReplacedWord(replaced) => Some(replaced.word.span),
+            Self::Separator(_)
+            | Self::Event(_)
+            | Self::Pause(_)
+            | Self::Action(_)
+            | Self::OverlapPoint(_)
+            | Self::OtherSpokenEvent(_)
+            | Self::Freecode(_)
+            | Self::InternalBullet(_)
+            | Self::LongFeatureBegin(_)
+            | Self::LongFeatureEnd(_)
+            | Self::UnderlineBegin(_)
+            | Self::UnderlineEnd(_)
+            | Self::NonvocalBegin(_)
+            | Self::NonvocalEnd(_)
+            | Self::NonvocalSimple(_) => None,
+        }
+    }
+}
 
 /// Mutable version of [`ContentItem`].
 pub enum ContentItemMut<'a> {

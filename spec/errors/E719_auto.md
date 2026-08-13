@@ -11,6 +11,7 @@ Sin count mismatch - too many sin tokens
 - **Level**: tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

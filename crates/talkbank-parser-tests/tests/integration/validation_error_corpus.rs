@@ -35,6 +35,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use talkbank_model::model::TranscriptName;
 
 use serde::Deserialize;
 use talkbank_model::ErrorCollector;
@@ -145,8 +146,10 @@ fn validation_errors_detected() -> Result<(), TestError> {
         if let ParseOutcome::Parsed(mut chat_file) = parse_result {
             let validation_errors = ErrorCollector::new();
             let fixture_path = dir.join(&entry.fixture);
-            let stem = fixture_path.file_stem().and_then(|s| s.to_str());
-            chat_file.validate_with_alignment(&validation_errors, stem);
+            chat_file.validate_with_alignment(
+                &validation_errors,
+                TranscriptName::for_path(&fixture_path),
+            );
             codes.extend(
                 validation_errors
                     .to_vec()

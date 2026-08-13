@@ -60,7 +60,7 @@ impl<'a> ContentLowering<'a> {
     /// Return the typed children of a `word_with_optional_annotations` node.
     ///
     /// Delegates to the NEW backend's free `extract_word_with_optional_annotations`
-    /// function, exposing (all `Positioned<..>`, read `.slot`):
+    /// function, exposing (all `Positioned<..>`, read `.slot()`):
     /// - `word`: `NodeSlot<StandaloneWordNode>` (required)
     /// - `child_1`: `Option<NodeSlot<WordWithOptionalAnnotationsChild1Children>>`
     ///   (the optional `[whitespace, replacement]` pair, NESTED because the
@@ -82,7 +82,7 @@ impl<'a> ContentLowering<'a> {
     /// Return the typed children of a `standalone_word` node.
     ///
     /// Delegates to the NEW backend's free `extract_standalone_word` function,
-    /// exposing (all `Positioned<..>`, read `.slot`):
+    /// exposing (all `Positioned<..>`, read `.slot()`):
     /// - `child_0`: `Option<NodeSlot<StandaloneWordChild0Choice>>` (the leading
     ///   `word_prefix | zero` choice, NEWLY MATERIALIZED as an explicit
     ///   position by the NEW backend; the OLD backend consumed it internally
@@ -107,7 +107,10 @@ impl<'a> ContentLowering<'a> {
 mod tests {
     use super::*;
     use crate::TreeSitterParser;
+    // Only the assertions below name a slot state; a file-scope import would be
+    // unused in a normal build.
     use crate::error::ErrorCollector;
+    use crate::generated_traversal::NodeSlot;
     use crate::node_types::STANDALONE_WORD;
 
     /// Recursively find the first node with the given kind in the subtree.
@@ -180,7 +183,7 @@ mod tests {
         // position (the OLD backend consumed it internally without exposing a
         // carrier field for it at all). The generated `extract_standalone_word`
         // kind-checks that slot before advancing: with no prefix present,
-        // `child_0.slot` stays `None` and the cursor does NOT advance, so
+        // `child_0.slot()` stays `None` and the cursor does NOT advance, so
         // `word_body` is correctly read at position 1 (Present) and
         // `form_marker` at position 2 (captured in `child_2`).
         //
@@ -198,8 +201,8 @@ mod tests {
                 // word_body is required: must be Present (not Absent/Unexpected).
                 // form_marker is the optional child_2: must be captured (Some).
                 (
-                    sw.child_1.slot.present_or_recover().is_ok(),
-                    sw.child_2.slot.is_some(),
+                    matches!(sw.child_1.slot(), NodeSlot::Present(_)),
+                    sw.child_2.slot().is_some(),
                 )
             },
         );

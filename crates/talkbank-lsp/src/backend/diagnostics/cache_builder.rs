@@ -10,6 +10,7 @@ use super::super::validation_cache::ValidationCache;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use talkbank_model::ErrorCollector;
+use talkbank_model::model::TranscriptName;
 use talkbank_model::model::{Bullet, ChatFile, Line, Utterance, UtteranceContent};
 use talkbank_model::validation::ValidationContext;
 
@@ -33,10 +34,10 @@ pub fn compute_scoped_errors(
         return Vec::new();
     }
 
-    talkbank_model::validation::cross_utterance::check_cross_utterance_patterns(
-        &chat_file.utterances().cloned().collect::<Vec<Utterance>>(),
-        context,
-    )
+    // The file itself, not a cloned vector of its utterances: this ran on every
+    // diagnostics rebuild and deep-cloned the whole document to hand the checks
+    // a contiguous slice they only read.
+    talkbank_model::validation::cross_utterance::check_cross_utterance_patterns(chat_file, context)
 }
 
 /// Compute bullet errors (timing monotonicity).
@@ -66,9 +67,12 @@ pub fn compute_bullet_errors(
 ///
 /// This fully re-validates headers and utterances; callers use this when headers changed
 /// or when there is no previous cache to reuse.
-pub fn build_validation_cache(chat_file: &mut ChatFile, filename: Option<&str>) -> ValidationCache {
+pub fn build_validation_cache(
+    chat_file: &mut ChatFile,
+    name: TranscriptName<'_>,
+) -> ValidationCache {
     let header_errors = ErrorCollector::new();
-    let context = chat_file.validate_headers_only(&header_errors, filename);
+    let context = chat_file.validate_headers_only(&header_errors, name);
 
     let mut utterance_errors = Vec::new();
     let mut utterance_scoped_signature = Vec::new();
@@ -106,7 +110,7 @@ pub fn build_validation_cache(chat_file: &mut ChatFile, filename: Option<&str>) 
 pub fn build_validation_cache_reuse_headers(
     chat_file: &mut ChatFile,
     old_cache: &ValidationCache,
-    filename: Option<&str>,
+    name: TranscriptName<'_>,
 ) -> ValidationCache {
     // Reuse header errors from old cache
     let header_errors = old_cache.header_errors.clone();
@@ -114,7 +118,7 @@ pub fn build_validation_cache_reuse_headers(
     // Get fresh context for utterance validation
     // (we reuse the header errors, but need fresh context from header validation)
     let header_errors_fresh = ErrorCollector::new();
-    let context = chat_file.validate_headers_only(&header_errors_fresh, filename);
+    let context = chat_file.validate_headers_only(&header_errors_fresh, name);
 
     // Use old header errors but new context for utterance validation
     let mut utterance_errors = Vec::new();

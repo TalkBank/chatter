@@ -29,7 +29,7 @@ pub fn parse_exp_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ExpT
     let children = extract_exp_dependent_tier(ExpDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

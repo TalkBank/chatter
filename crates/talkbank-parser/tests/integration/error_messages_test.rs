@@ -15,6 +15,7 @@
 //! **CRITICAL**: No error message should contain "node 'ERROR'" or expose tree-sitter internals.
 
 use crate::common::{parse_and_collect_errors, parse_validate_and_collect_diagnostics};
+use talkbank_model::model::TranscriptName;
 
 /// Tests no error node keyword in messages.
 #[test]
@@ -287,7 +288,7 @@ fn test_recovered_main_tier_does_not_cascade_e306_or_model_e305() {
     let header = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tINV Investigator\n@ID:\teng|test|INV|||||Investigator|||\n";
     let input = format!("{header}*INV:\t&- um and .\n@End\n");
 
-    let diagnostics = parse_validate_and_collect_diagnostics(&input, None);
+    let diagnostics = parse_validate_and_collect_diagnostics(&input, TranscriptName::Anonymous);
     let codes: Vec<&str> = diagnostics.iter().map(|(code, _)| code.as_str()).collect();
     assert!(
         codes.contains(&"E316"),

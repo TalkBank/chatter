@@ -18,9 +18,10 @@ use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::content::word::{
-    FormType, WordCategory, WordCliticBoundary, WordCompoundMarker, WordContent, WordContents,
-    WordLanguageMarker, WordLengthening, WordPhonetic, WordShortening, WordStressMarker,
-    WordStressMarkerType, WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
+    FormMarkerPayload, FormType, WordCategory, WordCliticBoundary, WordCompoundMarker, WordContent,
+    WordContents, WordLanguageMarker, WordLengthening, WordPhonetic, WordShortening,
+    WordStressMarker, WordStressMarkerType, WordSyllablePause, WordText, WordUnderlineBegin,
+    WordUnderlineEnd,
 };
 use talkbank_model::model::WriteChat;
 use talkbank_model::model::{LanguageCode, OverlapIndex, OverlapPoint, OverlapPointKind};
@@ -79,31 +80,48 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
                 build_word_contents(child, source, errors, &mut content_items);
             }
             "form_marker" => {
+                // The grammar captures the whole marker as ONE token, `@` and
+                // any `:label` included, and deliberately tokenizes shapes it
+                // does not sanction (`@zz`, `@x:foo`) so they can be named here
+                // rather than degrading into generic unparsable content.
+                //
+                // Which codes exist, and which of them take a `:label`, is the
+                // registry's business, not this function's: `@z` requires a
+                // label and `@x` refuses one, and both facts arrive through
+                // `from_payload`. This site used to re-derive the `@z:` half
+                // itself, with the re2c parser re-deriving it a second time.
                 let text = extract_utf8_text(child, source, errors, "form_marker", "");
-                // text is like "@b" or "@z:grm", may include :suffix from grammar
-                // But the grammar captures form_marker as just "@b" (token.immediate),
-                // and the :suffix is a separate child. Let's check both patterns.
-                if let Some(ft) = FormType::parse(text) {
-                    form_type = Some(ft);
-                } else if let Some(label) = text.strip_prefix("@z:") {
-                    // User-defined form REQUIRES the colon and a label: `@z:label`.
-                    // `@z` without a colon (e.g. `@zzz`) is NOT a user-defined form;
-                    // it falls through to the InvalidFormType (E203) branch below,
-                    // matching CLAN CHECK 147 ("undeclared special form marker").
-                    form_type = Some(FormType::UserDefined(label.to_string()));
-                } else {
-                    // Unknown form marker, report error (CHECK 147)
-                    let marker = text.strip_prefix('@').unwrap_or(text);
-                    errors.report(ParseError::new(
-                        ErrorCode::InvalidFormType,
-                        Severity::Error,
-                        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                        format!("Undeclared form marker '@{}'", marker),
-                    ).with_suggestion(
-                        "Valid form markers: @b @c @d @f @fp @g @i @k @l @ls @n @o @p @q @sas @si @sl @t @u @wp @x @z"
-                    ));
-                    form_type = Some(FormType::UserDefined(marker.to_string()));
+                // The `@` is stripped HERE rather than by the payload type,
+                // because the guarantee that it is present is the GRAMMAR's,
+                // and this is the only code that reads a grammar token. If it
+                // were ever absent the text is read as a bare payload, which is
+                // the honest reading, not a safe one: a bare declared code
+                // would parse. The re2c parser hands over a payload already
+                // stripped and calls the same constructor.
+                let payload = FormMarkerPayload::after_at(text.strip_prefix('@').unwrap_or(text));
+                match FormType::from_payload(payload) {
+                    Ok(declared) => form_type = Some(declared),
+                    Err(undeclared) => {
+                        // CLAN CHECK 147, "undeclared special form marker".
+                        errors.report(
+                            ParseError::new(
+                                ErrorCode::InvalidFormType,
+                                Severity::Error,
+                                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
+                                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
+                                format!("Undeclared form marker '@{}'", undeclared.payload()),
+                            )
+                            .with_suggestion(undeclared.suggestion()),
+                        );
+                        // Record what was WRITTEN, not a marker that happens
+                        // to be declared. This used to store
+                        // `UserDefined(payload)`, which claimed `word@zz` was
+                        // `@z` with label `zz` and would serialize back as
+                        // `word@z:zz`. Storing it also keeps the model's own
+                        // E203 check quiet, so the specific diagnostic above is
+                        // not duplicated by the generic one.
+                        form_type = Some(FormType::Undeclared(undeclared.into_payload()));
+                    }
                 }
             }
             "word_lang_suffix" => {

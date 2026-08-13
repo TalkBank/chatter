@@ -58,6 +58,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
 mod completion;
+mod file_utterances;
+use file_utterances::FileUtterances;
 mod helpers;
 mod quotation_follows;
 mod quotation_precedes;
@@ -66,7 +68,7 @@ mod scoped_markers;
 #[cfg(test)]
 mod tests;
 
-use crate::model::{OverlapPointKind, Terminator, Utterance, UtteranceContent};
+use crate::model::{OverlapPointKind, Terminator, UtteranceContent};
 use crate::{ErrorCollector, ErrorSink, ParseError};
 use helpers::has_quoted_linker;
 
@@ -75,12 +77,12 @@ use helpers::has_quoted_linker;
 /// This is the allocation-friendly convenience entrypoint used by callers that
 /// do not need to reuse a custom error sink. It always runs scoped-marker and
 /// overlap checks, while quotation-specific checks depend on runtime context flags.
-pub fn check_cross_utterance_patterns(
-    utterances: &[Utterance],
+pub fn check_cross_utterance_patterns<S: crate::validation::ValidationState>(
+    file: &crate::model::ChatFile<S>,
     context: &crate::validation::ValidationContext,
 ) -> Vec<ParseError> {
     let errors = ErrorCollector::new();
-    check_cross_utterance_patterns_with_sink(utterances, context, &errors);
+    check_cross_utterance_patterns_with_sink(file, context, &errors);
     errors.into_vec()
 }
 
@@ -89,11 +91,12 @@ pub fn check_cross_utterance_patterns(
 /// This function centralizes the full rule dispatch order, including feature-
 /// gated quotation checks and always-on scoped-marker balancing. The ordering
 /// is intentionally deterministic so diagnostics remain stable across runs.
-pub(crate) fn check_cross_utterance_patterns_with_sink(
-    utterances: &[Utterance],
+pub(crate) fn check_cross_utterance_patterns_with_sink<S: crate::validation::ValidationState>(
+    file: &crate::model::ChatFile<S>,
     context: &crate::validation::ValidationContext,
     errors: &impl ErrorSink,
 ) {
+    let utterances = &FileUtterances::of(file);
     for (idx, utterance) in utterances.iter().enumerate() {
         // Quotation follows pattern (Pattern A - E341)
         // Gated behind runtime flag - disabled by default
@@ -149,7 +152,7 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
 
     // E347: Cross-utterance overlap balance, top regions should have
     // matching bottom regions on a different speaker.
-    check_cross_utterance_overlap_balance(utterances, errors);
+    check_cross_utterance_overlap_balance(file, errors);
 }
 
 /// Rejects overlap pairs that imply a speaker overlapping with themself.
@@ -158,13 +161,10 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
 /// followed by a bottom-overlap pair, which semantically implies self-overlap.
 /// This catches annotation slips that are easy to miss when overlap brackets
 /// are edited manually across turn boundaries.
-fn check_self_overlap_markers(utterances: &[Utterance], errors: &impl ErrorSink) {
+fn check_self_overlap_markers(utterances: &FileUtterances<'_>, errors: &impl ErrorSink) {
     use crate::{ErrorCode, ErrorContext, Severity, SourceLocation};
 
-    for pair in utterances.windows(2) {
-        let first = &pair[0];
-        let second = &pair[1];
-
+    for (first, second) in utterances.consecutive_pairs() {
         if first.main.speaker != second.main.speaker {
             continue;
         }
@@ -227,136 +227,34 @@ fn has_overlap_kind(
 
 /// Validate cross-utterance overlap balance (E347).
 ///
-/// Uses [`analyze_file_overlaps`] for proper 1:N matching, one top region
+/// Uses `analyze_file_overlaps` for proper 1:N matching, one top region
 /// from speaker A can be matched by bottom regions from speakers B, C, etc.
 /// Only orphaned tops (no matching bottom from any speaker) and orphaned
 /// bottoms (no matching top from any speaker) are reported.
-fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl ErrorSink) {
+fn check_cross_utterance_overlap_balance<S: crate::validation::ValidationState>(
+    file: &crate::model::ChatFile<S>,
+    errors: &impl ErrorSink,
+) {
+    let utterances = FileUtterances::of(file);
     use crate::{ErrorCode, ErrorContext, Severity, SourceLocation};
 
-    // Convert &[Utterance] to &[Line] for analyze_file_overlaps.
-    // We need Line references, but utterances is &[Utterance]. Build Line
-    // wrappers on the fly, the analysis only reads, doesn't mutate.
+    // A near-copy of `alignment::helpers::overlap_groups::analyze_file_overlaps`.
     //
-    // Since analyze_file_overlaps takes &[Line], we need to construct Lines.
-    // But we only have &[Utterance]. Re-extract directly instead.
-    let analysis = {
-        use crate::alignment::helpers::overlap::{OverlapRegionKind, extract_overlap_info};
-        use crate::alignment::helpers::overlap_groups::{
-            FileOverlapAnalysis, OverlapAnchor, OverlapGroup, PerUtteranceOverlap,
-        };
-
-        // Replicate the core logic of analyze_file_overlaps on &[Utterance]
-        let mut per_utterance: Vec<PerUtteranceOverlap> = Vec::new();
-        for utt in utterances {
-            let info = extract_overlap_info(utt.main.content.content.as_slice());
-            let bullet = utt
-                .main
-                .content
-                .bullet
-                .as_ref()
-                .map(|b| (b.timing.start_ms, b.timing.end_ms));
-            per_utterance.push(PerUtteranceOverlap {
-                utterance_index: per_utterance.len(),
-                speaker: utt.main.speaker.to_string(),
-                info,
-                bullet,
-            });
-        }
-
-        let mut tops: Vec<OverlapAnchor> = Vec::new();
-        let mut bottoms: Vec<OverlapAnchor> = Vec::new();
-        for pu in &per_utterance {
-            for region in &pu.info.regions {
-                let anchor = OverlapAnchor {
-                    utterance_index: pu.utterance_index,
-                    speaker: pu.speaker.clone(),
-                    region: region.clone(),
-                    bullet: pu.bullet,
-                };
-                match region.kind {
-                    OverlapRegionKind::Top if region.has_begin() => tops.push(anchor),
-                    OverlapRegionKind::Bottom if region.has_begin() => bottoms.push(anchor),
-                    _ => {}
-                }
-            }
-        }
-
-        let mut top_to_bottoms: Vec<Vec<OverlapAnchor>> = vec![Vec::new(); tops.len()];
-        let mut bottom_matched: Vec<bool> = vec![false; bottoms.len()];
-
-        for (bi, bottom) in bottoms.iter().enumerate() {
-            // Reverse scan (nearest top first), matching 1:N across
-            // speakers. The only refinement over a naive reverse scan:
-            // when this bottom's speaker already has a sibling bottom
-            // attached to the candidate top, AND there is a "vacant
-            // sibling top" (same speaker, same utterance, same index,
-            // no bottom from this speaker yet), skip to distribute
-            // evenly. This prevents two FM bottoms from collapsing
-            // onto one AM top when two AM tops exist.
-            for (ti, top) in tops.iter().enumerate().rev() {
-                if top.speaker == bottom.speaker {
-                    continue;
-                }
-                if top.region.index != bottom.region.index {
-                    continue;
-                }
-                if top.utterance_index > bottom.utterance_index {
-                    continue;
-                }
-                // Distribution guard for same-speaker-pair siblings.
-                let already_has_same_speaker = top_to_bottoms[ti]
-                    .iter()
-                    .any(|b| b.speaker == bottom.speaker);
-                if already_has_same_speaker {
-                    let has_vacant_sibling = tops.iter().enumerate().any(|(oti, other_top)| {
-                        oti != ti
-                            && other_top.speaker == top.speaker
-                            && other_top.utterance_index == top.utterance_index
-                            && other_top.region.index == top.region.index
-                            && other_top.utterance_index <= bottom.utterance_index
-                            && !top_to_bottoms[oti]
-                                .iter()
-                                .any(|b| b.speaker == bottom.speaker)
-                    });
-                    if has_vacant_sibling {
-                        continue;
-                    }
-                }
-                top_to_bottoms[ti].push(bottom.clone());
-                bottom_matched[bi] = true;
-                break;
-            }
-        }
-
-        let mut groups = Vec::new();
-        let mut orphaned_tops = Vec::new();
-        for (ti, top) in tops.into_iter().enumerate() {
-            let matched = std::mem::take(&mut top_to_bottoms[ti]);
-            if matched.is_empty() {
-                orphaned_tops.push(top);
-            } else {
-                groups.push(OverlapGroup {
-                    top,
-                    bottoms: matched,
-                });
-            }
-        }
-
-        let orphaned_bottoms: Vec<OverlapAnchor> = bottoms
-            .into_iter()
-            .zip(bottom_matched)
-            .filter(|(_, m)| !*m)
-            .map(|(b, _)| b)
-            .collect();
-
-        FileOverlapAnalysis {
-            groups,
-            orphaned_tops,
-            orphaned_bottoms,
-            per_utterance,
-        }
-    };
+    // It said three times that it could not call the shared function because it
+    // "only had `&[Utterance]`", which stopped being true when this module
+    // started taking the file: `analyze_file_overlaps` wants `&[Line]` and the
+    // file has them. Deduplicating is a separate change with its own risk,
+    // because the two have already DIVERGED (this copy carries the
+    // vacant-sibling distribution guard below and the shared one does not), so
+    // merging them is an adjudication rather than a move.
+    // ONE owner. This was a ~90-line near-copy of `analyze_file_overlaps`,
+    // justified by a comment saying it "only had `&[Utterance]`"; the module
+    // takes the file now, and the shared function wants exactly its lines. The
+    // copy had also DIVERGED, carrying a distribution guard the shared one
+    // lacked, so the validator and the alignment analysis disagreed about the
+    // same transcript. The guard moved to the shared function, where the 23
+    // existing tests still pass, and the copy is deleted.
+    let analysis = crate::alignment::helpers::overlap_groups::analyze_file_overlaps(&file.lines);
 
     // Report orphaned tops, only for indexed markers.
     // Unindexed multi-party overlaps are inherently ambiguous; see
@@ -365,7 +263,9 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
         if orphan.region.index.is_none() {
             continue;
         }
-        let utt = &utterances[orphan.utterance_index];
+        let Some(utt) = utterances.get(orphan.utterance_index) else {
+            continue;
+        };
         // Control-flow invariant: `is_none()` short-circuits the
         // continue above; reaching this line guarantees `Some(...)`.
         #[allow(clippy::unwrap_used)]
@@ -375,7 +275,11 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
                 ErrorCode::UnbalancedOverlap,
                 Severity::Error,
                 SourceLocation::new(utt.main.span),
-                ErrorContext::new(&orphan.speaker, utt.main.span, &orphan.speaker),
+                ErrorContext::new(
+                    orphan.speaker.as_str(),
+                    utt.main.span,
+                    orphan.speaker.as_str(),
+                ),
                 format!(
                     "Top overlap ⌈{index_label} on speaker '{}' has no matching \
                      bottom overlap ⌊ from a different speaker",
@@ -394,7 +298,9 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
         if orphan.region.index.is_none() {
             continue;
         }
-        let utt = &utterances[orphan.utterance_index];
+        let Some(utt) = utterances.get(orphan.utterance_index) else {
+            continue;
+        };
         // Same control-flow invariant as the orphaned_tops loop above.
         #[allow(clippy::unwrap_used)]
         let index_label = format!(" (index {})", orphan.region.index.unwrap().get());
@@ -403,7 +309,11 @@ fn check_cross_utterance_overlap_balance(utterances: &[Utterance], errors: &impl
                 ErrorCode::UnbalancedOverlap,
                 Severity::Error,
                 SourceLocation::new(utt.main.span),
-                ErrorContext::new(&orphan.speaker, utt.main.span, &orphan.speaker),
+                ErrorContext::new(
+                    orphan.speaker.as_str(),
+                    utt.main.span,
+                    orphan.speaker.as_str(),
+                ),
                 format!(
                     "Bottom overlap ⌊{index_label} on speaker '{}' has no matching \
                      top overlap ⌈ from a different speaker",

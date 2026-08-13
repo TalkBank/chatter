@@ -40,6 +40,7 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use talkbank_model::model::TranscriptName;
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::ParseOutcome;
@@ -132,7 +133,7 @@ fn error_corpus_dirs() -> Vec<PathBuf> {
 fn chatter_surfaces_diagnostic(
     parser: &TreeSitterParser,
     source: &str,
-    stem: Option<&str>,
+    name: TranscriptName<'_>,
 ) -> bool {
     let parse_errors = ErrorCollector::new();
     let outcome = parser.parse_chat_file_fragment(source, 0, &parse_errors);
@@ -142,7 +143,7 @@ fn chatter_surfaces_diagnostic(
     match outcome {
         ParseOutcome::Parsed(mut chat_file) => {
             let validation_errors = ErrorCollector::new();
-            chat_file.validate_with_alignment(&validation_errors, stem);
+            chat_file.validate_with_alignment(&validation_errors, name);
             !validation_errors.is_empty()
         }
         ParseOutcome::Rejected => true,
@@ -200,8 +201,7 @@ fn no_recovery_node_in_accepted_file() -> Result<(), TestError> {
         }
         checked += 1;
 
-        let stem = fixture.file_stem().and_then(|s| s.to_str());
-        if !chatter_surfaces_diagnostic(&parser, &source, stem) {
+        if !chatter_surfaces_diagnostic(&parser, &source, TranscriptName::for_path(fixture)) {
             swallowed.push(format!(
                 "{name}: {recovery_nodes} tree-sitter recovery node(s) but chatter surfaced NO \
                  diagnostic (swallowed, file silently accepted)"

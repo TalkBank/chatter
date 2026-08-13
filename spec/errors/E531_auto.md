@@ -15,7 +15,7 @@ E531.
 
 ## Metadata
 - **Status**: implemented
-- **Last updated**: 2026-04-04 08:15 EDT
+- **Last updated**: 2026-08-11 16:20 EDT
 
 - **Error Code**: E531
 - **Category**: validation
@@ -59,8 +59,16 @@ https://talkbank.org/0info/manuals/CHAT.pdf
 
 ## Notes
 
-- Validation logic exists and is correct, but requires the filename to be
-  passed to the validator at invocation time
-- The spec test runner may not provide the filename context needed to trigger
-  the check
-- The code IS emitted in production when files are validated via CLI with paths
+- The check requires the transcript's name at validation time. Both runners now
+  supply it: the manifest-driven fixture runner passes each fixture's stem, and
+  the spec-example runner passes the stem of this example's own `**Source**`
+  line (`E531_media_filename_mismatch`), against which `@Media: different` is a
+  mismatch. Until 2026-08-11 the latter passed `None`, which silently disabled
+  every rule about the file's own name, so this spec could not be verified
+  there and was reported as failing rather than as untestable. The name is a
+  `TranscriptName` now, not an `Option<&str>`, so a caller with no name says
+  `Anonymous` rather than leaving a reader to work out what `None` switched off.
+- This example also emits E544 (`@Media` declares linkage but the transcript
+  carries no timing evidence), which is correct and independent: it has no
+  bullets. The expected-codes check is a subset test, so E544 is not declared
+  here; it is declared by E544's own spec.

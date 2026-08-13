@@ -11,6 +11,7 @@ Empty speaker code
 - **Level**: utterance
 - **Layer**: parser
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

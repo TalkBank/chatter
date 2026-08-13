@@ -11,6 +11,7 @@ Empty GRA relation
 - **Level**: tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

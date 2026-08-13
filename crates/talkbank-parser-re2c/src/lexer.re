@@ -201,10 +201,11 @@ impl<'a> Iterator for Lexer<'a> {
         // Word prefix
         w_prefix = "&-" | "&~" | "&+";
 
-        // Form marker suffix: @code with optional :extended
-        w_form = "@" ("u" | "b" | "c" | "d" | "f" | "fp" | "g" | "i" | "k" | "l"
-               | "ls" | "n" | "o" | "p" | "q" | "sas" | "si" | "sl" | "t" | "wp"
-               | "x" | "z") (":" [a-zA-Z0-9_]+)?;
+        // The closed set of form-marker codes, generated from
+        // spec/form_markers/form_marker_registry.json. Four rules below lex a
+        // word and each tags the marker's boundaries differently, so they share
+        // the code set rather than the whole marker pattern.
+        !include "generated_form_markers.re";
 
         // Language suffix: @s or @s:codes
         w_lang = "@s" (":" [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)?;
@@ -689,7 +690,17 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "[- " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(Langcode); }
 
         // grammar.js: replacement = seq('[', ':', words..., ']')
-        <MAIN_CONTENT> "[:" @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(Replacement); }
+        // Replacement content excludes `[` as well as `]`. grammar.js builds a
+        // replacement from `standalone_word`s, and `[` cannot appear in a word,
+        // so a `[` here opens something else and this is not a replacement.
+        //
+        // Without the exclusion `[: unclosed replacement [* error]` lexed as a
+        // COMPLETE replacement whose text merely contained `[* error`, so the
+        // unmatched `[` became invisible and the parser reported that the
+        // annotation lacked preceding text: a plausible-sounding wrong reason.
+        // Real CLAN CHECK reports "Unmatched [ found on the tier" and the
+        // canonical parser reports an unclosed replacement bracket.
+        <MAIN_CONTENT> "[:" @t1 [^\x00[\]\r\n]+ @t2 "]" { emit_t1t2!(Replacement); }
 
         // ── Pauses (grammar.js: pause_token with prec(10)) ──
         // grammar.js: token(prec(10, choice('(.)', '(..)', '(...)', /\(\d+(?::\d+)?\.\d*\)/)))
@@ -770,7 +781,7 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "\u230B" [1-9]? { emit!(OverlapBottomEnd); }   // ⌋
 
         // Word with prefix (&-, &~, &+)
-        <MAIN_CONTENT> w_prefix @t1 w_body @t2 ("@" @t3 ("u" | "b" | "c" | "d" | "f" | "fp" | "g" | "i" | "k" | "l" | "ls" | "n" | "o" | "p" | "q" | "sas" | "si" | "sl" | "t" | "wp" | "x" | "z") (":" [a-zA-Z0-9_]+)? @t4)? ("@s" (":" @t5 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? @t6)? ("$" @t7 [a-zA-Z:]+ @t8)? {
+        <MAIN_CONTENT> w_prefix @t1 w_body @t2 ("@" @t3 w_form_code (":" [a-zA-Z0-9_]+)? @t4)? ("@s" (":" @t5 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? @t6)? ("$" @t7 [a-zA-Z:]+ @t8)? {
             let end = self.cursor;
             let raw_text = &yyinput[start..end];
             let prefix = Some(&yyinput[start..self.t1]);
@@ -782,7 +793,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
 
         // Word with zero prefix (0 followed by word body)
-        <MAIN_CONTENT> "0" @t1 w_body @t2 ("@" @t3 ("u" | "b" | "c" | "d" | "f" | "fp" | "g" | "i" | "k" | "l" | "ls" | "n" | "o" | "p" | "q" | "sas" | "si" | "sl" | "t" | "wp" | "x" | "z") (":" [a-zA-Z0-9_]+)? @t4)? ("@s" (":" @t5 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? @t6)? ("$" @t7 [a-zA-Z:]+ @t8)? {
+        <MAIN_CONTENT> "0" @t1 w_body @t2 ("@" @t3 w_form_code (":" [a-zA-Z0-9_]+)? @t4)? ("@s" (":" @t5 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? @t6)? ("$" @t7 [a-zA-Z:]+ @t8)? {
             let end = self.cursor;
             let raw_text = &yyinput[start..end];
             let body = &yyinput[self.t1..self.t2];
@@ -793,7 +804,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
 
         // Word without prefix (body starts immediately)
-        <MAIN_CONTENT> w_body @t2 ("@" @t3 ("u" | "b" | "c" | "d" | "f" | "fp" | "g" | "i" | "k" | "l" | "ls" | "n" | "o" | "p" | "q" | "sas" | "si" | "sl" | "t" | "wp" | "x" | "z") (":" [a-zA-Z0-9_]+)? @t4)? ("@s" (":" @t5 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? @t6)? ("$" @t7 [a-zA-Z:]+ @t8)? {
+        <MAIN_CONTENT> w_body @t2 ("@" @t3 w_form_code (":" [a-zA-Z0-9_]+)? @t4)? ("@s" (":" @t5 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? @t6)? ("$" @t7 [a-zA-Z:]+ @t8)? {
             let end = self.cursor;
             let raw_text = &yyinput[start..end];
             let body = &yyinput[start..self.t2];
@@ -893,7 +904,7 @@ impl<'a> Iterator for Lexer<'a> {
         // ── Word suffix markers (tagged) ──
         // grammar.js: form_marker = token.immediate(/@(?:u|b|...|z)(?::[a-zA-Z0-9_]+)?/)
         // t1 = start of marker type, t2 = end of marker type (before optional :suffix)
-        <MAIN_CONTENT> "@" @t1 ("u" | "b" | "c" | "d" | "f" | "fp" | "g" | "i" | "k" | "l" | "ls" | "n" | "o" | "p" | "q" | "sas" | "si" | "sl" | "t" | "wp" | "x" | "z") @t2 (":" [a-zA-Z0-9_]+)? {
+        <MAIN_CONTENT> "@" @t1 w_form_code @t2 (":" [a-zA-Z0-9_]+)? {
             emit_t1!(FormMarker);
         }
 

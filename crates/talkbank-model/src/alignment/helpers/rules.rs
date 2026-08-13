@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Word_Timing_Tier>
 
-use crate::model::{ContentAnnotation, Separator, Word, WordCategory};
+use crate::model::{ContentAnnotation, ReplacedWord, Separator, Word, WordCategory};
 
 use super::domain::TierDomain;
 
@@ -45,20 +45,14 @@ fn is_alignment_ignore_annotation(annotation: &ContentAnnotation) -> bool {
 
 /// Return whether a word participates in alignment for the target domain.
 ///
-/// This is the canonical domain gate used by callers that do not carry
-/// container context.
-pub fn counts_for_tier(word: &Word, domain: TierDomain) -> bool {
-    counts_for_tier_in_context(word, domain, false)
-}
-
-/// Return whether a word participates in alignment for the target domain,
-/// given whether it appears inside retraced content.
+/// The canonical domain gate. It depends on the WORD and the target tier, and
+/// on nothing about the containers the word sits inside. `%wor` membership once
+/// depended on retrace ancestry and deliberately no longer does: `%wor` models
+/// spoken main-tier word slots directly, inside a retrace or not.
 ///
-/// The `in_retrace` parameter remains for call-site compatibility, but `%wor`
-/// membership no longer depends on retrace ancestry. `%wor` now models spoken
-/// main-tier word slots directly, regardless of whether those words appear
-/// inside or outside a retrace container.
-pub fn counts_for_tier_in_context(word: &Word, domain: TierDomain, _in_retrace: bool) -> bool {
+/// That invariant is what lets a single traversal call one leaf predicate, so
+/// do not reintroduce a container-context argument here.
+pub fn counts_for_tier(word: &Word, domain: TierDomain) -> bool {
     // Empty words (from parser artifacts) should never align
     if word.cleaned_text().is_empty() {
         return false;
@@ -164,9 +158,18 @@ fn is_wor_timing_token(word: &Word) -> bool {
 
 /// Return whether a replaced word should align in `%pho`/`%sin` domains.
 ///
-/// Omissions never align. Fragment-like words are excluded when a replacement exists.
-pub fn should_align_replaced_word_in_pho_sin(word: &Word, has_replacement: bool) -> bool {
-    if word
+/// Omissions never align. Fragment-like words are excluded when a replacement
+/// exists.
+///
+/// Takes the whole `ReplacedWord`, not `(&Word, has_replacement: bool)`. The
+/// bool was a DERIVED value the callee can compute: all five call sites already
+/// held this struct and all five passed the identical
+/// `!entry.replacement.words.is_empty()`, so the only thing the parameter added
+/// was five chances to pass the wrong expression, in a predicate whose answer
+/// changes what aligns.
+pub fn should_align_replaced_word_in_pho_sin(replaced: &ReplacedWord) -> bool {
+    if replaced
+        .word
         .category
         .as_ref()
         .is_some_and(WordCategory::is_omission)
@@ -174,7 +177,7 @@ pub fn should_align_replaced_word_in_pho_sin(word: &Word, has_replacement: bool)
         return false;
     }
 
-    if has_replacement && is_fragment_like(word) {
+    if !replaced.replacement.words.is_empty() && is_fragment_like(&replaced.word) {
         return false;
     }
 

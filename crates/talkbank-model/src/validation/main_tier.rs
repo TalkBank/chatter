@@ -118,7 +118,7 @@ fn has_nested_quotation(items: &[BracketedItem]) -> bool {
             ContentStructure::Retrace(_) | ContentStructure::Group(_) => structure
                 .enclosed()
                 .is_some_and(|content| has_nested_quotation(&content.content)),
-            ContentStructure::Word(_) | ContentStructure::Other => false,
+            ContentStructure::Word(_) | ContentStructure::Leaf(_) => false,
         }
     })
 }

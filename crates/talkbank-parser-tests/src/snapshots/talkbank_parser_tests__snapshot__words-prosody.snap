@@ -349,6 +349,242 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "The pair below carries the SHAPE real CA data uses, which the two",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "lines above do not: an underline begin glued INSIDE a word and an end",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "glued to the START of the next. Attested in ca-data/Bergmann as",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "`j:\\x02\\x01a \\x02\\x02da is noch mal s\\x02\\x01a\\x02\\x02:men`, written with escapes",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "here so the COMMENT does not itself contain underline markers: it is",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "parsed input, and a reflow that unbalanced them would present as a",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "parser regression in the very check this fixture pins.",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "The letters below are the",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "fixture's own, the placement is the corpus's. Standalone markers alone",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "never exercised the word-body scanner, which discarded these two for",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "years behind a \"skip for now\".",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "we",
+              "content": [
+                {
+                  "content": "we",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "we",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "need",
+              "content": [
+                {
+                  "content": "ne",
+                  "type": "text"
+                },
+                {
+                  "content": null,
+                  "type": "underlinebegin"
+                },
+                {
+                  "content": "ed",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "ne\u0002\u0001ed",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "to",
+              "content": [
+                {
+                  "content": "to",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "to",
+              "type": "word"
+            },
+            {
+              "type": "underline_end"
+            },
+            {
+              "cleaned_text": "do",
+              "content": [
+                {
+                  "content": "do",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "do",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "something",
+              "content": [
+                {
+                  "content": "something",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "something",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "that",
+              "content": [
+                {
+                  "content": "that",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "that",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "is",
+              "content": [
+                {
+                  "content": "is",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "is",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "something",
+              "content": [
+                {
+                  "content": "so",
+                  "type": "text"
+                },
+                {
+                  "content": null,
+                  "type": "underlinebegin"
+                },
+                {
+                  "content": "me",
+                  "type": "text"
+                },
+                {
+                  "content": null,
+                  "type": "underlineend"
+                },
+                {
+                  "content": "thing",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "so\u0002\u0001me\u0002\u0002thing",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "else",
+              "content": [
+                {
+                  "content": "else",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "else",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

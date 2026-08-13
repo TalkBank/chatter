@@ -49,9 +49,9 @@ pub fn parse_act_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ActT
     let children = extract_act_dependent_tier(ActDependentTierNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    let content = match children.child_2.slot {
+    let content = match children.child_2.slot() {
         NodeSlot::Present(text) => parse_bullet_content(text.raw_node(), source, errors),
-        NodeSlot::Missing(raw) => parse_bullet_content(raw, source, errors),
+        NodeSlot::Missing(raw) => parse_bullet_content(*raw, source, errors),
         NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,

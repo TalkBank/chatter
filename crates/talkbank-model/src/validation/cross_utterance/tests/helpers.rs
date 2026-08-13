@@ -14,7 +14,21 @@ use crate::validation::ValidationContext;
 /// checks fire during tests.
 pub fn check_cross_utterance_patterns(utterances: &[Utterance]) -> Vec<ParseError> {
     let context = ValidationContext::default().with_quotation_validation(true);
-    crate::validation::cross_utterance::check_cross_utterance_patterns(utterances, &context)
+    // A real `ChatFile`, not a hand-built sequence. There USED to be a
+    // `#[cfg(test)]` constructor that took the slice directly; it was the one
+    // door into the invariant the sequence type exists to hold, and it turned
+    // out to be unnecessary, because `Line::Utterance` and `ChatFile::new` are
+    // both public. Going through the front door also keeps the PUBLIC entry
+    // point tested: routing these fixtures around it left it with no coverage
+    // at all, and it is the LSP's only way in.
+    let file = crate::model::ChatFile::new(
+        utterances
+            .iter()
+            .cloned()
+            .map(|utt| crate::model::Line::Utterance(Box::new(utt)))
+            .collect(),
+    );
+    crate::validation::cross_utterance::check_cross_utterance_patterns(&file, &context)
 }
 
 /// Builds a minimal utterance fixture for cross-utterance tests.

@@ -20,13 +20,25 @@
 //!
 //! Re-home: `word@zz` PARSES into a structured word with a `form_marker` child
 //! (`@zz`). The parser's typed dispatch reads that parsed `form_marker` node's
-//! own text and, because the base marker `zz` is not in the valid set
-//! (a,b,c,d,f,fp,g,i,k,l,ls,n,o,p,q,sas,si,sl,t,u,wp,x,z, and `@z:label` for
-//! user-defined), emits E203 (`InvalidFormType`). Reading a parsed node's own
-//! content for validation is typed-model work, NOT raw-CHAT / ERROR-text scanning.
+//! own text and hands it to `FormType::from_payload`, which owns the question
+//! of which markers exist; `zz` is not one of them, so E203 (`InvalidFormType`)
+//! is emitted. Reading a parsed node's own content for validation is
+//! typed-model work, NOT raw-CHAT / ERROR-text scanning.
+//!
+//! This comment used to enumerate the valid set, and by 2026-08-11 it was the
+//! last place in the repository still advertising `@a`, one commit after `@a`
+//! was retired. The set has one owner now,
+//! `spec/form_markers/form_marker_registry.json`; a copy here could only ever
+//! go stale again, because nothing reads a comment.
 //! The redundant ERROR-text branches are removed; this test pins that the typed
 //! path still flags `@zz`, does NOT regress to generic E316, and does NOT
 //! false-positive on valid markers (`@i`, `@s:eng`).
+
+use talkbank_model::ErrorCollector;
+use talkbank_model::model::FileStem;
+use talkbank_model::model::TranscriptName;
+use talkbank_model::model::WriteChat;
+use talkbank_parser::TreeSitterParser;
 
 /// An unknown form marker `word@zz` must be flagged E203 via the typed
 /// `form_marker` dispatch, and must NOT regress to a generic E316.
@@ -34,8 +46,10 @@
 fn unknown_form_marker_emits_e203_not_e316() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword@zz .\n@End\n";
 
-    let diags =
-        crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
+    let diags = crate::common::parse_validate_and_collect_diagnostics(
+        input,
+        TranscriptName::Named(FileStem::from_str("e203_regression")),
+    );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(
@@ -54,8 +68,10 @@ fn unknown_form_marker_emits_e203_not_e316() {
 fn valid_builtin_form_marker_not_flagged() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello@i .\n@End\n";
 
-    let diags =
-        crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
+    let diags = crate::common::parse_validate_and_collect_diagnostics(
+        input,
+        TranscriptName::Named(FileStem::from_str("e203_regression")),
+    );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(
@@ -74,8 +90,10 @@ fn valid_builtin_form_marker_not_flagged() {
 fn valid_language_suffix_not_flagged() {
     let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello@s:eng .\n@End\n";
 
-    let diags =
-        crate::common::parse_validate_and_collect_diagnostics(input, Some("e203_regression"));
+    let diags = crate::common::parse_validate_and_collect_diagnostics(
+        input,
+        TranscriptName::Named(FileStem::from_str("e203_regression")),
+    );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
     assert!(
@@ -85,5 +103,41 @@ fn valid_language_suffix_not_flagged() {
     assert!(
         !codes.contains(&"E316"),
         "Valid language suffix `hello@s:eng` must not produce E316; got: {diags:#?}",
+    );
+}
+
+/// An undeclared marker survives a parse-and-serialize round trip byte for
+/// byte.
+///
+/// # Why this exists
+///
+/// The recovery path used to store `FormType::UserDefined(payload)` for
+/// `word@zz`, which asserts that the word carries the `@z` user-defined marker
+/// with label `zz`. `Word::write_chat` rebuilds the marker from `form_type`
+/// rather than from the raw text, so it wrote `word@z:zz`: a silent
+/// corruption, unobservable only because every command that serializes aborts
+/// on E203 first. That is a latent trap, not a safe state, and the re2c parser
+/// stored nothing at all for the same input, so the two parsers disagreed.
+///
+/// A ROUNDTRIP test rather than an assertion about which variant is stored,
+/// deliberately: this pins the property that matters (the transcript comes
+/// back unchanged), which no type signature can state, and it still holds if
+/// the recovery representation changes again.
+#[test]
+fn an_undeclared_form_marker_round_trips_unchanged() {
+    let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+                 @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword@zz .\n@End\n";
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let errors = ErrorCollector::new();
+    let chat_file = parser.parse_chat_file_streaming(input, &errors);
+
+    let mut serialized = String::new();
+    chat_file.write_chat(&mut serialized).expect("serialize");
+
+    assert_eq!(
+        serialized, input,
+        "an undeclared form marker must serialize back verbatim; storing it as \
+         a DECLARED marker rewrote `word@zz` as `word@z:zz`"
     );
 }

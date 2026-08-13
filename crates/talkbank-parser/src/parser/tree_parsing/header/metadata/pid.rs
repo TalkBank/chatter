@@ -7,6 +7,7 @@ use crate::node_types::{FREE_TEXT, PID_HEADER};
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::parser_helpers::find_child_by_kind;
 use talkbank_model::model::{Header, PidValue, WarningText};
 
 /// Build `Header::Unknown` for malformed `@PID` input.
@@ -75,11 +76,4 @@ pub fn parse_pid_header(node: Node, source: &str, errors: &impl ErrorSink) -> He
     Header::Pid {
         pid: PidValue::new(pid),
     }
-}
-
-/// Find first direct child matching `kind`.
-fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .find(|child| child.kind() == kind)
 }

@@ -29,6 +29,7 @@
 use crate::model::Line;
 
 use super::overlap::{OverlapMarkerInfo, OverlapRegion, OverlapRegionKind, extract_overlap_info};
+use crate::model::SpeakerCode;
 
 /// An overlap region anchored to a specific utterance.
 #[derive(Debug, Clone)]
@@ -36,7 +37,12 @@ pub struct OverlapAnchor {
     /// Index of the utterance in the file's utterance list (0-based).
     pub utterance_index: usize,
     /// Speaker code of the utterance.
-    pub speaker: String,
+    ///
+    /// `SpeakerCode`, not `String`: the code is an interned `Arc<str>` and a
+    /// field typed `String` is what made `speaker.to_string()` look like the
+    /// natural way to fill it, heap-allocating a fresh copy per utterance and
+    /// discarding the interning the type exists to provide.
+    pub speaker: SpeakerCode,
     /// The overlap region within this utterance.
     pub region: OverlapRegion,
     /// Utterance-level timing bullet, if present.
@@ -75,8 +81,8 @@ pub struct FileOverlapAnalysis {
 pub struct PerUtteranceOverlap {
     /// Utterance index.
     pub utterance_index: usize,
-    /// Speaker code.
-    pub speaker: String,
+    /// Speaker code. See [`OverlapAnchor::speaker`] for why it is not a `String`.
+    pub speaker: SpeakerCode,
     /// Overlap marker info for this utterance.
     pub info: OverlapMarkerInfo,
     /// Utterance-level timing bullet.
@@ -128,7 +134,7 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
                 .map(|b| (b.timing.start_ms, b.timing.end_ms));
             per_utterance.push(PerUtteranceOverlap {
                 utterance_index: per_utterance.len(),
-                speaker: utt.main.speaker.to_string(),
+                speaker: utt.main.speaker.clone(),
                 info,
                 bullet,
             });
@@ -175,6 +181,35 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
             // Must precede or be at the same utterance position.
             if top.utterance_index > bottom.utterance_index {
                 continue;
+            }
+            // Distribution guard for same-speaker-pair siblings: when this
+            // bottom's speaker already has a sibling attached to this top AND
+            // a vacant sibling top exists (same speaker, same utterance, same
+            // index, no bottom from this speaker yet), skip so the bottoms
+            // distribute instead of collapsing. Without it two FM bottoms
+            // land on one AM top while a second AM top sits empty.
+            //
+            // This lived only in a near-copy of this function inside
+            // `validation::cross_utterance`, so the validator and this
+            // analysis disagreed about the same transcript. The copy is gone;
+            // this is the one owner.
+            let already_has_same_speaker = top_to_bottoms[ti]
+                .iter()
+                .any(|b| b.speaker == bottom.speaker);
+            if already_has_same_speaker {
+                let has_vacant_sibling = tops.iter().enumerate().any(|(oti, other_top)| {
+                    oti != ti
+                        && other_top.speaker == top.speaker
+                        && other_top.utterance_index == top.utterance_index
+                        && other_top.region.index == top.region.index
+                        && other_top.utterance_index <= bottom.utterance_index
+                        && !top_to_bottoms[oti]
+                            .iter()
+                            .any(|b| b.speaker == bottom.speaker)
+                });
+                if has_vacant_sibling {
+                    continue;
+                }
             }
             best_top = Some(ti);
             break;
@@ -274,9 +309,9 @@ mod tests {
 
         let analysis = analyze_file_overlaps(&lines);
         assert_eq!(analysis.groups.len(), 1);
-        assert_eq!(analysis.groups[0].top.speaker, "A");
+        assert_eq!(analysis.groups[0].top.speaker.as_str(), "A");
         assert_eq!(analysis.groups[0].bottoms.len(), 1);
-        assert_eq!(analysis.groups[0].bottoms[0].speaker, "B");
+        assert_eq!(analysis.groups[0].bottoms[0].speaker.as_str(), "B");
         assert!(analysis.orphaned_tops.is_empty());
         assert!(analysis.orphaned_bottoms.is_empty());
     }
@@ -316,8 +351,8 @@ mod tests {
         let analysis = analyze_file_overlaps(&lines);
         assert_eq!(analysis.groups.len(), 1, "one top → one group");
         assert_eq!(analysis.groups[0].bottoms.len(), 2, "two bottoms matched");
-        assert_eq!(analysis.groups[0].bottoms[0].speaker, "B");
-        assert_eq!(analysis.groups[0].bottoms[1].speaker, "C");
+        assert_eq!(analysis.groups[0].bottoms[0].speaker.as_str(), "B");
+        assert_eq!(analysis.groups[0].bottoms[1].speaker.as_str(), "C");
         assert!(analysis.orphaned_tops.is_empty());
         assert!(analysis.orphaned_bottoms.is_empty());
     }
@@ -418,7 +453,7 @@ mod tests {
         let analysis = analyze_file_overlaps(&lines);
         assert_eq!(analysis.groups.len(), 0);
         assert_eq!(analysis.orphaned_tops.len(), 1);
-        assert_eq!(analysis.orphaned_tops[0].speaker, "A");
+        assert_eq!(analysis.orphaned_tops[0].speaker.as_str(), "A");
     }
 
     #[test]

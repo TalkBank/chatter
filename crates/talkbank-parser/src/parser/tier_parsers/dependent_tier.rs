@@ -132,8 +132,8 @@ pub fn parse_dependent_tier(input: &str, errors: &impl ErrorSink) -> ParseOutcom
 fn find_first_dependent_tier<'tree>(
     root: tree_sitter::Node<'tree>,
 ) -> Option<DependentTierChoice<'tree>> {
-    if let NodeSlot::Present(choice) = extract_dependent_tier(root).content.slot {
-        return Some(choice);
+    if let NodeSlot::Present(choice) = extract_dependent_tier(root).content.slot() {
+        return Some(choice.clone());
     }
 
     let mut cursor = root.walk();

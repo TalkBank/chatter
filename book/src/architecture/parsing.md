@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-07-07 21:17 EDT
+**Last updated:** 2026-08-12 21:15 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -66,8 +66,16 @@ with five states:
 
 This design makes silent recovery-node loss structurally impossible at
 modeled positions: `Missing` and `Error` are explicit variants every
-call site must handle (they map to the E342 and E316 diagnostics), not
-conditions a hand-written walk can forget to check. Hand-walking the CST
+call site must handle, not conditions a hand-written walk can forget to
+check. `Missing` maps to E342 (a MISSING placeholder for a required
+element); `Error` reaches E316, which is the generic "content could not be
+parsed" catch-all.
+
+That asymmetry matters when reading a diagnostic. E342 names a specific fact
+the parser knows. E316 names the absence of one, so an E316 on input a human
+can read is a standing invitation to ask whether the parser, rather than the
+file, is at fault: a generic code standing in for a specific rule is one of the
+documented tells of a chatter defect. Hand-walking the CST
 with `node.kind()` comparisons, and classifying the text of ERROR nodes
 to guess what was malformed, are both banned in production parser code
 for exactly this reason.
@@ -80,12 +88,18 @@ junk. The layers are complementary, and both are load-bearing: removing
 the backstop demonstrably regresses the CHECK-parity and
 recovery-is-not-validity test suites.
 
-The module is regenerated whenever the grammar changes (the regeneration
-workflow, including the staleness guard that fails the test suite if
-regeneration is forgotten, is documented in the repository root
-`CLAUDE.md` under "Grammar Change Workflow"). It is never edited by
-hand: generator defects are fixed in `tree-sitter-grammar-utils` and
-regenerated.
+The module is regenerated whenever the grammar changes; the command and its
+preconditions are in [Grammar Workflow](../contributing/grammar-workflow.md).
+It is never edited by hand: generator defects are fixed in
+`tree-sitter-grammar-utils` and regenerated.
+
+**The staleness guard proves less than its name suggests.**
+`generated_traversal_is_current` recomputes the digests of `grammar.json` and
+`node-types.json`, so it catches a forgotten regeneration after a grammar
+change and nothing else. It cannot see which generator produced the file, so a
+module emitted by an older backend passes indefinitely. The generator's name
+and version are stamped in the file's own header comment; read that when the
+question is which backend built it.
 
 ### Error Recovery
 
@@ -107,13 +121,16 @@ This allows the parser to skip individual malformed elements while continuing to
 
 ## Parser Equivalence
 
-The 78-file reference corpus is the primary correctness guarantee:
+The reference corpus is the primary correctness signal:
 
 ```bash
-cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-tests --tests parser_equivalence
 ```
 
-Each `.cha` file is its own test, so failures are reported per file.
+Each `.cha` file is its own test, so failures are reported per file. The file
+count is deliberately not stated here: this page claimed 78 for months while the
+corpus grew past a hundred. Ask the tree
+(`rg --files -g '*.cha' corpus/reference | wc -l`).
 
 ## TreeSitterParser API
 

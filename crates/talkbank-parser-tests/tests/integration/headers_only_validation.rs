@@ -23,6 +23,7 @@
 //! BOTH entry points", not "E767 fires", so the next header rule that gets
 //! written as a file-level sweep fails here rather than in an editor.
 
+use talkbank_model::model::TranscriptName;
 use talkbank_model::{ErrorCode, ErrorCollector};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
@@ -55,7 +56,7 @@ fn header_payload_rules_fire_from_validate_headers_only() -> Result<(), TestErro
     let file = parse(WHITESPACE_BEFORE_COMMA)?;
 
     let headers_only = codes_from(|errors| {
-        file.validate_headers_only(errors, None);
+        file.validate_headers_only(errors, TranscriptName::Anonymous);
     });
     assert!(
         headers_only.contains(&ErrorCode::MediaWhitespaceBeforeComma),
@@ -72,10 +73,10 @@ fn both_entry_points_report_the_same_header_rule() -> Result<(), TestError> {
     let file = parse(WHITESPACE_BEFORE_COMMA)?;
 
     let headers_only = codes_from(|errors| {
-        file.validate_headers_only(errors, None);
+        file.validate_headers_only(errors, TranscriptName::Anonymous);
     });
     let full = codes_from(|errors| {
-        file.validate(errors, None);
+        file.validate(errors, TranscriptName::Anonymous);
     });
 
     assert!(
@@ -93,7 +94,7 @@ fn both_entry_points_report_the_same_header_rule() -> Result<(), TestError> {
 fn full_validation_reports_the_rule_exactly_once() -> Result<(), TestError> {
     let file = parse(WHITESPACE_BEFORE_COMMA)?;
     let full = codes_from(|errors| {
-        file.validate(errors, None);
+        file.validate(errors, TranscriptName::Anonymous);
     });
 
     let count = full

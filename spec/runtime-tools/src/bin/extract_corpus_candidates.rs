@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 use talkbank_model::ErrorCollector;
+use talkbank_model::model::TranscriptName;
 use talkbank_parser::TreeSitterParser;
 use tree_sitter::Parser as TSParser;
 use tree_sitter_talkbank::LANGUAGE;
@@ -326,10 +327,13 @@ fn rust_validity_counts(
     }
 
     let sink = ErrorCollector::new();
+    // This helper counts diagnostics for candidate text, not for a file, so
+    // rules about the transcript's own name do not apply.
+    let name = TranscriptName::Anonymous;
     if validate_alignment {
-        chat_file.validate_with_alignment(&sink, None);
+        chat_file.validate_with_alignment(&sink, name);
     } else {
-        chat_file.validate(&sink, None);
+        chat_file.validate(&sink, name);
     }
     let validation_errors = sink.into_vec();
     (parse_diagnostic_count, validation_errors.len())

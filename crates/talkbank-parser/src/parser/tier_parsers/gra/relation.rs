@@ -47,7 +47,7 @@ pub(super) fn parse_gra_relation(
     let children = extract_gra_relation(GraRelationNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    let index_text = match children.index.slot {
+    let index_text = match children.index.slot() {
         NodeSlot::Present(index_node) => {
             let field = index_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
@@ -109,7 +109,7 @@ pub(super) fn parse_gra_relation(
         }
     };
 
-    let head_text = match children.head.slot {
+    let head_text = match children.head.slot() {
         NodeSlot::Present(head_node) => {
             let field = head_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
@@ -158,7 +158,7 @@ pub(super) fn parse_gra_relation(
         }
     };
 
-    let relation_text = match children.relation.slot {
+    let relation_text = match children.relation.slot() {
         NodeSlot::Present(relation_node) => {
             let field = relation_node.raw_node();
             match field.utf8_text(source.as_bytes()) {

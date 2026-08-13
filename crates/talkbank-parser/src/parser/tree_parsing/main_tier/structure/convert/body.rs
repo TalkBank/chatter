@@ -24,10 +24,11 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{AsRawNode, NodeSlot, TierBodyChildren};
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use tree_sitter::Node;
 
-use super::super::super::content::analyze_word_error;
+use super::super::super::content::{
+    MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
+};
 use super::super::contents::parse_main_tier_contents;
 use super::ending::{UtteranceEndTail, parse_utterance_end};
 use super::linkers::parse_linkers;
@@ -54,7 +55,7 @@ pub(super) fn parse_tier_body(
     // (decoded by the shared linker parser); every other state maps to an empty
     // linker list, matching the pre-migration absent-linkers behavior with no new
     // diagnostic.
-    let linkers = match &body.linkers.slot {
+    let linkers = match body.linkers.slot() {
         Some(NodeSlot::Present(linkers_node)) => {
             parse_linkers(linkers_node.raw_node(), source, errors)
         }
@@ -77,7 +78,7 @@ pub(super) fn parse_tier_body(
     // the old behavior of running the contents walk over whatever node sat at
     // this position. The contents internals are migrated separately (this
     // cluster's `contents.rs`, below).
-    let content = match &body.content_2.slot {
+    let content = match body.content_2.slot() {
         NodeSlot::Present(contents_node) => {
             parse_main_tier_contents(contents_node.raw_node(), source, errors)
         }
@@ -87,7 +88,11 @@ pub(super) fn parse_tier_body(
         // backstop also covers ERROR nodes) and yield empty content rather than
         // fabricating model values.
         NodeSlot::Error(node) => {
-            errors.report(analyze_word_error(*node, source));
+            errors.report(classify_main_tier_recovery(
+                *node,
+                source,
+                MainTierRegion::Body,
+            ));
             Vec::new()
         }
         NodeSlot::Unexpected(node) => {
@@ -109,7 +114,7 @@ pub(super) fn parse_tier_body(
         terminator,
         postcodes,
         bullet,
-    } = match &body.ending.slot {
+    } = match body.ending.slot() {
         NodeSlot::Present(ending_node) => {
             parse_utterance_end(ending_node.raw_node(), source, errors)
         }
@@ -120,7 +125,11 @@ pub(super) fn parse_tier_body(
         // it to the same analyzer here. No terminator is recovered; the whole-tree
         // backstop covers the surviving ERROR / MISSING nodes. Malformed-only path.
         NodeSlot::Error(error_node) => {
-            errors.report(analyze_word_error(*error_node, source));
+            errors.report(classify_main_tier_recovery(
+                *error_node,
+                source,
+                MainTierRegion::Body,
+            ));
             UtteranceEndTail::default()
         }
         // No usable `utterance_end` at this position: the old end-parser reported
@@ -142,9 +151,27 @@ pub(super) fn parse_tier_body(
         }
     };
 
-    // Surface the carrier's own `unexpected` sink (R2). Empty on every fixture
-    // probed so far; load-bearing once the whole-tree backstop is deleted.
-    surface_unexpected(&body.unexpected, source, errors);
+    // Surface the carrier's own `unexpected` sink (R2).
+    //
+    // This is no longer the empty set it was assumed to be. A malformed
+    // fragment BETWEEN `contents` and `ending` (`*CHI:\thello [: world .`)
+    // parses as an ERROR that is a direct child of `tier_body`, filling no
+    // grammar position, so it arrives here rather than inside `contents`.
+    //
+    // It must be classified by the MAIN-TIER word classifier, not by the
+    // generic backstop. The two answer the same question at different
+    // resolutions: [`analyze_word_error`] knows main-tier word syntax and names
+    // the construct (an unclosed replacement, a bare `&`, a misplaced form
+    // marker), while the backstop knows only that something did not parse and
+    // so answers E316, the generic "unparsable content" catch-all.
+    //
+    // Routing the sink to the backstop silently degraded six error codes to
+    // E316 with every gate green, because each of those codes still had a
+    // PASSING test: the same construct at utterance start takes a different
+    // route and was the only position any spec example covered. A node is not a
+    // different kind of problem because recovery placed it elsewhere, so the
+    // sink asks the classifier that matches the REGION.
+    surface_main_tier_sink(&body.unexpected, MainTierRegion::Body, source, errors);
 
     TierBodyData {
         linkers,
@@ -187,7 +214,7 @@ fn parse_optional_langcode(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParsedLangcode {
-    let group = match &body.language_code.slot {
+    let group = match body.language_code.slot() {
         Some(NodeSlot::Present(group)) => group,
         Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
@@ -199,13 +226,13 @@ fn parse_optional_langcode(
             };
         }
     };
-    surface_unexpected(&group.unexpected, source, errors);
+    surface_main_tier_sink(&group.unexpected, MainTierRegion::Body, source, errors);
 
     // Only a `Present` langcode token proceeds to decode, matching the OLD
     // `.ok()` collapse (which yielded `Some` for `Present` ONLY): a zero-width
     // MISSING langcode placeholder maps to no code and no diagnostic, the same
     // as Error/Unexpected/Absent, exactly like the pre-migration behavior.
-    let node = match &group.child_0.slot {
+    let node = match group.child_0.slot() {
         NodeSlot::Present(langcode_node) => langcode_node.raw_node(),
         NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
             return ParsedLangcode {

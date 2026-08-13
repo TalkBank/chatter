@@ -228,7 +228,6 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::PauseGluedToWord => DiagnosticKind::Invalidity, // E751: E751_pause_glued_to_word.md
         ErrorCode::TimingWithoutMedia => DiagnosticKind::Invalidity, // E752: E752_timing_without_media.md
         ErrorCode::WordOnlyRepetitionSegments => DiagnosticKind::Invalidity, // E753: E753_word_only_repetition_segments.md
-        ErrorCode::LetterFormMultipleLetters => DiagnosticKind::Invalidity, // E754: E754_letter_form_multiple_letters.md
         ErrorCode::UndeclaredUtteranceLanguage => DiagnosticKind::Invalidity, // E755: E755_undeclared_utterance_language.md
         ErrorCode::EmptyUserDefinedTier => DiagnosticKind::Invalidity, // E756: E756_empty_user_defined_tier.md
         ErrorCode::CodeGluedToFollowingContent => DiagnosticKind::Style, // E757: E757_code_glued_to_following_content.md

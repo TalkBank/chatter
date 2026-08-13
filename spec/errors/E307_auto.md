@@ -11,12 +11,13 @@ Auto-generated from corpus
 - **Level**: utterance
 - **Layer**: parser
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 
 **Source**: `E3xx_main_tier_errors/E307_invalid_speaker_chars.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E370
+**Trigger**: Speaker code containing a colon (`*A:B:`), which the lexer reads as a lengthening marker before spoken material
+**Expected Error Codes**: E246
 
 ```chat
 @UTF8

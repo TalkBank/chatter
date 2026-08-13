@@ -122,15 +122,24 @@ pub mod bug_annotations;
 
 pub mod check_error_map;
 pub mod conformance_inventory;
+pub mod construct_coverage;
+pub mod content_catch_alls;
+pub mod error_code_specs;
 pub mod error_corpus_gen;
 pub mod feature_signature;
+pub mod gate;
+pub mod golden_word_validity;
 /// The NEW-backend typed CST traversal (see `talkbank-parser`'s
 /// `generated_traversal`); re-exported here for the tests in this crate
 /// that drive the free-fn API directly (conformance, parity, slot-repeat).
 pub use talkbank_parser::generated_traversal;
+pub mod error_specs;
+pub mod repo_paths;
 pub mod snapshot;
+pub mod spec_status;
 pub mod template;
 pub mod test_error;
+pub mod test_hygiene;
 
 pub use bug_annotations::{BugAction, BugAnnotation, GoldenBugs};
 pub use feature_signature::WordFeatureSignature;

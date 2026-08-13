@@ -82,37 +82,37 @@ fn test_main_tier_all_fields_present() {
         if node.kind() == "main_tier" {
             let c = extract_main_tier(MainTierNode(node));
             assert!(
-                matches!(c.child_0.slot, NodeSlot::Present(_)),
+                matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "star: {:?}",
-                c.child_0.slot
+                c.child_0.slot()
             );
             assert!(
-                matches!(c.speaker.slot, NodeSlot::Present(_)),
+                matches!(c.speaker.slot(), NodeSlot::Present(_)),
                 "speaker: {:?}",
-                c.speaker.slot
+                c.speaker.slot()
             );
             assert!(
-                matches!(c.child_2.slot, NodeSlot::Present(_)),
+                matches!(c.child_2.slot(), NodeSlot::Present(_)),
                 "colon: {:?}",
-                c.child_2.slot
+                c.child_2.slot()
             );
             assert!(
-                matches!(c.child_3.slot, NodeSlot::Present(_)),
+                matches!(c.child_3.slot(), NodeSlot::Present(_)),
                 "tab: {:?}",
-                c.child_3.slot
+                c.child_3.slot()
             );
             assert!(
-                c.child_4.slot.is_none(),
+                c.child_4.slot().is_none(),
                 "sep_trailing_space (clean tab, no illegal trailing space): {:?}",
-                c.child_4.slot
+                c.child_4.slot()
             );
             assert!(
-                matches!(c.child_5.slot, NodeSlot::Present(_)),
+                matches!(c.child_5.slot(), NodeSlot::Present(_)),
                 "tier_body: {:?}",
-                c.child_5.slot
+                c.child_5.slot()
             );
 
-            if let NodeSlot::Present(spk) = &c.speaker.slot {
+            if let NodeSlot::Present(spk) = c.speaker.slot() {
                 assert_eq!(node_text(spk.0, source), "CHI");
             }
             found = true;
@@ -136,19 +136,19 @@ fn test_participants_header() {
             let c = extract_participants_header(ParticipantsHeaderNode(node));
             // Should have all required children present
             assert!(
-                matches!(c.child_0.slot, NodeSlot::Present(_)),
+                matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "prefix: {:?}",
-                c.child_0.slot
+                c.child_0.slot()
             );
             assert!(
-                matches!(c.child_1.slot, NodeSlot::Present(_)),
+                matches!(c.child_1.slot(), NodeSlot::Present(_)),
                 "header_sep: {:?}",
-                c.child_1.slot
+                c.child_1.slot()
             );
             assert!(
-                matches!(c.child_2.slot, NodeSlot::Present(_)),
+                matches!(c.child_2.slot(), NodeSlot::Present(_)),
                 "contents: {:?}",
-                c.child_2.slot
+                c.child_2.slot()
             );
             found = true;
         }
@@ -167,22 +167,22 @@ fn test_date_header() {
         if node.kind() == "date_header" {
             let c = extract_date_header(DateHeaderNode(node));
             assert!(
-                matches!(c.child_0.slot, NodeSlot::Present(_)),
+                matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "date_prefix: {:?}",
-                c.child_0.slot
+                c.child_0.slot()
             );
             assert!(
-                matches!(c.child_1.slot, NodeSlot::Present(_)),
+                matches!(c.child_1.slot(), NodeSlot::Present(_)),
                 "header_sep: {:?}",
-                c.child_1.slot
+                c.child_1.slot()
             );
             assert!(
-                matches!(c.child_2.slot, NodeSlot::Present(_)),
+                matches!(c.child_2.slot(), NodeSlot::Present(_)),
                 "date_contents: {:?}",
-                c.child_2.slot
+                c.child_2.slot()
             );
 
-            if let NodeSlot::Present(date) = &c.child_2.slot {
+            if let NodeSlot::Present(date) = c.child_2.slot() {
                 assert_eq!(node_text(date.0, source), "01-JAN-2000");
             }
             found = true;
@@ -208,9 +208,9 @@ fn test_full_document_extraction() {
 
     let c = extract_full_document(FullDocumentNode(full_doc));
     assert!(
-        matches!(c.child_0.slot, NodeSlot::Present(_)),
+        matches!(c.child_0.slot(), NodeSlot::Present(_)),
         "utf8_header: {:?}",
-        c.child_0.slot
+        c.child_0.slot()
     );
 }
 
@@ -428,7 +428,7 @@ fn test_speaker_parity_with_existing_parser() {
         walk_all(tree.root_node(), &mut |node| {
             if node.kind() == "main_tier" {
                 let c = extract_main_tier(MainTierNode(node));
-                if let NodeSlot::Present(spk) = &c.speaker.slot {
+                if let NodeSlot::Present(spk) = c.speaker.slot() {
                     gen_speakers.push(node_text(spk.0, &source).to_string());
                 }
             }
@@ -1039,10 +1039,10 @@ fn test_options_header_semantic_conversion() {
             // carries the typed `OptionsContentsNode` wrapper, so it is
             // passed straight into `extract_options_contents` with no
             // unwrap-then-rewrap.
-            if let NodeSlot::Present(contents_node) = &children.child_2.slot {
+            if let NodeSlot::Present(contents_node) = children.child_2.slot() {
                 let contents_children = extract_options_contents(*contents_node);
 
-                if let NodeSlot::Present(option_node) = &contents_children.child_0.slot {
+                if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
                     let option_text = node_text(option_node.0, source);
 
                     let value = talkbank_model::ChatOptionFlag::from_text(option_text);
@@ -1070,9 +1070,9 @@ fn test_options_header_unknown_value() {
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
             let children = extract_options_header(OptionsHeaderNode(node));
-            if let NodeSlot::Present(contents_node) = &children.child_2.slot {
+            if let NodeSlot::Present(contents_node) = children.child_2.slot() {
                 let contents_children = extract_options_contents(*contents_node);
-                if let NodeSlot::Present(option_node) = &contents_children.child_0.slot {
+                if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
                     let value =
                         talkbank_model::ChatOptionFlag::from_text(node_text(option_node.0, source));
                     assert!(

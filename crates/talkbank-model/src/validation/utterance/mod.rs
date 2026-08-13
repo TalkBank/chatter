@@ -21,7 +21,6 @@ mod repetition_segment;
 mod spacing;
 mod tiers;
 mod underline;
-mod word_form;
 
 #[cfg(test)]
 mod tests;
@@ -48,4 +47,3 @@ pub(crate) use spacing::{
 };
 pub(crate) use tiers::check_no_duplicate_dependent_tiers;
 pub(crate) use underline::check_underline_balance;
-pub(crate) use word_form::check_letter_form_single_letter;

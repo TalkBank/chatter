@@ -31,7 +31,7 @@ Err(
                 labels: [],
                 message: "Undeclared form marker '@z'",
                 suggestion: Some(
-                    "Valid form markers: @b @c @d @f @fp @g @i @k @l @ls @n @o @p @q @sas @si @sl @t @u @wp @x @z",
+                    "Valid form markers: @b @c @d @f @fp @g @i @k @l @ls @n @o @p @q @sas @si @sl @t @u @wp @x @z:<label>",
                 ),
                 help_url: Some(
                     "https://talkbank.org/errors/E203",

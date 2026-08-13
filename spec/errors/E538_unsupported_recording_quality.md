@@ -11,8 +11,10 @@ An `@Recording Quality` header contains a value that is not one of the recognize
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E538
 
 ```chat
 @UTF8

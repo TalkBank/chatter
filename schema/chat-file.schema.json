@@ -2312,6 +2312,161 @@
           "type": "string"
         },
         {
+          "const": "E202",
+          "description": "Missing form type on special word.",
+          "type": "string"
+        },
+        {
+          "const": "E203",
+          "description": "Invalid form type value.",
+          "type": "string"
+        },
+        {
+          "const": "E207",
+          "description": "Unknown annotation type in word.",
+          "type": "string"
+        },
+        {
+          "const": "E208",
+          "description": "Replacement annotation is empty.",
+          "type": "string"
+        },
+        {
+          "const": "E209",
+          "description": "Spoken content portion of word is empty.",
+          "type": "string"
+        },
+        {
+          "const": "E210",
+          "description": "Illegal replacement for fragment (deprecated: use E387).",
+          "type": "string"
+        },
+        {
+          "const": "E212",
+          "description": "Invalid word format.",
+          "type": "string"
+        },
+        {
+          "const": "E213",
+          "description": "Untranscribed marker in replacement (deprecated: use E391).",
+          "type": "string"
+        },
+        {
+          "const": "E214",
+          "description": "Empty annotated scoped annotations.",
+          "type": "string"
+        },
+        {
+          "const": "E220",
+          "description": "Illegal digits in word content.",
+          "type": "string"
+        },
+        {
+          "const": "E230",
+          "description": "Unbalanced CA (Conversation Analysis) delimiter.",
+          "type": "string"
+        },
+        {
+          "const": "E231",
+          "description": "Unbalanced shortening markers.",
+          "type": "string"
+        },
+        {
+          "const": "E232",
+          "description": "Invalid compound marker position.",
+          "type": "string"
+        },
+        {
+          "const": "E233",
+          "description": "Empty part in compound word.",
+          "type": "string"
+        },
+        {
+          "const": "E241",
+          "description": "Illegal use of untranscribed marker.",
+          "type": "string"
+        },
+        {
+          "const": "E242",
+          "description": "Unbalanced quotation marks within a word.",
+          "type": "string"
+        },
+        {
+          "const": "E243",
+          "description": "Illegal characters in word content.",
+          "type": "string"
+        },
+        {
+          "const": "E244",
+          "description": "Consecutive stress markers in word.",
+          "type": "string"
+        },
+        {
+          "const": "E245",
+          "description": "Stress marker not placed before spoken material.",
+          "type": "string"
+        },
+        {
+          "const": "E246",
+          "description": "Lengthening marker not placed after spoken material.",
+          "type": "string"
+        },
+        {
+          "const": "E247",
+          "description": "Multiple primary stress markers in one word.",
+          "type": "string"
+        },
+        {
+          "const": "E248",
+          "description": "Tertiary language needs an explicit language code.",
+          "type": "string"
+        },
+        {
+          "const": "E249",
+          "description": "Missing language context for language-tagged word.",
+          "type": "string"
+        },
+        {
+          "const": "E250",
+          "description": "Secondary stress marker without primary stress.",
+          "type": "string"
+        },
+        {
+          "const": "E251",
+          "description": "Word content text is empty.",
+          "type": "string"
+        },
+        {
+          "const": "E252",
+          "description": "Syllable pause not between spoken material.",
+          "type": "string"
+        },
+        {
+          "const": "E253",
+          "description": "Word content is empty.",
+          "type": "string"
+        },
+        {
+          "const": "E255",
+          "description": "Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`.",
+          "type": "string"
+        },
+        {
+          "const": "E256",
+          "description": "Curly single quotation mark (U+2018 or U+2019) used as a word\ncharacter; CHAT requires the ASCII apostrophe. CLAN CHECK 138/139.",
+          "type": "string"
+        },
+        {
+          "const": "E258",
+          "description": "Consecutive commas (`,,`), should use single comma or `‚` (CLAN CHECK 107)",
+          "type": "string"
+        },
+        {
+          "const": "E259",
+          "description": "Comma after non-spoken content (paralinguistic event, filler, nonword, placeholder, omitted word)",
+          "type": "string"
+        },
+        {
           "const": "E301",
           "description": "Missing main tier (speaker line) in utterance.",
           "type": "string"
@@ -2363,7 +2518,7 @@
         },
         {
           "const": "E311",
-          "description": "Unexpected node type in the parse tree.",
+          "description": "Unexpected node type in the parse tree.\n\nNo longer planned as of 2026-08-11: an unclosed replacement bracket\n(`*CHI:\\t[: unclosed [* error] .`) reaches it and reports \"Unclosed\nreplacement bracket\". Its spec had stayed `not_implemented` on the\nstrength of a note saying tree-sitter recovery made it unreachable\nbecause E316 fired first, which the parser had since outgrown.",
           "type": "string"
         },
         {
@@ -2629,161 +2784,6 @@
         {
           "const": "E391",
           "description": "Replacement text contains untranscribed marker (`xxx`/`yyy`/`www`).",
-          "type": "string"
-        },
-        {
-          "const": "E202",
-          "description": "Missing form type on special word.",
-          "type": "string"
-        },
-        {
-          "const": "E203",
-          "description": "Invalid form type value.",
-          "type": "string"
-        },
-        {
-          "const": "E207",
-          "description": "Unknown annotation type in word.",
-          "type": "string"
-        },
-        {
-          "const": "E208",
-          "description": "Replacement annotation is empty.",
-          "type": "string"
-        },
-        {
-          "const": "E209",
-          "description": "Spoken content portion of word is empty.",
-          "type": "string"
-        },
-        {
-          "const": "E210",
-          "description": "Illegal replacement for fragment (deprecated: use E387).",
-          "type": "string"
-        },
-        {
-          "const": "E212",
-          "description": "Invalid word format.",
-          "type": "string"
-        },
-        {
-          "const": "E213",
-          "description": "Untranscribed marker in replacement (deprecated: use E391).",
-          "type": "string"
-        },
-        {
-          "const": "E214",
-          "description": "Empty annotated scoped annotations.",
-          "type": "string"
-        },
-        {
-          "const": "E220",
-          "description": "Illegal digits in word content.",
-          "type": "string"
-        },
-        {
-          "const": "E230",
-          "description": "Unbalanced CA (Conversation Analysis) delimiter.",
-          "type": "string"
-        },
-        {
-          "const": "E231",
-          "description": "Unbalanced shortening markers.",
-          "type": "string"
-        },
-        {
-          "const": "E232",
-          "description": "Invalid compound marker position.",
-          "type": "string"
-        },
-        {
-          "const": "E233",
-          "description": "Empty part in compound word.",
-          "type": "string"
-        },
-        {
-          "const": "E241",
-          "description": "Illegal use of untranscribed marker.",
-          "type": "string"
-        },
-        {
-          "const": "E242",
-          "description": "Unbalanced quotation marks within a word.",
-          "type": "string"
-        },
-        {
-          "const": "E243",
-          "description": "Illegal characters in word content.",
-          "type": "string"
-        },
-        {
-          "const": "E244",
-          "description": "Consecutive stress markers in word.",
-          "type": "string"
-        },
-        {
-          "const": "E245",
-          "description": "Stress marker not placed before spoken material.",
-          "type": "string"
-        },
-        {
-          "const": "E246",
-          "description": "Lengthening marker not placed after spoken material.",
-          "type": "string"
-        },
-        {
-          "const": "E247",
-          "description": "Multiple primary stress markers in one word.",
-          "type": "string"
-        },
-        {
-          "const": "E248",
-          "description": "Tertiary language needs an explicit language code.",
-          "type": "string"
-        },
-        {
-          "const": "E249",
-          "description": "Missing language context for language-tagged word.",
-          "type": "string"
-        },
-        {
-          "const": "E250",
-          "description": "Secondary stress marker without primary stress.",
-          "type": "string"
-        },
-        {
-          "const": "E251",
-          "description": "Word content text is empty.",
-          "type": "string"
-        },
-        {
-          "const": "E252",
-          "description": "Syllable pause not between spoken material.",
-          "type": "string"
-        },
-        {
-          "const": "E253",
-          "description": "Word content is empty.",
-          "type": "string"
-        },
-        {
-          "const": "E255",
-          "description": "Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`.",
-          "type": "string"
-        },
-        {
-          "const": "E256",
-          "description": "Curly single quotation mark (U+2018 or U+2019) used as a word\ncharacter; CHAT requires the ASCII apostrophe. CLAN CHECK 138/139.",
-          "type": "string"
-        },
-        {
-          "const": "E258",
-          "description": "Consecutive commas (`,,`), should use single comma or `‚` (CLAN CHECK 107)",
-          "type": "string"
-        },
-        {
-          "const": "E259",
-          "description": "Comma after non-spoken content (paralinguistic event, filler, nonword, placeholder, omitted word)",
           "type": "string"
         },
         {
@@ -3332,11 +3332,6 @@
           "type": "string"
         },
         {
-          "const": "E754",
-          "description": "The `@l` letter form marks a single spoken letter, but the word's\nstem has more than one character. Sequences belong under `@k`\n(letter sequence) or `@ls` (letter plural). Replicates CLAN CHECK\nerror 76 (`check_isOneLetter`); the digraph question (one letter\northographically, two characters) is deferred, not decided here.",
-          "type": "string"
-        },
-        {
           "const": "E755",
           "description": "A `[- CODE]` utterance-level language is not declared in\n`@Languages`. Utterance-level presence is substantial, unlike a\nword-level `@s:CODE` insertion, which deliberately carries no\ndeclaration requirement (2026-07-15 ruling). Matches CLAN CHECK\nerror 152.",
           "type": "string"
@@ -3407,13 +3402,13 @@
           "type": "string"
         },
         {
-          "const": "W108",
-          "description": "Speaker code not found in `@Participants` (non-fatal).",
+          "const": "E999",
+          "description": "Unknown or unrecognized error code (fallback).",
           "type": "string"
         },
         {
-          "const": "E999",
-          "description": "Unknown or unrecognized error code (fallback).",
+          "const": "W108",
+          "description": "Speaker code not found in `@Participants` (non-fatal).",
           "type": "string"
         }
       ]
@@ -3529,121 +3524,116 @@
       "type": "string"
     },
     "FormType": {
-      "description": "Special-form suffix marker attached to a word token.\n\nMost variants correspond to fixed CHAT marker codes. [`FormType::UserDefined`]\nkeeps project-specific `@z:...` values available without schema changes.\n\n# CHAT Format Examples\n\n```text\ngumma@c           Child-invented form (@c)\nyounz@d           Dialect form (@d)\nabame@b           Babbling (@b)\nbunko@f           Family-specific form (@f)\nwoofwoof@o        Onomatopoeia (@o)\num@fp             Filled pause (@fp) - deprecated, use &-um\nb@l               Letter (@l)\nabc@k             Letter sequence (@k)\nif@q              Metalinguistic reference (@q)\nbreaked@n         Neologism (@n)\nlalala@si         Singing (@si)\nwug@t             Test word (@t)\ncustom@z:label    User-defined (@z:label)\n```\n\n# Standard Markers\n\n- `@a` - Approximate/phonologically consistent form\n- `@b` - Babbling\n- `@c` - Child-invented form\n- `@d` - Dialect form\n- `@f` - Family-specific form\n- `@fp` - Filled pause (deprecated)\n- `@g` - Gemination/general special form\n- `@i` - Interjection\n- `@k` - Letter sequence (kinship)\n- `@l` - Single letter\n- `@ls` - Letter plural\n- `@n` - Neologism\n- `@o` - Onomatopoeia\n- `@p` - Proper name\n- `@q` - Metalinguistic reference\n- `@sas` - Second attempt success\n- `@si` - Singing\n- `@sl` - Slang\n- `@t` - Test word\n- `@u` - Unibet transcription\n- `@wp` - Word play\n- `@x` - Complex/excluded\n- `@z:xxx` - User-defined custom code\n\n# References\n\n- [Special Form Markers](https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker)\n- [Babbling Marker](https://talkbank.org/0info/manuals/CHAT.html#Babbling_Marker)\n- [Child-Invented Marker](https://talkbank.org/0info/manuals/CHAT.html#ChildInvented_Marker)\n- [Dialect Form Marker](https://talkbank.org/0info/manuals/CHAT.html#DialectForm_Marker)\n- [Family-Specific Form Marker](https://talkbank.org/0info/manuals/CHAT.html#FamilySpecificForm_Marker)\n- [Neologism Marker](https://talkbank.org/0info/manuals/CHAT.html#Neologism_Marker)\n- [Metalinguistic Reference Marker](https://talkbank.org/0info/manuals/CHAT.html#MetalinguisticReference_Marker)",
+      "description": "Special-form suffix marker attached to a word token.\n\nA word may carry one `@` marker naming what kind of form it is: a\nchild-invented word, a letter, a sung passage. The set is closed, and\ndeclared once in `spec/form_markers/form_marker_registry.json`.\n\n# Standard Markers\n\n- `@b` - Babbling (`abame@b`)\n- `@c` - Child-invented form (`gumma@c`, meaning sticky)\n- `@d` - Dialect form (`younz@d`, meaning you)\n- `@f` - Family-specific form (`bunko@f`, meaning broken)\n- `@fp` - Filled pause (`um@fp`, deprecated, use `&-um` instead, because filled pauses are excluded from grammatical analysis)\n- `@g` - General special form (`gongga@g`)\n- `@i` - Interjection, interaction (`uhhuh@i`)\n- `@k` - Multiple letters (`abcd@k`, mnemonic is \"kana\": a Japanese kana is one symbol for a whole syllable)\n- `@l` - Letter (`b@l`, the letter b)\n- `@ls` - Letter plural (`p@ls`, the plural of a letter)\n- `@n` - Neologism (`breaked@n`, meaning broke)\n- `@o` - Onomatopoeia (`woofwoof@o`, a dog barking)\n- `@p` - Phonologically consistent form (`aga@p`)\n- `@q` - Metalinguistic use (`if@q`, as in `no if@q-s or but@q-s`, when citing words)\n- `@sas` - Sign and speech (`apple@sas`, signs and says apple)\n- `@si` - Singing (`lalala@si`)\n- `@sl` - Signed language (`apple@sl`, signs apple)\n- `@t` - Test word (`wug@t`)\n- `@u` - Unibet transcription (`binga@u`)\n- `@wp` - Word play (`goobarumba@wp`)\n- `@x` - Excluded words (`stuff@x`)\n- `@z:<label>` - User-defined code (`word@z:rtfd`, any user code)\n\n# References\n\n- [Special Form Markers](https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker)\n\nPer-marker anchors are on each variant below.",
       "oneOf": [
         {
-          "const": "a",
-          "description": "`@a` - Approximate/phonologically consistent form\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
-          "type": "string"
-        },
-        {
           "const": "b",
-          "description": "`@b` - Babbling\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Babbling_Marker>",
+          "description": "`@b` - Babbling (`abame@b`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Babbling_Marker>",
           "type": "string"
         },
         {
           "const": "c",
-          "description": "`@c` - Child-invented form\nReference: <https://talkbank.org/0info/manuals/CHAT.html#ChildInvented_Marker>",
+          "description": "`@c` - Child-invented form (`gumma@c`, meaning sticky)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#ChildInvented_Marker>",
           "type": "string"
         },
         {
           "const": "d",
-          "description": "`@d` - Dialect form\nReference: <https://talkbank.org/0info/manuals/CHAT.html#DialectForm_Marker>",
+          "description": "`@d` - Dialect form (`younz@d`, meaning you)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#DialectForm_Marker>",
           "type": "string"
         },
         {
           "const": "f",
-          "description": "`@f` - Family-specific form\nReference: <https://talkbank.org/0info/manuals/CHAT.html#FamilySpecificForm_Marker>",
+          "description": "`@f` - Family-specific form (`bunko@f`, meaning broken)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#FamilySpecificForm_Marker>",
           "type": "string"
         },
         {
           "const": "fp",
-          "description": "`@fp` - Filled pause (deprecated, use &-um instead)\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@fp` - Filled pause (`um@fp`, deprecated, use `&-um` instead, because filled pauses are excluded from grammatical analysis)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#FilledPause_Marker>",
           "type": "string"
         },
         {
           "const": "g",
-          "description": "`@g` - Gemination/general special form\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@g` - General special form (`gongga@g`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#GeneralSpecialForm_Marker>",
           "type": "string"
         },
         {
           "const": "i",
-          "description": "`@i` - Interjection\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@i` - Interjection, interaction (`uhhuh@i`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Interjection_Marker>",
           "type": "string"
         },
         {
           "const": "k",
-          "description": "`@k` - Letter sequence (kinship)\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@k` - Multiple letters (`abcd@k`, mnemonic is \"kana\": a Japanese kana is one symbol for a whole syllable)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Kana_Marker>",
           "type": "string"
         },
         {
           "const": "l",
-          "description": "`@l` - Single letter\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@l` - Letter (`b@l`, the letter b)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Letter_Marker>",
           "type": "string"
         },
         {
           "const": "ls",
-          "description": "`@ls` - Letter plural\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@ls` - Letter plural (`p@ls`, the plural of a letter)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Letter_Plural_Marker>",
           "type": "string"
         },
         {
           "const": "n",
-          "description": "`@n` - Neologism\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Neologism_Marker>",
+          "description": "`@n` - Neologism (`breaked@n`, meaning broke)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Neologism_Marker>",
           "type": "string"
         },
         {
           "const": "o",
-          "description": "`@o` - Onomatopoeia\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@o` - Onomatopoeia (`woofwoof@o`, a dog barking)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Onomatopoeia_Marker>",
           "type": "string"
         },
         {
           "const": "p",
-          "description": "`@p` - Proper name\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@p` - Phonologically consistent form (`aga@p`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#PCF_Marker>",
           "type": "string"
         },
         {
           "const": "q",
-          "description": "`@q` - Metalinguistic reference\nReference: <https://talkbank.org/0info/manuals/CHAT.html#MetalinguisticReference_Marker>",
+          "description": "`@q` - Metalinguistic use (`if@q`, as in `no if@q-s or but@q-s`, when citing words)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#MetalinguisticReference_Marker>",
           "type": "string"
         },
         {
           "const": "sas",
-          "description": "`@sas` - Second attempt success\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@sas` - Sign and speech (`apple@sas`, signs and says apple)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SignAndSpeech_Marker>",
           "type": "string"
         },
         {
           "const": "si",
-          "description": "`@si` - Singing\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@si` - Singing (`lalala@si`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Singing_Marker>",
           "type": "string"
         },
         {
           "const": "sl",
-          "description": "`@sl` - Slang\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@sl` - Signed language (`apple@sl`, signs apple)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SignLanguage_Marker>",
           "type": "string"
         },
         {
           "const": "t",
-          "description": "`@t` - Test word\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@t` - Test word (`wug@t`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#TestWord_Marker>",
           "type": "string"
         },
         {
           "const": "u",
-          "description": "`@u` - Unibet transcription\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@u` - Unibet transcription (`binga@u`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Unibet_Marker>",
           "type": "string"
         },
         {
           "const": "wp",
-          "description": "`@wp` - Word play\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@wp` - Word play (`goobarumba@wp`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#WordPlay_Marker>",
           "type": "string"
         },
         {
           "const": "x",
-          "description": "`@x` - Complex/excluded\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@x` - Excluded words (`stuff@x`)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Excluded_Marker>",
           "type": "string"
         },
         {
           "additionalProperties": false,
-          "description": "User-defined special form (@z:label)\nReference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>",
+          "description": "`@z:<label>` - User-defined code (`word@z:rtfd`, any user code)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#User_Special_Form>",
           "properties": {
             "z": {
               "type": "string"
@@ -3651,6 +3641,19 @@
           },
           "required": [
             "z"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Text that was written in a word's `@` slot but that no registry row\ndeclares (`word@zz`, `word@x:foo`).\n\nNOT a marker: it is a record of what the transcript actually said, kept\nso that recovery does not have to invent a marker that IS declared. The\ntree-sitter parser reports E203 and stores this; the payload is the\ntext after the `@`, verbatim, so serializing the word reproduces the\ninput exactly.\n\nBefore this variant existed, that recovery path stored\n`UserDefined(payload)`, which claimed `word@zz` was the `@z`\nuser-defined marker with label `zz`, and `to_chat_marker` rendered it\nback as `word@z:zz`. It was unobservable only because every command\nthat serializes aborts on E203 first, which is a latent corruption\nrather than a safe one. The re2c parser stored nothing at all, so the\ntwo parsers disagreed on the same input.\n\n[`FormType::from_payload`] never returns this: it is reachable only\nfrom a parser that has already reported the marker undeclared.",
+          "properties": {
+            "undeclared": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "undeclared"
           ],
           "type": "object"
         }

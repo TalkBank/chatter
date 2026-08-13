@@ -11,6 +11,7 @@ Pause inside phonological group
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

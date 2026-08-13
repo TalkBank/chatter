@@ -15,6 +15,7 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::errors::ParseError;
 use talkbank_parser::TreeSitterParser;
 
+use talkbank_model::model::TranscriptName;
 use talkbank_transform::splice::{BatchSafety, EditTarget, FixKind, apply_edits, catalog_fix};
 
 /// Parse `source`, run the same alignment-aware validation pass
@@ -39,7 +40,7 @@ fn single_error_with_code(source: &str, code: &str) -> Result<ParseError, String
     let mut file = parser.parse_chat_file_streaming(source, &parse_errors);
 
     let validation_errors = ErrorCollector::new();
-    file.validate_with_alignment(&validation_errors, None);
+    file.validate_with_alignment(&validation_errors, TranscriptName::Anonymous);
 
     let mut diagnostics = parse_errors.into_vec();
     diagnostics.extend(validation_errors.into_vec());

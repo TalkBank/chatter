@@ -30,12 +30,14 @@
 //! generated `extract_full_document` / `NodeSlot` dispatch, but it is
 //! behavior-preserving: the model and the recovery diagnostics must not change.
 //!
-//! Both diagnostic values below were captured by RUNNING the pre-migration
-//! parser (not guessed): a valid minimal file parses to a known line structure
-//! with zero diagnostics, and a file with a stray top-level `@Date:` that drives
-//! tree-sitter into a document-level ERROR recovery node produces exactly the
-//! recovered-line structure plus the E316 backstop diagnostic and the E747
+//! The diagnostic values below were captured by RUNNING the pre-migration
+//! parser (not guessed): a file with a stray top-level `@Date:` drives
+//! tree-sitter into a document-level ERROR recovery node and produces exactly
+//! the recovered-line structure plus the E316 backstop diagnostic and the E747
 //! blank-line diagnostic, at the exact spans pinned here.
+//!
+//! The valid-minimal-file case this module used to also carry lives in
+//! `line_dispatch_characterization.rs`, which held a byte-identical copy of it.
 //!
 //! WATCH-ITEM (double-emission): the document-level ERROR for `@Date:` is
 //! recovered into a `Header::Date` line by the entry point AND flagged E316 by
@@ -50,21 +52,6 @@ use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic: (code, span start, span end, message).
 type Diag = (String, u32, u32, String);
-
-/// A clean, minimal, valid CHAT file: required headers, one comment, one
-/// utterance, `@End`. Drives every entry-point arm that exists for valid input
-/// (utf8/begin/end headers, pre-begin-header-free body, header lines, utterance
-/// line) with no recovery nodes.
-const VALID_MINIMAL: &str = "\
-@UTF8
-@Begin
-@Languages:\teng
-@Participants:\tCHI Child
-@ID:\teng|corpus|CHI|||||Child|||
-@Comment:\tMinimal valid file
-*CHI:\thello .
-@End
-";
 
 /// A file with a stray top-level `@Date:` (empty value). Tree-sitter cannot
 /// parse this as a date header, so it emits an `ERROR` node that is a DIRECT
@@ -174,31 +161,6 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
         })
         .collect();
     (line_tags(chat.lines.as_slice()), diags)
-}
-
-#[test]
-fn valid_multiline_file_parses_to_expected_line_structure() {
-    let (tags, diags) = parse_lines_and_diags(VALID_MINIMAL);
-
-    assert_eq!(
-        tags,
-        vec![
-            "Header(Utf8)",
-            "Header(Begin)",
-            "Header(Languages)",
-            "Header(Participants)",
-            "Header(ID)",
-            "Header(Comment)",
-            "Utterance",
-            "Header(End)",
-        ],
-        "valid minimal file must parse to the exact header/utterance line order"
-    );
-
-    assert!(
-        diags.is_empty(),
-        "valid minimal file must produce zero diagnostics, got: {diags:?}"
-    );
 }
 
 #[test]

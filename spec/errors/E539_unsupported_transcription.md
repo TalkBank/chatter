@@ -11,8 +11,10 @@ An `@Transcription` header contains a value that is not one of the recognized tr
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E539
 
 ```chat
 @UTF8

@@ -104,26 +104,26 @@ fn extract_contents_enumerates_main_tier_items() {
     let mut contents_nodes_seen = 0usize;
 
     // child_3 is the `repeat(line)` slot: `Vec<Positioned<NodeSlot<LineNode>>>`.
-    for elem in &doc_children.child_3.slot {
-        let NodeSlot::Present(line_node) = &elem.slot else {
+    for elem in doc_children.child_3.slot() {
+        let NodeSlot::Present(line_node) = elem.slot() else {
             continue;
         };
 
         // Only utterance lines carry a main tier (and thus a `contents` node).
         let line_children = extract_line(*line_node);
-        let NodeSlot::Present(LineChoice::Utterance(utterance_node)) = line_children.content.slot
+        let NodeSlot::Present(LineChoice::Utterance(utterance_node)) = line_children.content.slot()
         else {
             continue;
         };
 
         // utterance -> main_tier (child_0) -> tier_body (child_5) -> contents (content_2).
         // (child_4 is the optional `sep_trailing_space` E758 provenance slot.)
-        let utt = extract_utterance(utterance_node);
-        let main_tier_node = present_raw(&utt.child_0.slot, "utterance.main_tier");
+        let utt = extract_utterance(*utterance_node);
+        let main_tier_node = present_raw(utt.child_0.slot(), "utterance.main_tier");
         let main_tier = extract_main_tier(MainTierNode(main_tier_node));
-        let tier_body_node = present_raw(&main_tier.child_5.slot, "main_tier.tier_body");
+        let tier_body_node = present_raw(main_tier.child_5.slot(), "main_tier.tier_body");
         let tier_body = extract_tier_body(TierBodyNode(tier_body_node));
-        let contents_node = present_raw(&tier_body.content_2.slot, "tier_body.contents");
+        let contents_node = present_raw(tier_body.content_2.slot(), "tier_body.contents");
         assert_eq!(
             contents_node.kind(),
             "contents",
@@ -139,7 +139,7 @@ fn extract_contents_enumerates_main_tier_items() {
         // generator mangles into two separately-named types because `contents =
         // repeat1(..)` splits into a required-first-plus-repeated-tail shape.
         let contents_children = extract_contents(ContentsNode(contents_node));
-        match &contents_children.child_0.slot {
+        match contents_children.child_0.slot() {
             NodeSlot::Present(choice) => {
                 present_items += 1;
                 if matches!(choice, ContentsChild0Choice::ContentItem(_)) {
@@ -150,12 +150,12 @@ fn extract_contents_enumerates_main_tier_items() {
             NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
                 problem_items.push(format!(
                     "contents child_0: {:?}",
-                    contents_children.child_0.slot
+                    contents_children.child_0.slot()
                 ));
             }
         }
-        for (i, item) in contents_children.child_1.slot.iter().enumerate() {
-            match &item.slot {
+        for (i, item) in contents_children.child_1.slot().iter().enumerate() {
+            match item.slot() {
                 NodeSlot::Present(choice) => {
                     present_items += 1;
                     if matches!(choice, ContentsChild1Choice::ContentItem(_)) {
@@ -164,7 +164,7 @@ fn extract_contents_enumerates_main_tier_items() {
                 }
                 NodeSlot::Missing(_) | NodeSlot::Absent => {}
                 NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
-                    problem_items.push(format!("contents item {i}: {:?}", item.slot));
+                    problem_items.push(format!("contents item {i}: {:?}", item.slot()));
                 }
             }
         }

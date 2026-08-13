@@ -123,7 +123,7 @@ pub(crate) trait InspectField {
 /// contract (they are comments/whitespace, never classified content).
 impl<'tree, S: InspectField> InspectField for Positioned<'tree, S> {
     fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<RawViolation>) {
-        self.slot.inspect_field(rule, slot, out);
+        self.slot().inspect_field(rule, slot, out);
     }
 }
 
@@ -185,7 +185,7 @@ impl<'tree, T: Inspect> InspectField for Option<NodeSlot<'tree, T>> {
 impl<'tree, T: Inspect> InspectField for Vec<Positioned<'tree, NodeSlot<'tree, T>>> {
     fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<RawViolation>) {
         for elem in self {
-            match &elem.slot {
+            match &elem.slot() {
                 NodeSlot::Present(value) => value.inspect(rule, out),
                 NodeSlot::Unexpected(n) => out.push(RawViolation {
                     rule_kind: rule,

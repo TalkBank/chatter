@@ -109,13 +109,17 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
                     match next_ch {
                         '\u{0001}' => {
                             chars.next();
-                            // Underline begin, not a WordBodyItem, skip for now
+                            items.push(WordBodyItem::UnderlineBegin);
                         }
                         '\u{0002}' => {
                             chars.next();
-                            // Underline end, not a WordBodyItem, skip for now
+                            items.push(WordBodyItem::UnderlineEnd);
                         }
-                        _ => {}
+                        // A lone `\u{0002}` is not an underline marker. Keep it
+                        // as text rather than consuming it silently: this match
+                        // is where "skip for now" cost 768 spurious E357s, and
+                        // dropping the odd byte is the same shape one arm over.
+                        _ => items.push(WordBodyItem::Text(&body[i..i + ch.len_utf8()])),
                     }
                 }
             }

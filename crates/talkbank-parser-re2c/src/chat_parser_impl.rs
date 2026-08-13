@@ -340,7 +340,12 @@ impl ChatParser for Re2cParser {
         offset: usize,
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<WorTier> {
-        ParseOutcome::parsed(shifted(crate::convert::wor_tier_from_input(input), offset))
+        match crate::convert::wor_tier_from_input(input) {
+            Some(wor) => ParseOutcome::parsed(shifted(wor, offset)),
+            // An unparsable %wor tier used to arrive here as an empty one, so a
+            // malformed tier and a tier with no words were indistinguishable.
+            None => ParseOutcome::rejected(),
+        }
     }
 
     fn parse_dependent_tier(

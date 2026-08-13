@@ -28,7 +28,9 @@
 
 mod accessors;
 mod core;
+pub mod transcript_name;
 mod validate;
 mod write;
 
 pub use core::{ChatFile, ChatFileLines};
+pub use transcript_name::{FileStem, TranscriptName};

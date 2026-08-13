@@ -5,59 +5,19 @@
 //! view of which validation checks the running binary enforces and which
 //! are only documented in `spec/errors/`.
 //!
-//! The list of Planned (not_implemented) codes is hard-coded in
-//! [`PLANNED_CODES`] below. It was derived from
-//! `grep -l "Status.*not_implemented" spec/errors/*.md` and must be kept
-//! in sync when a spec changes from `not_implemented` to `implemented`.
+//! The status comes from `ErrorCode::check_status()`, generated from
+//! `#[status(planned)]` attributes on the variants and held to
+//! `spec/errors/*.md` by `SpecStatusGate`. It used to be a hand-maintained
+//! list of code strings in this file, which had drifted from the specs on 15
+//! of 225 codes, in both directions.
 
-use talkbank_model::ErrorCode;
+use talkbank_model::{CheckStatus, ErrorCode};
 
-/// Implementation status of an error check.
+/// Every error code the binary knows about, in code order.
 ///
-/// This is a closed, two-state enum because every spec in `spec/errors/`
-/// is either `implemented` (we call it [`Active`]) or `not_implemented`
-/// (we call it [`Planned`]). Any other status is a spec bug.
-///
-/// [`Active`]: CheckStatus::Active
-/// [`Planned`]: CheckStatus::Planned
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckStatus {
-    /// The check is active and fires when the error condition is detected.
-    Active,
-    /// The check is documented but not yet enforced by the validator.
-    Planned,
-}
-
-/// Error codes whose spec is currently marked `Status: not_implemented`.
-///
-/// Derived from `spec/errors/*.md`. Keep sorted for easy auditing.
-///
-/// Source of truth: `grep -l "Status.*not_implemented" spec/errors/*.md`.
-const PLANNED_CODES: &[&str] = &[
-    "E003", "E101", "E208", "E212", "E214", "E245", "E246", "E251", "E252", "E302", "E303", "E309",
-    "E310", "E311", "E312", "E319", "E320", "E321", "E322", "E323", "E325", "E331", "E341", "E342",
-    "E344", "E346", "E348", "E351", "E352", "E353", "E354", "E355", "E360", "E364", "E365", "E370",
-    "E404", "E531", "E702", "E708", "E709", "E711", "E720",
-];
-
-/// Returns the implementation status of a given error code.
-///
-/// Performs a linear scan over [`PLANNED_CODES`]. The list is small
-/// (~50 entries) so a hashmap would be overkill.
-pub fn check_status(code: ErrorCode) -> CheckStatus {
-    if PLANNED_CODES.contains(&code.as_str()) {
-        CheckStatus::Planned
-    } else {
-        CheckStatus::Active
-    }
-}
-
-/// Every error code the binary knows about, in declaration order.
-///
-/// This intentionally relies on `ErrorCode::iter()` from the
-/// `#[error_code_enum]` macro, which guarantees one entry per enum
-/// variant. `PLANNED_CODES` remains the small manual overlay for specs
-/// that are documented but not yet enforced.
+/// Relies on `ErrorCode::iter()` from the `#[error_code_enum]` macro, which
+/// guarantees one entry per variant AND, since the macro enforces ascending
+/// declaration order, that the sequence is already sorted by code.
 pub fn all_error_codes() -> Vec<ErrorCode> {
     ErrorCode::iter().copied().collect()
 }
@@ -68,19 +28,23 @@ pub fn all_error_codes() -> Vec<ErrorCode> {
 /// deliberately NOT machine-parseable JSON, downstream tooling should read
 /// the spec files directly instead.
 pub fn print_check_list() {
-    let mut codes = all_error_codes();
-    codes.sort_by_key(|c| c.as_str());
+    // No sort: the macro rejects a descending declaration, so `all()` is in
+    // code order by construction. This used to be `sort_by_key(|c| c.as_str())`
+    // under a doc comment claiming declaration order, which was a hand-written
+    // re-derivation of an ordering the enum did not yet provide, and a
+    // lexicographic one at that.
+    let codes = all_error_codes();
 
     let active_count = codes
         .iter()
-        .filter(|c| check_status(**c) == CheckStatus::Active)
+        .filter(|c| c.check_status() == CheckStatus::Active)
         .count();
     let planned_count = codes.len() - active_count;
 
     println!("Validation checks (Active / Planned):");
     println!();
     for code in &codes {
-        let (badge, label) = match check_status(*code) {
+        let (badge, label) = match code.check_status() {
             CheckStatus::Active => ("[Active] ", "Active"),
             CheckStatus::Planned => ("[Planned]", "Planned"),
         };
@@ -107,38 +71,29 @@ mod tests {
         assert!(!all_error_codes().is_empty());
     }
 
-    #[test]
-    fn planned_codes_are_known_variants() {
-        // Every string in PLANNED_CODES must correspond to a real variant.
-        // ErrorCode::new() falls back to UnknownError for unknown codes,
-        // so anything that round-trips through as_str() is genuine.
-        for raw in PLANNED_CODES {
-            let code = ErrorCode::new(raw);
-            assert_ne!(
-                code,
-                ErrorCode::UnknownError,
-                "PLANNED_CODES contains unknown code {:?}",
-                raw
-            );
-            assert_eq!(code.as_str(), *raw);
-        }
-    }
+    // DELETED: `planned_codes_are_known_variants`. It checked that every
+    // string in a hand-written list named a real variant. The list is gone;
+    // `#[status(planned)]` sits on the variant itself, so an entry for a code
+    // that does not exist, or a misspelled one, is now a compile error rather
+    // than a test failure. The type obsoleted the test.
 
+    /// SURVIVES: policy. WHICH checks are enforced is a fact about this
+    /// binary, and the spot checks below are cheap insurance that the
+    /// attribute wiring reaches the accessor at all. `SpecStatusGate` in
+    /// `talkbank-parser-tests` owns the exhaustive comparison against
+    /// `spec/errors/*.md`.
     #[test]
-    fn status_lookup_matches_planned_list() {
+    fn status_comes_from_the_variant_attributes() {
         assert_eq!(
-            check_status(ErrorCode::UnparsableUtterance),
+            ErrorCode::UnparsableUtterance.check_status(),
             CheckStatus::Planned
         );
         assert_eq!(
-            check_status(ErrorCode::MissingColonAfterSpeaker),
+            ErrorCode::MissingColonAfterSpeaker.check_status(),
             CheckStatus::Planned
         );
-        // E201 is not in PLANNED_CODES -> should be Active (and the variant
-        // itself is UnknownError since E201 isn't defined; use a known
-        // Active one instead).
         assert_eq!(
-            check_status(ErrorCode::MorCountMismatchTooFew),
+            ErrorCode::MorCountMismatchTooFew.check_status(),
             CheckStatus::Active
         );
     }

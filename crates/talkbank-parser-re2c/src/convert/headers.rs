@@ -371,8 +371,7 @@ pub(crate) fn tokens_to_bullet_content(tokens: &[Token<'_>]) -> BulletContent {
                 end_time,
                 ..
             } => {
-                let start_ms = start_time.parse().unwrap_or(0);
-                let end_ms = end_time.parse().unwrap_or(0);
+                let (start_ms, end_ms) = super::items::bullet_times(start_time, end_time);
                 segments.push(BulletContentSegment::bullet(start_ms, end_ms));
             }
             Token::InlinePic(s) => {

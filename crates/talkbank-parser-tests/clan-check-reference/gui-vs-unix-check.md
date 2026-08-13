@@ -44,8 +44,20 @@ CLAN itself, and it predates us.
 ## What this means for chatter parity
 
 - Codes reachable only through these regions (101, and 151's live
-  path) are recorded in `dead-codes.json` as GUI-only: not parity
-  targets under the unix-authoritative policy.
+  path) are recorded in the parity manifest
+  (`tests/check_parity/manifest.json`) as status `no_obligation` with
+  `no_obligation_reason: gui_only`: not parity targets under the
+  unix-authoritative policy.
+
+  They used to be listed in a separate `dead-codes.json` beside this
+  file. That was a second, hand-maintained copy of what the manifest
+  already recorded, with nothing keeping the two in agreement, and by
+  the time it was removed on 2026-08-11 it was missing six codes (39,
+  40, 41, 58, 74, 76). The manifest is the single owner: its
+  `no_obligation_reason` is a typed value, and
+  `manifest_agrees_with_clan_reference` checks the source-derivable
+  reasons against the generated `check-error-codes.json` in both
+  directions.
 - chatter's own CA validation (e.g. E230 unbalanced CA delimiters)
   is independent of this and remains: chatter may legitimately check
   CA constructs BETTER than unix CHECK; that is ordinary

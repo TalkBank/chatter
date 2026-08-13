@@ -29,7 +29,7 @@ pub fn parse_sit_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SitT
     let children = extract_sit_dependent_tier(SitDependentTierNode(node));
     let content = parse_text_tier_content(
         node,
-        children.child_2.slot,
+        children.child_2.slot(),
         &children.unexpected,
         source,
         errors,

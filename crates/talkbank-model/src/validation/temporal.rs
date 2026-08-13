@@ -32,6 +32,12 @@ use crate::codes::temporal::{E701, E704};
 ///
 /// Small overlaps are common around annotation boundaries; this threshold mirrors
 /// CHECK behavior before issuing `E704`.
+///
+/// The boundary is INCLUSIVE of the tolerance: an overlap of exactly 500 ms is
+/// accepted, 501 ms is reported. Both sides are pinned in
+/// `tests/temporal_validation_tests.rs`, because the comparison below is a
+/// single `>` and flipping it to `>=` changes behaviour at exactly one value
+/// that no other case in that file visits.
 const SPEAKER_OVERLAP_TOLERANCE_MS: u64 = 500;
 
 /// Validates temporal constraints on utterance bullets.
@@ -263,17 +269,6 @@ mod tests {
     };
 
     // Note: Full integration tests should go in talkbank-model/tests/
-
-    /// Documents expected tolerance behavior around the `E704` boundary.
-    ///
-    /// This placeholder keeps the intended 499ms/501ms edge semantics visible
-    /// until the full temporal fixture harness is added.
-    #[test]
-    fn test_speaker_overlap_tolerance() {
-        // 499ms overlap should pass (within tolerance)
-        // 501ms overlap should fail
-        // This is a unit test - full integration tests elsewhere
-    }
 
     #[test]
     fn fillers_count_as_timeable_content_for_utterance_bullets() {

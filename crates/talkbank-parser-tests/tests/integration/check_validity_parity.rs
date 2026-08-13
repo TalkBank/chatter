@@ -35,6 +35,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use talkbank_model::model::TranscriptName;
 
 use serde::Deserialize;
 use talkbank_model::ErrorCollector;
@@ -44,8 +45,26 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
 
 /// How chatter is expected to behave on a fixture relative to CLAN CHECK.
+///
+/// Internally tagged on the manifest's own `status` field and flattened into
+/// [`ParityEntry`], so the PAYLOAD belongs to the variant that needs it.
+///
+/// `no_obligation_reason` used to be an `Option<NoObligationReason>` beside
+/// `status`, which made two meaningless states representable, and the gate spent
+/// two match arms and sixteen lines of prose rejecting them at test time.
+/// Neither arm exists now, but the two states did NOT both become
+/// unrepresentable, and the difference is worth knowing:
+///
+/// - A `no_obligation` entry with no reason is REFUSED while reading the file.
+///   Verified by deleting a reason from the manifest and watching the load fail.
+/// - A verdict entry carrying a stray `no_obligation_reason` still loads.
+///   `#[serde(flatten)]` cannot be combined with `deny_unknown_fields`, so the
+///   field is simply not deserialized into anything. Verified the same way: it
+///   is accepted. It became UNREACHABLE rather than unrepresentable, which is a
+///   real downgrade in severity (no code path can read it, so it cannot produce
+///   a wrong verdict) but is not the same thing, and saying so is the point.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "status", rename_all = "snake_case")]
 enum ParityStatus {
     /// chatter flags an equivalent error: `expected_chatter_codes` must appear.
     Parity,
@@ -62,14 +81,10 @@ enum ParityStatus {
     ///   permanent intentional choice, not a defect to close.
     Divergence,
     /// Unix-build CLAN CHECK cannot emit this code at the current synced CLAN
-    /// HEAD, so there is nothing to reach parity WITH. Three sub-shapes, all
-    /// recorded in the entry `note` with `check.cpp` line evidence:
-    /// - the `check_err(N, ...)` call site is commented out in the source;
-    /// - the call site is compiled but unreachable in file mode (an earlier
-    ///   check preempts it, or the stock depfile's pattern shapes exclude it);
-    /// - the call site lives in an `#ifndef UNX` region (GUI-only; unix CHECK
-    ///   is the authoritative parity bar, see
-    ///   `clan-check-reference/gui-vs-unix-check.md`).
+    /// HEAD, so there is nothing to reach parity WITH. WHY it cannot is carried
+    /// by [`NoObligationReason`], not by prose in `note`, because two of the
+    /// four sub-shapes are checkable against the generated CLAN reference and
+    /// free text is not.
     ///
     /// A fixture is OPTIONAL here (the only status where it is): when present
     /// it pins the construct anyway. The CI gate asserts chatter's recorded
@@ -77,7 +92,52 @@ enum ParityStatus {
     /// and the CLAN-gated grounding test asserts the code is still NOT
     /// emitted, a tripwire that fires if a future CLAN bundle revives the
     /// rule and the entry needs re-adjudication.
-    NoObligation,
+    NoObligation {
+        /// Why unix CLAN cannot emit it. Required by construction here: an
+        /// entry cannot reach this variant without stating a checkable reason.
+        no_obligation_reason: NoObligationReason,
+    },
+}
+
+/// Why unix-build CLAN CHECK cannot emit a `NoObligation` code.
+///
+/// This is a typed discriminant rather than a sentence in `note` because the
+/// first two variants are DERIVABLE from `check.cpp` and can therefore be
+/// gated: the generated reference records how many live `check_err` call sites
+/// each code has, so "the source no longer emits this" is a fact a test can
+/// check instead of a claim a reader has to trust. The last two are not
+/// derivable from source text and rest on the empirical grounding run.
+///
+/// The distinction is not academic. Before 2026-08-11 the reference generator
+/// stripped `//` line comments but not `/* ... */` blocks, so ELEVEN entries
+/// asserted "call site commented out" while the reference still reported live
+/// call sites, and nothing compared the two. CHECK 76's retirement (an upstream
+/// `/* 2026-08-07 */` block) would have been the twelfth.
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+enum NoObligationReason {
+    /// The `check_err(N, ...)` call site is commented out in `check.cpp`.
+    /// DERIVABLE: the reference must show zero live call sites for this code.
+    CommentedOut,
+    /// No emission path exists anywhere in `clan/` or `lib/`: the code is
+    /// defined in the message switch but nothing ever raises it.
+    /// DERIVABLE: the reference must show zero live call sites for this code.
+    NoEmissionPath,
+    /// The call site is compiled, but unreachable in file mode because an
+    /// earlier check preempts it or the stock depfile's pattern shapes exclude
+    /// it. NOT derivable from source text: the call site is real, so the
+    /// reference still counts it; only running CLAN can show it never fires.
+    UnreachableInFileMode,
+    /// Every call site lives in an `#ifndef UNX` region, so the code exists
+    /// only in the GUI builds; unix CHECK is the authoritative parity bar (see
+    /// `clan-check-reference/gui-vs-unix-check.md`).
+    /// DERIVABLE since 2026-08-11: the generator runs `unifdef -DUNX` before
+    /// scanning, so those sites are blanked and the reference reports none.
+    /// Note the boundary this draws, which CHECK 151 sits on the far side of:
+    /// this means the SITE is excluded, not merely that the code is unreachable
+    /// in a unix run. A site that compiles but whose only caller is excluded is
+    /// [`Self::UnreachableInFileMode`].
+    GuiOnly,
 }
 
 /// One CHECK number grounded against a fixture.
@@ -94,6 +154,7 @@ struct ParityEntry {
     /// code, so there may be no construct to ground); both tests fail closed
     /// on a fixture-less entry of any other status.
     fixture: Option<String>,
+    #[serde(flatten)]
     status: ParityStatus,
     #[serde(default)]
     expected_chatter_codes: Vec<String>,
@@ -132,6 +193,159 @@ fn parity_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/check_parity")
 }
 
+/// `clan-check-reference/` under this crate: the generated view of `check.cpp`.
+fn clan_reference_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("clan-check-reference")
+}
+
+/// One CHECK code as the generator sees it in `check.cpp`.
+#[derive(Deserialize)]
+struct ReferenceCode {
+    code: u16,
+    /// Live `check_err(N, ...)` sites: call sites inside comments do NOT count.
+    n_call_sites: usize,
+}
+
+#[derive(Deserialize)]
+struct ClanReference {
+    codes: Vec<ReferenceCode>,
+}
+
+fn load_clan_reference() -> Result<ClanReference, TestError> {
+    let path = clan_reference_dir().join("check-error-codes.json");
+    let text = fs::read_to_string(&path)
+        .map_err(|e| TestError::Failure(format!("read {}: {e}", path.display())))?;
+    serde_json::from_str(&text)
+        .map_err(|e| TestError::Failure(format!("parse {}: {e}", path.display())))
+}
+
+/// Whether an entry claims `check.cpp` still emits its code.
+///
+/// Derived from the status by [`ParityStatus::expected_sites`], so the gate is
+/// one comparison rather than a branch per case. Each case's remediation advice
+/// survives as data beside the expectation; it was the four copies of the
+/// control flow, not the four distinct hints, that were the duplication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SiteExpectation {
+    /// The reference must show at least one live `check_err` call site.
+    Live,
+    /// The reference must show none.
+    None,
+}
+
+impl SiteExpectation {
+    /// The claim being tested, phrased for the failure message.
+    fn claim(self) -> &'static str {
+        match self {
+            Self::Live => "this entry asserts CLAN emits the code",
+            Self::None => "this entry asserts `check.cpp` no longer emits the code",
+        }
+    }
+}
+
+impl ParityStatus {
+    /// What this entry implies about the generated reference, and what to do
+    /// when the reference disagrees.
+    fn expected_sites(&self) -> (SiteExpectation, &'static str) {
+        match self {
+            Self::Parity | Self::Gap | Self::Divergence => (
+                SiteExpectation::Live,
+                "Either CLAN retired it (move the entry to `no_obligation` with a reason), \
+                 or it is reached through a wrapper the generator does not yet follow \
+                 (teach `find_code_carrying_aliases`, do not add an exception here).",
+            ),
+            Self::NoObligation {
+                no_obligation_reason,
+            } => match no_obligation_reason {
+                // Claims about the SOURCE, which the generated reference can
+                // confirm because the generator excludes exactly these two
+                // kinds of not-compiled text: comments, and the preprocessor
+                // regions a unix build drops.
+                NoObligationReason::CommentedOut
+                | NoObligationReason::NoEmissionPath
+                | NoObligationReason::GuiOnly => (
+                    SiteExpectation::None,
+                    "Either the reference is stale (regenerate it from the current CLAN \
+                     sources with scripts/extract_check_codes.py) or the reason is wrong.",
+                ),
+                // A claim about RUNTIME reachability: the call site is real and
+                // compiled, so the reference counts it; only running CLAN shows
+                // it never fires.
+                NoObligationReason::UnreachableInFileMode => (
+                    SiteExpectation::Live,
+                    "This reason claims the call site EXISTS but never fires, so the \
+                     reference should still count it. If the site is gone, the reason \
+                     should be `commented_out` or `no_emission_path`.",
+                ),
+            },
+        }
+    }
+}
+
+/// The manifest's claims about CLAN must agree with the generated view of
+/// `check.cpp`. Runs in CI; needs no CLAN binary, only the checked-in reference.
+///
+/// This is the gate that was missing. Two independent artifacts describe the
+/// same fact (which codes CLAN can still emit): this manifest, hand-maintained
+/// as codes are adjudicated, and `clan-check-reference/check-error-codes.json`,
+/// generated from `check.cpp`. Nothing compared them, so they drifted, and the
+/// drift was invisible in both directions:
+///
+/// - eleven entries said "call site commented out" while the reference still
+///   reported live call sites, because the generator stripped `//` comments but
+///   not `/* ... */` blocks;
+/// - CHECK 76 was retired upstream on 2026-08-07 inside such a block, and the
+///   manifest went on claiming `parity` with a code no build can emit.
+///
+/// Note what this does NOT assert: that chatter is right, or that CLAN is
+/// right. Only that our two records of CLAN's behaviour say the same thing.
+/// Whether CLAN's behaviour is CORRECT is a separate question, answered by
+/// adjudication, and whether CLAN still behaves as recorded is answered by
+/// `clan_check_grounding` against the real binary.
+#[test]
+fn manifest_agrees_with_clan_reference() -> Result<(), TestError> {
+    let manifest = load_manifest()?;
+    let reference = load_clan_reference()?;
+
+    let live_sites: std::collections::HashMap<u16, usize> = reference
+        .codes
+        .iter()
+        .map(|c| (c.code, c.n_call_sites))
+        .collect();
+
+    let mut failures = Vec::new();
+
+    for entry in &manifest.entries {
+        let code = entry.check_code;
+        // A code the reference does not mention at all is one `check.cpp` never
+        // names; treat it as zero live sites rather than skipping, so a typo in
+        // a manifest code number surfaces here instead of passing vacuously.
+        let sites = live_sites.get(&code).copied().unwrap_or(0);
+        let (expected, hint) = entry.status.expected_sites();
+
+        let disagrees = match expected {
+            SiteExpectation::Live => sites == 0,
+            SiteExpectation::None => sites != 0,
+        };
+        if disagrees {
+            failures.push(format!(
+                "CHECK {code}: {} but the generated reference reports {sites} live \
+                 call site(s). {hint}",
+                expected.claim()
+            ));
+        }
+    }
+
+    if !failures.is_empty() {
+        return Err(TestError::Failure(format!(
+            "{} manifest entr(ies) disagree with the generated CLAN reference:\n  {}",
+            failures.len(),
+            failures.join("\n  ")
+        )));
+    }
+    Ok(())
+}
+
 fn load_manifest() -> Result<ParityManifest, TestError> {
     let path = parity_dir().join("manifest.json");
     let text = fs::read_to_string(&path)
@@ -168,8 +382,8 @@ fn chatter_codes(parser: &TreeSitterParser, fixture: &str) -> Result<Vec<String>
     let mut codes = error_severity_codes(&parse_errors);
     if let ParseOutcome::Parsed(mut chat_file) = outcome {
         let validation_errors = ErrorCollector::new();
-        let stem = path.file_stem().and_then(|s| s.to_str());
-        chat_file.validate_with_alignment(&validation_errors, stem);
+        chat_file
+            .validate_with_alignment(&validation_errors, TranscriptName::for_path(path.as_ref()));
         codes.extend(error_severity_codes(&validation_errors));
     }
     Ok(codes)
@@ -228,7 +442,7 @@ fn chatter_matches_check() -> Result<(), TestError> {
             // Only `no_obligation` may go fixture-less (nothing groundable
             // exists); any other status without a fixture is an authoring
             // error, fail closed rather than silently skipping.
-            if entry.status != ParityStatus::NoObligation {
+            if !matches!(entry.status, ParityStatus::NoObligation { .. }) {
                 failures.push(format!(
                     "CHECK {}: entry has no fixture but status {:?}; only \
                      `no_obligation` entries may omit the fixture [{}]",
@@ -273,7 +487,7 @@ fn chatter_matches_check() -> Result<(), TestError> {
             // CLAN cannot emit the code, but the fixture still pins chatter's
             // recorded behaviour on the construct: same two shapes as
             // `Divergence` (codes present, or clean when the list is empty).
-            ParityStatus::NoObligation => {
+            ParityStatus::NoObligation { .. } => {
                 if entry.expected_chatter_codes.is_empty() {
                     report_unexpected_codes(
                         entry,
@@ -331,7 +545,7 @@ fn clan_check_grounding() -> Result<(), TestError> {
         // The pty emits CRLF; strip CR before scanning the (NN) trailers.
         let text = String::from_utf8_lossy(&output.stdout).replace('\r', "");
         let emitted = parse_check_numbers(&text);
-        if entry.status == ParityStatus::NoObligation {
+        if matches!(entry.status, ParityStatus::NoObligation { .. }) {
             // Tripwire, inverted assertion: unix CLAN must still NOT emit the
             // code on this construct. If a future CLAN bundle revives the rule
             // (uncomments the call site, compiles the GUI-only region into the

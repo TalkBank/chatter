@@ -11,6 +11,7 @@ Bullet timestamps must be monotonic
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

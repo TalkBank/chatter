@@ -1,103 +1,111 @@
 # Setup
 
 **Status:** Current
-**Last modified:** 2026-06-21 21:33 EDT
+**Last modified:** 2026-08-12 20:25 EDT
 
-Development is supported on **Windows, macOS, and Linux**. The instructions below use Unix shell syntax; on Windows, use PowerShell or Git Bash equivalently.
+Getting a working checkout, and what you need installed for each surface you
+might touch. What to RUN once you are set up is in
+[Developer Verification Checks](dev-checks.md), which owns that list.
+
+Development is supported on **Windows, macOS, and Linux**. The commands below
+use Unix shell syntax; on Windows use PowerShell or Git Bash.
 
 ## Prerequisites
 
-- **Rust (stable)** via [rustup](https://rustup.rs/) (all platforms)
-- **Node.js** for tree-sitter grammar generation and symbol validation
-- **tree-sitter CLI**: `cargo install tree-sitter-cli`
-- **just** (optional but recommended) for the repo's top-level helper recipes
+**Always:**
 
-## Clone Repository
+- **Rust** via [rustup](https://rustup.rs/). Do NOT install a version by hand:
+  `rust-toolchain.toml` pins the exact stable release (currently 1.97.1) and
+  rustup honours it automatically. The pin exists so a new stable's clippy
+  lints cannot turn every open PR red overnight.
+- **[just](https://github.com/casey/just)** for the repo's recipes. Not
+  strictly required, but every command in the contributing docs is a `just`
+  recipe, and the recipes are the single owner of how each check is invoked.
+
+**Per surface, only if you touch it:**
+
+| You are changing | You also need |
+|---|---|
+| the grammar (`grammar/grammar.js`) | Node.js, and the tree-sitter CLI (`cargo install tree-sitter-cli`) |
+| the grammar, so the typed traversal must be regenerated | a local checkout of `tree-sitter-grammar-utils`, which is not yet published (see [Grammar Workflow](grammar-workflow.md)) |
+| the re2c lexer (`crates/talkbank-parser-re2c/src/lexer.re`) | `re2c`, which provides the `re2rust` binary |
+| the book | `just book-install-tools` (installs mdBook and lychee into `.tooling/`) |
+
+Nothing here needs a TalkBank corpus or any network service. The CHAT core
+builds and its tests pass on a fresh machine with only the "always" row.
+
+## Clone and build
 
 ```bash
-mkdir -p ~/talkbank && cd ~/talkbank
 git clone https://github.com/TalkBank/chatter.git
 cd chatter
-```
-
-## Build
-
-From your chatter checkout root:
-
-```bash
 cargo build --workspace --locked
-cargo build --workspace --all-targets --locked
-
-# Optional helpers from the root justfile
-just build
-just test
-just book-install-tools
-just book
 ```
 
-## Two Cargo Workspaces
-
-The repository has two independent Cargo workspaces:
-
-### 1. Root workspace (`Cargo.toml`)
-
-Contains all Rust crates for parsing, model, validation, and transform:
+Then run the tests to confirm the checkout is sound:
 
 ```bash
-cargo build
-cargo test
+just test          # cargo test --workspace --tests, about a minute
 ```
 
-### 2. Spec workspace (`spec/Cargo.toml`)
+## Two Cargo workspaces
 
-Contains two sibling crates for spec-driven artifacts. Invoke with
-`--manifest-path` relative to the chatter repo root:
+The repository has two INDEPENDENT Cargo workspaces. This trips people up
+because `--workspace` from the root does not reach the second one, so a spec
+change can be broken while every root gate is green.
+
+### 1. The root workspace (`Cargo.toml`)
+
+Every crate for parsing, model, validation, transform, CLI, LSP and desktop.
+Plain `cargo` commands from the repo root operate here.
+
+### 2. The spec workspace (`spec/Cargo.toml`)
+
+Two member crates, `spec/tools` and `spec/runtime-tools`. Reach it with the
+WORKSPACE manifest, not an individual crate's:
 
 ```bash
-cargo build --manifest-path spec/tools/Cargo.toml
-cargo build --manifest-path spec/runtime-tools/Cargo.toml
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- --help
-cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_specs -- --help
+cargo test --manifest-path spec/Cargo.toml --workspace   # or: just test-spec
 ```
 
-## Root justfile recipes
+`just test-spec` is the same thing and is what the pre-push list names. What
+the two crates are for, and why the split exists, is in
+[Spec Tooling](../architecture/spec-tooling.md).
+
+## The recipes
 
 ```bash
-just build        # Build the Rust workspace
-just build-release
-just test         # cargo test --workspace
-just clippy
-just fmt
-just fmt-check
+just --list
 ```
 
-## Verification
+That is the authoritative catalog and it is worth reading once end to end: it
+covers testing, both generators, the spec gates, formatting, the book, doc
+dates, the vendored lexer, coverage, and the release commands. This page
+deliberately does not reproduce it. It used to list eight recipes, and by the
+time anyone noticed there were thirty-one, so the copy was quietly telling
+contributors that `just test-spec`, `just spec-status`, `just form-markers-gen`,
+`just symbols-gen`, `just verify-vendored-lexer` and `just doc-dates` did not
+exist.
 
-This repo does **not** currently have the old monorepo-wide `make verify`
-wrapper ported into the root checkout. Until that lands, use the concrete
-verification commands from the repo guidance:
+Which recipes to run, when, and what each costs: [Developer Verification
+Checks](dev-checks.md).
+
+## Pushing
 
 ```bash
-cargo fmt
-cargo check --workspace --all-targets
-cargo build --workspace --all-targets --locked
-cargo test --workspace
-cargo test --doc
+just push          # fmt-check, actionlint, and the two version-sync checks, then git push
 ```
 
-Add grammar/spec commands when your change touches those surfaces:
+`just push` is a backstop for the fast checks that `cargo test` cannot catch,
+not a substitute for the pre-push list in
+[dev-checks](dev-checks.md#before-pushing). Run the real gates locally first:
+CI is a confirmation, never the thing that finds your bug for you.
 
-```bash
-cd grammar && tree-sitter generate && tree-sitter test
-cargo build --manifest-path spec/tools/Cargo.toml
-cargo build --manifest-path spec/runtime-tools/Cargo.toml
-```
+There is no `make verify` and no Makefile. This page used to describe one as
+"not yet ported"; it was never coming, because the recipes replaced it.
 
-CI green on the pushed commit remains the authoritative pre-push gate for this
-repo.
+## Editor setup
 
-## Editor Setup
-
-### rust-analyzer
-
-The workspace should work out of the box with rust-analyzer. The root `Cargo.toml` workspace configuration is standard.
+rust-analyzer works out of the box on the root workspace. If you are editing
+under `spec/`, point your editor at `spec/Cargo.toml` as a second linked
+project, or it will report the spec crates as not belonging to any workspace.

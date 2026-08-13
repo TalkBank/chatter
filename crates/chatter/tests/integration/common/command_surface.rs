@@ -127,8 +127,36 @@ pub const SURFACE_GROUPS: &[SurfaceGroup] = &[
         family: SurfaceFamily::Maintenance,
         commands: &["update"],
         coverage: MAINTENANCE_COVERAGE,
-        note: "self-update launcher that runs the bundled chatter-update program",
+        note: "in-process self-update against GitHub Releases (experimental)",
     },
+];
+
+/// Top-level commands that exist in `chatter --help` but are deliberately NOT
+/// part of the release-facing manifest above, each with the reason.
+///
+/// This list exists because [`SURFACE_GROUPS`] alone could only ever be checked
+/// in ONE direction. `top_level_help_lists_all_manifested_commands` asserts that
+/// every manifested command reaches help, which catches a REMOVAL; nothing
+/// caught an ADDITION, so a new top-level command could join the CLI without
+/// appearing in any manifest, any coverage expectation, or any documentation,
+/// and every gate stayed green. That is how `update` came to be absent from the
+/// CLI reference page while the binary had shipped it.
+///
+/// Naming a command here is a deliberate act with a stated reason, so the
+/// accounting is complete: every command is either published (and carries
+/// coverage expectations) or explicitly excluded (and says why). Both
+/// directions are asserted, so this list cannot rot either: an entry naming a
+/// command that no longer exists fails just as loudly as an unaccounted-for
+/// command.
+pub const UNPUBLISHED_TOP_LEVEL: &[(&str, &str)] = &[
+    ("adjudicate", "experimental: merge-conflict adjudication"),
+    ("batch", "experimental: batch orchestration"),
+    ("debug", "maintainer diagnostics, not a user-facing surface"),
+    ("merge", "experimental: transcript reconciliation"),
+    ("pipeline", "experimental: multi-stage pipeline driver"),
+    ("rediarize", "experimental: speaker re-diarization"),
+    ("sanity-scan", "experimental: corpus-wide sanity sweep"),
+    ("speaker-id", "experimental: speaker identification"),
 ];
 
 /// Look up the reviewed surface-group metadata for one published family.

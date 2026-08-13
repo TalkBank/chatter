@@ -15,6 +15,7 @@ the `@ID` block is an ordering violation.
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

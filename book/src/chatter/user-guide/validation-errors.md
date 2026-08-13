@@ -1,11 +1,21 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-07-29 20:17 EDT
+**Last modified:** 2026-08-12 20:10 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
-`chatter validate` is the binding judgment on whether a byte sequence is valid CHAT. When it reports an **error**, the file is invalid CHAT: clean the data rather than working around the check. A **warning** flags a questionable but parseable construct you should review. Where `chatter` and an older tool such as CLAN's `check` disagree on whether a file is valid, `chatter validate` is authoritative (see [CHECK Parity Audit](../../architecture/errors-and-validation/check-parity-audit.md) for how the two are reconciled).
+`chatter validate` is the binding judgment on whether a byte sequence is valid CHAT. When it reports an **error**, the file is invalid CHAT: clean the data rather than working around the check.
+
+**But that is a conclusion, not a reflex, and it cuts both ways.** chatter is
+under active development and its current behaviour is not sacred. If a
+diagnostic does not make sense against your file, the fault may be ours, and we
+would rather hear about it than have you edit a transcript to silence it. Tells
+that a diagnostic is a chatter bug: the message names a construct your line does
+not contain, the code is a generic "unparsable content" rather than a specific
+rule, or no documented rule justifies it. Report it with the smallest file that
+reproduces it. Editing data to quiet a wrong check destroys the evidence and
+leaves the bug in place for the next person. A **warning** flags a questionable but parseable construct you should review. Where `chatter` and an older tool such as CLAN's `check` disagree on whether a file is valid, `chatter validate` is authoritative (see [CHECK Parity Audit](../../architecture/errors-and-validation/check-parity-audit.md) for how the two are reconciled).
 
 ## Reading Error Output
 
@@ -39,7 +49,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E754: Multi-letter @l form, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial, E767: Whitespace before the @Media comma, E768: @Media filename not representable |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial, E767: Whitespace before the @Media comma, E768: @Media filename not representable |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -210,12 +220,6 @@ nonword form. Filler and other word-category prefixes (`&-`, `&~`, `0`)
 count as material outside the arrows. Adopted from GUI CLAN CHECK error
 151 as a chatter rule.
 
-### E754: Letter form @l with more than one letter
-
-The `@l` form marks a single spoken letter (`b@l`); use `@k` (letter
-sequence) or `@ls` (letter plural) for multi-letter content. Stuttered
-letters with repetition segments (`↫b^↫b@l`) are fine: repeated-segment
-material does not count toward the stem. Mirrors CLAN CHECK error 76.
 
 ### E519 at word level: language codes must be real everywhere
 

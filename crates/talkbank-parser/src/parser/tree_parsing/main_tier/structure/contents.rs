@@ -18,11 +18,11 @@ use tree_sitter::Node;
 use crate::generated_traversal::{
     AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsNode, NodeSlot, extract_contents,
 };
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 
 use super::super::super::parser_helpers::parse_separator_like;
 use super::super::content::{
-    analyze_word_error, illegal_curly_quote_error, misplaced_linker_error, parse_overlap_point,
+    MainTierRegion, classify_main_tier_recovery, illegal_curly_quote_error, misplaced_linker_error,
+    parse_overlap_point, surface_main_tier_sink,
 };
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
@@ -92,11 +92,11 @@ pub fn parse_main_tier_contents(
     let mut content = Vec::new();
 
     let contents = extract_contents(ContentsNode(node));
-    process_contents_slot(contents.child_0.slot, source, errors, &mut content);
-    for element in contents.child_1.slot {
-        process_contents_slot(element.slot, source, errors, &mut content);
+    process_contents_slot(contents.child_0.slot(), source, errors, &mut content);
+    for element in contents.child_1.slot() {
+        process_contents_slot(element.slot(), source, errors, &mut content);
     }
-    surface_unexpected(&contents.unexpected, source, errors);
+    surface_main_tier_sink(&contents.unexpected, MainTierRegion::Body, source, errors);
 
     content
 }
@@ -109,7 +109,7 @@ pub fn parse_main_tier_contents(
 /// four arms, just driven by an exhaustive `NodeSlot` match instead of an
 /// iterator yield.
 fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
-    slot: NodeSlot<'tree, C>,
+    slot: &NodeSlot<'tree, C>,
     source: &str,
     errors: &impl ErrorSink,
     content: &mut Vec<UtteranceContent>,
@@ -136,7 +136,7 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
             }
         }
         NodeSlot::Missing(item_node) => {
-            if let ParseOutcome::Parsed(parsed) = parse_content_item(item_node, source, errors) {
+            if let ParseOutcome::Parsed(parsed) = parse_content_item(*item_node, source, errors) {
                 content.push(parsed);
             }
         }
@@ -185,8 +185,12 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
                          remove the code",
                     ),
                 );
-            } else if !attach_error_suffix_to_previous_word(error_node, source, content) {
-                errors.report(analyze_word_error(error_node, source));
+            } else if !attach_error_suffix_to_previous_word(*error_node, source, content) {
+                errors.report(classify_main_tier_recovery(
+                    *error_node,
+                    source,
+                    MainTierRegion::Body,
+                ));
             }
         }
         // A child whose kind is none of the `contents` alternatives. On valid
@@ -392,7 +396,11 @@ fn parse_content_item(
         };
 
         if child.is_error() {
-            errors.report(analyze_word_error(child, source));
+            errors.report(classify_main_tier_recovery(
+                child,
+                source,
+                MainTierRegion::Body,
+            ));
             return ParseOutcome::rejected();
         }
 

@@ -1,5 +1,5 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: result.unwrap()
 ---
 speaker:
@@ -8,8 +8,7 @@ tier_body:
   linkers: []
   langcode: ~
   contents:
-    - Event:
-        - Event: w3_33
+    - Event: w3_33
   terminator:
     Period: "."
   postcodes: []

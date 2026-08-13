@@ -1,14 +1,21 @@
 @UTF8
 @Begin
-@Languages:	eng
+@Languages:	eng, zho
 @Participants:	CHI Child, MOT Mother
 @ID:	eng|sample|CHI|2;00.||||Child|||
 @ID:	eng|sample|MOT|||||Mother|||
 @Media:	wor, audio
 @Comment:	Word-level timing tier (%wor) with per-word timestamps
 @Comment:	Constructs: wor_dependent_tier, wor_tier_prefix, wor_tier_body, wor_word_item
+@Comment:	The third pair is ATTESTED, copied from a real Cantonese corpus file:
+	a %wor tier opening with a language precode, which grammar.js allows via
+	wor_tier_body's optional language_code field. It is here because the two
+	synthesized pairs above never exercised it, and the re2c backend could not
+	parse it at all (510 E316 over a 2% corpus sample) while tree-sitter could.
 *CHI:	hello world . 100_600
 %wor:	hello 100_300 world 300_600 .
 *MOT:	how are you ? 700_1200
 %wor:	how 700_800 are 800_1000 you 1000_1200 .
+*CHI:	[- zho] 我 . 565499_566219
+%wor:	[- zho] 我 565499_566219 .
 @End

@@ -52,7 +52,7 @@ pub(super) fn parse_prefix(
     // the bespoke "Expected 'star' (*)" structural diagnostic (an ERROR node's
     // `kind()` is "ERROR", matching the old `found '{}'` text); an absent star
     // reproduces the missing-star diagnostic.
-    match &main.child_0.slot {
+    match main.child_0.slot() {
         NodeSlot::Present(_) | NodeSlot::Missing(_) => {}
         NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
             errors.report(ParseError::new(
@@ -82,7 +82,7 @@ pub(super) fn parse_prefix(
     // zero-width-check body per arm.
     let mut speaker: Option<String> = None;
     let mut speaker_span = Span::DUMMY;
-    let speaker_raw_node = match &main.speaker.slot {
+    let speaker_raw_node = match main.speaker.slot() {
         NodeSlot::Present(speaker_node) => Some(speaker_node.raw_node()),
         NodeSlot::Missing(node) => Some(*node),
         NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
@@ -126,7 +126,7 @@ pub(super) fn parse_prefix(
     // above. A zero-width colon (a `Present` empty node or a MISSING
     // placeholder, both zero-width) is reported as `EmptyColon`; the old branch
     // reported `EmptyColon` whenever the colon node was zero width.
-    let colon_raw_node = match &main.child_2.slot {
+    let colon_raw_node = match main.child_2.slot() {
         NodeSlot::Present(colon_node) => Some(colon_node.raw_node()),
         NodeSlot::Missing(node) => Some(*node),
         NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
@@ -153,7 +153,7 @@ pub(super) fn parse_prefix(
     // Position 3: tab. A `Present` or `Missing` tab keeps kind `tab`, so the old
     // `child.kind() == TAB` branch accepted both with no diagnostic (see the
     // star-position note above on why the unbound `_ | _` arm is sound).
-    match &main.child_3.slot {
+    match main.child_3.slot() {
         NodeSlot::Present(_) | NodeSlot::Missing(_) => {}
         NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
             report_unexpected_child(*node, source, errors, "tab", TAB_POSITION);

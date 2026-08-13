@@ -9,4 +9,17 @@
 *CHI:	no:: I do:n't wa:nt to .
 *MOT:	ple:ase eat your dinner .
 *CHI:	we need  to do  something .
+@Comment:	The pair below carries the SHAPE real CA data uses, which the two
+	lines above do not: an underline begin glued INSIDE a word and an end
+	glued to the START of the next. Attested in ca-data/Bergmann as
+	`j:\x02\x01a \x02\x02da is noch mal s\x02\x01a\x02\x02:men`, written with escapes
+	here so the COMMENT does not itself contain underline markers: it is
+	parsed input, and a reflow that unbalanced them would present as a
+	parser regression in the very check this fixture pins.
+	The letters below are the
+	fixture's own, the placement is the corpus's. Standalone markers alone
+	never exercised the word-body scanner, which discarded these two for
+	years behind a "skip for now".
+*CHI:	we need to do something .
+*MOT:	that is something else .
 @End

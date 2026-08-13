@@ -11,8 +11,10 @@ An `@Options` header contains a flag that is not one of the recognized option va
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E534
 
 ```chat
 @UTF8

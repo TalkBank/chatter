@@ -9,6 +9,7 @@
 
 use super::find_alignment_hover_info;
 use talkbank_model::model::Line;
+use talkbank_model::model::TranscriptName;
 use talkbank_model::{ErrorCode, ErrorCollector};
 use talkbank_parser::TreeSitterParser;
 use tower_lsp::lsp_types::Position;
@@ -56,7 +57,7 @@ fn parse_and_validate_chat_file(
 
     // Validate the file (but allow validation warnings - we only care about parse errors)
     let error_sink = ErrorCollector::new();
-    chat_file.validate(&error_sink, None);
+    chat_file.validate(&error_sink, TranscriptName::Anonymous);
     let errors = error_sink.into_vec();
 
     // Only fatal parse errors should fail the test (not validation warnings)

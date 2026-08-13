@@ -11,8 +11,10 @@ An `@Media` header contains a media type that is not one of the recognized value
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E535
 
 ```chat
 @UTF8

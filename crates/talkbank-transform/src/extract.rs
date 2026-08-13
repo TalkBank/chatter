@@ -155,11 +155,29 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                 });
             }
         }
-        TierDomain::Pho | TierDomain::Sin | TierDomain::Wor => {
-            if should_align_replaced_word_in_pho_sin(
-                &entry.word,
-                !entry.replacement.words.is_empty(),
-            ) {
+        // %wor gets its OWN arm, matching `count::count_alignable_replaced_word`.
+        // Grouping it with Pho/Sin applied the pho/sin fragment exclusion to
+        // %wor, and the two predicates deliberately disagree about fillers:
+        // `is_wor_excluded_category` excludes only Nonword and
+        // PhonologicalFragment, because `rules.rs` documents fillers as
+        // INCLUDED in %wor ("stable, alignable phoneme sequences"), while
+        // `is_fragment_like` (used by the pho/sin predicate) counts Filler as a
+        // fragment. So `&-um [: um]` counted 1 and extracted 0, and
+        // `count_tier_positions(..) == collect_tier_items(..).len()` silently
+        // stopped holding for that shape.
+        TierDomain::Wor => {
+            if counts_for_tier(&entry.word, TierDomain::Wor) {
+                out.push(ExtractedWord {
+                    text: ChatCleanedText::from_word(&entry.word),
+                    raw_text: ChatRawText::from_word_raw(&entry.word),
+                    utterance_word_index: WordIdx::new(out.len()),
+                    form_type: entry.word.form_type.clone(),
+                    lang: entry.word.lang.clone(),
+                });
+            }
+        }
+        TierDomain::Pho | TierDomain::Sin => {
+            if should_align_replaced_word_in_pho_sin(entry) {
                 out.push(ExtractedWord {
                     text: ChatCleanedText::from_word(&entry.word),
                     raw_text: ChatRawText::from_word_raw(&entry.word),

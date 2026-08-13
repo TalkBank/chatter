@@ -217,6 +217,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          # check_doc_dates.py needs per-file commit dates, so it refuses to
+          # run on a shallow clone rather than passing vacuously.
+          fetch-depth: 0
 
       # Cheap guard (pure Python, no Rust build): every numeric Rust-version
       # pin in the workflows must match its source of truth, the dev toolchain
@@ -225,6 +229,9 @@ jobs:
       # `just rust-sync`, and this job enforces no pin was missed.
       - name: Check Rust version pins
         run: python3 scripts/sync-rust-versions.py --check
+
+      - name: Documentation date headers are honest
+        run: python3 scripts/check_doc_dates.py
 
   app-version-sync:
     name: App version in sync

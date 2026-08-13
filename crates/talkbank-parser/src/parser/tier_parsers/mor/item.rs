@@ -43,11 +43,11 @@ pub fn parse_mor_content(node: Node, source: &str, errors: &impl ErrorSink) -> P
     let children = extract_mor_content(MorContentNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    let main_word = decode_main_word(children.main.slot, source, errors);
+    let main_word = decode_main_word(children.main.slot(), source, errors);
 
     let mut post_clitics = Vec::new();
-    for element in children.post_clitics.slot {
-        match element.slot {
+    for element in children.post_clitics.slot() {
+        match element.slot() {
             NodeSlot::Present(clitic_node) => {
                 if let ParseOutcome::Parsed(Some(clitic)) =
                     parse_mor_post_clitic(clitic_node.0, source, errors)
@@ -57,13 +57,13 @@ pub fn parse_mor_content(node: Node, source: &str, errors: &impl ErrorSink) -> P
             }
             NodeSlot::Missing(raw) => {
                 if let ParseOutcome::Parsed(Some(clitic)) =
-                    parse_mor_post_clitic(raw, source, errors)
+                    parse_mor_post_clitic(*raw, source, errors)
                 {
                     post_clitics.push(clitic);
                 }
             }
             NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "mor_content"));
+                errors.report(unexpected_node_error(*raw, source, "mor_content"));
             }
             NodeSlot::Absent => {}
         }
@@ -85,7 +85,7 @@ pub fn parse_mor_content(node: Node, source: &str, errors: &impl ErrorSink) -> P
 /// [`parse_mor_word`] alike (see the module doc comment for why), and
 /// reporting `Error`/`Unexpected` the way the removed loop's `_ =>` arm did.
 fn decode_main_word<'tree>(
-    slot: NodeSlot<'tree, MorWordNode<'tree>>,
+    slot: &NodeSlot<'tree, MorWordNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Option<MorWord> {
@@ -94,12 +94,12 @@ fn decode_main_word<'tree>(
             ParseOutcome::Parsed(word) => Some(word),
             ParseOutcome::Rejected => None,
         },
-        NodeSlot::Missing(raw) => match parse_mor_word(raw, source, errors) {
+        NodeSlot::Missing(raw) => match parse_mor_word(*raw, source, errors) {
             ParseOutcome::Parsed(word) => Some(word),
             ParseOutcome::Rejected => None,
         },
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_content"));
+            errors.report(unexpected_node_error(*raw, source, "mor_content"));
             None
         }
         NodeSlot::Absent => None,
@@ -127,26 +127,26 @@ fn parse_mor_post_clitic(
     let children: MorPostCliticChildren<'_> = extract_mor_post_clitic(MorPostCliticNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_0.slot {
+    match children.child_0.slot() {
         NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent => {}
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
+            errors.report(unexpected_node_error(*raw, source, "mor_post_clitic"));
         }
     }
 
-    match children.child_1.slot {
+    match children.child_1.slot() {
         NodeSlot::Present(word_node) => {
             if let ParseOutcome::Parsed(word) = parse_mor_word(word_node.0, source, errors) {
                 return ParseOutcome::parsed(Some(word));
             }
         }
         NodeSlot::Missing(raw) => {
-            if let ParseOutcome::Parsed(word) = parse_mor_word(raw, source, errors) {
+            if let ParseOutcome::Parsed(word) = parse_mor_word(*raw, source, errors) {
                 return ParseOutcome::parsed(Some(word));
             }
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
+            errors.report(unexpected_node_error(*raw, source, "mor_post_clitic"));
         }
         NodeSlot::Absent => {}
     }

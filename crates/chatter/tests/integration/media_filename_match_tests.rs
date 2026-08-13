@@ -91,3 +91,51 @@ fn matching_media_filename_is_accepted() -> Result<(), TestError> {
     );
     Ok(())
 }
+
+/// E531 also runs on the `to-json` path, not only on `validate`.
+///
+/// # Why this exists
+///
+/// `chat_to_json` took content and no name, so `parse_and_validate` passed
+/// `None` for the filename and every rule about the transcript's own name was
+/// silently skipped. That was known and DOCUMENTED rather than fixed: the
+/// pipeline carried a `NOTE` plus a `FOLLOW-UP` in production source saying
+/// E531 does not run for `to-json` or any other pipeline consumer. A hazard
+/// note is a bug with documentation, and this is the test that closes it.
+///
+/// The sibling assertion below matters as much: turning a rule ON is only
+/// correct if it still stays quiet when it should. Without it this test would
+/// pass equally well against code that reported E531 on every file.
+#[test]
+fn media_filename_mismatch_is_rejected_via_to_json() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let path = write_fixture(dir.path(), "session.cha", &fixture_with_media("elsewhere"))?;
+
+    let mut cmd = harness.chatter_cmd();
+    cmd.arg("to-json").arg(&path);
+    let text = combined_output(&cmd.output()?);
+    assert!(
+        text.contains("E531"),
+        "`to-json` must run the @Media filename match; it silently skipped it \
+         until the transcript's name became a parameter. Got:\n{text}"
+    );
+    Ok(())
+}
+
+/// ...and stays quiet on `to-json` when the names agree.
+#[test]
+fn matching_media_filename_is_accepted_via_to_json() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let path = write_fixture(dir.path(), "session.cha", &fixture_with_media("session"))?;
+
+    let mut cmd = harness.chatter_cmd();
+    cmd.arg("to-json").arg(&path);
+    let text = combined_output(&cmd.output()?);
+    assert!(
+        !text.contains("E531"),
+        "a matching @Media filename must not emit E531 from `to-json`, got:\n{text}"
+    );
+    Ok(())
+}

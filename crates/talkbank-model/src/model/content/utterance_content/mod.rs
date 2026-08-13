@@ -36,7 +36,4 @@
 mod types;
 mod write;
 
-#[cfg(test)]
-mod tests;
-
 pub use types::UtteranceContent;

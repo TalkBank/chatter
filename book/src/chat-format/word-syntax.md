@@ -57,15 +57,14 @@ The `@s:` suffix marks a word's language in multilingual transcripts:
 *CHI:	I want a Keks@s:deu .
 ```
 
-Other `@` markers:
-- `@l`: letter
-- `@c`: child-invented form
-- `@f`: family-specific word
-- `@n`: neologism
-- `@o`: onomatopoeia
-- `@b`: babbling
-- `@wp`: word play
-- `@si`: signed word
+A word can also carry one special-form marker naming what kind of form it is
+(`gumma@c` for a child-invented word, `b@l` for a letter). The complete set,
+with meanings and examples, is the table in
+[Symbols](symbols.md#-markers-word-level).
+
+There used to be a hand-picked subset of that table here, and it had already
+drifted: it glossed `@si` as "signed word", which is `@sl`. `@si` is singing.
+A partial copy of a closed set is worth less than a link to the whole one.
 
 ## Annotations
 

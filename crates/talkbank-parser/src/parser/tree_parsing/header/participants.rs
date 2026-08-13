@@ -95,7 +95,13 @@ pub fn parse_participants_header(node: Node, source: &str, errors: &impl ErrorSi
     // deliberately DEFERRED out of scope for B2 (see the special.rs `@Options`
     // note for the same deferral rationale).
     let header_children = extract_participants_header(ParticipantsHeaderNode(node));
-    let Some(contents_node) = header_children.child_2.slot.present_or_recover().ok() else {
+    let Some(contents_node) = header_children
+        .child_2
+        .slot()
+        .clone()
+        .present_or_recover()
+        .ok()
+    else {
         errors.report(ParseError::new(
             ErrorCode::EmptyParticipantsHeader,
             Severity::Error,

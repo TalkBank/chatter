@@ -11,6 +11,7 @@ Mor count mismatch - too many mor items
 - **Level**: tier
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

@@ -1,5 +1,5 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: result.unwrap()
 ---
 speaker:
@@ -9,8 +9,7 @@ tier_body:
   langcode: ~
   contents:
     - Action:
-        zero:
-          Zero: "0"
+        zero: "0"
         annotations: []
   terminator:
     Period: "."

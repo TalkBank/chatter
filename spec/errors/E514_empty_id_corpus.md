@@ -13,6 +13,7 @@ is required: a blank corpus is invalid.
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

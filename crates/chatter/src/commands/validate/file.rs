@@ -15,7 +15,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use talkbank_model::{ErrorCollector, ErrorSink, ParseValidateOptions, TeeErrorSink};
-use talkbank_transform::parse_and_validate_streaming;
+use talkbank_transform::parse_and_validate_streaming_for_path;
 
 use crate::cli::OutputFormat;
 use crate::commands::{AlignmentValidationMode, CacheRefreshMode, ValidationInterface};
@@ -164,7 +164,7 @@ pub fn validate_file(
         // JSON mode or TUI mode: collect errors for structured output or TUI display
         let error_sink = ErrorCollector::new();
 
-        match parse_and_validate_streaming(&content, options.clone(), &error_sink) {
+        match parse_and_validate_streaming_for_path(path, &content, options.clone(), &error_sink) {
             Ok(_) => error_sink.into_vec(),
             Err(e) => {
                 if matches!(format, OutputFormat::Json) {
@@ -190,7 +190,7 @@ pub fn validate_file(
         // (cannot stream-and-suppress because TerminalErrorSink prints immediately)
         let error_sink = ErrorCollector::new();
 
-        match parse_and_validate_streaming(&content, options.clone(), &error_sink) {
+        match parse_and_validate_streaming_for_path(path, &content, options.clone(), &error_sink) {
             Ok(_) => error_sink.into_vec(),
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -203,7 +203,7 @@ pub fn validate_file(
         let collecting_sink = ErrorCollector::new();
         let tee_sink = TeeErrorSink::new(&terminal_sink, &collecting_sink);
 
-        match parse_and_validate_streaming(&content, options.clone(), &tee_sink) {
+        match parse_and_validate_streaming_for_path(path, &content, options.clone(), &tee_sink) {
             Ok(_) => collecting_sink.into_vec(),
             Err(e) => {
                 eprintln!("Error: {}", e);

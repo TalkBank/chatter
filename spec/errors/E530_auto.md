@@ -11,6 +11,7 @@ Lazy gem inside background
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

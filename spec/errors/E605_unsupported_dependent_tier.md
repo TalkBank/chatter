@@ -11,8 +11,10 @@ An utterance contains a dependent tier with a label that is not a standard CHAT 
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E605
 
 ```chat
 @UTF8

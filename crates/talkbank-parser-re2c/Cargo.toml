@@ -29,7 +29,6 @@ tracing = { workspace = true }
 # Domain types
 indexmap = { workspace = true }
 serde = { workspace = true }
-smallvec = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
@@ -41,6 +40,13 @@ serde_json = { workspace = true }
 # block `cargo publish` regardless of wave order. Gated by
 # scripts/release/check-foundation-publication-readiness.sh.
 talkbank-parser = { path = "../talkbank-parser" }
+# Path-only for the same reason as talkbank-parser above. Pulled in so the
+# spec-parity gate in tests/integration/error_parity.rs can use `gate::listing`
+# and `gate::report` instead of re-copying them: that crate's `gate` module
+# documents having centralised the same loop after FIVE hand-written copies,
+# and a sixth was written here before this dep existed. Acyclic: nothing in
+# talkbank-parser-tests' lib graph reaches this crate.
+talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 walkdir = { workspace = true }
 
 [features]

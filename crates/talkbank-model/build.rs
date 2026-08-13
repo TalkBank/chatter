@@ -8,25 +8,35 @@
 //! Build script for talkbank-model.
 //!
 //! Generates a compile-time perfect hash set of ISO 639-3 language codes from
-//! the vendored registry at `data/iso639-3.txt` (committed inside this crate).
+//! the derived file at `data/iso639-3.tsv` (committed inside this crate).
 //!
-//! The ISO 639-3 data file was extracted from `clan-info/lib/fixes/ISO 639-3.txt`
-//! and vendored into this crate so CI and fresh clones always have it without
-//! needing to clone the private `clan-info` submodule.
+//! ## Where the data comes from
 //!
-//! ## Syncing the vendored list
+//! `data/iso639-3.tsv` is DERIVED from the code tables published by
+//! iso639-3.sil.org, the ISO registration authority for ISO 639-3. It carries
+//! only the identifiers chatter needs, unmodified, with attribution and the
+//! release stamp in its own header; it is not the code tables.
 //!
-//! The ISO 639-3 standard is updated infrequently (new codes are occasionally
-//! added for newly-documented languages; retired codes are deprecated but kept).
-//! When the master list in `clan-info/lib/fixes/ISO 639-3.txt` is updated,
-//! sync `data/iso639-3.txt` manually:
+//! It holds three categories, all VALID: currently assigned codes, retired
+//! codes (a CHAT file is a historical document, so a transcript must not become
+//! invalid when a code is retired later), and the `qaa`..`qtz` block the
+//! standard reserves for local use, which appears in no published table.
+//!
+//! Before 2026-08-11 the vendored list was instead a copy of a third party's
+//! copy of the registry, unversioned and stale: it was missing 162 currently
+//! assigned codes, which chatter therefore rejected.
+//!
+//! ## Refreshing it
+//!
+//! Run the script; never hand-edit the file:
 //!
 //! ```bash
-//! cp clan-info/lib/fixes/ISO\ 639-3.txt chatter/crates/talkbank-model/data/iso639-3.txt
+//! python3 scripts/update_iso639_3.py --release YYYYMMDD \
+//!     --out crates/talkbank-model/data/iso639-3.tsv
 //! ```
 //!
-//! There is no automated check for this, syncing is a periodic maintenance
-//! task, not a CI gate.
+//! There is no automated staleness check. SIL publishes infrequently, and a
+//! release that adds codes only ever widens what chatter accepts.
 //!
 //! The generated file is written to `$OUT_DIR/iso639_3_set.rs` and included
 //! by `src/model/header/codes/iso639.rs` at compile time.
@@ -181,40 +191,32 @@ fn generate_iso639_3_set() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let crate_root = Path::new(&manifest_dir);
 
-    // Primary: vendored copy committed inside this crate (data/iso639-3.txt).
-    // Always present in CI and fresh clones, no external submodule needed.
-    let vendored = crate_root.join("data/iso639-3.txt");
-
-    // Fallback: a `clan-info` repo cloned as a sibling of this repository.
-    // Used when a developer clones clan-info alongside chatter.
-    let clan_info_path = crate_root
-        .parent() // crates/
-        .and_then(|p| p.parent()) // chatter/
-        .and_then(|p| p.parent()) // parent dir that may hold sibling checkouts
-        .map(|workspace| workspace.join("clan-info/lib/fixes/ISO 639-3.txt"));
-
-    let iso_path = if vendored.exists() {
-        vendored
-    } else if let Some(ref p) = clan_info_path {
-        if p.exists() {
-            p.clone()
-        } else {
-            // Neither source found, emit an empty set (graceful degradation).
-            eprintln!(
-                "cargo:warning=ISO 639-3 file not found at data/iso639-3.txt or \
-                 clan-info/lib/fixes/. Language code membership validation will be disabled."
-            );
-            generate_empty_set();
-            return;
-        }
-    } else {
-        eprintln!(
-            "cargo:warning=ISO 639-3 file not found, generating empty set. \
-             Language code membership validation will be disabled."
+    // The vendored copy committed inside this crate is the ONLY source.
+    //
+    // There used to be a fallback to a `clan-info` checkout beside this repo,
+    // and then to an EMPTY set. Both are gone, for the same reason: a build
+    // must not silently decide what counts as a real language based on what
+    // happens to be on the developer's disk.
+    //
+    // The empty-set path was the dangerous one, and it did exactly what its own
+    // comment said: "language code membership validation will be disabled".
+    // `is_valid_iso639_3` opened with a guard returning `true` for EVERY input
+    // when the set was empty, so a missing data file did not fail the build and
+    // did not reject anything. It silently turned language validation off, and
+    // `@Languages: xyzzy` would have passed, on the strength of a
+    // `cargo:warning` nobody reads. A missing data file is now a build failure,
+    // and the guard that accepted everything is gone with it.
+    let iso_path = crate_root.join("data/iso639-3.tsv");
+    if !iso_path.exists() {
+        panic!(
+            "ISO 639-3 data file missing at {}.\n\
+             This file is committed to the repository and is the sole source of \
+             valid language codes; regenerate it with scripts/update_iso639_3.py or \
+             restore it (git checkout -- crates/talkbank-model/data/). Building without \
+             it used to silently disable language validation entirely.",
+            iso_path.display()
         );
-        generate_empty_set();
-        return;
-    };
+    }
 
     println!("cargo:rerun-if-changed={}", iso_path.display());
 
@@ -226,23 +228,45 @@ fn generate_iso639_3_set() {
         )
     });
 
-    let mut codes: Vec<&str> = Vec::with_capacity(8500);
+    // Derived-file format, written by scripts/update_iso639_3.py:
+    //   `#` comment lines carrying provenance, then code<TAB>status<TAB>change_to.
+    // Every status is a VALID code here. `retired` is deliberate: a CHAT file is
+    // a historical document, so a transcript must not become invalid because a
+    // code was retired afterwards. `private_use` covers qaa..qtz, which the
+    // standard reserves and which therefore appear in no published table.
+    let mut codes: Vec<&str> = Vec::with_capacity(9000);
+    let mut release = String::new();
 
     for line in content.lines() {
-        // Format: `aaa\t|...|...|Language Name
-        // The backtick prefix + 3-letter code is positions 0..4.
-        if line.starts_with('`') && line.len() >= 4 {
-            let code = &line[1..4];
-            if code.len() == 3 && code.chars().all(|c| c.is_ascii_lowercase()) {
-                codes.push(code);
-            }
+        if let Some(stamp) = line.strip_prefix("# Release: ") {
+            release = stamp.trim().to_owned();
+            continue;
         }
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        // `split_once` is total here: a row with no tab is a bare code, which
+        // the shape check below then judges. The previous `split().next()` form
+        // needed an unreachable panic arm, because `split` always yields once.
+        let code = line.split_once('\t').map_or(line, |(code, _)| code);
+        // Fail loudly on a shape we do not recognise rather than skipping it:
+        // a silently dropped row is a language chatter would start rejecting.
+        if code.len() != 3 || !code.chars().all(|c| c.is_ascii_lowercase()) {
+            panic!(
+                "unexpected language code {code:?} in {}; regenerate it with \
+                 scripts/update_iso639_3.py rather than editing it by hand",
+                iso_path.display()
+            );
+        }
+        codes.push(code);
     }
 
-    if codes.is_empty() {
-        eprintln!("cargo:warning=No codes parsed from ISO 639-3 file, generating empty set.");
-        generate_empty_set();
-        return;
+    if release.is_empty() {
+        panic!(
+            "{} carries no `# Release:` line. The release date is the only version \
+             these tables have, so a file without one cannot be identified.",
+            iso_path.display()
+        );
     }
 
     // Generate the phf set.
@@ -259,7 +283,8 @@ fn generate_iso639_3_set() {
     .unwrap();
     writeln!(
         writer,
-        "/// Generated from clan-info/lib/fixes/ISO 639-3.txt by build.rs."
+        "/// Generated from data/iso639-3.tsv by build.rs.\n\
+         /// ISO 639-3 release {release}; source: iso639-3.sil.org."
     )
     .unwrap();
 
@@ -272,25 +297,6 @@ fn generate_iso639_3_set() {
         writer,
         "static ISO_639_3_CODES: phf::Set<&'static str> = {};",
         set.build()
-    )
-    .unwrap();
-
-    eprintln!(
-        "cargo:warning=Generated ISO 639-3 set with {} codes",
-        codes.len()
-    );
-}
-
-/// Generate an empty set for environments without the ISO file.
-fn generate_empty_set() {
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("iso639_3_set.rs");
-    let mut file = fs::File::create(&dest_path).unwrap();
-    writeln!(
-        file,
-        "/// Empty ISO 639-3 set (file not available at build time).\n\
-         static ISO_639_3_CODES: phf::Set<&'static str> = {};",
-        phf_codegen::Set::<&str>::new().build()
     )
     .unwrap();
 }

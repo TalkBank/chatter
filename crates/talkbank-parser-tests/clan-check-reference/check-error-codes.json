@@ -2,16 +2,26 @@
   "source": "OSX-CLAN/src/clan/check.cpp",
   "summary": {
     "codes_defined_in_switch": 161,
-    "codes_emitted_via_call_sites": 153,
+    "codes_emitted_via_call_sites": 143,
     "defined_but_never_emitted": [
-      16,
+      28,
+      29,
       39,
       40,
       41,
+      49,
       58,
       74,
-      122,
-      152
+      76,
+      81,
+      88,
+      95,
+      101,
+      104,
+      105,
+      118,
+      145,
+      154
     ],
     "emitted_but_no_message": []
   },
@@ -38,13 +48,13 @@
         1724,
         1733,
         1735,
-        3743,
-        3758,
-        3783,
-        3796,
-        3802,
-        3815,
-        3830
+        3746,
+        3761,
+        3786,
+        3799,
+        3805,
+        3818,
+        3833
       ]
     },
     {
@@ -55,10 +65,10 @@
       "n_call_sites": 5,
       "call_site_lines": [
         1756,
-        3735,
-        3748,
-        3807,
-        3820
+        3738,
+        3751,
+        3810,
+        3823
       ]
     },
     {
@@ -72,7 +82,7 @@
       "call_site_lines": [
         1682,
         1760,
-        3790
+        3793
       ]
     },
     {
@@ -83,7 +93,7 @@
       "n_call_sites": 2,
       "call_site_lines": [
         1744,
-        3794
+        3797
       ]
     },
     {
@@ -94,8 +104,8 @@
       "n_call_sites": 3,
       "call_site_lines": [
         2341,
-        3731,
-        3771
+        3734,
+        3774
       ]
     },
     {
@@ -153,10 +163,13 @@
       "messages": [
         "Missing speaker name and/or role."
       ],
-      "n_call_sites": 2,
+      "n_call_sites": 5,
       "call_site_lines": [
-        5060,
-        5084
+        2094,
+        2101,
+        2113,
+        5063,
+        5087
       ]
     },
     {
@@ -164,9 +177,10 @@
       "messages": [
         "Duplicate speaker declaration."
       ],
-      "n_call_sites": 1,
+      "n_call_sites": 2,
       "call_site_lines": [
-        5064
+        2011,
+        5067
       ]
     },
     {
@@ -184,9 +198,11 @@
       "messages": [
         "Illegal role. Please see \"depfile.cut\" for list of roles."
       ],
-      "n_call_sites": 1,
+      "n_call_sites": 3,
       "call_site_lines": [
-        5087
+        2080,
+        2122,
+        5090
       ]
     },
     {
@@ -194,8 +210,10 @@
       "messages": [
         "Illegal use of extended characters in speaker names."
       ],
-      "n_call_sites": 0,
-      "call_site_lines": []
+      "n_call_sites": 1,
+      "call_site_lines": [
+        2086
+      ]
     },
     {
       "code": 17,
@@ -215,7 +233,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5062
+        5065
       ]
     },
     {
@@ -226,8 +244,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4590,
-        4592
+        4593,
+        4595
       ]
     },
     {
@@ -237,7 +255,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2560
+        2563
       ]
     },
     {
@@ -247,7 +265,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4921
+        4924
       ]
     },
     {
@@ -257,7 +275,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4985
+        4988
       ]
     },
     {
@@ -267,7 +285,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2860
+        2863
       ]
     },
     {
@@ -277,7 +295,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4987
+        4990
       ]
     },
     {
@@ -287,7 +305,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2874
+        2877
       ]
     },
     {
@@ -297,7 +315,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4989
+        4992
       ]
     },
     {
@@ -307,7 +325,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2865
+        2868
       ]
     },
     {
@@ -315,20 +333,16 @@
       "messages": [
         "Unmatched ( found on the tier."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        4992
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 29,
       "messages": [
         "Unmatched ) found on the tier."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        4993
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 30,
@@ -393,13 +407,12 @@
     {
       "code": 36,
       "messages": [
-        "Utterance delimiter must be at the end of the utterance.",
-        "Use \"fixit\" program to break up this tier."
+        "Utterance delimiter must be at the end of the utterance."
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4394,
-        4396
+        4397,
+        4399
       ]
     },
     {
@@ -409,7 +422,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2556
+        2559
       ]
     },
     {
@@ -419,7 +432,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4811
+        4814
       ]
     },
     {
@@ -453,7 +466,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4824
+        4827
       ]
     },
     {
@@ -484,7 +497,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5758
+        5761
       ]
     },
     {
@@ -494,8 +507,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        5391,
-        5400
+        5394,
+        5403
       ]
     },
     {
@@ -505,9 +518,9 @@
       ],
       "n_call_sites": 3,
       "call_site_lines": [
-        3158,
-        3162,
-        3167
+        3161,
+        3165,
+        3170
       ]
     },
     {
@@ -516,30 +529,29 @@
         "Illegal character(s) found.",
         "Illegal character(s) '%s' found."
       ],
-      "n_call_sites": 22,
+      "n_call_sites": 21,
       "call_site_lines": [
-        2995,
-        3095,
-        3101,
-        3121,
+        3098,
+        3104,
         3124,
-        3128,
+        3127,
         3131,
-        3152,
-        3209,
+        3134,
+        3155,
         3212,
-        3219,
-        3256,
-        3343,
-        3431,
-        3486,
-        3584,
-        3703,
-        4294,
+        3215,
+        3222,
+        3259,
+        3346,
+        3434,
+        3489,
+        3587,
+        3706,
         4297,
-        4348,
-        4551,
-        4723
+        4300,
+        4351,
+        4554,
+        4726
       ]
     },
     {
@@ -547,10 +559,8 @@
       "messages": [
         "Upper case letters are not allowed inside a word."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        3447
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 50,
@@ -559,9 +569,9 @@
       ],
       "n_call_sites": 3,
       "call_site_lines": [
-        4351,
         4354,
-        4554
+        4357,
+        4557
       ]
     },
     {
@@ -571,8 +581,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4376,
-        4568
+        4379,
+        4571
       ]
     },
     {
@@ -583,7 +593,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4859
+        4862
       ]
     },
     {
@@ -613,7 +623,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4571
+        4574
       ]
     },
     {
@@ -623,7 +633,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4572
+        4575
       ]
     },
     {
@@ -634,7 +644,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4437
+        4440
       ]
     },
     {
@@ -648,13 +658,12 @@
     {
       "code": 59,
       "messages": [
-        "Expected second %c character.",
         "Expected second %s character."
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4049,
-        4797
+        4052,
+        4800
       ]
     },
     {
@@ -684,9 +693,9 @@
       ],
       "n_call_sites": 3,
       "call_site_lines": [
-        2536,
-        5023,
-        5054
+        2539,
+        5026,
+        5057
       ]
     },
     {
@@ -696,7 +705,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5057
+        5060
       ]
     },
     {
@@ -707,7 +716,7 @@
       "n_call_sites": 2,
       "call_site_lines": [
         1861,
-        5075
+        5078
       ]
     },
     {
@@ -716,39 +725,38 @@
         "This item can not be followed by the next symbol.",
         "Item '%s' can not be followed by the next symbol."
       ],
-      "n_call_sites": 31,
+      "n_call_sites": 30,
       "call_site_lines": [
-        3016,
-        3083,
-        3107,
-        3204,
-        3230,
-        3241,
-        3248,
-        3266,
-        3276,
-        3285,
-        3294,
-        3355,
-        3380,
-        3402,
-        3419,
-        3426,
-        3482,
-        3499,
-        3511,
-        3526,
-        3545,
-        3556,
-        3565,
-        3573,
-        3578,
-        3622,
-        3629,
-        3639,
-        3662,
-        3682,
-        3701
+        3086,
+        3110,
+        3207,
+        3233,
+        3244,
+        3251,
+        3269,
+        3279,
+        3288,
+        3297,
+        3358,
+        3383,
+        3405,
+        3422,
+        3429,
+        3485,
+        3502,
+        3514,
+        3529,
+        3548,
+        3559,
+        3568,
+        3576,
+        3581,
+        3625,
+        3632,
+        3642,
+        3665,
+        3685,
+        3704
       ]
     },
     {
@@ -760,9 +768,9 @@
       ],
       "n_call_sites": 3,
       "call_site_lines": [
-        3232,
-        3311,
-        3329
+        3235,
+        3314,
+        3332
       ]
     },
     {
@@ -772,11 +780,10 @@
         "Item '%s' must be followed by text,",
         "preceded by SPACE or be removed."
       ],
-      "n_call_sites": 3,
+      "n_call_sites": 2,
       "call_site_lines": [
-        3025,
-        3319,
-        3338
+        3322,
+        3341
       ]
     },
     {
@@ -806,7 +813,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4984
+        4987
       ]
     },
     {
@@ -817,7 +824,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4735
+        4738
       ]
     },
     {
@@ -828,8 +835,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4740,
-        4744
+        4743,
+        4747
       ]
     },
     {
@@ -838,13 +845,11 @@
         "This item must be preceded by text or '0'.",
         "Item '%s' must be preceded by text or '0'."
       ],
-      "n_call_sites": 5,
+      "n_call_sites": 3,
       "call_site_lines": [
-        3030,
-        3033,
-        4045,
-        4781,
-        4861
+        4048,
+        4784,
+        4864
       ]
     },
     {
@@ -863,7 +868,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4747
+        4750
       ]
     },
     {
@@ -871,10 +876,8 @@
       "messages": [
         "Only one letter is allowed with '@l'."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        2532
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 77,
@@ -894,7 +897,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4769
+        4772
       ]
     },
     {
@@ -904,7 +907,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        3549
+        3552
       ]
     },
     {
@@ -914,8 +917,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3518,
-        3590
+        3521,
+        3593
       ]
     },
     {
@@ -923,10 +926,8 @@
       "messages": [
         "Bullet must follow utterance delimiter or be followed by end-of-line."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        4791
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 82,
@@ -935,8 +936,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3879,
-        3936
+        3882,
+        3939
       ]
     },
     {
@@ -946,10 +947,10 @@
       ],
       "n_call_sites": 4,
       "call_site_lines": [
-        3885,
-        3890,
-        3941,
-        3946
+        3888,
+        3893,
+        3944,
+        3949
       ]
     },
     {
@@ -959,8 +960,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3901,
-        3957
+        3904,
+        3960
       ]
     },
     {
@@ -970,8 +971,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3905,
-        3961
+        3908,
+        3964
       ]
     },
     {
@@ -981,11 +982,11 @@
       ],
       "n_call_sites": 5,
       "call_site_lines": [
-        3198,
-        3497,
-        3620,
-        3660,
-        3699
+        3201,
+        3500,
+        3623,
+        3663,
+        3702
       ]
     },
     {
@@ -995,8 +996,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3592,
-        3646
+        3595,
+        3649
       ]
     },
     {
@@ -1004,10 +1005,8 @@
       "messages": [
         "Illegal use of compounds and special form markers."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        3414
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 89,
@@ -1016,8 +1015,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3863,
-        3919
+        3866,
+        3922
       ]
     },
     {
@@ -1027,8 +1026,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3865,
-        3921
+        3868,
+        3924
       ]
     },
     {
@@ -1038,7 +1037,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4331
+        4334
       ]
     },
     {
@@ -1047,14 +1046,11 @@
         "This item must be followed by space or end-of-line.",
         "Item '%s' must be followed by space or end-of-line."
       ],
-      "n_call_sites": 6,
+      "n_call_sites": 3,
       "call_site_lines": [
-        2999,
-        3021,
-        3028,
-        3184,
-        4317,
-        4320
+        2059,
+        4320,
+        4323
       ]
     },
     {
@@ -1063,12 +1059,10 @@
         "This item must be preceded by SPACE.",
         "Item '%s' must be preceded by SPACE."
       ],
-      "n_call_sites": 4,
+      "n_call_sites": 2,
       "call_site_lines": [
-        3179,
-        3187,
-        4469,
-        4472
+        4472,
+        4475
       ]
     },
     {
@@ -1078,8 +1072,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4338,
-        4522
+        4341,
+        4525
       ]
     },
     {
@@ -1087,10 +1081,8 @@
       "messages": [
         "Illegal use of capitalized words in compounds."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        3300
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 96,
@@ -1099,7 +1091,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        3462
+        3465
       ]
     },
     {
@@ -1109,7 +1101,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        3360
+        3363
       ]
     },
     {
@@ -1119,8 +1111,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3867,
-        3923
+        3870,
+        3926
       ]
     },
     {
@@ -1130,9 +1122,9 @@
       ],
       "n_call_sites": 3,
       "call_site_lines": [
-        3869,
-        3925,
-        5589
+        3872,
+        3928,
+        5592
       ]
     },
     {
@@ -1151,10 +1143,8 @@
         "This item must be followed or preceded by text.",
         "Item '%s' must be followed or preceded by text."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        3013
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 102,
@@ -1163,12 +1153,12 @@
       ],
       "n_call_sites": 6,
       "call_site_lines": [
-        4289,
-        4415,
-        4433,
-        4484,
-        4498,
-        4514
+        4292,
+        4418,
+        4436,
+        4487,
+        4501,
+        4517
       ]
     },
     {
@@ -1178,8 +1168,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        5478,
-        5537
+        5481,
+        5540
       ]
     },
     {
@@ -1187,22 +1177,16 @@
       "messages": [
         "Please select \"CAfont\" or \"Ascender Uni Duo\" font for CA file as per \"@Options:\" tier."
       ],
-      "n_call_sites": 2,
-      "call_site_lines": [
-        5483,
-        5542
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 105,
       "messages": [
         "Please select \"Charis SIL\" font for IPA file as per \"@Options:\" tier."
       ],
-      "n_call_sites": 2,
-      "call_site_lines": [
-        5487,
-        5546
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 106,
@@ -1211,7 +1195,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4835
+        4838
       ]
     },
     {
@@ -1221,7 +1205,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4322
+        4325
       ]
     },
     {
@@ -1231,7 +1215,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4750
+        4753
       ]
     },
     {
@@ -1241,12 +1225,12 @@
       ],
       "n_call_sites": 6,
       "call_site_lines": [
-        3471,
-        3598,
-        3651,
-        3670,
-        3676,
-        3690
+        3474,
+        3601,
+        3654,
+        3673,
+        3679,
+        3693
       ]
     },
     {
@@ -1256,7 +1240,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4916
+        4919
       ]
     },
     {
@@ -1267,11 +1251,11 @@
       ],
       "n_call_sites": 5,
       "call_site_lines": [
-        3061,
-        3066,
-        3071,
-        3075,
-        3079
+        3064,
+        3069,
+        3074,
+        3078,
+        3082
       ]
     },
     {
@@ -1281,7 +1265,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        3927
+        3930
       ]
     },
     {
@@ -1291,7 +1275,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5592
+        5595
       ]
     },
     {
@@ -1301,7 +1285,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5620
+        5623
       ]
     },
     {
@@ -1311,7 +1295,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        3871
+        3874
       ]
     },
     {
@@ -1321,7 +1305,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4879
+        4882
       ]
     },
     {
@@ -1332,21 +1316,21 @@
       ],
       "n_call_sites": 15,
       "call_site_lines": [
-        4925,
-        4929,
-        4933,
-        4937,
-        4941,
-        4945,
-        4949,
-        4953,
-        4957,
-        4961,
-        4965,
-        4969,
-        4973,
-        4977,
-        4981
+        4928,
+        4932,
+        4936,
+        4940,
+        4944,
+        4948,
+        4952,
+        4956,
+        4960,
+        4964,
+        4968,
+        4972,
+        4976,
+        4980,
+        4984
       ]
     },
     {
@@ -1354,10 +1338,8 @@
       "messages": [
         "Utterance delimiter must precede final bullet."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        4618
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 119,
@@ -1367,7 +1349,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5218
+        5221
       ]
     },
     {
@@ -1379,10 +1361,10 @@
       ],
       "n_call_sites": 4,
       "call_site_lines": [
-        4165,
-        4176,
-        5454,
-        5467
+        4168,
+        4179,
+        5457,
+        5470
       ]
     },
     {
@@ -1394,8 +1376,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4172,
-        5462
+        4175,
+        5465
       ]
     },
     {
@@ -1403,8 +1385,10 @@
       "messages": [
         "Language on @ID tier is not defined on \"@Languages:\" header tier."
       ],
-      "n_call_sites": 0,
-      "call_site_lines": []
+      "n_call_sites": 1,
+      "call_site_lines": [
+        5055
+      ]
     },
     {
       "code": 123,
@@ -1425,8 +1409,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3875,
-        3931
+        3878,
+        3934
       ]
     },
     {
@@ -1466,7 +1450,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4995
+        4998
       ]
     },
     {
@@ -1476,7 +1460,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4695
+        4698
       ]
     },
     {
@@ -1486,7 +1470,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4997
+        5000
       ]
     },
     {
@@ -1496,7 +1480,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4700
+        4703
       ]
     },
     {
@@ -1517,8 +1501,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3895,
-        3951
+        3898,
+        3954
       ]
     },
     {
@@ -1529,8 +1513,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        3476,
-        3603
+        3479,
+        3606
       ]
     },
     {
@@ -1541,9 +1525,9 @@
       ],
       "n_call_sites": 3,
       "call_site_lines": [
-        3138,
-        3613,
-        3632
+        3141,
+        3616,
+        3635
       ]
     },
     {
@@ -1553,7 +1537,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4999
+        5002
       ]
     },
     {
@@ -1563,7 +1547,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4705
+        4708
       ]
     },
     {
@@ -1573,7 +1557,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2908
+        2911
       ]
     },
     {
@@ -1583,7 +1567,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2906
+        2909
       ]
     },
     {
@@ -1593,7 +1577,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5706
+        5709
       ]
     },
     {
@@ -1604,7 +1588,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4865
+        4868
       ]
     },
     {
@@ -1614,7 +1598,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5090
+        5093
       ]
     },
     {
@@ -1624,7 +1608,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5100
+        5103
       ]
     },
     {
@@ -1642,10 +1626,8 @@
       "messages": [
         "This intonational marker should be outside paired markers."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        4609
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 146,
@@ -1654,7 +1636,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4827
+        4830
       ]
     },
     {
@@ -1664,7 +1646,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2558
+        2561
       ]
     },
     {
@@ -1674,7 +1656,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        5567
+        5570
       ]
     },
     {
@@ -1685,7 +1667,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4853
+        4856
       ]
     },
     {
@@ -1695,7 +1677,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4845
+        4848
       ]
     },
     {
@@ -1705,7 +1687,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        2977
+        2980
       ]
     },
     {
@@ -1713,8 +1695,11 @@
       "messages": [
         "Language is not defined on \"@Languages:\" header tier."
       ],
-      "n_call_sites": 0,
-      "call_site_lines": []
+      "n_call_sites": 2,
+      "call_site_lines": [
+        4197,
+        5504
+      ]
     },
     {
       "code": 153,
@@ -1732,10 +1717,8 @@
       "messages": [
         "Please add \"unlinked\" to @Media header."
       ],
-      "n_call_sites": 1,
-      "call_site_lines": [
-        5754
-      ]
+      "n_call_sites": 0,
+      "call_site_lines": []
     },
     {
       "code": 155,
@@ -1745,7 +1728,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4729
+        4732
       ]
     },
     {
@@ -1755,7 +1738,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4324
+        4327
       ]
     },
     {
@@ -1765,8 +1748,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        5610,
-        5613
+        5613,
+        5616
       ]
     },
     {
@@ -1776,7 +1759,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4873
+        4876
       ]
     },
     {
@@ -1786,7 +1769,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4533
+        4536
       ]
     },
     {
@@ -1796,8 +1779,8 @@
       ],
       "n_call_sites": 2,
       "call_site_lines": [
-        4300,
-        4306
+        4303,
+        4309
       ]
     },
     {
@@ -1807,7 +1790,7 @@
       ],
       "n_call_sites": 1,
       "call_site_lines": [
-        4370
+        4373
       ]
     }
   ]

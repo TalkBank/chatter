@@ -52,13 +52,13 @@ pub fn parse_sin_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SinT
     let children = extract_sin_dependent_tier(SinDependentTierNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot {
+    match children.child_2.slot() {
         NodeSlot::Present(groups) => {
             let items = parse_sin_groups(groups.raw_node(), source, errors);
             SinTier::new(items).with_span(span)
         }
         NodeSlot::Missing(raw) => {
-            let items = parse_sin_groups(raw, source, errors);
+            let items = parse_sin_groups(*raw, source, errors);
             SinTier::new(items).with_span(span)
         }
         NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
@@ -81,14 +81,14 @@ pub fn parse_sin_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SinT
 /// [`push_sin_separator`].
 fn parse_sin_groups(sin_groups: Node, source: &str, errors: &impl ErrorSink) -> Vec<SinItem> {
     let groups = extract_sin_groups(SinGroupsNode(sin_groups));
-    let mut items: Vec<SinItem> = Vec::with_capacity(groups.child_1.slot.len() + 1);
+    let mut items: Vec<SinItem> = Vec::with_capacity(groups.child_1.slot().len() + 1);
 
-    push_sin_group(groups.child_0.slot, source, errors, &mut items);
-    for element in groups.child_1.slot {
-        match element.slot {
+    push_sin_group(groups.child_0.slot(), source, errors, &mut items);
+    for element in groups.child_1.slot() {
+        match element.slot() {
             NodeSlot::Present(pair) => {
-                push_sin_separator(pair.child_0.slot, source, errors, "sin_groups");
-                push_sin_group(pair.child_1.slot, source, errors, &mut items);
+                push_sin_separator(pair.child_0.slot(), source, errors, "sin_groups");
+                push_sin_group(pair.child_1.slot(), source, errors, &mut items);
                 surface_unexpected(&pair.unexpected, source, errors);
             }
             // The generated repeat classifies a whole item as `Present` /
@@ -96,7 +96,7 @@ fn parse_sin_groups(sin_groups: Node, source: &str, errors: &impl ErrorSink) -> 
             // repeat finding); matched exhaustively regardless, per the
             // no-`_`-on-project-enums rule.
             NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "sin_groups"));
+                errors.report(unexpected_node_error(*raw, source, "sin_groups"));
             }
             NodeSlot::Absent => {}
         }
@@ -127,7 +127,7 @@ fn parse_sin_groups(sin_groups: Node, source: &str, errors: &impl ErrorSink) -> 
 /// (`parse_sin_tier` is only entered when the tier node has no tree-sitter error);
 /// they are handled explicitly for exhaustiveness.
 fn push_sin_group<'tree>(
-    slot: NodeSlot<'tree, SinGroupNode<'tree>>,
+    slot: &NodeSlot<'tree, SinGroupNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<SinItem>,
@@ -141,10 +141,10 @@ fn push_sin_group<'tree>(
             ));
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "sin_groups");
+            check_not_missing(*raw, source, errors, "sin_groups");
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "sin_groups"));
+            errors.report(unexpected_node_error(*raw, source, "sin_groups"));
         }
         NodeSlot::Absent => {}
     }

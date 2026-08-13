@@ -42,6 +42,7 @@ use talkbank_transform::splice::{
 
 use super::debug::{collect_cha_files, die};
 use super::error_codes::resolve_error_codes;
+use talkbank_model::model::TranscriptName;
 
 /// Apply catalog fixes to CHAT file(s) at exact byte spans.
 ///
@@ -293,9 +294,9 @@ fn fix_one_file(
     let mut chat_file = parser.parse_chat_file_streaming(source, &sink);
 
     if skip_alignment {
-        chat_file.validate(&sink, None);
+        chat_file.validate(&sink, TranscriptName::Anonymous);
     } else {
-        chat_file.validate_with_alignment(&sink, None);
+        chat_file.validate_with_alignment(&sink, TranscriptName::Anonymous);
     }
     let diagnostics = sink.into_vec();
 
@@ -483,9 +484,9 @@ fn verify_fix_result(
     let sink = ErrorCollector::new();
     let mut reparsed = parser.parse_chat_file_streaming(spliced, &sink);
     if skip_alignment {
-        reparsed.validate(&sink, None);
+        reparsed.validate(&sink, TranscriptName::Anonymous);
     } else {
-        reparsed.validate_with_alignment(&sink, None);
+        reparsed.validate_with_alignment(&sink, TranscriptName::Anonymous);
     }
     let diagnostics_after = sink.into_vec();
 
@@ -662,7 +663,7 @@ mod tests {
     fn diagnostics_for(parser: &TreeSitterParser, source: &str) -> Vec<ParseError> {
         let sink = ErrorCollector::new();
         let mut chat_file = parser.parse_chat_file_streaming(source, &sink);
-        chat_file.validate_with_alignment(&sink, None);
+        chat_file.validate_with_alignment(&sink, TranscriptName::Anonymous);
         sink.into_vec()
     }
 

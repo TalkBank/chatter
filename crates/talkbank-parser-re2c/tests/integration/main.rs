@@ -24,3 +24,4 @@ mod parser_fixtures;
 mod quick_divergence_check;
 mod snapshot_tests;
 mod subcategorize_main_tier;
+mod unmatched_bracket_tests;

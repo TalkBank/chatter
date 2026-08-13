@@ -92,8 +92,8 @@ fn classify_header_types_concrete_header_nodes() {
     let mut languages_header_seen = false;
     let mut non_present = Vec::new();
 
-    for (i, elem) in doc_children.child_3.slot.iter().enumerate() {
-        let line_node = match &elem.slot {
+    for (i, elem) in doc_children.child_3.slot().iter().enumerate() {
+        let line_node = match &elem.slot() {
             NodeSlot::Present(node) => *node,
             other => panic!("line repeat element {i} should be Present, got {other:?}"),
         };
@@ -104,7 +104,7 @@ fn classify_header_types_concrete_header_nodes() {
         // `LineChoice::ActivitiesHeader(LineActivitiesHeaderChoice)`, not a bare
         // `LineChoice::Header(node)`; reach the concrete raw node via `raw_node()`.
         let line_children = extract_line(line_node);
-        let header_node = match &line_children.content.slot {
+        let header_node = match &line_children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(inner)) => inner.raw_node(),
             _ => continue,
         };
@@ -112,7 +112,7 @@ fn classify_header_types_concrete_header_nodes() {
 
         // The Task-2b/0c target call: classify the concrete header node by TYPE,
         // via the free, self-classifying `extract_header`.
-        match extract_header(header_node).content.slot {
+        match extract_header(header_node).content.slot() {
             NodeSlot::Present(HeaderChoice::LanguagesHeader(_)) => languages_header_seen = true,
             NodeSlot::Present(_) => {} // some other concrete header kind: still typed.
             other => non_present.push(format!("line {i}: {other:?}")),

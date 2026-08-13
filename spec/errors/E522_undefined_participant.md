@@ -10,8 +10,10 @@ An utterance uses a speaker code that was not defined in the @Participants heade
 - **Level**: utterance
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example
+**Expected Error Codes**: E522
 
 ```chat
 @UTF8

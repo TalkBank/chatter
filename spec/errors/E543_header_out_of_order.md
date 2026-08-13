@@ -11,6 +11,7 @@ A header appears out of canonical order. For example, `@Options` or `@ID` appear
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

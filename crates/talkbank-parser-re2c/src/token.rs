@@ -263,7 +263,12 @@ pub enum Token<'a> {
     },
 
     // ── Word suffixes ───────────────────────────────────────
-    /// grammar.js: form_marker = `token.immediate(/@[ubcdfgiklnopqtxz]|@(fp|ls|sas|si|sl|wp)/)`
+    /// The `@` marker on a word, WITHOUT the `@`: `b`, `fp`, `z:grm`.
+    ///
+    /// The set of codes is generated into `src/generated_form_markers.re`
+    /// from `spec/form_markers/form_marker_registry.json`. A list here used
+    /// to enumerate it and had already drifted: it omitted `@z` and quoted a
+    /// `grammar.js` regex that no longer exists.
     FormMarker(&'a str),
     /// grammar.js: word_lang_suffix = `token.immediate(/@s(?::[a-z]{2,3}(?:[+&][a-z]{2,3})*)? /)`
     /// `@s` (bare shortcut) carries `None`; `@s:eng+zho` carries `Some("eng+zho")`.

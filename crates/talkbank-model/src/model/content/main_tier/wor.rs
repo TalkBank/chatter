@@ -1,4 +1,10 @@
 //! `%wor` generation helpers for main tiers.
+// Every match over the content enums in this file is exhaustive, so the lint
+// costs nothing today and makes it stay that way: a new `UtteranceContent` or
+// `BracketedItem` variant becomes a COMPILE ERROR here rather than a silent
+// `_ =>` that answers wrong. Four such catch-alls have already shipped as
+// defects; see `talkbank-parser-tests/src/content_catch_alls.rs`.
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use super::MainTier;
 use crate::Span;
@@ -57,56 +63,52 @@ impl MainTier {
 /// explicitly instead of using `walk_words()`.
 fn collect_wor_items_content(content: &[UtteranceContent], out: &mut Vec<WorItem>) {
     for item in content {
-        collect_wor_item(item, false, out);
+        collect_wor_item(item, out);
     }
 }
 
-fn collect_wor_item(item: &UtteranceContent, in_retrace: bool, out: &mut Vec<WorItem>) {
-    use crate::alignment::helpers::{counts_for_tier_in_context, is_tag_marker_separator};
+fn collect_wor_item(item: &UtteranceContent, out: &mut Vec<WorItem>) {
+    use crate::alignment::helpers::{counts_for_tier, is_tag_marker_separator};
 
     match item {
         UtteranceContent::Word(word) => {
-            if counts_for_tier_in_context(word, crate::alignment::TierDomain::Wor, in_retrace) {
+            if counts_for_tier(word, crate::alignment::TierDomain::Wor) {
                 out.push(WorItem::Word(Box::new(wor_word_from_main(word))));
             }
         }
         UtteranceContent::AnnotatedWord(annotated) => {
-            if counts_for_tier_in_context(
-                &annotated.inner,
-                crate::alignment::TierDomain::Wor,
-                in_retrace,
-            ) {
+            if counts_for_tier(&annotated.inner, crate::alignment::TierDomain::Wor) {
                 out.push(WorItem::Word(Box::new(wor_word_from_main(
                     &annotated.inner,
                 ))));
             }
         }
         UtteranceContent::ReplacedWord(replaced) => {
-            collect_wor_replaced_word(replaced, in_retrace, out);
+            collect_wor_replaced_word(replaced, out);
         }
         UtteranceContent::Group(group) => {
-            collect_wor_bracketed_content(&group.content, in_retrace, out);
+            collect_wor_bracketed_content(&group.content, out);
         }
         UtteranceContent::AnnotatedGroup(annotated) => {
-            collect_wor_bracketed_content(&annotated.inner.content, in_retrace, out);
+            collect_wor_bracketed_content(&annotated.inner.content, out);
         }
         UtteranceContent::PhoGroup(pho) => {
-            collect_wor_bracketed_content(&pho.content, in_retrace, out);
+            collect_wor_bracketed_content(&pho.content, out);
         }
         UtteranceContent::SinGroup(sin) => {
-            collect_wor_bracketed_content(&sin.content, in_retrace, out);
+            collect_wor_bracketed_content(&sin.content, out);
         }
         UtteranceContent::Quotation(quotation) => {
-            collect_wor_bracketed_content(&quotation.content, in_retrace, out);
+            collect_wor_bracketed_content(&quotation.content, out);
         }
         UtteranceContent::Retrace(retrace) => {
-            collect_wor_bracketed_content(&retrace.content, true, out);
+            collect_wor_bracketed_content(&retrace.content, out);
         }
         UtteranceContent::AnnotatedRetrace(annotated) => {
             // Same handling as the bare form: the wrapper carries only
             // the annotations written after the marker, and the retraced
             // content is unchanged.
-            collect_wor_bracketed_content(&annotated.inner.content, true, out);
+            collect_wor_bracketed_content(&annotated.inner.content, out);
         }
         UtteranceContent::Separator(sep) => {
             if is_tag_marker_separator(sep) {
@@ -134,59 +136,51 @@ fn collect_wor_item(item: &UtteranceContent, in_retrace: bool, out: &mut Vec<Wor
     }
 }
 
-fn collect_wor_bracketed_content(
-    content: &BracketedContent,
-    in_retrace: bool,
-    out: &mut Vec<WorItem>,
-) {
+fn collect_wor_bracketed_content(content: &BracketedContent, out: &mut Vec<WorItem>) {
     for item in &content.content {
-        collect_wor_bracketed_item(item, in_retrace, out);
+        collect_wor_bracketed_item(item, out);
     }
 }
 
-fn collect_wor_bracketed_item(item: &BracketedItem, in_retrace: bool, out: &mut Vec<WorItem>) {
-    use crate::alignment::helpers::{counts_for_tier_in_context, is_tag_marker_separator};
+fn collect_wor_bracketed_item(item: &BracketedItem, out: &mut Vec<WorItem>) {
+    use crate::alignment::helpers::{counts_for_tier, is_tag_marker_separator};
 
     match item {
         BracketedItem::Word(word) => {
-            if counts_for_tier_in_context(word, crate::alignment::TierDomain::Wor, in_retrace) {
+            if counts_for_tier(word, crate::alignment::TierDomain::Wor) {
                 out.push(WorItem::Word(Box::new(wor_word_from_main(word))));
             }
         }
         BracketedItem::AnnotatedWord(annotated) => {
-            if counts_for_tier_in_context(
-                &annotated.inner,
-                crate::alignment::TierDomain::Wor,
-                in_retrace,
-            ) {
+            if counts_for_tier(&annotated.inner, crate::alignment::TierDomain::Wor) {
                 out.push(WorItem::Word(Box::new(wor_word_from_main(
                     &annotated.inner,
                 ))));
             }
         }
         BracketedItem::ReplacedWord(replaced) => {
-            collect_wor_replaced_word(replaced, in_retrace, out);
+            collect_wor_replaced_word(replaced, out);
         }
         BracketedItem::AnnotatedGroup(annotated) => {
-            collect_wor_bracketed_content(&annotated.inner.content, in_retrace, out);
+            collect_wor_bracketed_content(&annotated.inner.content, out);
         }
         BracketedItem::PhoGroup(pho) => {
-            collect_wor_bracketed_content(&pho.content, in_retrace, out);
+            collect_wor_bracketed_content(&pho.content, out);
         }
         BracketedItem::SinGroup(sin) => {
-            collect_wor_bracketed_content(&sin.content, in_retrace, out);
+            collect_wor_bracketed_content(&sin.content, out);
         }
         BracketedItem::Quotation(quotation) => {
-            collect_wor_bracketed_content(&quotation.content, in_retrace, out);
+            collect_wor_bracketed_content(&quotation.content, out);
         }
         BracketedItem::Retrace(retrace) => {
-            collect_wor_bracketed_content(&retrace.content, true, out);
+            collect_wor_bracketed_content(&retrace.content, out);
         }
         BracketedItem::AnnotatedRetrace(annotated) => {
             // Same handling as the bare form: the wrapper carries only
             // the annotations written after the marker, and the retraced
             // content is unchanged.
-            collect_wor_bracketed_content(&annotated.inner.content, true, out);
+            collect_wor_bracketed_content(&annotated.inner.content, out);
         }
         BracketedItem::Separator(sep) => {
             if is_tag_marker_separator(sep) {
@@ -215,10 +209,10 @@ fn collect_wor_bracketed_item(item: &BracketedItem, in_retrace: bool, out: &mut 
     }
 }
 
-fn collect_wor_replaced_word(entry: &ReplacedWord, in_retrace: bool, out: &mut Vec<WorItem>) {
-    use crate::alignment::helpers::counts_for_tier_in_context;
+fn collect_wor_replaced_word(entry: &ReplacedWord, out: &mut Vec<WorItem>) {
+    use crate::alignment::helpers::counts_for_tier;
 
-    if counts_for_tier_in_context(&entry.word, crate::alignment::TierDomain::Wor, in_retrace) {
+    if counts_for_tier(&entry.word, crate::alignment::TierDomain::Wor) {
         out.push(WorItem::Word(Box::new(wor_word_from_main(&entry.word))));
     }
 }

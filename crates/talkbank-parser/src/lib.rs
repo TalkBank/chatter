@@ -94,7 +94,7 @@ pub(crate) mod validation {
 ///   <CHATTER>/grammar/src/grammar.json \
 ///   <CHATTER>/grammar/src/node-types.json \
 ///   --edition 2024 \
-///   --toolchain 1.97.0 \
+///   --toolchain 1.97.1 \
 ///   > <CHATTER>/crates/talkbank-parser/src/generated_traversal.rs
 /// ```
 ///

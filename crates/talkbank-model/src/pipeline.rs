@@ -166,16 +166,21 @@ pub fn validate_chat_file_with_options(
     options: &ParseValidateOptions,
 ) -> Result<(), Vec<ParseError>> {
     use crate::ErrorCollector;
+    use crate::model::TranscriptName;
 
     if !options.should_validate() {
         return Ok(());
     }
 
     let errors = ErrorCollector::new();
+    // This helper takes a parsed file and options, never a path, so the
+    // transcript is genuinely anonymous here and E531 does not apply. Callers
+    // that read from disk name the transcript themselves.
+    let name = TranscriptName::Anonymous;
     if options.alignment {
-        chat_file.validate_with_alignment(&errors, None);
+        chat_file.validate_with_alignment(&errors, name);
     } else {
-        chat_file.validate(&errors, None);
+        chat_file.validate(&errors, name);
     }
 
     let error_vec = errors.into_vec();

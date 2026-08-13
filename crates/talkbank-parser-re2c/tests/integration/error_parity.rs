@@ -10,333 +10,449 @@
     clippy::unimplemented
 )]
 
-//! Error parity test: run ALL implemented error specs against the re2c
-//! parser and compare error codes with TreeSitter.
+//! Do the two parser backends agree with each other, and does each meet the
+//! spec? Two orthogonal axes, both measured, one of them gated.
 //!
-//! This test reads each error spec file, extracts the input and expected
-//! error codes, then runs both parsers. It reports which specs produce
-//! matching errors, which diverge, and which are missing.
+//! # What this file used to be, and why that was the bug
 //!
-//! Run: `cargo test -p talkbank-parser-re2c --test error_parity -- --nocapture`
+//! Until 2026-08-09 this ran on every test run, printed
+//!
+//! ```text
+//! Exact code match:   214        Re2c SILENT:  11  <- critical gaps
+//! ```
+//!
+//! and PASSED. It had no assertion. `E375_replacement_needs_preceding_space`
+//! sat on that silent list while the very same divergence was rediscovered by
+//! hand, hours later, from a corpus line: the audit had been right all along
+//! and nobody read it.
+//!
+//! `talkbank-parser-tests`' `gate` module documents this exact bug class ("a
+//! real `#[test]` that computed its findings, printed them and asserted
+//! nothing") and names three instances. This was the fourth, one crate over,
+//! and three more live in this very test binary: `categorize_divergences`,
+//! `quick_divergence_check` and `subcategorize_main_tier` each classify
+//! backend divergences, print a report, and assert nothing. They are named in
+//! `gate.rs`'s own "What is NOT closed" list so the enumeration there does not
+//! read as finished.
+//!
+//! This gate borrows that module's `listing`/`report`/[`GateOutcome`] rather
+//! than re-copying them, but it cannot be REGISTERED in `gate::ALL`: that
+//! registry is a `const` in the library crate, and this gate is a module of
+//! another crate's test binary, which no library can name. The shape is
+//! reproduced instead: [`audit`] returns a verdict and nothing else, so there
+//! is no way to obtain the findings without also deciding about them. Moving
+//! the gate INTO `talkbank-parser-tests` would fix that properly and needs a
+//! normal (not dev) dependency on this crate; it is a structural change, not a
+//! drive-by.
+//!
+//! # Two axes, because five buckets were one value proxying for two facts
+//!
+//! Every bucket in the old version was defined against the SPEC's expectation,
+//! so the headline "Exact parity: 214/283" measured *both backends satisfy the
+//! spec*, which is not what parity means for an oracle whose whole job is to
+//! track the other backend. Two cases it graded backwards:
+//!
+//! - both backends report the same wrong code: perfect agreement, counted as a
+//!   parity failure;
+//! - both meet the expectation but re2c also invents an extra diagnostic: a
+//!   real divergence, counted as parity.
+//!
+//! So [`model::Conformance`] answers "did this backend meet the spec", per
+//! backend, and [`model::Divergence`] answers "do the backends produce the same
+//! diagnostics". Both are DERIVED from the four recorded fields of a
+//! [`CaseReport`], never
+//! stored beside them, because a stored classification is a value that can
+//! drift from the thing it classifies.
+//!
+//! # No `bool` crosses a function boundary in these modules
+//!
+//! That is the checkable form of "no boolean blindness", and the first draft of
+//! this rewrite broke it while removing the same fault from the code it
+//! replaced: it grew `Reported::is_silent()` and `meets()`, then matched on the
+//! PAIR `(tree_sitter.is_silent(), re2c.is_silent())`, two bools with an
+//! unreachable arm. Emptiness is therefore a VARIANT here ([`Reported::Silent`]
+//! versus a non-empty [`Reported::Spoke`]), not a property a caller has to
+//! remember to test, and the derived verdicts carry payloads (WHICH expected
+//! codes were absent) instead of collapsing to yes/no.
+//!
+//! Equality and emptiness comparisons consumed on the spot are still written as
+//! comparisons: a bool that never travels cannot lose what it was about.
+//!
+//! # The ratchet
+//!
+//! [`baseline::KNOWN_DIVERGENCES`] names every case where the backends disagree
+//! today.
+//! Named, not counted: a count passes a run that closes one gap and opens
+//! another, which is precisely the swap a parity ratchet exists to catch.
+//!
+//! It is bidirectional, like `construct_coverage`'s list. An entry that stops
+//! diverging FAILS until it is deleted, so the list cannot rot into a permanent
+//! excuse once somebody fixes a gap and forgets to prune it, and the finish
+//! line is the list being empty. That is what "re2c tracks tree-sitter" means,
+//! and no percentage could ever show it.
+//!
+//! Only the spec suite is in scope. Divergence on WILD data is a different
+//! measurement with a different instrument (the corpus differential), and this
+//! gate must not be read as covering it.
+//!
+//! # Layout
+//!
+//! Split when this file passed the workspace's 800-line hard limit, along the
+//! section boundaries it already had:
+//!
+//! - [`model`]: what one case looks like once both backends have run over it,
+//!   and every type that makes an illegal state unrepresentable in it.
+//! - [`spec_corpus`]: getting from markdown on disk to a testable case,
+//!   including which specs are in scope.
+//! - [`baseline`]: the recorded divergences. Its own file because it is what a
+//!   contributor edits when they fix one, and it should shrink visibly in a
+//!   diff without the machinery moving around it.
+//! - here: running both backends, reconciling against the baseline, and the
+//!   two `#[test]`s that are the gate.
 
+mod baseline;
+mod model;
+mod spec_corpus;
+
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::btree_map::Entry;
 
 use talkbank_model::ErrorCollector;
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_tests::gate::{GateOutcome, listing, report};
 
-/// A single test case from a spec file: input + expected error codes.
-struct SpecCase {
-    input: String,
-    expected_codes: Vec<String>,
-}
+use baseline::KNOWN_DIVERGENCES;
+use model::{CaseReport, ConformanceTally, Divergence, DivergingCase, Reported, SpecLabel};
+use spec_corpus::{SpecCorpus, load_spec_corpus};
+use talkbank_model::model::TranscriptName;
 
-/// Extract CHAT inputs and expected error codes from a spec markdown file.
-/// Some specs have multiple examples; returns all of them.
-fn parse_spec(content: &str, filename: &str) -> Vec<SpecCase> {
-    let mut cases = Vec::new();
+// ---------------------------------------------------------------------------
+// Running both backends
+// ---------------------------------------------------------------------------
 
-    // Extract error code from filename as fallback: E241_foo.md -> E241
-    let filename_code = if filename.len() >= 4
-        && filename.starts_with('E')
-        && filename[1..4].chars().all(|c| c.is_ascii_digit())
-    {
-        Some(filename[..4].to_string())
-    } else {
-        None
-    };
-
-    // Find all ```chat blocks and their associated expected codes.
-    // A spec may have multiple examples, each with its own code block.
-    let mut search_from = 0;
-    while let Some(block_start) = content[search_from..].find("```chat\n") {
-        let abs_start = search_from + block_start + "```chat\n".len();
-        let Some(block_end) = content[abs_start..].find("\n```") else {
-            break;
-        };
-        let abs_end = abs_start + block_end;
-        let input = content[abs_start..abs_end].to_string();
-
-        // Look for expected error codes near this block.
-        // Search backwards for "Expected Error Codes" line, or forward.
-        let context_start = search_from;
-        let context_end = (abs_end + 200).min(content.len());
-        let context = &content[context_start..context_end];
-
-        let mut codes = Vec::new();
-        for line in context.lines() {
-            // Match "**Expected Error Codes**: E316" or "**Expected Error Codes**: E316, E317"
-            if let Some(after) = line
-                .strip_prefix("**Expected Error Codes**:")
-                .or_else(|| line.strip_prefix("- **Expected Error Codes**:"))
-            {
-                for part in after.split([',', ' ']) {
-                    let part = part.trim();
-                    if part.len() >= 4
-                        && (part.starts_with('E') || part.starts_with('W'))
-                        && part[1..4].chars().all(|c| c.is_ascii_digit())
-                    {
-                        codes.push(part[..4].to_string());
-                    }
-                }
-            }
-        }
-
-        // Fallback: use filename code if no explicit expected codes found
-        if codes.is_empty()
-            && let Some(ref fc) = filename_code
-        {
-            codes.push(fc.clone());
-        }
-
-        if !codes.is_empty() {
-            cases.push(SpecCase {
-                input,
-                expected_codes: codes,
-            });
-        }
-
-        search_from = abs_end + 4; // skip past closing ```
-    }
-
-    cases
-}
-
-/// Run TreeSitter on input and collect all error codes (parse + validate).
-fn collect_error_codes_ts(input: &str) -> BTreeSet<String> {
-    let parser = TreeSitterParser::new().expect("grammar loads");
+/// Validate one input with one backend and keep only the codes.
+///
+/// Shared by both backends so that HOW a run is measured is written once. It
+/// had been written twice, differing in one line, in the very function whose
+/// output exists to detect the two backends drifting apart.
+///
+/// `into_vec` rather than `to_vec`: the collector dies on the next line, and
+/// `to_vec` deep-clones every `ParseError`, each carrying a message `String`
+/// and an optional context holding two more, to read one `Copy` field off it.
+fn codes_from(lower: impl FnOnce(&ErrorCollector) -> talkbank_model::model::ChatFile) -> Reported {
     let errors = ErrorCollector::new();
-    let mut file = parser.parse_chat_file_streaming(input, &errors);
-    file.validate_with_alignment(&errors, None);
-    errors
-        .to_vec()
-        .iter()
-        .map(|e| e.code.as_str().to_string())
-        .collect()
+    let mut file = lower(&errors);
+    file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+    Reported::of(
+        errors
+            .into_vec()
+            .into_iter()
+            .map(|error| error.code)
+            .collect(),
+    )
 }
 
-fn collect_error_codes_re2c(input: &str) -> BTreeSet<String> {
-    let errors = ErrorCollector::new();
-    let parsed = talkbank_parser_re2c::parser::parse_chat_file_streaming(input, &errors);
-    let mut file = talkbank_model::model::ChatFile::from(&parsed);
-    file.validate_with_alignment(&errors, None);
-    errors
-        .to_vec()
+/// Parse and validate every case with each backend, in one pass.
+///
+/// The tree-sitter parser is built ONCE, though that is a smaller saving than
+/// it sounds: the grammar is statically linked, so `TreeSitterParser::new` is a
+/// `Parser::new` plus `set_language` and this crate's benchmark note calls that
+/// cost negligible. The real waste removed was the old debug pass, which walked
+/// `spec/errors` a second time and re-parsed all 239 markdown files on every
+/// run purely to print what the first pass had already computed.
+fn measure(corpus: &SpecCorpus) -> Result<Vec<CaseReport>, String> {
+    let parser =
+        TreeSitterParser::new().map_err(|err| format!("cannot load the CHAT grammar: {err}"))?;
+
+    let reports = corpus
+        .cases
         .iter()
-        .map(|e| e.code.as_str().to_string())
-        .collect()
-}
-
-#[test]
-fn error_parity_audit() {
-    let spec_dir = format!(
-        "{}/spec/errors",
-        crate::fixture_utils::workspace_root().display()
-    );
-    let spec_path = Path::new(&spec_dir);
-    if !spec_path.exists() {
-        eprintln!("Spec directory not found: {spec_dir}");
-        return;
-    }
-
-    let mut total = 0;
-    let mut exact_match = 0;
-    let mut both_detect = 0; // both report errors, different codes
-    let mut re2c_silent = Vec::new(); // re2c reports NOTHING, TS does
-    let mut ts_silent = Vec::new(); // TS reports NOTHING, re2c does
-    let mut both_empty = 0; // neither reports the expected code
-    // Test-side accumulator; explicit tuple keeps the (spec name, expected,
-    // re2c, ts) lineup visible at the use site without a one-off type alias.
-    #[allow(clippy::type_complexity)]
-    let mut both_empty_specs: Vec<(String, Vec<String>, Vec<String>, Vec<String>)> = Vec::new();
-    let mut skipped = 0;
-
-    let mut entries: Vec<_> = std::fs::read_dir(spec_path)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
+        .map(|case| CaseReport {
+            label: case.label.clone(),
+            expected: case.expected.clone(),
+            tree_sitter: codes_from(|errors| parser.parse_chat_file_streaming(&case.input, errors)),
+            re2c: codes_from(|errors| {
+                let parsed =
+                    talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, errors);
+                talkbank_model::model::ChatFile::from(&parsed)
+            }),
+        })
         .collect();
-    entries.sort_by_key(|e| e.file_name());
+    Ok(reports)
+}
 
-    for entry in &entries {
-        let content = std::fs::read_to_string(entry.path()).unwrap();
+// ---------------------------------------------------------------------------
+// The gate
+// ---------------------------------------------------------------------------
 
-        // Skip not_implemented specs
-        if content.contains("not_implemented") {
-            skipped += 1;
-            continue;
-        }
-
-        let filename = entry.file_name().to_string_lossy().to_string();
-        let cases = parse_spec(&content, &filename);
-        if cases.is_empty() {
-            continue;
-        }
-
-        for (case_idx, case) in cases.iter().enumerate() {
-            total += 1;
-
-            let ts_codes = collect_error_codes_ts(&case.input);
-            let re2c_codes = collect_error_codes_re2c(&case.input);
-
-            let expected: BTreeSet<String> = case.expected_codes.iter().cloned().collect();
-
-            let ts_has_expected = expected.iter().all(|c| ts_codes.contains(c));
-            let re2c_has_expected = expected.iter().all(|c| re2c_codes.contains(c));
-
-            let label = if cases.len() > 1 {
-                format!("{filename}#{case_idx}")
-            } else {
-                filename.clone()
-            };
-
-            let ts_has_any_error = !ts_codes.is_empty();
-            let re2c_has_any_error = !re2c_codes.is_empty();
-
-            if ts_has_expected && re2c_has_expected {
-                exact_match += 1;
-            } else if ts_has_any_error && re2c_has_any_error {
-                // Both detect something wrong, just different codes
-                both_detect += 1;
-            } else if ts_has_any_error && !re2c_has_any_error {
-                // Re2c is SILENT on invalid input, the critical gap
-                re2c_silent.push((label, expected.iter().cloned().collect::<Vec<_>>()));
-            } else if !ts_has_any_error && re2c_has_any_error {
-                ts_silent.push((label, re2c_codes.iter().cloned().collect::<Vec<_>>()));
-            } else {
-                // Neither reports the expected code
-                both_empty += 1;
-                both_empty_specs.push((
-                    label,
-                    expected.iter().cloned().collect::<Vec<_>>(),
-                    ts_codes.iter().cloned().collect::<Vec<_>>(),
-                    re2c_codes.iter().cloned().collect::<Vec<_>>(),
+/// Read [`KNOWN_DIVERGENCES`] into a map, refusing a duplicated label.
+///
+/// A plain `collect()` keeps the LAST of two entries naming the same case and
+/// says nothing, so the earlier one, and whatever reason was written beside it,
+/// vanishes from the ratchet with no diagnostic anywhere.
+fn recorded_divergences() -> Result<BTreeMap<&'static str, Divergence>, String> {
+    let mut recorded = BTreeMap::new();
+    for (label, shape) in KNOWN_DIVERGENCES {
+        match recorded.insert(*label, *shape) {
+            None => {}
+            Some(previous) => {
+                return Err(format!(
+                    "KNOWN_DIVERGENCES lists {label:?} twice ({previous:?} then {shape:?}); \
+                     keep one entry"
                 ));
             }
         }
     }
+    Ok(recorded)
+}
 
-    let detects_errors = exact_match + both_detect;
-    let total_with_errors = total - both_empty;
-
-    eprintln!("\n═══ Error Parity Audit ═══");
-    eprintln!("Specs tested:       {total}");
-    eprintln!("Exact code match:   {exact_match}");
-    eprintln!("Both detect (diff): {both_detect}");
-    eprintln!("Re2c SILENT:        {} ← critical gaps", re2c_silent.len());
-    eprintln!("TS silent:          {}", ts_silent.len());
-    eprintln!("Both empty:         {both_empty}");
-    eprintln!("Skipped (not_impl): {skipped}");
-    eprintln!();
-    eprintln!(
-        "Error detection: {detects_errors}/{total_with_errors} ({:.1}%)",
-        if total_with_errors > 0 {
-            detects_errors as f64 / total_with_errors as f64 * 100.0
-        } else {
-            0.0
-        }
-    );
-    eprintln!(
-        "Exact parity:    {exact_match}/{total_with_errors} ({:.1}%)",
-        if total_with_errors > 0 {
-            exact_match as f64 / total_with_errors as f64 * 100.0
-        } else {
-            0.0
-        }
-    );
-
-    if !re2c_silent.is_empty() {
-        eprintln!("\n── Re2c SILENT (invalid input, no error reported) ──");
-        for (file, codes) in &re2c_silent {
-            eprintln!("  {file}: TS reports {codes:?}");
-        }
-        // Debug: show what re2c actually produces for silent cases
-        eprintln!("\n── Debug: re2c output for silent cases ──");
-        for entry in &entries {
-            let content = std::fs::read_to_string(entry.path()).unwrap();
-            if content.contains("not_implemented") {
-                continue;
+/// Index this run's diverging cases by label, refusing a collision.
+///
+/// Two distinct cases rendering to one label would silently drop a divergence.
+/// It cannot happen for generated spec names, and the point of checking is that
+/// nothing has to KNOW that in order for the count to be right.
+fn observed_divergences<'a>(
+    reports: &'a [CaseReport],
+) -> Result<BTreeMap<String, DivergingCase<'a>>, String> {
+    let mut observed = BTreeMap::new();
+    for report in reports {
+        let Some(diverging) = DivergingCase::of(report) else {
+            continue;
+        };
+        match observed.entry(report.label.to_string()) {
+            Entry::Vacant(slot) => {
+                slot.insert(diverging);
             }
-            let filename = entry.file_name().to_string_lossy().to_string();
-            let cases = parse_spec(&content, &filename);
-            for (ci, case) in cases.iter().enumerate() {
-                let label = if cases.len() > 1 {
-                    format!("{filename}#{ci}")
-                } else {
-                    filename.clone()
-                };
-                if re2c_silent.iter().any(|(f, _)| f == &label) {
-                    let re2c_codes = collect_error_codes_re2c(&case.input);
-                    let ts_codes = collect_error_codes_ts(&case.input);
-                    eprintln!("  {label}:");
-                    eprintln!("    TS:   {:?}", ts_codes);
-                    eprintln!("    Re2c: {:?}", re2c_codes);
-                    eprintln!(
-                        "    Input (first 100): {:?}",
-                        &case.input[..case.input.len().min(100)]
-                    );
+            Entry::Occupied(slot) => {
+                return Err(format!("two spec cases both render as {:?}", slot.key()));
+            }
+        }
+    }
+    Ok(observed)
+}
+
+/// The whole check. `Ok` is the summary of what was verified; `Err` is what an
+/// operator has to do about it.
+///
+/// There is deliberately no function yielding the findings without a verdict:
+/// that separation is what let the previous version print eleven critical gaps
+/// and pass.
+fn audit() -> GateOutcome {
+    let corpus = load_spec_corpus()?;
+    let reports = measure(&corpus)?;
+
+    let observed = observed_divergences(&reports)?;
+    let recorded = recorded_divergences()?;
+
+    let tree_sitter = ConformanceTally::of(reports.iter().map(CaseReport::tree_sitter_conformance));
+    let re2c = ConformanceTally::of(reports.iter().map(CaseReport::re2c_conformance));
+    let mut shapes: BTreeMap<Divergence, usize> = BTreeMap::new();
+    for diverging in observed.values() {
+        *shapes.entry(diverging.shape).or_default() += 1;
+    }
+
+    let reconciliation = reconcile(&observed, &recorded, &reports);
+
+    let mut summary = format!(
+        "{} case(s) over {} spec file(s), {} skipped as not_implemented; {} agree, {} diverge",
+        reports.len(),
+        corpus.files_scanned,
+        corpus.not_implemented,
+        reports.len() - observed.len(),
+        observed.len(),
+    );
+    summary.push_str(&format!(
+        "\n     against the spec, tree-sitter: {tree_sitter}"
+    ));
+    summary.push_str(&format!("\n     against the spec, re2c:        {re2c}"));
+    for (shape, count) in &shapes {
+        summary.push_str(&format!("\n     {count:>4}  diverging: {shape:?}"));
+    }
+    match corpus.unclassifiable.first() {
+        None => {}
+        Some(_) => summary.push_str(&format!(
+            "\n     {:>4}  chat block(s) with no expectation, UNTESTED: {}",
+            corpus.unclassifiable.len(),
+            corpus
+                .unclassifiable
+                .iter()
+                .map(SpecLabel::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        )),
+    }
+
+    match reconciliation.agrees_with_baseline() {
+        true => Ok(summary),
+        false => {
+            let mut sections = reconciliation.render();
+            sections.push(format!("Measured over: {summary}"));
+            Err(report(sections))
+        }
+    }
+}
+
+/// Compare what diverges NOW against what the baseline records, and describe
+/// every way the two can fail to line up.
+///
+/// One pass rather than three functions. The first cut had `new_divergences`
+/// and `reshaped_divergences` as separate walks of `observed`, both asking
+/// `recorded.get(label)` and differing only in which arm of that one `Option`
+/// they handled, so "how a diverging case is presented" had two sites and could
+/// be changed at one of them.
+///
+/// Each of the four sections is a distinct operator action, which is why they
+/// are not merged into one list: paste an entry, delete an entry, delete a
+/// STALE entry naming a spec that no longer exists, or look at a case whose
+/// disagreement changed character.
+fn reconcile(
+    observed: &BTreeMap<String, DivergingCase<'_>>,
+    recorded: &BTreeMap<&str, Divergence>,
+    reports: &[CaseReport],
+) -> Reconciliation {
+    let mut appeared = Vec::new();
+    let mut reshaped = Vec::new();
+    for (label, diverging) in observed {
+        let now = diverging.shape;
+        match recorded.get(label.as_str()) {
+            None => appeared.push(format!(
+                "(\"{label}\", {now:?}),\n      {}",
+                diverging.report.detail()
+            )),
+            Some(was) if *was == now => {}
+            Some(was) => reshaped.push(format!(
+                "{label}: baseline says {was:?}, now {now:?}\n      {}",
+                diverging.report.detail()
+            )),
+        }
+    }
+
+    // Built only when something recorded is no longer diverging, which on a
+    // green run is never: every recorded label is observed, so the whole set
+    // would be allocated and thrown away.
+    let mut fixed = Vec::new();
+    let mut vanished = Vec::new();
+    let unobserved: Vec<&&str> = recorded
+        .keys()
+        .filter(|label| !observed.contains_key(**label))
+        .collect();
+    match unobserved.first() {
+        None => {}
+        Some(_) => {
+            let every_label: BTreeSet<String> = reports
+                .iter()
+                .map(|report| report.label.to_string())
+                .collect();
+            for label in unobserved {
+                // Matched as an `Option`, not reduced to a bool: "the case
+                // agrees now" and "there is no such case" are different
+                // operator actions, and a bool would need a comment to say
+                // which way round it read.
+                match every_label.get(*label) {
+                    Some(_) => fixed.push((*label).to_owned()),
+                    None => vanished.push((*label).to_owned()),
                 }
             }
         }
     }
 
-    if !ts_silent.is_empty() {
-        eprintln!("\n── TS silent (Re2c reports, TS doesn't) ──");
-        for (file, codes) in &ts_silent {
-            eprintln!("  {file}: re2c reports {codes:?}");
-        }
-    }
-
-    if !both_empty_specs.is_empty() {
-        eprintln!("\n── Both empty (neither finds expected code) ──");
-        for (file, expected, ts_got, re2c_got) in &both_empty_specs {
-            eprintln!("  {file}: expected {expected:?}");
-            if !ts_got.is_empty() {
-                eprintln!("    ts got:   {ts_got:?}");
-            }
-            if !re2c_got.is_empty() {
-                eprintln!("    re2c got: {re2c_got:?}");
-            }
-        }
+    Reconciliation {
+        appeared,
+        fixed,
+        vanished,
+        reshaped,
     }
 }
 
-/// Verify that the re2c parser NEVER panics or aborts on invalid input.
-/// Every error spec must produce a ChatFile, even if the content is garbage.
+/// The four ways this run and the baseline can fail to line up.
+///
+/// Typed lists rather than rendered sections, because the first cut had
+/// `reconcile` return `Vec<String>` and [`audit`] decide pass or fail by
+/// whether that vector was empty. That is this module's OWN bug class,
+/// reproduced one level down inside the gate that exists to forbid it: the
+/// verdict became a property of presentation text, so a heading emitted for an
+/// empty list would have turned a green run red, and a section built but never
+/// pushed would have turned a red run green.
+///
+/// Now [`Reconciliation::agrees_with_baseline`] reads the lists and
+/// [`Reconciliation::render`] is reached only on the failure path.
+struct Reconciliation {
+    /// Diverging now, absent from the baseline: a regression.
+    appeared: Vec<String>,
+    /// In the baseline, agreeing now: the entry is stale and should go.
+    fixed: Vec<String>,
+    /// In the baseline, naming a spec case that no longer exists at all.
+    vanished: Vec<String>,
+    /// Still diverging, but not in the recorded way.
+    reshaped: Vec<String>,
+}
+
+impl Reconciliation {
+    /// The verdict, read off the findings themselves.
+    fn agrees_with_baseline(&self) -> bool {
+        self.appeared.is_empty()
+            && self.fixed.is_empty()
+            && self.vanished.is_empty()
+            && self.reshaped.is_empty()
+    }
+
+    /// Operator-facing text. `gate::report` drops the empty sections, so each
+    /// heading is emitted unconditionally here.
+    fn render(&self) -> Vec<String> {
+        vec![
+            listing(
+                "NEW DIVERGENCES: the backends disagree here and the baseline does not say so.\n\
+                 Fix the parser, or paste these into KNOWN_DIVERGENCES under the right family:",
+                &self.appeared,
+            ),
+            listing(
+                "RETIRED: listed as diverging, but the backends now agree.\n\
+                 Delete these from KNOWN_DIVERGENCES in the commit that fixed them:",
+                &self.fixed,
+            ),
+            listing(
+                "STALE: listed as diverging, but no such spec case exists.\n\
+                 The spec was renamed or deleted; delete the entry, it proves nothing:",
+                &self.vanished,
+            ),
+            listing(
+                "CHANGED SHAPE: still diverging, but not in the recorded way:",
+                &self.reshaped,
+            ),
+        ]
+    }
+}
+
+/// SURVIVES: policy. WHICH divergences this project has decided to ship with is
+/// a set of judgements about real alternatives, so no type can hold the list.
+/// What the types DO hold is that a divergence cannot be observed without being
+/// classified ([`Divergence`] has no "unknown" variant, and
+/// [`CaseReport::divergence`] is the only way to obtain one), and that findings
+/// cannot be produced without a verdict ([`audit`] returns only a `Result`).
 #[test]
-fn re2c_never_panics_on_invalid_input() {
-    let spec_dir = format!(
-        "{}/spec/errors",
-        crate::fixture_utils::workspace_root().display()
+fn backends_diverge_only_where_recorded() -> Result<(), String> {
+    let summary = audit()?;
+    println!("ok  re2c/tree-sitter spec parity: {summary}");
+    Ok(())
+}
+
+/// Neither backend may panic on invalid input: every spec case must yield a
+/// `ChatFile`, however malformed the input.
+///
+/// SURVIVES: behaviour a signature cannot describe. "Returns `ChatFile`" does
+/// not promise "does not abort on the way there".
+#[test]
+fn re2c_never_panics_on_invalid_input() -> Result<(), String> {
+    let corpus = load_spec_corpus()?;
+    for case in &corpus.cases {
+        let errors = ErrorCollector::new();
+        let parsed = talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, &errors);
+        let _file = talkbank_model::model::ChatFile::from(&parsed);
+    }
+    println!(
+        "ok  {} invalid input(s) parsed without panic",
+        corpus.cases.len()
     );
-    let spec_path = std::path::Path::new(&spec_dir);
-    if !spec_path.exists() {
-        return;
-    }
-
-    let mut tested = 0;
-    let mut entries: Vec<_> = std::fs::read_dir(spec_path)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in &entries {
-        let content = std::fs::read_to_string(entry.path()).unwrap();
-        let filename = entry.file_name().to_string_lossy().to_string();
-        let cases = parse_spec(&content, &filename);
-
-        for case in &cases {
-            tested += 1;
-            // This must not panic
-            let errors = ErrorCollector::new();
-            let parsed =
-                talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, &errors);
-            // Must produce a ChatFile (best-effort recovery)
-            let _file = talkbank_model::model::ChatFile::from(&parsed);
-        }
-    }
-
-    eprintln!("Recovery test: {tested} invalid inputs parsed without panic");
+    Ok(())
 }

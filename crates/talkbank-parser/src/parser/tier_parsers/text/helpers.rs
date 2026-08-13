@@ -58,7 +58,7 @@ pub(super) use crate::parser::node_span::span_of;
 ///   "no content" rejection.
 pub(super) fn parse_text_tier_content<'tree, T>(
     tier_node: Node<'tree>,
-    body: NodeSlot<'tree, T>,
+    body: &NodeSlot<'tree, T>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -72,9 +72,9 @@ where
 
     match body {
         NodeSlot::Present(text) => parse_bullet_content(text.raw_node(), source, errors),
-        NodeSlot::Missing(node) => parse_bullet_content(node, source, errors),
+        NodeSlot::Missing(node) => parse_bullet_content(*node, source, errors),
         NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
-            errors.report(unexpected_node_error(node, source, context));
+            errors.report(unexpected_node_error(*node, source, context));
             report_missing_text_content(tier_node, source, errors, context, message);
             BulletContent::from_text("")
         }

@@ -79,7 +79,7 @@ serde_json = "1.0"
 smallvec = { version = "1.15", features = ["serde", "union", "const_generics"] }
 smol_str = { version = "0.3", features = ["serde"] }
 text-size = "1.1"
-thiserror = "^2.0.19"
+thiserror = "^2.0.20"
 toml = "^1.1.4"
 
 # Proc-macro infrastructure
@@ -92,7 +92,7 @@ sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate"] }
 tokio = { version = "1.53", features = ["full"] }
 
 # Tree-sitter parsing
-tree-sitter = "0.26.11"
+tree-sitter = "0.26.12"
 tree-sitter-talkbank = { path = "grammar", version = "0.1.0" }
 
 # Re2c parser deps
@@ -130,7 +130,7 @@ whatlang = "0.18"
 
 # LSP infrastructure
 tower-lsp = "0.20"
-tree-sitter-highlight = "0.26.11"
+tree-sitter-highlight = "0.26.12"
 
 # C compiler driver for send2clan
 cc = "1.4"

@@ -75,7 +75,7 @@ mod tests;
 pub use async_channel_sink::AsyncChannelErrorSink;
 pub use builder::{ParseErrorBuilder, ParseErrorBuilderError};
 pub use clan_location::{ClanHiddenLineError, ClanLocation, resolve_clan_location};
-pub use codes::{ErrorCode, XPHON_ERROR_CODES, validation_rules_fingerprint};
+pub use codes::{CheckStatus, ErrorCode, XPHON_ERROR_CODES, validation_rules_fingerprint};
 pub use collectors::{ErrorCollector, ParseTracker};
 pub use config::RuleSelection;
 pub use context::ErrorContext;

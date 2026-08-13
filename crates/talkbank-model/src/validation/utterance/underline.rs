@@ -4,6 +4,11 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
+// Protected against the class this module's own history belongs to: a new
+// `WordContent` variant must not silently join a `_ =>` that answers wrong.
+// See `talkbank-parser-tests/src/content_catch_alls.rs`.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use crate::model::{
     BracketedContent, BracketedItem, Utterance, UtteranceContent, Word, WordContent,
 };
@@ -274,7 +279,22 @@ fn walk_underline_balance_in_word(
                 };
                 apply_underline_end(begin_spans, span, errors);
             }
-            _ => {}
+            // Named, not swept. Every one of these carries no underline
+            // marker, so doing nothing is the right answer today; the point of
+            // writing them out is that a NEW `WordContent` variant cannot join
+            // them by default. Four catch-alls of exactly this shape have
+            // shipped as defects (see `content_catch_alls`).
+            WordContent::Text(_)
+            | WordContent::Phonetic(_)
+            | WordContent::Shortening(_)
+            | WordContent::OverlapPoint(_)
+            | WordContent::CAElement(_)
+            | WordContent::CADelimiter(_)
+            | WordContent::StressMarker(_)
+            | WordContent::Lengthening(_)
+            | WordContent::SyllablePause(_)
+            | WordContent::CompoundMarker(_)
+            | WordContent::CliticBoundary(_) => {}
         }
     }
 }

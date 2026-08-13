@@ -5,13 +5,16 @@
 A word contains `@` at a position where a form type marker is expected, but
 no valid form type follows. Tree-sitter produces an ERROR node at the `@`.
 
-Valid form types: `@b`, `@c`, `@d`, `@f`, `@fp`, `@g`, `@i`, `@k`, `@l`,
-`@ls`, `@n`, `@o`, `@p`, `@q`, `@sas`, `@si`, `@sl`, `@t`, `@wp`, `@x`,
-`@z`, `@s` (language marker).
+The valid form types are declared in
+`spec/form_markers/form_marker_registry.json` and rendered in the book's
+[symbols chapter](../../book/src/chat-format/symbols.md). `@s` is the language
+marker, a separate construct that is not a form type.
+
+There used to be a copy of the list here, and it had drifted: it omitted `@u`.
 
 ## Metadata
 - **Status**: implemented
-- **Last updated**: 2026-04-04 08:15 EDT
+- **Last updated**: 2026-08-11 16:20 EDT
 
 - **Error Code**: E202
 - **Category**: Word validation

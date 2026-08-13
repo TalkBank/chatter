@@ -85,24 +85,24 @@ fn full_document_enumerates_clean_line_repeat() {
     // begin_header (production index 2) and end_header (index 4) anchors must
     // classify as Present: before the fix the swallowed repeat misaligned them.
     assert!(
-        matches!(children.child_2.slot, NodeSlot::Present(_)),
+        matches!(children.child_2.slot(), NodeSlot::Present(_)),
         "begin_header anchor should be Present, got {:?}",
-        children.child_2.slot
+        children.child_2.slot()
     );
     assert!(
-        matches!(children.child_4.slot, NodeSlot::Present(_)),
+        matches!(children.child_4.slot(), NodeSlot::Present(_)),
         "end_header anchor should be Present, got {:?}",
-        children.child_4.slot
+        children.child_4.slot()
     );
 
     // repeat(line) (production index 3) must be a non-empty Vec whose elements
     // are all Present `line` nodes.
     assert!(
-        !children.child_3.slot.is_empty(),
+        !children.child_3.slot().is_empty(),
         "repeat(line) slot should be a non-empty Vec, got empty"
     );
-    for (i, elem) in children.child_3.slot.iter().enumerate() {
-        match &elem.slot {
+    for (i, elem) in children.child_3.slot().iter().enumerate() {
+        match &elem.slot() {
             NodeSlot::Present(node) => {
                 assert_eq!(
                     node.0.kind(),
@@ -142,22 +142,22 @@ fn full_document_repeat_captures_error_line() {
     // skipping the whole region.
     let error_count = children
         .child_3
-        .slot
+        .slot()
         .iter()
-        .filter(|s| matches!(s.slot, NodeSlot::Error(_)))
+        .filter(|s| matches!(s.slot(), NodeSlot::Error(_)))
         .count();
     let present_lines = children
         .child_3
-        .slot
+        .slot()
         .iter()
-        .filter(|s| matches!(&s.slot, NodeSlot::Present(n) if n.0.kind() == "line"))
+        .filter(|s| matches!(&s.slot(), NodeSlot::Present(n) if n.0.kind() == "line"))
         .count();
 
     assert!(
         error_count >= 1,
         "the unparsable line must surface as a NodeSlot::Error in the repeat, \
          got {error_count} error slots in {:?}",
-        children.child_3.slot
+        children.child_3.slot()
     );
     assert!(
         present_lines >= 1,

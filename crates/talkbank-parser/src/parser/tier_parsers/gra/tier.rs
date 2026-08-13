@@ -58,13 +58,13 @@ pub fn parse_gra_tier(node: Node, source: &str, errors: &impl ErrorSink) -> GraT
     let children = extract_gra_dependent_tier(GraDependentTierNode(node));
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot {
+    match children.child_2.slot() {
         NodeSlot::Present(contents) => {
             let relations = parse_gra_relations(contents.raw_node(), source, errors);
             GraTier::new(GraTierType::Gra, relations).with_span(span)
         }
         NodeSlot::Missing(raw_contents) => {
-            let relations = parse_gra_relations(raw_contents, source, errors);
+            let relations = parse_gra_relations(*raw_contents, source, errors);
             GraTier::new(GraTierType::Gra, relations).with_span(span)
         }
         NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
@@ -100,14 +100,14 @@ fn parse_gra_relations(
 ) -> Vec<GrammaticalRelation> {
     let contents = extract_gra_contents(GraContentsNode(gra_contents));
     let mut relations: Vec<GrammaticalRelation> =
-        Vec::with_capacity(contents.child_1.slot.len() + 1);
+        Vec::with_capacity(contents.child_1.slot().len() + 1);
 
-    push_gra_relation(contents.child_0.slot, source, errors, &mut relations);
-    for element in contents.child_1.slot {
-        match element.slot {
+    push_gra_relation(contents.child_0.slot(), source, errors, &mut relations);
+    for element in contents.child_1.slot() {
+        match element.slot() {
             NodeSlot::Present(pair) => {
-                push_gra_separator(pair.child_0.slot, source, errors);
-                push_gra_relation(pair.child_1.slot, source, errors, &mut relations);
+                push_gra_separator(pair.child_0.slot(), source, errors);
+                push_gra_relation(pair.child_1.slot(), source, errors, &mut relations);
                 surface_unexpected(&pair.unexpected, source, errors);
             }
             // The generated repeat classifies a whole item as `Present` /
@@ -115,7 +115,7 @@ fn parse_gra_relations(
             // analogous `@Languages` code-list repeat); matched exhaustively
             // regardless, per the project no-`_`-on-project-enums rule.
             NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(raw, source, "gra_contents"));
+                errors.report(unexpected_node_error(*raw, source, "gra_contents"));
             }
             NodeSlot::Absent => {}
         }
@@ -140,17 +140,17 @@ fn parse_gra_relations(
 /// CHAT lexer never emits two adjacent `index|head|relation` triples without
 /// intervening whitespace on well-formed input.
 fn push_gra_separator<'tree>(
-    slot: NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
 ) {
     match slot {
         NodeSlot::Present(_) | NodeSlot::Absent => {}
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "gra_contents");
+            check_not_missing(*raw, source, errors, "gra_contents");
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "gra_contents"));
+            errors.report(unexpected_node_error(*raw, source, "gra_contents"));
         }
     }
 }
@@ -177,7 +177,7 @@ fn push_gra_separator<'tree>(
 /// (`parse_gra_tier` is only entered when the tier node has no tree-sitter
 /// error); they are handled explicitly for exhaustiveness.
 fn push_gra_relation<'tree>(
-    slot: NodeSlot<'tree, GraRelationNode<'tree>>,
+    slot: &NodeSlot<'tree, GraRelationNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     relations: &mut Vec<GrammaticalRelation>,
@@ -191,10 +191,10 @@ fn push_gra_relation<'tree>(
             }
         }
         NodeSlot::Missing(raw) => {
-            check_not_missing(raw, source, errors, "gra_contents");
+            check_not_missing(*raw, source, errors, "gra_contents");
         }
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(raw, source, "gra_contents"));
+            errors.report(unexpected_node_error(*raw, source, "gra_contents"));
         }
         NodeSlot::Absent => {}
     }

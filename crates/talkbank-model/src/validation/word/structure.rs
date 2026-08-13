@@ -461,7 +461,10 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
                 ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
                 "Malformed form marker suffix",
             )
-            .with_suggestion("Use exactly one valid form marker (e.g., @b, @c, @z:label)"),
+            // Deliberately says nothing about WHICH markers exist: this is a
+            // shape complaint (more than one `@`), and an inventory example
+            // here would be a copy that goes stale.
+            .with_suggestion("Use exactly one form marker"),
         );
         return;
     }
@@ -479,9 +482,8 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
                         ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
                         "Invalid characters after form marker",
                     )
-                    .with_suggestion(
-                        "Use a valid marker suffix only (e.g., @b, @c, @s:eng, @z:label)",
-                    ),
+                    // Shape, not inventory: see the suggestion above.
+                    .with_suggestion("Use a marker suffix only, with nothing after it"),
                 );
             }
         }
@@ -496,7 +498,11 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
                 ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
                 "Unknown '@' marker suffix",
             )
-            .with_suggestion("Use a valid marker like @b, @c, @s:eng, or @z:label"),
+            // The inventory is the registry's, not this function's: this site
+            // used to name three markers by hand, so retiring one left it
+            // advertised in a user-facing string. `@s:` is the language suffix,
+            // a separate construct, and is named separately.
+            .with_suggestion(crate::model::FormType::DECLARED_MARKERS_SUGGESTION),
         );
     }
 }

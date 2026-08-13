@@ -1,306 +1,127 @@
 //! Word-form `@` suffix markers (`gumma@c`, `younz@d`, ...).
 //!
+//! [`FormType`] itself, its per-variant documentation, and the mapping in both
+//! directions between a variant and its `@` code are GENERATED from
+//! `spec/form_markers/form_marker_registry.json` into
+//! [`crate::generated::form_markers`]. Change the registry, then run
+//! `just form-markers-gen`; never edit the generated file.
+//!
+//! What lives here is the part that does not depend on which markers exist:
+//! the type that names what a caller is holding ([`FormMarkerPayload`]), the
+//! error for text that names no marker ([`UndeclaredFormMarker`]), and the
+//! CHAT serialization impl.
+//!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Special_Form_Markers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
 
 use crate::model::WriteChat;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use talkbank_derive::{SemanticEq, SpanShift};
 
-/// Special-form suffix marker attached to a word token.
-///
-/// Most variants correspond to fixed CHAT marker codes. [`FormType::UserDefined`]
-/// keeps project-specific `@z:...` values available without schema changes.
-///
-/// # CHAT Format Examples
-///
-/// ```text
-/// gumma@c           Child-invented form (@c)
-/// younz@d           Dialect form (@d)
-/// abame@b           Babbling (@b)
-/// bunko@f           Family-specific form (@f)
-/// woofwoof@o        Onomatopoeia (@o)
-/// um@fp             Filled pause (@fp) - deprecated, use &-um
-/// b@l               Letter (@l)
-/// abc@k             Letter sequence (@k)
-/// if@q              Metalinguistic reference (@q)
-/// breaked@n         Neologism (@n)
-/// lalala@si         Singing (@si)
-/// wug@t             Test word (@t)
-/// custom@z:label    User-defined (@z:label)
-/// ```
-///
-/// # Standard Markers
-///
-/// - `@a` - Approximate/phonologically consistent form
-/// - `@b` - Babbling
-/// - `@c` - Child-invented form
-/// - `@d` - Dialect form
-/// - `@f` - Family-specific form
-/// - `@fp` - Filled pause (deprecated)
-/// - `@g` - Gemination/general special form
-/// - `@i` - Interjection
-/// - `@k` - Letter sequence (kinship)
-/// - `@l` - Single letter
-/// - `@ls` - Letter plural
-/// - `@n` - Neologism
-/// - `@o` - Onomatopoeia
-/// - `@p` - Proper name
-/// - `@q` - Metalinguistic reference
-/// - `@sas` - Second attempt success
-/// - `@si` - Singing
-/// - `@sl` - Slang
-/// - `@t` - Test word
-/// - `@u` - Unibet transcription
-/// - `@wp` - Word play
-/// - `@x` - Complex/excluded
-/// - `@z:xxx` - User-defined custom code
-///
-/// # References
-///
-/// - [Special Form Markers](https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker)
-/// - [Babbling Marker](https://talkbank.org/0info/manuals/CHAT.html#Babbling_Marker)
-/// - [Child-Invented Marker](https://talkbank.org/0info/manuals/CHAT.html#ChildInvented_Marker)
-/// - [Dialect Form Marker](https://talkbank.org/0info/manuals/CHAT.html#DialectForm_Marker)
-/// - [Family-Specific Form Marker](https://talkbank.org/0info/manuals/CHAT.html#FamilySpecificForm_Marker)
-/// - [Neologism Marker](https://talkbank.org/0info/manuals/CHAT.html#Neologism_Marker)
-/// - [Metalinguistic Reference Marker](https://talkbank.org/0info/manuals/CHAT.html#MetalinguisticReference_Marker)
-#[derive(
-    Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift,
-)]
-pub enum FormType {
-    /// `@a` - Approximate/phonologically consistent form
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "a")]
-    A,
-    /// `@b` - Babbling
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Babbling_Marker>
-    #[serde(rename = "b")]
-    B,
-    /// `@c` - Child-invented form
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#ChildInvented_Marker>
-    #[serde(rename = "c")]
-    C,
-    /// `@d` - Dialect form
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#DialectForm_Marker>
-    #[serde(rename = "d")]
-    D,
-    /// `@f` - Family-specific form
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#FamilySpecificForm_Marker>
-    #[serde(rename = "f")]
-    F,
-    /// `@fp` - Filled pause (deprecated, use &-um instead)
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "fp")]
-    FP,
-    /// `@g` - Gemination/general special form
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "g")]
-    G,
-    /// `@i` - Interjection
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "i")]
-    I,
-    /// `@k` - Letter sequence (kinship)
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "k")]
-    K,
-    /// `@l` - Single letter
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "l")]
-    L,
-    /// `@ls` - Letter plural
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "ls")]
-    LS,
-    /// `@n` - Neologism
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Neologism_Marker>
-    #[serde(rename = "n")]
-    N,
-    /// `@o` - Onomatopoeia
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "o")]
-    O,
-    /// `@p` - Proper name
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "p")]
-    P,
-    /// `@q` - Metalinguistic reference
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#MetalinguisticReference_Marker>
-    #[serde(rename = "q")]
-    Q,
-    /// `@sas` - Second attempt success
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "sas")]
-    SAS,
-    /// `@si` - Singing
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "si")]
-    SI,
-    /// `@sl` - Slang
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "sl")]
-    SL,
-    /// `@t` - Test word
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "t")]
-    T,
-    /// `@u` - Unibet transcription
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "u")]
-    U,
-    /// `@wp` - Word play
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "wp")]
-    WP,
-    /// `@x` - Complex/excluded
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "x")]
-    X,
+pub use crate::generated::form_markers::FormType;
 
-    /// User-defined special form (@z:label)
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker>
-    #[serde(rename = "z")]
-    UserDefined(String),
+/// The text of a form marker AFTER the `@`.
+///
+/// # Why this is a type and not a `&str`
+///
+/// The function this replaced took a `&str` and accepted BOTH `"b"` and
+/// `"@b"`, so every arm of its match was written twice and each caller decided
+/// for itself whether to strip the `@`. The two callers decided differently:
+/// the tree-sitter parser passed `"@z:grm"` and tested for a `"@z:"` prefix,
+/// the re2c parser passed `"z:grm"` and tested for `"z:"`. One fact, spelled
+/// two ways, in two crates, with nothing relating them.
+///
+/// Naming the payload settles which of the two shapes a value is, and
+/// [`FormType::from_payload`] splits the label itself, so no caller has to know
+/// which markers take one.
+///
+/// The code and label are DERIVED on access rather than stored beside the
+/// text. Storing all three meant an invariant (`text` is `code`, or `code` then
+/// `:` then `label`) that only the constructor maintained, which is the shape
+/// this whole registry exists to remove, in the type built to remove it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FormMarkerPayload<'a> {
+    /// The whole payload as written, without the `@`.
+    text: &'a str,
 }
 
-impl FormType {
-    /// All standard form markers with their short descriptions.
-    pub const ALL_MARKERS: &'static [(&'static str, &'static str)] = &[
-        ("a", "approximate"),
-        ("b", "babbling"),
-        ("c", "child-invented"),
-        ("d", "dialect"),
-        ("f", "family-specific"),
-        ("fp", "filled pause"),
-        ("g", "gemination"),
-        ("i", "interjection"),
-        ("k", "kinship"),
-        ("l", "letter"),
-        ("ls", "letter sequence"),
-        ("n", "neologism"),
-        ("o", "onomatopoeia"),
-        ("p", "proper name"),
-        ("q", "meta-linguistic"),
-        ("sas", "second attempt success"),
-        ("si", "sing"),
-        ("sl", "slang"),
-        ("t", "test word"),
-        ("u", "unibet"),
-        ("wp", "word play"),
-        ("x", "complex"),
-    ];
-
-    /// Parse a standard marker code in case-insensitive form, with or without `@`.
+impl<'a> FormMarkerPayload<'a> {
+    /// Read the text that follows a word's `@`.
     ///
-    /// This parser intentionally covers only fixed built-in markers. `@z:...`
-    /// user-defined markers should be constructed through `UserDefined` paths.
-    pub fn parse(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "a" | "@a" => Some(FormType::A),
-            "b" | "@b" => Some(FormType::B),
-            "c" | "@c" => Some(FormType::C),
-            "d" | "@d" => Some(FormType::D),
-            "f" | "@f" => Some(FormType::F),
-            "fp" | "@fp" => Some(FormType::FP),
-            "g" | "@g" => Some(FormType::G),
-            "i" | "@i" => Some(FormType::I),
-            "k" | "@k" => Some(FormType::K),
-            "l" | "@l" => Some(FormType::L),
-            "ls" | "@ls" => Some(FormType::LS),
-            "n" | "@n" => Some(FormType::N),
-            "o" | "@o" => Some(FormType::O),
-            "p" | "@p" => Some(FormType::P),
-            "q" | "@q" => Some(FormType::Q),
-            "sas" | "@sas" => Some(FormType::SAS),
-            "si" | "@si" => Some(FormType::SI),
-            "sl" | "@sl" => Some(FormType::SL),
-            "t" | "@t" => Some(FormType::T),
-            "u" | "@u" => Some(FormType::U),
-            "wp" | "@wp" => Some(FormType::WP),
-            "x" | "@x" => Some(FormType::X),
-            _ => None,
+    /// The re2c lexer hands over exactly this; the tree-sitter parser strips
+    /// the `@` from its token first. There is deliberately no constructor that
+    /// accepts either shape: that leniency is what made the old `&str` seam
+    /// ambiguous, and a constructor tolerating a stray `@` would additionally
+    /// have had to claim, falsely, that a bare code cannot parse. It can:
+    /// `after_at("b")` is `@b`.
+    pub fn after_at(text: &'a str) -> Self {
+        Self { text }
+    }
+
+    /// The part before any `:`.
+    ///
+    /// `split_once` rather than `split(':').next()`: a marker carries at most
+    /// one colon and everything after the first one is the label, so `@z:a:b`
+    /// has the label `a:b` rather than being silently truncated.
+    pub fn code(&self) -> &'a str {
+        self.text
+            .split_once(':')
+            .map_or(self.text, |(code, _)| code)
+    }
+
+    /// The part after the first `:`, absent when there is no colon. An empty
+    /// label (`@z:`) is `Some("")`, which is distinct from `None` and is
+    /// refused by [`FormType::from_payload`].
+    pub fn label(&self) -> Option<&'a str> {
+        self.text.split_once(':').map(|(_, label)| label)
+    }
+
+    /// The whole payload as written, without the `@`.
+    pub fn text(&self) -> &'a str {
+        self.text
+    }
+}
+
+/// Text in a form-marker position that no registry row declares.
+///
+/// # Constructing one
+///
+/// The only constructor is `pub(crate)` and is called from exactly one place,
+/// [`FormType::from_payload`], after the lookup has failed. There is no way to
+/// assert this outcome while holding a payload that does parse, which is what
+/// makes the error evidence rather than a label.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("undeclared form marker `@{payload}`")]
+pub struct UndeclaredFormMarker {
+    payload: String,
+}
+
+impl UndeclaredFormMarker {
+    /// Record a payload that matched no declared marker.
+    pub(crate) fn new(payload: FormMarkerPayload<'_>) -> Self {
+        Self {
+            payload: payload.text().to_owned(),
         }
     }
 
-    /// Return all standard markers as a comma-separated `@`-prefixed list.
-    ///
-    /// Useful for diagnostics/help text that needs to enumerate accepted
-    /// built-in codes in a stable presentation order.
-    pub fn all_markers_string() -> String {
-        FormType::ALL_MARKERS
-            .iter()
-            .map(|(marker, _)| format!("@{}", marker))
-            .collect::<Vec<_>>()
-            .join(", ")
+    /// The offending text, without the `@`.
+    pub fn payload(&self) -> &str {
+        &self.payload
     }
 
-    /// Return a human-readable label for UI/help surfaces.
+    /// Take the offending text, for a caller that has to keep it.
     ///
-    /// The returned label is intentionally concise and not localized; it is
-    /// meant for diagnostics and debug displays rather than end-user prose.
-    pub fn description(&self) -> std::borrow::Cow<'static, str> {
-        use std::borrow::Cow;
-        match self {
-            FormType::A => Cow::Borrowed("approximate"),
-            FormType::B => Cow::Borrowed("babbling"),
-            FormType::C => Cow::Borrowed("child-invented"),
-            FormType::D => Cow::Borrowed("dialect"),
-            FormType::F => Cow::Borrowed("family-specific"),
-            FormType::FP => Cow::Borrowed("filled pause"),
-            FormType::G => Cow::Borrowed("gemination"),
-            FormType::I => Cow::Borrowed("interjection"),
-            FormType::K => Cow::Borrowed("kinship"),
-            FormType::L => Cow::Borrowed("letter"),
-            FormType::LS => Cow::Borrowed("letter sequence"),
-            FormType::N => Cow::Borrowed("neologism"),
-            FormType::O => Cow::Borrowed("onomatopoeia"),
-            FormType::P => Cow::Borrowed("proper name"),
-            FormType::Q => Cow::Borrowed("meta-linguistic"),
-            FormType::SAS => Cow::Borrowed("second attempt success"),
-            FormType::SI => Cow::Borrowed("sing"),
-            FormType::SL => Cow::Borrowed("slang"),
-            FormType::T => Cow::Borrowed("test word"),
-            FormType::U => Cow::Borrowed("unibet"),
-            FormType::WP => Cow::Borrowed("word play"),
-            FormType::X => Cow::Borrowed("complex"),
-            FormType::UserDefined(label) => Cow::Owned(format!("user-defined: {}", label)),
-        }
+    /// Exists so the tree-sitter parser's E203 path does not copy the payload
+    /// a second time to build its recovered word: the error already owns the
+    /// only copy that needs to survive.
+    pub fn into_payload(self) -> String {
+        self.payload
     }
 
-    /// Return marker payload text written after `@` in CHAT output.
-    ///
-    /// Callers writing full CHAT tokens should add the `@` separator
-    /// themselves, then append this payload.
-    pub fn to_chat_marker(&self) -> std::borrow::Cow<'static, str> {
-        use std::borrow::Cow;
-        match self {
-            FormType::A => Cow::Borrowed("a"),
-            FormType::B => Cow::Borrowed("b"),
-            FormType::C => Cow::Borrowed("c"),
-            FormType::D => Cow::Borrowed("d"),
-            FormType::F => Cow::Borrowed("f"),
-            FormType::FP => Cow::Borrowed("fp"),
-            FormType::G => Cow::Borrowed("g"),
-            FormType::I => Cow::Borrowed("i"),
-            FormType::K => Cow::Borrowed("k"),
-            FormType::L => Cow::Borrowed("l"),
-            FormType::LS => Cow::Borrowed("ls"),
-            FormType::N => Cow::Borrowed("n"),
-            FormType::O => Cow::Borrowed("o"),
-            FormType::P => Cow::Borrowed("p"),
-            FormType::Q => Cow::Borrowed("q"),
-            FormType::SAS => Cow::Borrowed("sas"),
-            FormType::SI => Cow::Borrowed("si"),
-            FormType::SL => Cow::Borrowed("sl"),
-            FormType::T => Cow::Borrowed("t"),
-            FormType::U => Cow::Borrowed("u"),
-            FormType::WP => Cow::Borrowed("wp"),
-            FormType::X => Cow::Borrowed("x"),
-            FormType::UserDefined(label) => Cow::Owned(format!("z:{}", label)),
-        }
+    /// What to tell the user instead. Generated from the registry, so a
+    /// retired marker cannot stay advertised in a diagnostic; carried on the
+    /// error so a reporting site cannot supply a different list of its own.
+    pub fn suggestion(&self) -> &'static str {
+        FormType::DECLARED_MARKERS_SUGGESTION
     }
 }
 

@@ -45,7 +45,7 @@ pub(super) fn attach_mor(
 ) {
     let tier_node = n.raw_node();
     let separator =
-        super::helpers::dependent_tier_separator(&extract_mor_dependent_tier(n).child_1.slot);
+        super::helpers::dependent_tier_separator(&extract_mor_dependent_tier(n).child_1.slot());
     let tier_span = span_of(tier_node);
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "mor", errors);
@@ -87,7 +87,7 @@ pub(super) fn attach_gra(
 ) {
     let tier_node = n.raw_node();
     let separator =
-        super::helpers::dependent_tier_separator(&extract_gra_dependent_tier(n).child_1.slot);
+        super::helpers::dependent_tier_separator(&extract_gra_dependent_tier(n).child_1.slot());
     let tier_span = span_of(tier_node);
     if tier_node.has_error() {
         report_tier_parse_error(tier_node, input, "gra", errors);
@@ -121,7 +121,7 @@ pub(super) fn attach_pho(
         report_tier_parse_error(tier_node, input, "pho", errors);
     } else {
         let separator =
-            super::helpers::dependent_tier_separator(&extract_pho_dependent_tier(n).child_1.slot);
+            super::helpers::dependent_tier_separator(&extract_pho_dependent_tier(n).child_1.slot());
         let tier = parse_pho_tier(tier_node, input, errors);
         utterance
             .dependent_tiers
@@ -144,7 +144,7 @@ pub(super) fn attach_mod(
         report_tier_parse_error(tier_node, input, "mod", errors);
     } else {
         let separator =
-            super::helpers::dependent_tier_separator(&extract_mod_dependent_tier(n).child_1.slot);
+            super::helpers::dependent_tier_separator(&extract_mod_dependent_tier(n).child_1.slot());
         let tier = parse_mod_tier(tier_node, input, errors);
         utterance
             .dependent_tiers
@@ -167,7 +167,7 @@ pub(super) fn attach_sin(
         report_tier_parse_error(tier_node, input, "sin", errors);
     } else {
         let separator =
-            super::helpers::dependent_tier_separator(&extract_sin_dependent_tier(n).child_1.slot);
+            super::helpers::dependent_tier_separator(&extract_sin_dependent_tier(n).child_1.slot());
         let tier = parse_sin_tier(tier_node, input, errors);
         utterance
             .dependent_tiers
@@ -193,7 +193,7 @@ pub(super) fn attach_wor(
         report_tier_parse_error(tier_node, input, "wor", errors);
     } else {
         let separator =
-            super::helpers::dependent_tier_separator(&extract_wor_dependent_tier(n).child_1.slot);
+            super::helpers::dependent_tier_separator(&extract_wor_dependent_tier(n).child_1.slot());
         let tier = parse_wor_tier(tier_node, input, errors);
         utterance
             .dependent_tiers

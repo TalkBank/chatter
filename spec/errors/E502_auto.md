@@ -11,6 +11,7 @@ Every valid CHAT file must end with an `@End` header. This error indicates the f
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Corpus Impact
 

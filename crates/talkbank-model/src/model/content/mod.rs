@@ -75,7 +75,7 @@ pub use pause::*;
 pub use postcode::*;
 pub use retrace::*;
 pub use separator::*;
-pub(crate) use structure::{ContentStructure, GroupRef};
+pub use structure::{ContentStructure, GroupRef, LeafContent, LeafRef, RetraceRef, WordRef};
 pub use terminator::*;
 pub use tier_content::*;
 pub use tier_separator::TierSeparator;
@@ -83,10 +83,11 @@ pub use utterance_content::*;
 
 // Re-export word types at content level
 pub use word::{
-    CADelimiter, CADelimiterType, CAElement, CAElementType, FormType, UnderlineMarker, Word,
-    WordCategory, WordCliticBoundary, WordCompoundMarker, WordContent, WordContents,
-    WordLanguageMarker, WordLengthening, WordPhonetic, WordShortening, WordStressMarker,
-    WordStressMarkerType, WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
+    CADelimiter, CADelimiterType, CAElement, CAElementType, FormMarkerPayload, FormType,
+    UndeclaredFormMarker, UnderlineMarker, Word, WordCategory, WordCliticBoundary,
+    WordCompoundMarker, WordContent, WordContents, WordLanguageMarker, WordLengthening,
+    WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType, WordSyllablePause,
+    WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
 
 // Re-export types needed by submodules via super::

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-07 10:59 EDT
+**Last modified:** 2026-08-11 16:20 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -155,11 +155,64 @@ is right.
 
 Not a licence to rewrite: apply it to what you touch and to new design.
 
-**Every touch is the mechanism.** There is no separate type-hygiene project
-before 1.0 and there will not be one. Every bug fix, every refactor, and every
-drive-by reading of code you happened to open carries the same standing
-obligation: leave the types better than you found them, and delete whatever the
-improved type has just made impossible to fail.
+**FABRICATED VALUES ARE BANNED, IN NEW CODE AND OLD (maintainer, 2026-08-11).**
+A fabricated value is one the code INVENTS because a total function was forced
+to return something when it had nothing true to return. It is not a style
+question: every instance is a wrong answer that type-checks.
+
+Found and removed in a single week: `_ => Separator::Comma`,
+`_ => Terminator::Period`, `_ => PauseDuration::Short`, `unwrap_or("")` for an
+event, `Freecode(marker_text)` for an orphaned annotation (which made a whole
+invalid utterance read as VALID, because a freecode is legal content and
+silences everything after it), and a `SpecFile { path: PathBuf::new(), content:
+String::new() }` built solely to reach one accessor.
+
+**The cure is always the same: record the fact where it is known.** The parser
+knows which token it matched, so carry that instead of choosing a plausible
+variant downstream. Where the truth is genuinely "unknown" or "invalid", say so
+with a variant or a `Result`; never with a value that reads as data.
+
+**The enforcement is a lint, not this paragraph.** The largest mechanically
+detectable class is a catch-all arm over a closed enum, which is exactly
+`clippy::wildcard_enum_match_arm`. That lint is denied PER FILE and added as
+each file is cleaned, so a new catch-all in a cleaned file is a compile error.
+`talkbank-parser-tests/src/content_catch_alls.rs` is the inventory of what is
+not yet protected, with a both-directions ratchet; as of 2026-08-11, 19 files
+are protected and **21 remain on `UNPROTECTED`**. Working that list down is the
+concrete form of this ban, and it is real work, not housekeeping: four shipped
+defects in that module's own doc were catch-alls.
+
+**Shapes the lint cannot see, which are on you:** `unwrap_or(<literal>)` and
+`unwrap_or_default()` standing in for a real answer; a struct literal with empty
+placeholder fields; a `Default` impl on a type whose wrong value is invisible; a
+sentinel that is also a legal value. For each, ask what would notice if the
+value were wrong. If the answer is a reviewer, it is fabricated.
+
+**Every touch is a mechanism, and it is the FLOOR, not the ceiling.** Every bug
+fix, every refactor, and every drive-by reading of code you happened to open
+carries the same standing obligation: leave the types better than you found
+them, and delete whatever the improved type has just made impossible to fail.
+
+This paragraph used to end "there is no separate type-hygiene project before 1.0
+and there will not be one." That was measured wrong, on its own terms, in the
+four days after it was written: `Span::DUMMY` went 383 to 385 and
+`new_unchecked` 306 to 318, over exactly the incidental touches it prescribes.
+Incidental work fixes what it passes and nothing sequences what it does not, so
+a rule that relies on it alone loses ground on anything nobody happened to open.
+**A sequenced programme therefore runs alongside it**, in waves, each landing
+one named type, naming the tests that type retires, and passing the corpus
+differential before it ships. The two are not alternatives: the programme
+sequences the load-bearing types, and the every-touch rule covers everything the
+programme will never reach. Ask the maintainer for the current wave order.
+
+**A ratchet that only `main` performs is not a ratchet.** Same failure one layer
+up, found the same day: `audit_content_catch_alls` held its path-set check
+inside `main()`, and CI compiles a binary without ever running it, so the check
+asserted nothing anywhere while every doc citing it called it a gate. Moving the
+assertion into a `#[test]` was half the fix; the other half was that the crate
+sets `test = false` on every `[[bin]]`, which is target SELECTION and silently
+excluded it from `--tests` as well. When you write a gate, run it, then break it
+on purpose and watch it fail, before believing any claim that rests on it.
 
 **The test half is an explicit pre-1.0 goal: remove as many tests as possible
 by making illegal states unrepresentable.** A test guarding an invariant is a
@@ -344,6 +397,17 @@ Data flows: **spec** (source of truth) → **grammar** → **crates**
 Two Cargo workspaces: the root, and `spec/` (`spec/tools`,
 `spec/runtime-tools`); use the right manifest path for spec tooling.
 Shared symbols generate from `spec/symbols/symbol_registry.json`.
+
+**Closed vocabularies have ONE owner in `spec/`, and every site that names
+them is generated.** Shared symbols come from
+`spec/symbols/symbol_registry.json`; the CHAT special-form markers (`@b`,
+`@k`, `@z:label`) come from `spec/form_markers/form_marker_registry.json`
+(`just form-markers-gen`; see that directory's README). Before adding a list
+of a closed set anywhere, including a comment or a doc, ask whether it can be
+generated instead, and if it cannot, whether it can be a link. The form-marker
+set was spelled out in SIXTEEN places, three of which were already wrong when
+the registry was built, two of them wrong within an hour of a session that
+corrected the others. A copy nobody reads drifts first and silently.
 Parser-backend selection, the shared `ChatParser` trait, equivalence
 testing, and the re2c oracle workflow:
 `book/src/architecture/parser-backends.md` and

@@ -27,6 +27,8 @@ use super::conversion::{to_diagnostics_batch, to_diagnostics_batch_with_context}
 use super::text_diff::{compute_text_changed_range, compute_text_diff_span};
 use dashmap::DashMap;
 use std::sync::Arc;
+use talkbank_model::model::FileStem;
+use talkbank_model::model::TranscriptName;
 use talkbank_model::model::{ChatFile, Line};
 use talkbank_model::{ErrorCollector, Severity};
 use tower_lsp::Client;
@@ -74,11 +76,18 @@ pub(crate) async fn validate_and_publish(
 
     let diagnostics = match language_services.with_parser(|parser| {
         'diagnostics: {
-            // Extract filename from URI for E531 validation
-            let filename = uri
+            // Name the transcript after the document's URI, so the rules that
+            // compare it against `@Media` (E531) run in the editor too. An
+            // unsaved or oddly-named buffer genuinely has no `.cha` name, and
+            // `Anonymous` says so rather than leaving the reader to work out
+            // what a `None` filename switched off.
+            let name = uri
                 .path_segments()
                 .and_then(|mut segments| segments.next_back())
-                .and_then(|f| f.strip_suffix(".cha"));
+                .and_then(|f| f.strip_suffix(".cha"))
+                .map_or(TranscriptName::Anonymous, |stem| {
+                    TranscriptName::Named(FileStem::from_str(stem))
+                });
 
             let old_tree = parse_trees.get(&uri).map(|entry| entry.clone());
             let old_chat_file = chat_files
@@ -297,13 +306,13 @@ pub(crate) async fn validate_and_publish(
                                     build_validation_cache_reuse_headers(
                                         &mut chat_file,
                                         &old_cache,
-                                        filename,
+                                        name,
                                     )
                                 } else {
-                                    build_validation_cache(&mut chat_file, filename)
+                                    build_validation_cache(&mut chat_file, name)
                                 }
                             } else {
-                                build_validation_cache(&mut chat_file, filename)
+                                build_validation_cache(&mut chat_file, name)
                             };
                             let errors = cache.all_errors();
 
@@ -480,7 +489,7 @@ pub(crate) async fn validate_and_publish(
                                 path = "splice",
                                 "LSP: no existing cache, falling back to full build"
                             );
-                            let cache = build_validation_cache(&mut chat_file, filename);
+                            let cache = build_validation_cache(&mut chat_file, name);
                             let errors = cache.all_errors();
                             let diagnostics = to_diagnostics_batch_with_context(
                                 &errors.iter().collect::<Vec<_>>(),
@@ -544,12 +553,12 @@ pub(crate) async fn validate_and_publish(
                             path = "fallback-full",
                             "LSP: reusing header validation (headers unchanged)"
                         );
-                        build_validation_cache_reuse_headers(&mut chat_file, &old_cache, filename)
+                        build_validation_cache_reuse_headers(&mut chat_file, &old_cache, name)
                     } else {
-                        build_validation_cache(&mut chat_file, filename)
+                        build_validation_cache(&mut chat_file, name)
                     }
                 } else {
-                    build_validation_cache(&mut chat_file, filename)
+                    build_validation_cache(&mut chat_file, name)
                 };
                 let errors = cache.all_errors();
 

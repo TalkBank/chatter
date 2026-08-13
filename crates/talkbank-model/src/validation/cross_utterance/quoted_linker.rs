@@ -8,8 +8,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SelfCompletion_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
+use super::FileUtterances;
 use super::helpers::has_quoted_linker;
-use crate::model::{Terminator, Utterance};
+use crate::model::Terminator;
 use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
 /// Validates the `+"` linker against surrounding same-speaker quotation context.
@@ -20,14 +21,16 @@ use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 /// Reachable only when `enable_quotation_validation` is set (the
 /// `--strict-linkers` path); the call site in `cross_utterance/mod.rs` is
 /// always compiled, so no `#[allow(dead_code)]` is needed.
-pub(super) fn check_quoted_linker(utterances: &[Utterance], idx: usize) -> Vec<ParseError> {
+pub(super) fn check_quoted_linker(utterances: &FileUtterances<'_>, idx: usize) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let utterance = &utterances[idx];
+    let Some(utterance) = utterances.get(idx) else {
+        return Vec::new();
+    };
     let speaker = utterance.main.speaker.as_str();
 
     // Check Pattern A: Look backward for +"/. or +"
     let mut pattern_a_valid = false;
-    for prev_utt in utterances[..idx].iter().rev() {
+    for prev_utt in utterances.preceding(idx) {
         if prev_utt.main.speaker.as_str() == speaker {
             // Check if previous same-speaker utterance ended with +"/.
             if let Some(ref term) = prev_utt.main.content.terminator
@@ -48,7 +51,7 @@ pub(super) fn check_quoted_linker(utterances: &[Utterance], idx: usize) -> Vec<P
 
     // Check Pattern B: Look forward for +".
     let mut pattern_b_valid = false;
-    for next_utt in utterances[idx + 1..].iter() {
+    for next_utt in utterances.following(idx) {
         if next_utt.main.speaker.as_str() == speaker {
             // Check if this or a future same-speaker utterance ends with +".
             if let Some(ref term) = next_utt.main.content.terminator

@@ -5,6 +5,7 @@
 //! - [Participants header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)
 //! - [ID header](https://talkbank.org/0info/manuals/CHAT.html#ID_Header)
 
+use super::transcript_name::TranscriptName;
 use crate::model::{ChatOptionFlags, Header, LanguageCodes, MediaHeader, Participant, SpeakerCode};
 use crate::validation::{NotValidated, Validate, Validated, ValidationContext, ValidationState};
 use crate::{ErrorSink, LineMap};
@@ -301,10 +302,10 @@ impl ChatFile<NotValidated> {
     pub fn validate_into(
         self,
         errors: &impl ErrorSink,
-        filename: Option<&str>,
+        name: TranscriptName<'_>,
     ) -> ChatFile<Validated> {
         // Run validation, streaming errors
-        self.validate(errors, filename);
+        self.validate(errors, name);
 
         // Convert to Validated state
         self.change_state()

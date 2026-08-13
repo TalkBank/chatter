@@ -11,6 +11,7 @@ Nested background with identical label
 - **Level**: header
 - **Layer**: validation
 - **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 

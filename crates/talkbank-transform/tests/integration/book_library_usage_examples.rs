@@ -146,6 +146,11 @@ fn book_serializing_to_json() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Book example: "Custom Error Handling", implementing the
 /// `ErrorSink` trait against the published `ParseError` shape.
+///
+/// SURVIVES: wire format, in the documentation sense. The assertion is that it
+/// COMPILES: a reader copying this out of the book gets code that builds
+/// against the current public API. A change to `ErrorSink`'s shape breaks this
+/// file, which is the point, and no runtime assertion would add to it.
 #[test]
 fn book_custom_error_handling() {
     struct MyErrorHandler;

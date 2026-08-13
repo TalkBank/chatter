@@ -146,9 +146,12 @@ impl<'a> Chain<'a> {
             Chain::Word(word) => ContentItem::Word(word),
             Chain::Event(event, annotations) => {
                 if annotations.is_empty() {
-                    ContentItem::Event(vec![event])
+                    ContentItem::Event(event.text())
                 } else {
-                    ContentItem::AnnotatedEvent { event, annotations }
+                    ContentItem::AnnotatedEvent {
+                        event: event.text(),
+                        annotations,
+                    }
                 }
             }
             Chain::Group(contents, annotations) => ContentItem::Group(Group {
@@ -160,9 +163,17 @@ impl<'a> Chain<'a> {
     }
 }
 
-/// Convert a raw annotation token to a typed `ParsedAnnotation`.
-pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> ParsedAnnotation<'a> {
-    match tok {
+/// Convert an annotation token to a typed `ParsedAnnotation`, or `None`.
+///
+/// THE list of which token is an annotation. It used to end in a `panic!`,
+/// defended by a comment asserting that `is_annotation`'s separate
+/// seventeen-discriminant list exactly covered these eighteen arms. Nothing
+/// bound the two, so an annotation token added to the lexer and missed in one
+/// of them either panicked the parser or admitted a token the converters
+/// mishandle. `Option` says the same thing without a panic in a parser, and
+/// `is_annotation` is derived from it rather than repeating it.
+pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation<'a>> {
+    Some(match tok {
         Token::RetracePartial(_) => ParsedAnnotation::Retrace(RetraceKindParsed::Partial),
         Token::RetraceComplete(_) => ParsedAnnotation::Retrace(RetraceKindParsed::Complete),
         Token::RetraceMultiple(_) => ParsedAnnotation::Retrace(RetraceKindParsed::Multiple),
@@ -183,40 +194,15 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> ParsedAnnotation<'a> {
         Token::Replacement(s) => ParsedAnnotation::Replacement(s),
         Token::Langcode(s) => ParsedAnnotation::Langcode(s),
         Token::Postcode(s) => ParsedAnnotation::Postcode(s),
-        // Caller-contract invariant: `token_to_parsed_annotation` is
-        // only called from `parser/main_tier.rs` after
-        // `is_annotation(d)` returns true. The token kinds enumerated
-        // above exhaust `is_annotation`'s positive set (verified by
-        // `parser/classify.rs::is_annotation` below). Reaching this
-        // arm means `is_annotation` and the variant set drifted
-        // apart, caught by the parser's golden-corpus equivalence
-        // tests before merge.
-        #[allow(clippy::panic)]
-        other => panic!("token_to_parsed_annotation: unexpected {:?}", other.text()),
-    }
+        _ => return None,
+    })
 }
 
 // ── Token classification (from grammar.js rule definitions) ─────
 
 pub fn is_terminator(d: Option<TokenDiscriminants>) -> bool {
-    matches!(
-        d,
-        Some(
-            TokenDiscriminants::Period
-                | TokenDiscriminants::Question
-                | TokenDiscriminants::Exclamation
-                | TokenDiscriminants::TrailingOff
-                | TokenDiscriminants::Interruption
-                | TokenDiscriminants::SelfInterruption
-                | TokenDiscriminants::InterruptedQuestion
-                | TokenDiscriminants::BrokenQuestion
-                | TokenDiscriminants::QuotedNewLine
-                | TokenDiscriminants::QuotedPeriodSimple
-                | TokenDiscriminants::SelfInterruptedQuestion
-                | TokenDiscriminants::TrailingOffQuestion
-                | TokenDiscriminants::BreakForCoding
-        )
-    )
+    d.and_then(crate::ast::TerminatorKindParsed::from_discriminant)
+        .is_some()
 }
 
 pub fn is_linker(d: Option<TokenDiscriminants>) -> bool {
@@ -230,54 +216,6 @@ pub fn is_linker(d: Option<TokenDiscriminants>) -> bool {
                 | TokenDiscriminants::LinkerSelfCompletion
                 | TokenDiscriminants::CaNoBreakLinker
                 | TokenDiscriminants::CaTechnicalBreakLinker
-        )
-    )
-}
-
-pub fn is_annotation(d: Option<TokenDiscriminants>) -> bool {
-    matches!(
-        d,
-        Some(
-            TokenDiscriminants::RetraceComplete
-                | TokenDiscriminants::RetracePartial
-                | TokenDiscriminants::RetraceMultiple
-                | TokenDiscriminants::RetraceReformulation
-                | TokenDiscriminants::ScopedStressing
-                | TokenDiscriminants::ScopedContrastiveStressing
-                | TokenDiscriminants::ScopedUncertain
-                | TokenDiscriminants::ExcludeMarker
-                | TokenDiscriminants::ErrorMarkerAnnotation
-                | TokenDiscriminants::OverlapPrecedes
-                | TokenDiscriminants::OverlapFollows
-                | TokenDiscriminants::ExplanationAnnotation
-                | TokenDiscriminants::ParaAnnotation
-                | TokenDiscriminants::AltAnnotation
-                | TokenDiscriminants::PercentAnnotation
-                | TokenDiscriminants::Replacement
-                | TokenDiscriminants::Langcode
-        )
-    )
-}
-
-pub fn is_separator(d: Option<TokenDiscriminants>) -> bool {
-    matches!(
-        d,
-        Some(
-            TokenDiscriminants::Comma
-                | TokenDiscriminants::Semicolon
-                | TokenDiscriminants::Colon
-                | TokenDiscriminants::CaContinuationMarker
-                | TokenDiscriminants::TagMarker
-                | TokenDiscriminants::VocativeMarker
-                | TokenDiscriminants::UnmarkedEnding
-                | TokenDiscriminants::UptakeSymbol
-                | TokenDiscriminants::CaNoBreak
-                | TokenDiscriminants::CaTechnicalBreak
-                | TokenDiscriminants::RisingToHigh
-                | TokenDiscriminants::RisingToMid
-                | TokenDiscriminants::LevelPitch
-                | TokenDiscriminants::FallingToMid
-                | TokenDiscriminants::FallingToLow
         )
     )
 }

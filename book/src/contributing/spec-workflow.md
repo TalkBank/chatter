@@ -1,97 +1,83 @@
 # Spec Workflow
 
 **Status:** Current
-**Last modified:** 2026-05-29 17:50 EDT
+**Last modified:** 2026-08-12 20:35 EDT
 
-Specifications in `spec/` are the source of truth for CHAT format intent, grammar
-examples, and validation/error contracts.
+How to change `spec/` and leave the repository consistent. For what the fields
+MEAN, read [Spec System](../architecture/spec-system.md) first; this page is
+the procedure.
 
-## Adding a Construct Spec
+Every command here is written out. If a step here disagrees with what the
+tools do, the tools are right and this page is a bug.
 
-Construct specs define valid CHAT patterns with expected parse trees.
+## Before and after any spec change
 
-### 1. Create the Spec File
-
-Create a new markdown file in the appropriate `spec/constructs/` subdirectory:
-
-```text
-spec/constructs/
-├── header/         # Header-related constructs
-├── main_tier/      # Main tier patterns
-├── tiers/          # Dependent tier patterns
-├── utterance/      # Utterance-level patterns
-└── word/           # Word syntax patterns
+```bash
+just spec-status      # what state the spec system is in, derived from the gates
 ```
 
-### 2. Write the Spec
+Run it before you start, so you know what "unchanged" looks like, and again at
+the end. A change that moves the "assert NOTHING" or "deferred" counts in the
+wrong direction is worth a second look.
 
-```markdown
+## Adding a construct spec
+
+A construct spec is a VALID fragment plus the tree it must parse to.
+
+**1. Write the file** under the right `spec/constructs/` subdirectory
+(`header/`, `main_tier/`, `tiers/`, `utterance/`, `word/`):
+
+````markdown
 # my_example
 
 Description of what this example demonstrates.
 
 ## Input
 
-\```utterance
+```utterance
 *CHI:	hello world .
-\```
+```
 
 ## Expected CST
 
-\```cst
+```cst
 (utterance
   (main_tier
     ...))
-\```
+```
 
 ## Metadata
 
 - **Level**: utterance
 - **Category**: main_tier
+````
+
+The fence label (`utterance` here) names a template in `spec/tools/templates/`
+that wraps the fragment into a full CHAT file. If no template matches, create
+one; the generator fails rather than guessing.
+
+**2. Get the real CST** rather than writing one by hand:
+
+```bash
+cd grammar && tree-sitter parse <a file containing your input>
 ```
 
-The code fence label (e.g., `utterance`, `mor_dependent_tier`) selects which
-template wraps the input into a full CHAT file.
+Copy the tree, dropping byte positions and field names.
 
-### 3. Generate the CST
+**3. Regenerate and verify** (see "Regenerating" below).
 
-Parse your input with tree-sitter to get the actual CST, then copy it as the Expected CST (stripping positions and field names).
+## Adding an error spec
 
-### 4. Regenerate The Affected Generated Artifacts
+An error spec is INVALID CHAT plus the codes it must produce.
 
-The predecessor monorepo wrapped this step as `make test-gen`. That root
-wrapper is not yet ported into this repo, so follow `spec/CLAUDE.md` and run
-only the generator command(s) relevant to the artifacts you intentionally
-changed.
+**1. Write the file** in `spec/errors/`, named `E###_<slug>.md`:
 
-For isolated grammar additions, keep the change small:
-
-1. Add or adjust one grammar example.
-2. Add one full-file fixture if the change matters in context.
-3. Regenerate only the artifacts that truly changed.
-
-## Adding an Error Spec
-
-Error specs define invalid CHAT patterns with expected error codes.
-
-### 1. Create the Spec File
-
-Error specs live in `spec/errors/`, named by error code. The
-convention is `E###_auto.md` (or `E###_<short-slug>.md`); for example
-`spec/errors/E301_auto.md` covers "Empty speaker code".
-
-### 2. Write the Spec
-
-The actual on-disk format (per `spec/errors/E301_auto.md`) uses
-bolded metadata keys; there is no `Name` field and severity is
-implicit in the error-code numbering:
-
-```markdown
+````markdown
 # E301: Empty speaker code
 
 ## Description
 
-Empty speaker code
+Empty speaker code.
 
 ## Metadata
 
@@ -99,6 +85,8 @@ Empty speaker code
 - **Category**: Main tier validation
 - **Level**: utterance
 - **Layer**: parser
+- **Kind**: Invalidity
+- **Status**: implemented
 
 ## Example 1
 
@@ -106,53 +94,111 @@ Empty speaker code
 **Trigger**: Main tier with * but no speaker code
 **Expected Error Codes**: E301
 
-\```chat
+```chat
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-...
-\```
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*:	hello .
+@End
+```
+````
+
+**Four things decide whether your spec asserts anything**, and each is easy to
+get wrong. They are covered in full in
+[Spec System](../architecture/spec-system.md); in short:
+
+- **`Expected Error Codes` is the only field that asserts.** Omit it and the
+  example can never fail. It is a SUBSET check, so extra emitted codes pass.
+- **`Layer` decides what the generated test can see.** A `parser`-layer test
+  sees parse diagnostics only, so a validation-layer code declared there can
+  never be observed.
+- **`Status: not_implemented` DEFERS the example** and `#[ignore]`s its
+  generated tests. Omitting `Status` entirely defaults to `implemented`.
+- **`Source`'s stem names the transcript**, which is what rules about the
+  file's own name (E531) compare against.
+
+**Write the failing case first.** A new error spec should fail before the rule
+exists; that is what proves the fixture actually triggers it.
+
+## Regenerating
+
+Run only the generators whose artifacts your change affects. All commands are
+from the repository root.
+
+```bash
+# tree-sitter corpus tests
+cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
+  --output-dir grammar/test/corpus/generated \
+  --template-dir spec/tools/templates
+
+# Rust parser tests
+cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
+  --output-dir crates/talkbank-parser-tests/tests/integration/generated
+
+# validation fixture corpus + manifest
+cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
+  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+
+# optional local error-reference pages
+cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
 ```
 
-### Key Metadata Fields
+Never hand-edit anything under a `generated/` directory. The corpus generator
+wipes its output directory wholesale and refuses to clear one lacking its
+`.generated-output-dir` marker.
 
-- **Layer: parser**: the error is caught during `parser.parse_chat_file()` (file fails to parse)
-- **Layer: validation**: the error is caught by `validate_with_alignment()` after successful parse
-- **Status: not_implemented**: generates `#[ignore]` tests (validation logic not yet coded)
+## Verifying
 
-### 3. Regenerate The Affected Artifacts
+```bash
+just spec-status                                  # the derived summary
+cargo test --manifest-path spec/Cargo.toml --workspace   # every spec-side gate
+just test                                         # the main workspace
+```
 
-Regenerate the affected artifacts with the current spec-tool commands from
-`spec/CLAUDE.md`, then run the concrete verification commands from
-[Setup](setup.md) / [Developer Verification Checks](dev-checks.md).
+If your change touched the grammar, follow the full
+[Grammar Workflow](grammar-workflow.md) as well: a
+`grammar.js` edit needs `tree-sitter generate` before any parser behaviour can
+be trusted.
 
-## Updating the Symbol Registry
+## Updating a registry
 
-The symbol registry at `spec/symbols/symbol_registry.json` defines character sets used by the grammar and Rust crates.
+Two closed vocabularies live under `spec/`, each generating every site that
+names it. Neither is edited anywhere but its registry.
+
+```bash
+just symbols-gen        # spec/symbols/symbol_registry.json
+just form-markers-gen   # spec/form_markers/form_marker_registry.json
+```
 
 ```mermaid
 flowchart TD
-    registry["Edit spec/symbols/\nsymbol_registry.json"]
-    validate["validate_symbol_registry.js\n(structure check)"]
-    gen_grammar["Generate grammar symbols\n(for tree-sitter)"]
-    gen_rust["generate_rust_symbol_sets.js\n→ talkbank-model/src/generated/symbol_sets.rs\n→ spec/tools/src/generated/symbol_sets.rs"]
-    fmt["rustfmt\n(format generated code)"]
-    verify["Run current symbol generators\nthen local verification sweep"]
+    registry["Edit the registry JSON"]
+    gen["Run its generator\n(loading validates; there is no separate check step)"]
+    fmt["Generator runs rustfmt on Rust output"]
+    gate["Drift gate compares committed output\nagainst what the generator produces"]
 
-    registry --> validate --> gen_grammar & gen_rust
-    gen_rust --> fmt --> verify
-    gen_grammar --> verify
+    registry --> gen --> fmt --> gate
 ```
 
-After editing, run the current symbol-generation commands from `spec/CLAUDE.md`,
-then regenerate any dependent grammar/tests/docs outputs if the symbol change
-affects them.
+The generators format their own Rust output deliberately: otherwise `just fmt`
+and the generator each rewrite the same bytes and the drift gate fails forever,
+with both sides correct.
 
-## Common Mistakes
+Each registry's README covers its authorities and the follow-ups its generator
+cannot do:
+[`spec/symbols/README.md`](https://github.com/TalkBank/chatter/blob/main/spec/symbols/README.md),
+[`spec/form_markers/README.md`](https://github.com/TalkBank/chatter/blob/main/spec/form_markers/README.md).
 
-- **Editing generated files**: never edit `grammar/test/corpus/` or `crates/talkbank-parser-tests/tests/integration/generated/` by hand
-- **Regenerating reflexively**: use regeneration when generated artifacts
-  changed, not as a substitute for thinking about what kind of test authority
-  the change really needs
-- **Wrong layer**: parser-layer specs expect parse failure; validation-layer specs expect parse success + error report
+## Common mistakes
+
+- **Editing generated files.** Change the spec or the registry, then regenerate.
+- **Declaring no `Expected Error Codes`.** The example is then parsed and
+  nothing more. `just spec-status` counts these.
+- **Declaring a validation-layer code in a parser-layer spec.** The generated
+  test cannot see it.
+- **Flipping `Status` to `implemented` without regenerating.** The generated
+  tests stay `#[ignore]`d, so nothing you just enabled actually runs.
+- **Regenerating reflexively.** Regeneration is for artifacts that genuinely
+  changed, not a substitute for deciding what the change needs.

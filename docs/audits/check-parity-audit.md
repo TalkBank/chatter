@@ -4,13 +4,13 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 
 ## Executive Summary
 
-- CHECK rules parsed: `153`
-- Overlap with TalkBank codes: `89`
-- CHECK rules missing direct TalkBank mapping: `64`
-- Semantic parity `full`: `89`
-- Behavioral parity `full`: `78`
+- CHECK rules parsed: `143`
+- Overlap with TalkBank codes: `87`
+- CHECK rules missing direct TalkBank mapping: `56`
+- Semantic parity `full`: `87`
+- Behavioral parity `full`: `76`
 - Intentional divergence (semantic full + behavioral partial due to CHECK anomalies): `11`
-- TalkBank enhancements beyond CHECK (no mapped CHECK rule): `106`
+- TalkBank enhancements beyond CHECK (no mapped CHECK rule): `123`
 
 ## Method
 
@@ -40,6 +40,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 13 | Duplicate speaker declaration. | check.cpp (generated reference) | `E549` | full | full | equal | none | no action | P3 |
 | 14 | Spaces before tier code. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 15 | Illegal role. Please see "depfile.cut" for list of roles. | check.cpp (generated reference) | `E532` | full | full | equal | none | no action | P3 |
+| 16 | Illegal use of extended characters in speaker names. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 17 | Tier is not declared in depfile file. | check.cpp (generated reference) | `E525`, `E605` | full | full | equal | none | no action | P3 |
 | 18 | Speaker / is not specified in a participants list. | check.cpp (generated reference) | `E308`, `E522` | full | full | equal | none | no action | P3 |
 | 19 | Illegal use of delimiter in a word. / Or a SPACE should be added after it. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
@@ -51,15 +52,13 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 25 | Unmatched > found on the tier. | check.cpp (generated reference) | `E348` | full | partial | TalkBank stricter | intentional | no action | P2 |
 | 26 | Unmatched { found on the tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 27 | Unmatched } found on the tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
-| 28 | Unmatched ( found on the tier. | check.cpp (generated reference) | `E313` | full | full | equal | none | no action | P3 |
-| 29 | Unmatched ) found on the tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 30 | Text is illegal. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 31 | Missing text after the colon. | check.cpp (generated reference) | `E305` | full | full | equal | none | no action | P3 |
 | 32 | Code is not declared in depfile. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 33 | Either illegal date or time or symbol is not declared in depfile. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 34 | Illegal date representation. | check.cpp (generated reference) | `E518` | full | full | equal | none | no action | P3 |
 | 35 | Illegal time representation. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
-| 36 | Utterance delimiter must be at the end of the utterance. / Use "fixit" program to break up this tier. | check.cpp (generated reference) | `E305` | full | full | equal | none | no action | P3 |
+| 36 | Utterance delimiter must be at the end of the utterance. | check.cpp (generated reference) | `E305` | full | full | equal | none | no action | P3 |
 | 37 | Undeclared prefix. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 38 | Numbers should be written out in words. | check.cpp (generated reference) | `E220` | full | full | equal | none | no action | P3 |
 | 42 | Use either "&" or "()", but not both. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
@@ -69,7 +68,6 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 46 | This @Eg does not have matching @Bg. | check.cpp (generated reference) | `E527` | full | full | equal | none | no action | P3 |
 | 47 | Numbers are not allowed inside words. | check.cpp (generated reference) | `E220` | full | full | equal | none | no action | P3 |
 | 48 | Illegal character(s) found. / Illegal character(s) '%s' found. | check.cpp (generated reference) | `E202`, `E207`, `E212`, `E243`, `E252`, `E330`, `E364`, `E375` | full | full | equal | none | no action | P3 |
-| 49 | Upper case letters are not allowed inside a word. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 50 | Redundant utterance delimiter. | check.cpp (generated reference) | `E305` | full | full | equal | none | no action | P3 |
 | 51 | expected [ ]; < > should be followed by [ ] | check.cpp (generated reference) | `E347`, `E348` | full | full | equal | none | no action | P3 |
 | 52 | This item must be preceded by text. / Item '%s' must be preceded by text. | check.cpp (generated reference) | `E370` | full | full | equal | none | no action | P3 |
@@ -78,7 +76,7 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 55 | Unmatched ( found in the word. | check.cpp (generated reference) | `E231` | full | full | equal | none | no action | P3 |
 | 56 | Unmatched ) found in the word. | check.cpp (generated reference) | `E231` | full | full | equal | none | no action | P3 |
 | 57 | Please add space between word and pause symbol. / Please add space between word and pause symbol: '%s'. | check.cpp (generated reference) | `E243` | full | full | equal | none | no action | P3 |
-| 59 | Expected second %c character. / Expected second %s character. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
+| 59 | Expected second %s character. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 60 | "@ID:" tier is missing in the file. Please run "insert" in Commands window on this data file. | check.cpp (generated reference) | `E522`, `E523` | full | full | equal | none | no action | P3 |
 | 61 | "@Participants:" tier is expected here. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 62 | Missing language information. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
@@ -94,36 +92,29 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 72 | This item must precede the utterance delimiter or CA delimiter. / Item '%s' must precede the utterance delimiter or CA delimiter. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 73 | This item must be preceded by text or '0'. / Item '%s' must be preceded by text or '0'. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 75 | This item must follow after utterance delimiter. / Item '%s' must follow after utterance delimiter. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
-| 76 | Only one letter is allowed with '@l'. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 77 | "@Languages:" tier is expected here. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 78 | This item must be used at the beginning of tier. / Item '%s' must be used at the beginning of tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 79 | Only one occurrence of \| symbol per word is allowed. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 80 | There must be at least one occurrence of '\|'. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
-| 81 | Bullet must follow utterance delimiter or be followed by end-of-line. | check.cpp (generated reference) | `E360` | full | full | equal | none | no action | P3 |
 | 82 | BEG mark of bullet must be smaller than END mark. | check.cpp (generated reference) | `E361`, `E362` | full | full | equal | none | no action | P3 |
 | 83 | Current BEG time is smaller than previous' tier BEG time | check.cpp (generated reference) | `E362`, `E701` | full | full | equal | none | no action | P3 |
 | 84 | Current BEG time is smaller than previous' tier END time by %ld msec. | check.cpp (generated reference) | `E704`, `E729` | full | full | equal | none | no action | P3 |
-| 85 | Gap found between current BEG time and previous' tier END time. | check.cpp (generated reference) | `E700`, `E730` | full | full | equal | none | no action | P3 |
+| 85 | Gap found between current BEG time and previous' tier END time. | check.cpp (generated reference) | `E730` | full | full | equal | none | no action | P3 |
 | 86 | Illegal character. Please re-enter it using Unicode standard. | check.cpp (generated reference) | `E315` | full | full | equal | none | no action | P3 |
 | 87 | Malformed structure. | check.cpp (generated reference) | `E600`, `E713` | full | full | equal | none | no action | P3 |
-| 88 | Illegal use of compounds and special form markers. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 89 | Missing or extra or wrong characters found in bullet. | check.cpp (generated reference) | `E360`, `E361` | full | full | equal | none | no action | P3 |
 | 90 | Illegal time representation inside a bullet. | check.cpp (generated reference) | `E360`, `E361` | full | full | equal | none | no action | P3 |
 | 91 | Blank lines are not allowed. | check.cpp (generated reference) | `E303` | full | full | equal | none | no action | P3 |
-| 92 | This item must be followed by space or end-of-line. / Item '%s' must be followed by space or end-of-line. | check.cpp (generated reference) | `E243`, `W210`, `W211` | full | full | equal | none | no action | P3 |
-| 93 | This item must be preceded by SPACE. / Item '%s' must be preceded by SPACE. | check.cpp (generated reference) | `E243`, `W210`, `W211` | full | full | equal | none | no action | P3 |
+| 92 | This item must be followed by space or end-of-line. / Item '%s' must be followed by space or end-of-line. | check.cpp (generated reference) | `E243`, `E750`, `E751`, `E757` | full | full | equal | none | no action | P3 |
+| 93 | This item must be preceded by SPACE. / Item '%s' must be preceded by SPACE. | check.cpp (generated reference) | `E243`, `E750`, `E751`, `E757` | full | full | equal | none | no action | P3 |
 | 94 | Mismatch of speaker and %%mor: utterance delimiters. | check.cpp (generated reference) | `E705`, `E706`, `E707`, `E714`, `E715`, `E716`, `E718`, `E719`, `E720` | full | full | equal | none | no action | P3 |
-| 95 | Illegal use of capitalized words in compounds. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 96 | Word color is now illegal. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 97 | Illegal character inside parentheses. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 98 | Space is not allow in media file name inside bullets. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 99 | Extension is not allow at the end of media file name. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 100 | Commas at the end of PARTICIPANTS tier are not allowed. | check.cpp (generated reference) | `E550` | full | full | equal | none | no action | P3 |
-| 101 | This item must be followed or preceded by text. / Item '%s' must be followed or preceded by text. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 102 | Italic markers are no longer legal in CHAT. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 103 | Illegal use of both CA and IPA on "@Options:" tier. | check.cpp (generated reference) | `E533` | full | full | equal | none | no action | P3 |
-| 104 | Please select "CAfont" or "Ascender Uni Duo" font for CA file as per "@Options:" tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
-| 105 | Please select "Charis SIL" font for IPA file as per "@Options:" tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 106 | The whole code must be on one line. Please run chstring +q on this file. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 107 | Only single commas are allowed in tier. | check.cpp (generated reference) | `E258` | full | full | equal | none | no action | P3 |
 | 108 | All postcodes must precede final bullet. | check.cpp (generated reference) | `E363` | full | full | equal | none | no action | P3 |
@@ -136,10 +127,10 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 115 | Old bullets format found. Please run "fixbullets" program to fix this data. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 116 | Specifying Font for individual lines is illegal. Please open this file and save it again. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 117 | This character must be used in pairs. See if any are unmatched. / Character %s must be used in pairs. See if any are unmatched. | check.cpp (generated reference) | `E230`, `E242`, `E356`, `E357`, `E372` | full | partial | TalkBank stricter | intentional | no action | P2 |
-| 118 | Utterance delimiter must precede final bullet. | check.cpp (generated reference) | `E360` | full | full | equal | none | no action | P3 |
 | 119 | Missing word after code / Missing word after code "%s" | check.cpp (generated reference) | `E370` | full | full | equal | none | no action | P3 |
 | 120 | Please use three letter language code. / Please use "%s" language code instead. / Or see if "fixlang" CLAN command in commands window can fix codes automaticaly. | check.cpp (generated reference) | `E248` | full | full | equal | none | no action | P3 |
 | 121 | Language code not found in CLAN/lib/fixes/ISO-639.cut file. / Language code "%s" not found in "CLAN/lib/fixes/ISO-639.cut" file. / If it is a legal code, then please add it to "CLAN/lib/fixes/ISO-639.cut" file. | check.cpp (generated reference) | `E519` | full | full | equal | none | no action | P3 |
+| 122 | Language on @ID tier is not defined on "@Languages:" header tier. | check.cpp (generated reference) | `E519` | full | full | equal | none | no action | P3 |
 | 123 | Illegal character found in tier text. If it CA, then add "@Options: CA" / Illegal character '%s' found in tier text. If it CA, then add "@Options: CA" | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 124 | Please remove "unlinked" from @Media header. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 125 | "@Options" header must immediately follow "@Participants:" header. | check.cpp (generated reference) | `E543` | full | full | equal | none | no action | P3 |
@@ -162,22 +153,21 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | 142 | Speaker's role on @ID tier does not match role on @Participants: tier. | check.cpp (generated reference) | `E532` | full | full | equal | none | no action | P3 |
 | 143 | The @ID line needs 10 fields. | check.cpp (generated reference) | `E505` | full | full | equal | none | no action | P3 |
 | 144 | Either illegal SES field value or symbol is not declared in depfile. | check.cpp (generated reference) | `E546` | full | full | equal | none | no action | P3 |
-| 145 | This intonational marker should be outside paired markers. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 146 | The &= symbol must include some code after '=' character. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 147 | Undeclared special form marker in depfile. | check.cpp (generated reference) | `E203` | full | full | equal | none | no action | P3 |
 | 148 | Space character is not allowed before comma(,) character on "@Media:" header. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 149 | Illegal character located between a word and [...] code. / Illegal character '%s' located between a word and [...] code. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 150 | Illegal item located between a word and [...] code. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 151 | This word has only repetition segments. | check.cpp (generated reference) | `E370` | full | full | equal | none | no action | P3 |
+| 152 | Language is not defined on "@Languages:" header tier. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 153 | Age's month or day are missing initial zero. Please run "chstring +q +1" command on this file to fix this error. | check.cpp (generated reference) | `E517` | full | full | equal | none | no action | P3 |
-| 154 | Please add "unlinked" to @Media header. | check.cpp (generated reference) | None | none | none | TalkBank looser | bug-risk | add rule | P1 |
 | 155 | Please use "0word" instead of "(word)". / Please use "0%s" instead of "(%s)". | check.cpp (generated reference) | `E209`, `E212` | full | full | equal | none | no action | P3 |
 | 156 | Please replace ,, with F2-t („) character. | check.cpp (generated reference) | `E243` | full | full | equal | none | no action | P3 |
 | 157 | Media file name has to match datafile name. | check.cpp (generated reference) | `E531` | full | full | equal | none | no action | P3 |
 | 158 | [: ...] has to have real word, not 0... or &... or xxx. | check.cpp (generated reference) | `E390`, `E391` | full | full | equal | none | no action | P3 |
 | 159 | Pause markers should appear after retrace markers. | check.cpp (generated reference) | `E370` | full | full | equal | none | no action | P3 |
-| 160 | Space character is not allowed after '<' or before '>' character. | check.cpp (generated reference) | `E243`, `W210`, `W211` | full | full | equal | none | no action | P3 |
-| 161 | Space character is required before '[' code item. | check.cpp (generated reference) | `E243`, `W210`, `W211` | full | full | equal | none | no action | P3 |
+| 160 | Space character is not allowed after '<' or before '>' character. | check.cpp (generated reference) | `E243`, `E750`, `E751`, `E757` | full | full | equal | none | no action | P3 |
+| 161 | Space character is required before '[' code item. | check.cpp (generated reference) | `E243`, `E750`, `E751`, `E757` | full | full | equal | none | no action | P3 |
 
 ## Gaps: CHECK Rules Missing in TalkBank
 
@@ -187,11 +177,11 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `9`: Tier name is longer than %d. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `10`: Tier text is longer than %ld. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `14`: Spaces before tier code. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
+- CHECK `16`: Illegal use of extended characters in speaker names. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `19`: Illegal use of delimiter in a word. / Or a SPACE should be added after it. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `20`: Undeclared suffix in depfile. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `26`: Unmatched { found on the tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `27`: Unmatched } found on the tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `29`: Unmatched ) found on the tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `30`: Text is illegal. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `32`: Code is not declared in depfile. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `33`: Either illegal date or time or symbol is not declared in depfile. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
@@ -199,10 +189,9 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `37`: Undeclared prefix. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `42`: Use either "&" or "()", but not both. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `43`: The file must start with "@Begin" tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `49`: Upper case letters are not allowed inside a word. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `53`: Only one "@Begin" can be in a file. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `54`: Only one "@End" can be in a file. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `59`: Expected second %c character. / Expected second %s character. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
+- CHECK `59`: Expected second %s character. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `61`: "@Participants:" tier is expected here. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `62`: Missing language information. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `63`: Missing Corpus name. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
@@ -214,21 +203,15 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `72`: This item must precede the utterance delimiter or CA delimiter. / Item '%s' must precede the utterance delimiter or CA delimiter. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `73`: This item must be preceded by text or '0'. / Item '%s' must be preceded by text or '0'. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `75`: This item must follow after utterance delimiter. / Item '%s' must follow after utterance delimiter. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `76`: Only one letter is allowed with '@l'. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `77`: "@Languages:" tier is expected here. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `78`: This item must be used at the beginning of tier. / Item '%s' must be used at the beginning of tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `79`: Only one occurrence of | symbol per word is allowed. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `80`: There must be at least one occurrence of '|'. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `88`: Illegal use of compounds and special form markers. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `95`: Illegal use of capitalized words in compounds. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `96`: Word color is now illegal. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `97`: Illegal character inside parentheses. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `98`: Space is not allow in media file name inside bullets. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `99`: Extension is not allow at the end of media file name. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `101`: This item must be followed or preceded by text. / Item '%s' must be followed or preceded by text. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `102`: Italic markers are no longer legal in CHAT. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `104`: Please select "CAfont" or "Ascender Uni Duo" font for CA file as per "@Options:" tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `105`: Please select "Charis SIL" font for IPA file as per "@Options:" tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `106`: The whole code must be on one line. Please run chstring +q on this file. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `109`: Postcodes are not allowed on dependent tiers. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `111`: Illegal pause format. Pause has to have '.' / Pause needs '.' in '%s' or this item is in wrong location. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
@@ -239,12 +222,11 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `123`: Illegal character found in tier text. If it CA, then add "@Options: CA" / Illegal character '%s' found in tier text. If it CA, then add "@Options: CA" (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `124`: Please remove "unlinked" from @Media header. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `132`: Tabs should only be used to mark the beginning of lines. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `145`: This intonational marker should be outside paired markers. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `146`: The &= symbol must include some code after '=' character. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `148`: Space character is not allowed before comma(,) character on "@Media:" header. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `149`: Illegal character located between a word and [...] code. / Illegal character '%s' located between a word and [...] code. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 - CHECK `150`: Illegal item located between a word and [...] code. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
-- CHECK `154`: Please add "unlinked" to @Media header. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
+- CHECK `152`: Language is not defined on "@Languages:" header tier. (`check.cpp (generated reference)`) -> action: `add rule` (P1)
 
 ## Intentional Divergences (Behavioral Mismatch, Semantic Match)
 
@@ -264,59 +246,60 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 
 - `E001` `InternalError`
 - `E002` `TestError`
-- `E003` `EmptyString`
-- `E301` `MissingMainTier`
-- `E302` `MissingNode`
-- `E307` `InvalidSpeaker`
-- `E309` `UnexpectedSyntax`
-- `E310` `ParseFailed`
-- `E311` `UnexpectedNode`
-- `E314` `IncompleteAnnotation`
-- `E319` `UnparsableLine`
-- `E320` `UnparsableHeader`
-- `E321` `UnparsableUtterance`
-- `E322` `EmptyColon`
-- `E324` `UnrecognizedUtteranceError`
-- `E325` `UnexpectedUtteranceChild`
-- `E326` `UnexpectedLineType`
-- `E331` `UnexpectedNodeInContext`
-- `E340` `UnknownBaseContent`
-- `E341` `UnbalancedQuotationCrossUtterance`
-- `E342` `MissingRequiredElement`
-- `E344` `InvalidContentAnnotationNesting`
-- `E351` `MissingQuoteBegin`
-- `E352` `MissingQuoteEnd`
-- `E353` `MissingOtherCompletionContext`
-- `E354` `MissingTrailingOffTerminator`
-- `E355` `InterleavedContentAnnotations`
-- `E365` `MalformedTierContent`
-- `E366` `LongFeatureLabelMismatch`
-- `E369` `NonvocalLabelMismatch`
-- `E371` `PauseInPhoGroup`
-- `E373` `InvalidOverlapIndex`
-- `E376` `ReplacementParseError`
+- `E003` `UnknownVariant`
 - `E208` `EmptyReplacement`
 - `E210` `IllegalReplacementForFragment`
 - `E213` `UntranscribedInReplacement`
-- `E214` `EmptyAnnotatedContentAnnotations`
+- `E214` `UnknownVariant`
 - `E232` `InvalidCompoundMarkerPosition`
 - `E233` `EmptyCompoundPart`
 - `E244` `ConsecutiveStressMarkers`
 - `E245` `StressNotBeforeSpokenMaterial`
-- `E246` `LengtheningNotAfterSpokenMaterial`
+- `E246` `UnknownVariant`
 - `E247` `MultiplePrimaryStress`
 - `E249` `MissingLanguageContext`
 - `E250` `SecondaryStressWithoutPrimary`
-- `E251` `EmptyWordContentText`
-- `E254` `UndeclaredExplicitWordLanguage`
+- `E251` `UnknownVariant`
 - `E255` `WholeUtteranceLanguageSwitchShouldUsePrecode`
 - `E259` `CommaAfterNonSpokenContent`
+- `E301` `MissingMainTier`
+- `E302` `UnknownVariant`
+- `E307` `InvalidSpeaker`
+- `E309` `UnknownVariant`
+- `E310` `UnknownVariant`
+- `E311` `UnknownVariant`
+- `E313` `UnclosedParenthesis`
+- `E314` `IncompleteAnnotation`
+- `E319` `UnknownVariant`
+- `E320` `UnknownVariant`
+- `E321` `UnknownVariant`
+- `E322` `UnknownVariant`
+- `E324` `UnrecognizedUtteranceError`
+- `E325` `UnknownVariant`
+- `E326` `UnexpectedLineType`
+- `E331` `UnknownVariant`
+- `E340` `UnknownBaseContent`
+- `E341` `UnknownVariant`
+- `E342` `MissingRequiredElement`
+- `E344` `UnknownVariant`
+- `E351` `UnknownVariant`
+- `E352` `UnknownVariant`
+- `E353` `UnknownVariant`
+- `E354` `UnknownVariant`
+- `E355` `UnknownVariant`
+- `E365` `UnknownVariant`
+- `E371` `PauseInPhoGroup`
+- `E373` `InvalidOverlapIndex`
+- `E376` `ReplacementParseError`
+- `E377` `RetraceWithNoMaterial`
+- `E378` `RetraceWithoutWords`
 - `E404` `OrphanedDependentTier`
 - `E508` `EmptyDateHeader`
 - `E509` `EmptyMediaHeader`
 - `E510` `EmptyIDLanguage`
 - `E511` `EmptyIDSpeaker`
 - `E512` `EmptyParticipantCode`
+- `E514` `EmptyIDCorpus`
 - `E515` `EmptyIDRole`
 - `E516` `EmptyDate`
 - `E524` `BirthUnknownParticipant`
@@ -331,15 +314,16 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - `E541` `InvalidTimeStart`
 - `E544` `MediaLinkageWithoutTiming`
 - `E545` `InvalidBirthDateFormat`
+- `E551` `OptionsHeaderOutOfOrder`
+- `E552` `MediaUnlinkedWithTiming`
 - `E601` `InvalidDependentTier`
 - `E602` `MalformedTierHeader`
 - `E603` `InvalidTimTierFormat`
 - `E604` `GraWithoutMor`
-- `E703` `UnexpectedMorphologyNode`
-- `E708` `MalformedGrammarRelation`
+- `E708` `UnknownVariant`
 - `E709` `InvalidGrammarIndex`
 - `E710` `UnexpectedGrammarNode`
-- `E711` `MorEmptyContent`
+- `E711` `UnknownVariant`
 - `E712` `GraInvalidWordIndex`
 - `E721` `GraNonSequentialIndex`
 - `E722` `GraNoRoot`
@@ -363,11 +347,26 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - `E744` `XphointMediaBoundsViolation`
 - `E745` `XphointPhoneReconstructionMismatch`
 - `E746` `XphointGroupCountMismatch`
+- `E747` `BlankLineNotAllowed`
+- `E748` `LeadingZeroBulletTime`
+- `E749` `CommaGluedToNextWord`
+- `E752` `TimingWithoutMedia`
+- `E753` `WordOnlyRepetitionSegments`
+- `E755` `UndeclaredUtteranceLanguage`
+- `E756` `EmptyUserDefinedTier`
+- `E758` `LeadingSpaceOnMainTier`
+- `E759` `AnnotationAtUtteranceStart`
+- `E760` `MorItemEmptyPos`
+- `E761` `GraRelationHeadNotUniversal`
+- `E762` `PrefixMarkerIllegalPosition`
+- `E763` `PrefixMarkerLanguageNotAllowed`
+- `E764` `PrefixedFormGluedToPrecedingWord`
+- `E765` `SeparatorGluedToFollowingContent`
+- `E766` `LinkerNotUtteranceInitial`
+- `E767` `MediaWhitespaceBeforeComma`
+- `E768` `MediaFilenameNotRepresentable`
+- `E999` `UnknownVariant`
 - `W108` `SpeakerNotFoundInParticipants`
-- `W601` `EmptyUserDefinedTier`
-- `W602` `UnknownUserDefinedTier`
-- `W999` `LegacyWarning`
-- `E999` `UnknownError`
 
 ## Reverse Mapping (TalkBank -> CHECK)
 
@@ -375,81 +374,17 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 |---|---|---|
 | `E001` | `InternalError` | None |
 | `E002` | `TestError` | None |
-| `E003` | `EmptyString` | None |
-| `E101` | `InvalidLineFormat` | 1 |
-| `E301` | `MissingMainTier` | None |
-| `E302` | `MissingNode` | None |
-| `E303` | `SyntaxError` | 8, 91 |
-| `E304` | `MissingSpeaker` | 12, 21 |
-| `E305` | `MissingTerminator` | 21, 31, 36, 50 |
-| `E306` | `EmptyUtterance` | 70 |
-| `E307` | `InvalidSpeaker` | None |
-| `E308` | `UndeclaredSpeaker` | 18 |
-| `E309` | `UnexpectedSyntax` | None |
-| `E310` | `ParseFailed` | None |
-| `E311` | `UnexpectedNode` | None |
-| `E312` | `UnclosedBracket` | 22 |
-| `E313` | `UnclosedParenthesis` | 28 |
-| `E314` | `IncompleteAnnotation` | None |
-| `E315` | `InvalidControlCharacter` | 86 |
-| `E316` | `UnparsableContent` | 128, 130 |
-| `E319` | `UnparsableLine` | None |
-| `E320` | `UnparsableHeader` | None |
-| `E321` | `UnparsableUtterance` | None |
-| `E322` | `EmptyColon` | None |
-| `E323` | `MissingColonAfterSpeaker` | 2 |
-| `E324` | `UnrecognizedUtteranceError` | None |
-| `E325` | `UnexpectedUtteranceChild` | None |
-| `E326` | `UnexpectedLineType` | None |
-| `E330` | `TreeParsingError` | 48 |
-| `E331` | `UnexpectedNodeInContext` | None |
-| `E340` | `UnknownBaseContent` | None |
-| `E341` | `UnbalancedQuotationCrossUtterance` | None |
-| `E342` | `MissingRequiredElement` | None |
-| `E344` | `InvalidContentAnnotationNesting` | None |
-| `E346` | `UnmatchedContentAnnotationEnd` | 23, 129, 131 |
-| `E347` | `UnbalancedOverlap` | 24, 51 |
-| `E348` | `MissingOverlapEnd` | 25, 51 |
-| `E351` | `MissingQuoteBegin` | None |
-| `E352` | `MissingQuoteEnd` | None |
-| `E353` | `MissingOtherCompletionContext` | None |
-| `E354` | `MissingTrailingOffTerminator` | None |
-| `E355` | `InterleavedContentAnnotations` | None |
-| `E356` | `UnmatchedUnderlineBegin` | 22, 117 |
-| `E357` | `UnmatchedUnderlineEnd` | 23, 117 |
-| `E358` | `UnmatchedLongFeatureBegin` | 22 |
-| `E359` | `UnmatchedLongFeatureEnd` | 23 |
-| `E360` | `InvalidMediaBullet` | 81, 89, 90, 110, 118 |
-| `E361` | `InvalidTimestamp` | 82, 89, 90 |
-| `E362` | `TimestampBackwards` | 82, 83 |
-| `E363` | `InvalidPostcode` | 108 |
-| `E364` | `MalformedWordContent` | 48 |
-| `E365` | `MalformedTierContent` | None |
-| `E366` | `LongFeatureLabelMismatch` | None |
-| `E367` | `UnmatchedNonvocalBegin` | 22 |
-| `E368` | `UnmatchedNonvocalEnd` | 23 |
-| `E369` | `NonvocalLabelMismatch` | None |
-| `E370` | `StructuralOrderError` | 52, 119, 151, 159 |
-| `E371` | `PauseInPhoGroup` | None |
-| `E372` | `NestedQuotation` | 117 |
-| `E373` | `InvalidOverlapIndex` | None |
-| `E375` | `ContentAnnotationParseError` | 22, 48 |
-| `E376` | `ReplacementParseError` | None |
-| `E382` | `MorParseError` | 134 |
-| `E387` | `ReplacementOnFragment` | 141 |
-| `E388` | `ReplacementOnNonword` | 141 |
-| `E389` | `ReplacementOnFiller` | 141 |
-| `E390` | `ReplacementContainsOmission` | 158 |
-| `E391` | `ReplacementContainsUntranscribed` | 158 |
+| `E003` | `UnknownVariant` | None |
+| `E101` | `UnknownVariant` | 1 |
 | `E202` | `MissingFormType` | 48 |
 | `E203` | `InvalidFormType` | 147 |
 | `E207` | `UnknownAnnotation` | 48 |
 | `E208` | `EmptyReplacement` | None |
 | `E209` | `EmptySpokenContent` | 155 |
 | `E210` | `IllegalReplacementForFragment` | None |
-| `E212` | `InvalidWordFormat` | 48, 155 |
+| `E212` | `UnknownVariant` | 48, 155 |
 | `E213` | `UntranscribedInReplacement` | None |
-| `E214` | `EmptyAnnotatedContentAnnotations` | None |
+| `E214` | `UnknownVariant` | None |
 | `E220` | `IllegalDigits` | 38, 47 |
 | `E230` | `UnbalancedCADelimiter` | 117 |
 | `E231` | `UnbalancedShortening` | 55, 56 |
@@ -460,19 +395,82 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E243` | `IllegalCharactersInWord` | 48, 57, 92, 93, 156, 160, 161 |
 | `E244` | `ConsecutiveStressMarkers` | None |
 | `E245` | `StressNotBeforeSpokenMaterial` | None |
-| `E246` | `LengtheningNotAfterSpokenMaterial` | None |
+| `E246` | `UnknownVariant` | None |
 | `E247` | `MultiplePrimaryStress` | None |
 | `E248` | `TertiaryLanguageNeedsExplicitCode` | 120 |
 | `E249` | `MissingLanguageContext` | None |
 | `E250` | `SecondaryStressWithoutPrimary` | None |
-| `E251` | `EmptyWordContentText` | None |
+| `E251` | `UnknownVariant` | None |
 | `E252` | `SyllablePauseNotBetweenSpokenMaterial` | 48 |
 | `E253` | `EmptyWordContent` | 70 |
-| `E254` | `UndeclaredExplicitWordLanguage` | None |
 | `E255` | `WholeUtteranceLanguageSwitchShouldUsePrecode` | None |
 | `E256` | `IllegalCurlyQuote` | 138, 139 |
 | `E258` | `ConsecutiveCommas` | 107 |
 | `E259` | `CommaAfterNonSpokenContent` | None |
+| `E301` | `MissingMainTier` | None |
+| `E302` | `UnknownVariant` | None |
+| `E303` | `UnknownVariant` | 8, 91 |
+| `E304` | `UnknownVariant` | 12, 21 |
+| `E305` | `MissingTerminator` | 21, 31, 36, 50 |
+| `E306` | `EmptyUtterance` | 70 |
+| `E307` | `InvalidSpeaker` | None |
+| `E308` | `UndeclaredSpeaker` | 18 |
+| `E309` | `UnknownVariant` | None |
+| `E310` | `UnknownVariant` | None |
+| `E311` | `UnknownVariant` | None |
+| `E312` | `UnknownVariant` | 22 |
+| `E313` | `UnclosedParenthesis` | None |
+| `E314` | `IncompleteAnnotation` | None |
+| `E315` | `InvalidControlCharacter` | 86 |
+| `E316` | `UnparsableContent` | 128, 130 |
+| `E319` | `UnknownVariant` | None |
+| `E320` | `UnknownVariant` | None |
+| `E321` | `UnknownVariant` | None |
+| `E322` | `UnknownVariant` | None |
+| `E323` | `UnknownVariant` | 2 |
+| `E324` | `UnrecognizedUtteranceError` | None |
+| `E325` | `UnknownVariant` | None |
+| `E326` | `UnexpectedLineType` | None |
+| `E330` | `TreeParsingError` | 48 |
+| `E331` | `UnknownVariant` | None |
+| `E340` | `UnknownBaseContent` | None |
+| `E341` | `UnknownVariant` | None |
+| `E342` | `MissingRequiredElement` | None |
+| `E344` | `UnknownVariant` | None |
+| `E346` | `UnknownVariant` | 23, 129, 131 |
+| `E347` | `UnbalancedOverlap` | 24, 51 |
+| `E348` | `UnknownVariant` | 25, 51 |
+| `E351` | `UnknownVariant` | None |
+| `E352` | `UnknownVariant` | None |
+| `E353` | `UnknownVariant` | None |
+| `E354` | `UnknownVariant` | None |
+| `E355` | `UnknownVariant` | None |
+| `E356` | `UnmatchedUnderlineBegin` | 22, 117 |
+| `E357` | `UnmatchedUnderlineEnd` | 23, 117 |
+| `E358` | `UnmatchedLongFeatureBegin` | 22 |
+| `E359` | `UnmatchedLongFeatureEnd` | 23 |
+| `E360` | `UnknownVariant` | 89, 90, 110 |
+| `E361` | `InvalidTimestamp` | 82, 89, 90 |
+| `E362` | `TimestampBackwards` | 82, 83 |
+| `E363` | `InvalidPostcode` | 108 |
+| `E364` | `UnknownVariant` | 48 |
+| `E365` | `UnknownVariant` | None |
+| `E367` | `UnmatchedNonvocalBegin` | 22 |
+| `E368` | `UnmatchedNonvocalEnd` | 23 |
+| `E370` | `StructuralOrderError` | 52, 119, 151, 159 |
+| `E371` | `PauseInPhoGroup` | None |
+| `E372` | `NestedQuotation` | 117 |
+| `E373` | `InvalidOverlapIndex` | None |
+| `E375` | `ContentAnnotationParseError` | 22, 48 |
+| `E376` | `ReplacementParseError` | None |
+| `E377` | `RetraceWithNoMaterial` | None |
+| `E378` | `RetraceWithoutWords` | None |
+| `E382` | `MorParseError` | 134 |
+| `E387` | `ReplacementOnFragment` | 141 |
+| `E388` | `ReplacementOnNonword` | 141 |
+| `E389` | `ReplacementOnFiller` | 141 |
+| `E390` | `ReplacementContainsOmission` | 158 |
+| `E391` | `ReplacementContainsUntranscribed` | 158 |
 | `E401` | `DuplicateDependentTier` | 140 |
 | `E404` | `OrphanedDependentTier` | None |
 | `E501` | `DuplicateHeader` | 6, 44 |
@@ -488,11 +486,12 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E511` | `EmptyIDSpeaker` | None |
 | `E512` | `EmptyParticipantCode` | None |
 | `E513` | `EmptyParticipantRole` | 12 |
+| `E514` | `EmptyIDCorpus` | None |
 | `E515` | `EmptyIDRole` | None |
 | `E516` | `EmptyDate` | None |
 | `E517` | `InvalidAgeFormat` | 153 |
 | `E518` | `InvalidDateFormat` | 34 |
-| `E519` | `InvalidLanguageCode` | 121 |
+| `E519` | `InvalidLanguageCode` | 121, 122 |
 | `E522` | `SpeakerNotDefined` | 18, 60 |
 | `E523` | `OrphanIDHeader` | 60 |
 | `E524` | `BirthUnknownParticipant` | None |
@@ -522,24 +521,24 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E548` | `IdHeaderOutOfOrder` | 126 |
 | `E549` | `DuplicateSpeakerDeclaration` | 13 |
 | `E550` | `TrailingCommaInParticipants` | 100 |
+| `E551` | `OptionsHeaderOutOfOrder` | None |
+| `E552` | `MediaUnlinkedWithTiming` | None |
 | `E600` | `TierValidationError` | 87 |
 | `E601` | `InvalidDependentTier` | None |
 | `E602` | `MalformedTierHeader` | None |
 | `E603` | `InvalidTimTierFormat` | None |
 | `E604` | `GraWithoutMor` | None |
 | `E605` | `UnsupportedDependentTier` | 17 |
-| `E700` | `UnexpectedTierNode` | 85 |
 | `E701` | `TierBeginTimeNotMonotonic` | 83 |
-| `E702` | `InvalidMorphologyFormat` | 134 |
-| `E703` | `UnexpectedMorphologyNode` | None |
+| `E702` | `UnknownVariant` | 134 |
 | `E704` | `SpeakerSelfOverlap` | 84, 133 |
 | `E705` | `MorCountMismatchTooFew` | 94, 140 |
 | `E706` | `MorCountMismatchTooMany` | 94, 140 |
-| `E707` | `MorTerminatorPresenceMismatch` | 94 |
-| `E708` | `MalformedGrammarRelation` | None |
+| `E707` | `UnknownVariant` | 94 |
+| `E708` | `UnknownVariant` | None |
 | `E709` | `InvalidGrammarIndex` | None |
 | `E710` | `UnexpectedGrammarNode` | None |
-| `E711` | `MorEmptyContent` | None |
+| `E711` | `UnknownVariant` | None |
 | `E712` | `GraInvalidWordIndex` | None |
 | `E713` | `GraInvalidHeadIndex` | 87 |
 | `E714` | `PhoCountMismatchTooFew` | 94 |
@@ -556,10 +555,10 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E726` | `PhosylPhoCountMismatch` | None |
 | `E727` | `PhoalnModCountMismatch` | None |
 | `E728` | `PhoalnPhoCountMismatch` | None |
-| `E729` | `BulletOverlap` | 84 |
-| `E730` | `BulletGap` | 85 |
-| `E731` | `SpeakerBulletSelfOverlap` | 133 |
-| `E732` | `MissingBullet` | 110 |
+| `E729` | `UnknownVariant` | 84 |
+| `E730` | `UnknownVariant` | 85 |
+| `E731` | `UnknownVariant` | 133 |
+| `E732` | `UnknownVariant` | 110 |
 | `E733` | `ModCountMismatchTooFew` | None |
 | `E734` | `ModCountMismatchTooMany` | None |
 | `E735` | `SylUnitMalformed` | None |
@@ -574,13 +573,29 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 | `E744` | `XphointMediaBoundsViolation` | None |
 | `E745` | `XphointPhoneReconstructionMismatch` | None |
 | `E746` | `XphointGroupCountMismatch` | None |
+| `E747` | `BlankLineNotAllowed` | None |
+| `E748` | `LeadingZeroBulletTime` | None |
+| `E749` | `CommaGluedToNextWord` | None |
+| `E750` | `SpaceInsideAngleGroup` | 92, 93, 160, 161 |
+| `E751` | `PauseGluedToWord` | 92, 93, 160, 161 |
+| `E752` | `TimingWithoutMedia` | None |
+| `E753` | `WordOnlyRepetitionSegments` | None |
+| `E755` | `UndeclaredUtteranceLanguage` | None |
+| `E756` | `EmptyUserDefinedTier` | None |
+| `E757` | `CodeGluedToFollowingContent` | 92, 93, 160, 161 |
+| `E758` | `LeadingSpaceOnMainTier` | None |
+| `E759` | `AnnotationAtUtteranceStart` | None |
+| `E760` | `MorItemEmptyPos` | None |
+| `E761` | `GraRelationHeadNotUniversal` | None |
+| `E762` | `PrefixMarkerIllegalPosition` | None |
+| `E763` | `PrefixMarkerLanguageNotAllowed` | None |
+| `E764` | `PrefixedFormGluedToPrecedingWord` | None |
+| `E765` | `SeparatorGluedToFollowingContent` | None |
+| `E766` | `LinkerNotUtteranceInitial` | None |
+| `E767` | `MediaWhitespaceBeforeComma` | None |
+| `E768` | `MediaFilenameNotRepresentable` | None |
+| `E999` | `UnknownVariant` | None |
 | `W108` | `SpeakerNotFoundInParticipants` | None |
-| `W210` | `MissingWhitespaceBeforeContent` | 92, 93, 160, 161 |
-| `W211` | `MissingWhitespaceAfterOverlap` | 92, 93, 160, 161 |
-| `W601` | `EmptyUserDefinedTier` | None |
-| `W602` | `UnknownUserDefinedTier` | None |
-| `W999` | `LegacyWarning` | None |
-| `E999` | `UnknownError` | None |
 
 ## Priority Action Plan
 
@@ -596,11 +611,11 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `9` `Tier name is longer than %d.` -> add rule (TalkBank looser; none parity)
 - CHECK `10` `Tier text is longer than %ld.` -> add rule (TalkBank looser; none parity)
 - CHECK `14` `Spaces before tier code.` -> add rule (TalkBank looser; none parity)
+- CHECK `16` `Illegal use of extended characters in speaker names.` -> add rule (TalkBank looser; none parity)
 - CHECK `19` `Illegal use of delimiter in a word. / Or a SPACE should be added after it.` -> add rule (TalkBank looser; none parity)
 - CHECK `20` `Undeclared suffix in depfile.` -> add rule (TalkBank looser; none parity)
 - CHECK `26` `Unmatched { found on the tier.` -> add rule (TalkBank looser; none parity)
 - CHECK `27` `Unmatched } found on the tier.` -> add rule (TalkBank looser; none parity)
-- CHECK `29` `Unmatched ) found on the tier.` -> add rule (TalkBank looser; none parity)
 - CHECK `30` `Text is illegal.` -> add rule (TalkBank looser; none parity)
 - CHECK `32` `Code is not declared in depfile.` -> add rule (TalkBank looser; none parity)
 - CHECK `33` `Either illegal date or time or symbol is not declared in depfile.` -> add rule (TalkBank looser; none parity)
@@ -608,10 +623,9 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `37` `Undeclared prefix.` -> add rule (TalkBank looser; none parity)
 - CHECK `42` `Use either "&" or "()", but not both.` -> add rule (TalkBank looser; none parity)
 - CHECK `43` `The file must start with "@Begin" tier.` -> add rule (TalkBank looser; none parity)
-- CHECK `49` `Upper case letters are not allowed inside a word.` -> add rule (TalkBank looser; none parity)
 - CHECK `53` `Only one "@Begin" can be in a file.` -> add rule (TalkBank looser; none parity)
 - CHECK `54` `Only one "@End" can be in a file.` -> add rule (TalkBank looser; none parity)
-- CHECK `59` `Expected second %c character. / Expected second %s character.` -> add rule (TalkBank looser; none parity)
+- CHECK `59` `Expected second %s character.` -> add rule (TalkBank looser; none parity)
 - CHECK `61` `"@Participants:" tier is expected here.` -> add rule (TalkBank looser; none parity)
 - CHECK `62` `Missing language information.` -> add rule (TalkBank looser; none parity)
 - CHECK `63` `Missing Corpus name.` -> add rule (TalkBank looser; none parity)
@@ -623,21 +637,15 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `72` `This item must precede the utterance delimiter or CA delimiter. / Item '%s' must precede the utterance delimiter or CA delimiter.` -> add rule (TalkBank looser; none parity)
 - CHECK `73` `This item must be preceded by text or '0'. / Item '%s' must be preceded by text or '0'.` -> add rule (TalkBank looser; none parity)
 - CHECK `75` `This item must follow after utterance delimiter. / Item '%s' must follow after utterance delimiter.` -> add rule (TalkBank looser; none parity)
-- CHECK `76` `Only one letter is allowed with '@l'.` -> add rule (TalkBank looser; none parity)
 - CHECK `77` `"@Languages:" tier is expected here.` -> add rule (TalkBank looser; none parity)
 - CHECK `78` `This item must be used at the beginning of tier. / Item '%s' must be used at the beginning of tier.` -> add rule (TalkBank looser; none parity)
 - CHECK `79` `Only one occurrence of | symbol per word is allowed.` -> add rule (TalkBank looser; none parity)
 - CHECK `80` `There must be at least one occurrence of '|'.` -> add rule (TalkBank looser; none parity)
-- CHECK `88` `Illegal use of compounds and special form markers.` -> add rule (TalkBank looser; none parity)
-- CHECK `95` `Illegal use of capitalized words in compounds.` -> add rule (TalkBank looser; none parity)
 - CHECK `96` `Word color is now illegal.` -> add rule (TalkBank looser; none parity)
 - CHECK `97` `Illegal character inside parentheses.` -> add rule (TalkBank looser; none parity)
 - CHECK `98` `Space is not allow in media file name inside bullets.` -> add rule (TalkBank looser; none parity)
 - CHECK `99` `Extension is not allow at the end of media file name.` -> add rule (TalkBank looser; none parity)
-- CHECK `101` `This item must be followed or preceded by text. / Item '%s' must be followed or preceded by text.` -> add rule (TalkBank looser; none parity)
 - CHECK `102` `Italic markers are no longer legal in CHAT.` -> add rule (TalkBank looser; none parity)
-- CHECK `104` `Please select "CAfont" or "Ascender Uni Duo" font for CA file as per "@Options:" tier.` -> add rule (TalkBank looser; none parity)
-- CHECK `105` `Please select "Charis SIL" font for IPA file as per "@Options:" tier.` -> add rule (TalkBank looser; none parity)
 - CHECK `106` `The whole code must be on one line. Please run chstring +q on this file.` -> add rule (TalkBank looser; none parity)
 - CHECK `109` `Postcodes are not allowed on dependent tiers.` -> add rule (TalkBank looser; none parity)
 - CHECK `111` `Illegal pause format. Pause has to have '.' / Pause needs '.' in '%s' or this item is in wrong location.` -> add rule (TalkBank looser; none parity)
@@ -648,12 +656,11 @@ Reference: `clan-check-reference/check-error-codes.json`, generated from `check.
 - CHECK `123` `Illegal character found in tier text. If it CA, then add "@Options: CA" / Illegal character '%s' found in tier text. If it CA, then add "@Options: CA"` -> add rule (TalkBank looser; none parity)
 - CHECK `124` `Please remove "unlinked" from @Media header.` -> add rule (TalkBank looser; none parity)
 - CHECK `132` `Tabs should only be used to mark the beginning of lines.` -> add rule (TalkBank looser; none parity)
-- CHECK `145` `This intonational marker should be outside paired markers.` -> add rule (TalkBank looser; none parity)
 - CHECK `146` `The &= symbol must include some code after '=' character.` -> add rule (TalkBank looser; none parity)
 - CHECK `148` `Space character is not allowed before comma(,) character on "@Media:" header.` -> add rule (TalkBank looser; none parity)
 - CHECK `149` `Illegal character located between a word and [...] code. / Illegal character '%s' located between a word and [...] code.` -> add rule (TalkBank looser; none parity)
 - CHECK `150` `Illegal item located between a word and [...] code.` -> add rule (TalkBank looser; none parity)
-- CHECK `154` `Please add "unlinked" to @Media header.` -> add rule (TalkBank looser; none parity)
+- CHECK `152` `Language is not defined on "@Languages:" header tier.` -> add rule (TalkBank looser; none parity)
 
 ### P2
 

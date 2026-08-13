@@ -250,17 +250,6 @@ fn test_channel_error_sink_handles_closed_receiver() {
     sink.report(make_test_error("E001"));
 }
 
-/// Tests null error sink.
-#[test]
-fn test_null_error_sink() {
-    let sink = NullErrorSink;
-
-    // Should not panic, just discard
-    sink.report(make_test_error("E001"));
-    sink.report(make_test_error("E002"));
-    sink.report_all(vec![make_test_error("E003")]);
-}
-
 /// Tests error sink reference impl.
 #[test]
 fn test_error_sink_reference_impl() {

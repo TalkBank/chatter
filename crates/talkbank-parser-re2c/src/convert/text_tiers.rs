@@ -1,9 +1,15 @@
 //! Part of the AST→model conversion (see `mod.rs`); split out for file size.
+//!
+//! Clean of content-enum catch-alls since the CA-omission walk moved to
+//! `talkbank-model` (the traversal now belongs to `walk_words_mut`), so this
+//! file is off `UNPROTECTED`. `#![deny(clippy::wildcard_enum_match_arm)]` is
+//! deliberately NOT applied: the remaining wildcard is over `Token`, where
+//! enumerating ~180 variants buys nothing. Design rule 3 is about the CONTENT
+//! enums, and the textual ratchet in `talkbank-parser-tests` holds that line.
 #![allow(clippy::unreachable, clippy::unwrap_used, clippy::expect_used)]
 
 use crate::ast;
 use crate::token::Token;
-use talkbank_model::Span;
 use talkbank_model::model::*;
 
 use super::*;
@@ -150,8 +156,7 @@ pub(crate) fn text_tier_to_bullet_content(parsed: &ast::TextTierParsed<'_>) -> B
                     end_time,
                     ..
                 } => {
-                    let s: u64 = start_time.parse().unwrap_or(0);
-                    let e: u64 = end_time.parse().unwrap_or(0);
+                    let (s, e) = super::items::bullet_times(start_time, end_time);
                     BulletContentSegment::bullet(s, e)
                 }
                 _ => BulletContentSegment::text(tok.text()),
@@ -241,35 +246,32 @@ pub fn sin_tier_from_text(input: &str) -> talkbank_model::model::SinTier {
     talkbank_model::model::SinTier::new(items)
 }
 
-/// Parse %wor tier content and convert to model WorTier.
-pub fn wor_tier_from_input(input: &str) -> WorTier {
+/// Parse `%wor` tier content and convert to a model `WorTier`.
+///
+/// `None` when the tier does not parse, so the caller can reject it. It used to
+/// return a bare `WorTier`, substituting an EMPTY one on failure, which
+/// reported an unparsable tier as a successfully parsed tier with no words.
+/// The seam to say otherwise already existed at both call sites: one holds an
+/// `ErrorSink` it was ignoring, the other an outcome type with a `rejected`
+/// variant. Matching the `Option`-then-`rejected` shape the three sibling
+/// entry points in `chat_parser_impl` already use.
+///
+/// Delegates to `wor_tier_parser`, the same parser the file-level path uses.
+/// It used to be a SECOND implementation, parsing with the MAIN-TIER
+/// `contents_parser` and keeping only bare words and separators from a flat
+/// loop, so it disagreed with the real one about timing bullets, language
+/// precodes and terminators. Two parsers for one tier is a divergence with
+/// nothing holding it shut, and this one was the fallback the other fell back
+/// TO, so both had to fail before anyone saw a difference.
+pub fn wor_tier_from_input(input: &str) -> Option<WorTier> {
     use chumsky::Parser as _;
-    use talkbank_model::model::dependent_tier::wor::WorItem;
 
-    // %wor uses same word rules as main tier. Parse words via chumsky.
     let tokens = crate::parser::lex_to_tokens(input, crate::lexer::COND_MAIN_CONTENT);
-    let contents = crate::parser::main_tier::contents_parser()
+    crate::parser::dependent_tiers::wor_tier_parser()
         .parse(tokens)
         .into_result()
-        .unwrap_or_default();
-
-    let mut items = Vec::new();
-    for item in &contents {
-        match item {
-            ast::ContentItem::Word(w) => {
-                let word = word_from_parsed(w);
-                items.push(WorItem::Word(Box::new(word)));
-            }
-            ast::ContentItem::Separator(tok) => {
-                items.push(WorItem::Separator {
-                    text: tok.text().to_string(),
-                    span: Span::DUMMY,
-                });
-            }
-            _ => {}
-        }
-    }
-    WorTier::new(items)
+        .ok()
+        .map(|parsed| crate::convert::tiers::wor_tier_to_model(&parsed))
 }
 
 // From impls that are now possible (no source needed)
@@ -353,104 +355,6 @@ impl<'a> From<&ast::PhoTier<'a>> for talkbank_model::model::PhoTier {
 impl<'a> From<&ast::PhoWordParsed<'a>> for talkbank_model::model::PhoWord {
     fn from(w: &ast::PhoWordParsed<'a>) -> Self {
         talkbank_model::model::PhoWord::new(w.segments.join("+"))
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CA omission normalization (post-parse, context-dependent)
-// ═══════════════════════════════════════════════════════════════
-
-/// Normalize CA omission markers when @Options: CA is active.
-/// A standalone (word), a word whose only content is a single Shortening
-/// and has no category, is reclassified as CAOmission with Text content.
-pub(crate) fn normalize_ca_omissions_in_lines(lines: &mut [talkbank_model::model::Line]) {
-    for line in lines {
-        if let talkbank_model::model::Line::Utterance(utterance) = line {
-            for content in utterance.main.content.content.as_mut_slice() {
-                normalize_ca_omission(content);
-            }
-        }
-    }
-}
-
-pub(crate) fn normalize_ca_omission(content: &mut UtteranceContent) {
-    match content {
-        UtteranceContent::Word(word) => normalize_ca_omission_word(word),
-        UtteranceContent::AnnotatedWord(annotated) => {
-            normalize_ca_omission_word(&mut annotated.inner);
-        }
-        UtteranceContent::ReplacedWord(replaced) => {
-            normalize_ca_omission_word(&mut replaced.word);
-        }
-        UtteranceContent::Group(group) => {
-            for item in group.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            for item in annotated.inner.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        UtteranceContent::Retrace(retrace) => {
-            for item in retrace.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        UtteranceContent::Quotation(quote) => {
-            for item in quote.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            for item in annotated.inner.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        _ => {}
-    }
-}
-
-pub(crate) fn normalize_ca_omission_bracketed_item(item: &mut BracketedItem) {
-    match item {
-        BracketedItem::Word(word) => normalize_ca_omission_word(word),
-        BracketedItem::AnnotatedWord(annotated) => {
-            normalize_ca_omission_word(&mut annotated.inner);
-        }
-        BracketedItem::ReplacedWord(replaced) => {
-            normalize_ca_omission_word(&mut replaced.word);
-        }
-        // Both retrace forms recurse. Neither did before: the bare one was
-        // already missing here while the utterance-level walk above handled
-        // it, so this side skipped normalisation inside every retrace.
-        BracketedItem::Retrace(retrace) => {
-            for item in retrace.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        BracketedItem::AnnotatedRetrace(annotated) => {
-            for item in annotated.inner.content.content.as_mut_slice() {
-                normalize_ca_omission_bracketed_item(item);
-            }
-        }
-        _ => {}
-    }
-}
-
-pub(crate) fn normalize_ca_omission_word(word: &mut Word) {
-    // Only reclassify if no existing category and content is a single Shortening
-    if word.category.is_some() {
-        return;
-    }
-    if word.content.len() == 1
-        && let WordContent::Shortening(shortening) = &word.content[0]
-    {
-        // Reclassify: Shortening → Text, category → CAOmission
-        let text = shortening.as_ref().to_string();
-        word.category = Some(WordCategory::CAOmission);
-        word.content = WordContents::new(smallvec::smallvec![WordContent::Text(
-            WordText::new_unchecked(&text)
-        )]);
     }
 }
 

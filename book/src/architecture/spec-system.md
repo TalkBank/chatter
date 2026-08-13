@@ -1,144 +1,248 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-05-29 17:50 EDT
+**Last modified:** 2026-08-11 20:40 EDT
 
-Specifications in `spec/` are the authoritative source of truth for the CHAT format. They drive grammar artifact generation, validation/error docs, and targeted test generation.
+`spec/` is the source of truth for what CHAT is and for what chatter rejects.
+Tests, fixtures and error documentation are GENERATED from it. You change the
+spec; you do not hand-edit what it produces.
 
-**Historical note:** This system was originally shaped during a
-dual-parser era. The chumsky-based direct parser was removed in
-March 2026. Today the canonical parser is tree-sitter
-(`talkbank-parser`); a second implementation,
-`talkbank-parser-re2c`, exists as a specification oracle and
-high-throughput batch parser. Fragment specs remain valuable, but
-synthetic tree-sitter wrapper behavior is audit-only legacy unless a
-page or test explicitly says otherwise.
+This chapter is the reference: what the spec files contain, what each field
+does, and what checks them. To make a change, follow
+[Spec Workflow](../contributing/spec-workflow.md).
 
-## Spec Types
+## Start here: ask the system
 
-### Construct Specs (`spec/constructs/`)
+Before reading further, run:
 
-Each construct spec defines a valid CHAT pattern with its expected parse tree:
+```bash
+just spec-status
+```
 
-```markdown
-# example_name
+It reports, derived from the same code the gates use rather than from prose:
+how many specs exist and what status they declare, how many examples are
+verified, how many are deferred, **how many assert nothing at all**, the state
+of CLAN CHECK parity, and which gate checks which artifact. If this page and
+that command ever disagree, the command is right.
 
-Description of what this example tests.
+## The two kinds of spec
+
+### Construct specs, `spec/constructs/`
+
+A valid CHAT fragment and the tree it must parse to.
+
+````markdown
+# languages_single
+
+@Languages header with single language code
 
 ## Input
 
-\```mor_dependent_tier
-%mor:	VERB|eat .
-\```
+```languages_header
+@Languages:	eng
+```
 
 ## Expected CST
 
-\```cst
-(mor_dependent_tier
-  (mor_tier_prefix)
-  ...)
-\```
-
-## Metadata
-
-- **Level**: tier
-- **Category**: tiers
+```cst
+(languages_header
+  (languages_prefix)
+  ...
+)
 ```
 
-The `Input` code fence label (e.g., `mor_dependent_tier`, `utterance`) selects
-which template wraps the fragment into a full CHAT file for parsing.
+## Metadata
 
-That is an explicit **grammar/test templating** mechanism. It is useful, but it
-does **not** by itself define honest isolated-fragment semantics for the direct
-parser.
+- **Level**: header
+- **Category**: header
+````
 
-### Error Specs (`spec/errors/`)
+The `Input` fence label (`languages_header`, `main_tier`, `utterance`,
+`standalone_word`, ...) names a **template** in `spec/tools/templates/` that
+wraps the fragment in a complete CHAT file, because tree-sitter parses
+documents rather than fragments. A label with no matching `.tera` template is
+an error; add the template.
 
-Each error spec defines an invalid CHAT pattern with expected error codes:
+### Error specs, `spec/errors/`
 
-```markdown
-# Error E301
+Invalid CHAT, and the codes it must produce.
+
+````markdown
+# E207: Unknown scoped annotation marker
+
+## Description
+
+Unknown scoped annotation marker.
 
 ## Metadata
 
-- Code: E301
-- Name: missing_participants
-- Severity: Error
-- Layer: parser
+- **Error Code**: E207
+- **Category**: Word validation
+- **Level**: word
+- **Layer**: parser
+- **Kind**: Invalidity
+- **Status**: implemented
 
-## Examples
+## Example 1
 
-### missing_participants_1
+**Source**: `E2xx_word_errors/E207_multiple_form_types.cha`
+**Trigger**: Scoped annotation with unrecognized marker
+**Expected Error Codes**: E207
 
-\```chat
+```chat
 @UTF8
 @Begin
-*CHI: hello .
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	word@zz .
 @End
-\```
 ```
+````
 
-Key metadata fields:
-- **Layer: parser**: error caught during parsing (returns `Err`)
-- **Layer: validation**: error caught after successful parse
-- **Status: not_implemented**: generates `#[ignore]` tests
+## What every field actually does
 
-### Symbol Registry (`spec/symbols/`)
+The fields are not decoration. Each one changes what is checked.
 
-`symbol_registry.json` defines character sets used by both the grammar and Rust
-crates. In this repo, `just symbols-gen` validates the registry and regenerates
-the checked-in grammar and Rust symbol-set outputs. The generation step produces:
-- JavaScript constants for `grammar.js`
-- Rust constants for model validation
+| Field | Effect |
+|-------|--------|
+| `**Error Code**` | The code the spec is about; names the generated tests. |
+| `**Layer**` | `parser` or `validation`. **Decides what a generated test can SEE**, see below. |
+| `**Kind**` | The `DiagnosticKind` axis. Required; a spec without it fails to load. |
+| `**Status**` | Whether examples are verified or deferred, see below. |
+| `**Category**`, `**Level**` | Documentation and grouping only. |
+| `**Source**` | The fixture the example came from. **Its stem NAMES the transcript**, see below. |
+| `**Trigger**` | Prose. Not read by any tool. |
+| `**Expected Error Codes**` | The codes the example must emit. **The only field that makes an example assert anything**, and it must appear BEFORE the code fence. |
 
-## Test Generation
+### `Expected Error Codes` must precede the fence
 
-The predecessor monorepo used `make test-gen` as shorthand for three generator
-classes. That root wrapper is not yet ported into this repo, but the underlying
-generation responsibilities are still:
+The loader reads it from the content BEFORE the ```chat block. A spec that puts
+the line after the fence declares nothing while reading, to a human, as fully
+specified; two of E757's examples did exactly that. The loader now REFUSES that
+placement rather than silently accepting an example that cannot fail.
 
-### 1. Tree-sitter Corpus Tests
+### `Expected Error Codes` is a SUBSET check
 
-`gen_tree_sitter_tests` reads construct specs and error specs, then:
-- Wraps each `Input` in a template to create a full CHAT file
-- Parses with tree-sitter and checks for error nodes
-- Writes `Expected CST` to `grammar/test/corpus/`
+An example passes when every code it declares was emitted. Emitting **extra**
+codes is fine, because one malformed line legitimately raises several
+diagnostics.
 
-For error specs, it captures the actual parse (with ERROR nodes) as the expected tree.
+Two consequences worth stating plainly:
 
-### 2. Rust Tests
+- Declaring fewer codes is always safe, so a spec cannot be used to assert that
+  a code is NOT emitted.
+- **An example declaring no `Expected Error Codes` can never fail** in this
+  runner. It is parsed and nothing more. `just spec-status` counts them, and a
+  test holds the count at ZERO, so a new one fails CI.
 
-`gen_rust_tests` generates Rust test functions:
-- Construct specs become parse-and-compare tests
-- Parser-layer error specs become `parser.parse_chat_file()` tests expecting `Err`
-- Validation-layer error specs become parse-then-validate tests
+  This matters more than it looks, because `gen_validation_corpus` falls back
+  to the spec's TITLE code when an example declares none. An undeclared example
+  was therefore asserted by the corpus runner and ignored by this one: the same
+  question with two answers. On 2026-08-11 all 22 undeclared examples were given
+  the code they were MEASURED to emit, which in every case was the title code
+  the corpus generator had been assuming, so the two runners now agree by
+  construction.
 
-Output: `crates/talkbank-parser-tests/tests/integration/generated/`
+### `Layer` decides what a generated test can see
 
-The generated suites are useful as grammar/audit support and regression
-coverage, but they are not the sole authority for parser semantics.
+A `parser`-layer test inspects PARSE diagnostics only; a `validation`-layer
+test runs validation as well. So declaring a validation-layer code in a
+parser-layer spec produces a test that can never see it.
 
-### 3. Error Documentation
+This is not hypothetical: `E342_auto.md`'s first example declared E390
+(`ReplacementContainsOmission`, a validation-layer code) in a parser-layer
+spec. The input genuinely raises both E342 and E390 in production, but the
+generated test only ever sees E342, and the mismatch sat undetected because
+the spec was ALSO marked `not_implemented`, so the test was `#[ignore]`d.
 
-`gen_error_docs` generates optional local markdown pages for each error code
-under `docs/errors/` when maintainers want a browsable reference set while
-working on diagnostics. The source of truth remains `spec/errors/`.
+### `Status` decides whether an example is checked at all
 
-## Workflow After Spec Changes
+| Value | Effect |
+|-------|--------|
+| `implemented` | Examples are verified. |
+| `not_implemented` | Examples are DEFERRED, not checked, and generated tests carry `#[ignore]`. |
+| `deprecated`, `unreachable_from_chat` | Deferred, same as above. |
+| **absent** | REFUSED: the spec fails to load, naming the file. |
 
-1. Regenerate only the affected spec-driven artifacts using the current commands
-   documented in `spec/CLAUDE.md`.
-2. Run the concrete verification commands from
-   [Contributing > Setup](../contributing/setup.md).
+`Status` used to default to `implemented` when the bullet was missing, so the
+file said nothing and the loader invented an answer. On 2026-08-11 that was
+true of **104 of 238 specs**. All of them now declare it explicitly and the
+default is gone, so `implemented` in a spec file means somebody decided it.
 
-Never hand-edit generated artifacts, always regenerate from specs.
+Changing a spec from `not_implemented` to `implemented` un-`#[ignore]`s its
+generated tests, and those tests may never have run. Regenerate and run them in
+the same change.
 
-## Post-Bootstrap Doctrine
+### `Source` names the transcript
 
-- `spec/tools` remains the generator/validator for grammar corpus tests, error
-  docs, and shared symbol artifacts.
-- `talkbank-parser-tests` owns parser equivalence and roundtrip contracts.
-- Isolated grammar additions should usually need two things: one grammar
-  corpus example and one full-file fixture. They should not require
-  the old bootstrap ritual unless generated
-  artifacts really changed.
+Some CHAT rules are about the file's own name: E531 requires the `@Media`
+header's filename to match the transcript's stem. The example runner therefore
+names each transcript after the stem of its `**Source**` path, and an example
+with no `**Source**` is anonymous, so those rules do not run for it.
+
+This field was parsed by nothing until 2026-08-11, which is why E531's spec
+could not be verified and was reported as failing rather than as untestable.
+
+## What is generated, and by what
+
+| Generator (`spec/tools`) | Produces |
+|---|---|
+| `gen_tree_sitter_tests` | `grammar/test/corpus/generated/*.txt` |
+| `gen_rust_tests` | `crates/talkbank-parser-tests/tests/integration/generated/*.rs` |
+| `gen_validation_corpus` | validation fixtures + `manifest.json` |
+| `gen_error_docs` | `docs/errors/*.md` (optional local reference) |
+| `gen_form_markers` | the `FormType` enum, the re2c marker set, the book's marker table |
+
+Two registries under `spec/` own closed vocabularies and generate every site
+that names them: `spec/symbols/symbol_registry.json` (`just symbols-gen`) and
+`spec/form_markers/form_marker_registry.json` (`just form-markers-gen`). Each
+has its own README and its own drift gate.
+
+**Generated and hand-written tests live in separate trees.**
+`grammar/test/corpus/generated/` is wiped in full on every run and refuses to
+clear a directory lacking its `.generated-output-dir` marker;
+`grammar/test/corpus/manual/` is never written by a generator. Both were once
+one tree, which destroyed 1,468 lines of hand-mined corpus tests twice in three
+days.
+
+## What checks what
+
+| Gate | Checks | Needs |
+|---|---|---|
+| `error_spec_codes` | every example emits the codes it declares | |
+| `manifest_agrees_with_clan_reference` | parity manifest against `check.cpp` | |
+| `generated_form_marker_sites_are_current` | form-marker outputs against the registry | |
+| `generated_symbol_sets_are_current` | symbol-set outputs against the registry | `node` |
+| `clan_check_grounding` | fixtures against the REAL CLAN binary | CLAN, `CHATTER_CLAN_RUN` |
+
+The first four run in CI under
+`cargo test --manifest-path spec/Cargo.toml --workspace`. `clan_check_grounding`
+is `#[ignore]`d and catches UPSTREAM drift; `refresh-unix-clan.sh` runs it after
+a successful CLAN sync, which is the moment it matters.
+
+## CLAN CHECK parity
+
+CHECK is a decades-old approximation and a QUESTION LIST, never a
+specification. For each of its error codes the question is whether the
+construct it rejects actually fails to make sense, answered against `spec/`,
+the grammar and real corpus data.
+
+Every code carries a verdict in
+`crates/talkbank-parser-tests/tests/check_parity/manifest.json`:
+
+- **parity**, chatter rejects it too;
+- **divergence**, chatter deliberately accepts it, with the reason recorded;
+- **no_obligation**, CLAN cannot emit it (commented out, no emission path,
+  unreachable in file mode, or GUI-only), with the reason as a typed value.
+
+`just spec-status` prints the current counts. CHECK's silence is not authority:
+when upstream retired error 76 in the 2026-08-07 bundle, chatter KEPT its rule,
+because the changelog showed enforcement being abandoned rather than a
+linguistic question being decided.
+
+## Related
+
+- [Spec Workflow](../contributing/spec-workflow.md), how to make a change.
+- [Testing](../contributing/testing.md), the wider test strategy.
+- [Grammar Governance](grammar-governance.md), the grammar side.

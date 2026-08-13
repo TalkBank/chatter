@@ -18,6 +18,7 @@ words.
 ## Example 1
 
 **Trigger**: Replacement with empty corrected form
+**Expected Error Codes**: E376
 
 ```chat
 @UTF8
