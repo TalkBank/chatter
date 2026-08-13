@@ -30,9 +30,13 @@ build-release:
 
 # Run the full workspace test suite via cargo.
 test:
-    cargo test --workspace --tests
+    cargo test --workspace --tests --locked
 
-# Compiled tests AND doctests. What CI runs; use before pushing.
+# The full TEST set: compiled tests, doctests, both workspaces, the UI suite.
+#
+# NOT the pre-push gate, which is `just gate` and includes this. This recipe
+# used to say "what CI runs; use before pushing", which was true of the tests
+# and false of everything else CI does.
 #
 # `--tests` above restricts the first pass to compiled test targets, because a
 # bare `cargo test` ALSO runs doctests: without it, `test` and this recipe both
@@ -178,46 +182,99 @@ actionlint:
 
 # Regenerate the tree-sitter parser and fail if the committed output moved.
 #
-# The ONLY check that catches a stale `parser.c`, and nothing else can: the
-# traversal staleness guard hashes `grammar.json` and `node-types.json`, so a
-# regeneration that changes only `parser.c` passes it correctly. A tree-sitter
-# version bump does exactly that, and left `parser.c` 997 lines stale until CI
-# caught it after a push.
+# The ONLY check that catches a stale `parser.c`. The traversal staleness guard
+# hashes `grammar.json` and `node-types.json`, so a regeneration that changes
+# only `parser.c` passes it correctly; a tree-sitter version bump does exactly
+# that. A guard proves what it hashes.
 grammar-generate-check:
-    cd grammar && tree-sitter generate
-    cd grammar && git diff --exit-code src/parser.c src/grammar.json src/node-types.json
+    cd grammar && tree-sitter generate && git diff --exit-code src/parser.c src/grammar.json src/node-types.json
 
-# Everything CI runs, run locally. THIS is the pre-push gate.
+# The grammar's own corpus tests and editor queries.
+grammar-test:
+    cd grammar && tree-sitter test
+    cd grammar && for q in queries/*.scm; do tree-sitter query "$q" ../corpus/reference/edge-cases/postcodes-and-gems.cha >/dev/null || exit 1; done
+
+# Clippy over the spec workspace, which `just clippy` does not reach.
+clippy-spec:
+    cargo clippy --manifest-path spec/Cargo.toml --all-targets --locked
+
+# The model and re2c parser must keep compiling for wasm32 (no C toolchain).
+wasm-check:
+    cargo check -p talkbank-model -p talkbank-parser-re2c --target wasm32-unknown-unknown --locked
+
+# Every tracked shell script, at shellcheck's default severity.
+shellcheck:
+    bash scripts/lint/shellcheck-all.sh
+
+# Dependency policy.
+deps-check:
+    cargo deny --locked check
+
+# Point git at the tracked hooks. Run once per clone.
 #
-# It exists because the gate used to be a bulleted list on a book page that a
-# human executed from memory, while `just push` ran fmt, actionlint and two
-# version-sync checks and NO TESTS AT ALL, under a comment claiming it was
-# "the full CI gate". The easy command did not gate and the gate was not a
-# command, so a green `just test` was mistaken for a green gate and CI went red
-# on a doctest. `just test` is `--tests`; doctests are a separate compilation
-# that `--tests` cannot see, by construction.
+# `.git/hooks` does not survive a clone, so an untracked hook is a gate that
+# exists on exactly one machine. The one this replaces was untracked, ran two
+# checks, and printed "fast gate passed" while letting a broken push through.
+install-hooks:
+    git config core.hooksPath .githooks
+    @echo "hooks installed: pre-push now requires a gate stamp (see just gate)"
+
+# Assert CI and the gate cannot describe different checks.
+ci-gate-sync:
+    python3 scripts/check_ci_gate_sync.py
+
+# THE FAST HALF of the gate: everything that fails in seconds.
 #
-# Takes 10-15 minutes, most of it rustdoc building one merged doctest binary
-# per crate. That is the honest cost of knowing before the push rather than
-# after.
-#
-# NOT included, deliberately: clippy, which CI owns as a single pass (see
-# CLAUDE.md). That is an accepted way for CI to go red on something local did
-# not run; everything else here closes.
-gate:
+# Ordered so a typo costs seconds, not the twelve minutes the slow half takes.
+# Run this constantly; it is cheap enough to have no excuse.
+gate-fast:
     just fmt-check
-    just grammar-generate-check
-    just test
-    just check-feature-off
-    cargo test --doc --workspace --locked
-    just test-spec
-    just book
-    just doc-dates
     just actionlint
+    just ci-gate-sync
     just rust-sync-check
     just app-sync-check
+    just doc-dates
+    just shellcheck
+    just verify-vendored-lexer
+    just grammar-generate-check
+    just grammar-test
+    just wasm-check
+    just deps-check
+    just book
+
+# THE SLOW HALF: compilation, tests, lints, the book. 12-15 minutes.
+#
+# Most of it is rustdoc building one merged doctest binary per crate. That is
+# inherent, and it is the half that catches what `just test` cannot see.
+gate-slow:
+    just test-all
+    just clippy
+    just clippy-spec
+
+# THE PRE-PUSH GATE: both halves, which is everything CI runs that one machine
+# can run.
+#
+# It is split because the whole thing exceeds this project's 900-second command
+# ceiling, so an agent cannot invoke it in a single call and would otherwise be
+# pushed toward running some-but-not-all by hand, which is the exact failure
+# this gate exists to end. Run `gate-fast` then `gate-slow` when a ceiling
+# binds; run `gate` when nothing stops you.
+#
+# The test set is delegated to `test-all` rather than restated. An earlier cut
+# inlined it and immediately produced two recipes both claiming to be "what CI
+# runs", already diverged in both directions.
+#
+# What is NOT here: the cross-platform matrix, which needs three operating
+# systems. `just ci-gate-sync` fails if anything else drifts out.
+gate: gate-fast gate-slow
+    @printf '%s %s\n' "$(git rev-parse HEAD)" "$(git status --porcelain | shasum | cut -d' ' -f1)" > .git/gate-passed
+    @echo "[gate] passed; stamp written for this tree"
 
 # Gate, then push. Use this instead of `git push`.
+#
+# The gate runs BEFORE git opens its connection, deliberately: a long run
+# between connection and transfer can stall the push past GitHub's SSH idle
+# timeout. That is also why the pre-push hook holds only the fast checks.
 push *ARGS:
     just gate
     git push {{ARGS}}

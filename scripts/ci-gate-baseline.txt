@@ -1,0 +1,23 @@
+# Workflow steps still running a raw command instead of a `just`
+# recipe. This list may only SHRINK: a new raw command fails the
+# check, and so does an entry here that has been converted.
+#
+# Empty means the justfile owns every command CI runs, which is
+# the point: `just gate` is then CI by construction.
+book.yml:cd book && mdbook build
+ci.yml:cargo build --workspace --all-targets --locked
+ci.yml:cargo fmt --all -- --check
+ci.yml:cargo fmt --manifest-path spec/Cargo.toml --all -- --check
+ci.yml:cargo test --doc --workspace --locked
+ci.yml:cargo test --manifest-path spec/Cargo.toml --workspace --locked
+ci.yml:cargo test --workspace --tests --locked
+ci.yml:cargo test -p talkbank-derive --features ui-tests --tests ui_tests --locked
+ci.yml:cd book && mdbook build
+ci.yml:for query_file in queries/*.scm; do
+ci.yml:lychee --offline --root-dir "${GITHUB_WORKSPACE}/book/build" "${GITHUB_WORKSPACE}/book/build"
+ci.yml:tree-sitter generate
+ci.yml:version=$(node -p "require('./package.json').devDependencies['tree-sitter-cli']")
+crates-io-foundation.yml:bash scripts/release/check-foundation-publication-readiness.sh
+cross-platform.yml:cargo build --workspace --all-targets --locked
+cross-platform.yml:cargo test --doc --workspace --locked
+cross-platform.yml:cargo test --workspace --tests --locked

@@ -10,6 +10,17 @@ keywords.workspace = true
 categories.workspace = true
 description = "OpenAI-compatible HTTP JudgmentProvider for talkbank-transform (the only network-dependent crate in the toolchain)"
 
+[lib]
+# No doc examples, and rustdoc charges a full compile per crate whether or not
+# there are any: measured at 22-23 s each, against 18.4 s of ACTUAL doctest
+# execution across the entire workspace. Skipping the two application crates
+# that have none takes about a minute off every gate run and every CI run.
+#
+# The cost, stated because it is silent: a doc example added here later would
+# never run, locally or in CI. That is an acceptable trade for an app shell and
+# an API client, and NOT for the library crates, which keep their doctests.
+doctest = false
+
 [dependencies]
 talkbank-transform = { workspace = true }
 ureq = "3.3.0"

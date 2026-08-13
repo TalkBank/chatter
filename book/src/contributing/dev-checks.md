@@ -1,7 +1,7 @@
 # Developer Verification Checks
 
 **Status:** Current
-**Last modified:** 2026-08-12 23:40 EDT
+**Last modified:** 2026-08-13 01:05 EDT
 
 What to run locally, and what each thing costs. The commands are `just`
 recipes; `just --list` shows them all.
@@ -29,10 +29,19 @@ page used to prescribe exactly that sequence. If a crate has no tests, run
 ## Before pushing
 
 ```bash
-just gate          # everything CI runs. 10-15 minutes.
+just gate-fast     # twelve checks, under a minute. Run this constantly.
+just gate-slow     # compilation, tests, lints. 10-13 minutes.
+just gate          # both
 ```
 
 Or `just push`, which runs `gate` and then pushes.
+
+The split exists because the whole gate exceeds this project's 900-second
+command ceiling, so an agent cannot invoke it in one call and would otherwise
+be pushed toward running some-but-not-all by hand, which is the failure the
+gate exists to end. It also puts every cheap check ahead of every expensive
+one: a workflow typo or a stale version pin now fails in seconds instead of
+after twelve minutes of rustdoc.
 
 **Do not assemble this by hand from the list below.** It used to be a list,
 `just push` ran no tests at all under a comment claiming it was the full CI
@@ -57,9 +66,9 @@ What `gate` runs, and why each is not covered by the others:
 Clippy is deliberately absent: CI owns it as a single pass. That is an accepted
 way for CI to go red on something local did not run.
 
-`just test-all` bundles the first four, but takes 10-15 minutes, almost all of
-it rustdoc compiling one merged doctest binary per crate. It also exceeds this
-project's 900-second command ceiling, so run the pieces separately.
+`just test-all` is the TEST half of the gate (both workspaces, doctests, the
+proc-macro UI suite) and is what `gate` delegates to. Useful on its own when you
+want the tests without the lints, the grammar checks and the book.
 
 **`just fmt-check` is not optional.** `cargo test` does not run rustfmt, CI
 does, and formatting drift accumulated across 19 files once while every test run

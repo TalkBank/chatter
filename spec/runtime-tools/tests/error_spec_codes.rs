@@ -59,11 +59,16 @@ fn examples_asserting_nothing_do_not_increase() {
     /// Was 22 when `just spec-status` first reported it; worked to zero the
     /// same day by declaring, on each example, the code it was measured to
     /// emit (which is the code `gen_validation_corpus` was already assuming).
+    ///
+    /// The ratchet has reached its floor, so this is `==` rather than `<=`:
+    /// a count cannot go below zero, and `<= 0` on an unsigned type is an
+    /// absurd comparison that clippy denies. If a lower bound ever becomes
+    /// meaningful again the shape can go back.
     const CEILING: u32 = 0;
 
     let report = run(&Request::default()).expect("the spec corpus must load");
     assert!(
-        report.no_expected_codes <= CEILING,
+        report.no_expected_codes == CEILING,
         "{} example(s) declare no `Expected Error Codes`, up from {CEILING}. \
          Such an example is parsed and nothing more: it cannot fail. Give the \
          new one its codes, or mark its spec `not_implemented` so it counts as \

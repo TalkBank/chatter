@@ -38,6 +38,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       # Pinned in lockstep with rust-toolchain.toml (channel =
       # "1.97.1"). Drift against latest-stable is caught by the
       # weekly .github/workflows/clippy-rolling.yml job; bump this
@@ -145,8 +153,7 @@ jobs:
       # opportunistic session sweeps (advisory lint rotted to ~100
       # warnings once before, 2026-05-29; leisure needs a pulse).
       - name: cargo clippy (single pass; red only on panic-policy denies)
-        run: cargo clippy --workspace --all-targets --locked
-
+        run: just clippy
       # The spec workspace had fmt and test in CI but NEVER clippy, so its
       # lint debt accumulated unseen: 20 warnings by 2026-08-05, all
       # machine-applicable, in the tooling that GENERATES the corpus tests,
@@ -154,8 +161,7 @@ jobs:
       # as the main pass above; this exists so the count cannot silently
       # climb again.
       - name: cargo clippy (spec workspace)
-        run: cargo clippy --manifest-path spec/Cargo.toml --all-targets --locked
-
+        run: just clippy-spec
   # Pins the wasm-cleanliness contract: talkbank-model and the pure-Rust
   # re2c parser must keep compiling for wasm32 (no C toolchain, no
   # tree-sitter runtime). External consumers depend on exactly this
@@ -168,6 +174,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       # Same lockstep pin as the rust job above.
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
@@ -180,8 +194,7 @@ jobs:
           shared-key: wasm-job
 
       - name: Check wasm32 compilation
-        run: cargo check -p talkbank-model -p talkbank-parser-re2c --target wasm32-unknown-unknown --locked
-
+        run: just wasm-check
   book:
     name: mdBook build
     runs-on: ubuntu-latest
@@ -222,17 +235,23 @@ jobs:
           # run on a shallow clone rather than passing vacuously.
           fetch-depth: 0
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       # Cheap guard (pure Python, no Rust build): every numeric Rust-version
       # pin in the workflows must match its source of truth, the dev toolchain
       # from rust-toolchain.toml or, for the marked MSRV pin, Cargo.toml
       # rust-version. Bumping Rust is then: edit the source file, run
       # `just rust-sync`, and this job enforces no pin was missed.
       - name: Check Rust version pins
-        run: python3 scripts/sync-rust-versions.py --check
-
+        run: just rust-sync-check
       - name: Documentation date headers are honest
-        run: python3 scripts/check_doc_dates.py
-
+        run: just doc-dates
   app-version-sync:
     name: App version in sync
     runs-on: ubuntu-latest
@@ -240,6 +259,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       # Cheap guard (pure Python, no build): the app version must match across the
       # canonical [workspace.package] version, tauri.conf.json, package.json, and a
       # CHANGELOG entry. Bumping the version is then: edit Cargo.toml, run
@@ -247,8 +274,7 @@ jobs:
       # missed. Prevents the desktop bundle-vs-updater version drift that broke the
       # first v0.1.1 desktop release.
       - name: Check app version sync
-        run: python3 scripts/sync-app-version.py --check
-
+        run: just app-sync-check
   shellcheck:
     name: Shell scripts (shellcheck, strictest)
     runs-on: ubuntu-latest
@@ -256,12 +282,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       # Every tracked shell script must pass shellcheck at its default
       # (strictest) severity. ubuntu-latest ships shellcheck; the runner finds
       # every *.sh plus shebang scripts via git ls-files. See CLAUDE.md.
       - name: shellcheck all shell scripts
-        run: bash scripts/lint/shellcheck-all.sh
-
+        run: just shellcheck
   grammar:
     name: Grammar (generate staleness, tree-sitter test, queries)
     runs-on: ubuntu-latest
@@ -272,6 +305,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: actions/setup-node@v7
         with:
           node-version-file: grammar/.nvmrc
@@ -315,8 +356,7 @@ jobs:
       # of the v0.3.3 word-fragmentation regression. 199 parses at time of
       # wiring.
       - name: tree-sitter test
-        run: tree-sitter test
-
+        run: just grammar-test
       # Editor queries reference grammar node types by name, so they rot
       # silently whenever a node is renamed or removed: nothing else reads them.
       # `tree-sitter query` fails if a pattern does not compile against the
@@ -337,6 +377,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+
+      # `just` owns every command this workflow runs, so that the local
+      # gate and CI cannot describe different checks. See
+      # scripts/check_ci_gate_sync.py.
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       # `deny.toml` has existed since the v0.1.0 release prep but nothing ever
       # ran it, so the license + advisory policy was decorative for months.
       # Wired up 2026-07-26. This matters more here than in most repos: these
@@ -360,4 +408,4 @@ jobs:
       # `--locked` is a TOP-LEVEL cargo-deny option, not a `check` subcommand
       # flag: `cargo deny check --locked` fails to parse.
       - name: cargo deny check
-        run: cargo deny --locked check
+        run: just deps-check

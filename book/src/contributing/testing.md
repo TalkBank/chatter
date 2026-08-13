@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-08-12 20:55 EDT
+**Last modified:** 2026-08-13 00:05 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -169,7 +169,7 @@ either program accepts.
 | LSP | `cargo test -p talkbank-lsp` |
 | Spec files | regenerate per [Spec Workflow](spec-workflow.md), then `just test-spec` and the gate registry |
 | Either registry (symbols, form markers) | `just test-spec`, which includes the drift gates |
-| Anything, before pushing | the pre-push list in [dev-checks](dev-checks.md#before-pushing) |
+| Anything, before pushing | `just gate`, or `just push` which runs it |
 
 ## Mutation testing
 

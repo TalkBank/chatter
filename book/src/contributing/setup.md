@@ -1,7 +1,7 @@
 # Setup
 
 **Status:** Current
-**Last modified:** 2026-08-12 20:25 EDT
+**Last modified:** 2026-08-13 00:05 EDT
 
 Getting a working checkout, and what you need installed for each surface you
 might touch. What to RUN once you are set up is in
@@ -68,7 +68,7 @@ WORKSPACE manifest, not an individual crate's:
 cargo test --manifest-path spec/Cargo.toml --workspace   # or: just test-spec
 ```
 
-`just test-spec` is the same thing and is what the pre-push list names. What
+`just test-spec` is the same thing, and `just gate` runs it. What
 the two crates are for, and why the split exists, is in
 [Spec Tooling](../architecture/spec-tooling.md).
 
@@ -93,13 +93,17 @@ Checks](dev-checks.md).
 ## Pushing
 
 ```bash
-just push          # fmt-check, actionlint, and the two version-sync checks, then git push
+just push          # runs `just gate`, then pushes
 ```
 
-`just push` is a backstop for the fast checks that `cargo test` cannot catch,
-not a substitute for the pre-push list in
-[dev-checks](dev-checks.md#before-pushing). Run the real gates locally first:
-CI is a confirmation, never the thing that finds your bug for you.
+`just gate` is the pre-push gate: everything CI runs that can run on one
+machine, in one command. It takes 12-15 minutes. CI is a confirmation, never
+the thing that finds your bug for you.
+
+It used to be a list of commands on another page, and `just push` ran four fast
+checks under a comment claiming to be the full CI gate. A green `just test` was
+read as a green gate and CI went red. If you find yourself assembling the gate
+by hand from a list, that list is the bug.
 
 There is no `make verify` and no Makefile. This page used to describe one as
 "not yet ported"; it was never coming, because the recipes replaced it.

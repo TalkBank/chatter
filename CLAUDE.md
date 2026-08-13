@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-12 23:45 EDT
+**Last modified:** 2026-08-13 01:10 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -73,17 +73,21 @@ or CLAN still say.
 
 ## Danger rules (each has burned a session; no exceptions)
 
-1. **`just gate` IS the pre-push gate, and `just push` runs it.** It runs
-   everything CI runs, in one command, because a gate assembled by hand from a
-   list is a gate that gets assembled wrong: on 2026-08-12 a green `just test`
-   was read as a green gate and CI went red on a doctest, while `just push`
-   ran no tests at all under a comment claiming it was the full CI gate.
-   `just test` is the inner loop (`--tests`, compiled targets only) and
-   CANNOT see doctests, which are a separate compilation. Never substitute it
-   for the gate.
-   Each crate has ONE integration binary (`tests/integration/`), so select
-   tests by NAME FILTER (`cargo test -p <crate> --tests <filter>`); the
-   per-file `--test <target>` names no longer exist.
+1. **`just gate` IS the pre-push gate, and `just push` runs it.** `gate-fast`
+   is twelve checks in under a minute; `gate-slow` is the tests and lints, 10-13
+   minutes; `gate` is both. Run the halves separately when the 900-second
+   command ceiling binds. `just test` is `--tests` only and CANNOT see doctests,
+   which are a separate compilation; never substitute it for the gate.
+
+   **The justfile owns every command CI runs**, and
+   `scripts/check_ci_gate_sync.py` fails if a workflow runs anything else, if a
+   recipe CI invokes is missing from the gate, or if a job calls `just` without
+   installing it. That check exists because this repository had FOUR
+   independent lists of what must pass (the workflows, `gate`, `test-all`, and
+   an untracked pre-push hook that printed "fast gate passed" after two of
+   twenty checks) and all four had drifted. Seventeen raw commands remain in
+   `scripts/ci-gate-baseline.txt`; that list may only shrink.
+
 2. **Never run two cargo-family commands concurrently against one
    workspace** (this root workspace or `spec/`'s). The target-dir
    lock silently queues them; wall clock explodes. If both are truly
