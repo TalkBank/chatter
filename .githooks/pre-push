@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Refuse a push unless `just gate` has passed on exactly this tree.
+# Refuse a push unless BOTH halves of `just gate` have passed on this tree.
 #
-# THIS HOOK RUNS NO CHECKS. It reads a stamp that only `just gate` writes.
+# THIS HOOK RUNS NO CHECKS. It reads two stamps that only `just gate-fast` and
+# `just gate-slow` write.
 #
 # # Why it does no work
 #
@@ -12,6 +13,18 @@
 # push fails AFTER passing. And a 15-minute hook manufactures pressure to use
 # `--no-verify`, which this project forbids outright, so it would convert a
 # real gate into a habitually bypassed one.
+#
+# # Why two stamps rather than one
+#
+# `gate` is `gate-fast` plus `gate-slow`, and on a cold build the pair exceeds
+# a single command invocation's time ceiling, so the halves have to be
+# runnable separately. The first version of this hook read ONE stamp that only
+# the combined `gate` wrote, which meant running both halves did all the work
+# and produced no proof: the split and the stamp were added an hour apart and
+# nothing checked that one satisfied the other.
+#
+# Two stamps make the composition real. Running the halves is now equivalent to
+# running `gate`, which is what the split claimed all along.
 #
 # # Why it exists at all
 #
@@ -25,30 +38,33 @@
 # push. A hook ran and issued a green, for two checks out of twenty, using the
 # word "gate".
 #
-# So the rule is: a check that cannot run the gate must not report on it. This
-# hook answers one question, "has the gate passed on this exact tree", and the
-# only way to make it answer yes is to run the gate.
+# So the rule is: a check that cannot run the gate must not report on it.
 set -euo pipefail
 
-STAMP=".git/gate-passed"
-HEAD_SHA="$(git rev-parse HEAD)"
-# Uncommitted changes count: the gate ran against a tree, not a commit.
+# ORDER MATTERS: commit first, then gate, then push.
+#
+# The stamp records the WORKING TREE state, so committing changes it: a gate
+# run before the commit stamps "these files are modified" and the push stamps
+# "clean". That is correct rather than annoying, because it makes the stamp
+# mean "the gate ran on exactly what you are pushing", which is the only claim
+# worth having. Gate the thing you are about to push.
 TREE_STATE="$(git status --porcelain | shasum | cut -d' ' -f1)"
-WANT="${HEAD_SHA} ${TREE_STATE}"
 
-if [ ! -f "$STAMP" ]; then
-    echo "[pre-push] REFUSED: no gate stamp." >&2
-    echo "           Run 'just push', which runs the gate and then pushes." >&2
-    exit 1
-fi
+for half in fast slow; do
+    stamp=".git/gate-${half}-passed"
+    if [ ! -f "$stamp" ]; then
+        echo "[pre-push] REFUSED: no stamp from 'just gate-${half}'." >&2
+        echo "           Run 'just push', or 'just gate-fast' and" >&2
+        echo "           'just gate-slow' if a time ceiling forces the split." >&2
+        exit 1
+    fi
+    got="$(cat "$stamp")"
+    if [ "$got" != "$TREE_STATE" ]; then
+        echo "[pre-push] REFUSED: the gate-${half} stamp is for a different tree." >&2
+        echo "           stamped: $got" >&2
+        echo "           pushing: $TREE_STATE" >&2
+        exit 1
+    fi
+done
 
-GOT="$(cat "$STAMP")"
-if [ "$GOT" != "$WANT" ]; then
-    echo "[pre-push] REFUSED: the gate stamp is for a different tree." >&2
-    echo "           stamped: $GOT" >&2
-    echo "           pushing: $WANT" >&2
-    echo "           Run 'just push'." >&2
-    exit 1
-fi
-
-echo "[pre-push] gate stamp matches this tree."
+echo "[pre-push] both gate stamps match this tree."

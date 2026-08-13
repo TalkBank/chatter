@@ -241,6 +241,7 @@ gate-fast:
     just wasm-check
     just deps-check
     just book
+    @printf '%s\n' "$(git status --porcelain | shasum | cut -d' ' -f1)" > .git/gate-fast-passed
 
 # THE SLOW HALF: compilation, tests, lints, the book. 12-15 minutes.
 #
@@ -250,6 +251,7 @@ gate-slow:
     just test-all
     just clippy
     just clippy-spec
+    @printf '%s\n' "$(git status --porcelain | shasum | cut -d' ' -f1)" > .git/gate-slow-passed
 
 # THE PRE-PUSH GATE: both halves, which is everything CI runs that one machine
 # can run.
@@ -267,8 +269,7 @@ gate-slow:
 # What is NOT here: the cross-platform matrix, which needs three operating
 # systems. `just ci-gate-sync` fails if anything else drifts out.
 gate: gate-fast gate-slow
-    @printf '%s %s\n' "$(git rev-parse HEAD)" "$(git status --porcelain | shasum | cut -d' ' -f1)" > .git/gate-passed
-    @echo "[gate] passed; stamp written for this tree"
+    @echo "[gate] both halves passed; stamps written for this tree"
 
 # Gate, then push. Use this instead of `git push`.
 #

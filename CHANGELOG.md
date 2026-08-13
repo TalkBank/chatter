@@ -9,6 +9,64 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-13
+
+**Validation verdicts: CHANGED, in BOTH directions.** Six error codes that had
+silently degraded to E316 "unparsable content" now report themselves again
+(E202, E307, E311, E314, E370, E375), and two false positives are gone. If you
+gate a pipeline on `validate`, diff your own corpus before upgrading; see
+[What a Version Bump Promises](https://talkbank.github.io/chatter/chatter/integrating/versioning.html).
+
+Adjudicated against real corpus data before shipping: the operator's corpus
+differential over a 2158-file stratified sample reports byte-identical per-code
+counts and no newly-failing roundtrips against v0.10.0. The changes below are
+all on malformed input, which a curated corpus contains almost none of.
+
+**Library APIs: additive.** `talkbank_model::alignment` re-exports
+`walk_words`, `walk_words_mut` and `counts_for_tier`, which previously required
+naming the `helpers` module.
+
+### Fixed
+
+- **A recovery node could displace an entire `tier_body`.** An utterance ending
+  in " ." was told its terminator was missing (E305), and a retrace or bracket
+  at utterance start took the rest of the line with it. The parser was reading
+  its own recovery artefact as evidence about the user's file. The generated
+  typed CST traversal is regenerated from a generator that no longer absorbs an
+  ERROR child at whatever position its cursor had reached.
+
+- **Six codes degraded to the E316 catch-all.** Which classifier a recovery node
+  reached was decided by WHERE tree-sitter had put it, so the same construct was
+  named precisely at utterance start and generically after spoken material.
+  `MainTierRegion` is now stated by the caller that knows it, and every
+  main-tier Unexpected sink routes through one owner.
+
+- **E246 blamed a lengthening marker for a stray tab.** The classifier saw a `:`
+  before the recovery node, and that `:` was the SPEAKER's. A tab inside the
+  main tier now reports the tab.
+
+- **E758 pointed at whitespace nowhere near a tab.** It claims "extra whitespace
+  between the tab and the tier content"; filling that slot never established the
+  adjacency the sentence asserts, so ordinary space between two words was
+  reported as a leading-space violation. The span is now built only when it
+  starts at the tab's end byte.
+
+- **E754 retired.** `@l` and `@ls` no longer require a single character.
+
+- **Windows: the content-catch-all gate reported every exempted file as new**,
+  because repo-relative paths were compared with the host separator against a
+  forward-slashed list.
+
+### Changed
+
+- Two wall-clock test assertions became hang detectors with order-of-magnitude
+  ceilings; both were tuned to one machine and one of them turned the Windows
+  matrix red doing correct work.
+
+- `chatter-desktop` and `talkbank-llm` set `doctest = false`. Neither has doc
+  examples, and each was paying a full rustdoc compile to run zero doctests.
+
+
 ## [0.10.0] - 2026-08-07
 
 **Validation verdicts: CHANGED, in the stricter direction.** Two new error
@@ -1241,7 +1299,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/TalkBank/chatter/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/TalkBank/chatter/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/TalkBank/chatter/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/TalkBank/chatter/compare/v0.8.0...v0.9.0
