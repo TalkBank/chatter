@@ -386,7 +386,9 @@ fn sources(root: &Path) -> Scanned {
         if path.extension().is_none_or(|ext| ext != "rs") {
             continue;
         }
-        let as_str = path.to_string_lossy();
+        // Forward-slashed on every host: the exclusions and the baseline keys
+        // are written that way, and Windows would otherwise match neither.
+        let as_str = path.to_string_lossy().replace('\\', "/");
         if as_str.contains("/generated/") || as_str.contains("/target/") {
             continue;
         }
@@ -396,7 +398,7 @@ fn sources(root: &Path) -> Scanned {
                     .strip_prefix(root)
                     .unwrap_or(path)
                     .to_string_lossy()
-                    .into_owned();
+                    .replace('\\', "/");
                 let blanked = blank_literals(&text);
                 files.push(SourceFile {
                     path: rel,

@@ -153,12 +153,20 @@ pub struct RepoPath(String);
 impl RepoPath {
     /// Strip the workspace root, the only way a `RepoPath` is made from a
     /// filesystem path.
+    /// Always forward-slashed, whatever the host separator is.
+    ///
+    /// `UNPROTECTED` is written with forward slashes, and Windows yields
+    /// backslashes, so a raw `to_string_lossy` compares every path against a
+    /// list it can never match: the gate reported all 20 listed files as newly
+    /// "gaining" a catch-all, on Windows only, and had done since it was
+    /// written. A path is not a string, and a path RENDERED for comparison
+    /// needs a stated convention.
     fn of(root: &Path, file: &Path) -> Self {
         Self(
             file.strip_prefix(root)
                 .unwrap_or(file)
                 .to_string_lossy()
-                .into_owned(),
+                .replace('\\', "/"),
         )
     }
 
@@ -243,7 +251,7 @@ impl Sweep {
             if path.extension().is_none_or(|ext| ext != "rs") {
                 continue;
             }
-            let as_str = path.to_string_lossy();
+            let as_str = path.to_string_lossy().replace('\\', "/");
             // Test code is exempt: a test matching one variant it cares about
             // is not a traversal that can silently drop content.
             if as_str.contains("/tests/") || as_str.contains("/generated/") {
@@ -526,6 +534,32 @@ impl Gate for CatchAllGate {
 #[cfg(test)]
 mod tests {
     use super::{RepoPath, has_catch_all, scan};
+    use std::path::Path;
+
+    /// SURVIVES: behaviour a signature cannot state. `RepoPath` renders a path
+    /// for COMPARISON against `UNPROTECTED`, which is written with forward
+    /// slashes, so the rendering must be separator-independent.
+    ///
+    /// This is testable on any host because the input is a path whose text
+    /// contains backslashes, which is what Windows hands `to_string_lossy`.
+    /// Without it, the gate reported all 20 listed files as newly gaining a
+    /// catch-all on Windows and nowhere else, and the only place that showed up
+    /// was a cross-platform CI matrix nobody reads on a green day.
+    #[test]
+    fn repo_paths_are_forward_slashed_whatever_the_host_separator() {
+        let root = Path::new("/repo");
+        let windows_style = Path::new("/repo/crates\\talkbank-lsp\\src\\alignment.rs");
+        assert_eq!(
+            RepoPath::of(root, windows_style).as_str(),
+            "crates/talkbank-lsp/src/alignment.rs",
+            "a path rendered for comparison must not carry the host separator"
+        );
+        let unix_style = Path::new("/repo/crates/talkbank-lsp/src/alignment.rs");
+        assert_eq!(
+            RepoPath::of(root, unix_style).as_str(),
+            "crates/talkbank-lsp/src/alignment.rs"
+        );
+    }
 
     /// SURVIVES: behaviour. `scan` is brace-balanced and depth-aware, which no
     /// signature describes; this pins that a catch-all in an INNER match over
