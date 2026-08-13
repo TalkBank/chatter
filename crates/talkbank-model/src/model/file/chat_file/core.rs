@@ -56,7 +56,7 @@ use crate::Line;
 /// # Example
 ///
 /// ```
-/// use talkbank_model::model::{ChatFile, Header, LanguageCode, Line};
+/// use talkbank_model::model::{ChatFile, Header, LanguageCode, Line, TranscriptName};
 /// use talkbank_model::{Span, ErrorCollector};
 ///
 /// // Parsing returns NotValidated
@@ -70,7 +70,7 @@ use crate::Line;
 ///
 /// // Validate to get Validated state
 /// let errors = ErrorCollector::new();
-/// let validated = chat_file.validate_into(&errors, None);
+/// let validated = chat_file.validate_into(&errors, TranscriptName::Anonymous);
 ///
 /// // Only validated files can be serialized to JSON
 /// // let json = match validated.to_json_validated() {

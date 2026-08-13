@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-12 22:55 EDT
+**Last modified:** 2026-08-12 23:45 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -73,10 +73,14 @@ or CLAN still say.
 
 ## Danger rules (each has burned a session; no exceptions)
 
-1. **Tests run under `cargo test`.** `just test` is the inner loop
-   (`--tests`, compiled targets only); **`just test-all` is the full gate**
-   and adds doctests, which is what CI runs. Run `test-all` before pushing:
-   `test` alone will not catch a doctest regression.
+1. **`just gate` IS the pre-push gate, and `just push` runs it.** It runs
+   everything CI runs, in one command, because a gate assembled by hand from a
+   list is a gate that gets assembled wrong: on 2026-08-12 a green `just test`
+   was read as a green gate and CI went red on a doctest, while `just push`
+   ran no tests at all under a comment claiming it was the full CI gate.
+   `just test` is the inner loop (`--tests`, compiled targets only) and
+   CANNOT see doctests, which are a separate compilation. Never substitute it
+   for the gate.
    Each crate has ONE integration binary (`tests/integration/`), so select
    tests by NAME FILTER (`cargo test -p <crate> --tests <filter>`); the
    per-file `--test <target>` names no longer exist.

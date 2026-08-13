@@ -176,16 +176,50 @@ release-tag VERSION:
 actionlint:
     actionlint
 
-# Run the full CI gate (fmt + workflow lint + pin sync + two-pass clippy) and
-# THEN push. Use this instead of `git push`: the gate runs before git opens its
-# connection, so a long clippy run cannot stall the push past GitHub's SSH idle
-# timeout (which is why clippy is not in the pre-push hook). The hook still runs
-# the fast checks (fmt + actionlint) as a backstop.
-push *ARGS:
+# Regenerate the tree-sitter parser and fail if the committed output moved.
+#
+# The ONLY check that catches a stale `parser.c`, and nothing else can: the
+# traversal staleness guard hashes `grammar.json` and `node-types.json`, so a
+# regeneration that changes only `parser.c` passes it correctly. A tree-sitter
+# version bump does exactly that, and left `parser.c` 997 lines stale until CI
+# caught it after a push.
+grammar-generate-check:
+    cd grammar && tree-sitter generate
+    cd grammar && git diff --exit-code src/parser.c src/grammar.json src/node-types.json
+
+# Everything CI runs, run locally. THIS is the pre-push gate.
+#
+# It exists because the gate used to be a bulleted list on a book page that a
+# human executed from memory, while `just push` ran fmt, actionlint and two
+# version-sync checks and NO TESTS AT ALL, under a comment claiming it was
+# "the full CI gate". The easy command did not gate and the gate was not a
+# command, so a green `just test` was mistaken for a green gate and CI went red
+# on a doctest. `just test` is `--tests`; doctests are a separate compilation
+# that `--tests` cannot see, by construction.
+#
+# Takes 10-15 minutes, most of it rustdoc building one merged doctest binary
+# per crate. That is the honest cost of knowing before the push rather than
+# after.
+#
+# NOT included, deliberately: clippy, which CI owns as a single pass (see
+# CLAUDE.md). That is an accepted way for CI to go red on something local did
+# not run; everything else here closes.
+gate:
     just fmt-check
+    just grammar-generate-check
+    just test
+    just check-feature-off
+    cargo test --doc --workspace --locked
+    just test-spec
+    just book
+    just doc-dates
     just actionlint
     just rust-sync-check
     just app-sync-check
+
+# Gate, then push. Use this instead of `git push`.
+push *ARGS:
+    just gate
     git push {{ARGS}}
 
 # Regenerate symbol registry outputs for grammar and Rust consumers.

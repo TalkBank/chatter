@@ -1,7 +1,7 @@
 # Testing and Quality Gates
 
 **Status:** Current
-**Last modified:** 2026-08-12 21:00 EDT
+**Last modified:** 2026-08-12 23:40 EDT
 
 How local verification relates to CI. The local commands themselves live in
 [Developer Verification Checks](dev-checks.md), which is their single owner;
@@ -9,10 +9,14 @@ this page says which of them CI repeats and which it does not.
 
 ## Local pre-merge contract
 
-Run the pre-push set from [dev-checks](dev-checks.md#before-pushing). In short:
-`just fmt-check`, `just test`, `just check-feature-off`,
-`cargo test --doc --workspace`, `just test-spec`, `just book`, plus whatever
-your surface adds.
+`just gate` runs everything CI runs; `just push` runs it and then pushes. See
+[dev-checks](dev-checks.md#before-pushing) for what it contains and why each
+step catches something the others cannot.
+
+The list is deliberately no longer reproduced here. When it was, it was a set
+of commands a human assembled from memory, and the one that was easiest to
+forget was `cargo test --doc --workspace`, which is exactly the one a green
+`just test` gives no signal about.
 
 ## Never-regress gates
 

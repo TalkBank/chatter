@@ -1,7 +1,7 @@
 # Developer Verification Checks
 
 **Status:** Current
-**Last modified:** 2026-08-12 21:00 EDT
+**Last modified:** 2026-08-12 23:40 EDT
 
 What to run locally, and what each thing costs. The commands are `just`
 recipes; `just --list` shows them all.
@@ -29,13 +29,33 @@ page used to prescribe exactly that sequence. If a crate has no tests, run
 ## Before pushing
 
 ```bash
-just fmt-check     # BOTH workspaces; cargo test does not run rustfmt
-just test          # compiled tests
-just check-feature-off
-cargo test --doc --workspace
-just test-spec     # the spec/ workspace, which --workspace does not reach
-just book          # builds the book and link-checks it
+just gate          # everything CI runs. 10-15 minutes.
 ```
+
+Or `just push`, which runs `gate` and then pushes.
+
+**Do not assemble this by hand from the list below.** It used to be a list,
+`just push` ran no tests at all under a comment claiming it was the full CI
+gate, and the predictable thing happened: a green `just test` was read as a
+green gate and CI went red on a doctest. `just test` is `--tests`, and doctests
+are a separate compilation it cannot see.
+
+What `gate` runs, and why each is not covered by the others:
+
+| Step | Catches what nothing else does |
+|---|---|
+| `just fmt-check` | `cargo test` does not run rustfmt; CI does |
+| `just grammar-generate-check` | a stale `parser.c`. The traversal staleness guard hashes `grammar.json` and `node-types.json`, so a regeneration touching only `parser.c` passes it correctly; a tree-sitter version bump does exactly that |
+| `just test` | the compiled test suite |
+| `just check-feature-off` | the crate still builds with default features off |
+| `cargo test --doc --workspace` | doctests, invisible to `--tests` |
+| `just test-spec` | the `spec/` workspace, which `--workspace` does not reach |
+| `just book` | the book builds and its links resolve |
+| `just doc-dates` | a `Last modified` header older than the file |
+| `just actionlint`, the two sync checks | workflow syntax and version pins |
+
+Clippy is deliberately absent: CI owns it as a single pass. That is an accepted
+way for CI to go red on something local did not run.
 
 `just test-all` bundles the first four, but takes 10-15 minutes, almost all of
 it rustdoc compiling one merged doctest binary per crate. It also exceeds this
