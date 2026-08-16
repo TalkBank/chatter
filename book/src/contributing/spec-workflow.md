@@ -1,7 +1,7 @@
 # Spec Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-15 13:20 EDT
+**Last modified:** 2026-08-16 12:39 EDT
 
 How to change `spec/` and leave the repository consistent. For what the fields
 MEAN, read [Spec System](../architecture/spec-system.md) first; this page is

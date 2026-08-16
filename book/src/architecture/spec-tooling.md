@@ -1,7 +1,7 @@
 # Spec Tooling
 
 **Status:** Current
-**Last modified:** 2026-08-15 13:20 EDT
+**Last modified:** 2026-08-16 12:39 EDT
 
 What the generator crates ARE. For the spec system's contract, which is what
 you need to write or change a spec, read

@@ -1,7 +1,7 @@
 # Grammar Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-15 13:20 EDT
+**Last modified:** 2026-08-16 12:39 EDT
 
 The tree-sitter grammar at `grammar/grammar.js` is the formal definition of the CHAT format. Changes require careful validation.
 

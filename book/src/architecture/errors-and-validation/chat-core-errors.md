@@ -1,7 +1,7 @@
 # Errors, CHAT core
 
 **Status:** Current
-**Last modified:** 2026-08-15 13:20 EDT
+**Last modified:** 2026-08-16 12:39 EDT
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,

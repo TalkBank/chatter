@@ -7,7 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
-## [Unreleased]
+## [0.12.0] - 2026-08-16
 
 **Validation verdicts: CHANGED.** Four rules report where they were silent:
 E241 on illegal untranscribed spellings, E756 on any empty dependent tier,
@@ -17,9 +17,13 @@ diff your own corpus before upgrading; see
 [What a Version Bump Promises](https://talkbank.github.io/chatter/chatter/integrating/versioning.html).
 
 Adjudicated against real corpus data before shipping, per the standing
-grammar-change gate. See the release's own differential run for the current
-figures: the earlier stratified sample was measured before the E756 widening
-was finished, so its numbers describe a build that no longer exists.
+grammar-change gate. The full-stride differential against the shipped 0.11.0
+build covers all 106,507 corpus files and reports EVERY error code unchanged
+except E241, whose 661 new instances are every one an illegal short or miscased
+spelling of an untranscribed marker: 624 `ww`, 18 `Www`, 10 `XX`, 6 `Ww`, 2
+`Xxx`, 1 `Xx`. All adjudicated INTENDED, the rule correctly flagging invalid
+data, and the 194 affected files join the cleanup queue. No new cross-backend
+disagreements and no newly-failing roundtrips.
 
 ### Added
 
@@ -1433,6 +1437,7 @@ First public release.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
 [Unreleased]: https://github.com/TalkBank/chatter/compare/v0.11.0...HEAD
+[0.12.0]: https://github.com/TalkBank/chatter/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/TalkBank/chatter/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/TalkBank/chatter/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/TalkBank/chatter/compare/v0.9.0...v0.9.1

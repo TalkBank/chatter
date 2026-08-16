@@ -1,7 +1,7 @@
 # Retained validation fixture (not a generated corpus)
 
 **Status:** Reference
-**Last updated:** 2026-08-15 13:20 EDT
+**Last updated:** 2026-08-16 12:39 EDT
 
 This directory once held a hand-written validation-error corpus emitted by the
 `generate_error_corpus` binary (`crates/talkbank-parser-tests/src/bin/`). That
