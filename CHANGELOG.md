@@ -98,6 +98,25 @@ disagreements and no newly-failing roundtrips.
   constructs one, `declared_content()` returns `None` for it (`as_str()` still
   flattens to `""` for `Display` and serialization), and the serde form is
   unchanged apart from `""` now deserializing to `Empty` instead of erroring.
+- **Breaking (library): the `test-utils` feature is REMOVED**, and with it
+  `ChatCleanedText::test_unchecked` and `ChatRawText::test_unchecked`. Not
+  renamed: gone. This is the breaking change that bites FIRST, because cargo
+  refuses to resolve a graph that asks for a feature which no longer exists, so
+  it fails before anything compiles and is invisible to a "what will fail to
+  build" scan. A consumer sees:
+
+  ```
+  package `X` depends on `talkbank-model` with feature `test-utils`
+  but `talkbank-model` does not have that feature
+  ```
+
+  Build fixtures through the parser instead: `TreeSitterParser::parse_word`
+  followed by `ChatCleanedText::from_word`. The hatch was removed because a type
+  whose existence proves "this text came from a parsed AST" is only as strong as
+  its weakest constructor, and one any dev-dependency could switch on was that
+  constructor. Downstream adoption on the day of release found three fixtures
+  that had been asserting on a shape production cannot emit (a terminator in a
+  `words` list), passing only because the hatch let them fabricate it.
 - **Breaking (library): `BulletContent::empty()`.** A named constructor for a
   payload that carries nothing, distinct from `from_text("")`, which fabricates
   an empty text segment that is not in the file. Additive; no existing call site
