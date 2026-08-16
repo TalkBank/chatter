@@ -6570,7 +6570,14 @@
       ]
     },
     "TextTier": {
-      "$ref": "#/$defs/NonEmptyString",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        {
+          "type": "null"
+        }
+      ],
       "description": "A simple text-only dependent tier with span tracking.\n\nUsed for tiers that carry free-form text without inline bullets or\nstructural alignment: %alt, %coh, %def, %eng, %err, %fac, %flo,\n%gls, %ort, %par, %tim.\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>\n- <https://talkbank.org/0info/manuals/CHAT.html#Comment_Tier>"
     },
     "TierContent": {

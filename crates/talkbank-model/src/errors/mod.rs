@@ -50,7 +50,7 @@ pub mod enhance;
 /// Core error sink trait plus lightweight forwarding implementations.
 pub mod error_sink;
 /// Generated `DiagnosticKind` match, produced from `spec/errors/*.md` by
-/// `gen_diagnostic_kind` (`spec/runtime-tools`). DO NOT EDIT BY HAND; see
+/// `just spec-gen` (`spec/runtime-tools`). DO NOT EDIT BY HAND; see
 /// the file's own header for the regeneration command.
 mod generated_diagnostic_kind;
 /// Byte-offset line index for O(log n) line/column lookups.
@@ -107,30 +107,37 @@ pub use text_size::{TextRange, TextSize};
 /// our existing API while gaining the type-safe offset arithmetic from
 /// the `text-size` ecosystem (used by rust-analyzer, rowan, etc.).
 ///
-// KNOWN HAZARD, for maintainers: `Default` and `DUMMY` are the same value.
+// KNOWN HAZARD, for maintainers: `DUMMY` is `{0, 0}`, and so is a real
+// zero-length position at the start of the file.
 //
 // Deliberately a plain comment, not rustdoc: schemars turns doc comments into
 // `description` text in the published `schema/chat-file.schema.json`, and this
 // is internal maintenance detail, not something a schema consumer should read.
 //
-// `Span::default()` is `{0, 0}`, which is exactly `DUMMY`, the sentinel meaning
-// "this value has no source location". Several validators branch on that
-// sentinel: `validation/utterance/spacing.rs` SKIPS a retrace whose span is
-// `DUMMY`, and `underline.rs` / `validation/retrace/mod.rs` widen to an
-// enclosing span. So a span arriving via `default()` or `unwrap_or_default()`
-// silently changes validation behaviour with nothing at the call site saying
-// so, and is invisible to a grep for `DUMMY`.
+// `DUMMY` is the sentinel meaning "this value has no source location", and
+// several validators branch on it: `validation/utterance/spacing.rs` SKIPS a
+// retrace whose span is `DUMMY`, and `underline.rs` /
+// `validation/retrace/mod.rs` widen to an enclosing span. `splice/engine.rs`
+// rejects an edit carrying it outright, because splicing at offset 0 and
+// "no location" are the same bytes. So the VALUE is still overloaded, and that
+// part is not fixed.
 //
-// Dropping the derive is the fix, but it is not free: 22 model fields carry
-// `#[serde(skip)] pub span: Span`, and serde needs `Default` to reconstruct a
-// skipped field (44 compile errors when the derive is removed). The honest
-// version is `#[serde(skip, default = "Span::dummy")]` on each, which also
-// documents what deserialization produces. Tracked as a 1.0 cleanup rather
-// than done piecemeal.
+// What IS fixed, and this comment described the pre-fix world for long enough
+// to mislead a reader: `Span` no longer derives `Default`. It used to, and
+// `Span::default()` was `{0, 0}`, so the sentinel was ALSO whatever any caller
+// got from `default()` or `unwrap_or_default()`, invisibly and un-greppably.
+// That derive is gone. `Span::dummy()` below exists so a serde-skipped field
+// asks for the sentinel BY NAME in its own attribute, where a reader of the
+// field can see what deserialization produces. Count the asks with
+// `rg -o 'default = "[a-zA-Z:_]*Span::dummy"' crates | wc -l` rather than
+// trusting a number written here.
 //
-// Until then: write `Span::DUMMY` explicitly, never `Span::default()`, so that
-// choosing the sentinel stays greppable.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+// So: `Span::DUMMY` is alive ON PURPOSE and is the only route to the sentinel.
+// Writing it is a deliberate, greppable act, which is exactly what the removal
+// of `Default` bought. Removing the sentinel itself is a different and much
+// larger change (an `Option<Span>`, or a span type that cannot be absent),
+// and it is not what happened here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct Span {
     /// Start byte offset (0-indexed, inclusive)
     pub start: u32,
@@ -141,6 +148,18 @@ pub struct Span {
 impl Span {
     /// Dummy span for programmatic construction (tests, builders).
     pub const DUMMY: Span = Span { start: 0, end: 0 };
+
+    /// [`Span::DUMMY`], as a function, for `#[serde(skip, default = ...)]`.
+    ///
+    /// Exists because dropping the `Default` derive left serde with no way to
+    /// reconstruct a skipped field. That is the point: the sentinel is now
+    /// something a field has to ASK for by name, and the ask is visible in the
+    /// field's own attribute, where a reader looking at the field can see what
+    /// deserialization will produce.
+    #[must_use]
+    pub const fn dummy() -> Span {
+        Span::DUMMY
+    }
 
     /// Create a span from byte offsets.
     ///

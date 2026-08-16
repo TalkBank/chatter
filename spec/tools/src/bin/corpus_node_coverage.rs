@@ -14,7 +14,8 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use generators::node_coverage::{Request, default_corpus_dir, default_node_types, run};
+use generators::node_coverage::{Request, run};
+use generators::repo_paths::RepoRoot;
 
 #[derive(ClapParser)]
 #[command(name = "corpus_node_coverage")]
@@ -51,9 +52,40 @@ struct JsonReport {
 
 fn main() -> ExitCode {
     let args = Args::parse();
-    let request = Request {
-        corpus_dir: args.corpus_dir.unwrap_or_else(default_corpus_dir),
-        node_types: args.node_types.unwrap_or_else(default_node_types),
+
+    // Each path is the operator's if they named one, and this repository's
+    // otherwise. Written as a match rather than `unwrap_or_else(default_...)`
+    // for two reasons: the old form resolved the repository root EAGERLY, on
+    // every run, including runs that named both paths and needed no checkout at
+    // all; and the root resolution can now fail, which an `unwrap_or_else`
+    // closure has nowhere to report.
+    //
+    // These are configuration defaults, not invented measurements: each is
+    // derived from a `RepoRoot` that proved itself a chatter checkout.
+    let request = match (args.corpus_dir, args.node_types) {
+        (Some(corpus_dir), Some(node_types)) => Request {
+            corpus_dir,
+            node_types,
+        },
+        (given_corpus_dir, given_node_types) => {
+            let derived = match RepoRoot::resolve(None).map(|root| Request::for_repo(&root)) {
+                Ok(request) => request,
+                Err(why) => {
+                    eprintln!("{why}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            Request {
+                corpus_dir: match given_corpus_dir {
+                    Some(given) => given,
+                    None => derived.corpus_dir,
+                },
+                node_types: match given_node_types {
+                    Some(given) => given,
+                    None => derived.node_types,
+                },
+            }
+        }
     };
 
     let report = match run(&request) {

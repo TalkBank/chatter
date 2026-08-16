@@ -109,19 +109,22 @@ fn check_error_coverage(dir: &PathBuf, enum_file: &Path) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to load error specs: {}", e))?;
 
     // Collect spec info: code -> (has_example, layer, category)
+    // Keyed by `String` because this map is JOINED with `enum_codes`, which
+    // `extract_enum_codes` builds by REGEX-SCRAPING `error_code.rs`'s source
+    // text. So the other side of this join is matched text, not a typed
+    // vocabulary, and there is nothing to parse it into that would mean
+    // anything. (`spec-runtime-tools`' artifacts.rs has a similar `String` key
+    // for a different reason: a real cross-workspace enum join.)
     let mut spec_codes: BTreeMap<String, SpecInfo> = BTreeMap::new();
     for spec in &specs {
         for error_def in &spec.errors {
-            let code = error_def.code.clone();
-            if code.is_empty() || (!code.starts_with('E') && !code.starts_with('W')) {
-                continue;
-            }
+            // No shape guard here: `SpecErrorCode` establishes it at load.
             spec_codes.insert(
-                code,
+                error_def.code.to_string(),
                 SpecInfo {
                     has_example: !error_def.examples.is_empty(),
-                    layer: spec.metadata.error_type.clone(),
-                    category: spec.metadata.category.clone(),
+                    layer: spec.metadata.layer.to_string(),
+                    category: spec.metadata.category.to_string(),
                     source_file: spec.source_file.clone(),
                 },
             );

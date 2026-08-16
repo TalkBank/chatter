@@ -107,7 +107,7 @@ pub enum Line {
         header: Box<Header>,
 
         /// Source span for diagnostics (not serialized).
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         span: Span,
 

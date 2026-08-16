@@ -267,13 +267,6 @@ fn classify_diff_path(path: &str) -> Category {
     }
 }
 
-fn corpus_base() -> PathBuf {
-    PathBuf::from(
-        std::env::var("TALKBANK_DATA")
-            .unwrap_or_else(|_| format!("{}/talkbank/data", std::env::var("HOME").unwrap())),
-    )
-}
-
 fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(base)
@@ -291,7 +284,7 @@ fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
 #[test]
 #[ignore]
 fn categorize_corpus_divergences() {
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     if !base.exists() {
         eprintln!("Skipping: {} not found", base.display());
         return;

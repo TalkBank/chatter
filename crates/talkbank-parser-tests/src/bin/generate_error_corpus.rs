@@ -4,7 +4,7 @@
 //! `tests/error_corpus/warnings/` fixtures (parse-layer rejections and
 //! warnings). Validation-layer fixtures are NOT generated here: `spec/errors/`
 //! is the single source of truth for validation tests, lowered to a fixture
-//! corpus by `gen_validation_corpus` (see
+//! corpus by `just spec-gen` (see
 //! `tests/error_corpus/validation_errors/README.md`).
 //!
 //! ## Usage

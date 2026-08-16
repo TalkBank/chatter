@@ -206,11 +206,33 @@ pub enum DependentTier {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 pub struct TextTier {
-    /// Plain text payload for this dependent tier.
-    pub content: NonEmptyString,
+    /// Plain text payload, absent when the tier declares nothing.
+    ///
+    /// Optional because an empty tier is something a FILE can contain, and a
+    /// parser's job is to say what the file contains. `NonEmptyString` alone
+    /// forced a parser meeting `%eng:` with no content to invent one: the re2c
+    /// backend substituted a single space, which made the tier look well
+    /// formed and the whole file read as VALID where the tree-sitter backend
+    /// reported errors. A type that cannot express what the input says is a
+    /// type that makes its producer lie.
+    ///
+    /// `UserDefinedDependentTier` in this same module already models it this
+    /// way, and E756 already judges it: "a tier whose content is empty
+    /// declares nothing; the line asserts an annotation that is not there".
+    /// That reasoning was never `%x`-specific.
+    ///
+    /// Recovery is not validity: representing the empty tier is what lets a
+    /// validator reject it, rather than the parser hiding it.
+    ///
+    /// E756 judges this state. The rule ("a tier whose content is empty
+    /// declares nothing") was never `%x`-specific, and the maintainer widened
+    /// it on 2026-08-16 rather than write E330's spec or mint a third code.
+    /// `DependentTier::empty_content_span` is where a tier answers it.
+    ///
+    pub content: Option<NonEmptyString>,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }
@@ -223,7 +245,25 @@ impl TextTier {
     /// [`Self::with_span`] immediately after construction.
     pub fn new(content: NonEmptyString) -> Self {
         Self {
-            content,
+            content: Some(content),
+            span: crate::Span::DUMMY,
+        }
+    }
+
+    /// Creates a text-only dependent tier that declares nothing.
+    ///
+    /// Named rather than reached by passing `None` to [`Self::new`], so that
+    /// producing an empty tier is a deliberate act a reader can grep for. The
+    /// only legitimate caller is a parser that met a tier line with no content
+    /// and must say so; every other path has content and uses [`Self::new`].
+    ///
+    /// The result is INVALID CHAT, and deliberately representable anyway:
+    /// recovery is not validity, and a parser that cannot express what the file
+    /// says is a parser that will invent something instead. E756 states the
+    /// rule this exists to let the validator apply.
+    pub fn empty() -> Self {
+        Self {
+            content: None,
             span: crate::Span::DUMMY,
         }
     }
@@ -237,19 +277,24 @@ impl TextTier {
         self
     }
 
-    /// Borrows the raw tier payload text.
+    /// Borrows the raw tier payload text, empty when the tier declares nothing.
     ///
     /// The returned view excludes `%tag:\t` prefixes and any serialization
     /// wrapper logic from [`write_chat`](crate::model::WriteChat::write_chat).
+    ///
+    /// An empty tier reads as `""` here rather than forcing every caller to
+    /// unwrap, because "the text of this tier" genuinely is nothing. Callers
+    /// that must distinguish "empty" from "absent" read [`Self::content`]
+    /// directly; the validator is the one that cares.
     pub fn as_str(&self) -> &str {
-        self.content.as_str()
+        self.content.as_deref().unwrap_or("")
     }
 }
 
 impl std::fmt::Display for TextTier {
     /// Formats only the raw tier payload text (without `%tag:\t` prefix).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.content.fmt(f)
+        f.write_str(self.as_str())
     }
 }
 
@@ -277,7 +322,7 @@ pub struct UserDefinedDependentTier {
     pub content: Option<NonEmptyString>,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }

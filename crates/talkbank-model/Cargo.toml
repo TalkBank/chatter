@@ -42,13 +42,6 @@ phf_codegen = { workspace = true }
 default = []
 async = ["tokio"]
 channels = ["dep:crossbeam-channel"]
-# Exposes `ChatCleanedText::test_unchecked` and `ChatRawText::test_unchecked`
-# escape hatches for downstream test code that needs to construct
-# `ChatCleanedText` / `ChatRawText` fixtures without going through a parsed
-# AST. Production code cannot enable this feature transitively unless it
-# explicitly opts in. See `text_types.rs` for the full rationale.
-test-utils = []
-
 # Panic-site audit completed 2026-04-29 (see
 # `docs/panic-audit/talkbank-model.md`). 2 non-test src/ sites
 # annotated; build.rs panics are exempt by spirit (build-time, not
@@ -63,3 +56,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 [package.metadata.cargo-machete]
 ignored = ["phf"]
 
+
+[lints]
+workspace = true

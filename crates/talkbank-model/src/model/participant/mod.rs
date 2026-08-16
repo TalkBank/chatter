@@ -71,6 +71,7 @@
 mod accessors;
 mod core;
 mod declared;
+pub mod join;
 #[cfg(test)]
 mod tests;
 

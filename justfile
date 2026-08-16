@@ -98,6 +98,31 @@ coverage:
 coverage-html:
     cargo llvm-cov --workspace --html --open
 
+# The only test that runs BOTH parser backends over the real corpus, comparing
+# parsed MODELS rather than verdicts. Named here rather than left as a command
+# in a doc comment, because a test whose invocation is folklore is a test that
+# does not get run: this one had been `#[ignore]`d with a retired default corpus
+# path, so the two ways to invoke it were "wrong" and "not at all".
+#
+# Not in `test-all`: it needs a corpus no CI runner has, and it reads about
+# 100,000 files with two parsers. Set TALKBANK_DATA to override the location.
+# It FAILS rather than skips when there is no corpus, since you only ever run it
+# on purpose.
+corpus-parse-equivalence:
+    cargo test -p talkbank-parser-re2c --test integration --release \
+        -- --ignored --nocapture full_corpus_parse_equivalence
+
+# Every test that needs the wild corpus, which is every `#[ignore]`d test in
+# the re2c integration binary. They are ignored because no CI runner has a
+# corpus, and a test that cannot run should be absent rather than green: before
+# this was made explicit, thirteen of them ran in the default suite and either
+# printed "Skipping" or worked on an empty input set, both of which cargo
+# reports as a pass.
+#
+# Set TALKBANK_DATA to point somewhere other than ~/0tb/data.
+corpus-tests:
+    cargo test -p talkbank-parser-re2c --test integration --release -- --ignored
+
 # Documentation gate: build the workspace docs with every rustdoc warning
 # (missing docs, broken intra-doc links, private-item links, redundant link
 # targets) promoted to an error, then run all doctests. The first-wave crates
@@ -118,8 +143,10 @@ doc-check:
 # working ON clippy findings.
 clippy:
     # Single pass: production strictness lives in the workspace [lints]
-    # table; test relaxation lives in-source (crate-root cfg_attr +
-    # per-test-file allow headers). One flag set = one build profile.
+    # table, which reaches a crate only because that crate declares
+    # `[lints] workspace = true`; test relaxation lives in-source (crate-root
+    # cfg_attr for unit tests, a crate-root allow block for each integration
+    # test target). One flag set = one build profile.
     cargo clippy --workspace --all-targets --locked
 
 # Format BOTH workspaces.
@@ -295,6 +322,22 @@ symbols-gen:
 # read the page first.
 doc-dates:
     python3 {{ justfile_directory() }}/scripts/check_doc_dates.py
+# Regenerate every artifact derived from spec/ (tests, fixtures, registries).
+#
+# One command for what used to be four hand-typed `cargo run --manifest-path`
+# invocations, each carrying its own `--output-dir`. The destinations are
+# constants in the registry now, so a generator cannot be aimed at the wrong
+# tree. Review the diff before committing.
+spec-gen:
+    cargo run --quiet --manifest-path {{justfile_directory()}}/spec/Cargo.toml --bin spec_gen
+
+# Report whether every generated artifact is current. Writes nothing.
+#
+# This is what `every_generated_artifact_is_current` runs; use it for the same
+# answer without waiting for the test binary.
+spec-check:
+    cargo run --quiet --manifest-path {{justfile_directory()}}/spec/Cargo.toml --bin spec_gen -- --check
+
 
 # What state is the spec system in? Derived from the same code the gates use.
 #

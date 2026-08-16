@@ -21,7 +21,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 pub mod chat_file_parser;
-pub mod participants;
 pub mod tier_parsers;
 pub mod tree_parsing;
 

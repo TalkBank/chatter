@@ -87,6 +87,21 @@ pub fn code_of(filename: &str) -> Option<ErrorCode> {
     ErrorCode::parse_exact(stem.split_once('_').map_or(stem, |(code, _)| code))
 }
 
+/// The text after an `**Expected Error Codes**:` label, if this line is one.
+///
+/// Here for the same reason [`SpecFile::status`] is: the `spec/errors` markdown
+/// conventions get re-derived by every new reader, and the optional `- ` list
+/// marker plus the bold-label spelling are exactly the details that drift. This
+/// field had two independent matchers, character-for-character identical, in
+/// two crates of one workspace.
+#[must_use]
+pub fn expected_codes_declaration(line: &str) -> Option<&str> {
+    line.trim_start()
+        .trim_start_matches("- ")
+        .strip_prefix("**Expected Error Codes**:")
+        .map(str::trim)
+}
+
 impl SpecFile {
     /// The code this spec's filename names. See [`code_of`].
     #[must_use]

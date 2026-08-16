@@ -50,11 +50,8 @@ reference. This page covers the practical workflow.
 
 5. **Regenerate tests**:
    ```bash
-   cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-     --output-dir crates/talkbank-parser-tests/tests/integration/generated
-
-   cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-     --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+   just spec-gen      # every artifact derived from spec/
+   just spec-check    # or: is the committed copy current?
    ```
 
 6. **Run tests**:

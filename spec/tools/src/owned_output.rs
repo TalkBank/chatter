@@ -8,14 +8,17 @@
 //! generated files are usually indistinguishable by content from
 //! hand-maintained ones sitting beside them.
 //!
-//! `gen_tree_sitter_tests` wiped the SHARED `grammar/test/corpus/` root, where
+//! The tree-sitter corpus generator wiped the SHARED `grammar/test/corpus/`
+//! root, where
 //! `word_markers/marker_density.txt` (1,468 lines mined from wild corpus data)
 //! lived alongside generated tests. It destroyed that file twice in three days;
 //! both times the loss was caught only because a human read the diff.
 //!
 //! Before this module the four generators each had their own answer to that
-//! problem, and no two agreed. Each now states its own policy at its own call
-//! site; `gen_rust_tests` is the one remaining exception and says why there.
+//! problem, and no two agreed. The answer is now a single typed field:
+//! [`crate::artifacts::Ownership`], which every artifact declares and the
+//! writer honours, so "may I clear this directory" is asked once rather than
+//! per generator.
 //!
 //! # The rule
 //!

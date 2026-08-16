@@ -192,7 +192,8 @@ impl crate::validation::Validate for Word {
         // (gate removed 2026-07-29): CA legalizes the `(word)` omission form,
         // not arbitrary untranscribed markers; the skip had no CHECK
         // counterpart and protected zero occurrences on kept CA data.
-        if let Some(suggested) = structure::get_illegal_untranscribed_suggestion(cleaned) {
+        if let Some(intended) = structure::illegal_untranscribed_marker(self) {
+            let suggested = intended.canonical();
             errors.report(
                 ParseError::new(
                     ErrorCode::IllegalUntranscribed,

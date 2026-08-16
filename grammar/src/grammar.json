@@ -3946,8 +3946,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -3967,8 +3975,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets_and_pics"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets_and_pics"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -3988,8 +4004,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4050,8 +4074,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4071,8 +4103,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4092,8 +4132,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4113,8 +4161,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4134,8 +4190,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4155,8 +4219,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4176,8 +4248,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4197,8 +4277,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4218,8 +4306,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4239,8 +4335,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4277,8 +4381,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4298,8 +4410,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4319,8 +4439,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4340,8 +4468,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4361,8 +4497,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4382,8 +4526,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4403,8 +4555,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4424,8 +4584,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4445,8 +4613,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4466,8 +4642,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -4487,8 +4671,16 @@
           "name": "tier_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "text_with_bullets"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "text_with_bullets"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",

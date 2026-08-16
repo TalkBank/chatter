@@ -35,17 +35,6 @@ tree-sitter-talkbank = { workspace = true }
 name = "gen_form_markers"
 path = "src/bin/gen_form_markers.rs"
 
-[[bin]]
-name = "gen_tree_sitter_tests"
-path = "src/bin/gen_tree_sitter_tests.rs"
-
-[[bin]]
-name = "gen_rust_tests"
-path = "src/bin/gen_rust_tests.rs"
-
-[[bin]]
-name = "gen_error_docs"
-path = "src/bin/gen_error_docs.rs"
 
 [[bin]]
 name = "validate_spec"
@@ -54,10 +43,6 @@ path = "src/bin/validate_spec.rs"
 [[bin]]
 name = "coverage"
 path = "src/bin/coverage.rs"
-
-[[bin]]
-name = "gen_validation_corpus"
-path = "src/bin/gen_validation_corpus.rs"
 
 [[bin]]
 name = "gen_coverage_dashboard"

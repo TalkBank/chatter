@@ -35,12 +35,6 @@ pub(super) fn actions_for_diagnostic(
     };
 
     match code {
-        ErrorCode::IllegalUntranscribed => vec![replace_diagnostic_range(
-            uri,
-            diagnostic,
-            "xxx",
-            "Replace 'xx' with 'xxx' (proper untranscribed marker)",
-        )],
         ErrorCode::MissingTerminator => missing_terminator_actions(uri, diagnostic),
         ErrorCode::UndeclaredSpeaker => doc
             .and_then(|text| undeclared_speaker_action(uri, diagnostic, text))

@@ -32,10 +32,15 @@ mod tests {
     use super::registry::FormMarkerRegistry;
     use super::registry::RegistryError;
     use super::render;
-    use crate::node_coverage::repo_root;
+    use crate::repo_paths::{self, RepoRoot};
+
+    /// The checkout under test.
+    fn root() -> RepoRoot {
+        RepoRoot::resolve(None).expect(repo_paths::NOT_A_CHECKOUT)
+    }
 
     fn load() -> FormMarkerRegistry {
-        FormMarkerRegistry::load(&repo_root()).expect("the committed registry must be valid")
+        FormMarkerRegistry::load(root().as_path()).expect("the committed registry must be valid")
     }
 
     /// THE GATE. Every site that carries the marker inventory must equal what
@@ -57,7 +62,7 @@ mod tests {
         for output in render::OUTPUTS {
             let rendered = (output.render)(&registry)
                 .unwrap_or_else(|error| panic!("rendering {}: {error}", output.what));
-            let full = repo_root().join(output.path);
+            let full = root().join(output.path);
             let committed = std::fs::read_to_string(&full)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", full.display()));
             assert_eq!(
@@ -179,7 +184,7 @@ mod tests {
             "generate_grammar_symbol_sets.js",
             "generate_rust_symbol_sets.js",
         ] {
-            let path = repo_root().join("spec").join("symbols").join(script);
+            let path = root().join("spec").join("symbols").join(script);
             let output = std::process::Command::new("node")
                 .arg(&path)
                 .arg("--check")

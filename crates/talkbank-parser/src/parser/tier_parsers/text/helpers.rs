@@ -45,10 +45,11 @@ pub(super) use crate::parser::node_span::span_of;
 ///   `Missing` directly: the NEW backend's `NodeSlot::Missing` carries the raw
 ///   `tree_sitter::Node`, not the typed wrapper OLD carried, so the two arms can
 ///   no longer share one `|`-pattern binding, but the observable parse is
-///   unchanged). (Empirically the only reachable malformed case, an empty `%com:`
-///   body, lands here as `Present` with a MISSING inner `continuation` and
-///   recovers to a single `Continuation` segment; the E342 recovery diagnostics
-///   come from the whole-tree backstop, not this parser.)
+///   unchanged). (This paragraph used to add that an empty `%com:` body was the
+///   only reachable malformed case here, landing as `Present` with a MISSING
+///   inner `continuation` and recovering to a single `Continuation` segment. The
+///   E756 widening abolished that: `%com`'s grammar body is `optional(...)`, so
+///   an empty one never reaches this function at all.)
 /// - `Error` / `Unexpected`: the removed loop's `_` arm reported
 ///   [`unexpected_node_error`] for a non-structural, non-text child, then fell
 ///   through to the end-of-loop "no content" rejection because no text body was
@@ -56,7 +57,7 @@ pub(super) use crate::parser::node_span::span_of;
 ///   in practice; the whole-tree recovery backstop covers these).
 /// - `Absent`: the removed loop simply never matched a text node and reported the
 ///   "no content" rejection.
-pub(super) fn parse_text_tier_content<'tree, T>(
+fn parse_text_tier_content<'tree, T>(
     tier_node: Node<'tree>,
     body: &NodeSlot<'tree, T>,
     unexpected: &[Node<'tree>],
@@ -76,11 +77,53 @@ where
         NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
             errors.report(unexpected_node_error(*node, source, context));
             report_missing_text_content(tier_node, source, errors, context, message);
-            BulletContent::from_text("")
+            BulletContent::empty()
         }
         NodeSlot::Absent => {
             report_missing_text_content(tier_node, source, errors, context, message);
-            BulletContent::from_text("")
+            BulletContent::empty()
+        }
+    }
+}
+
+/// Parse the bullet payload of a text-like dependent tier whose grammar makes
+/// that body OPTIONAL.
+///
+/// The nine bullet-payload tiers (`%act %add %cod %com %exp %gpx %int %sit
+/// %spa`) gained optional bodies on 2026-08-16 with the E756 widening, joining
+/// the ten text-payload tiers that had gained them the day before. A tier line
+/// with nothing after the separator is a real, invalid construct a file can
+/// contain: before, it failed to parse and recovered generically as E342 while
+/// the re2c backend already reported E756 on the same file, so the two backends
+/// disagreed on what the file said.
+///
+/// The absent case lowers to [`BulletContent::empty`] and reports NOTHING from
+/// the parse path, because recovery is not validity: the parser says what the
+/// file contains and `DependentTier::empty_content_span` lets the validator
+/// judge it. That also keeps the tier in the model, so the line survives a
+/// roundtrip; a parse-path rejection would drop it.
+///
+/// `Some(slot)` delegates to [`parse_text_tier_content`] unchanged, so a body
+/// that is present but malformed keeps its existing diagnostics.
+pub(super) fn parse_optional_text_tier_content<'tree, T>(
+    tier_node: Node<'tree>,
+    body: &Option<NodeSlot<'tree, T>>,
+    unexpected: &[Node<'tree>],
+    source: &str,
+    errors: &impl ErrorSink,
+    context: &str,
+    message: &str,
+) -> BulletContent
+where
+    T: AsRawNode<'tree>,
+{
+    match body {
+        Some(slot) => parse_text_tier_content(
+            tier_node, slot, unexpected, source, errors, context, message,
+        ),
+        None => {
+            surface_unexpected(unexpected, source, errors);
+            BulletContent::empty()
         }
     }
 }

@@ -153,6 +153,22 @@ pub(crate) fn check_code_glued_to_following_content(
 /// (`(word)`) are deliberately excluded: they are not `&` forms, they do
 /// not split a glued token into two words, and the glued shape is already
 /// rejected elsewhere (E220).
+///
+/// Deliberately NOT `WordCategory::material()`, which selects the same three
+/// categories today. That asks whether the LETTERS are a spelling; this asks
+/// about the SURFACE, because a `&` opens a new word and so needs a space before
+/// it. A sound category written without a `&` prefix would belong to one and not
+/// the other, so each site keeps answering its own question.
+///
+/// This was briefly derived as `to_chat_prefix().starts_with('&')`, which is
+/// WORSE than the match it replaced: `to_chat_prefix` is a serialiser whose own
+/// doc calls it "intentionally serialization-focused", it returns `""` for
+/// `CAOmission` (an empty string doing duty as "has no prefix"), and a
+/// validation rule has no business recovering a fact from a rendering of it.
+/// The real fix is a typed `CategoryPrefix { None | Zero | Ampersand(..) }` that
+/// both this and `to_chat_prefix` derive FROM; until that exists an exhaustive
+/// match the compiler checks is the honest form. Recorded in the workspace's
+/// deferred-type-findings note.
 fn is_ampersand_prefixed(word: &crate::model::Word) -> bool {
     matches!(
         word.category,

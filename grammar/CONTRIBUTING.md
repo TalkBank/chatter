@@ -50,7 +50,7 @@ If your change modifies node types (adding/removing/renaming rules), downstream 
 | `src/grammar.json` | `tree-sitter generate` | `grammar.js` |
 | `src/node-types.json` | `tree-sitter generate` | `grammar.js` |
 | `src/generated_symbol_sets.js` | `just symbols-gen` (from repo root) | `spec/symbols/` |
-| `test/corpus/` | `gen_tree_sitter_tests` (via `spec/tools`) | `spec/constructs/` and `spec/errors/` |
+| `test/corpus/` | `just spec-gen` | `spec/constructs/` and `spec/errors/` |
 
 Never hand-edit any of these. If you need to change parser behavior, edit `grammar.js`. If you need to change test cases, read on.
 
@@ -100,11 +100,10 @@ Most test files are **generated** from specifications in the repository:
 - **Construct specs** (`spec/constructs/`) define valid CHAT examples with expected parse trees
 - **Error specs** (`spec/errors/`) define invalid CHAT examples with expected error codes
 
-The generation pipeline (from the repo root):
+The generation pipeline (from anywhere in the checkout):
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
+just spec-gen      # regenerate every artifact derived from spec/
+just spec-check    # or ask whether the committed copies are current
 ```
 
 This ensures specs are the single source of truth for what the grammar should accept/reject. Generated test files should not be edited by hand, change the spec and regenerate.

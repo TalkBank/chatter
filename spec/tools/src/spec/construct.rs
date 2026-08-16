@@ -4,8 +4,8 @@
 //!
 //! Each Markdown file defines one valid CHAT example together with its expected
 //! concrete syntax tree (CST). [`ConstructSpec`] groups examples by category
-//! and provides the interface that generators (`gen_tree_sitter_tests`,
-//! `gen_rust_tests`) consume to emit test files.
+//! and provides the interface the artifact builders in [`crate::artifacts`]
+//! consume to emit test files.
 
 use serde::Deserialize;
 use std::path::Path;

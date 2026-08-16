@@ -53,7 +53,7 @@ pub enum Terminator {
     /// Period `.` - declarative statement
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Period_Terminator>
     Period {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -62,7 +62,7 @@ pub enum Terminator {
     /// Question mark `?` - interrogative
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#QuestionMark_Terminator>
     Question {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -71,7 +71,7 @@ pub enum Terminator {
     /// Exclamation `!` - imperative/exclamatory
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#ExclamationMark_Terminator>
     Exclamation {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -80,7 +80,7 @@ pub enum Terminator {
     /// +... - trailing off (incomplete utterance)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TrailingOff_Terminator>
     TrailingOff {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -89,7 +89,7 @@ pub enum Terminator {
     /// +/. - interruption (interrupted by another speaker)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Interruption_Terminator>
     Interruption {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -98,7 +98,7 @@ pub enum Terminator {
     /// +//. - self-interruption
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Self_Interruption_Terminator>
     SelfInterruption {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -107,7 +107,7 @@ pub enum Terminator {
     /// +/? - interrupted question
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Interrupted_Question_Terminator>
     InterruptedQuestion {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -116,7 +116,7 @@ pub enum Terminator {
     /// +!? - broken-off question
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#BrokenQuestion_Terminator>
     BrokenQuestion {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -126,7 +126,7 @@ pub enum Terminator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#QuotedNewLine_Terminator>
     #[serde(rename = "quoted_new_line")]
     QuotedNewLine {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -136,7 +136,7 @@ pub enum Terminator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#QuotedPeriod_Terminator>
     #[serde(rename = "quoted_period_simple")]
     QuotedPeriodSimple {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -146,7 +146,7 @@ pub enum Terminator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SelfInterruptedQuestion_Terminator>
     #[serde(rename = "self_interrupted_question")]
     SelfInterruptedQuestion {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -156,7 +156,7 @@ pub enum Terminator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TrailingOffQuestion_Terminator>
     #[serde(rename = "trailing_off_question")]
     TrailingOffQuestion {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -166,7 +166,7 @@ pub enum Terminator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#BreakForCoding>
     #[serde(rename = "break_for_coding")]
     BreakForCoding {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.

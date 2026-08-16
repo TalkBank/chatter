@@ -7,6 +7,7 @@
 //! as the coverage check.
 
 use generators::node_coverage::{Request, run};
+use generators::repo_paths::RepoRoot;
 
 /// SURVIVES: policy. WHICH node types a curated corpus must exercise, and which
 /// are excused, is a judgement with real alternatives; no type holds it. What
@@ -15,7 +16,8 @@ use generators::node_coverage::{Request, run};
 /// shares, so `cargo run` and CI cannot disagree.
 #[test]
 fn the_reference_corpus_covers_the_grammar() -> Result<(), String> {
-    run(&Request::default())?
+    let root = RepoRoot::resolve(None).map_err(|why| why.to_string())?;
+    run(&Request::for_repo(&root))?
         .outcome()
         .map(|summary| println!("{summary}"))
 }

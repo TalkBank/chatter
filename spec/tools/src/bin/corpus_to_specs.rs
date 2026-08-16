@@ -2,12 +2,35 @@
 //!
 //! This tool reads error corpus files from tests/error_corpus/
 //! and generates markdown error specifications in the format expected by
-//! validate_error_specs and gen_validation_corpus.
+//! `validate_error_specs` and the artifact builders in
+//! [`generators::artifacts`].
 //!
 //! Usage:
 //!   cargo run --bin corpus_to_specs -- \
 //!     --corpus-dir path/to/error_corpus \
 //!     --spec-dir ../spec/errors
+//!
+//! # It currently REFUSES to run, and that is the fix rather than a bug
+//!
+//! Each generated example carries an `Expected Error Codes` line, which is a
+//! claim about what the validator DID on that input. The only source of that
+//! claim was `expectations.json` beside the corpus, and as of 2026-08-15 that
+//! file does not exist and never has: `fd expectations.json` finds none, and
+//! `git log --diff-filter=D` shows none was ever deleted. The loader treated a
+//! missing file as an empty map, the per-file lookup treated a miss as an
+//! empty code list, and the emitter turned an empty code list into the spec's
+//! OWN code. So every `Expected Error Codes` line this tool has ever written
+//! asserts, as a measurement, the answer the filename already implied.
+//!
+//! That is the mechanism behind the `_auto` specs whose examples do not
+//! produce their own code, which `talkbank_parser_tests::spec_self_
+//! demonstration` now baselines and refuses to let grow.
+//!
+//! It now fails closed at each of those three points instead. Making it useful
+//! again means giving it a real measurement, and the open design question is
+//! WHERE from: this is an independent workspace with no dependency on
+//! `talkbank-parser`, deliberately, so it cannot run the validator itself
+//! without that changing. Do not "fix" this by restoring any of the defaults.
 
 use clap::Parser as ClapParser;
 use std::collections::HashMap;
@@ -33,11 +56,41 @@ struct Args {
     overwrite: bool,
 }
 
+/// The codes an example ACTUALLY produced, read from `expectations.json`.
+///
+/// # Why this is a type
+///
+/// The emitter used to write `if actual_codes.is_empty() { error_code }`: with
+/// no measurement to hand it printed the spec's OWN code as the example's
+/// expected output, so the spec asserted a result nobody had observed. Three
+/// silent defaults fed that branch, a missing `expectations.json`, an
+/// unparseable one, and a per-file lookup miss, and a run with no expectations
+/// file at all produced one spec per code with every example fabricated. That
+/// is the mechanism behind the specs whose examples do not produce their own
+/// code, which `spec_self_demonstration` now baselines.
+///
+/// A `MeasuredCodes` cannot be empty and there is no other route to the
+/// emitter, so the fabrication branch has no case left to handle.
+#[derive(Debug)]
+struct MeasuredCodes(Vec<String>);
+
+impl MeasuredCodes {
+    /// The only constructor. An empty measurement is not a measurement.
+    fn new(codes: Vec<String>) -> Option<Self> {
+        (!codes.is_empty()).then_some(Self(codes))
+    }
+
+    /// Render as the spec's comma-separated `Expected Error Codes` value.
+    fn joined(&self) -> String {
+        self.0.join(", ")
+    }
+}
+
 #[derive(Debug)]
 struct ErrorCorpusFile {
     path: PathBuf,
-    error_code: Option<String>,
-    actual_codes: Vec<String>,
+    error_code: String,
+    actual_codes: MeasuredCodes,
     description: Option<String>,
     trigger: Option<String>,
     category: Option<String>,
@@ -58,6 +111,29 @@ pub enum CorpusSpecError {
         path: String,
         source: std::io::Error,
     },
+    #[error(
+        "expectations.json is missing at {path}: every generated spec would \
+         assert codes nobody measured"
+    )]
+    ExpectationsMissing { path: String },
+    #[error("expectations.json at {path} is not readable as JSON")]
+    ExpectationsUnreadable {
+        path: String,
+        source: serde_json::Error,
+    },
+    #[error(
+        "{path}: expectations.json records no codes for this corpus file, so \
+         what the example produces is unknown; regenerate expectations rather \
+         than guessing"
+    )]
+    Unmeasured { path: String },
+    #[error(
+        "{path}: no expected-error directive and no code in the filename, so \
+         this file belongs under no error code"
+    )]
+    Unclassifiable { path: String },
+    #[error("{count} corpus file(s) could not be turned into a spec; nothing was written")]
+    Refused { count: usize },
 }
 
 #[derive(Debug, Clone)]
@@ -91,8 +167,21 @@ struct TreeSitterExpectation {
     codes: Vec<String>,
 }
 
+/// Print the error's own message rather than its `Debug` form, which is what a
+/// `Result`-returning `main` does and which throws away wording written to tell
+/// an operator what to fix.
+fn main() -> std::process::ExitCode {
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("corpus_to_specs: {err}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
 /// Converts legacy error corpus `.cha` files into Markdown error spec files.
-fn main() -> Result<(), CorpusSpecError> {
+fn run() -> Result<(), CorpusSpecError> {
     let args = Args::parse();
 
     println!(
@@ -101,39 +190,57 @@ fn main() -> Result<(), CorpusSpecError> {
         args.spec_dir.display()
     );
 
-    // Load expectations.json
+    // Load expectations.json. Both failures here used to fall back to an empty
+    // map, which reads downstream exactly like "this corpus produces no
+    // errors" and is the difference between a spec that records a measurement
+    // and one that invents it.
     let expectations_path = args.corpus_dir.join("expectations.json");
-    let expectations: Expectations = if expectations_path.exists() {
-        let content =
-            fs::read_to_string(&expectations_path).map_err(|source| CorpusSpecError::Read {
-                path: expectations_path.display().to_string(),
-                source,
-            })?;
-        serde_json::from_str(&content).unwrap_or_else(|_| Expectations {
-            files: HashMap::new(),
-        })
-    } else {
-        Expectations {
-            files: HashMap::new(),
+    if !expectations_path.exists() {
+        return Err(CorpusSpecError::ExpectationsMissing {
+            path: expectations_path.display().to_string(),
+        });
+    }
+    let content =
+        fs::read_to_string(&expectations_path).map_err(|source| CorpusSpecError::Read {
+            path: expectations_path.display().to_string(),
+            source,
+        })?;
+    let expectations: Expectations = serde_json::from_str(&content).map_err(|source| {
+        CorpusSpecError::ExpectationsUnreadable {
+            path: expectations_path.display().to_string(),
+            source,
         }
-    };
+    })?;
 
     let corpus_files = discover_corpus_files(&args.corpus_dir)?;
     println!("Found {} corpus files", corpus_files.len());
 
+    // Every refusal is collected and printed before anything is written, so one
+    // run names the whole list of things to fix. A per-file warning followed by
+    // a successful-looking exit was how unmeasured examples reached the specs.
     let mut parsed_files = Vec::new();
+    let mut refusals = Vec::new();
     for path in &corpus_files {
         match parse_corpus_file(path, &args.corpus_dir, &expectations) {
             Ok(file) => parsed_files.push(file),
-            Err(err) => eprintln!("Warning: Failed to parse {}: {}", path.display(), err),
+            Err(err) => refusals.push(err),
         }
+    }
+    if !refusals.is_empty() {
+        for err in &refusals {
+            eprintln!("refused: {err}");
+        }
+        return Err(CorpusSpecError::Refused {
+            count: refusals.len(),
+        });
     }
 
     let mut by_error_code: HashMap<String, Vec<ErrorCorpusFile>> = HashMap::new();
     for file in parsed_files {
-        if let Some(ref code) = file.error_code {
-            by_error_code.entry(code.clone()).or_default().push(file);
-        }
+        by_error_code
+            .entry(file.error_code.clone())
+            .or_default()
+            .push(file);
     }
 
     println!(
@@ -220,8 +327,10 @@ fn parse_corpus_file(
     let actual_codes = expectations
         .files
         .get(&rel_path_str)
-        .map(|e| e.tree_sitter.codes.clone())
-        .unwrap_or_default();
+        .and_then(|e| MeasuredCodes::new(e.tree_sitter.codes.clone()))
+        .ok_or_else(|| CorpusSpecError::Unmeasured {
+            path: rel_path_str.clone(),
+        })?;
 
     let mut error_code = None;
     let mut description = None;
@@ -286,6 +395,12 @@ fn parse_corpus_file(
     {
         error_code = Some(code);
     }
+    // A file that classifies under no code used to be dropped from the
+    // grouping map by an `if let Some`, so it vanished from the run without
+    // appearing in any count.
+    let error_code = error_code.ok_or_else(|| CorpusSpecError::Unclassifiable {
+        path: rel_path_str.clone(),
+    })?;
 
     Ok(ErrorCorpusFile {
         path: rel_path.to_path_buf(),
@@ -342,11 +457,7 @@ fn generate_aggregated_spec(error_code: &str, files: &[ErrorCorpusFile]) -> Opti
 
     for (i, file) in files.iter().enumerate() {
         let trigger = file.trigger.as_deref().unwrap_or("See example below");
-        let codes = if file.actual_codes.is_empty() {
-            error_code.to_string()
-        } else {
-            file.actual_codes.join(", ")
-        };
+        let codes = file.actual_codes.joined();
 
         output.push_str(&format!(
             r#"## Example {}

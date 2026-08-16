@@ -242,6 +242,40 @@ fn test_validate_invalid_file_json_mode_keeps_stderr_clean() -> Result<(), TestE
     Ok(())
 }
 
+/// Cache housekeeping notes must not reach stderr in JSON mode.
+///
+/// BOUNDARY test, and it has to be: the defect is in what the process writes to
+/// a file descriptor, which no signature can describe.
+///
+/// `--force` makes this deterministic. The neighbouring test above found the
+/// same defect by accident and only under parallel load, because it depends on
+/// a cache PRUNE happening to fire, which needs superseded rows: shipped
+/// 0.11.0 emitted `note: pruned 1 unreachable cache row(s)...` there roughly
+/// one run in many. `--force` takes the other branch of the same function every
+/// time, and shipped 0.11.0 writes exactly 24 bytes of `Cleared 0 cache
+/// entries` to a stream the JSON contract says is empty.
+///
+/// The routing is now a type (`CacheNotices`) rather than a bare `eprintln!`,
+/// so this test guards the CALLERS' choice of variant, which a type cannot
+/// make for them.
+#[test]
+fn cache_housekeeping_notes_stay_off_stderr_in_json_mode() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file_path = dir.path().join("valid.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    crate::common::chatter_cmd()
+        .arg("validate")
+        .arg("--format")
+        .arg("json")
+        .arg("--force")
+        .arg(&file_path)
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+    Ok(())
+}
+
 /// Tests validate file not found.
 #[test]
 fn test_validate_file_not_found() {

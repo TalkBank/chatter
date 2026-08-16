@@ -30,6 +30,9 @@ pub enum TimSegment {
 /// `00:01:30-00:02:00`) is parsed into structured `TimSegment`s.
 /// Free-text descriptions (e.g. `afternoon session`) are stored as
 /// `Unsupported` and flagged by validation (E603).
+/// A tier line that declares nothing is [`Self::Empty`], which is neither of
+/// those: it is not a time and it is not free text, so it gets its own state
+/// rather than an invented payload. E756 judges it.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Timing_Tier>
 #[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift, ValidationTagged)]
@@ -57,10 +60,69 @@ pub enum TimTier {
         #[span_shift(skip)]
         span: crate::Span,
     },
+    /// A `%tim:` line with nothing after the separator.
+    ///
+    /// A third state rather than an empty payload on the other two: an empty
+    /// `%tim` is not a time that failed to parse (`Unsupported`) and not a time
+    /// (`Parsed`), it is a declaration that was never made. Both other variants
+    /// hold a [`NonEmptyString`], so before this variant existed the re2c
+    /// backend had to lower an empty `%tim:` to an `Unsupported` DEPENDENT TIER
+    /// (E605, "unsupported dependent tier"), losing the tier's identity to
+    /// report a code about the tier NAME on a file whose tier name is fine.
+    ///
+    /// Tagged CLEAN explicitly. `ValidationTagged`'s fallback reads the
+    /// severity off the variant's NAME (a suffix of `Error` / `Warning` /
+    /// `Unsupported`), which would give the right answer here by accident and
+    /// the wrong one under a rename. E603 is about a `%tim` body that is not a
+    /// time; an absent body is not a malformed time, it is E756's business, and
+    /// letting E603 fire would print `Invalid %tim tier format: ''`.
+    #[validation_tag(clean)]
+    Empty {
+        /// Source span for error reporting.
+        #[semantic_eq(skip)]
+        #[span_shift(skip)]
+        span: crate::Span,
+    },
 }
 
 impl TimTier {
+    /// A `%tim` tier that declares nothing.
+    ///
+    /// Named rather than reached by passing an empty string to
+    /// [`Self::from_text`], which cannot express it: both content-bearing
+    /// variants hold a [`NonEmptyString`]. The only legitimate callers are the
+    /// parsers, which met a `%tim:` line with no body and must say so.
+    ///
+    /// The result is INVALID CHAT, and deliberately representable anyway:
+    /// recovery is not validity, and a parser that cannot express what the file
+    /// says is a parser that will invent something instead.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::Empty {
+            span: crate::Span::DUMMY,
+        }
+    }
+
+    /// The raw text this tier DECLARED, or `None` when it declared nothing.
+    ///
+    /// Distinct from [`Self::as_str`], which flattens the empty case to `""` so
+    /// `Display` and the serializer have something to write. This accessor is
+    /// what `DependentTier::empty_content_span` asks, so the "declared nothing"
+    /// question is answered by the type rather than re-derived from a string.
+    #[must_use]
+    pub fn declared_content(&self) -> Option<&str> {
+        match self {
+            Self::Parsed { content, .. } | Self::Unsupported { content, .. } => {
+                Some(content.as_str())
+            }
+            Self::Empty { .. } => None,
+        }
+    }
+
     /// Parse a `%tim` tier body, classifying as `Parsed` or `Unsupported`.
+    ///
+    /// Cannot produce [`Self::Empty`]: the argument is a [`NonEmptyString`], so
+    /// a caller with nothing to hand over reaches for [`Self::empty`] instead.
     pub fn from_text(content: NonEmptyString) -> Self {
         if let Some(segments) = parse_tim_segments(content.as_str()) {
             Self::Parsed {
@@ -81,15 +143,22 @@ impl TimTier {
         match &mut self {
             Self::Parsed { span: s, .. } => *s = span,
             Self::Unsupported { span: s, .. } => *s = span,
+            Self::Empty { span: s } => *s = span,
         }
         self
     }
 
-    /// Returns the raw text content.
+    /// Returns the raw text content, `""` for [`Self::Empty`].
+    ///
+    /// The empty case flattens here because `Display` and the CHAT serializer
+    /// need a string, and `%tim:` with nothing after it is what an empty tier
+    /// writes back. Callers asking whether anything was DECLARED want
+    /// [`Self::declared_content`], which does not flatten.
     pub fn as_str(&self) -> &str {
         match self {
             Self::Parsed { content, .. } => content.as_str(),
             Self::Unsupported { content, .. } => content.as_str(),
+            Self::Empty { .. } => "",
         }
     }
 
@@ -98,14 +167,15 @@ impl TimTier {
         match self {
             Self::Parsed { span, .. } => *span,
             Self::Unsupported { span, .. } => *span,
+            Self::Empty { span } => *span,
         }
     }
 
-    /// Returns the structured time segments (empty for `Unsupported`).
+    /// Returns the structured time segments (none for `Unsupported` or `Empty`).
     pub fn segments(&self) -> &[TimSegment] {
         match self {
             Self::Parsed { segments, .. } => segments,
-            Self::Unsupported { .. } => &[],
+            Self::Unsupported { .. } | Self::Empty { .. } => &[],
         }
     }
 }
@@ -155,10 +225,16 @@ impl Serialize for TimTier {
 
 impl<'de> Deserialize<'de> for TimTier {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // The wire form is the raw text, and `""` is not ambiguous: every
+        // content-bearing variant holds a `NonEmptyString`, so an empty string
+        // can only have come from `Empty`. Reading it back as `Empty` rather
+        // than as an error is what makes the round trip lossless now that the
+        // state exists; it used to be rejected because it was unrepresentable.
         let s = String::deserialize(deserializer)?;
-        let content = NonEmptyString::new(&s)
-            .map_err(|_| serde::de::Error::custom("TimTier content cannot be empty"))?;
-        Ok(Self::from_text(content))
+        Ok(match NonEmptyString::new(&s) {
+            Ok(content) => Self::from_text(content),
+            Err(_) => Self::empty(),
+        })
     }
 }
 

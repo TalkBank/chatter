@@ -723,11 +723,41 @@ impl Validate for WordCliticBoundary {
 /// or `{}` → nothing extra (internally tagged) to preserve backward-compatible JSON.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
-#[derive(Clone, Debug, Default, PartialEq, JsonSchema, SemanticEq, SpanShift)]
+#[derive(Clone, Debug, PartialEq, JsonSchema, SemanticEq, SpanShift)]
 pub struct UnderlineMarker {
     /// Source span for error reporting (not serialized to JSON)
     #[schemars(skip)]
     pub span: crate::Span,
+}
+
+impl Default for UnderlineMarker {
+    /// A marker carrying no source location.
+    ///
+    /// Hand-written rather than derived, because [`crate::Span`] deliberately
+    /// has no `Default`: the sentinel is a choice, and a derive makes it
+    /// silently.
+    ///
+    /// # The remaining honesty gap, stated rather than papered over
+    ///
+    /// This comment used to end "every caller is a test building a fixture
+    /// whose location is genuinely irrelevant, which is the one case where
+    /// asking for the sentinel is honest." That was FALSE when it was written
+    /// and was found so by counting: three of the callers are the serde
+    /// visitor arms immediately below, which run in production whenever a
+    /// legacy JSON transcript is read. Those forms carry no span, so the marker
+    /// really does have no location, and `Span::DUMMY` is then a fabricated
+    /// answer to a question with a true one: "unknown".
+    ///
+    /// The honest type is `Option<Span>` on the marker. That is a model shape
+    /// change, so it drags the JSON Schema and the roundtrip goldens with it
+    /// and does not belong in a drive-by. It is recorded here, at the value,
+    /// rather than in a queue, and the claim above is corrected in place rather
+    /// than left standing with a note underneath.
+    fn default() -> Self {
+        Self {
+            span: crate::Span::DUMMY,
+        }
+    }
 }
 
 impl serde::Serialize for UnderlineMarker {

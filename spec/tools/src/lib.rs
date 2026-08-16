@@ -24,36 +24,25 @@
 //!
 //! # Running the generators
 //!
-//! Each generator is its own `[[bin]]` target; there is no aggregate Makefile
-//! wrapper in this repo, run the binaries directly. Note that `spec/tools/` is a
-//! **separate Cargo workspace**, so commands must specify `--manifest-path`
-//! when run from the repo root, or you must `cd spec/tools` first:
+//! One command, from anywhere in the checkout:
 //!
 //! ```bash
-//! # Tree-sitter corpus test generation (the most common one)
-//! cargo run --manifest-path spec/tools/Cargo.toml \
-//!     --bin gen_tree_sitter_tests -- \
-//!     -o ../tree-sitter-talkbank/test/corpus \
-//!     -t spec/tools/templates
+//! just spec-gen      # regenerate every committed artifact derived from spec/
+//! just spec-check    # report staleness, writing nothing
+//! ```
 //!
-//! # Rust validation test generation
-//! cargo run --manifest-path spec/tools/Cargo.toml \
-//!     --bin gen_rust_tests -- \
-//!     -o crates/talkbank-parser-tests/tests/integration/generated
+//! Both drive [`artifacts::ARTIFACTS`] (plus the half in `spec/runtime-tools`
+//! that needs the live `ErrorCode` enum). Every destination is a constant in
+//! that registry, so there is no `--output-dir` to get wrong, and the checker
+//! compares without writing because each [`artifacts::Artifact`] RETURNS its
+//! files rather than emitting them.
 //!
-//! # Validation fixture corpus + manifest (validation-layer errors only)
-//! cargo run --manifest-path spec/tools/Cargo.toml \
-//!     --bin gen_validation_corpus -- \
-//!     --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+//! The generators outside the registry produce nothing that is committed, so
+//! they keep their own invocations:
 //!
-//! # Error documentation (Markdown)
-//! cargo run --manifest-path spec/tools/Cargo.toml \
-//!     --bin gen_error_docs -- \
-//!     -o docs/errors
-//!
+//! ```bash
 //! # Coverage dashboard (how many constructs have specs)
-//! cargo run --manifest-path spec/tools/Cargo.toml \
-//!     --bin gen_coverage_dashboard
+//! cargo run --manifest-path spec/tools/Cargo.toml --bin gen_coverage_dashboard
 //! ```
 //!
 //! # Module map
@@ -68,14 +57,12 @@
 //!
 //! ## Binary entry points
 //!
-//! Each generator is a separate `[[bin]]` target in `Cargo.toml`:
+//! The generation binaries are gone; `spec_gen` drives the registry instead.
+//! What remains here is analysis and one-off tooling:
 //!
 //! | Binary | Purpose |
 //! |--------|---------|
-//! | `gen_tree_sitter_tests` | Generate `tree-sitter test` corpus files from specs |
-//! | `gen_rust_tests` | Generate Rust `#[test]` files from construct + error specs |
-//! | `gen_validation_corpus` | Generate the validation fixture corpus + manifest.json from validation-layer error specs |
-//! | `gen_error_docs` | Generate Markdown error documentation pages |
+//! | `spec_gen` (in `spec/runtime-tools`) | Regenerate, or `--check`, every committed artifact in [`artifacts`] |
 //! | `validate_spec` | Validate individual spec file format integrity |
 //! | `coverage` | Report spec coverage of grammar node types |
 //! | `gen_coverage_dashboard` | Generate HTML/Markdown coverage dashboard |
@@ -119,21 +106,24 @@
 //! for spec in &specs {
 //!     for err in &spec.errors {
 //!         println!(
-//!             "{} ({}) -- {} [{}, {}]",
+//!             "{} ({}) -- {:?} [{}, {}]",
 //!             err.code,
 //!             err.name,
-//!             err.severity,
-//!             spec.metadata.error_type,
+//!             spec.metadata.kind,
+//!             spec.metadata.layer,
 //!             spec.metadata.status,
 //!         );
 //!     }
 //! }
 //! ```
 
+pub mod artifacts;
 pub mod form_markers;
 pub mod node_coverage;
 pub mod output;
 pub mod owned_output;
+pub mod repo_paths;
+pub mod rust_source;
 pub mod spec;
 pub mod templates;
 

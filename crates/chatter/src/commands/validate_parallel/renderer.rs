@@ -3,6 +3,8 @@
 //! The runtime drives a single event stream, while concrete renderers decide
 //! how to present those events as text or JSONL.
 
+use crate::commands::validate::cache::CacheEvent;
+
 use std::path::Path;
 
 use indicatif::ProgressStyle;
@@ -89,6 +91,15 @@ pub trait ValidationRenderer {
     );
     /// Emit the final run summary.
     fn print_summary(&self, path: &Path, stats: &ValidationStatsSnapshot, roundtrip: bool);
+
+    /// Render one fact about what cache maintenance did.
+    ///
+    /// On the trait rather than decided inside the cache, because "how does
+    /// this run speak" is exactly what a renderer is for, and a cache event is
+    /// an event like any other. Putting it here also forces the question the
+    /// old stderr write let everyone avoid: whether an AUDIT run records that
+    /// it pruned twelve rows.
+    fn handle_cache_event(&mut self, event: &CacheEvent);
 }
 
 /// Human-readable renderer with optional progress throttling.
@@ -272,6 +283,11 @@ impl ValidationRenderer for TextRenderer {
         println!("Cache misses: {}", stats.cache_misses);
         println!("Hit rate: {:.1}%", stats.cache_hit_rate());
     }
+
+    /// A terminal run says it in words, on stderr, where it always did.
+    fn handle_cache_event(&mut self, event: &CacheEvent) {
+        eprintln!("{}", event.sentence());
+    }
 }
 
 /// JSONL renderer for machine-readable output.
@@ -397,6 +413,13 @@ impl ValidationRenderer for JsonRenderer {
             summary["roundtrip_failed"] = serde_json::json!(stats.roundtrip_failed);
         }
         println!("{}", summary);
+    }
+
+    /// A machine-facing run gets a record on the stream, because stderr is
+    /// promised empty and silence would throw away a result the caller asked
+    /// for by passing `--force`.
+    fn handle_cache_event(&mut self, event: &CacheEvent) {
+        println!("{}", event.record());
     }
 }
 

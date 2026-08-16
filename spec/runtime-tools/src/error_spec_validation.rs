@@ -37,11 +37,13 @@
 //! "256 passed" was counting examples nobody had verified.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use talkbank_model::model::FileStem;
 use talkbank_model::model::TranscriptName;
 
+use generators::repo_paths::RepoRoot;
 use generators::spec::error::{ErrorExample, ErrorSpec};
+use generators::spec::metadata::{SpecErrorCode, Status};
 use talkbank_model::ErrorCollector;
 use talkbank_parser::TreeSitterParser;
 
@@ -80,46 +82,22 @@ impl CodeFilter {
     }
 }
 
-/// A spec's implementation status.
+/// Whether this run skips a spec with the given status.
 ///
-/// Was a bare `&str` compared against two literals at the point of use, which
-/// is a closed set wearing a string: a spec whose status is misspelled read as
-/// "implemented" and was silently checked as though it claimed to work.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpecStatus {
-    Implemented,
-    NotImplemented,
-    Deprecated,
-    /// The rule is implemented and does fire, but no `.cha` input can reach it,
-    /// so the spec carries no example and owes a named out-of-corpus test
-    /// instead. `E768_media_filename_not_representable.md` is why the status
-    /// exists: it first shipped as `implemented` with no example, which made
-    /// the loader drop it silently. Enumerating it here was found necessary the
-    /// moment `Unrecognised` stopped being silent.
-    UnreachableFromChat,
-    /// Anything else, kept verbatim so the report can NAME it. Reported as a
-    /// failure: `is_skipped` answers false, so a misspelling was otherwise
-    /// checked as though the spec claimed to be implemented.
-    Unrecognised(String),
-}
-
-impl SpecStatus {
-    fn parse(raw: &str) -> Self {
-        match raw.trim() {
-            "implemented" => Self::Implemented,
-            "not_implemented" => Self::NotImplemented,
-            "deprecated" => Self::Deprecated,
-            "unreachable_from_chat" => Self::UnreachableFromChat,
-            other => Self::Unrecognised(other.to_owned()),
-        }
-    }
-
-    fn is_skipped(&self) -> bool {
-        matches!(
-            self,
-            Self::NotImplemented | Self::Deprecated | Self::UnreachableFromChat
-        )
-    }
+/// POLICY, deliberately kept out of [`Status`] itself: two other readers of the
+/// same vocabulary make different calls (`SpecStatusGate` treats only
+/// `NotImplemented` as unenforced; the re2c parity gate measures everything
+/// except it). Three defensible judgements about one fact, so the fact is shared
+/// and the judgements are not.
+///
+/// This replaced a private `SpecStatus` enum that re-parsed the metadata string
+/// into a five-variant copy of the closed set. Its fifth variant existed to
+/// report a value outside the set, which the loader now refuses outright.
+fn is_skipped(status: Status) -> bool {
+    matches!(
+        status,
+        Status::NotImplemented | Status::Deprecated | Status::UnreachableFromChat
+    )
 }
 
 /// One run's inputs.
@@ -130,12 +108,21 @@ pub struct Request {
     pub filter: CodeFilter,
 }
 
-impl Default for Request {
+impl Request {
     /// What the CI gate means: verify every code, in every non-deferred spec,
-    /// in this repository's own spec directory.
-    fn default() -> Self {
+    /// in this checkout's own spec directory.
+    ///
+    /// # Why this is not a `Default`
+    ///
+    /// It was one, and it resolved the repository root from the filesystem.
+    /// `Default::default()` has no way to fail, so a checkout the resolver
+    /// could not recognise had to abort the process; that panic was what kept
+    /// `RepoRoot::from_manifest_dir` from returning a `Result`. Requiring an
+    /// already-proved root moves the failure to the caller that can report it.
+    #[must_use]
+    pub fn for_repo(root: &RepoRoot) -> Self {
         Self {
-            spec_dir: default_spec_dir(),
+            spec_dir: spec_dir(root),
             code_check: CodeCheck::Verify,
             skipped: SkippedSpecs::Omit,
             filter: CodeFilter::All,
@@ -210,10 +197,6 @@ pub enum Failure {
     NoErrorDefinitions {
         source_file: String,
     },
-    UnrecognisedStatus {
-        source_file: String,
-        status: String,
-    },
     CodeMismatch {
         label: ExampleLabel,
         expected: Vec<String>,
@@ -229,7 +212,7 @@ impl Failure {
     /// The declared error code this finding is about, when it has one.
     pub fn code(&self) -> Option<&str> {
         match self {
-            Self::NoErrorDefinitions { .. } | Self::UnrecognisedStatus { .. } => None,
+            Self::NoErrorDefinitions { .. } => None,
             Self::CodeMismatch { label, .. } | Self::Panicked { label, .. } => Some(&label.code),
         }
     }
@@ -241,13 +224,6 @@ impl std::fmt::Display for Failure {
             Self::NoErrorDefinitions { source_file } => {
                 write!(f, "{source_file}: no error definitions")
             }
-            Self::UnrecognisedStatus {
-                source_file,
-                status,
-            } => write!(
-                f,
-                "{source_file}: unrecognised Status {status:?}, so it was checked as implemented"
-            ),
             Self::CodeMismatch {
                 label,
                 expected,
@@ -407,17 +383,11 @@ pub fn run(request: &Request) -> Result<Report, String> {
         if !request.filter.covers(first.code.as_str()) {
             continue;
         }
-        let status = SpecStatus::parse(&spec.metadata.status);
-        if let SpecStatus::Unrecognised(raw) = &status {
-            report.failures.push(Failure::UnrecognisedStatus {
-                source_file: spec.source_file.clone(),
-                status: raw.clone(),
-            });
-        }
+        let status = spec.metadata.status;
 
         for (def_idx, error_def) in spec.errors.iter().enumerate() {
             for (example_idx, example) in error_def.examples.iter().enumerate() {
-                match check_example(&parser, &status, example, request) {
+                match check_example(&parser, status, example, request) {
                     ExampleOutcome::Verified => report.verified += 1,
                     ExampleOutcome::Parsed => report.parsed += 1,
                     ExampleOutcome::Skipped(SkipReason::Deferred) => report.deferred += 1,
@@ -498,11 +468,11 @@ pub fn emit_for(
 /// Run one example through parse + validate.
 fn check_example(
     parser: &TreeSitterParser,
-    status: &SpecStatus,
+    status: Status,
     example: &ErrorExample,
     request: &Request,
 ) -> ExampleOutcome {
-    if request.skipped == SkippedSpecs::Omit && status.is_skipped() {
+    if request.skipped == SkippedSpecs::Omit && is_skipped(status) {
         return ExampleOutcome::Skipped(SkipReason::Deferred);
     }
     if request.code_check == CodeCheck::Verify && example.expected_codes.is_empty() {
@@ -541,25 +511,36 @@ fn check_example(
     if example
         .expected_codes
         .iter()
-        .all(|expected| actual.iter().any(|got| got == expected))
+        .all(|expected| actual.iter().any(|got| got == expected.as_str()))
     {
         ExampleOutcome::Verified
     } else {
         ExampleOutcome::CodeMismatch {
-            expected: example.expected_codes.clone(),
+            // `expected` is spec-side and validated; `actual` is what the
+            // parser emitted. They stay different types on purpose, and this
+            // report struct renders both as text.
+            expected: example
+                .expected_codes
+                .iter()
+                .map(SpecErrorCode::to_string)
+                .collect(),
             actual,
         }
     }
 }
 
-/// The spec directory.
+/// The spec directory of a given checkout.
 ///
-/// Derived from the spec workspace's single root resolver rather than a second
-/// `..`-chain of its own. Adding one here was the exact form that
-/// `talkbank-parser-tests/src/repo_paths.rs`, written the same day, argues
-/// breaks silently on a rename.
-pub fn default_spec_dir() -> PathBuf {
-    generators::node_coverage::repo_root()
-        .join("spec")
-        .join("errors")
+/// Takes an already-proved [`RepoRoot`] rather than resolving one itself, so
+/// the "which checkout" question is answered once per run, by whoever can
+/// report the failure, instead of once per helper.
+/// Takes `impl AsRef<Path>` rather than `&RepoRoot`, so the artifact registry
+/// (whose shared `build` signature hands it a bare `&Path`) and the binaries
+/// (which hold a proved `RepoRoot`, and it implements `AsRef<Path>`) reach the
+/// same function. A second `spec_dir_of` door existed briefly, with an eight-line
+/// doc justifying itself; one function with a permissive argument is the same
+/// ownership with less to explain.
+#[must_use]
+pub fn spec_dir(root: impl AsRef<Path>) -> PathBuf {
+    root.as_ref().join("spec").join("errors")
 }

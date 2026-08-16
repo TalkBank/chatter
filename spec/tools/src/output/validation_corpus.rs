@@ -1,47 +1,32 @@
-//! Generate the validation-error fixture corpus + a typed expectations manifest
-//! from `spec/errors/` (the single source of truth for validation tests).
+//! Build the validation-error fixture corpus and its typed manifest from
+//! `spec/errors/`.
 //!
-//! For every `Layer: validation` spec this writes one `.cha` fixture per EXAMPLE
-//! into the corpus dir and records, in `manifest.json`, the codes that fixture
-//! must produce (the example's own `Expected Error Codes`, not the spec title),
-//! its implementation status, and its source spec. The data-driven runner
-//! (`validation_error_corpus.rs`) consumes the manifest; no `.rs` test files are
-//! generated here anymore.
+//! For every `Layer: validation` spec this produces one `.cha` fixture per
+//! EXAMPLE, plus `manifest.json` recording the codes that fixture must produce
+//! (the example's own `Expected Error Codes`, not the spec title), its
+//! implementation status, and its source spec. The data-driven runner
+//! (`validation_error_corpus.rs`) consumes the manifest.
+//!
+//! # Why this is a library module rather than a binary's `main`
+//!
+//! It lived in `gen_validation_corpus`'s `main`, which meant the only way to
+//! ask "what SHOULD this corpus contain" was to write it somewhere and look.
+//! A currency gate cannot be built on that: it would have to generate into a
+//! temporary directory and compare trees, so the check would need write access
+//! to answer a read-only question. Returning the files instead lets
+//! [`crate::artifacts`] both write them and compare them, from one description.
 
-use anyhow::Result;
-use clap::Parser;
 use std::collections::HashSet;
-use std::fs;
-use std::path::PathBuf;
 
-use generators::owned_output::clear_owned;
-use generators::spec::error_corpus::{ErrorCorpusExample, ErrorCorpusSpec, Status};
-use generators::spec::validation_manifest::{
-    FixtureName, ValidationFixtureEntry, ValidationManifest,
-};
+use crate::artifacts::GeneratedFiles;
+use crate::repo_paths::RepoRelativePath;
+use crate::spec::error_corpus::{ErrorCorpusExample, ErrorCorpusSpec};
+use crate::spec::metadata::Status;
+use crate::spec::validation_manifest::{FixtureName, ValidationFixtureEntry, ValidationManifest};
 
 /// Fallback fixture-name prefix for an example with no codes (should not occur:
 /// `parse_markdown` fills every example with at least the title code).
 const UNKNOWN_CODE: &str = "UNKNOWN";
-
-/// CLI arguments: the spec directory to read and the corpus directory to write
-/// fixtures + `manifest.json` into.
-#[derive(Parser)]
-#[command(name = "gen_validation_corpus")]
-#[command(about = "Generate the validation fixture corpus + manifest from spec/errors")]
-struct Args {
-    /// Root directory containing error specs.
-    #[arg(short, long, default_value = "spec/errors")]
-    spec_dir: PathBuf,
-
-    /// Corpus directory for `.cha` fixtures + `manifest.json`.
-    #[arg(
-        short,
-        long,
-        default_value = "crates/talkbank-parser-tests/tests/error_corpus/validation_errors"
-    )]
-    corpus_dir: PathBuf,
-}
 
 /// One fixture to write: the CHAT input plus the manifest entry (which carries
 /// the unique filename and what the runner must assert). Produced from one spec
@@ -51,29 +36,26 @@ struct PlannedFixture {
     entry: ValidationFixtureEntry,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+/// Build every file of the validation corpus, including `manifest.json`.
+///
+/// Reads `repo_root/spec/errors`. Takes the repository root rather than the
+/// spec directory, because every recorded `source_spec` must be relative to
+/// that root and nothing else can compute it.
+pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
+    let validation_specs: Vec<ErrorCorpusSpec> =
+        ErrorCorpusSpec::load_all(crate::artifacts::error_dir(repo_root))
+            .map_err(|e| anyhow::anyhow!("Failed to load error corpus specs: {}", e))?
+            .into_iter()
+            .filter(|spec| spec.metadata.layer.is_validation())
+            .collect();
 
-    let validation_specs: Vec<ErrorCorpusSpec> = ErrorCorpusSpec::load_all(&args.spec_dir)
-        .map_err(|e| anyhow::anyhow!("Failed to load error corpus specs: {}", e))?
-        .into_iter()
-        .filter(|spec| spec.metadata.layer.is_validation())
-        .collect();
+    let planned = plan_fixtures(&validation_specs, repo_root);
 
-    let planned = plan_fixtures(&validation_specs);
-
-    // Claim and clear the corpus directory, then write the spec-derived
-    // fixtures into it. Clearing is wholesale, which is safe only because the
-    // directory holds nothing but this generator's output; `clear_owned`
-    // refuses any directory that has not been marked as such.
-    clear_owned(&args.corpus_dir)?;
+    let mut files = GeneratedFiles::new();
     for fixture in &planned {
         // The input was already stripped of its trailing newline when the chat
-        // block was captured in parse_markdown, so write it verbatim.
-        fs::write(
-            args.corpus_dir.join(fixture.entry.fixture.as_str()),
-            &fixture.input,
-        )?;
+        // block was captured in parse_markdown, so store it verbatim.
+        files.insert(fixture.entry.fixture.as_str().into(), fixture.input.clone());
     }
 
     let mut manifest = ValidationManifest {
@@ -85,7 +67,7 @@ fn main() -> Result<()> {
         implemented_specs_without_examples: validation_specs
             .iter()
             .filter(|spec| spec.metadata.status == Status::Implemented && spec.examples.is_empty())
-            .map(ErrorCorpusSpec::source_path_display)
+            .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
             .collect(),
         // The converse, so the new state cannot become a way to opt a
         // perfectly reachable rule out of its fixture: if an example exists,
@@ -95,7 +77,7 @@ fn main() -> Result<()> {
             .filter(|spec| {
                 spec.metadata.status == Status::UnreachableFromChat && !spec.examples.is_empty()
             })
-            .map(ErrorCorpusSpec::source_path_display)
+            .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
             .collect(),
     };
     manifest
@@ -104,33 +86,23 @@ fn main() -> Result<()> {
     manifest.implemented_specs_without_examples.sort();
     manifest.unreachable_specs_with_examples.sort();
 
-    let manifest_json = serde_json::to_string_pretty(&manifest)? + "\n";
-    fs::write(args.corpus_dir.join("manifest.json"), &manifest_json)?;
-
-    println!(
-        "Wrote {} fixtures + manifest.json to {}",
-        manifest.fixtures.len(),
-        args.corpus_dir.display()
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_string_pretty(&manifest)? + "\n",
     );
-    if !manifest.implemented_specs_without_examples.is_empty() {
-        println!(
-            "coverage: {} implemented specs lack examples",
-            manifest.implemented_specs_without_examples.len()
-        );
-    }
-    Ok(())
+    Ok(files)
 }
 
 /// Plan one fixture per example across all validation specs, assigning each a
 /// filename unique within the corpus dir (multi-example specs would otherwise
 /// collide on the shared spec title; the per-example code usually disambiguates,
 /// and a numeric suffix covers the rest).
-fn plan_fixtures(specs: &[ErrorCorpusSpec]) -> Vec<PlannedFixture> {
+fn plan_fixtures(specs: &[ErrorCorpusSpec], repo_root: &std::path::Path) -> Vec<PlannedFixture> {
     let mut used: HashSet<String> = HashSet::new();
     let mut planned = Vec::new();
     for spec in specs {
         // Computed once per spec; every example of the spec shares them.
-        let source_spec = spec.source_path_display();
+        let source_spec = RepoRelativePath::new(repo_root, &spec.source_path_display());
         let status = spec.metadata.status;
         for example in &spec.examples {
             let name = unique_fixture_name(&mut used, &fixture_base(example));
@@ -184,9 +156,7 @@ fn sanitize_filename(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    // `Path` is used only here, so importing it at file scope warned on the
-    // non-test build. Scope it to the module that needs it rather than
-    // silencing the warning.
+    use std::fs;
     use std::path::Path;
 
     use super::*;
@@ -214,12 +184,13 @@ mod tests {
             dir.path(),
             "E999_multi.md",
             "# E999: Multi\n\n## Description\n\nDemo.\n\n## Metadata\n\n\
-             - **Category**: demo\n- **Level**: utterance\n- **Layer**: validation\n\n\
+             - **Category**: demo\n- **Level**: utterance\n- **Layer**: validation\n\
+             - **Status**: implemented\n\n\
              ## Example 1\n\n**Expected Error Codes**: E316\n\n```chat\n@UTF8\n@Begin\none\n@End\n```\n\n\
              ## Example 2\n\n**Expected Error Codes**: E600\n\n```chat\n@UTF8\n@Begin\ntwo\n@End\n```\n",
         );
         let specs = ErrorCorpusSpec::load_all(dir.path()).expect("load specs");
-        let planned = plan_fixtures(&specs);
+        let planned = plan_fixtures(&specs, dir.path());
 
         assert_eq!(planned.len(), 2, "one fixture per example");
         let codes: Vec<&str> = planned
@@ -238,6 +209,34 @@ mod tests {
                 .iter()
                 .all(|f| f.entry.status == Status::Implemented)
         );
-        assert!(planned[0].entry.source_spec.ends_with("E999_multi.md"));
+        assert!(
+            planned[0]
+                .entry
+                .source_spec
+                .as_str()
+                .ends_with("E999_multi.md")
+        );
+    }
+
+    /// The manifest is one of the built files, not a side effect of writing.
+    ///
+    /// SURVIVES a type: this is a wire format. Nothing in the signature says
+    /// the map contains `manifest.json`, and the runner reads it by that name.
+    #[test]
+    fn the_manifest_is_one_of_the_built_files() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let dir = root.path().join("spec/errors");
+        fs::create_dir_all(&dir).expect("spec/errors");
+        write_spec(
+            &dir,
+            "E999_one.md",
+            "# E999: One\n\n## Description\n\nDemo.\n\n## Metadata\n\n\
+             - **Category**: demo\n- **Level**: utterance\n- **Layer**: validation\n\
+             - **Status**: implemented\n\n\
+             ## Example 1\n\n**Expected Error Codes**: E999\n\n```chat\n@UTF8\n@Begin\none\n@End\n```\n",
+        );
+        let files = build(root.path()).expect("build");
+        assert!(files.contains_key(Path::new("manifest.json")));
+        assert_eq!(files.len(), 2, "one fixture plus the manifest");
     }
 }

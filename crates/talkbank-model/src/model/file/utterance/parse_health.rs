@@ -31,9 +31,10 @@ pub enum ParseHealthState {
 
 /// Runtime parse provenance used to decide whether alignment comparisons are trustworthy.
 ///
-/// The value stores one taint bit per [`ParseHealthTier`]. `Default` means no
-/// taint bits are set, so all tracked tiers are considered clean until a parser
-/// marks recovery-tainted domains.
+/// The value stores one taint bit per [`ParseHealthTier`].
+/// [`ParseHealth::untainted`] sets none of them, so all tracked tiers are
+/// considered clean until a parser marks recovery-tainted domains. There is
+/// deliberately no `Default`; see that constructor for why.
 ///
 /// # References
 ///
@@ -83,14 +84,24 @@ impl ParseHealthTier {
     }
 }
 
-impl Default for ParseHealth {
-    /// Starts all tiers as clean until a parser marks recovery-tainted domains.
-    fn default() -> Self {
+impl ParseHealth {
+    /// A bitset with nothing tainted yet: the identity a parser taints into.
+    ///
+    /// # Why this is not `Default`
+    ///
+    /// `Default` was the wrong NAME for it, next to a type built to draw
+    /// exactly the distinction the name blurs. [`ParseHealthState`] separates
+    /// `Unknown` from `Clean` because "nobody computed this" and "this was
+    /// computed and is clean" are different facts with different consequences
+    /// for alignment. `ParseHealth::untainted()` reads as the first and means the
+    /// second, so a value that arrived by defaulting was indistinguishable from
+    /// one a parser had established. Every caller is an accumulator start, and
+    /// `untainted()` says so.
+    #[must_use]
+    pub fn untainted() -> Self {
         Self { tainted_tiers: 0 }
     }
-}
 
-impl ParseHealth {
     /// Build explicit runtime provenance from one concrete parse-health bitset.
     pub fn into_state(self) -> ParseHealthState {
         if self.is_clean() {
@@ -338,7 +349,7 @@ impl ParseHealthState {
     pub fn taint(&mut self, tier: ParseHealthTier) {
         match self {
             Self::Unknown | Self::Clean => {
-                let mut health = ParseHealth::default();
+                let mut health = ParseHealth::untainted();
                 health.taint(tier);
                 *self = Self::Tainted(health);
             }
@@ -350,7 +361,7 @@ impl ParseHealthState {
     pub fn taint_all_alignment_dependents(&mut self) {
         match self {
             Self::Unknown | Self::Clean => {
-                let mut health = ParseHealth::default();
+                let mut health = ParseHealth::untainted();
                 health.taint_all_alignment_dependents();
                 *self = Self::Tainted(health);
             }
@@ -363,10 +374,10 @@ impl ParseHealthState {
 mod tests {
     use super::{ParseHealth, ParseHealthState, ParseHealthTier};
 
-    /// The default parse-health state marks every tracked tier as clean.
+    /// The accumulator start marks every tracked tier as clean.
     #[test]
-    fn default_health_is_clean() {
-        let health = ParseHealth::default();
+    fn untainted_health_is_clean() {
+        let health = ParseHealth::untainted();
 
         assert!(health.is_clean());
         assert!(health.is_tier_clean(ParseHealthTier::Main));
@@ -377,7 +388,7 @@ mod tests {
     /// Tainting one tier affects only that tier.
     #[test]
     fn taint_marks_only_the_requested_tier() {
-        let mut health = ParseHealth::default();
+        let mut health = ParseHealth::untainted();
         health.taint(ParseHealthTier::Gra);
 
         assert!(health.is_tier_clean(ParseHealthTier::Main));
@@ -388,7 +399,7 @@ mod tests {
     /// Unknown dependent-tier recovery taints every dependent alignment tier.
     #[test]
     fn taint_all_alignment_dependents_leaves_main_clean() {
-        let mut health = ParseHealth::default();
+        let mut health = ParseHealth::untainted();
         health.taint_all_alignment_dependents();
 
         assert!(health.is_tier_clean(ParseHealthTier::Main));
@@ -411,7 +422,7 @@ mod tests {
     /// Clean parse provenance allows alignment checks without carrying taint bits.
     #[test]
     fn clean_health_becomes_clean_state() {
-        let state = ParseHealth::default().into_state();
+        let state = ParseHealth::untainted().into_state();
 
         assert_eq!(state, ParseHealthState::Clean);
         assert!(state.can_align_main_to_mor());

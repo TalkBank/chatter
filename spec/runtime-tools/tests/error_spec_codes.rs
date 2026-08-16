@@ -21,7 +21,8 @@ use spec_runtime_tools::error_spec_validation::{Request, run};
 /// library beside the harness limitation they describe.
 #[test]
 fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
-    let report = run(&Request::default())?;
+    let root = generators::repo_paths::RepoRoot::resolve(None).map_err(|why| why.to_string())?;
+    let report = run(&Request::for_repo(&root))?;
 
     // The spec corpus has been ~330 examples for a long time, so a collapse
     // means a loading fault rather than a real reduction. Checked HERE, off the
@@ -49,7 +50,7 @@ fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
 /// invariant rather than a ratchet. It stays a test because the field remains
 /// optional in the format: nothing in a type stops the next spec omitting it.
 ///
-/// It also keeps two runners agreeing. `gen_validation_corpus` falls back to
+/// It also keeps two runners agreeing. The validation-corpus builder falls back to
 /// the spec's TITLE code when an example declares none, so an undeclared
 /// example was asserted by the corpus runner and ignored by this one: one
 /// question, two answers, nothing relating them. With every example declaring
@@ -58,7 +59,7 @@ fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
 fn examples_asserting_nothing_do_not_increase() {
     /// Was 22 when `just spec-status` first reported it; worked to zero the
     /// same day by declaring, on each example, the code it was measured to
-    /// emit (which is the code `gen_validation_corpus` was already assuming).
+    /// emit (which is the code that builder was already assuming).
     ///
     /// The ratchet has reached its floor, so this is `==` rather than `<=`:
     /// a count cannot go below zero, and `<= 0` on an unsigned type is an
@@ -66,7 +67,9 @@ fn examples_asserting_nothing_do_not_increase() {
     /// meaningful again the shape can go back.
     const CEILING: u32 = 0;
 
-    let report = run(&Request::default()).expect("the spec corpus must load");
+    let root = generators::repo_paths::RepoRoot::resolve(None)
+        .expect(generators::repo_paths::NOT_A_CHECKOUT);
+    let report = run(&Request::for_repo(&root)).expect("the spec corpus must load");
     assert!(
         report.no_expected_codes == CEILING,
         "{} example(s) declare no `Expected Error Codes`, up from {CEILING}. \
@@ -95,13 +98,14 @@ fn examples_asserting_nothing_do_not_increase() {
 #[test]
 fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
     let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
+    let root = generators::repo_paths::RepoRoot::resolve(None).map_err(|why| why.to_string())?;
     let specs = generators::spec::error::ErrorSpec::load_all(
-        spec_runtime_tools::error_spec_validation::default_spec_dir(),
+        spec_runtime_tools::error_spec_validation::spec_dir(&root),
     )?;
 
     let mut stale = Vec::new();
     for spec in &specs {
-        if spec.metadata.status == "implemented" {
+        if spec.metadata.status == generators::spec::metadata::Status::Implemented {
             continue;
         }
         for definition in &spec.errors {

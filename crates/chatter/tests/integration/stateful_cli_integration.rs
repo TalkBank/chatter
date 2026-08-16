@@ -205,9 +205,30 @@ fn validate_force_respects_directory_boundaries_for_cache_clears() -> Result<(),
         .arg("json");
     let forced = force_cmd.output()?;
     assert_success(&forced, "validate directory --force");
+    // The cleared count arrives as a RECORD on the JSON stream, not as an
+    // English sentence on stderr. It used to be the latter, which meant this
+    // test parsed prose while a sibling test asserted that JSON-mode stderr is
+    // empty: two contradictory contracts, both green, because the sibling only
+    // failed when a cache prune happened to fire.
+    let forced_stdout = String::from_utf8_lossy(&forced.stdout);
+    let cleared: Vec<serde_json::Value> = forced_stdout
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|record| record["type"] == "cache" && record["action"] == "clear")
+        .collect();
+    assert_eq!(
+        cleared.len(),
+        1,
+        "expected exactly one cache-clear record\nstdout:\n{forced_stdout}"
+    );
+    assert_eq!(
+        cleared[0]["entries_cleared"].as_u64(),
+        Some(1),
+        "--force should only clear entries for the requested directory\nstdout:\n{forced_stdout}"
+    );
     assert!(
-        stderr_string(&forced).contains("Cleared 1 cache entries"),
-        "--force should only clear entries for the requested directory\nstderr:\n{}",
+        stderr_string(&forced).is_empty(),
+        "JSON mode must leave stderr empty\nstderr:\n{}",
         stderr_string(&forced)
     );
 

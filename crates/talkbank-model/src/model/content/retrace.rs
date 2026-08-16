@@ -79,7 +79,7 @@ pub struct Retrace {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_group: bool,
     /// Source span for diagnostics.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub span: Span,

@@ -81,11 +81,7 @@ fn parse_spec(content: &str, filename: &str) -> Result<Vec<SpecBlock>, String> {
         // Declarations between the previous block and this one; the last wins.
         let mut declared: Option<Expected> = None;
         for line in content[search_from..block_start].lines() {
-            let Some(after) = line
-                .trim_start()
-                .trim_start_matches("- ")
-                .strip_prefix("**Expected Error Codes**:")
-            else {
+            let Some(after) = error_specs::expected_codes_declaration(line) else {
                 continue;
             };
             let mut codes = BTreeSet::new();

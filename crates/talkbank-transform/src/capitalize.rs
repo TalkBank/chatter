@@ -18,7 +18,7 @@
 //! rewrites mutate the first plain-text segment (the stem), not `raw_text`.
 
 use talkbank_model::alignment::helpers::{WordItemMut, walk_words_mut};
-use talkbank_model::model::content::word::{WordContent, WordText};
+use talkbank_model::model::content::word::{UntranscribedStatus, WordContent, WordText};
 use talkbank_model::{ChatFile, Line};
 
 /// Lowercased pronoun-"I" surfaces and their capitalized forms.
@@ -91,7 +91,20 @@ pub fn capitalized_pronoun_i(word: &str) -> Option<&'static str> {
 /// Whether `text` is a "real" word eligible to be the capitalized
 /// utterance-initial token (not a CHAT marker, fragment, or non-letter start).
 pub fn is_capitalizable_initial(text: &str) -> bool {
-    if matches!(text, "xxx" | "yyy" | "www") || text.starts_with('&') {
+    // Ask the type that owns the untranscribed vocabulary rather than listing
+    // it again. This was the fourth place the three markers were spelled out,
+    // and the only one left after `UntranscribedStatus` gained `canonical()`
+    // and `from_marker_text()`.
+    //
+    // The owner matches case-insensitively where this line did not, which is a
+    // behaviour change on paper and none in practice: a token has to fold to a
+    // marker AND begin with a lowercase letter for the verdict to move, since
+    // `capitalize_first` is a no-op when the first character is already
+    // uppercase. Measured over all 107,403 corpus files on 2026-08-15: zero
+    // such tokens (`xxX`, `xXx`, `wwW` and the rest do not occur), against 30
+    // occurrences of the uppercase-initial forms `Www`, `Xxx` and `Yyy`, which
+    // this function's verdict cannot affect either way.
+    if UntranscribedStatus::from_marker_text(text).is_some() || text.starts_with('&') {
         return false;
     }
     text.chars().next().is_some_and(char::is_alphabetic)

@@ -100,7 +100,7 @@ pub struct Pause {
     pub duration: PauseDuration,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }

@@ -98,7 +98,7 @@ impl PartialEq for CachedStr {
 #[derive(Clone, Debug, PartialEq, Deserialize, SemanticEq, SpanShift)]
 pub struct Word {
     /// Source location (byte offsets in original input).
-    #[serde(skip, default)]
+    #[serde(skip, default = "crate::Span::dummy")]
     pub span: crate::Span,
 
     /// Unique identifier for tier alignment.
@@ -210,11 +210,39 @@ impl Word {
             .get_or_init(|| smol_str::SmolStr::new(self.compute_cleaned_text()))
     }
 
+    /// What this word's letters ARE: spelling, or a rendering of sound.
+    ///
+    /// Delegates to [`WordCategory::material`]. A word with NO category prefix
+    /// is plain orthography, and that is an answer rather than a default: the
+    /// absence of `&+`, `&-`, `&~` or `0` is exactly what makes it an ordinary
+    /// word.
+    #[must_use]
+    pub fn material(&self) -> crate::model::WordMaterial {
+        match &self.category {
+            Some(category) => category.material(),
+            None => crate::model::WordMaterial::Orthography,
+        }
+    }
+
     /// Returns untranscribed marker classification, if any.
     ///
     /// Computed from content: returns `Some(...)` when cleaned text is "xxx", "yyy", or "www".
+    /// Reads the `OnceLock`-cached cleaned text rather than recomputing it.
+    ///
+    /// This used to delegate to `compute_untranscribed`, which calls
+    /// `compute_cleaned_text()` and so allocated a fresh `String` on every call:
+    /// measured 20.96 ns against 2.22 ns for the cached form. Ten call sites pay
+    /// it, several unconditionally per word, including `Serialize` (so every
+    /// `chatter to-json` over the corpus) and the `%mor` / `%wor` alignment
+    /// rules.
+    ///
+    /// An earlier pass fixed ONE of those call sites by inlining this body at
+    /// the E209 check, which was the wrong altitude twice over: E209 sits behind
+    /// a short-circuit and so was among the coldest of the ten, and hardcoding
+    /// the category-blind semantics at a caller made the pending
+    /// category-aware change to `compute_untranscribed` harder to land.
     pub fn untranscribed(&self) -> Option<UntranscribedStatus> {
-        self.compute_untranscribed()
+        UntranscribedStatus::from_marker_text(self.cleaned_text())
     }
 
     /// Sets source span metadata for diagnostics.
@@ -335,24 +363,6 @@ impl Word {
             }
         }
         result
-    }
-
-    /// Compute untranscribed status from the word's content.
-    ///
-    /// Derives the untranscribed status by checking the cleaned text against
-    /// the three canonical untranscribed markers: "xxx", "yyy", "www".
-    /// The match is case-insensitive because legacy corpora use uppercase
-    /// variants (e.g., "XXX") which are illegal (E241) but still represent
-    /// untranscribed material. Without this, the morphotag pipeline would
-    /// send uppercase variants to Stanza and produce spurious %mor entries.
-    pub fn compute_untranscribed(&self) -> Option<UntranscribedStatus> {
-        let cleaned = self.compute_cleaned_text();
-        match cleaned.to_ascii_lowercase().as_str() {
-            "xxx" => Some(UntranscribedStatus::Unintelligible),
-            "yyy" => Some(UntranscribedStatus::Phonetic),
-            "www" => Some(UntranscribedStatus::Untranscribed),
-            _ => None,
-        }
     }
 
     /// Replaces only `raw_text` for parser-recovery flows.

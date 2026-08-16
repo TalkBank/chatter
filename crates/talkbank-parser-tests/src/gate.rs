@@ -105,6 +105,7 @@ pub const ALL: &[&dyn Gate] = &[
     &crate::content_catch_alls::CatchAllGate,
     &crate::error_code_specs::ErrorCodeSpecGate,
     &crate::golden_word_validity::GoldenWordsGate,
+    &crate::spec_self_demonstration::SpecSelfDemonstrationGate,
     &crate::spec_status::SpecStatusGate,
     &crate::test_hygiene::DuplicateTestGate,
     &crate::test_hygiene::VacuousTestGate,

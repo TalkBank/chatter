@@ -55,7 +55,7 @@ pub struct Event {
     pub event_type: EventType,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }

@@ -47,6 +47,7 @@
 
 - [Overview](architecture/overview.md)
 - [Spec System](architecture/spec-system.md)
+- [Why the Spec System Looks Like That](architecture/spec-system-history.md)
 - [Grammar](architecture/grammar.md)
 - [Overlap Marker Binding](architecture/overlap-binding.md)
 - [Parsing](architecture/parsing.md)

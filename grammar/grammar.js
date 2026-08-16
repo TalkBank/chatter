@@ -298,6 +298,19 @@ export default grammar({
     // Format: text [bullet text]* or bullet [text bullet]*
     // Used in: %act, %add, %cod, %eng, %err, %exp, %gpx, %ort, %sit, %tim, %x...
     // Includes continuation lines (\n\t) to handle multi-line tiers
+    // A tier BODY may be absent, and every dependent-tier rule whose body is
+    // free text marks it `optional(...)` for that reason: an empty `%eng:` is a
+    // real (if invalid) construct a file can contain. It lowers to a payload
+    // that says it is empty and E756 judges it, rather than failing to parse
+    // and recovering generically while the re2c backend reads the same file as
+    // VALID. Which rules those are is not restated here, because a hand-kept
+    // count beside the list it counts is the first thing to go wrong; grep
+    // `optional($.text_with_bullets` to read the real set off the grammar.
+    //
+    // This rule, and `text_with_bullets_and_pics`, themselves stay `repeat1`.
+    // Optionality is per tier rule on purpose: relaxing a shared body would
+    // silently admit an empty `%mor`, `%gra` and `@Comment`, whose payloads
+    // are not free text.
     text_with_bullets: $ => repeat1(choice(
       $.text_segment,
       // A bullet owns its trailing spaces (see text_with_bullets_and_pics).
@@ -1588,7 +1601,8 @@ export default grammar({
     ort_dependent_tier: $ => seq(
       $.ort_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1596,7 +1610,8 @@ export default grammar({
     com_dependent_tier: $ => seq(
       $.com_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets_and_pics,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets_and_pics),
       $.newline
     ),
 
@@ -1604,7 +1619,8 @@ export default grammar({
     cod_dependent_tier: $ => seq(
       $.cod_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1615,12 +1631,12 @@ export default grammar({
     x_dependent_tier: $ => seq(
       alias(token(prec(1, /%x[a-zA-Z][a-zA-Z0-9]*/)), $.x_tier_prefix),
       $.tier_sep,
-      // Body is optional ONLY for user-defined tiers: the separator can absorb
+      // The separator can absorb
       // a lone trailing space, leaving an empty body. An empty %x tier is a
       // real (if invalid) construct that must lower to an empty user-defined
       // tier and flag E756, not recover via a spurious E342/E330. The shared
-      // text_with_bullets rule stays repeat1 (so empty @Comment/%com/%mor do
-      // NOT parse); only this rule makes the body optional.
+      // text_with_bullets rule stays repeat1; see the note there for which
+      // rules mark their body optional and why.
       optional($.text_with_bullets),
       $.newline
     ),
@@ -1629,7 +1645,8 @@ export default grammar({
     gls_dependent_tier: $ => seq(
       $.gls_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1637,7 +1654,8 @@ export default grammar({
     eng_dependent_tier: $ => seq(
       $.eng_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1645,7 +1663,8 @@ export default grammar({
     int_dependent_tier: $ => seq(
       $.int_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1654,7 +1673,8 @@ export default grammar({
     act_dependent_tier: $ => seq(
       $.act_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1662,7 +1682,8 @@ export default grammar({
     add_dependent_tier: $ => seq(
       $.add_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1670,7 +1691,8 @@ export default grammar({
     err_dependent_tier: $ => seq(
       $.err_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1678,7 +1700,8 @@ export default grammar({
     exp_dependent_tier: $ => seq(
       $.exp_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1686,7 +1709,8 @@ export default grammar({
     gpx_dependent_tier: $ => seq(
       $.gpx_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1694,7 +1718,8 @@ export default grammar({
     sit_dependent_tier: $ => seq(
       $.sit_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1702,7 +1727,8 @@ export default grammar({
     tim_dependent_tier: $ => seq(
       $.tim_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1721,7 +1747,8 @@ export default grammar({
     alt_dependent_tier: $ => seq(
       $.alt_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1729,7 +1756,8 @@ export default grammar({
     coh_dependent_tier: $ => seq(
       $.coh_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1737,7 +1765,8 @@ export default grammar({
     def_dependent_tier: $ => seq(
       $.def_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1745,7 +1774,8 @@ export default grammar({
     fac_dependent_tier: $ => seq(
       $.fac_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1753,7 +1783,8 @@ export default grammar({
     flo_dependent_tier: $ => seq(
       $.flo_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1761,19 +1792,22 @@ export default grammar({
     modsyl_dependent_tier: $ => seq(
       $.modsyl_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
     phosyl_dependent_tier: $ => seq(
       $.phosyl_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
     phoaln_dependent_tier: $ => seq(
       $.phoaln_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
     // %xphoint: per-phone time intervals. Captured as flat text_with_bullets
@@ -1783,7 +1817,8 @@ export default grammar({
     xphoint_dependent_tier: $ => seq(
       $.xphoint_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1791,7 +1826,8 @@ export default grammar({
     par_dependent_tier: $ => seq(
       $.par_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 
@@ -1799,7 +1835,8 @@ export default grammar({
     spa_dependent_tier: $ => seq(
       $.spa_tier_prefix,
       $.tier_sep,
-      $.text_with_bullets,
+      // Optional body: see the note on `text_with_bullets`.
+      optional($.text_with_bullets),
       $.newline
     ),
 

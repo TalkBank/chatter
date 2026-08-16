@@ -22,9 +22,9 @@ use crate::error::{
 };
 use crate::model::{ChatFile, Header, Line};
 use crate::parser::TreeSitterParser;
-use crate::parser::participants::build_participants_from_lines;
 use talkbank_model::LineMap;
 use talkbank_model::ParseOutcome;
+use talkbank_model::model::participant::join::build_participants_from_lines;
 use tracing::{debug, info, warn};
 use tree_sitter::Tree;
 
@@ -155,10 +155,7 @@ impl TreeSitterParser {
         // Build participant map from headers
         let all_headers = collect_headers(&lines);
 
-        let (participants, participant_errors) = build_participants_from_lines(&lines);
-        for error in participant_errors {
-            errors.report(error);
-        }
+        let participants = build_participants_from_lines(&lines).report_into(&errors);
 
         let ca_mode = headers_enable_ca_mode(&all_headers);
         if ca_mode {
@@ -219,10 +216,7 @@ impl TreeSitterParser {
 
         let all_headers = collect_headers(&lines);
 
-        let (participants, participant_errors) = build_participants_from_lines(&lines);
-        for err in participant_errors {
-            errors.report(err);
-        }
+        let participants = build_participants_from_lines(&lines).report_into(errors);
 
         let ca_mode = headers_enable_ca_mode(&all_headers);
         if ca_mode {

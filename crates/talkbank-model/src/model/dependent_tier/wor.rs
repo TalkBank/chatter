@@ -94,7 +94,7 @@ pub enum WorItem {
         text: String,
 
         /// Source span for error reporting.
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         span: Span,
     },
@@ -177,7 +177,7 @@ pub struct WorTier {
     pub bullet: Option<Bullet>,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }

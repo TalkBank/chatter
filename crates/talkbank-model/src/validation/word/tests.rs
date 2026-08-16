@@ -218,86 +218,36 @@ fn test_e220_all_number_languages() {
     }
 }
 
-/// Normalizes placeholder conventions by rejecting lowercase `xx`.
+/// E241's MESSAGE names the canonical spelling of the marker that was
+/// mistyped, not merely some canonical spelling.
 ///
-/// `E241` should be emitted with guidance toward canonical `xxx`.
-#[test]
-fn test_e241_illegal_xx() {
-    let word = Word::new_unchecked("xx", "xx");
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.code.as_str() == "E241" && e.message.contains("xxx")),
-        "Expected E241 error suggesting 'xxx' for 'xx', got: {:#?}",
-        errors
-    );
-}
-
-/// Rejects uppercase placeholder variants that deviate from CHAT casing.
+/// SURVIVES a type: this is about the rendered diagnostic text, which no type
+/// pins. What it is deliberately NOT is coverage of the vocabulary. Which
+/// spellings E241 rejects is settled end to end in
+/// `crates/chatter/tests/integration/untranscribed_marker_spelling_tests.rs`,
+/// at the CLI boundary.
 ///
-/// `XXX` should still map to `E241` with a suggestion for lowercase `xxx`.
+/// This replaced four near-identical tests, one per token, that each asserted
+/// rejection AND message shape. The rejection half duplicated the CLI file; the
+/// per-token list was a fifth hand-written copy of a vocabulary whose scattering
+/// is the reason `ww` went unrejected for years.
 #[test]
-fn test_e241_illegal_xxx() {
-    let word = Word::new_unchecked("XXX", "XXX");
-    let errors = run_word_validation(&word, None, &[], false);
+fn test_e241_message_names_the_intended_marker() {
+    // Two pairs, not four: this test is about the MESSAGE naming the intended
+    // marker, and one shortened plus one miscased form, on different letters,
+    // proves that. Listing all four restated the vocabulary the docstring above
+    // explicitly disclaims owning.
+    for (mistyped, canonical) in [("xx", "xxx"), ("WWW", "www")] {
+        let word = Word::new_unchecked(mistyped, mistyped);
+        let errors = run_word_validation(&word, None, &[], false);
 
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.code.as_str() == "E241" && e.message.contains("xxx")),
-        "Expected E241 error suggesting 'xxx' for 'XXX', got: {:#?}",
-        errors
-    );
-}
-
-/// Rejects non-canonical two-letter uncertain forms like `yy`.
-///
-/// The validator should steer users to canonical `yyy` via `E241`.
-#[test]
-fn test_e241_illegal_yy() {
-    let word = Word::new_unchecked("yy", "yy");
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.code.as_str() == "E241" && e.message.contains("yyy")),
-        "Expected E241 error suggesting 'yyy' for 'yy', got: {:#?}",
-        errors
-    );
-}
-
-/// Rejects uppercase `WWW` in favor of canonical lowercase `www`.
-///
-/// This keeps reserved token conventions stable for downstream tooling.
-#[test]
-fn test_e241_illegal_www() {
-    let word = Word::new_unchecked("WWW", "WWW");
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.code.as_str() == "E241" && e.message.contains("www")),
-        "Expected E241 error suggesting 'www' for 'WWW', got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts canonical placeholder tokens such as lowercase `xxx`.
-///
-/// This guards against false-positive `E241` errors on valid forms.
-#[test]
-fn test_e241_valid_xxx() {
-    let word = Word::new_unchecked("xxx", "xxx");
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E241"),
-        "Valid 'xxx' should not trigger E241"
-    );
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.code.as_str() == "E241" && e.message.contains(canonical)),
+            "Expected E241 for {mistyped:?} to name {canonical:?}, got: {errors:#?}"
+        );
+    }
 }
 
 /// Flags trailing whitespace contamination in word tokens.

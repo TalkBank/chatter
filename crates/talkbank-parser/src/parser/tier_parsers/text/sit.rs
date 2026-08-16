@@ -11,23 +11,23 @@ use tree_sitter::Node;
 
 use crate::generated_traversal::{SitDependentTierNode, extract_sit_dependent_tier};
 
-use super::helpers::{parse_text_tier_content, span_of};
+use super::helpers::{parse_optional_text_tier_content, span_of};
 
 /// Converts one `%sit` tier node.
 ///
 /// **Grammar Rule:**
 /// ```text
-/// sit_dependent_tier: seq('%', 'sit', colon, tab, text_with_bullets, newline)
+/// sit_dependent_tier: seq('%', 'sit', colon, tab, optional(text_with_bullets), newline)
 /// ```
 ///
 /// Driven by the generated typed visitor: `extract_sit_dependent_tier` yields the
 /// body as `child_2.slot`, matched exhaustively by the shared
-/// [`parse_text_tier_content`], which also surfaces the carrier's `unexpected`
+/// [`parse_optional_text_tier_content`], which also surfaces the carrier's `unexpected`
 /// sink (R2).
 pub fn parse_sit_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SitTier {
     let span = span_of(node);
     let children = extract_sit_dependent_tier(SitDependentTierNode(node));
-    let content = parse_text_tier_content(
+    let content = parse_optional_text_tier_content(
         node,
         children.child_2.slot(),
         &children.unexpected,

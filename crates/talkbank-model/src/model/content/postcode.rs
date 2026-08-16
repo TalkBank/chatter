@@ -39,7 +39,7 @@ pub struct Postcode {
     pub text: smol_str::SmolStr,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }

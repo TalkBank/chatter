@@ -18,12 +18,11 @@
 //! just spec-status
 //! ```
 
-use spec_runtime_tools::error_spec_validation::{
-    self, CodeCheck, CodeFilter, Request, SkippedSpecs,
-};
+use generators::repo_paths::RepoRoot;
+use generators::spec::metadata::Status;
+use spec_runtime_tools::error_spec_validation::{self, Request, spec_dir};
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::path::PathBuf;
 
 /// The parity manifest, read for a COUNT only.
 ///
@@ -44,12 +43,12 @@ struct ParityEntry {
     no_obligation_reason: Option<String>,
 }
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("spec/runtime-tools is two levels below the repository root")
-        .to_path_buf()
+/// The repository root, resolved by the workspace's one resolver.
+///
+/// Fallible, because the resolver now PROVES the directory is a chatter
+/// checkout rather than counting two levels up and trusting the result.
+fn repo_root() -> Result<RepoRoot, String> {
+    RepoRoot::resolve(None).map_err(|why| why.to_string())
 }
 
 /// Count spec files by their declared `Status`, and by NOT declaring one.
@@ -133,7 +132,7 @@ fn list_deferred(spec_dir: &Path) -> Result<(), String> {
     let specs = generators::spec::error::ErrorSpec::load_all(spec_dir)?;
     let (mut ready, mut genuine) = (0usize, 0usize);
     for spec in &specs {
-        if spec.metadata.status == "implemented" {
+        if spec.metadata.status == Status::Implemented {
             continue;
         }
         for definition in &spec.errors {
@@ -177,14 +176,14 @@ fn list_deferred(spec_dir: &Path) -> Result<(), String> {
 }
 
 fn main() -> Result<(), String> {
-    let root = repo_root();
+    let root = repo_root()?;
     if std::env::args().any(|arg| arg == "--deferred") {
-        return list_deferred(&root.join("spec").join("errors"));
+        return list_deferred(&spec_dir(&root));
     }
     if std::env::args().any(|arg| arg == "--unasserted") {
-        return list_unasserted(&root.join("spec").join("errors"));
+        return list_unasserted(&spec_dir(&root));
     }
-    let spec_dir = root.join("spec").join("errors");
+    let spec_dir = spec_dir(&root);
 
     println!("SPEC SYSTEM STATUS");
     println!("==================\n");
@@ -200,13 +199,10 @@ fn main() -> Result<(), String> {
          above reading `(none declared)` is a non-spec file in the directory."
     );
 
-    // The same call the CI gate makes, so these numbers cannot disagree with it.
-    let report = error_spec_validation::run(&Request {
-        spec_dir: spec_dir.clone(),
-        code_check: CodeCheck::Verify,
-        skipped: SkippedSpecs::Omit,
-        filter: CodeFilter::All,
-    })?;
+    // The same REQUEST the CI gate builds, not a copy of its four fields. The
+    // comment here used to say these numbers cannot disagree with the gate's,
+    // beside a hand-written struct literal that could drift from it silently.
+    let report = error_spec_validation::run(&Request::for_repo(&root))?;
 
     println!("\nExamples ({} in total):", report.total());
     println!(

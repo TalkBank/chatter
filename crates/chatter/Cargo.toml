@@ -60,3 +60,6 @@ tempfile = { workspace = true }
 
 # Panic-site audit completed 2026-04-29 (see
 # `docs/panic-audit/chatter.md`). 14 non-test sites annotated.
+
+[lints]
+workspace = true

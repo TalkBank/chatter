@@ -61,7 +61,7 @@ pub fn parse_bullet_content(node: Node, source: &str, errors: &impl ErrorSink) -
                 node_kind
             ),
         ));
-        return BulletContent::from_text("");
+        return BulletContent::empty();
     }
 
     let child_count = node.child_count();

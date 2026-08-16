@@ -43,7 +43,7 @@ pub struct OtherSpokenEvent {
     pub text: smol_str::SmolStr,
 
     /// Source location metadata for diagnostics.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub span: Span,

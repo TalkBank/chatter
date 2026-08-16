@@ -842,6 +842,7 @@ dependencies = [
  "serde",
  "serde_json",
  "talkbank-model",
+ "talkbank-parser-tests",
  "talkbank-transform",
  "tauri",
  "tauri-build",

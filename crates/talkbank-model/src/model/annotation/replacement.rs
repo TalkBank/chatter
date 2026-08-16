@@ -472,7 +472,7 @@ pub struct ReplacedWord {
     pub scoped_annotations: ReplacedWordAnnotations,
 
     /// Source span for diagnostics (not serialized to JSON).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }

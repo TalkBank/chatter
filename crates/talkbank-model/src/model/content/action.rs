@@ -35,7 +35,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct Action {
     /// Source location metadata for diagnostics.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub span: Span,
@@ -55,13 +55,6 @@ impl Action {
     /// Use this constructor when source offsets are already known at creation.
     pub fn with_span(span: Span) -> Self {
         Self { span }
-    }
-}
-
-impl Default for Action {
-    /// Returns an action token with dummy span metadata.
-    fn default() -> Self {
-        Self::new()
     }
 }
 

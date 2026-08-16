@@ -15,9 +15,16 @@ pub struct MinimalChatFile {
     pub utterance: Option<String>,
 }
 
-impl Default for MinimalChatFile {
-    /// Build the default minimal CHAT-file template configuration.
-    fn default() -> Self {
+impl MinimalChatFile {
+    /// Create a minimal CHAT file configuration seeded with fixture
+    /// placeholders: speaker `CHI`, language `eng`, role `Target_Child`,
+    /// corpus `corpus`, and no utterance.
+    ///
+    /// Every one of those is a PLACEHOLDER, not a fact about a transcript, and
+    /// a caller is expected to overwrite the ones it cares about. See
+    /// [`super::builder::ChatFileBuilder::new`] for why these live in a named
+    /// constructor rather than a `Default` impl.
+    pub fn new() -> Self {
         Self {
             speaker: "CHI".to_string(),
             language: "eng".to_string(),
@@ -25,20 +32,6 @@ impl Default for MinimalChatFile {
             corpus: "corpus".to_string(),
             utterance: None,
         }
-    }
-}
-
-impl MinimalChatFile {
-    /// Create a new minimal CHAT file configuration with defaults.
-    ///
-    /// Defaults:
-    /// - Speaker: CHI
-    /// - Language: eng
-    /// - Role: Target_Child
-    /// - Corpus: corpus
-    /// - No utterance (empty file)
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Set the speaker code.

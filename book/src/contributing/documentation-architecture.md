@@ -36,7 +36,7 @@ flowchart TD
 | Integrator contracts | `book/src/chatter/integrating/` | JSON schema, diagnostic contract |
 | Technical reference and audits | `book/src/` (Technical Reference section) | Parity audits, UTF-8 audit, risk register |
 | Spec authoring guides | `spec/docs/` | Error spec format, curation workflow |
-| Generated error docs | `docs/errors/` | Optional local output from `gen_error_docs`; source of truth stays in `spec/errors/` |
+| Generated error docs | `docs/errors/` | Registry artifact, written by `just spec-gen` and gated by `just spec-check`; source of truth stays in `spec/errors/` |
 | Historical/archived docs | project archive | Old audits, superseded proposals |
 | AI assistant context | `CLAUDE.md` files (per repo/subdir) | Not documentation for humans |
 
@@ -48,8 +48,9 @@ flowchart TD
 3. **Satellites stay only when the audience is editing files in that directory.**
    Spec authors need `WRITING_ERROR_SPECS.md` next to their specs. Everyone else
    reads the book.
-4. **Generated docs are build artifacts.** Never hand-edit `docs/errors/`. If you
-   need that local reference set, regenerate it with `gen_error_docs`.
+4. **Generated docs are build artifacts.** Never hand-edit `docs/errors/`;
+   `just spec-check` reports a hand-written file there as `extra` and fails.
+   Regenerate with `just spec-gen`.
 5. **Historical docs go to project archive.** Don't keep old audit logs,
    investigation notes, or superseded proposals in the public repo.
 

@@ -66,7 +66,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Comma>
     #[serde(rename = "comma")]
     Comma {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -77,7 +77,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Semicolon>
     #[serde(rename = "semicolon")]
     Semicolon {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -88,7 +88,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Colon>
     #[serde(rename = "colon")]
     Colon {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -99,7 +99,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TAG_Marker>
     #[serde(rename = "tag")]
     Tag {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -110,7 +110,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Vocative_Marker>
     #[serde(rename = "vocative")]
     Vocative {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -121,7 +121,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#CA_Continuation>
     #[serde(rename = "ca_continuation")]
     CaContinuation {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -132,7 +132,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#UnmarkedEnding>
     #[serde(rename = "unmarked_ending")]
     UnmarkedEnding {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -143,7 +143,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Uptake_Marker>
     #[serde(rename = "uptake")]
     Uptake {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -154,7 +154,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TCU_NoBreak>
     #[serde(rename = "ca_no_break")]
     CaNoBreak {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -165,7 +165,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TCU_Technical_Break>
     #[serde(rename = "ca_technical_break")]
     CaTechnicalBreak {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -176,7 +176,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#RisingToHigh>
     #[serde(rename = "rising_to_high")]
     RisingToHigh {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -187,7 +187,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#RisingToMid>
     #[serde(rename = "rising_to_mid")]
     RisingToMid {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -198,7 +198,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Level_Intonation>
     #[serde(rename = "level")]
     Level {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -209,7 +209,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#FallingToMid>
     #[serde(rename = "falling_to_mid")]
     FallingToMid {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
@@ -220,7 +220,7 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#FallingToLow>
     #[serde(rename = "falling_to_low")]
     FallingToLow {
-        #[serde(skip)]
+        #[serde(skip, default = "crate::Span::dummy")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.

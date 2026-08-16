@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-08-13 00:05 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -38,10 +38,10 @@ flowchart LR
     end
 
     subgraph generators["spec/tools generators\n(run only what changed)"]
-        gen_ts["gen_tree_sitter_tests"]
-        gen_rust["gen_rust_tests"]
-        gen_validation["gen_validation_corpus"]
-        gen_docs["gen_error_docs"]
+        gen_ts["just spec-gen: corpus tests"]
+        gen_rust["just spec-gen: Rust test bodies"]
+        gen_validation["just spec-gen: validation fixtures"]
+        gen_docs["docs/errors/ (spec-gen artifact)"]
     end
 
     subgraph outputs["Generated Outputs (DO NOT EDIT)"]

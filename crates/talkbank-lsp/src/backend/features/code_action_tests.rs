@@ -162,6 +162,15 @@ fn test_fix_e504_non_participants_ignored() {
     assert!(actions.is_none());
 }
 
+/// E241 joined this list on 2026-08-15. Its arm spliced the literal `"xxx"`
+/// under the title "Replace 'xx' with 'xxx'", so it ALREADY rewrote a `YYY` or a
+/// `WWW` to `xxx`, turning "requires phonetic transcription" into
+/// "unintelligible" on the user's behalf. That was wrong before the rule moved;
+/// widening E241 to the shortened forms only added `ww` to the set it damages.
+/// (An earlier draft of this note said the arm "became" wrong when the rule
+/// widened. It did not, and the distinction matters: this is a defect the audit
+/// missed, not one a later change introduced.)
+///
 /// Regression guard for the 2026-07-31 LSP code-action audit
 /// (`docs/investigations/2026-07-31-lsp-code-actions-fix-the-wrong-diagnostic.md`):
 /// every one of these codes previously had an `actions_for_diagnostic` arm
@@ -178,6 +187,7 @@ fn test_fix_e504_non_participants_ignored() {
 fn test_removed_codes_offer_no_action() {
     let uri = Url::parse("file:///test.cha").unwrap();
     let removed_codes = [
+        "E241", // IllegalUntranscribed: hardcoded "xxx", so it rewrote a `YYY` or `ww` to `xxx`.
         "E242", // UnbalancedQuotation: "+..." does not balance a quote.
         "E244", // ConsecutiveStressMarkers: whole-span replace deletes the word.
         "E258", // ConsecutiveCommas: span is one comma; replacing it with itself is a no-op.

@@ -77,9 +77,37 @@ string. Read-failure files use `"status":"read_error"` with an
 When `--roundtrip` is set, the summary also includes
 `roundtrip_passed` and `roundtrip_failed` counters.
 
+### Cache record
+
+Emitted only when cache maintenance actually did something: a prune
+reclaimed rows, `--force` cleared entries, or maintenance failed and
+the run continued without it.
+
+```json
+{"type":"cache","action":"clear","entries_cleared":1}
+{"type":"cache","action":"prune","rows_deleted":12,"versions_deleted":2}
+{"type":"cache","action":"warning","operation":"initialize","error":"..."}
+```
+
+These facts used to go to stderr as English sentences, which broke the
+promise below that JSON mode leaves stderr empty. Silencing them under
+`--format json` was the other option and was rejected: they are results
+a caller can act on, not decoration, so they belong on the stream in a
+form a reader can parse.
+
+A consumer that dispatches on `type` and ignores unknown values needs
+no change. One that treats an unrecognised `type` as an error will see
+these where it previously saw nothing on stdout, and stderr text where
+it now sees a record.
+
 ### Contract notes
 
-- The `type` field is stable: `"file"` or `"summary"`.
+- The `type` field is stable, and its values are `"file"`,
+  `"summary"` and `"cache"`. Treat an unknown `type` as ignorable
+  rather than as an error: new record kinds may appear.
+- **Stderr is not part of the JSON surface and is empty in JSON mode.**
+  Anything a run wants to tell you arrives as a record on stdout.
+
 - For file records: `file` and `status` are stable; `cache_hit` is
   stable for `valid` records. `error_count` and `errors` are
   stable for `invalid` records.

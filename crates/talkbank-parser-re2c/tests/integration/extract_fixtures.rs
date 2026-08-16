@@ -15,7 +15,7 @@
 //! Run with: cargo test -p talkbank-parser-re2c --test extract_fixtures -- --ignored --nocapture
 //!
 //! Extracts sample CHAT lines from the wild-corpus tree (see
-//! `corpus_base()` below for the env var / fallback contract) and
+//! `crate::corpus_root::CorpusRoot::resolve().require()` below for the env var / fallback contract) and
 //! writes them to tests/fixtures/ as permanent test fixtures. These
 //! fixtures are checked into git so anyone cloning the repo can run
 //! parser tests without access to the full corpus.
@@ -32,12 +32,6 @@ use talkbank_parser_re2c::chat_lines::ChatLines;
 /// `$HOME/talkbank/data`, a conventional local layout, but
 /// generally not present elsewhere; without `TALKBANK_DATA`
 /// the test will simply find nothing and exit cleanly.
-fn corpus_base() -> String {
-    std::env::var("TALKBANK_DATA").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_default();
-        format!("{home}/talkbank/data")
-    })
-}
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 const SAMPLES_PER_TYPE: usize = 200;
 
@@ -105,7 +99,7 @@ fn extract_all_fixtures() {
         by_prefix.insert(name.to_string(), Vec::new());
     }
 
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     let data_dirs: Vec<_> = std::fs::read_dir(&base)
         .into_iter()
         .flatten()

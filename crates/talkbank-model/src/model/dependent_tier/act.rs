@@ -86,7 +86,7 @@ pub struct ActTier {
     pub content: BulletContent,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }

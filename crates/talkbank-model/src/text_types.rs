@@ -116,15 +116,6 @@ impl AsRef<str> for ChatRawText {
     }
 }
 
-impl ChatRawText {
-    /// Test-only escape hatch. See [`ChatCleanedText::test_unchecked`]
-    /// for full rationale.
-    #[cfg(any(test, feature = "test-utils"))]
-    pub fn test_unchecked(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-}
-
 // Read-only comparison helpers (see the macro definition below for
 // rationale). Comparison cannot construct a value, so the seal stays
 // intact; these are ergonomics for tests and log/diagnostic code.
@@ -201,30 +192,6 @@ impl fmt::Display for ChatCleanedText {
 impl AsRef<str> for ChatCleanedText {
     fn as_ref(&self) -> &str {
         &self.0
-    }
-}
-
-impl ChatCleanedText {
-    /// Test-only escape hatch. Constructs a `ChatCleanedText` from an
-    /// arbitrary string without going through a parsed AST node.
-    ///
-    /// **Only available in test builds**: gated behind
-    /// `cfg(any(test, feature = "test-utils"))`. Production code outside
-    /// `talkbank-model` cannot reach this constructor: the symbol does
-    /// not exist when the `test-utils` feature is not enabled. Test
-    /// crates opt in via
-    /// `talkbank-model = { workspace = true, features = ["test-utils"] }`
-    /// in their `[dev-dependencies]`.
-    ///
-    /// Tests use this when they need to construct `ChatCleanedText`
-    /// fixtures for testing downstream logic (alignment, dispatch,
-    /// retokenization) without paying the cost of running the full
-    /// parse pipeline. The name advertises that the value did NOT come
-    /// from a parsed AST, caller is responsible for passing a string
-    /// that would be a valid cleaned-text projection if it had.
-    #[cfg(any(test, feature = "test-utils"))]
-    pub fn test_unchecked(value: impl Into<String>) -> Self {
-        Self(value.into())
     }
 }
 

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-13 01:10 EDT
+**Last modified:** 2026-08-15 13:01 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -116,8 +116,13 @@ or CLAN still say.
    change that alters CST structure.
 8. **No panics in long-lived code** (parser, model, validation, CLI,
    LSP, background tooling): typed errors, no `unwrap`/`expect`.
-   The workspace `[lints.clippy]` table denies the panic family;
-   test code relaxes it in source.
+   The workspace `[lints.clippy]` table denies the panic family, and
+   **every crate declares `[lints] workspace = true`, which is what makes
+   the table reach it**. Cargo applies workspace lints per package, so a
+   crate that omits that stanza is silently exempt: six were, including
+   the whole CHAT core, from the table's creation until 2026-08-14. If you
+   add a crate, add the stanza. Test code relaxes the family in source, at
+   the test target's crate root.
 9. **Never create ad hoc `.cha` test files**; use `corpus/reference/`
    or ask. Every error code tests through `spec/errors/` (generated,
    never hand-written).
@@ -268,12 +273,23 @@ that.
 8. Fix root causes, never symptoms; "pragmatic" is banned as a
    justification for a band-aid; a workaround that prevents a crash
    is evidence the architecture needs changing.
-9. **Red/green TDD, top-down:** the FIRST failing test is the
-   highest-level test at the bug's real boundary (CLI subprocess /
-   real fragment through `parse_*` / `.cha` through validate / LSP
-   request). Unit tests supplement, never substitute. Grammar/parser
-   fixes also require a spec + reference-corpus entry (permanent
-   regression gates; a bug fixed without a spec WILL regress).
+9. **Types first, then red/green TDD top-down for what is left.**
+   Before writing a failing test, ask what type change would make the
+   defect unrepresentable, and prefer that: the compiler is red before
+   the change and green after, at every call site, including the ones
+   no test enumerates, and it reports at the mistake rather than in
+   CI. A change that introduces a type should DELETE the tests that
+   type obsoletes; keeping both relocates the check instead of
+   removing it.
+   For what a type genuinely cannot hold (wire formats, roundtrips
+   between two functions, measurements, policy choices with real
+   alternatives, anything reaching a subprocess or another machine),
+   the FIRST failing test is the highest-level test at the bug's real
+   boundary (CLI subprocess / real fragment through `parse_*` / `.cha`
+   through validate / LSP request). Unit tests supplement, never
+   substitute. Grammar/parser fixes also require a spec +
+   reference-corpus entry (permanent regression gates; a bug fixed
+   without a spec WILL regress).
 9b. **Performance regressions get a RED TEST FIRST, like any other bug,
     and it asserts COUNTED WORK, never elapsed time.** Wall-clock
     thresholds are machine-dependent and go flaky, and "flaky" is not a
@@ -420,6 +436,25 @@ Parser-backend selection, the shared `ChatParser` trait, equivalence
 testing, and the re2c oracle workflow:
 `book/src/architecture/parser-backends.md` and
 `crates/talkbank-parser-re2c/CLAUDE.md`.
+
+**"Parity" names TWO unrelated programmes. Always say which one.** Conflating
+them reads as "the validity work is unfinished", which it is not.
+
+- **CHECK adjudication** asks, for each CLAN CHECK error code, whether the
+  construct it rejects actually fails to make sense, and then either records a
+  deliberate divergence or closes the gap in chatter's own semantics. It is
+  about CHAT VALIDITY, its authorities are `spec/` and the wild data, and it is
+  COMPLETE: every entry in `tests/check_parity/manifest.json` carries a
+  terminal verdict, and there is no "open" status to hold one that does not.
+  The breakdown is the file's, not a number to copy:
+  `jq -r '.entries[].status' crates/talkbank-parser-tests/tests/check_parity/manifest.json | sort | uniq -c`
+- **Backend parity** asks whether `talkbank-parser` and `talkbank-parser-re2c`
+  answer identically. It is about our two IMPLEMENTATIONS, says nothing about
+  CHAT, and it is OPEN. Three instruments, each answering a different question,
+  and a clean run of one is no evidence about the others: `KNOWN_DIVERGENCES`
+  (per CODE, over spec fixtures), the corpus differential's cross-backend axis
+  (per VERDICT, over the wild corpus), and `just corpus-parse-equivalence`
+  (whole MODELS, over the wild corpus).
 
 **Reference corpus** (`corpus/reference/`) is a synthesized regression
 signal, NOT a validity authority: when a change rejects a reference

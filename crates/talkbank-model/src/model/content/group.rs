@@ -46,7 +46,7 @@ pub struct Group {
     pub trailing_space: Option<smol_str::SmolStr>,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }
@@ -226,7 +226,7 @@ pub struct Quotation {
     pub content: BracketedContent,
 
     /// Source location metadata for diagnostics.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub span: Span,

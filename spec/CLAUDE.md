@@ -1,7 +1,7 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-08-12 22:55 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 ## Read the book first
 
@@ -30,14 +30,16 @@ spec/errors/*.md      ─┤                            ──► crates/talkban
 spec/tools/templates/ ─┘
 ```
 
-This repo does **not** currently have the predecessor workspace's root
-`make test-gen` wrapper. Run the relevant `spec/tools` binaries directly.
+Regenerate with `just spec-gen`, and ask `just spec-check` whether the
+committed artifacts are current. One command covers every artifact; the
+destinations are constants in the registry (`spec/tools/src/artifacts.rs`), not
+arguments, so a generator cannot be aimed at the wrong tree.
 
 ### Generated and hand-maintained tests live in SEPARATE trees
 
 ```
 grammar/test/corpus/
-├── generated/   owned by gen_tree_sitter_tests; DELETED IN FULL every run
+├── generated/   owned by the tree-sitter corpus artifact; DELETED IN FULL every run
 └── manual/      hand-maintained; no generator writes here
 ```
 
@@ -69,7 +71,7 @@ hand-maintained tests in `manual/`.
 | `grammar/test/corpus/manual/` | Hand-maintained tree-sitter tests (never generated) |
 | → `crates/talkbank-parser-tests/tests/integration/generated/` | Generated Rust parser tests |
 | → `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | Validation fixtures + `manifest.json` (data-driven runner) |
-| → `docs/errors/` | Optional locally generated error-reference pages |
+| → `docs/errors/` | Published error-reference pages; a registry artifact, gated |
 
 ## Adding a Test
 
@@ -122,10 +124,11 @@ fragment in a full CHAT document. Templates live in `spec/tools/templates/`.
 
 Error for some condition.
 
-- **Code**: E999
-- **Severity**: Error
+- **Error Code**: E999
+- **Kind**: Invalidity | Unmodeled | Deprecation | Style
+- **Category**: validation
 - **Layer**: parser | validation
-- **Status**: implemented | not_implemented
+- **Status**: implemented | not_implemented | deprecated | unreachable_from_chat
 
 ## Example
 
@@ -161,15 +164,8 @@ Example (`spec/tools/templates/main_tier.tera`):
 ### 5. Regenerate and verify
 
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
-
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
-
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+just spec-gen        # regenerate every artifact from the specs
+just spec-check      # or ask whether the committed copies are current
 
 cd grammar && tree-sitter test
 cargo build --workspace --all-targets --locked
@@ -179,20 +175,14 @@ cargo test --workspace
 ## Key Commands
 
 ```bash
-# Regenerate grammar corpus tests
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
+# Regenerate every artifact derived from spec/ (corpus tests, Rust test bodies,
+# validation fixtures + manifest, the DiagnosticKind registry)
+just spec-gen
 
-# Regenerate generated Rust tests
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
+# Report staleness without writing anything. This is what the gate runs.
+just spec-check
 
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
-
-# Regenerate local error docs
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
+# (docs/errors/ is a spec-gen artifact; no separate command.)
 
 # Verify spec format integrity
 cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_specs
@@ -202,10 +192,7 @@ cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_spe
 
 | Binary | What it generates |
 |--------|-------------------|
-| `gen_tree_sitter_tests` | `grammar/test/corpus/generated/*.txt` from constructs + errors |
-| `gen_rust_tests` | `crates/talkbank-parser-tests/tests/integration/generated/*.rs` from constructs + errors |
-| `gen_validation_corpus` | Validation fixture corpus + `manifest.json` from `spec/errors/` (one fixture per example, asserting that example's own Expected Error Codes) |
-| `gen_error_docs` | `docs/errors/*.md` from errors |
+| `spec_gen` | EVERY artifact below, from one registry: the tree-sitter corpus, the Rust test bodies, the validation fixtures + `manifest.json`, and the `DiagnosticKind` registry. `--check` reports staleness and writes nothing. Run it as `just spec-gen` / `just spec-check`. |
 | `gen_form_markers` | Every site carrying the CHAT form-marker inventory, from `spec/form_markers/form_marker_registry.json`: the model's `FormType` enum, the re2c lexer's code set, and the book's table. Run it as `just form-markers-gen`; see `spec/form_markers/README.md` for the two follow-ups it cannot do (the vendored re2c lexer and the JSON Schema). |
 | `validate_spec` | Validates spec format integrity (no output) |
 | `corpus_node_coverage` | Reports which grammar node types are exercised by `corpus/reference/` |
@@ -220,7 +207,7 @@ grammar rule so that previously-unparsable content now parses:
 
 1. Update the primary error spec: change `Layer: parser` → `Layer: validation`
 2. Audit `E316_auto.md`: remove examples that no longer produce E316
-3. Regenerate the affected outputs with the current `spec/tools` binaries
+3. Run `just spec-gen` and review the diff
 4. Run the concrete verification commands from `book/src/contributing/dev-checks.md`
 
 ## See Also

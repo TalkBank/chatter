@@ -316,7 +316,11 @@ pub fn generate_error_corpus_files(
                     cst = cst,
                 );
 
-                let filename = format!("errors/{}{}.txt", error_def.code.to_lowercase(), suffix);
+                let filename = format!(
+                    "errors/{}{}.txt",
+                    error_def.code.as_str().to_lowercase(),
+                    suffix
+                );
                 files.push((filename, content));
             }
         }

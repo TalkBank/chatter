@@ -25,6 +25,6 @@ justified exceptions to maintain.
 
 ## Verification
 
-```bash
-cargo clippy -p talkbank-transform --lib --bins --locked -- -D warnings
-```
+`just clippy`, which covers this crate along with every other. See
+[README](README.md#verification) for what it checks and why the per-crate
+command that used to sit here could not fail.

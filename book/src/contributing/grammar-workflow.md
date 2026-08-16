@@ -1,7 +1,7 @@
 # Grammar Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-12 19:55 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 The tree-sitter grammar at `grammar/grammar.js` is the formal definition of the CHAT format. Changes require careful validation.
 
@@ -94,7 +94,7 @@ tree-sitter test
 
 Every test under `grammar/test/corpus/` must pass. Tests live there
 and are partially auto-generated from specs (primarily via
-`gen_tree_sitter_tests`).
+`just spec-gen`).
 
 ### 5. Run Parser Tests
 
@@ -117,15 +117,10 @@ Every file in the reference corpus must parse correctly. Each `.cha` file is its
 If the grammar change affects any spec examples:
 
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
+just spec-gen
 
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
-
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+just spec-gen      # every artifact derived from spec/
+just spec-check    # or: is the committed copy current?
 ```
 
 This regenerates tree-sitter corpus tests and other generated outputs that

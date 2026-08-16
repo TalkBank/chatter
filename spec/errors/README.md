@@ -110,8 +110,8 @@ This automated pipeline generates `E###_auto.md` files with:
 Once you have error specs, generate the validation fixture corpus:
 
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+just spec-gen      # every artifact derived from spec/
+just spec-check    # or: is the committed copy current?
 ```
 
 This generates:
@@ -229,13 +229,13 @@ cargo run --bin enhance_specs -- \
   - Parser layer: "parser should reject this CHAT input"
   - Validation layer: "parser should succeed, validation should report error"
 
-### gen_validation_corpus
+### Regenerating the validation corpus
 
 Generates the validation fixture corpus + manifest from error specs.
 
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+just spec-gen      # every artifact derived from spec/
+just spec-check    # or: is the committed copy current?
 ```
 
 Generates:

@@ -2,15 +2,22 @@
 //!
 //! Structured representation of the error spec files in `spec/errors/`.
 //!
-//! Each Markdown file defines one error code with its metadata (severity,
+//! Each Markdown file defines one error code with its metadata (kind,
 //! category, layer), a human-readable description, and one or more bad-input
 //! examples that should trigger the error. Generators consume these types to
 //! emit Rust validation tests and error documentation pages.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::Path;
 use unicode_normalization::UnicodeNormalization;
+
+use super::metadata::{CategoryName, SpecErrorCode, SpecLayer, Status};
+
+use super::comrak_text::{
+    extract_text_from_children, normalize_whitespace, strip_single_trailing_newline,
+};
 
 /// Root structure for an error specification file.
 ///
@@ -19,7 +26,7 @@ use unicode_normalization::UnicodeNormalization;
 /// practice, one per file).
 #[derive(Debug, Deserialize)]
 pub struct ErrorSpec {
-    /// Category-level metadata (code range, layer, status).
+    /// Category-level metadata (layer, status, kind).
     pub metadata: ErrorMetadata,
     /// Error definitions contained in this spec (usually exactly one).
     pub errors: Vec<ErrorDefinition>,
@@ -32,18 +39,38 @@ pub struct ErrorSpec {
 /// Metadata about the error category
 #[derive(Debug, Deserialize)]
 pub struct ErrorMetadata {
-    /// Error code range: "E200-E299", "E500-E599", etc.
-    pub range: String,
-    /// Error category: "word", "header", "alignment", etc.
-    pub category: String,
-    /// Error type: "parser" or "validation"
+    /// Error category: "validation", "header_validation", etc.
+    pub category: CategoryName,
+    /// Which layer of the pipeline catches this rule.
+    ///
+    /// Named `error_type` and typed `String` until 2026-08-15, though it is
+    /// parsed from the `**Layer**` bullet and the sibling parser of the same
+    /// files already had it as [`SpecLayer`]. Two string comparisons decided
+    /// what got GENERATED from it: `artifacts.rs` selected the tree-sitter
+    /// corpus with `== "parser"`, and `output/rust_test.rs` skipped emitting a
+    /// parser test with `== "validation"`. A misspelled bullet therefore
+    /// dropped a spec out of the corpus, or emitted a parser test for a
+    /// validation-layer rule -- which is precisely the E342/E390 failure the
+    /// book documents as a warning. It is now a load error.
+    ///
+    /// The markdown loader resolves this explicitly: an absent bullet means
+    /// parser, a present-but-unknown value is an error. That absent-means-parser
+    /// rule is a real CHAT-spec convention both parsers have always followed,
+    /// which is why [`SpecLayer`] keeps a `Default` where [`Status`] does not.
     #[serde(rename = "type")]
-    pub error_type: String,
+    pub layer: SpecLayer,
     /// Human-readable description
     pub description: String,
-    /// Implementation status: "implemented" (default) or "not_implemented"
-    #[serde(default = "default_status")]
-    pub status: String,
+    /// Implementation status, parsed at load into the closed set.
+    ///
+    /// Was a `String` on this struct until 2026-08-15, while the sibling parser
+    /// of the same files had it typed. Why that mattered, and what it cost, is
+    /// recorded once on [`Status`].
+    ///
+    /// No `#[serde(default)]`: [`Status`] has no `Default`, deliberately, so a
+    /// spec that declares nothing is refused on BOTH construction paths rather
+    /// than on the markdown one only.
+    pub status: Status,
     /// What this diagnostic intrinsically IS, per the code's own spec.
     ///
     /// Deliberately REQUIRED, not `Option` with a default: a spec file
@@ -54,16 +81,6 @@ pub struct ErrorMetadata {
     /// generated from this field across every spec file, so an unclassified
     /// code is a build-time failure here, not a silent gap in that registry.
     pub kind: ErrorKind,
-}
-
-/// Serde default for `ErrorMetadata::status`.
-///
-/// Retained ONLY for the serde path (specs deserialized from structured data
-/// rather than parsed from markdown). The markdown loader, which is how every
-/// spec in this repository is read, now REQUIRES the bullet and reports the
-/// file that lacks it.
-fn default_status() -> String {
-    "implemented".to_string()
 }
 
 /// The four `DiagnosticKind` axis values a spec file's `## Metadata` block
@@ -91,26 +108,17 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    /// Parse a `- **Kind**:` bullet value. Case-sensitive and exact: the
-    /// four spelled-out variant names, nothing else (no abbreviations, no
-    /// synonyms), so a typo in a spec file fails loudly at load time
-    /// instead of silently defaulting.
-    fn parse(value: &str) -> Result<Self, String> {
-        match value.trim() {
-            "Invalidity" => Ok(Self::Invalidity),
-            "Unmodeled" => Ok(Self::Unmodeled),
-            "Deprecation" => Ok(Self::Deprecation),
-            "Style" => Ok(Self::Style),
-            other => Err(format!(
-                "unrecognized Kind value {other:?}: expected one of \
-                 Invalidity, Unmodeled, Deprecation, Style"
-            )),
-        }
-    }
-
-    /// The identically-named `talkbank_model::errors::DiagnosticKind`
-    /// variant this value maps to, as source text for code generation.
-    pub fn diagnostic_kind_variant(self) -> &'static str {
+    /// ONE table, the way [`Status`] and [`SpecLayer`] already have one.
+    ///
+    /// This name is FOUR things at once: what a `- **Kind**:` bullet must say,
+    /// what the generated `DiagnosticKind` registry emits as source text, what
+    /// `docs/errors/*.md` publishes, and what the index table shows. Three of
+    /// those were separate matches until 2026-08-15, and the published pair
+    /// were `{:?}` on the derived `Debug`, so renaming a variant would have
+    /// silently changed user-facing documentation while
+    /// `diagnostic_kind_variant` kept emitting the old literal and only
+    /// `parse` failed loudly.
+    fn as_str(self) -> &'static str {
         match self {
             Self::Invalidity => "Invalidity",
             Self::Unmodeled => "Unmodeled",
@@ -118,42 +126,54 @@ impl ErrorKind {
             Self::Style => "Style",
         }
     }
+
+    /// Parse a `- **Kind**:` bullet value. Case-sensitive and exact: the
+    /// four spelled-out variant names, nothing else (no abbreviations, no
+    /// synonyms), so a typo in a spec file fails loudly at load time
+    /// instead of silently defaulting.
+    fn parse(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        [
+            Self::Invalidity,
+            Self::Unmodeled,
+            Self::Deprecation,
+            Self::Style,
+        ]
+        .into_iter()
+        .find(|kind| kind.as_str() == value)
+        .ok_or_else(|| {
+            format!(
+                "unrecognized Kind value {value:?}: expected one of \
+                 Invalidity, Unmodeled, Deprecation, Style"
+            )
+        })
+    }
+
+    /// The identically-named `talkbank_model::errors::DiagnosticKind`
+    /// variant this value maps to, as source text for code generation.
+    ///
+    /// Identical to [`Self::as_str`] by construction rather than by
+    /// coincidence, and named separately because the CALLER's intent differs:
+    /// this one is Rust source text and must not drift if the published
+    /// spelling ever gains a space.
+    pub fn diagnostic_kind_variant(self) -> &'static str {
+        self.as_str()
+    }
 }
 
-/// Strip the leading error-code prefix from a spec H1 heading.
-///
-/// Spec headings are `<CODE><sep> <Name>`, and `<sep>` has drifted over time:
-/// today 212 of 222 files use `:`, nine use `,` (a mechanical dash sweep
-/// rewrote their separator), and none use the ` - ` form the loader used to
-/// assume.
-///
-/// The previous implementation was `name.split('-').nth(1)`, which therefore
-/// matched NOTHING and silently fell back to the entire heading, so every
-/// generated page rendered its code twice: `# E248: E248, Bare @s shortcut`.
-/// It also mis-split any name containing a hyphen inside a word. Parsing the
-/// prefix explicitly is separator-agnostic and survives the next sweep.
-fn strip_code_prefix(heading: &str, code: &str) -> String {
-    let heading = heading.trim();
-    let Some(rest) = heading.strip_prefix(code) else {
-        // No code prefix to remove: the heading is already just the name.
-        return heading.to_string();
-    };
-    let rest = rest.trim_start();
-    rest.strip_prefix([',', ':', '-'])
-        .unwrap_or(rest)
-        .trim()
-        .to_string()
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// A single error definition
 #[derive(Debug, Deserialize)]
 pub struct ErrorDefinition {
     /// Error code: "E241", "E520", etc.
-    pub code: String,
+    pub code: SpecErrorCode,
     /// Short name: "IllegalUntranscribed", "SpeakerNotInParticipants", etc.
     pub name: String,
-    /// Severity: "error" or "warning"
-    pub severity: String,
     /// Human-readable description
     pub description: String,
     /// How to fix the error
@@ -212,11 +232,9 @@ pub struct ErrorReference {
 pub struct ErrorExample {
     /// The input that triggers the error
     pub input: String,
-    /// Context level: "word", "tier", "utterance", "file"
-    pub context: String,
     /// Expected error codes
     #[serde(default)]
-    pub expected_codes: Vec<String>,
+    pub expected_codes: Vec<SpecErrorCode>,
     /// The fixture path the example was taken from, as its `**Source**` line
     /// gives it, when it has one.
     ///
@@ -266,10 +284,17 @@ fn raw_after_fence_declares_codes(node: &comrak::nodes::AstNode<'_>) -> bool {
 
 impl ErrorSpec {
     /// Load an error specification from a Markdown file
-    pub fn load(path: impl AsRef<Path>) -> Result<Self, String> {
+    /// # Errors do NOT name the file
+    ///
+    /// [`Self::load_all`] prefixes every failure with `Failed to load {path}:`,
+    /// so naming the path here would print it twice. That was got wrong eight
+    /// times in this function before 2026-08-15, including twice by the commits
+    /// that documented the rule, which is why `load` is private: `load_all` is
+    /// the only route in, so there is no caller that could need the path and
+    /// not get it.
+    fn load(path: impl AsRef<Path>) -> Result<Self, String> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+        let content = std::fs::read_to_string(path).map_err(|e| format!("failed to read: {e}"))?;
 
         // Parse to AST
         let arena = comrak::Arena::new();
@@ -320,12 +345,29 @@ impl ErrorSpec {
                     if current_h2.starts_with("Example") =>
                 {
                     let input = strip_single_trailing_newline(&code_block.literal);
-                    let mut context = code_block.info.clone();
-                    if context == "chat" {
-                        context = "chat_file".to_string();
-                    }
-                    if context.is_empty() {
-                        context = "utterance".to_string();
+
+                    // AN ERROR EXAMPLE IS A WHOLE CHAT FILE, AND THE FENCE SAYS
+                    // SO. This was a `context: String` carrying the fence info,
+                    // which the generator interpolated into
+                    // `parser.parse_{context}` with no mapping step. So every
+                    // value but `chat` named a `TreeSitterParser` method that does
+                    // not exist, including the empty fence (defaulted to
+                    // `utterance`, a free function, not a method) and all five
+                    // alternatives the format reference documented.
+                    //
+                    // Measured over all 236 loaded spec files, 2026-08-15: 330 of 330
+                    // example fences are `chat`, and all 214 generated tests call
+                    // `parse_chat_file`. One reachable value is an invariant, not
+                    // data, so it is checked here rather than stored.
+                    if code_block.info != "chat" {
+                        // `load_all` prefixes the file name, so this must not.
+                        return Err(format!(
+                            "an example's code fence is ```{} where only ```chat \
+                             is supported. An error example is parsed as a whole \
+                             CHAT file; there is no other parse entry point a \
+                             generated test can call.",
+                            code_block.info,
+                        ));
                     }
 
                     // Try to find "Expected Error Codes" and "Source" in the
@@ -349,14 +391,14 @@ impl ErrorSpec {
                             let rest = &text[pos + "Source:".len()..];
                             source = rest.split_whitespace().next().map(str::to_string);
                         }
-                        if let Some(pos) = text.find("Expected Error Codes:") {
-                            let rest = &text[pos + "Expected Error Codes:".len()..];
-                            let codes_str = rest.lines().next().unwrap_or("");
-                            expected_codes = codes_str
-                                .split(',')
-                                .map(|s| s.trim().to_string())
-                                .filter(|s| !s.is_empty())
-                                .collect();
+                        if text.contains("Expected Error Codes") {
+                            // ONE owner for this line, shared with the sibling
+                            // parser of the same files. This used to split on
+                            // `,` and require every token to parse, while
+                            // `error_corpus.rs` split on non-alphanumerics and
+                            // tolerated prose, so `E301 and E305` loaded in one
+                            // reader and hard-failed in the other.
+                            expected_codes = super::metadata::expected_error_codes(&text)?;
                             break;
                         }
                         // Stop if we hit another H2
@@ -374,16 +416,14 @@ impl ErrorSpec {
                     // silently ignored and the examples asserted nothing while
                     // looking fully specified. Refuse that rather than drop it.
                     if expected_codes.is_empty() && raw_after_fence_declares_codes(node) {
-                        return Err(format!(
-                            "an example declares `**Expected Error Codes**` AFTER its \
-                             ```chat fence, where the loader cannot see it, so the \
+                        return Err("an example declares `**Expected Error Codes**` AFTER \
+                             its ```chat fence, where the loader cannot see it, so the \
                              example would assert nothing. Move the line above the fence."
-                        ));
+                            .to_string());
                     }
 
                     examples.push(ErrorExample {
                         input,
-                        context,
                         expected_codes,
                         source,
                         expected_message: String::new(),
@@ -395,33 +435,50 @@ impl ErrorSpec {
             }
         }
 
-        let code = metadata.get("Error Code").cloned().unwrap_or_else(|| {
-            // Try to extract from name if not in metadata (e.g., "# E304 - ...")
-            name.split_whitespace()
-                .next()
-                .map(|s| s.trim_end_matches(':').to_string())
-                .unwrap_or_default()
-        });
+        // The code comes from the `- **Error Code**:` bullet, or from the
+        // heading, which `metadata::parse_spec_title` owns for both parsers of
+        // these files. Neither route may FABRICATE one.
+        //
+        // This chain used to end `.unwrap_or_default()`, so a spec with no
+        // bullet and an empty H1 was given the EMPTY STRING as its error code,
+        // which reached `ErrorCode::new("")` inside a generated test and became
+        // the `Unknown` sentinel. Measured 2026-08-15 over all 236 loaded
+        // specs: 233 use the bullet, 3 use the heading, none is malformed. So
+        // this is PREVENTION, like `Span`'s `Default` removal.
+        //
+        // The heading route used to be weaker than the sibling parser's; see
+        // `metadata::parse_spec_title`, which now owns it for both.
+        let title = super::metadata::parse_spec_title(&name);
+        // The bullet wins where both are present: 233 of 236 specs declare it,
+        // and it is the field an author edits deliberately. A tuple match over
+        // (bullet, heading) was tried and reverted: its first arm discarded the
+        // second component with `_`, so it read as a cross-product while
+        // deciding on one value, and bought no exhaustiveness.
+        let code: SpecErrorCode = match metadata.get("Error Code") {
+            Some(declared) => declared
+                .parse()
+                .map_err(|why| format!("`Error Code` {why}"))?,
+            None => title.code.clone().ok_or_else(|| {
+                format!(
+                    "no `- **Error Code**:` bullet, and the heading {name:?} \
+                     names no code either, so this file declares none at all."
+                )
+            })?,
+        };
 
         // Required: a spec file with no `- **Kind**:` bullet, or an
         // unrecognized value, fails to load rather than silently defaulting.
         // See `ErrorMetadata::kind` for why this must never become optional.
         let kind_str = metadata.get("Kind").ok_or_else(|| {
-            format!(
-                "{}: missing required Kind metadata (must be one of: \
-                 Invalidity, Unmodeled, Deprecation, Style)",
-                path.display()
-            )
+            "missing required Kind metadata (must be one of: Invalidity, \
+             Unmodeled, Deprecation, Style)"
+                .to_string()
         })?;
-        let kind = ErrorKind::parse(kind_str).map_err(|e| format!("{}: {}", path.display(), e))?;
+        let kind = ErrorKind::parse(kind_str).map_err(|e| e.to_string())?;
 
         let error_def = ErrorDefinition {
             code: code.clone(),
-            name: strip_code_prefix(&name, &code),
-            severity: metadata
-                .get("Severity")
-                .cloned()
-                .unwrap_or_else(|| "error".to_string()),
+            name: title.name.clone(),
             description: description.clone(),
             suggestion: String::new(), // TODO
             help_url: None,
@@ -429,25 +486,49 @@ impl ErrorSpec {
             examples,
         };
 
+        // Both metadata vocabularies are resolved BEFORE the literal, matching
+        // `kind` twenty lines above and matching `error_corpus.rs`, the sibling
+        // parser of these same files. They were briefly inline block expressions
+        // inside the literal, which meant reading a nested closure and a
+        // multi-line format string while still tracking which field you were in.
+        //
+        // An absent `Layer` bullet means parser, which is what the sibling parser
+        // has always defaulted to. A PRESENT but misspelled value is an error,
+        // which it was not before; those were one case and are now two.
+        let layer = match metadata.get("Layer") {
+            Some(raw) => raw.parse::<SpecLayer>().map_err(|why| why.to_string())?,
+            None => SpecLayer::Parser,
+        };
+        let status = metadata
+            .get("Status")
+            .ok_or_else(|| {
+                "no `- **Status**:` bullet. Every spec must declare one \
+                 (implemented / not_implemented / deprecated / \
+                 unreachable_from_chat). This used to default to `implemented`, \
+                 so a spec that said nothing had an answer invented for it, and \
+                 104 of the 238 files then in spec/errors declared nothing."
+                    .to_string()
+            })?
+            .parse::<Status>()
+            .map_err(|why| why.to_string())?;
+
         Ok(ErrorSpec {
             metadata: ErrorMetadata {
-                range: format!("{}x", &code[..2]),
-                category: metadata.get("Category").cloned().unwrap_or_default(),
-                error_type: metadata
-                    .get("Layer")
-                    .cloned()
-                    .unwrap_or_else(|| "parser".to_string()),
+                // REQUIRED, like `Kind` and `Status`. This was
+                // `.unwrap_or_default()`, so a spec declaring no category was
+                // given the empty string and published as a `## ` heading with
+                // no name. All 236 loaded specs declare one, so this is
+                // prevention; the sibling parser has always required it.
+                category: metadata
+                    .get("Category")
+                    .ok_or_else(|| {
+                        "no `- **Category**:` bullet. Every spec must declare one.".to_string()
+                    })?
+                    .parse()
+                    .map_err(|why| format!("`Category` {why}"))?,
+                layer,
                 description: description.clone(),
-                status: metadata.get("Status").cloned().ok_or_else(|| {
-                    format!(
-                        "{}: no `- **Status**:` bullet. Every spec must declare one \
-                         (implemented / not_implemented / deprecated / \
-                         unreachable_from_chat). This used to default to \
-                         `implemented`, so a spec that said nothing had an answer \
-                         invented for it, and 104 of 238 specs declared nothing.",
-                        path.display()
-                    )
-                })?,
+                status,
                 kind,
             },
             errors: vec![error_def],
@@ -514,28 +595,6 @@ impl ErrorSpec {
     }
 }
 
-/// Extract plain text from the inline nodes under this node.
-///
-/// Soft/hard line breaks become single spaces (a wrapped source paragraph
-/// must not fuse words), and inline code spans contribute their literal
-/// text (a backticked example must not vanish from the extracted prose).
-fn extract_text_from_children<'a>(node: &'a comrak::nodes::AstNode<'a>) -> String {
-    let mut result = String::new();
-
-    for child in node.descendants() {
-        match child.data.borrow().value {
-            comrak::nodes::NodeValue::Text(ref text) => result.push_str(text),
-            comrak::nodes::NodeValue::Code(ref code) => result.push_str(&code.literal),
-            comrak::nodes::NodeValue::SoftBreak | comrak::nodes::NodeValue::LineBreak => {
-                result.push(' ');
-            }
-            _ => {}
-        }
-    }
-
-    result
-}
-
 /// Extract metadata key-value pairs from a list item
 fn extract_metadata_from_list_item<'a>(
     list_item: &'a comrak::nodes::AstNode<'a>,
@@ -544,35 +603,6 @@ fn extract_metadata_from_list_item<'a>(
     let text = extract_text_from_children(list_item);
     if let Some((key, value)) = text.split_once(':') {
         metadata.insert(normalize_whitespace(key), normalize_whitespace(value));
-    }
-}
-
-/// Collapse all runs of whitespace into single spaces and trim both ends.
-fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Remove at most one trailing newline (`\n` or `\r\n`) from code block content.
-fn strip_single_trailing_newline(text: &str) -> String {
-    if let Some(stripped) = text.strip_suffix("\r\n") {
-        stripped.to_string()
-    } else if let Some(stripped) = text.strip_suffix('\n') {
-        stripped.to_string()
-    } else {
-        text.to_string()
-    }
-}
-
-impl ErrorDefinition {
-    /// Get the Rust variant name for this error code
-    /// E241 -> E241
-    pub fn code_variant(&self) -> String {
-        self.code.clone()
-    }
-
-    /// Generate a sanitized test name from the error code
-    pub fn test_name_prefix(&self) -> String {
-        self.code.to_lowercase().replace(['e', 'w'], "")
     }
 }
 
@@ -631,61 +661,5 @@ impl ErrorExample {
     /// Extract expected error message substring for assertion
     pub fn expected_substring(&self) -> &str {
         &self.expected_message
-    }
-}
-
-#[cfg(test)]
-mod strip_code_prefix_tests {
-    use super::strip_code_prefix;
-
-    /// The colon form, which 212 of the 222 spec files use today.
-    #[test]
-    fn strips_a_colon_separated_code() {
-        assert_eq!(
-            strip_code_prefix("E101: Invalid line format", "E101"),
-            "Invalid line format"
-        );
-    }
-
-    /// The comma form. Nine specs carry it because a dash sweep rewrote the
-    /// separator, and it is exactly what broke the old `split('-')` parse.
-    #[test]
-    fn strips_a_comma_separated_code() {
-        assert_eq!(
-            strip_code_prefix(
-                "E248, Bare @s shortcut in tertiary language context",
-                "E248"
-            ),
-            "Bare @s shortcut in tertiary language context"
-        );
-    }
-
-    /// The historical hyphen form still parses.
-    #[test]
-    fn strips_a_hyphen_separated_code() {
-        assert_eq!(
-            strip_code_prefix("E304 - Something went wrong", "E304"),
-            "Something went wrong"
-        );
-    }
-
-    /// A hyphen INSIDE the name must survive. The old implementation split on
-    /// the first hyphen anywhere and returned "of" for this input.
-    #[test]
-    fn keeps_hyphens_that_belong_to_the_name() {
-        assert_eq!(
-            strip_code_prefix("E543: Header out-of-order", "E543"),
-            "Header out-of-order"
-        );
-    }
-
-    /// A heading that carries no code prefix is returned unchanged, rather
-    /// than being truncated by a speculative split.
-    #[test]
-    fn passes_through_a_heading_with_no_code() {
-        assert_eq!(
-            strip_code_prefix("UnknownBaseContent", "E340"),
-            "UnknownBaseContent"
-        );
     }
 }

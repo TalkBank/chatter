@@ -17,15 +17,15 @@ use anyhow::Context;
 use anyhow::Result;
 use generators::form_markers::registry::FormMarkerRegistry;
 use generators::form_markers::render;
-use generators::node_coverage::repo_root;
+use generators::repo_paths::RepoRoot;
 use std::path::Path;
 
 fn main() -> Result<()> {
-    let repo_root = repo_root();
-    let registry = FormMarkerRegistry::load(&repo_root).with_context(|| {
+    let repo_root = RepoRoot::resolve(None)?;
+    let registry = FormMarkerRegistry::load(repo_root.as_path()).with_context(|| {
         format!(
             "loading the form-marker registry under {}",
-            repo_root.display()
+            repo_root.as_path().display()
         )
     })?;
 
@@ -36,7 +36,7 @@ fn main() -> Result<()> {
     for output in render::OUTPUTS {
         let rendered =
             (output.render)(&registry).with_context(|| format!("rendering {}", output.what))?;
-        write(&repo_root, output, &rendered)?;
+        write(repo_root.as_path(), output, &rendered)?;
     }
 
     println!(

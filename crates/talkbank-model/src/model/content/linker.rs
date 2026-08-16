@@ -106,7 +106,7 @@ pub struct Linker {
     /// Source byte span of the linker token. Provenance only: skipped in
     /// serialization, schema, and semantic equality. Used by source-spacing
     /// validation (E758) to detect a leading space before the linker.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub span: Span,

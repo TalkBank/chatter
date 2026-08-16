@@ -42,12 +42,8 @@ cargo run --bin extract_corpus_candidates --manifest-path spec/runtime-tools/Car
 3. Regenerate tests:
 
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
-
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
+just spec-gen      # every artifact derived from spec/
+just spec-check    # or: is the committed copy current?
 ```
 
 4. Verify:

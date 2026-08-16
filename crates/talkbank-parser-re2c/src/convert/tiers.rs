@@ -3,6 +3,7 @@
 
 use crate::ast;
 use crate::token::Token;
+use talkbank_model::ErrorSink;
 use talkbank_model::Span;
 use talkbank_model::model::content::word::ca::normalize_ca_omissions_in_lines;
 use talkbank_model::model::*;
@@ -150,7 +151,6 @@ pub fn dependent_tier_to_model(
             talkbank_model::model::DependentTier::Wor(wor_tier_to_model(wor_parsed))
         }
         ast::DependentTierParsed::Text { prefix, content } => {
-            let bc = tokens_to_bullet_content(content);
             let prefix_text = prefix.text();
             // Extract tier label: "%com:\t" → "com", "%xpho:\t" → "xpho"
             let label = prefix_text.trim_start_matches('%').trim_end_matches(":\t");
@@ -178,23 +178,54 @@ pub fn dependent_tier_to_model(
                 ));
             }
 
-            // BulletContent tiers
+            // BulletContent tiers. Each arm builds its own payload rather than
+            // sharing one `let bc = ...` above the match: only these nine consume
+            // it, and hoisting it made every OTHER arm (the ten text tiers, `%tim`,
+            // `%wor`, the four Phon tiers, `%x*` and the fallback) build a
+            // `BulletContent` (a `Vec`, a `SmolStr` per token, and a normalization
+            // pass per segment) only to drop it. Over six figures of corpus files
+            // that is the one measurable cost in this function.
             match label {
-                "com" => talkbank_model::model::DependentTier::Com(ComTier::new(bc)),
-                "act" => talkbank_model::model::DependentTier::Act(ActTier::new(bc)),
-                "exp" => talkbank_model::model::DependentTier::Exp(ExpTier::new(bc)),
-                "add" => talkbank_model::model::DependentTier::Add(AddTier::new(bc)),
-                "gpx" => talkbank_model::model::DependentTier::Gpx(GpxTier::new(bc)),
-                "int" => talkbank_model::model::DependentTier::Int(IntTier::new(bc)),
-                "spa" => talkbank_model::model::DependentTier::Spa(SpaTier::new(bc)),
-                "sit" => talkbank_model::model::DependentTier::Sit(SitTier::new(bc)),
-                "cod" => talkbank_model::model::DependentTier::Cod(CodTier::new(bc)),
+                "com" => talkbank_model::model::DependentTier::Com(ComTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "act" => talkbank_model::model::DependentTier::Act(ActTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "exp" => talkbank_model::model::DependentTier::Exp(ExpTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "add" => talkbank_model::model::DependentTier::Add(AddTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "gpx" => talkbank_model::model::DependentTier::Gpx(GpxTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "int" => talkbank_model::model::DependentTier::Int(IntTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "spa" => talkbank_model::model::DependentTier::Spa(SpaTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "sit" => talkbank_model::model::DependentTier::Sit(SitTier::new(
+                    tokens_to_bullet_content(content),
+                )),
+                "cod" => talkbank_model::model::DependentTier::Cod(CodTier::new(
+                    tokens_to_bullet_content(content),
+                )),
                 // TextTier tiers (plain string content)
                 "alt" | "coh" | "def" | "eng" | "err" | "fac" | "flo" | "gls" | "ort" | "par" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    let text = NonEmptyString::new(raw_text.as_str())
-                        .unwrap_or_else(|_| NonEmptyString::new_unchecked(" "));
-                    let tt = talkbank_model::model::dependent_tier::TextTier::new(text);
+                    // No fabrication. This used to substitute a single space
+                    // for empty content, which made the tier look well formed
+                    // and the whole FILE read as valid where tree-sitter
+                    // reported errors. Saying the tier is empty is what lets
+                    // the validator reject it (E756's rule: a tier whose
+                    // content is empty declares nothing).
+                    let tt = match NonEmptyString::new(raw_text.as_str()) {
+                        Ok(text) => talkbank_model::model::dependent_tier::TextTier::new(text),
+                        Err(_) => talkbank_model::model::dependent_tier::TextTier::empty(),
+                    };
                     match label {
                         "alt" => talkbank_model::model::DependentTier::Alt(tt),
                         "coh" => talkbank_model::model::DependentTier::Coh(tt),
@@ -212,10 +243,39 @@ pub fn dependent_tier_to_model(
                 // TimTier (structured time)
                 "tim" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    let text = NonEmptyString::new(raw_text.as_str())
-                        .unwrap_or_else(|_| NonEmptyString::new_unchecked(" "));
+                    // Same fabrication, same cure. `%tim` carries a structured
+                    // time, so an empty one is not merely undeclared, it is a
+                    // time that is not there; a substituted space made it parse
+                    // as though a value had been read.
+                    //
+                    // It also used to lose the `Tim` identity, lowering an empty
+                    // `%tim:` to an unsupported DEPENDENT TIER and so reporting
+                    // E605 ("unsupported dependent tier '%tim'") about a tier
+                    // name that is perfectly supported. `TimTier` grew the
+                    // `Empty` state on 2026-08-16, so the tier keeps its
+                    // identity and E756 judges it, agreeing with tree-sitter.
+                    //
+                    // Emptiness is tested AFTER trimming, not by
+                    // `NonEmptyString`: a body of one space is a declaration
+                    // that was never made, and treating it as content made
+                    // `from_text` call it a non-time and report E603, "Invalid
+                    // %tim tier format: ''", ALONGSIDE E756. Two codes for one
+                    // fact, and the more specific of them false. Tree-sitter's
+                    // separator absorbs that space and reaches `Empty`, so this
+                    // is also what makes the two backends agree.
+                    //
+                    // The content is stored UNTRIMMED. Only the verdict uses
+                    // `trim`; trimming the payload too would change the bytes a
+                    // `%tim` line roundtrips to, which is a different change
+                    // from the one being made here.
                     talkbank_model::model::DependentTier::Tim(
-                        talkbank_model::dependent_tier::TimTier::from_text(text),
+                        match NonEmptyString::new(raw_text.as_str()) {
+                            Ok(text) if text.as_str().trim().is_empty() => {
+                                talkbank_model::dependent_tier::TimTier::empty()
+                            }
+                            Ok(text) => talkbank_model::dependent_tier::TimTier::from_text(text),
+                            Err(_) => talkbank_model::dependent_tier::TimTier::empty(),
+                        },
                     )
                 }
                 // %wor tier, word tier with timing bullets.
@@ -258,12 +318,20 @@ pub fn dependent_tier_to_model(
                 }
                 "phoaln" | "xphoaln" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
+                    // No empty-body guard here, deliberately, and it is worth
+                    // saying why since `%xphoint` below has one.
+                    // `parse_phoaln_content` is `split_whitespace` into a
+                    // `Vec`, so an empty or whitespace-only body already yields
+                    // `Ok(vec![])`: an empty `PhoalnTier`, which is what
+                    // `PhoalnTier::is_empty` reports and E756 judges. A guard
+                    // would be a second place deciding what an empty `%phoaln`
+                    // means, agreeing with this one only by inspection.
                     match talkbank_model::dependent_tier::parse_phoaln_content(&raw_text) {
                         Ok(words) => talkbank_model::model::DependentTier::Phoaln(
                             talkbank_model::dependent_tier::PhoalnTier::new(words),
                         ),
                         Err(_) => {
-                            // No fabrication: an empty tier says so.
+                            // No fabrication: a tier that will not parse says so.
                             let text = NonEmptyString::new(raw_text.as_str()).ok();
                             talkbank_model::model::DependentTier::Unsupported(
                                 talkbank_model::model::UserDefinedDependentTier {
@@ -278,20 +346,30 @@ pub fn dependent_tier_to_model(
                 // Phon project per-phone interval tier
                 "phoint" | "xphoint" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    match talkbank_model::dependent_tier::parse_xphoint_content(&raw_text) {
-                        Ok(groups) => talkbank_model::model::DependentTier::Xphoint(
-                            talkbank_model::dependent_tier::XphointTier::new(groups),
-                        ),
-                        Err(_) => {
-                            // No fabrication: an empty tier says so.
-                            let text = NonEmptyString::new(raw_text.as_str()).ok();
-                            talkbank_model::model::DependentTier::Unsupported(
-                                talkbank_model::model::UserDefinedDependentTier {
-                                    label: NonEmptyString::new_unchecked("xphoint"),
-                                    content: text,
-                                    span: Span::DUMMY,
-                                },
-                            )
+                    // This guard IS needed, unlike `%phoaln` above:
+                    // `parse_xphoint_content("")` returns `Err(EmptyGroup)`, so
+                    // without it an absent body is reported as malformed
+                    // content and the tier loses its identity to E605.
+                    if raw_text.trim().is_empty() {
+                        talkbank_model::model::DependentTier::Xphoint(
+                            talkbank_model::dependent_tier::XphointTier::new(Vec::new()),
+                        )
+                    } else {
+                        match talkbank_model::dependent_tier::parse_xphoint_content(&raw_text) {
+                            Ok(groups) => talkbank_model::model::DependentTier::Xphoint(
+                                talkbank_model::dependent_tier::XphointTier::new(groups),
+                            ),
+                            Err(_) => {
+                                // No fabrication: a tier that will not parse says so.
+                                let text = NonEmptyString::new(raw_text.as_str()).ok();
+                                talkbank_model::model::DependentTier::Unsupported(
+                                    talkbank_model::model::UserDefinedDependentTier {
+                                        label: NonEmptyString::new_unchecked("xphoint"),
+                                        content: text,
+                                        span: Span::DUMMY,
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -300,8 +378,18 @@ pub fn dependent_tier_to_model(
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
                     talkbank_model::model::DependentTier::Unsupported(
                         talkbank_model::model::UserDefinedDependentTier {
-                            label: NonEmptyString::new(label)
-                                .unwrap_or_else(|_| NonEmptyString::new_unchecked("unknown")),
+                            // An empty label is not a tier named "unknown",
+                            // which is what this used to invent: a label no
+                            // file contained, reported to the operator as
+                            // though it had been read. The fallback arm is
+                            // reached only with a label the lexer matched, so
+                            // an empty one means the lexer produced something
+                            // this conversion cannot describe, and the honest
+                            // answer is to say so rather than name it.
+                            label: match NonEmptyString::new(label) {
+                                Ok(label) => label,
+                                Err(_) => return None,
+                            },
                             content: NonEmptyString::new(raw_text.as_str()).ok(),
                             span: Span::DUMMY,
                         },
@@ -316,94 +404,64 @@ pub fn dependent_tier_to_model(
 // ChatFile conversion
 // ═══════════════════════════════════════════════════════════════
 
-impl<'a> From<&ast::ChatFile<'a>> for talkbank_model::model::ChatFile {
-    fn from(file: &ast::ChatFile<'a>) -> Self {
-        let lines: Vec<talkbank_model::model::Line> = file
-            .lines
-            .iter()
-            .map(|line| match line {
-                ast::Line::Header(h) => talkbank_model::model::Line::Header {
-                    header: Box::new(crate::convert::header_to_model(h)),
-                    span: Span::DUMMY,
-                    separator: TierSeparator::CLEAN,
-                },
-                ast::Line::Utterance(u) => {
-                    talkbank_model::model::Line::Utterance(Box::new(utterance_to_model(u.as_ref())))
-                }
-            })
-            .collect();
-        // Build participants map from @ID headers, enriched with
-        // @Participants metadata. This matches TreeSitterParser's behavior:
-        // only participants with @ID headers appear in the map. The validator
-        // detects missing @ID (E522) by comparing @Participants entries
-        // against the participants map.
-        //
-        // First pass: collect @Participants entries by speaker code (for name/role).
-        let mut declared: indexmap::IndexMap<
-            SpeakerCode,
-            (Option<ParticipantName>, ParticipantRole),
-        > = indexmap::IndexMap::new();
-        for line in &lines {
-            if let talkbank_model::model::Line::Header { header, .. } = line
-                && let Header::Participants { entries } = header.as_ref()
-            {
-                for entry in entries.iter() {
-                    declared.insert(
-                        entry.speaker_code.clone(),
-                        (entry.name.clone(), entry.role.clone()),
-                    );
-                }
+/// Lower a parsed re2c AST to the model, reporting the lowering's own
+/// diagnostics into `errors`.
+///
+/// # Why this is a function and not `From`
+///
+/// It was `impl From<&ast::ChatFile> for ChatFile`, which is infallible by
+/// signature and so had nowhere to put a diagnostic. The participant join
+/// produces three (E522, E523, E524) and they were dropped on the floor,
+/// making the re2c backend silently more permissive than tree-sitter on every
+/// file with an inconsistent `@Participants` block. An infallible conversion
+/// that discards what it learned is the banned shape; the sink was already
+/// available one frame up, at `parse_chat_file_to_model`.
+pub fn chat_file_to_model(
+    file: &ast::ChatFile<'_>,
+    errors: &(impl ErrorSink + ?Sized),
+) -> talkbank_model::model::ChatFile {
+    let lines: Vec<talkbank_model::model::Line> = file
+        .lines
+        .iter()
+        .map(|line| match line {
+            ast::Line::Header(h) => talkbank_model::model::Line::Header {
+                header: Box::new(crate::convert::header_to_model(h)),
+                span: Span::DUMMY,
+                separator: TierSeparator::CLEAN,
+            },
+            ast::Line::Utterance(u) => {
+                talkbank_model::model::Line::Utterance(Box::new(utterance_to_model(u.as_ref())))
             }
-        }
-        // Second pass: build participants from @ID headers only.
-        let mut participants = indexmap::IndexMap::new();
-        for line in &lines {
-            if let talkbank_model::model::Line::Header { header, .. } = line {
-                match header.as_ref() {
-                    Header::ID(id_header) => {
-                        let code = id_header.speaker.clone();
-                        let (name, role) = declared
-                            .get(&code)
-                            .cloned()
-                            .unwrap_or((None, id_header.role.clone()));
-                        participants.insert(
-                            code.clone(),
-                            talkbank_model::model::Participant {
-                                code: code.clone(),
-                                name,
-                                role,
-                                id: id_header.clone(),
-                                birth_date: None,
-                            },
-                        );
-                    }
-                    Header::Birth { participant, date } => {
-                        if let Some(p) = participants.get_mut(participant) {
-                            p.birth_date = Some(date.clone());
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        // CA omission normalization: if @Options includes CA mode,
-        // reclassify standalone (word) shortenings as CAOmission category.
-        // This matches TreeSitterParser's post-parse normalization.
-        let ca_mode = lines.iter().any(|line| {
-            if let talkbank_model::model::Line::Header { header, .. } = line {
-                matches!(header.as_ref(), Header::Options { options }
-                    if options.iter().any(|opt| opt.enables_ca_mode()))
-            } else {
-                false
-            }
-        });
-        let mut lines = lines;
-        if ca_mode {
-            normalize_ca_omissions_in_lines(&mut lines);
-        }
+        })
+        .collect();
+    // The join is the model's, not this backend's. Both parsers ask the
+    // same function, so "which speakers appear, in what order" cannot drift
+    // between them again; it already did once, and that drift was 445 of
+    // the 446 whole-model divergences measured over the corpus.
+    //
+    // Its diagnostics (E522, E523, E524) go to the caller's sink, which is
+    // the only way to reach the map.
+    let participants =
+        talkbank_model::model::participant::join::build_participants_from_lines(&lines)
+            .report_into(errors);
 
-        talkbank_model::model::ChatFile::with_participants(lines, participants)
+    // CA omission normalization: if @Options includes CA mode,
+    // reclassify standalone (word) shortenings as CAOmission category.
+    // This matches TreeSitterParser's post-parse normalization.
+    let ca_mode = lines.iter().any(|line| {
+        if let talkbank_model::model::Line::Header { header, .. } = line {
+            matches!(header.as_ref(), Header::Options { options }
+                if options.iter().any(|opt| opt.enables_ca_mode()))
+        } else {
+            false
+        }
+    });
+    let mut lines = lines;
+    if ca_mode {
+        normalize_ca_omissions_in_lines(&mut lines);
     }
+
+    talkbank_model::model::ChatFile::with_participants(lines, participants)
 }
 
 /// Lower a parsed `%wor` tier to the model.

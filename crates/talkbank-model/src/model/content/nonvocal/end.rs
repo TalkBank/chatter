@@ -50,7 +50,7 @@ pub struct NonvocalEnd {
     pub label: NonvocalLabel,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }

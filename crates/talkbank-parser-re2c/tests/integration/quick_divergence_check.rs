@@ -58,7 +58,8 @@ fn check_sample_divergences() {
         let re2c_errors = ErrorCollector::new();
         let re2c_parsed =
             talkbank_parser_re2c::parser::parse_chat_file_streaming(&content, &re2c_errors);
-        let re2c_file = talkbank_model::model::ChatFile::from(&re2c_parsed);
+        let re2c_file =
+            talkbank_parser_re2c::convert::chat_file_to_model(&re2c_parsed, &re2c_errors);
 
         if ts_file.semantic_eq(&re2c_file) {
             eprintln!("{file_path}: MATCH");

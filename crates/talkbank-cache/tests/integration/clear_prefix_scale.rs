@@ -1,8 +1,3 @@
-// Test code: the panic-family clippy lints are relaxed by policy
-// (assertions and fixture unwraps are the testing idiom); the
-// workspace [lints] table holds production code to deny.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 //! `clear_prefix` at corpus scale: one statement, not one per file.
 //!
 //! Regression pin for the v0.5.0 `--force` "hang" (2026-07-30): the

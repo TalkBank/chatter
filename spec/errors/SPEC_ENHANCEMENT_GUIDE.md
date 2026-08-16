@@ -207,8 +207,8 @@ cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.to
 
 ### Regenerate the Validation Corpus
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+just spec-gen      # every generated artifact, including this corpus
+just spec-check    # or ask whether the committed copies are current
 ```
 
 ## Contributing

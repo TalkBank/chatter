@@ -11,24 +11,24 @@ use tree_sitter::Node;
 
 use crate::generated_traversal::{ComDependentTierNode, extract_com_dependent_tier};
 
-use super::helpers::{parse_text_tier_content, span_of};
+use super::helpers::{parse_optional_text_tier_content, span_of};
 
 /// Converts one `%com` tier node.
 ///
 /// **Grammar Rule:**
 /// ```text
-/// com_dependent_tier: seq('%', 'com', colon, tab, text_with_bullets_and_pics, newline)
+/// com_dependent_tier: seq('%', 'com', colon, tab, optional(text_with_bullets_and_pics), newline)
 /// ```
 ///
 /// Driven by the generated typed visitor: `extract_com_dependent_tier` yields the
 /// prefix / tier-sep / body / newline as typed `Positioned` slots, and the body
 /// (`child_2.slot`, a `text_with_bullets_and_pics` node) is matched exhaustively by
-/// the shared [`parse_text_tier_content`], which also surfaces the carrier's
+/// the shared [`parse_optional_text_tier_content`], which also surfaces the carrier's
 /// `unexpected` sink (R2).
 pub fn parse_com_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ComTier {
     let span = span_of(node);
     let children = extract_com_dependent_tier(ComDependentTierNode(node));
-    let content = parse_text_tier_content(
+    let content = parse_optional_text_tier_content(
         node,
         children.child_2.slot(),
         &children.unexpected,

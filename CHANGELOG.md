@@ -9,6 +9,105 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+**Validation verdicts: CHANGED.** Four rules report where they were silent:
+E241 on illegal untranscribed spellings, E756 on any empty dependent tier,
+the participants check on files declaring an empty set, and the re2c backend
+on empty tiers it used to paper over. If you gate a pipeline on `validate`,
+diff your own corpus before upgrading; see
+[What a Version Bump Promises](https://talkbank.github.io/chatter/chatter/integrating/versioning.html).
+
+Adjudicated against real corpus data before shipping, per the standing
+grammar-change gate. See the release's own differential run for the current
+figures: the earlier stratified sample was measured before the E756 widening
+was finished, so its numbers describe a build that no longer exists.
+
+### Added
+
+- **E241 rejects the illegal untranscribed spellings.** The corpus authority
+  ruled that `ww` is not legal CHAT and `www` is canonical, adding `yy` against
+  `yyy` unprompted. Which spellings are wrong is now DERIVED from the canonical
+  set rather than listed, so `ww` cannot be missed while `xx` and `yy` are
+  caught, which is what happened before. Eight instances in the differential
+  sample, every one adjudicated as the rule correctly flagging invalid data.
+- **E756 covers every dependent tier, not only `%x*`.** A tier line whose
+  payload is absent or whitespace-only declares nothing. The rule always said
+  that; only its name was `%x`-specific, and it could not be applied to a
+  standard tier until the model could represent an empty one. Before this, an
+  empty `%eng:` was read as VALID by the re2c backend and rejected by
+  tree-sitter through an undescribed code, so the two backends disagreed about
+  a file neither could explain. Zero instances in the differential sample: the
+  construct is invalid CHAT and correspondingly rare.
+
+  The rule now reaches EVERY tier whose grammar body is free text, which is
+  every dependent tier except the structured ones (`%mor`, `%gra`, `%pho`,
+  `%mod`, `%sin`, `%wor`), whose bodies are not free text and whose empty case
+  fails earlier and more specifically. That boundary is a grammar fact, not a
+  list: a tier qualifies exactly when its rule marks its body `optional(...)`.
+  `%tim` gained an `Empty` state to make this expressible, since both of its
+  content variants hold a non-empty string; the Phon tiers (`%xmodsyl`,
+  `%xphosyl`, `%xphoaln`, `%xphoint`) answer from the word or group count they
+  already reported.
+
+### Fixed
+
+- **An empty dependent tier is no longer papered over.** The re2c backend met
+  `%eng:` with no content and substituted a single space, which made the tier
+  look well formed and the whole FILE read as valid where tree-sitter reported
+  errors. The model can now say that a tier declares nothing, so the parser
+  reports what the file contains and E756 judges it.
+- **An empty `%x` tier survives a roundtrip, and `normalize` no longer swallows
+  the file.** `%xtst:` with no content reported E756 from the PARSE path and
+  returned without adding the tier to the model, so the line vanished on
+  roundtrip while an empty `%eng:` was preserved. Worse, because the report came
+  from parsing rather than validation, `chatter normalize` treated the whole
+  file as unparseable and wrote NOTHING. The parser now says what the file
+  contains and the validator judges it, as it does for every other tier kind.
+- **An empty `%tim:` is a `%tim` tier.** The re2c backend lowered it to an
+  unsupported DEPENDENT TIER and reported E605, "unsupported dependent tier
+  '%tim'", about a tier name that is perfectly supported; a whitespace-only body
+  additionally drew E603 ("Invalid %tim tier format: ''") alongside E756, two
+  codes for one fact and the more specific of them false. Same for an empty
+  `%xphoaln:` and `%xphoint:`, which conflated an absent body with a malformed
+  one. All four now report E756 on both backends.
+- **The participants check reads the declaration.** An empty participant set
+  used to disable the check rather than fail it, so the files least likely to
+  be well formed were the ones exempted from the rule.
+- **An annotation's separator is not part of its text.** `[=!  contacts]`,
+  written with two spaces, parsed as `" contacts"` in one backend and
+  `"contacts"` in the other. That was the last content-level disagreement
+  between the two parser backends across all 107,403 corpus files.
+- `chatter validate --format json` no longer writes cache housekeeping to
+  stderr. Two facts leaked there: `Cleared N cache entries` on every `--force`
+  run, and `note: pruned N unreachable cache row(s)...` whenever a prune fired.
+  Both broke the documented promise that JSON mode's stderr is empty, and the
+  test suite contained two tests with contradictory expectations about it, one
+  requiring stderr empty and one asserting it contained the cleared count. The
+  first only failed when a prune happened to fire, which is why both shipped
+  green through four releases.
+
+### Changed
+
+- **Breaking (library): `TimTier` gained a third variant.** `TimTier::Empty
+  { span }` represents a `%tim:` line that declares nothing, which neither
+  `Parsed` nor `Unsupported` could hold: both carry a `NonEmptyString`. Code
+  matching on `TimTier` exhaustively must add an arm. `TimTier::empty()`
+  constructs one, `declared_content()` returns `None` for it (`as_str()` still
+  flattens to `""` for `Display` and serialization), and the serde form is
+  unchanged apart from `""` now deserializing to `Empty` instead of erroring.
+- **Breaking (library): `BulletContent::empty()`.** A named constructor for a
+  payload that carries nothing, distinct from `from_text("")`, which fabricates
+  an empty text segment that is not in the file. Additive; no existing call site
+  changes.
+- **NDJSON surface: a new record type.** Those facts now arrive on stdout as
+  `{"type":"cache","action":"clear"|"prune"|"warning",...}`, emitted only when
+  cache maintenance did something. Silencing them under `--format json` was
+  considered and rejected: they are results a caller can act on. A consumer
+  that ignores unknown `type` values needs no change; one that errors on an
+  unrecognised `type` will see these. The `type` field's documented value set
+  is now `"file"`, `"summary"`, `"cache"`, and the contract page says to treat
+  unknown values as ignorable.
+  See [Diagnostic contract](https://talkbank.github.io/chatter/chatter/integrating/diagnostic-contract.html).
+
 ## [0.11.0] - 2026-08-13
 
 **Validation verdicts: CHANGED, in BOTH directions.** Six error codes that had
@@ -21,6 +120,40 @@ Adjudicated against real corpus data before shipping: the operator's corpus
 differential over a 2158-file stratified sample reports byte-identical per-code
 counts and no newly-failing roundtrips against v0.10.0. The changes below are
 all on malformed input, which a curated corpus contains almost none of.
+
+**Library APIs: BREAKING.** This release changes the public API in several
+ways. The list below is from a mechanical diff of the public surface between
+the two tags, made after the notes first shipped saying "additive" and then
+being corrected twice as a downstream consumer hit one break after another. A
+release note written from memory of a 415-file change is a guess; this one is a
+measurement.
+
+Removed items (6):
+
+- `FormType::A`. The `@a` marker was retired by the corpus authority in 2024
+  and is absent from the form-marker registry that now generates every site of
+  that closed set; the variant survived only because sixteen hand-written
+  copies of the list disagreed. No replacement: the construct is not CHAT.
+- `ALL_MARKERS`, `all_markers_string`. Superseded by the same registry.
+- `collect_bracketed_content`, `collect_bracketed_item`. Superseded by the
+  typed traversal.
+- `counts_for_tier_in_context`. Use `counts_for_tier`, now re-exported at
+  `talkbank_model::alignment`.
+- `iso`.
+
+Added, and breaking for an exhaustive match:
+
+- `FormType::Undeclared(String)` carries the raw text of a marker naming no
+  declared form, so `word@zz` roundtrips instead of being silently rewritten to
+  `word@z:zz`.
+
+Changed signatures:
+
+- `ChatFile::validate` and `validate_into` take `TranscriptName<'_>` rather
+  than `Option<&str>`. `None` becomes `TranscriptName::Anonymous`; a real name
+  becomes `TranscriptName::Named`. The `Option` could not say which of "no
+  name" and "a name we failed to read" it meant, and both reached the same
+  branch.
 
 **Library APIs: additive.** `talkbank_model::alignment` re-exports
 `walk_words`, `walk_words_mut` and `counts_for_tier`, which previously required

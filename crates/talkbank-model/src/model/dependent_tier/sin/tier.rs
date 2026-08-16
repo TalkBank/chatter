@@ -76,7 +76,7 @@ pub struct SinTier {
     pub items: SinItems,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }

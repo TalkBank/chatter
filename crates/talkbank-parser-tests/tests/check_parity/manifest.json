@@ -305,10 +305,9 @@
    "fixture": "CHECK_031_missing_text_after_colon.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E330",
-    "E342"
+    "E756"
    ],
-   "note": "A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. E330 'Tier has empty content' is the direct equivalent. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31)."
+   "note": "A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. It used to answer E330 plus E342: an auto-generated stub with no description, plus a generic tree-sitter recovery diagnostic, because the model could not represent an empty tier and the line failed to parse. The 2026-08-15 maintainer ruling widened E756 to every free-text tier rather than writing E330's spec, so the verdict here is unchanged (parity) and only the code chatter names for it moved. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31)."
   },
   {
    "check_code": 32,

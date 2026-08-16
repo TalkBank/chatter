@@ -9,6 +9,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::comrak_text::{
+    extract_text_from_children, normalize_whitespace, strip_single_trailing_newline,
+};
+
 /// A single parsed example from a Markdown spec file.
 ///
 /// Each spec file in `spec/constructs/` contains one example with an H1 name,
@@ -195,20 +199,6 @@ impl MarkdownExample {
     }
 }
 
-/// Extract plain text from all text nodes under this node
-fn extract_text_from_children<'a>(node: &'a AstNode<'a>) -> String {
-    let mut result = String::new();
-    for child in node.descendants() {
-        match child.data.borrow().value {
-            NodeValue::Text(ref text) => result.push_str(text),
-            NodeValue::Code(ref code) => result.push_str(&code.literal),
-            NodeValue::SoftBreak | NodeValue::LineBreak => result.push(' '),
-            _ => {}
-        }
-    }
-    result
-}
-
 /// Extract metadata key-value pairs from a list item
 /// Expects format: **Key**: value
 fn extract_metadata_from_list_item<'a>(
@@ -329,25 +319,6 @@ impl WrapperStrategy {
             ),
             Self::Infer => Self::MinimalChat.wrap_input(input),
         }
-    }
-}
-
-/// Collapse all runs of whitespace into single spaces and trim both ends.
-fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Remove at most one trailing newline (`\n` or `\r\n`) from code block content.
-///
-/// Comrak appends a trailing newline to fenced code block literals; stripping
-/// it avoids spurious whitespace differences in CST comparisons.
-fn strip_single_trailing_newline(text: &str) -> String {
-    if let Some(stripped) = text.strip_suffix("\r\n") {
-        stripped.to_string()
-    } else if let Some(stripped) = text.strip_suffix('\n') {
-        stripped.to_string()
-    } else {
-        text.to_string()
     }
 }
 

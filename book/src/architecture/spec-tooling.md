@@ -1,7 +1,7 @@
 # Spec Tooling
 
 **Status:** Current
-**Last modified:** 2026-08-12 19:15 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 What the generator crates ARE. For the spec system's contract, which is what
 you need to write or change a spec, read
@@ -19,11 +19,16 @@ tooling, so the three do not overlap.
 | `spec/tools` (`generators`) | reading specs and emitting artifacts | **No** |
 | `spec/runtime-tools` | anything needing the live parser or model | Yes |
 
-That split is the point. `spec/tools` reads markdown and JSON and writes tests,
-fixtures, docs and generated Rust; it never parses CHAT. Work that has to
+That split is the point. `spec/tools` reads markdown and JSON and produces
+tests, fixtures, docs and generated Rust; it never parses CHAT. Work that has to
 actually run the parser (verifying a spec example emits its codes, mining the
-corpus) lives in `spec/runtime-tools`, so ordinary generation does not drag the
-parser crates into the loop.
+corpus) lives in `spec/runtime-tools`.
+
+The artifact registry is split along the same line, and for the same reason:
+`generators::artifacts::ARTIFACTS` holds everything derivable from markdown
+alone, and `spec_runtime_tools::artifacts::RUNTIME_ARTIFACTS` holds the one
+artifact that has to enumerate the live `ErrorCode` enum. `spec_gen` runs both,
+so a contributor sees one command and one list.
 
 ## Layout of `spec/tools`
 

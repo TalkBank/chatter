@@ -59,34 +59,6 @@ use talkbank_parser::TreeSitterParser;
 /// One diagnostic: (code, span start, span end, message).
 type Diag = (String, u32, u32, String);
 
-/// A minimal `%com:` tier with an empty body. Full document scaffolding is
-/// required so the streaming parser reaches the utterance / dependent-tier
-/// region (the same inline-source approach the sibling Task 2a characterization
-/// test `visitor_line_dispatch_migration.rs` uses). The lone `%com:\t\n` at byte
-/// 98 has no content after the tab.
-///
-/// Byte layout:
-/// ```text
-/// [0..6)   @UTF8\n
-/// [6..13)  @Begin\n
-/// [13..29) @Languages:\teng\n
-/// [29..54) @Participants:\tCHI Child\n
-/// [54..87) @ID:\teng|corpus|CHI|||||Child|||\n
-/// [87..98) *CHI:\thi .\n
-/// [98..105) %com:\t\n   <- empty-body com tier; MISSING continuation at 104
-/// [105..110) @End\n
-/// ```
-const COM_EMPTY_BODY: &str = "\
-@UTF8
-@Begin
-@Languages:\teng
-@Participants:\tCHI Child
-@ID:\teng|corpus|CHI|||||Child|||
-*CHI:\thi .
-%com:\t
-@End
-";
-
 /// Render one bullet segment as a stable structural tag for assertions.
 fn seg_tag(seg: &BulletContentSegment) -> String {
     match seg {
@@ -188,44 +160,18 @@ fn valid_reference_text_tiers_parse_byte_identical_with_zero_diagnostics() {
     );
 }
 
-/// MALFORMED: an empty-body `%com:` tier. The body slot is `NodeSlot::Present`
-/// (a `text_with_bullets_and_pics` node containing a MISSING `continuation`), so
-/// the text-tier parser recovers it to a single `Continuation` segment (NOT an
-/// empty tier, NOT the parser's own "Missing content" rejection). The two E342
-/// diagnostics originate from the whole-tree recovery backstop, which Task 4b
-/// does not touch. All values captured on the pre-migration parser.
-#[test]
-fn empty_body_com_tier_recovers_to_continuation_with_e342() {
-    let (tiers, diags) = parse_text_tiers_and_diags(COM_EMPTY_BODY);
-
-    assert_eq!(
-        tiers,
-        vec![("Com", vec!["Continuation".to_string()])],
-        "an empty-body %com tier recovers to a single Continuation segment"
-    );
-
-    let e342: Vec<&(String, u32, u32, String)> =
-        diags.iter().filter(|(c, _, _, _)| c == "E342").collect();
-    assert_eq!(
-        e342.len(),
-        2,
-        "exactly two E342 recovery diagnostics expected for the MISSING continuation, got: {diags:?}"
-    );
-    for (_, start, end, _) in &e342 {
-        assert_eq!(
-            (*start, *end),
-            (104, 104),
-            "each E342 must sit at the zero-width MISSING continuation span (104..104)"
-        );
-    }
-    let mut msgs: Vec<&str> = e342.iter().map(|(_, _, _, m)| m.as_str()).collect();
-    msgs.sort_unstable();
-    assert_eq!(
-        msgs,
-        vec![
-            "Missing required 'continuation' at byte 104 (tree-sitter error recovery)",
-            "Missing required 'continuation': the document is incomplete here and was only parsed via tree-sitter recovery (recovery is not validity)",
-        ],
-        "the two E342 messages must be exactly the backstop's recovery wording"
-    );
-}
+// REMOVED 2026-08-16: `empty_body_com_tier_recovers_to_continuation_with_e342`.
+//
+// It characterized an empty-body `%com:` recovering to a single `Continuation`
+// segment with two E342 diagnostics, values "captured on the pre-migration
+// parser". The E756 widening abolished exactly that behavior: `%com`'s grammar
+// body is now `optional(...)`, so the line lowers to a tier that says it is
+// empty and the validator reports E756, with no recovery and no E342. The test
+// asserted, in its own words, that the result was "NOT an empty tier", which is
+// now the correct answer.
+//
+// Not rewritten in place, because the same input is already gated permanently
+// and generatively: spec `E756_empty_dependent_tier.md` Example 3 produces
+// `error_corpus/validation_errors/E756_Empty_dependent_tier_3.cha`. Keeping a
+// hand-written twin here would relocate a check the spec owns rather than
+// remove one. Deletion approved by the maintainer, per danger rule 7.

@@ -83,6 +83,20 @@ fn build_presentation_policy(suppress: &[String]) -> talkbank_transform::Present
     policy
 }
 
+/// Present one cache event on the single-file path.
+///
+/// This path has no `ValidationRenderer`: single-file validation predates the
+/// streaming runtime and presents through its own output functions. That
+/// duplication is the real defect and is bigger than this change; keeping the
+/// decision in ONE function here makes it visible rather than spreading a
+/// `match format` over every call site.
+fn report_cache_event(event: &super::cache::CacheEvent, format: OutputFormat) {
+    match format {
+        OutputFormat::Json => println!("{}", event.record()),
+        OutputFormat::Text => eprintln!("{}", event.sentence()),
+    }
+}
+
 /// Validate a single CHAT file with optional alignment and caching behavior.
 ///
 /// This routine encapsulates the CLI behavior for the `validate` subcommand when the target
@@ -124,8 +138,18 @@ pub fn validate_file(
     // cached.
     let rule_selection = build_rule_selection(strict_linkers);
     let presentation = build_presentation_policy(suppress);
-    let cache =
+    let cache_init =
         initialize_validation_cache(std::slice::from_ref(path), cache_refresh, &rule_selection);
+    // This path has no `ValidationRenderer`: single-file validation predates
+    // the streaming runtime and presents through its own output functions.
+    // That duplication is the real defect here and is bigger than this change;
+    // rendering the events locally makes it VISIBLE in one place instead of
+    // hiding it inside a cache function that used to write to stderr whatever
+    // the caller wanted.
+    let (cache, cache_events) = cache_init.into_parts();
+    for event in &cache_events {
+        report_cache_event(event, format);
+    }
 
     // Try to get cached results.
     // On Some(true): cached valid, skip revalidation.
@@ -232,7 +256,11 @@ pub fn validate_file(
     // display policy touches it: "did this file produce any diagnostic at all",
     // which is the same answer under every `--suppress` list and so is safely
     // shared between runs that differ only in one.
-    set_cached_validation(cache.as_ref(), path, check_alignment, errors.is_empty());
+    if let Some(event) =
+        set_cached_validation(cache.as_ref(), path, check_alignment, errors.is_empty())
+    {
+        report_cache_event(&event, format);
+    }
 
     // Only now the reader's view.
     let errors = presentation.apply_all(errors);

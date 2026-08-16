@@ -13,3 +13,4 @@
 pub mod markdown;
 pub mod rust_test;
 pub mod tree_sitter;
+pub mod validation_corpus;

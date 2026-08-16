@@ -5,7 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::error_corpus::{SpecErrorCode, Status};
+use super::metadata::SpecErrorCode;
+use super::metadata::Status;
+use crate::repo_paths::RepoRelativePath;
 
 /// A generated fixture's filename within the `validation_errors` corpus dir.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,8 +35,9 @@ pub struct ValidationFixtureEntry {
     /// Implementation status carried from the source spec; the runner skips
     /// anything that is not `Implemented`.
     pub status: Status,
-    /// Source spec path, for diagnostics.
-    pub source_spec: String,
+    /// Source spec path, for diagnostics. Repo-relative by construction, so a
+    /// caller cannot record an absolute one.
+    pub source_spec: RepoRelativePath,
 }
 
 /// Top-level manifest written to the corpus dir as `manifest.json`.
@@ -44,7 +47,7 @@ pub struct ValidationManifest {
     /// Implemented validation specs that produced no example/fixture. Populated
     /// by the generator; consumed by the runner's coverage gate.
     #[serde(default)]
-    pub implemented_specs_without_examples: Vec<String>,
+    pub implemented_specs_without_examples: Vec<RepoRelativePath>,
 
     /// Specs marked `unreachable_from_chat` that nonetheless carry an example.
     ///
@@ -52,7 +55,7 @@ pub struct ValidationManifest {
     /// wrong. Without this, the new status would be a way to opt any rule out
     /// of its fixture obligation.
     #[serde(default)]
-    pub unreachable_specs_with_examples: Vec<String>,
+    pub unreachable_specs_with_examples: Vec<RepoRelativePath>,
 }
 
 #[cfg(test)]
@@ -66,7 +69,10 @@ mod tests {
                 fixture: FixtureName::new("E370_retrace.cha"),
                 expected_codes: vec![SpecErrorCode::parse("E370").expect("valid code")],
                 status: Status::Implemented,
-                source_spec: "spec/errors/E370_retrace_missing_content.md".to_string(),
+                source_spec: RepoRelativePath::new(
+                    std::path::Path::new("/checkout"),
+                    "/checkout/spec/errors/E370_retrace_missing_content.md",
+                ),
             }],
             implemented_specs_without_examples: Vec::new(),
             unreachable_specs_with_examples: Vec::new(),
@@ -75,6 +81,8 @@ mod tests {
         // Codes and status serialize transparently as JSON strings.
         assert!(json.contains("\"E370\""));
         assert!(json.contains("\"implemented\""));
+        // The newtype is `serde(transparent)`, so the wire format is unchanged.
+        assert!(json.contains("\"spec/errors/E370_retrace_missing_content.md\""));
         let back: ValidationManifest = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(m, back);
     }

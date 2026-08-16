@@ -48,9 +48,16 @@ struct DependentTier {
     content: String,
 }
 
-impl Default for ChatFileBuilder {
-    /// Build an empty `ChatFileBuilder` with required defaults.
-    fn default() -> Self {
+impl ChatFileBuilder {
+    /// Create a new CHAT file builder, seeded with the fixture placeholders.
+    ///
+    /// `eng` and `corpus` are PLACEHOLDERS a caller is expected to overwrite,
+    /// not facts about any transcript. They are spelled out here rather than in
+    /// a `Default` impl so that reaching them is an explicit call: `Default`
+    /// also arrives through `..Default::default()` and through any derive that
+    /// needs it, which are two routes to a fabricated language code that read
+    /// like they cost nothing.
+    pub fn new() -> Self {
         Self {
             language: "eng".to_string(),
             corpus: "corpus".to_string(),
@@ -58,13 +65,6 @@ impl Default for ChatFileBuilder {
             utterances: vec![],
             headers: vec![],
         }
-    }
-}
-
-impl ChatFileBuilder {
-    /// Create a new CHAT file builder.
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Set the language code.

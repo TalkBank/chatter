@@ -13,7 +13,7 @@
 //! Validation error corpus, driven by the spec-generated manifest.
 //!
 //! `spec/errors/` is the single source of truth. The generator
-//! (`gen_validation_corpus`) emits one `.cha` fixture per validation example plus
+//! (`just spec-gen`) emits one `.cha` fixture per validation example plus
 //! a `manifest.json` recording the codes each fixture must produce and the
 //! source spec's implementation status. This runner reads that manifest, skips
 //! any fixture whose status is not `implemented` (e.g. `not_implemented`,
@@ -75,7 +75,7 @@ struct ManifestEntry {
     source_spec: String,
 }
 
-/// The corpus manifest written by `gen_validation_corpus`.
+/// The corpus manifest written by `just spec-gen`.
 #[derive(Deserialize)]
 struct Manifest {
     fixtures: Vec<ManifestEntry>,
@@ -102,7 +102,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
 
     let manifest_text = fs::read_to_string(dir.join("manifest.json")).map_err(|err| {
         TestError::Failure(format!(
-            "Failed to read manifest.json in {} (regenerate with gen_validation_corpus): {err}",
+            "Failed to read manifest.json in {} (regenerate with `just spec-gen`): {err}",
             dir.display()
         ))
     })?;
@@ -189,7 +189,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
 
     // Hard coverage gate: every implemented validation spec must contribute at
     // least one example, so a newly-implemented spec cannot silently ship without
-    // a test. `gen_validation_corpus` records any offenders in the manifest; a
+    // a test. The generator records any offenders in the manifest; a
     // non-empty list fails the run alongside any fixture mismatches above.
     let coverage_gaps = &manifest.implemented_specs_without_examples;
 

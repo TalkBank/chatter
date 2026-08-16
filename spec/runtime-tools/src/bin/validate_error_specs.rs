@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use spec_runtime_tools::error_spec_validation::{
-    CodeCheck, CodeFilter, Request, SkippedSpecs, default_spec_dir, run,
+    CodeCheck, CodeFilter, Request, SkippedSpecs, run, spec_dir,
 };
 
 #[derive(Parser)]
@@ -40,7 +40,19 @@ struct Args {
 fn main() -> ExitCode {
     let args = Args::parse();
     let request = Request {
-        spec_dir: args.spec_dir.unwrap_or_else(default_spec_dir),
+        // The operator's directory if they named one, this checkout's
+        // otherwise. Resolved only when it is actually needed, and only from a
+        // root that proved itself a chatter checkout.
+        spec_dir: match args.spec_dir {
+            Some(given) => given,
+            None => match generators::repo_paths::RepoRoot::resolve(None) {
+                Ok(root) => spec_dir(&root),
+                Err(why) => {
+                    eprintln!("{why}");
+                    return ExitCode::FAILURE;
+                }
+            },
+        },
         code_check: if args.check_codes {
             CodeCheck::Verify
         } else {

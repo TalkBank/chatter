@@ -86,8 +86,8 @@ pub use word::{
     CADelimiter, CADelimiterType, CAElement, CAElementType, FormMarkerPayload, FormType,
     UndeclaredFormMarker, UnderlineMarker, Word, WordCategory, WordCliticBoundary,
     WordCompoundMarker, WordContent, WordContents, WordLanguageMarker, WordLengthening,
-    WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType, WordSyllablePause,
-    WordText, WordUnderlineBegin, WordUnderlineEnd,
+    WordMaterial, WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType,
+    WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
 
 // Re-export types needed by submodules via super::

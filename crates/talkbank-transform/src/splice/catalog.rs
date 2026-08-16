@@ -101,9 +101,11 @@
 //!   LSP's title states.
 //!
 //! Every ported entry additionally verifies the text actually at its span
-//! matches what the fix assumes (e.g. E241 checks the span really reads
-//! `"xx"`) before building an edit, and returns `None` rather than
-//! guessing when it does not. `source` is threaded into [`catalog_fix`]
+//! matches what the fix assumes before building an edit, and returns `None`
+//! rather than guessing when it does not. E241 is the entry that shows what
+//! that check should look like: it asks the model's vocabulary owner whether
+//! the span reads as a misspelled marker, rather than comparing it to a
+//! literal, which is what the rest of this catalog still does. `source` is threaded into [`catalog_fix`]
 //! for exactly this: a diagnostic's span is trusted data about WHERE, never
 //! about WHAT is there.
 //!
@@ -130,6 +132,7 @@
 //! catalog entries: a header-scoped admission path is a separate piece of
 //! work this module does not attempt.
 
+use talkbank_model::model::content::word::MarkerSpelling;
 use talkbank_model::{ErrorCode, ParseError, Span};
 
 use super::engine::{EditProvenance, EditTarget, Replacement, SpliceEdit};
@@ -280,16 +283,31 @@ fn single_edit_fix(safety: BatchSafety, edit: SpliceEdit) -> CatalogFix {
     }
 }
 
-/// E241 `IllegalUntranscribed`: `xx` is not legal, only `xxx` is. One right
-/// answer once the span is confirmed to actually read `"xx"`.
+/// E241 `IllegalUntranscribed`: a marker written wrongly has exactly one right
+/// spelling, so the repair is the canonical form of whichever marker it is.
+///
+/// # Why this asks the model instead of comparing to a literal
+///
+/// It used to read `if source.get(span.to_range())? != "xx" { return None }`
+/// and splice in `"xxx"`, which is a fourth hand-written copy of a vocabulary
+/// that has three members and six or more wrong spellings. E241 fires on all of
+/// them; this could repair one. `chatter fix` therefore reported nothing to do
+/// on a file whose only fault was `YYY`, while `chatter validate` on the same
+/// file said exactly what was wrong and what it should be.
+///
+/// [`MarkerSpelling::of`] is the owner of that question, so this stays correct
+/// when the vocabulary changes rather than becoming the next copy to drift.
 fn e241_illegal_untranscribed(error: &ParseError, source: &str) -> Option<CatalogFix> {
     let span = error.location.span;
-    if source.get(span.to_range())? != "xx" {
-        return None;
-    }
+    // `None` when the span does not read as a misspelled marker ON ITS OWN, so
+    // no edit is certainly right and the fix declines rather than guessing. The
+    // real case is an omitted word (`0xx`), where the diagnostic is computed
+    // from the cleaned text while the span also covers the `0` prefix:
+    // replacing the whole span would silently delete the omission.
+    let intended = MarkerSpelling::of(source.get(span.to_range())?).misspelled()?;
     let edit = SpliceEdit::new(
         EditTarget::Replace(span),
-        Replacement::new("xxx"),
+        Replacement::new(intended.canonical()),
         EditProvenance::Diagnostic(error.code),
     );
     Some(single_edit_fix(BatchSafety::Mechanical, edit))

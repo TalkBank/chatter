@@ -32,7 +32,7 @@
 //! # Landing state (2026-07-31)
 //!
 //! [`kind_of`] is now GENERATED from `spec/errors/*.md`'s required
-//! `- **Kind**:` metadata field (`gen_diagnostic_kind`, in
+//! `- **Kind**:` metadata field (`just spec-gen`, in
 //! `spec/runtime-tools`), not hand-written: the per-code adjudication this
 //! module used to defer to a hand-curated proposal table now lives as
 //! ordinary spec content, read directly off the same file that already

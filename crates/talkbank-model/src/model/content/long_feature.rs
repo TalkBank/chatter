@@ -96,7 +96,7 @@ pub struct LongFeatureBegin {
     pub label: LongFeatureLabel,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }
@@ -183,7 +183,7 @@ pub struct LongFeatureEnd {
     pub label: LongFeatureLabel,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }

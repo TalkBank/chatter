@@ -52,7 +52,7 @@ pub fn parse_utterance_node(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Utterance> {
     let mut utterance_builder: Option<Utterance> = None;
-    let mut parse_health = ParseHealth::default();
+    let mut parse_health = ParseHealth::untainted();
 
     // Drive dispatch through the generated, exhaustive typed visitor instead of a
     // `node.kind()` hand-walk. `extract_utterance` exposes the utterance's two

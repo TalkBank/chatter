@@ -11,23 +11,23 @@ use tree_sitter::Node;
 
 use crate::generated_traversal::{IntDependentTierNode, extract_int_dependent_tier};
 
-use super::helpers::{parse_text_tier_content, span_of};
+use super::helpers::{parse_optional_text_tier_content, span_of};
 
 /// Converts one `%int` tier node.
 ///
 /// **Grammar Rule:**
 /// ```text
-/// int_dependent_tier: seq('%', 'int', colon, tab, text_with_bullets, newline)
+/// int_dependent_tier: seq('%', 'int', colon, tab, optional(text_with_bullets), newline)
 /// ```
 ///
 /// Driven by the generated typed visitor: `extract_int_dependent_tier` yields the
 /// body as `child_2.slot`, matched exhaustively by the shared
-/// [`parse_text_tier_content`], which also surfaces the carrier's `unexpected`
+/// [`parse_optional_text_tier_content`], which also surfaces the carrier's `unexpected`
 /// sink (R2).
 pub fn parse_int_tier(node: Node, source: &str, errors: &impl ErrorSink) -> IntTier {
     let span = span_of(node);
     let children = extract_int_dependent_tier(IntDependentTierNode(node));
-    let content = parse_text_tier_content(
+    let content = parse_optional_text_tier_content(
         node,
         children.child_2.slot(),
         &children.unexpected,

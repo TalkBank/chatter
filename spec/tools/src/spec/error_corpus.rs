@@ -3,50 +3,17 @@
 //! Types for error corpus specifications - invalid CHAT examples
 //! that should produce parse errors.
 
-use comrak::nodes::{AstNode, NodeValue};
+use comrak::nodes::NodeValue;
 use comrak::{Arena, Options, parse_document};
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use super::metadata::{CategoryName, SpecErrorCode, SpecLayer, Status};
 use std::fs;
 use std::path::Path;
-use std::str::FromStr;
 
-/// Raised when a closed-set metadata value (Status, Layer) is unrecognized.
-#[derive(Debug, thiserror::Error)]
-#[error("unknown {field} value {value:?}")]
-pub struct UnknownMetadataValue {
-    field: &'static str,
-    value: String,
-}
-
-/// Implementation status of an error spec: whether the validator actually
-/// checks its rule. The runner asserts `Implemented` examples fire and skips
-/// the rest.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Status {
-    /// Rule implemented; each example must produce its declared codes.
-    #[default]
-    Implemented,
-    /// Rule not implemented yet; examples are skipped by the runner.
-    NotImplemented,
-    /// Code deprecated/replaced by another; examples are skipped.
-    Deprecated,
-    /// Rule IS implemented, but no CHAT input can trigger it, so it cannot
-    /// have a fixture and the corpus gate must not demand one.
-    ///
-    /// This exists because the honest alternatives were both wrong. Leaving
-    /// such a spec as `Implemented` with no example made it vanish from the
-    /// loader entirely (see `load_all`), taking it out of reach of the very
-    /// gate meant to catch an untested rule; marking it `NotImplemented`
-    /// would state something false about a rule that fires. A spec in this
-    /// state owes a NAMED out-of-corpus regression test in its status note,
-    /// since the corpus cannot carry one.
-    ///
-    /// First user: E768, whose value cannot appear in a `.cha` file because
-    /// both parsers end an `@Media` filename at the comma.
-    UnreachableFromChat,
-}
+use super::comrak_text::{
+    extract_text_from_children, normalize_whitespace, strip_single_trailing_newline,
+};
 
 /// Whether a path names an error spec, as opposed to prose living in the same
 /// directory.
@@ -56,128 +23,61 @@ pub enum Status {
 /// parse failure had to be tolerated, and tolerating them is what hid E768
 /// from the coverage gate.
 fn is_error_spec_filename(path: &std::path::Path) -> bool {
-    let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-        return false;
-    };
-    let mut chars = stem.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    matches!(first, 'E' | 'W') && chars.next().is_some_and(|c| c.is_ascii_digit())
-}
-
-impl FromStr for Status {
-    type Err = UnknownMetadataValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "implemented" => Ok(Self::Implemented),
-            "not_implemented" => Ok(Self::NotImplemented),
-            "deprecated" => Ok(Self::Deprecated),
-            "unreachable_from_chat" => Ok(Self::UnreachableFromChat),
-            other => Err(UnknownMetadataValue {
-                field: "Status",
-                value: other.to_owned(),
-            }),
-        }
-    }
-}
-
-/// The layer a spec's rule lives at.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SpecLayer {
-    /// Grammar/parser-level error.
-    #[default]
-    Parser,
-    /// Semantic validation-level error.
-    Validation,
-}
-
-impl SpecLayer {
-    /// Whether this spec contributes a validation fixture.
-    pub fn is_validation(self) -> bool {
-        matches!(self, Self::Validation)
-    }
-}
-
-impl FromStr for SpecLayer {
-    type Err = UnknownMetadataValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "parser" => Ok(Self::Parser),
-            // A spec flagged as both is treated as validation for generation.
-            "validation" | "parser|validation" => Ok(Self::Validation),
-            other => Err(UnknownMetadataValue {
-                field: "Layer",
-                value: other.to_owned(),
-            }),
-        }
-    }
-}
-
-/// A CHAT error/warning code as written in specs: `E` or `W` followed by three
-/// digits. Construction validates the shape so a malformed code never reaches
-/// the manifest or the runner.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SpecErrorCode(String);
-
-impl SpecErrorCode {
-    /// Parse an `E###`/`W###` token; `None` if it is not well formed.
-    pub fn parse(token: &str) -> Option<Self> {
-        let token = token.trim();
-        let bytes = token.as_bytes();
-        let well_formed = bytes.len() == 4
-            && matches!(bytes[0], b'E' | b'W')
-            && bytes[1..].iter().all(u8::is_ascii_digit);
-        well_formed.then(|| Self(token.to_owned()))
-    }
-
-    /// The underlying `E###`/`W###` text.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for SpecErrorCode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
+    // The same question `looks_like_a_code` answers for a token, asked of a
+    // stem. It used to be a byte-identical copy of that predicate 500 lines
+    // away in this file, so "what looks like a code" had two definitions that
+    // had to move together and would have disagreed in opposite directions.
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(super::metadata::looks_like_a_code)
 }
 
 /// The structural level a spec's error occurs at (`file`, `utterance`, `tier`,
 /// `word`, ...): an open set across corpora, so a validated newtype, not an enum.
+///
+/// # Every route in, enumerated
+///
+/// [`FromStr`] only. `Deserialize` routes through `TryFrom<String>` so a level
+/// read back from JSON is held to the same non-empty rule as one read from
+/// markdown. It carried a bare `#[serde(transparent)]` until 2026-08-15, which
+/// would have built `SpecLevel("")` from any JSON string; its immediate
+/// neighbour in [`ErrorCorpusMetadata`], `CategoryName`, had that door closed
+/// four lines away, so the struct answered "how do I get one of these" two
+/// different ways depending on which field you looked at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct SpecLevel(String);
 
 impl SpecLevel {
-    /// Wrap a non-empty level label.
-    pub fn new(label: &str) -> Option<Self> {
-        let label = label.trim();
-        (!label.is_empty()).then(|| Self(label.to_owned()))
-    }
     /// The level label text.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// The category grouping for a spec (`retrace`, `language`, ...): an open set,
-/// so a validated newtype.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct CategoryName(String);
+impl std::str::FromStr for SpecLevel {
+    type Err = String;
 
-impl CategoryName {
-    /// Wrap a non-empty category name.
-    pub fn new(name: &str) -> Option<Self> {
-        let name = name.trim();
-        (!name.is_empty()).then(|| Self(name.to_owned()))
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let label = value.trim();
+        if label.is_empty() {
+            return Err("Empty Level in Metadata".to_string());
+        }
+        Ok(Self(label.to_owned()))
     }
-    /// The category name text.
-    pub fn as_str(&self) -> &str {
-        &self.0
+}
+
+impl TryFrom<String> for SpecLevel {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<SpecLevel> for String {
+    fn from(level: SpecLevel) -> Self {
+        level.0
     }
 }
 
@@ -206,9 +106,7 @@ pub struct ErrorCorpusMetadata {
     /// without an explicit Layer default to parser.
     #[serde(default)]
     pub layer: SpecLayer,
-    /// Implementation status. Specs without an explicit Status default to
-    /// implemented.
-    #[serde(default)]
+    /// Implementation status. REQUIRED; a spec declaring none is refused.
     pub status: Status,
 }
 
@@ -251,8 +149,7 @@ impl ErrorCorpusSpec {
     /// Load an error corpus specification from a markdown file
     pub fn load(path: impl AsRef<Path>) -> Result<Self, String> {
         let path = path.as_ref();
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+        let content = fs::read_to_string(path).map_err(|e| format!("failed to read: {e}"))?;
 
         Self::parse_markdown(&content, path)
     }
@@ -294,6 +191,13 @@ impl ErrorCorpusSpec {
     }
 
     /// Parse markdown content into an ErrorCorpusSpec
+    /// # Errors do NOT name the file
+    ///
+    /// [`Self::load_all`] prefixes every failure with `Failed to load {path}:`.
+    /// Twelve sites here named it again until 2026-08-15, so every corpus-spec
+    /// failure printed the path twice, and the sibling parser had the same
+    /// defect at eight sites. `path` survives as a parameter because
+    /// `source_path` genuinely needs it; it is not for error text.
     fn parse_markdown(content: &str, path: &Path) -> Result<Self, String> {
         /// Enum variants for Section.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -369,7 +273,7 @@ impl ErrorCorpusSpec {
                         // The `**Expected Error Codes**: E###, ...` line for
                         // the current example segment.
                         Section::Example if text.contains("Expected Error Codes") => {
-                            current_codes = extract_error_codes(&text);
+                            current_codes = super::metadata::expected_error_codes(&text)?;
                         }
                         _ => {}
                     }
@@ -426,9 +330,24 @@ impl ErrorCorpusSpec {
                         }
                     }
                 }
-                NodeValue::CodeBlock(code_block)
-                    if section == Section::Example && code_block.info == "chat" =>
-                {
+                NodeValue::CodeBlock(code_block) if section == Section::Example => {
+                    // REFUSE a wrong fence rather than fall through to `_ => {}`.
+                    // That fall-through left `current_input` as `None`, and
+                    // `finalize_example`'s `None => codes.clear()` then discarded
+                    // the example AND its declared codes with no signal at all,
+                    // so a mis-fenced example vanished from the validation corpus
+                    // and from `manifest.json`. Invisible in a directory listing,
+                    // which is what `examples_asserting_nothing_do_not_increase`
+                    // exists to catch. It is the same "dropping is the worst
+                    // available outcome" argument as `expected_error_codes`, and
+                    // it matches the sibling parser, which already refuses here.
+                    if code_block.info != "chat" {
+                        return Err(format!(
+                            "an example's code fence is ```{} where only ```chat \
+                             is supported.",
+                            code_block.info
+                        ));
+                    }
                     current_input = Some(strip_single_trailing_newline(&code_block.literal));
                 }
                 _ => {}
@@ -437,68 +356,58 @@ impl ErrorCorpusSpec {
         // Finalize the last example (no trailing heading closes it).
         finalize_example(&mut examples, &mut current_input, &mut current_codes);
 
-        let title = title.ok_or_else(|| format!("Missing title in {}", path.display()))?;
-        // The `# E### ...` / `# W### ...` title separates the error code from
-        // the human title with either a colon (`# E316: ...`, the majority
-        // form) or a comma (`# E249, ...`, used by nine specs). Split on
-        // whichever separator appears FIRST so both forms parse. For a
-        // colon-first title this is byte-identical to the previous
-        // `splitn(2, ':')` behavior; a comma-first title that previously
-        // produced no usable code (and was silently dropped by `load_all`)
-        // now parses correctly.
-        let separator_index = title.find([':', ',']).ok_or_else(|| {
-            format!(
-                "Missing error code separator in title for {}",
-                path.display()
-            )
-        })?;
-        let (code_part, rest_with_separator) = title.split_at(separator_index);
-        // `rest_with_separator` still leads with the separator char; drop it.
-        let name_part = &rest_with_separator[rest_with_separator
-            .char_indices()
-            .nth(1)
-            .map_or(rest_with_separator.len(), |(byte_index, _)| byte_index)..];
-        let error_code = normalize_whitespace(code_part);
-        let name = normalize_whitespace(name_part);
-
-        if error_code.is_empty() || name.is_empty() {
-            return Err(format!("Invalid title format in {}", path.display()));
+        let title = title.ok_or_else(|| "Missing title".to_string())?;
+        // `metadata::parse_spec_title` owns this for both parsers of these
+        // files. This copy split on the first `:` or `,`; `error.rs`'s took the
+        // first whitespace token and stripped only a trailing `:`, so the two
+        // disagreed on the 11 titles written `# E209, name`. The shared parser
+        // keeps the separator rule, which is the one the data supports, and
+        // falls back to the first token when a heading has no separator, so it
+        // is a superset of both rather than a swap of one for the other.
+        let parsed_title = super::metadata::parse_spec_title(&title);
+        let name = parsed_title.name;
+        if name.is_empty() {
+            return Err("Invalid title format".to_string());
         }
 
         let description = normalize_whitespace(&description_parts.join(" "));
         if description.is_empty() {
-            return Err(format!("Missing Description content in {}", path.display()));
+            return Err("Missing Description content".to_string());
         }
 
-        let category_str = category
-            .ok_or_else(|| format!("Missing Category in Metadata in {}", path.display()))?;
-        let category = CategoryName::new(&category_str)
-            .ok_or_else(|| format!("Empty Category in Metadata in {}", path.display()))?;
-        let level_str =
-            level.ok_or_else(|| format!("Missing Level in Metadata in {}", path.display()))?;
-        let level = SpecLevel::new(&level_str)
-            .ok_or_else(|| format!("Empty Level in Metadata in {}", path.display()))?;
+        let category_str = category.ok_or_else(|| "Missing Category in Metadata".to_string())?;
+        let category = category_str
+            .parse::<CategoryName>()
+            .map_err(|why| why.to_string())?;
+        let level_str = level.ok_or_else(|| "Missing Level in Metadata".to_string())?;
+        let level = level_str.parse::<SpecLevel>()?;
         let layer = match layer {
-            Some(text) => text
-                .parse::<SpecLayer>()
-                .map_err(|e| format!("{e} in {}", path.display()))?,
+            Some(text) => text.parse::<SpecLayer>().map_err(|e| e.to_string())?,
             None => SpecLayer::default(),
         };
         let status = match status {
-            Some(text) => text
-                .parse::<Status>()
-                .map_err(|e| format!("{e} in {}", path.display()))?,
-            None => Status::default(),
+            Some(text) => text.parse::<Status>().map_err(|e| e.to_string())?,
+            // Required, exactly as in `error.rs`. This used to be
+            // `Status::default()`, which invented `implemented` for a spec that
+            // declared nothing. Every one of the 236 error specs declares a
+            // Status today, so this arm was already unreachable in practice;
+            // what it did was let the two parsers of the same file disagree
+            // about whether the bullet is optional.
+            None => {
+                return Err("no `- **Status**:` bullet. Every spec must declare \
+                     one (implemented / not_implemented / deprecated / \
+                     unreachable_from_chat)."
+                    .to_string());
+            }
         };
 
         // The spec's title code is each example's fallback when it declares no
         // `Expected Error Codes` of its own.
-        let title_code = SpecErrorCode::parse(&error_code).ok_or_else(|| {
-            format!(
-                "Malformed title error code {error_code:?} in {}",
-                path.display()
-            )
-        })?;
+        // This parser has no bullet route, so a heading that names no code is
+        // fatal here where `error.rs` can still fall back.
+        let title_code = parsed_title
+            .code
+            .ok_or_else(|| format!("the title {title:?} names no error code"))?;
 
         // Deliberately NOT an error: parse what is there and let the
         // coverage gate rule on it. Erroring here made `load_all` drop the
@@ -569,25 +478,6 @@ impl ErrorCorpusExample {
     }
 }
 
-/// Extracts text from children.
-fn extract_text_from_children<'a>(node: &'a AstNode<'a>) -> String {
-    let mut result = String::new();
-    for child in node.descendants() {
-        match child.data.borrow().value {
-            NodeValue::Text(ref text) => result.push_str(text),
-            NodeValue::Code(ref code) => result.push_str(&code.literal),
-            NodeValue::SoftBreak | NodeValue::LineBreak => result.push(' '),
-            _ => {}
-        }
-    }
-    result
-}
-
-/// Runs normalize whitespace.
-fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 /// Finalize the current `## Example` segment into the examples list. A segment
 /// with no chat block contributes nothing (and any stray Expected codes are
 /// discarded); otherwise it pairs the chat input with its declared codes.
@@ -602,33 +492,6 @@ fn finalize_example(
     }
 }
 
-/// Extract the `E###` / `W###` codes from a `**Expected Error Codes**: ...`
-/// paragraph. Scans only the portion after the label so a code mentioned
-/// elsewhere is not picked up. Tokenizes on non-alphanumerics and keeps the
-/// well-formed codes; `SpecErrorCode::parse` is the single source of truth for
-/// code shape, so a malformed or over-long token is simply dropped.
-fn extract_error_codes(text: &str) -> Vec<SpecErrorCode> {
-    let after = match text.find("Expected Error Codes") {
-        Some(idx) => &text[idx..],
-        None => return Vec::new(),
-    };
-    after
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter_map(SpecErrorCode::parse)
-        .collect()
-}
-
-/// Runs strip single trailing newline.
-fn strip_single_trailing_newline(text: &str) -> String {
-    if let Some(stripped) = text.strip_suffix("\r\n") {
-        stripped.to_string()
-    } else if let Some(stripped) = text.strip_suffix('\n') {
-        stripped.to_string()
-    } else {
-        text.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -636,8 +499,8 @@ mod tests {
 
     /// A minimal but valid error-corpus spec markdown carrying an explicit
     /// `Status` bullet in its `## Metadata` section. The `{status}`
-    /// placeholder is substituted so the same body exercises both the
-    /// explicit-status and absent-status cases.
+    /// placeholder is substituted so one body serves every status, including
+    /// the absent case that `status_is_required` asserts is refused.
     fn spec_markdown(status_bullet: &str) -> String {
         format!(
             "# E999: Test error\n\
@@ -671,12 +534,19 @@ mod tests {
         assert_eq!(spec.metadata.status, Status::NotImplemented);
     }
 
+    /// A spec with no `**Status**` bullet is REFUSED, naming the file.
+    ///
+    /// Replaces `status_defaults_to_implemented_when_absent`, which asserted
+    /// that such a spec parsed and came back `Implemented`. That test encoded
+    /// the loss: it made the invented answer a guaranteed behaviour, so
+    /// removing the invention meant rewriting the test's expectation, which is
+    /// the shape this project treats as a standing confession.
     #[test]
-    fn status_defaults_to_implemented_when_absent() {
+    fn status_is_required() {
         let markdown = spec_markdown("");
-        let spec = ErrorCorpusSpec::parse_markdown(&markdown, Path::new("E999_test.md"))
-            .expect("spec without Status should parse");
-        assert_eq!(spec.metadata.status, Status::Implemented);
+        let why = ErrorCorpusSpec::parse_markdown(&markdown, Path::new("E999_test.md"))
+            .expect_err("a spec without Status must be refused");
+        assert!(why.contains("Status"), "{why}");
     }
 
     /// A loaded spec must retain the path it came from so the generator can
@@ -684,7 +554,7 @@ mod tests {
     /// this the manifest could not point a failing fixture back at its spec.
     #[test]
     fn spec_retains_its_source_path() {
-        let markdown = spec_markdown("");
+        let markdown = spec_markdown("- **Status**: implemented\n");
         let spec =
             ErrorCorpusSpec::parse_markdown(&markdown, Path::new("spec/errors/E999_test.md"))
                 .expect("spec should parse");
@@ -708,6 +578,7 @@ mod tests {
          - **Category**: language\n\
          - **Level**: word\n\
          - **Layer**: validation\n\
+         - **Status**: implemented\n\
          \n\
          ## Example\n\
          \n\
@@ -747,7 +618,7 @@ mod tests {
     /// comma-acceptance fix: code and human title split on the first `:`.
     #[test]
     fn colon_form_title_behavior_unchanged() {
-        let markdown = spec_markdown("");
+        let markdown = spec_markdown("- **Status**: implemented\n");
         let spec = ErrorCorpusSpec::parse_markdown(&markdown, Path::new("E999_test.md"))
             .expect("colon-form spec should parse");
         let example = spec

@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-08-12 20:10 EDT
+**Last modified:** 2026-08-16 01:41 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -49,7 +49,7 @@ Each diagnostic contains:
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
 | E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
-| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E755: Undeclared utterance language, E756: Empty user-defined tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial, E767: Whitespace before the @Media comma, E768: @Media filename not representable |
+| E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E755: Undeclared utterance language, E756: Empty dependent tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial, E767: Whitespace before the @Media comma, E768: @Media filename not representable |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
 
 ## Common Errors and Fixes
@@ -239,11 +239,23 @@ as-is), because `@Languages` lists the transcript's substantial
 languages, not every language that appears. Mirrors CLAN CHECK error
 152.
 
-### E756: Empty user-defined tier
+### E756: Empty dependent tier
 
-A user-defined `%x` tier with empty or whitespace-only content declares
-an annotation that is not there; add the content or remove the line.
-(Formerly W601; renumbered because it always was a hard error.)
+A dependent tier with empty or whitespace-only content declares an
+annotation that is not there; add the content or remove the line.
+
+This covers every tier whose body is free text, which is every
+dependent tier except the structured ones (`%mor`, `%gra`, `%pho`,
+`%mod`, `%sin`, `%wor`). An empty structured tier fails earlier and
+more specifically, because its body is not free text and there is no
+"you declared nothing" to report.
+
+The rule read only user-defined `%x` tiers until 2026-08-15. That was
+never the rule, only its name: the model could not represent an empty
+standard tier, so an empty `%eng:` had nowhere to be recorded and the
+two parser backends disagreed about it, one calling the file valid and
+the other rejecting it through an undescribed code. (Formerly W601;
+renumbered because it always was a hard error.)
 
 ### E757: Bracketed code glued to the following word
 
@@ -390,11 +402,11 @@ error 48.
 ## Generated Error Documentation
 
 The source of truth for error-code details is `spec/errors/`. Maintainers can
-also regenerate a local error-reference set from those specs when working on
-diagnostics:
+The browsable error catalog under `docs/errors/` is generated from those specs
+and committed, so it is regenerated with every other artifact:
 
 ```bash
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
+just spec-gen
 ```
 
 That generated reference includes the error description, example inputs, suggested fixes, and the layer that catches the diagnostic.

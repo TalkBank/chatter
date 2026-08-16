@@ -68,6 +68,12 @@ send2clan = { workspace = true }
 # reference-corpus integration test derives its expected file count from
 # disk instead of hardcoding a literal that breaks on every fixture add.
 walkdir = { workspace = true }
+# `repo_paths::workspace_root()`, so this crate's test binaries do not carry a
+# third hand-written root-finder. That module exists BECAUSE the workspace
+# accumulated fifteen of them in three flavours that disagreed; adding a
+# sixteenth here, in a file whose own comment cited that history, would have
+# been the joke writing itself. Dev-only: no release-binary cost.
+talkbank-parser-tests = { path = "../../../crates/talkbank-parser-tests" }
 
 [lints]
 workspace = true

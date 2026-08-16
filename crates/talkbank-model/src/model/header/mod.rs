@@ -32,7 +32,7 @@ pub use codes::*;
 pub use enums::*;
 pub use header_enum::{ChatOptionFlag, ChatOptionFlags, Header, LanguageCodes, ParticipantEntries};
 pub use id::IDHeader;
-pub use media::MediaHeader;
+pub use media::{DeclaredRecording, MediaHeader};
 pub use types_header::*;
 
 // Re-export for submodules via super::

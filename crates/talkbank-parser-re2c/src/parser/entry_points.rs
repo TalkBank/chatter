@@ -30,7 +30,7 @@ pub fn parse_chat_file_to_model(
     errors: &impl ErrorSink,
 ) -> talkbank_model::model::ChatFile {
     let ast = parse_chat_file_streaming(input, errors);
-    talkbank_model::model::ChatFile::from(&ast)
+    crate::convert::chat_file_to_model(&ast, errors)
 }
 
 // ═══════════════════════════════════════════════════════════════

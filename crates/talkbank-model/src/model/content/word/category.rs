@@ -89,6 +89,37 @@ impl WordCategory {
         }
     }
 
+    /// What this category's letters ARE: spelling, or a rendering of sound.
+    ///
+    /// # Why this is a type and not four hand-written matches
+    ///
+    /// Four places matched a subset of this enum to answer some version of the
+    /// question, and they did not agree. `validation/utterance/spacing.rs` and
+    /// `alignment/helpers/rules.rs::is_fragment_like` each listed the same
+    /// three `&` categories under a different name; `validation/word/structure.rs`
+    /// listed them a third time to exempt them from E241; and
+    /// `Word::compute_untranscribed` listed none of them, so a phonological
+    /// fragment spelled `xxx` was classified as untranscribed material.
+    ///
+    /// The disagreement is what makes it a type. A lexical rule asking "may I
+    /// judge these letters as a word?" has one right answer, and it should not
+    /// be re-derived by each rule that asks.
+    ///
+    /// Exhaustive with no catch-all, so a sixth category has to answer this at
+    /// compile time rather than inheriting whichever branch was the fallback.
+    #[must_use]
+    pub fn material(&self) -> WordMaterial {
+        match self {
+            // A word that was not spoken is still a WORD: `0dog` and `(dog)`
+            // are ordinary orthography with a note attached, so a misspelling
+            // inside one is still a misspelling.
+            Self::Omission | Self::CAOmission => WordMaterial::Orthography,
+            // `&~`, `&-`, `&+`: a transcriber's rendering of a noise. The
+            // letters approximate a sound and are not a spelling of anything.
+            Self::Nonword | Self::Filler | Self::PhonologicalFragment => WordMaterial::Sound,
+        }
+    }
+
     /// Return `true` for omission categories in either CHAT style.
     ///
     /// This unifies standard omission (`0word`) and CA-style parenthesized
@@ -96,6 +127,41 @@ impl WordCategory {
     pub fn is_omission(&self) -> bool {
         matches!(self, WordCategory::Omission | WordCategory::CAOmission)
     }
+}
+
+/// What a word's letters are: spelling, or a rendering of sound.
+///
+/// The distinction every lexical rule needs and none of them owned. A rule that
+/// judges orthography is meaningless applied to [`Self::Sound`]: those letters
+/// were chosen to approximate a noise, so checking them against a vocabulary
+/// reports a defect in the transcriber's ear.
+///
+/// # What actually consults this, as of 2026-08-15
+///
+/// E241 (`validation/word/structure.rs`) and the `%mor` fragment filter
+/// (`alignment/helpers/rules.rs`). TWO sites. This paragraph exists because the
+/// first draft named three rules as though they all did, which is the prose rot
+/// this repository treats as the worst kind: nothing gates it.
+///
+/// Three more ask the same question and answer it differently, none of the
+/// differences adjudicated: E220 (`validation/word/language/digits.rs`) and E763
+/// (`validation/word/prefix_marker.rs`) exempt `Omission` ONLY, and
+/// `Word::compute_untranscribed` exempts nothing, so `&+xxx` still reads as
+/// untranscribed material. Converting them changes validation output in BOTH
+/// directions (E220 would start judging `0dog2` and stop judging `&+3`) and owes
+/// a corpus differential. Until that runs this type is deliberately not
+/// universal, and saying so is cheaper than letting a reader infer from its
+/// existence that the question is settled.
+///
+/// A sum type rather than a `bool` named `is_orthography`, so a call site reads
+/// as a match on what the material IS rather than on a flag whose polarity the
+/// reader has to remember.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WordMaterial {
+    /// Words as written. Lexical rules apply.
+    Orthography,
+    /// A rendering of sound. Lexical rules do not apply.
+    Sound,
 }
 
 impl WriteChat for WordCategory {

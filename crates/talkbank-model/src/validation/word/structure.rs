@@ -8,7 +8,8 @@
 
 use std::ops::RangeInclusive;
 
-use crate::model::{Word, WordContent, WordStressMarkerType};
+use crate::model::content::word::{MarkerSpelling, UntranscribedStatus};
+use crate::model::{Word, WordContent, WordMaterial, WordStressMarkerType};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 /// Enforce character-level hygiene for the normalized word surface.
@@ -239,16 +240,34 @@ pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
     }
 }
 
-/// Map common non-canonical untranscribed placeholders to canonical forms.
+/// The marker a word was meant to spell, when its text is one written wrongly.
 ///
-/// Returns the recommended CHAT token (for example `xxx`, `yyy`, `www`) when
-/// the input matches a known uppercase/short variant.
-pub fn get_illegal_untranscribed_suggestion(text: &str) -> Option<&'static str> {
-    match text {
-        "xx" | "XXX" => Some("xxx"),
-        "yy" | "YYY" => Some("yyy"),
-        "WWW" => Some("www"),
-        _ => None,
+/// `None` means E241 has nothing to say about this word: either the spelling is
+/// canonical, or the word is not a marker at all, or it is not the kind of word
+/// whose letters are orthography in the first place.
+///
+/// # This takes the WORD, and that is the fix rather than a style choice
+///
+/// It used to take a `&str`, and the caller passed `cleaned_text()`. Cleaning a
+/// word strips its category prefix, so `&+xx` arrived here as `xx`,
+/// indistinguishable from a bare mistyped marker, and E241 fired on it. That
+/// was shipped behaviour: `chatter validate` on a file containing `&+xx`
+/// reported `"xx" is not legal; did you mean to use "xxx"?` against a line
+/// whose word is `&+xx`, which is the standing tell that a diagnostic is the
+/// tool's defect and not the data's. A phonological fragment is sound rather
+/// than spelling, and its letters mean nothing to a lexical rule.
+///
+/// WHICH categories are exempt is [`crate::model::WordCategory::material`]'s
+/// answer, not this rule's. Three other places had each written out their own
+/// version of that subset, and the reason a lexical rule must not judge a
+/// fragment's letters is the same reason in all four, so it has one owner.
+pub(crate) fn illegal_untranscribed_marker(word: &Word) -> Option<UntranscribedStatus> {
+    match word.material() {
+        // The letters approximate a noise. There is no spelling to be wrong.
+        WordMaterial::Sound => None,
+        // Orthography, spoken or not: `0xx` and `(xx)` are ordinary words that
+        // were not uttered, and the letters are still a spelling.
+        WordMaterial::Orthography => MarkerSpelling::of(word.cleaned_text()).misspelled(),
     }
 }
 

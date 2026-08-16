@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-08-12 22:55 EDT
+**Last modified:** 2026-08-15 13:50 EDT
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -136,7 +136,7 @@ Two consequences worth stating plainly:
   runner. It is parsed and nothing more. `just spec-status` counts them, and a
   test holds the count at ZERO, so a new one fails CI.
 
-  This matters more than it looks, because `gen_validation_corpus` falls back
+  This matters more than it looks, because the validation-corpus builder falls back
   to the spec's TITLE code when an example declares none. An undeclared example
   was therefore asserted by the corpus runner and ignored by this one: the same
   question with two answers. On 2026-08-11 all 22 undeclared examples were given
@@ -186,13 +186,26 @@ could not be verified and was reported as failing rather than as untestable.
 
 ## What is generated, and by what
 
-| Generator (`spec/tools`) | Produces |
-|---|---|
-| `gen_tree_sitter_tests` | `grammar/test/corpus/generated/*.txt` |
-| `gen_rust_tests` | `crates/talkbank-parser-tests/tests/integration/generated/*.rs` |
-| `gen_validation_corpus` | validation fixtures + `manifest.json` |
-| `gen_error_docs` | `docs/errors/*.md` (optional local reference) |
-| `gen_form_markers` | the `FormType` enum, the re2c marker set, the book's marker table |
+One command regenerates everything committed: `just spec-gen`. Its registry
+(`spec/tools/src/artifacts.rs`, plus the half in `spec/runtime-tools` that needs
+the live `ErrorCode` enum) is the only place a destination is written down, and
+the same list drives writing, checking and the gate.
+
+{{#include generated/spec-artifacts.md}}
+
+That table is itself generated from the registry, and the currency gate keeps
+it true. The hand-written one it replaced listed five generators when the tree
+held eighteen binaries, and named four separate commands that had by then become
+one.
+
+One generator sits outside it, deliberately: `gen_form_markers` has its own
+registry and its own drift gate (`just form-markers-gen`).
+
+`docs/errors/*.md` used to be described here as "an optional local reference
+nothing commits". That was false when written: the directory has been tracked
+since 2026-06-23, 226 files of it. It is now a registry artifact like any other,
+so `just spec-gen` writes it and `just spec-check` compares it, and the
+standalone `gen_error_docs` binary that wrote it outside the gate is deleted.
 
 Two registries under `spec/` own closed vocabularies and generate every site
 that names them: `spec/symbols/symbol_registry.json` (`just symbols-gen`) and
@@ -210,6 +223,7 @@ days.
 
 | Gate | Checks | Needs |
 |---|---|---|
+| `every_generated_artifact_is_current` | every committed generated artifact against what the specs produce now | |
 | `error_spec_codes` | every example emits the codes it declares | |
 | `manifest_agrees_with_clan_reference` | parity manifest against `check.cpp` | |
 | `generated_form_marker_sites_are_current` | form-marker outputs against the registry | |
@@ -243,6 +257,11 @@ linguistic question being decided.
 
 ## Related
 
+- [Why the Spec System Looks Like That](spec-system-history.md), which answers
+  the questions this page raises and does not settle: what `_auto` means, why an
+  E202 spec can carry an example expecting E316, and why eleven codes have two
+  spec files. Read it before concluding that a spec file means what it appears
+  to mean.
 - [Spec Workflow](../contributing/spec-workflow.md), how to make a change.
 - [Testing](../contributing/testing.md), the wider test strategy.
 - [Grammar Governance](grammar-governance.md), the grammar side.

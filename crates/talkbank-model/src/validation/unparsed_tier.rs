@@ -1,50 +1,60 @@
-//! Validation rules for user-defined dependent tiers (`%x*`).
+//! Validation for a dependent tier that declares no content (E756).
 //!
-//! One rule lives here: a user-defined tier must carry content (E756).
-//! History: the check was born as W601 firing at Error severity (the
-//! warning-prefixed code was the bug; renumbered 2026-07-16, rejection
-//! unchanged). A sibling W602 check (deprecated `%xLABEL` where LABEL
-//! was a standard tier) was DELETED the same day as dead code: the Phon
-//! `%x`-tier fold routes every known label to typed tier parsers, so
-//! labels like `xpho` never reach this user-defined path (and the old
-//! branch compared against bare names like `pho`, which production
-//! labels, `x`-prefixed, could never equal).
+//! One rule lives here: a tier line whose payload is absent or whitespace-only
+//! asserts an annotation that is not there.
+//!
+//! History: born as W601 firing at Error severity (the warning-prefixed code
+//! was the bug; renumbered 2026-07-16, rejection unchanged), and wired ONLY to
+//! user-defined `%x*` tiers because `TextTier::content` could not represent an
+//! empty standard tier. When it could (2026-08-15), an empty `%eng:` became
+//! representable and unjudged: re2c reported such a file VALID where
+//! tree-sitter rejected it through E330, an `_auto` stub with no description.
+//! The maintainer ruling widened E756 rather than write E330's spec or add a
+//! third code, on the grounds that E756's rule ("a tier whose content is empty
+//! declares nothing") was never `%x`-specific and only its NAME was.
+//!
+//! A sibling W602 check (deprecated `%xLABEL` where LABEL was a standard tier)
+//! was DELETED 2026-07-16 as dead code: the Phon `%x`-tier fold routes every
+//! known label to typed tier parsers, so labels like `xpho` never reach this
+//! path.
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
-/// Validate one user-defined `%x*` tier payload.
+/// Report a dependent tier that declares no content.
 ///
-/// `label` is the tier label as parsed, INCLUDING the `x` prefix (a
-/// `%xtst:` tier arrives as `xtst`).
-pub fn check_user_defined_tier_content(
+/// `label` is the tier label as parsed, without `%` or colon: a `%xtst:` tier
+/// arrives as `xtst` and a `%eng:` tier as `eng`. Callers get it from
+/// [`crate::model::DependentTier::kind`], and decide WHETHER to call by asking
+/// [`crate::model::DependentTier::empty_content_span`], which owns the question
+/// of whether a given tier kind can even be empty.
+///
+/// `pub(crate)` since 2026-08-16, and that is the point rather than tidiness.
+/// It was public because the tree-sitter `%x` lowering called it from the
+/// PARSE path, which is how an empty `%xtst:` came to be reported without ever
+/// being added to the model: the parser both judged the tier and dropped it.
+/// With the decision back where it belongs (the validator asks
+/// `empty_content_span`), no caller outside this crate remains, and closing the
+/// door is what stops the next one reopening it. Leaving a better primitive
+/// public only moves the duplication to the next caller.
+pub(crate) fn check_dependent_tier_content(
     label: &str,
-    content: Option<&str>,
-    span: Span,
+    span: crate::Span,
     errors: &impl ErrorSink,
 ) {
-    // E756: a tier declaring no content asserts an annotation that is
-    // not there and fails to make sense.
-    // Absent OR whitespace-only. `None` is the line that declared a tier and
-    // gave it nothing; before the model could represent that, this rule could
-    // only ever see the whitespace half.
-    let empty = content.is_none_or(|c| c.chars().all(|ch| ch.is_whitespace()));
-    if empty {
-        let content = content.unwrap_or("");
-        let mut err = ParseError::new(
-            ErrorCode::EmptyUserDefinedTier,
-            Severity::Error,
-            SourceLocation::at_offset(span.start as usize),
-            ErrorContext::new(content, 0..content.len(), content),
-            format!("User-defined tier %{label} has no content"),
-        )
-        .with_suggestion(
-            "User-defined tiers should contain custom analysis/annotation data; remove the empty tier line otherwise",
-        );
-        err.location.span = span;
-        errors.report(err);
-    }
+    let mut err = ParseError::new(
+        ErrorCode::EmptyDependentTier,
+        Severity::Error,
+        SourceLocation::at_offset(span.start as usize),
+        ErrorContext::new("", 0..0, ""),
+        format!("Dependent tier %{label} has no content"),
+    )
+    .with_suggestion(
+        "A dependent tier must carry the annotation it declares; remove the empty tier line otherwise",
+    );
+    err.location.span = span;
+    errors.report(err);
 }
 
 #[cfg(test)]
@@ -52,57 +62,43 @@ mod tests {
     use super::*;
     use crate::ErrorCollector;
 
-    /// A tier line that declared nothing at all is invalid.
+    /// The report is well formed for the tier it names.
     ///
-    /// POLICY, not an invariant a type could absorb: "a user-defined tier must
-    /// carry content" is a CHAT rule with a real alternative (accept it, as
-    /// CLAN does), so it is a rule the validator states rather than one the
-    /// model forbids. The model deliberately CAN represent this now; before it
-    /// could, each parser invented its own way round and the two disagreed.
+    /// The emptiness DECISION no longer lives here: it moved to
+    /// `DependentTier::empty_content_span` when E756 was widened past `%x*` on
+    /// 2026-08-15, because only the tier type knows whether it can be empty at
+    /// all. What survives in this module is the reporting, so what survives
+    /// here are the assertions about the diagnostic. The tests that fed this
+    /// function `None` / `""` / `" \t"` moved with the decision.
+    ///
+    /// The `%xfoo` / `%xxfoo` pair records a real past bug: the label already
+    /// carries its `x`, and an older format string double-prefixed it.
     #[test]
-    fn absent_content_is_reported() {
+    fn the_report_names_the_tier_with_one_percent_prefix() {
         let errors = ErrorCollector::new();
-        check_user_defined_tier_content("xfoo", None, Span::DUMMY, &errors);
+        check_dependent_tier_content("xfoo", crate::Span::DUMMY, &errors);
         let reported = errors.into_vec();
         assert_eq!(reported.len(), 1);
-        assert_eq!(reported[0].code, ErrorCode::EmptyUserDefinedTier);
+        assert_eq!(reported[0].code, ErrorCode::EmptyDependentTier);
+        assert_eq!(reported[0].severity, Severity::Error);
+        assert!(reported[0].message.contains("%xfoo"));
+        assert!(!reported[0].message.contains("%xxfoo"));
     }
 
+    /// A standard tier reports under the same code and reads naturally.
+    ///
+    /// POLICY, not an invariant a type could absorb: "a dependent tier must
+    /// carry content" is a CHAT rule with a real alternative (accept it, as
+    /// CLAN does), so the validator states it rather than the model forbidding
+    /// it. The model deliberately CAN represent an empty tier; before it
+    /// could, each parser invented its own way round and the two disagreed.
     #[test]
-    fn test_e756_empty_tier() {
+    fn a_standard_tier_reports_under_the_same_code() {
         let errors = ErrorCollector::new();
-        check_user_defined_tier_content("xfoo", Some(""), Span::DUMMY, &errors);
-        let error_vec = errors.into_vec();
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::EmptyUserDefinedTier);
-        assert_eq!(error_vec[0].severity, Severity::Error);
-        // The message names the tier with a single % prefix (the label
-        // already carries the x; the old format double-prefixed to %xx...).
-        assert!(error_vec[0].message.contains("%xfoo"));
-        assert!(!error_vec[0].message.contains("%xxfoo"));
-    }
-
-    #[test]
-    fn test_e756_whitespace_only_tier() {
-        let errors = ErrorCollector::new();
-        check_user_defined_tier_content("xtst", Some(" \t"), Span::DUMMY, &errors);
-        let error_vec = errors.into_vec();
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::EmptyUserDefinedTier);
-    }
-
-    #[test]
-    fn test_valid_user_tier_no_errors() {
-        // Any user-defined tier with content is valid; the deprecated
-        // %xLABEL check (W602) was deleted as dead code, so known-standard
-        // labels draw nothing here (their typed parsers own them upstream).
-        for label in ["xfoo", "xpho", "xmor", "xcustom"] {
-            let errors = ErrorCollector::new();
-            check_user_defined_tier_content(label, Some("test content"), Span::DUMMY, &errors);
-            assert!(
-                errors.into_vec().is_empty(),
-                "user-defined tier {label} with content must be valid"
-            );
-        }
+        check_dependent_tier_content("eng", crate::Span::DUMMY, &errors);
+        let reported = errors.into_vec();
+        assert_eq!(reported.len(), 1);
+        assert_eq!(reported[0].code, ErrorCode::EmptyDependentTier);
+        assert!(reported[0].message.contains("%eng"));
     }
 }

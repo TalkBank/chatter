@@ -7,6 +7,7 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{AsRawNode, NodeSlot, TierSepNode, extract_tier_sep};
+use crate::model::TextTier;
 use crate::model::{NonEmptyString, TierSeparator};
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use talkbank_model::ParseOutcome;
@@ -15,13 +16,19 @@ use tree_sitter::Node;
 /// Read the raw text of a simple text-like dependent tier's body slot as a
 /// `NonEmptyString`, driven by the generated typed visitor.
 ///
-/// The 15 raw text-like tiers (`%ort` / `%eng` / `%gls` / `%alt` / `%coh` /
-/// `%def` / `%err` / `%fac` / `%flo` / `%par` / `%tim` / `%modsyl` / `%phosyl`
-/// / `%phoaln` / `%xphoint`) share the grammar shape
-/// `seq(<x>_tier_prefix, tier_sep, text_with_bullets, newline)`, so each caller
-/// extracts its own concrete tier via the generated `extract_<kind>_dependent_tier`
-/// and hands the body slot (`child_2`, a `text_with_bullets` node) AND the
-/// carrier's `unexpected` sink here.
+/// The raw text-like tiers share the grammar shape
+/// `seq(<x>_tier_prefix, tier_sep, optional(text_with_bullets), newline)`, so
+/// each caller extracts its own concrete tier via the generated
+/// `extract_<kind>_dependent_tier` and hands the body slot (`child_2`, a
+/// `text_with_bullets` node) AND the carrier's `unexpected` sink here.
+///
+/// Since the E756 widening made those bodies optional, NOTHING calls this
+/// directly: every caller goes through [`read_optional_tier_body_text`] or
+/// [`read_optional_tier_body_raw_text`], which unwrap the `Option` and then
+/// delegate here for a body that IS present. This function therefore describes
+/// what to do with a body that exists, and the absent case is not its business.
+/// Its `Absent` arm below is the tree-sitter recovery state, which is a
+/// different fact from "the grammar says there need not be one".
 ///
 /// This replaces the removed `extract_unparsed_tier_content` hand-walk, which
 /// located the body by scanning `node.children()` for a child of kind
@@ -44,7 +51,7 @@ use tree_sitter::Node;
 ///
 /// The carrier's `unexpected` sink is surfaced FIRST via [`surface_unexpected`]
 /// (R2; a no-op on valid input, load-bearing for migration Task D).
-pub(crate) fn read_tier_body_text<'tree, T>(
+fn read_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
     body: &NodeSlot<'tree, T>,
     unexpected: &[Node<'tree>],
@@ -68,6 +75,81 @@ where
                 "Tier is missing content node",
             ));
             ParseOutcome::rejected()
+        }
+    }
+}
+
+/// Read a text tier's body when the grammar makes that body OPTIONAL.
+///
+/// The ten text-payload tiers (`%alt %coh %def %eng %err %fac %flo %gls %ort
+/// %par`) gained optional bodies on 2026-08-15 with the E756 widening; every
+/// other free-text tier followed on 2026-08-16. A tier
+/// line with nothing after the separator is a real, invalid construct a file
+/// can contain: before, it failed to parse and recovered as E602 "malformed
+/// dependent tier header" while the re2c backend read the same file as VALID.
+///
+/// The empty case lowers to [`TextTier::empty`] rather than reporting from the
+/// parse path, because recovery is not validity: the parser says what the file
+/// contains and `DependentTier::empty_content_span` lets the validator judge
+/// it. That also keeps the tier in the model, so the line survives a roundtrip.
+///
+/// `TextTier::empty` is called here and in the re2c converter's own lowering;
+/// both are parsers saying what the file contains, which is what that
+/// constructor's doc asks for.
+pub(crate) fn read_optional_tier_body_text<'tree, T>(
+    tier_node: Node<'tree>,
+    body: &Option<NodeSlot<'tree, T>>,
+    unexpected: &[Node<'tree>],
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<TextTier>
+where
+    T: AsRawNode<'tree>,
+{
+    // Defined over the raw reader rather than repeating its `match`, so the
+    // absent-body policy (surface the carrier's sink, report nothing, return a
+    // payload that says it is empty) is stated in exactly one place. Two copies
+    // thirty lines apart would agree only by inspection.
+    read_optional_tier_body_raw_text(tier_node, body, unexpected, source, errors).map(|content| {
+        match content {
+            Some(text) => TextTier::new(text),
+            None => TextTier::empty(),
+        }
+    })
+}
+
+/// Read a tier's body when the grammar makes that body OPTIONAL and the caller
+/// builds its own model type from the raw text.
+///
+/// Sibling of [`read_optional_tier_body_text`], which owns [`TextTier`]
+/// construction because all ten of its callers build the same type. The five
+/// remaining free-text tiers (`%tim %modsyl %phosyl %phoaln %xphoint`) each
+/// lower their text differently: `%tim` classifies it into time segments, the
+/// Phon tiers run their own fallible content parsers. So this returns the
+/// question rather than an answer, and each caller says what an absent body
+/// means IN ITS OWN TYPE (`TimTier::empty`, or the Phon tiers' empty word
+/// lists), which is the state `DependentTier::empty_content_span` then reads.
+///
+/// `Parsed(None)` is an absent body, NOT a failure: the outer [`ParseOutcome`]
+/// says whether the body could be read, the inner [`Option`] says whether there
+/// was one to read. Collapsing the two would make an empty tier
+/// indistinguishable from an unreadable one, and they get different diagnostics
+/// (E756 versus a parse error).
+pub(crate) fn read_optional_tier_body_raw_text<'tree, T>(
+    tier_node: Node<'tree>,
+    body: &Option<NodeSlot<'tree, T>>,
+    unexpected: &[Node<'tree>],
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Option<NonEmptyString>>
+where
+    T: AsRawNode<'tree>,
+{
+    match body {
+        Some(slot) => read_tier_body_text(tier_node, slot, unexpected, source, errors).map(Some),
+        None => {
+            surface_unexpected(unexpected, source, errors);
+            ParseOutcome::Parsed(None)
         }
     }
 }

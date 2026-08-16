@@ -204,7 +204,7 @@ pub struct Annotated<T> {
     pub scoped_annotations: AnnotatedContentAnnotations,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: crate::Span,
 }

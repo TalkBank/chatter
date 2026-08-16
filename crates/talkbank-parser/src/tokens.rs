@@ -57,10 +57,25 @@ pub fn parse_langcode_token(token_text: &str) -> Option<LanguageCode> {
 // ---------------------------------------------------------------------------
 
 /// Strip a known prefix and closing `]` from a token, returning the inner text.
-/// Trims trailing whitespace for leniency.
+///
+/// Trims whitespace at BOTH ends. The prefix already consumes the one space a
+/// well-formed annotation carries (`"[=! "`), so this only changes annotations
+/// written with more than one, where the extra is separator rather than
+/// content: a caller asking for the text of `[=! whispers]` wants `whispers`.
+///
+/// It trimmed only the trailing end until 2026-08-15, which made
+/// `[=!  contacts:tomato]` (two spaces) parse as `" contacts:tomato"` here and
+/// as `"contacts:tomato"` in the re2c backend. That was the ONLY content-level
+/// disagreement between the two parsers across all 107,403 corpus files, and
+/// the maintainer's ruling was that the separator is not content. Neighbouring
+/// helpers in this file already trimmed both ends, so the two halves of one
+/// idea disagreed inside a single module.
+///
+/// Roundtrip is unaffected: serialization reconstructs the annotation rather
+/// than echoing this string, verified on the file above under both backends.
 fn strip_annotation(token_text: &str, prefix: &str) -> Option<smol_str::SmolStr> {
     let inner = token_text.strip_prefix(prefix)?.strip_suffix(']')?;
-    let trimmed = inner.trim_end();
+    let trimmed = inner.trim();
     if trimmed.is_empty() {
         return None;
     }

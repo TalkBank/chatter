@@ -136,22 +136,21 @@ Adds `#[ignore]` to the generated test. Use for:
 
 #### Code Block Info String
 
-The code fence info string (language tag) determines the parse context:
+An error example's code fence **must** be `` ```chat ``. The example is parsed
+as a whole CHAT file, headers and `@End` included, and the generated test calls
+`parse_chat_file()`. Any other info string, including an empty one, is refused
+at load time and names the file it came from.
 
-| Info string | Parse method called | When to use |
-|-------------|-------------------|-------------|
-| `chat` | `parse_chat_file()` | Full CHAT file with headers, utterances, `@End` |
-| (empty) | `parse_utterance()` | Bare utterance content |
-| `standalone_word` | `parse_word()` | Single word |
-| `mor_dependent_tier` | `parse_mor_tier()` | %mor tier content |
-| `gra_dependent_tier` | `parse_gra_tier()` | %gra tier content |
-| Other tier types | Corresponding parse method | Tier-specific parsing |
+This is not the same rule as the CONSTRUCT spec fences documented under
+"Templates" below, where the info string genuinely selects a template that wraps
+a fragment. Error specs have no template step.
 
-**Most error specs use `` ```chat `` `` because errors typically need full file
-context (headers, speakers, etc.).**
-
-When `context == "chat"`, the generator maps it to `"chat_file"` internally.
-When the info string is empty, it defaults to `"utterance"`.
+> **Corrected 2026-08-15.** This section previously tabled five further info
+> strings mapping to parse methods. The generator performed no mapping: it
+> interpolated the raw string into `parser.parse_{info}`, and none of those
+> methods exist, so every documented alternative generated a test that could
+> not compile. All 330 example fences were already `` ```chat ``. The table
+> described the CONSTRUCT spec rules below, where the template names are real.
 
 #### Expected Error Codes Override
 
@@ -377,12 +376,8 @@ normalized during comparison.
 3. Regenerate the affected generated artifacts:
 
    ```bash
-   cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-     --output-dir grammar/test/corpus/generated \
-     --template-dir spec/tools/templates
-
-   cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-     --output-dir crates/talkbank-parser-tests/tests/integration/generated
+   just spec-gen      # every artifact derived from spec/
+   just spec-check    # or: is the committed copy current?
    ```
 
 4. `cd grammar && tree-sitter test`, verify grammar corpus tests
@@ -392,14 +387,19 @@ normalized during comparison.
 
 # Tools Reference
 
-## Generators (run directly via `spec/tools`)
+## Generators
 
-| Binary | What it generates |
+`just spec-gen` regenerates every committed artifact from one registry, and
+`just spec-check` reports staleness without writing:
+
+| Artifact | Built from |
 |--------|-------------------|
-| `gen_tree_sitter_tests` | Tree-sitter corpus tests from construct specs |
-| `gen_rust_tests` | Rust error tests from error specs |
-| `gen_validation_corpus` | Validation fixture corpus + manifest from error specs |
-| `gen_error_docs` | Markdown error documentation pages |
+| tree-sitter corpus tests | construct specs + parser-layer error specs |
+| Rust test bodies | construct + error specs |
+| validation fixture corpus + `manifest.json` | validation-layer error specs |
+| `DiagnosticKind` registry | every error spec's `Kind` |
+
+| published error documentation (`docs/errors/`) | every error spec |
 
 ## Validators
 

@@ -76,3 +76,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 # crate gets published to crates.io as a foundational library, the
 # publish step lives in a separate workflow, not in release.yml.)
 dist = false
+
+[lints]
+workspace = true

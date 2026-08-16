@@ -108,29 +108,42 @@ fn apply_x_tier(
     // Extract label by stripping "%x" prefix (e.g. "%xfoo" → "foo")
     let tier_label = full_prefix.strip_prefix("%x").unwrap_or(full_prefix);
 
-    // Empty user-defined tier (E756). The grammar makes ONLY this rule's body
-    // optional (see grammar.js `x_dependent_tier`), so the generated visitor
-    // types the body slot as `Option<NodeSlot<..>>`: when a `%xLABEL:` line
-    // carries nothing but a trailing space, the separator absorbs that space
-    // and NO `text_with_bullets` child is produced, so the body slot is
-    // `None`. This is a real (if invalid) construct that must lower to an
-    // empty user-defined tier and flag E756, not recover via a spurious
-    // E342/E330. Route it through the shared empty-tier check so the parse
-    // path and the validation path emit the identical E756 diagnostic. The
-    // label carries the leading 'x' (a `%xtst` tier validates as "xtst"),
-    // matching the label stored on a pushed `UserDefined` tier below.
+    // For UserDefined tiers the stored label keeps the leading 'x' to avoid
+    // colliding with built-in tiers (`%xmor` stores "xmor", not "mor"). Built
+    // once: both the empty-body path below and the content path at the end of
+    // this function need the identical value, and building it twice is how the
+    // two drift.
+    let stored_label = NonEmptyString::new_unchecked(format!("x{}", tier_label));
+
+    // Empty user-defined tier. Every free-text tier rule now marks its body
+    // `optional(...)`, so the generated visitor types this body slot as
+    // `Option<NodeSlot<..>>`: when a `%xLABEL:` line carries nothing but a
+    // trailing space, the separator absorbs that space, no `text_with_bullets`
+    // child is produced, and the slot is `None`. That is a real (if invalid)
+    // construct, and it lowers to a tier whose content says it is absent.
+    //
+    // It used to report E756 from HERE, out of the parse path, and return
+    // WITHOUT pushing the tier. Two things were wrong with that, and both were
+    // observable: the tier vanished from the model, so an empty `%xtst:` did
+    // not survive a roundtrip while an empty `%eng:` did; and because the
+    // report came from parsing rather than validation, `chatter normalize`
+    // treated the file as unparseable and emitted NOTHING AT ALL. Recovery is
+    // not validity: the parser says what the file contains, and
+    // `DependentTier::empty_content_span` hands it to E756 exactly as it does
+    // for every other tier kind.
     let body_slot = match children.child_2.slot().as_ref() {
         Some(slot) => slot,
         None => {
             let span =
                 crate::error::Span::new(tier_node.start_byte() as u32, tier_node.end_byte() as u32);
-            let e756_label = format!("x{}", tier_label);
-            talkbank_model::validation::check_user_defined_tier_content(
-                &e756_label,
-                None,
+            let tier = DependentTier::UserDefined(crate::model::UserDefinedDependentTier {
+                label: stored_label,
+                content: None,
                 span,
-                errors,
-            );
+            });
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(tier, separator));
             return true;
         }
     };
@@ -232,12 +245,8 @@ fn apply_x_tier(
         _ => {}
     }
 
-    // For UserDefined tiers, prepend 'x' to the label to avoid collision with built-in tiers
-    // e.g., %xmor stores label="xmor" not "mor" to avoid collision with %mor
-    let label = NonEmptyString::new_unchecked(format!("x{}", tier_label));
-
     let tier = DependentTier::UserDefined(crate::model::UserDefinedDependentTier {
-        label,
+        label: stored_label,
         content: Some(content),
         span,
     });

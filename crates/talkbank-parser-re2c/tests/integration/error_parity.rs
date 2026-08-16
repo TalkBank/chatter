@@ -175,7 +175,7 @@ fn measure(corpus: &SpecCorpus) -> Result<Vec<CaseReport>, String> {
             re2c: codes_from(|errors| {
                 let parsed =
                     talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, errors);
-                talkbank_model::model::ChatFile::from(&parsed)
+                talkbank_parser_re2c::convert::chat_file_to_model(&parsed, &errors)
             }),
         })
         .collect();
@@ -448,7 +448,7 @@ fn re2c_never_panics_on_invalid_input() -> Result<(), String> {
     for case in &corpus.cases {
         let errors = ErrorCollector::new();
         let parsed = talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, &errors);
-        let _file = talkbank_model::model::ChatFile::from(&parsed);
+        let _file = talkbank_parser_re2c::convert::chat_file_to_model(&parsed, &errors);
     }
     println!(
         "ok  {} invalid input(s) parsed without panic",

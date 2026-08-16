@@ -51,11 +51,11 @@ pub enum EditProvenance {
 
 /// What a single edit does to the source text.
 ///
-/// An explicit target rather than an inferred one: `Span::DUMMY` is `{0,0}`
-/// and is also `Span::default()`, so a span alone cannot distinguish
-/// "insert at the very start of the file" from "this value has no source
-/// location at all". Making the caller say which it means removes that
-/// ambiguity instead of resolving it by guesswork.
+/// An explicit target rather than an inferred one: `Span::DUMMY` is `{0,0}`,
+/// which is also a real zero-length position at the head of the file, so a
+/// span alone cannot distinguish "insert at the very start of the file" from
+/// "this value has no source location at all". Making the caller say which it
+/// means removes that ambiguity instead of resolving it by guesswork.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditTarget {
     /// Replace this byte range. Must be non-dummy and non-empty.
@@ -135,8 +135,9 @@ impl SpliceEdit {
 /// Why a set of edits could not be applied.
 #[derive(Debug, thiserror::Error)]
 pub enum SpliceError {
-    /// `Span::DUMMY` is `{0, 0}` and is also `Span::default()`, so a
-    /// `Replace` carrying it would silently splice at the head of the file.
+    /// `Span::DUMMY` is `{0, 0}`, which is indistinguishable from a real
+    /// zero-length position at the head of the file, so a `Replace` carrying
+    /// it would silently splice there.
     #[error("edit from {provenance:?} carries the dummy span, which is not a source location")]
     DummySpan {
         /// The edit's origin.
@@ -478,8 +479,8 @@ mod tests {
         );
     }
 
-    /// Span::DUMMY is {0,0} and is also Span::default(), so it must never
-    /// be read as "splice at the start of the file".
+    /// Span::DUMMY is {0,0}, the same bytes as a real position at the head of
+    /// the file, so it must never be read as "splice at the start of the file".
     #[test]
     fn dummy_span_is_rejected() {
         let result = apply_edits(SOURCE, &[edit(0, 0, "xxx")]);

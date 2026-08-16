@@ -25,9 +25,23 @@ impl Validate for Utterance {
     /// reported first so later tier-level diagnostics have clearer context.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
         // E522: speaker code used on `*SPEAKER:` must appear in @Participants.
-        if !context.shared.participant_ids.is_empty()
-            && !context.shared.participant_ids.contains(&self.main.speaker)
-        {
+        //
+        // This used to be guarded by `!participant_ids.is_empty() &&`, with no
+        // stated reason, and that guard meant an EMPTY participant set switched
+        // the check off entirely. A file where no speaker has a usable `@ID` is
+        // exactly the file whose speaker diagnostics matter, and it was the one
+        // getting none: "we have no information" was being read as "there is
+        // nothing to check".
+        //
+        // Found on 2026-08-15 when re2c stopped inventing a participant keyed
+        // on an empty speaker code. Its map became legitimately empty on one
+        // spec fixture, and two correct diagnostics vanished with it.
+        //
+        // Inert on real data, measured rather than assumed: removing it changed
+        // nothing across a 2,158-file stratified corpus sample, because every
+        // kept file carries `@ID` lines. It only ever suppressed diagnostics on
+        // malformed input.
+        if !context.shared.participant_ids.contains(&self.main.speaker) {
             let speaker_str = self.main.speaker.as_str();
             errors.report(
                 crate::ParseError::new(
@@ -166,15 +180,15 @@ impl Validate for Utterance {
             errors.report_all(self.alignment_diagnostics.clone());
         }
 
-        // Validate user-defined dependent tiers (e.g., `%xfoo`, `%xbar`).
+        // E756: any dependent tier that declares no content, not just `%x*`.
+        //
+        // The kind-specific question ("can this tier even be empty?") belongs
+        // to `DependentTier::empty_content_span`, whose match is exhaustive, so
+        // a new tier variant stops compiling there rather than silently
+        // escaping this rule. This loop only asks.
         for entry in &self.dependent_tiers {
-            if let DependentTier::UserDefined(tier) = &entry.tier {
-                crate::validation::check_user_defined_tier_content(
-                    &tier.label,
-                    tier.content.as_deref(),
-                    tier.span,
-                    errors,
-                );
+            if let Some(span) = entry.tier.empty_content_span() {
+                crate::validation::check_dependent_tier_content(entry.kind(), span, errors);
             }
         }
 

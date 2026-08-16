@@ -89,11 +89,11 @@ pub struct MainTier {
     /// Shared tier payload (content, markers, terminator, postcodes, bullet).
     pub content: TierContent,
     /// Source span for the full main-tier line.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
     /// Source span for speaker token only.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub speaker_span: Span,
     /// The `colon tab trailing_space?` separator between the speaker token

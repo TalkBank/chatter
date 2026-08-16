@@ -1,7 +1,7 @@
 # Spec Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-12 20:35 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 How to change `spec/` and leave the repository consistent. For what the fields
 MEAN, read [Spec System](../architecture/spec-system.md) first; this page is
@@ -124,29 +124,28 @@ exists; that is what proves the fixture actually triggers it.
 
 ## Regenerating
 
-Run only the generators whose artifacts your change affects. All commands are
-from the repository root.
+One command, from anywhere in the checkout:
 
 ```bash
-# tree-sitter corpus tests
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
-
-# Rust parser tests
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
-
-# validation fixture corpus + manifest
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
-
-# optional local error-reference pages
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
+just spec-gen      # rewrite every generated artifact from the specs
+just spec-check    # or ask whether the committed copies are current
 ```
 
-Never hand-edit anything under a `generated/` directory. The corpus generator
-wipes its output directory wholesale and refuses to clear one lacking its
+It regenerates all four: the tree-sitter corpus tests, the Rust test bodies,
+the validation fixture corpus and its `manifest.json`, and the `DiagnosticKind`
+registry in `talkbank-model`. There is nothing to choose and no path to type:
+every destination is a constant in `spec/tools/src/artifacts.rs`, so a
+generator cannot be aimed at the wrong tree.
+
+`just spec-check` writes nothing and is exactly what the
+`every_generated_artifact_is_current` gate runs, so a green check means a green
+gate.
+
+The published error-reference pages under `docs/errors/` are part of
+`spec-gen` like every other artifact, and `spec-check` gates them.
+
+Never hand-edit anything under a `generated/` directory. An artifact that owns
+its directory wipes it wholesale and refuses to clear one lacking its
 `.generated-output-dir` marker.
 
 ## Verifying

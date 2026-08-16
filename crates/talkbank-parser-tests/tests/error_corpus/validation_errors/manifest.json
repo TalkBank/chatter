@@ -1787,12 +1787,36 @@
       "source_spec": "spec/errors/E755_undeclared_utterance_language.md"
     },
     {
-      "fixture": "E756_Empty_user_defined_tier.cha",
+      "fixture": "E756_Empty_dependent_tier.cha",
       "expected_codes": [
         "E756"
       ],
       "status": "implemented",
-      "source_spec": "spec/errors/E756_empty_user_defined_tier.md"
+      "source_spec": "spec/errors/E756_empty_dependent_tier.md"
+    },
+    {
+      "fixture": "E756_Empty_dependent_tier_2.cha",
+      "expected_codes": [
+        "E756"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E756_empty_dependent_tier.md"
+    },
+    {
+      "fixture": "E756_Empty_dependent_tier_3.cha",
+      "expected_codes": [
+        "E756"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E756_empty_dependent_tier.md"
+    },
+    {
+      "fixture": "E756_Empty_dependent_tier_4.cha",
+      "expected_codes": [
+        "E756"
+      ],
+      "status": "implemented",
+      "source_spec": "spec/errors/E756_empty_dependent_tier.md"
     },
     {
       "fixture": "E757_Bracketed_code_glued_to_the_following_content.cha",

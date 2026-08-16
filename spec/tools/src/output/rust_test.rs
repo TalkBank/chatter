@@ -4,6 +4,7 @@
 
 use crate::spec::construct::{ConstructExample, ConstructSpec};
 use crate::spec::error::{ErrorDefinition, ErrorExample, ErrorSpec};
+use crate::spec::metadata::{SpecLayer, Status};
 
 /// Runs wrap for chat file parse.
 fn wrap_for_chat_file_parse(example: &ConstructExample, level: &str) -> String {
@@ -91,13 +92,13 @@ pub fn generate_error_test(
     error: &ErrorDefinition,
     example: &ErrorExample,
     test_error_path: &str,
-    error_type: &str,
+    layer: SpecLayer,
     source_file: &str,
     index: usize,
-    status: &str,
+    status: Status,
 ) -> String {
     // Validation-layer errors are tested solely by the validation corpus
-    // (gen_validation_corpus + the data-driven validation_error_corpus.rs
+    // (the validation-corpus artifact + the data-driven validation_error_corpus.rs
     // runner), which parses a real fixture file and passes its filename stem to
     // validate_with_alignment. A string-based parser test here has no file/media
     // context, so context-dependent checks cannot fire (for example E531
@@ -105,7 +106,7 @@ pub fn generate_error_test(
     // produces E544 "no timing" instead). Emitting a validation test here would
     // yield false failures and duplicate the validation corpus, so generate
     // nothing for validation-layer specs.
-    if error_type == "validation" {
+    if layer.is_validation() {
         return String::new();
     }
 
@@ -115,10 +116,14 @@ pub fn generate_error_test(
         .replace(['.', '-', ' '], "_")
         .to_lowercase();
 
-    let ignore_attr = if status == "not_implemented" {
-        format!("#[ignore = \"Status: not_implemented ({})\"]", error.code)
-    } else {
-        String::new()
+    // A match on the closed set, not a string comparison: this decides whether a
+    // GENERATED TEST is ignored, so it must not be able to miss a spelling. See
+    // `spec::metadata::Status` for what the `String` version cost.
+    let ignore_attr = match status {
+        Status::NotImplemented => {
+            format!("#[ignore = \"Status: not_implemented ({})\"]", error.code)
+        }
+        Status::Implemented | Status::Deprecated | Status::UnreachableFromChat => String::new(),
     };
 
     // Build test function name, avoiding double underscores when sanitized_name is empty
@@ -135,15 +140,11 @@ pub fn generate_error_test(
         example.expected_codes.clone()
     };
 
-    // `TreeSitterParser::parse_chat_file` returns `ParseProduct`, not a
-    // `Result`, so a "chat_file" context example needs a different template
-    // from every other context (which still parses through a fragment
-    // method returning `ParseResult<T>`, e.g. `parse_utterance`,
-    // `parse_word`). Branch here rather than forcing both shapes through
-    // one template.
-    if example.context == "chat_file" {
-        format!(
-            r#"{ignore_attr}
+    // One template and no context branch: `spec::error`'s loader refuses any
+    // fence but ```chat, which is what makes `parse_chat_file` the only call
+    // that can be generated. The reasoning lives there, at the rule.
+    format!(
+        r#"{ignore_attr}
 /// Tests expected behavior.
 #[test]
 fn test_{sanitized_source}_{fn_suffix}() -> Result<(), {test_error_path}> {{
@@ -170,63 +171,26 @@ fn test_{sanitized_source}_{fn_suffix}() -> Result<(), {test_error_path}> {{
 }}
 
 "#,
-            ignore_attr = ignore_attr,
-            sanitized_source = sanitized_source,
-            fn_suffix = fn_suffix,
-            input = example.input,
-            expected_codes = codes
-                .iter()
-                .map(|c| format!("{:?}", c))
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
-    } else {
-        format!(
-            r#"{ignore_attr}
-/// Tests expected behavior.
-#[test]
-fn test_{sanitized_source}_{fn_suffix}() -> Result<(), {test_error_path}> {{
-    let parser = TreeSitterParser::new()?;
-    let result = parser.parse_{context}({input:?});
-
-    let errors = match result {{
-        Ok(_) => return Err({test_error_path}::Failure("Expected parse error but parsing succeeded".to_string())),
-        Err(errors) => errors,
-    }};
-
-    let expected_codes = vec![{expected_codes}];
-    for code in expected_codes {{
-        let expected = talkbank_model::ErrorCode::new(code);
-        let has_expected = errors.errors.iter().any(|err| err.code == expected);
-        assert!(has_expected, "Expected error code {{}}, but got: {{:?}}",
-            code, errors.errors.iter().map(|err| err.code.as_str()).collect::<Vec<_>>());
-    }}
-
-    Ok(())
-}}
-
-"#,
-            ignore_attr = ignore_attr,
-            sanitized_source = sanitized_source,
-            fn_suffix = fn_suffix,
-            context = example.context,
-            input = example.input,
-            expected_codes = codes
-                .iter()
-                .map(|c| format!("{:?}", c))
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
-    }
+        input = example.input,
+        expected_codes = codes
+            .iter()
+            // `c.as_str()`, not `c`: `{:?}` on the newtype renders
+            // `SpecErrorCode("E301")` and this string is emitted as a Rust
+            // literal. The byte-identity gate caught it; the compiler could
+            // not, because `Debug` is implemented for both.
+            .map(|c| format!("{:?}", c.as_str()))
+            .collect::<Vec<_>>()
+            .join(", "),
+    )
 }
 
 /// Generate just the test bodies (no imports) for construct specs
 pub fn generate_construct_test_body(specs: &[ConstructSpec], test_error_path: &str) -> String {
     let mut output = String::new();
 
-    output.push_str("// Generated by gen_rust_tests - test bodies only\n");
+    output.push_str("// Generated from spec/ by `just spec-gen` - test bodies only\n");
     output.push_str(
-        "// DO NOT EDIT MANUALLY - regenerate from chatter spec/ via `make test-gen`\n\n",
+        "// DO NOT EDIT MANUALLY - run `just spec-gen`; `just spec-check` says whether this is current\n\n",
     );
 
     for spec in specs {
@@ -246,9 +210,9 @@ pub fn generate_construct_test_body(specs: &[ConstructSpec], test_error_path: &s
 pub fn generate_error_test_body(specs: &[ErrorSpec], test_error_path: &str) -> String {
     let mut output = String::new();
 
-    output.push_str("// Generated by gen_rust_tests - test bodies only\n");
+    output.push_str("// Generated from spec/ by `just spec-gen` - test bodies only\n");
     output.push_str(
-        "// DO NOT EDIT MANUALLY - regenerate from chatter spec/ via `make test-gen`\n\n",
+        "// DO NOT EDIT MANUALLY - run `just spec-gen`; `just spec-check` says whether this is current\n\n",
     );
 
     for spec in specs {
@@ -258,10 +222,10 @@ pub fn generate_error_test_body(specs: &[ErrorSpec], test_error_path: &str) -> S
                     error,
                     example,
                     test_error_path,
-                    &spec.metadata.error_type,
+                    spec.metadata.layer,
                     &spec.source_file,
                     i,
-                    &spec.metadata.status,
+                    spec.metadata.status,
                 ));
             }
         }
@@ -321,54 +285,6 @@ impl GeneratedTestFile {
 /// compiled, while inflating every count made of the suite.
 pub const RETIRED_OUTPUT_NAMES: &[&str] =
     &["generated_construct_tests.rs", "generated_error_tests.rs"];
-
-/// Clean this generator's outputs from `output_dir`, then write them.
-///
-/// Cleans by NAME, deliberately, rather than by owning the directory.
-/// `tests/integration/generated/` has TWO producers: this generator, and
-/// `bootstrap_reference_corpus` which writes `reference_corpus.rs`. Claiming
-/// the directory deletes the other producer's output, which broke the build
-/// immediately when it was tried on 2026-07-29.
-///
-/// Cost of the name list, accepted: it cannot remove stale SUBdirectories, so a
-/// deleted spec can leave an orphan behind. Give each producer its own owned
-/// directory if that ever matters.
-pub fn write_generated_tests(
-    output_dir: &std::path::Path,
-    construct_specs: &[ConstructSpec],
-    error_specs: &[ErrorSpec],
-    test_error_path: &str,
-) -> std::io::Result<Vec<std::path::PathBuf>> {
-    if output_dir.exists() {
-        let sweepable: Vec<&str> = GeneratedTestFile::ALL
-            .iter()
-            .map(|file| file.file_name())
-            .chain(RETIRED_OUTPUT_NAMES.iter().copied())
-            .collect();
-        for entry in std::fs::read_dir(output_dir)? {
-            let path = entry?.path();
-            let is_ours = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| sweepable.contains(&name));
-            if is_ours {
-                std::fs::remove_file(&path)?;
-            }
-        }
-    }
-    std::fs::create_dir_all(output_dir)?;
-
-    let mut written = Vec::with_capacity(GeneratedTestFile::ALL.len());
-    for file in GeneratedTestFile::ALL {
-        let path = output_dir.join(file.file_name());
-        std::fs::write(
-            &path,
-            file.render(construct_specs, error_specs, test_error_path),
-        )?;
-        written.push(path);
-    }
-    Ok(written)
-}
 
 #[cfg(test)]
 mod tests {

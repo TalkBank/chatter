@@ -19,22 +19,22 @@
 //!
 //! Uses `ChatLines` to correctly handle continuation lines.
 
+// EVERY test here needs the wild corpus, so every one is `#[ignore]`d and runs
+// through `just corpus-tests`. They used to run in the default suite, where
+// without a corpus they either printed "Skipping" and returned or operated on
+// an empty input set. Both report success, so on any machine without the
+// corpus (CI included) this file has been vacuous for as long as it has
+// existed. A test that cannot run is better absent than green.
+
 use talkbank_parser_re2c::chat_lines::{ChatLineKind, ChatLines};
 use talkbank_parser_re2c::lex;
-
-fn corpus_base() -> String {
-    std::env::var("TALKBANK_DATA").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_default();
-        format!("{home}/talkbank/data")
-    })
-}
 
 /// Collect sample logical lines from the wild corpus matching a prefix.
 /// Uses `ChatLines` to correctly handle continuation lines.
 /// Returns up to `max` unique lines.
 fn collect_lines(prefix: &str, max: usize) -> Vec<String> {
     let mut lines = std::collections::BTreeSet::new();
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     let data_dirs: Vec<_> = std::fs::read_dir(&base)
         .into_iter()
         .flatten()
@@ -74,7 +74,7 @@ fn collect_lines(prefix: &str, max: usize) -> Vec<String> {
 #[allow(dead_code)]
 fn collect_lines_by_kind(kind: ChatLineKind, max: usize) -> Vec<String> {
     let mut lines = std::collections::BTreeSet::new();
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     let data_dirs: Vec<_> = std::fs::read_dir(&base)
         .into_iter()
         .flatten()
@@ -147,6 +147,7 @@ fn batch_lex_check(prefix: &str, lines: &[String]) -> (usize, usize) {
 // ═══════════════════════════════════════════════════════════════
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_main_tiers() {
     let lines = collect_lines("*", 500);
     if lines.is_empty() {
@@ -171,6 +172,7 @@ fn corpus_main_tiers() {
 // ═══════════════════════════════════════════════════════════════
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_headers_structured() {
     let prefixes = [
         "@ID:\t",
@@ -196,6 +198,7 @@ fn corpus_headers_structured() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_headers_no_content() {
     let prefixes = ["@UTF8", "@Begin", "@End", "@Blank", "@New Episode"];
     let mut total_errors = 0;
@@ -209,6 +212,7 @@ fn corpus_headers_no_content() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_headers_text() {
     let prefixes = [
         "@Location:\t",
@@ -239,6 +243,7 @@ fn corpus_headers_text() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_headers_optional_content() {
     let prefixes = ["@Bg", "@Eg", "@G"];
     let mut total_errors = 0;
@@ -252,6 +257,7 @@ fn corpus_headers_optional_content() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_headers_speaker_embedded() {
     let prefixes = ["@Birth of", "@Birthplace of", "@L1 of"];
     let mut total_errors = 0;
@@ -269,6 +275,7 @@ fn corpus_headers_speaker_embedded() {
 // ═══════════════════════════════════════════════════════════════
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_mor_tiers() {
     let lines = collect_lines("%mor:\t", 500);
     if lines.is_empty() {
@@ -287,6 +294,7 @@ fn corpus_mor_tiers() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_gra_tiers() {
     let lines = collect_lines("%gra:\t", 500);
     if lines.is_empty() {
@@ -305,6 +313,7 @@ fn corpus_gra_tiers() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_pho_tiers() {
     let lines = collect_lines("%pho:\t", 200);
     if lines.is_empty() {
@@ -318,6 +327,7 @@ fn corpus_pho_tiers() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_text_tiers() {
     let prefixes = [
         "%com:\t", "%act:\t", "%sit:\t", "%exp:\t", "%eng:\t", "%flo:\t", "%ort:\t", "%spa:\t",
@@ -337,6 +347,7 @@ fn corpus_text_tiers() {
 }
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_user_defined_tiers() {
     let prefixes = ["%xdb:\t", "%xpho:\t", "%xmod:\t", "%xcod:\t", "%xlang:\t"];
     let mut total_errors = 0;
@@ -357,9 +368,10 @@ fn corpus_user_defined_tiers() {
 // ═══════════════════════════════════════════════════════════════
 
 #[test]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_full_files_sample() {
     // Lex a sample of complete files using ChatLines, check for error tokens
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     let data_dirs: Vec<_> = std::fs::read_dir(&base)
         .into_iter()
         .flatten()
@@ -428,9 +440,9 @@ fn corpus_full_files_sample() {
 /// Lex ALL .cha files in ALL corpus dirs. Run with --ignored for the full sweep.
 /// cargo test -p talkbank-parser-re2c --test corpus_lex_tests -E 'test(corpus_full_sweep)' --run-ignored ignored-only --nocapture
 #[test]
-#[ignore]
+#[ignore = "needs the wild corpus; run `just corpus-tests`"]
 fn corpus_full_sweep() {
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     let data_dirs: Vec<_> = std::fs::read_dir(&base)
         .into_iter()
         .flatten()

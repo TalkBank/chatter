@@ -1,7 +1,7 @@
 # spec/tools - Core Generators Crate
 
 **Status:** Current
-**Last modified:** 2026-08-12 22:55 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 ## Read the book first
 
@@ -20,19 +20,16 @@ tasks.
 ## Key Commands
 ```bash
 # From repo root:
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
+just spec-gen      # regenerate every artifact derived from spec/
+just spec-check    # report staleness, writing nothing
 
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
-
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
-
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
 cargo test
 ```
+
+Generation lives in `src/artifacts.rs`, one `Artifact` row per committed
+artifact, carrying its destination as a constant and a `build` that returns the
+files rather than writing them. That is what lets the gate compare without
+writing, and what stops a generator being pointed at the wrong directory.
 
 ## Binary Reference
 
@@ -40,10 +37,7 @@ cargo test
 
 | Binary | Purpose |
 |--------|---------|
-| `gen_tree_sitter_tests` | Generate tree-sitter corpus tests from `spec/constructs/` |
-| `gen_rust_tests` | Generate Rust parser tests from `spec/errors/` |
-| `gen_validation_corpus` | Generate the validation fixture corpus + `manifest.json` from `spec/errors/` (data-driven runner) |
-| `gen_error_docs` | Generate error documentation from `spec/errors/` |
+| `spec_gen` (in `spec/runtime-tools`) | Every artifact in the registry: tree-sitter corpus tests, Rust test bodies, the validation fixture corpus + `manifest.json`, and the `DiagnosticKind` registry. `just spec-gen` / `just spec-check`. |
 | `gen_form_markers` | Generate the model enum, re2c code set and book table from the form-marker registry (`just form-markers-gen`) |
 | `validate_spec` | Validate a single spec file |
 
@@ -67,6 +61,7 @@ cargo test
 ### Runtime-Aware Sibling Crate
 
 `spec/runtime-tools` owns the tools that need the live Rust parser/model crates:
+- `spec_gen` (the whole registry; its own half needs the live `ErrorCode` enum)
 - `validate_error_specs`
 - `extract_corpus_candidates`
 

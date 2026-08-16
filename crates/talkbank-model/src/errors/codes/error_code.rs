@@ -944,7 +944,7 @@ pub enum ErrorCode {
     /// fired as a hard error despite the warning prefix); renumbered
     /// 2026-07-16, rejection unchanged.
     #[code("E756")]
-    EmptyUserDefinedTier,
+    EmptyDependentTier,
 
     /// Bracketed code's closing `]` glued to the following content with
     /// no space (`hello [/]x`). Style rule; the parse is unambiguous but

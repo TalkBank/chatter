@@ -33,7 +33,7 @@ mod word_type;
 mod word_validate;
 
 pub use ca::{CADelimiter, CADelimiterType, CAElement, CAElementType};
-pub use category::WordCategory;
+pub use category::{WordCategory, WordMaterial};
 pub use content::{
     UnderlineMarker, WordCliticBoundary, WordCompoundMarker, WordContent, WordLengthening,
     WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType, WordSyllablePause,
@@ -41,6 +41,6 @@ pub use content::{
 };
 pub use form::{FormMarkerPayload, FormType, UndeclaredFormMarker};
 pub use language::WordLanguageMarker;
-pub use untranscribed::UntranscribedStatus;
+pub use untranscribed::{MarkerSpelling, UntranscribedStatus};
 pub use word_contents::WordContents;
 pub use word_type::Word;

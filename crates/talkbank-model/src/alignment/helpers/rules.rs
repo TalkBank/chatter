@@ -121,11 +121,13 @@ fn is_wor_excluded_category(word: &Word) -> bool {
 /// Return whether the word category is fragment-like for strict domains.
 ///
 /// Fragment-like categories are filtered only in stricter domains like `%mor`.
+///
+/// This is [`crate::model::WordMaterial::Sound`] under an alignment-side name:
+/// `%mor` tags words, and a rendering of a noise is not one. Delegating rather
+/// than listing the three categories again keeps it in step with the lexical
+/// rules asking the same question; it was one of four hand-written copies.
 fn is_fragment_like(word: &Word) -> bool {
-    matches!(
-        word.category,
-        Some(WordCategory::Nonword | WordCategory::Filler | WordCategory::PhonologicalFragment)
-    )
+    matches!(word.material(), crate::model::WordMaterial::Sound)
 }
 
 /// Return whether a word contributes linguistic content for `%mor` alignment.

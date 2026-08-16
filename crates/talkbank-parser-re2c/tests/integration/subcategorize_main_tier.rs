@@ -172,13 +172,6 @@ fn sub_classify(path: &str, ts_val: &str, re2c_val: &str) -> String {
     )
 }
 
-fn corpus_base() -> PathBuf {
-    PathBuf::from(
-        std::env::var("TALKBANK_DATA")
-            .unwrap_or_else(|_| format!("{}/talkbank/data", std::env::var("HOME").unwrap())),
-    )
-}
-
 fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
     walkdir::WalkDir::new(base)
         .into_iter()
@@ -191,7 +184,7 @@ fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
 #[test]
 #[ignore]
 fn subcategorize_main_tier_divergences() {
-    let base = corpus_base();
+    let base = crate::corpus_root::CorpusRoot::resolve().require();
     if !base.exists() {
         eprintln!("Skipping: {} not found", base.display());
         return;

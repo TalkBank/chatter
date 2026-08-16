@@ -155,4 +155,14 @@ impl ValidationRenderer for AuditRenderer {
         println!();
         println!("Detailed errors written to: {}", self.output_path.display());
     }
+
+    /// An audit records findings ABOUT TRANSCRIPTS, so a cache event does not
+    /// belong in the file, and it is not silently dropped either: the operator
+    /// running the audit is at a terminal and gets the sentence there.
+    ///
+    /// This is the question the old stderr write let everyone avoid. Putting
+    /// the event on the trait made someone answer it, which is the point.
+    fn handle_cache_event(&mut self, event: &crate::commands::validate::cache::CacheEvent) {
+        eprintln!("{}", event.sentence());
+    }
 }

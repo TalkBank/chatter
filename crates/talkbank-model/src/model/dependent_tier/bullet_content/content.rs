@@ -114,9 +114,32 @@ impl BulletContent {
         }
     }
 
+    /// Content for a tier line that declares NOTHING.
+    ///
+    /// Named rather than reached by `new(Vec::new())` or `from_text("")`, so
+    /// that producing an empty payload is a deliberate act a reader can grep
+    /// for, and so the empty case carries no fabricated segment: `from_text("")`
+    /// builds a text segment that is not in the file. The only legitimate
+    /// callers are the parsers, which met a tier line with no body and must say
+    /// so; every other path has content.
+    ///
+    /// The result is INVALID CHAT, and deliberately representable anyway:
+    /// recovery is not validity, and a parser that cannot express what the file
+    /// says is a parser that will invent something instead. E756 states the rule
+    /// this exists to let the validator apply; see
+    /// `DependentTier::empty_content_span`.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            segments: Vec::new().into(),
+        }
+    }
+
     /// Returns `true` when the payload carries no meaningful content.
     ///
-    /// A single empty text segment is also treated as empty content.
+    /// A single empty text segment is also treated as empty content, because
+    /// [`Self::from_text`] can build one; [`Self::empty`] carries no segment at
+    /// all.
     pub fn is_empty(&self) -> bool {
         self.segments.is_empty()
             || (self.segments.len() == 1

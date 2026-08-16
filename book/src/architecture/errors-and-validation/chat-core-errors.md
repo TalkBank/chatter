@@ -1,7 +1,7 @@
 # Errors, CHAT core
 
 **Status:** Current
-**Last modified:** 2026-08-03 14:03 EDT
+**Last modified:** 2026-08-15 13:20 EDT
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
@@ -73,7 +73,7 @@ flowchart LR
 
 The source of truth for error-code details is `spec/errors/`. Maintainers can
 generate a local markdown reference set under `docs/errors/` with
-`gen_error_docs` when they need a browsable error catalog while working on
+`just spec-gen` when they need a browsable error catalog while working on
 diagnostics.
 
 ### `Severity`
@@ -187,7 +187,7 @@ testing.
 3. Construct `ParseError::new(ErrorCode::YourVariant, ...)` at the
    detection site in the parser or validator.
 4. Regenerate the affected spec artifacts with the current `spec/tools`
-   binaries (`gen_rust_tests`, `gen_validation_corpus`, and optionally
-   `gen_error_docs`).
+   generators (`just spec-gen`, and optionally
+   `just spec-gen`).
 5. Run the concrete verification commands from
    `book/src/contributing/dev-checks.md`.

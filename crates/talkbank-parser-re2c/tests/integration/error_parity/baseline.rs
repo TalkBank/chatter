@@ -6,10 +6,11 @@
 //! in a diff without the surrounding machinery moving.
 
 use super::model::Divergence;
-// Imported unqualified: the table is 99 rows and rustfmt explodes a tuple
-// literal past 60 columns, so the qualified form would cost four lines per long
-// entry for no reader benefit in a column whose type the const's own signature
-// states.
+// Imported unqualified: rustfmt explodes a tuple literal past 60 columns, so
+// over a table this long the qualified form would cost four lines per long
+// entry, for no reader benefit in a column whose type the const's own
+// signature states. (No row count here on purpose: a number written beside the
+// list it counts is the drift this file exists to make visible.)
 use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilent};
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,31 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 /// The families matter more than the entries: `E321` alone accounts for over
 /// twenty of the conflicts, so one fix should retire a large block of this
 /// list at once, and that is the order to work in.
+///
+/// # Added since
+///
+/// **2026-08-16, one**: `E756_empty_dependent_tier.md#0`, `Re2cIncomplete`.
+/// That example's body is a lone space, so the tier is empty AND carries an
+/// illegal trailing space after the separator; tree-sitter now reports both
+/// E756 and E758, re2c reports only E756. It ships because re2c does not track
+/// separator provenance at all and so cannot emit E758 under any input, which
+/// is the same gap the `E758_leading_space_on_main_tier` entries above already
+/// record: one family, not a new class.
+///
+/// It became visible, rather than becoming true, when the E756 widening
+/// stopped the `%x` parse path dropping empty tiers from the model. While the
+/// tier was dropped there was no separator for the validator to judge, so
+/// tree-sitter under-reported and accidentally matched re2c. Agreement that
+/// rests on both backends missing something is not agreement.
+///
+/// # Retired since
+///
+/// **2026-08-15, three at once**: `E511_auto.md`, `E523_auto.md` and
+/// `E524_auto.md`. All three were the same defect. The re2c backend lowered a
+/// file through an infallible `From`, which had nowhere to put a diagnostic,
+/// so the participant join's E522/E523/E524 were computed and dropped. The
+/// conversion now takes the caller's sink, and the join's map is reachable
+/// only by handing over a sink, so the discard is no longer expressible.
 ///
 /// # Why there is no per-entry reason field
 ///
@@ -162,7 +188,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E508_auto.md", Conflicting),
     ("E509_auto.md", Conflicting),
     ("E510_auto.md", Conflicting),
-    ("E511_auto.md", Conflicting),
     ("E512_auto.md", Re2cIncomplete),
     ("E513_auto.md", Re2cIncomplete),
     ("E515_auto.md", Conflicting),
@@ -172,8 +197,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E518_auto.md#3", Re2cIncomplete),
     ("E518_auto.md#5", Re2cIncomplete),
     ("E522_auto.md#0", Re2cIncomplete),
-    ("E523_auto.md", Re2cIncomplete),
-    ("E524_auto.md", Re2cSilent),
     ("E525_auto.md#0", Re2cIncomplete),
     ("E525_auto.md#1", Re2cIncomplete),
     ("E525_auto.md#3", Conflicting),
@@ -190,6 +213,7 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E709_auto.md", Conflicting),
     ("E710_auto.md", Conflicting),
     ("E747_blank_line_not_allowed.md", Re2cSilent),
+    ("E756_empty_dependent_tier.md#0", Re2cIncomplete),
     ("E757_code_glued_to_following_content.md#1", Re2cSilent),
     ("E757_code_glued_to_following_content.md#2", Re2cSilent),
     ("E758_leading_space_on_main_tier.md#1", Re2cSilent),

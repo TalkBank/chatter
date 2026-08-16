@@ -15,11 +15,11 @@
 //! These tests document expected behavior and regressions.
 
 // Construct + parser-error tests generated from spec/constructs/ and
-// spec/errors/ by the gen_rust_tests generator (run via the spec/tools binaries;
+// spec/errors/ by `just spec-gen` (see spec/tools/src/artifacts.rs;
 // see spec/CLAUDE.md). The generated bodies are included below.
 //
 // Validation-layer coverage (semantic errors E5xx, E6xx, E7xx) is NOT generated
-// here: it is driven separately by gen_validation_corpus, which writes a `.cha`
+// here: it is driven by the validation-corpus artifact, which writes a `.cha`
 // fixture corpus + manifest.json that the data-driven runner in
 // validation_error_corpus.rs consumes. The reference-corpus roundtrip gate
 // (tests/roundtrip_reference_corpus, must pass 100%) is the other half.

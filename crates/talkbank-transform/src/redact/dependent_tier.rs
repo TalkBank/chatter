@@ -76,8 +76,15 @@ fn redacted_bullet() -> BulletContent {
 }
 
 fn redact_text_tier(tier: &mut TextTier) {
-    if let Ok(redacted) = NonEmptyString::new(REDACTED_TEXT) {
-        tier.content = redacted;
+    // Only redact content that EXISTS. A tier declaring nothing has nothing to
+    // hide, and writing the placeholder into it would invent text the file
+    // never contained, which is the opposite of what redaction is for. The
+    // compiler raised this the moment an empty tier became representable; no
+    // test covered it, because until then the state could not be built.
+    if tier.content.is_some()
+        && let Ok(redacted) = NonEmptyString::new(REDACTED_TEXT)
+    {
+        tier.content = Some(redacted);
     }
 }
 

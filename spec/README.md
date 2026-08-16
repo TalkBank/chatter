@@ -37,22 +37,15 @@ spec/
 ## Key Commands
 
 ```bash
-# This repo does not have a root `make test-gen` wrapper.
-# Regenerate the tree-sitter corpus tests:
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- \
-  --output-dir grammar/test/corpus/generated \
-  --template-dir spec/tools/templates
+# Regenerate every committed artifact derived from spec/: the tree-sitter
+# corpus tests, the Rust parser test bodies, the validation fixture corpus and
+# its manifest.json, and the DiagnosticKind registry.
+just spec-gen
 
-# Regenerate the generated Rust parser tests (constructs + parser-layer errors):
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_rust_tests -- \
-  --output-dir crates/talkbank-parser-tests/tests/integration/generated
+# Report which of them are stale, writing nothing. This is what the gate runs.
+just spec-check
 
-# Regenerate the validation fixture corpus + manifest.json (validation-layer errors):
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_validation_corpus -- \
-  --corpus-dir crates/talkbank-parser-tests/tests/error_corpus/validation_errors
-
-# Regenerate local error-reference pages from error specs:
-cargo run --manifest-path spec/tools/Cargo.toml --bin gen_error_docs
+# (docs/errors/ is a spec-gen artifact; no separate command.)
 
 # Validate spec format
 cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_specs

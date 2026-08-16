@@ -93,7 +93,7 @@ pub struct SylTier {
     pub words: Vec<NonEmptyString>,
 
     /// Source span for error reporting.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }
@@ -112,6 +112,13 @@ impl SylTier {
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
+    }
+
+    /// Returns `true` when this tier declares nothing. Derived from
+    /// [`Self::word_count`] so the two answers cannot drift.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.word_count() == 0
     }
 
     /// Returns the number of syllabified words.
@@ -515,7 +522,7 @@ pub struct PhoalnTier {
     pub words: Vec<WordAlignment>,
 
     /// Source span for error reporting.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }
@@ -533,6 +540,13 @@ impl PhoalnTier {
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
+    }
+
+    /// Returns `true` when this tier declares nothing. Derived from
+    /// [`Self::word_count`] so the two answers cannot drift.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.word_count() == 0
     }
 
     /// Returns the number of aligned words.
@@ -625,7 +639,7 @@ pub struct XphointTier {
     pub groups: Vec<XphointGroup>,
 
     /// Source span for error reporting.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }
@@ -643,6 +657,13 @@ impl XphointTier {
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
+    }
+
+    /// Returns `true` when this tier declares nothing. Derived from
+    /// [`Self::word_count`] so the two answers cannot drift.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.word_count() == 0
     }
 
     /// Number of word groups (aligns 1-to-1 with `%pho` words).

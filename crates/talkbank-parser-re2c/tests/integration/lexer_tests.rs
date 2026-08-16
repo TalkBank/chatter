@@ -1820,7 +1820,7 @@ fn parse_file_msu03b_line_count() {
     };
     let errors = talkbank_model::ErrorCollector::new();
     let parsed = talkbank_parser_re2c::parser::parse_chat_file_streaming(&content, &errors);
-    let file = talkbank_model::model::ChatFile::from(&parsed);
+    let file = talkbank_parser_re2c::convert::chat_file_to_model(&parsed, &errors);
     let ts = talkbank_parser::TreeSitterParser::new().expect("grammar");
     let ts_errors = talkbank_model::ErrorCollector::new();
     let ts_file = ts.parse_chat_file_streaming(&content, &ts_errors);

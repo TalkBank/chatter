@@ -25,12 +25,14 @@
 //! wrong one for this kind.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::Deserialize;
 use tree_sitter::Parser as TSParser;
 use tree_sitter_talkbank::LANGUAGE;
 use walkdir::WalkDir;
+
+use crate::repo_paths::RepoRoot;
 
 /// Node types the grammar carries so the parser can DETECT invalid CHAT, with
 /// the code the validator reports. A VALID reference corpus cannot contain
@@ -118,11 +120,23 @@ pub struct Request {
     pub node_types: PathBuf,
 }
 
-impl Default for Request {
-    fn default() -> Self {
+impl Request {
+    /// The two paths this repository's own corpus run uses.
+    ///
+    /// # Why this is not a `Default`
+    ///
+    /// It was one, and the `Default` impl reached into the filesystem to
+    /// resolve the repository root. `Default::default()` cannot fail, so a
+    /// wrong or missing root had nowhere to go but a `panic!` two crates away,
+    /// and that panic was the reason the root resolver could not return a
+    /// `Result`. Taking an already-proved [`RepoRoot`] moves the failure to the
+    /// one place that can report it, and states in the signature that this
+    /// request is ABOUT a particular checkout rather than about nothing.
+    #[must_use]
+    pub fn for_repo(root: &RepoRoot) -> Self {
         Self {
-            corpus_dir: default_corpus_dir(),
-            node_types: default_node_types(),
+            corpus_dir: root.join("corpus").join("reference"),
+            node_types: root.join("grammar").join("src").join("node-types.json"),
         }
     }
 }
@@ -392,28 +406,4 @@ fn collect_node_types(
     for child in node.children(&mut cursor) {
         collect_node_types(child, exercised, seen_here);
     }
-}
-
-/// The repository root, resolved from this crate rather than the caller's CWD.
-///
-/// ONE resolver for the spec workspace. A second one had been written in
-/// `spec-runtime-tools` in the same change that added
-/// `talkbank-parser-tests/src/repo_paths.rs`, whose whole docstring argues that
-/// `..`-chains break silently on a rename and that this workspace already has
-/// fifteen of them. Adding two more while writing that argument is the reason
-/// this is public.
-pub fn repo_root() -> PathBuf {
-    // `spec/tools` -> `spec` -> root.
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
-}
-
-pub fn default_corpus_dir() -> PathBuf {
-    repo_root().join("corpus").join("reference")
-}
-
-pub fn default_node_types() -> PathBuf {
-    repo_root()
-        .join("grammar")
-        .join("src")
-        .join("node-types.json")
 }

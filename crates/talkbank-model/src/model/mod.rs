@@ -61,7 +61,7 @@ mod alignment_set;
 mod intern;
 mod language_metadata;
 mod non_empty_string;
-mod participant;
+pub mod participant;
 mod provenance;
 mod time;
 mod user_defined_tier;
@@ -214,6 +214,7 @@ pub use content::{
     WordContents,
     WordLanguageMarker,
     WordLengthening,
+    WordMaterial,
     WordPhonetic,
     WordShortening,
     WordStressMarker,

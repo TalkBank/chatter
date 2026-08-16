@@ -114,7 +114,13 @@ pub fn run_validation_runtime(
     // validates with), never a re-derived summary, so the key and the
     // behaviour cannot drift apart. See `initialize_validation_cache` and
     // `RulesVersion::current_with_rule_selection`.
-    let cache = initialize_validation_cache(&files, execution.cache_refresh, &config.rules);
+    // The events are held, not printed. Rendering them here would mean deciding
+    // the run's output mode a second time, in a second place; the renderer
+    // below already IS that decision, and holding a Vec until it exists costs
+    // nothing. This is also why the renderer did not have to move: values wait,
+    // side effects do not.
+    let cache_init = initialize_validation_cache(&files, execution.cache_refresh, &config.rules);
+    let (cache, cache_events) = cache_init.into_parts();
 
     // The TUI is a streaming-only surface: audit mode writes a file and has no
     // interactive presentation to hand a terminal.
@@ -134,6 +140,9 @@ pub fn run_validation_runtime(
     // `--strict-linkers`, `--roundtrip`, `--jobs` and `--max-errors` working
     // identically in both modes.
     let mut renderer = create_presentation_renderer(&presentation);
+    for event in &cache_events {
+        renderer.handle_cache_event(event);
+    }
 
     let (events_rx, cancel_tx) = validate_files_streaming(files, &config, cache.clone());
     install_ctrlc_handler(&cancel_tx);

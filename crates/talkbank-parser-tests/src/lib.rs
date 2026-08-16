@@ -136,6 +136,7 @@ pub use talkbank_parser::generated_traversal;
 pub mod error_specs;
 pub mod repo_paths;
 pub mod snapshot;
+pub mod spec_self_demonstration;
 pub mod spec_status;
 pub mod template;
 pub mod test_error;

@@ -32,6 +32,10 @@
 //!
 //! Run with: `cargo test -p chatter-desktop --test validation_bridge`
 
+mod common;
+
+use common::workspace_root;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -71,16 +75,6 @@ fn validate_target_streaming(
 /// developer's real cache.
 fn test_cache_dir() -> PathBuf {
     std::env::temp_dir().join("chatter-desktop-validation-bridge-cache")
-}
-
-/// Find the workspace root by walking up from the manifest dir.
-fn workspace_root() -> PathBuf {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // apps/chatter-desktop/src-tauri → apps/chatter-desktop → apps → repo root
-    dir.pop();
-    dir.pop();
-    dir.pop();
-    dir
 }
 
 /// Reference corpus path. Every `.cha` file under it must be valid CHAT.

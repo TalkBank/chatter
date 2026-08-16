@@ -77,9 +77,30 @@ authoritative and regenerate with the command above.
 
 ## Verification
 
-For any audited crate, this is green (every panic site is absent or carries
-a reviewed allow; a new unguarded panic fails the build):
+```bash
+just clippy
+```
+
+That is the whole check, for every crate at once, and it is the same command
+CI runs. The panic family is denied by the workspace `[lints.clippy]` table,
+which reaches a package only when that package declares `[lints] workspace =
+true`; all twelve now do. To look at one crate while working on it:
+
+```bash
+cargo clippy -p <crate> --all-targets --locked
+```
+
+**The command this section used to give could not fail, and that is worth
+stating rather than quietly replacing.** It was:
 
 ```bash
 cargo clippy -p <crate> --lib --bins --locked -- -D warnings
 ```
+
+`unwrap_used`, `expect_used` and `panic` are clippy RESTRICTION lints, which
+are allow-by-default. `-D warnings` promotes warnings to errors and a lint
+that never warns produces none, so the command was green whether or not the
+crate had the lints enabled. Six of the twelve crates, including the entire
+CHAT core, never opted into the workspace table until 2026-08-14, and this
+page reported them clean throughout. A verification that cannot distinguish
+"no violations" from "not checked" is not a verification.
