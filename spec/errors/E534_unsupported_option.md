@@ -1,22 +1,13 @@
-# E534: Unsupported @Options Value
++++
+code = 'E534'
+name = 'Unsupported @Options Value'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@Options` header contains a flag that is not one of the recognized option values. The file parses successfully but the unsupported flag is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E534
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E534
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An `@Options` header contains a flag that is not one of the recognized option va
 @Options:	badoption
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@Options` header contains a flag that is not one of the recognized option values. The file parses successfully but the unsupported flag is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

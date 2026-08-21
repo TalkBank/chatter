@@ -1,21 +1,23 @@
-# E002: TestError
++++
+code = 'E002'
+name = 'TestError'
+kind = 'Invalidity'
+status = 'unreachable_from_chat'
++++
 
 ## Description
 
 Test-only sentinel error code. Used exclusively in the test suite to
 verify error handling plumbing. Never emitted in production.
 
-## Metadata
-
-- **Error Code**: E002
-- **Category**: internal
-- **Level**: file
-- **Layer**: parser
-- **Status**: implemented
-- **Kind**: Invalidity
-
 ## Notes
 
 - This code exists solely for test infrastructure.
-- No CHAT input can trigger this error.
+- No CHAT input can trigger this error. That is what `Status:
+  unreachable_from_chat` says; this spec asserted it in prose while claiming
+  `implemented` until 2026-08-20.
+- Out-of-corpus tests, which is the obligation the status carries:
+  `crates/chatter/src/output.rs` and
+  `crates/chatter/src/commands/validate/audit_reporter.rs` use it as the
+  reporting-plumbing sentinel.
 - No example is possible or appropriate.

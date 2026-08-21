@@ -1,26 +1,13 @@
-# E341: UnbalancedQuotationCrossUtterance
++++
+code = 'E341'
+name = 'UnbalancedQuotationCrossUtterance'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-A quotation-follows terminator (`+"/.`) is used but the next utterance
-from the same speaker does not begin with a quotation precedes linker
-(`+"`). This indicates an unbalanced cross-utterance quotation sequence.
-
-## Metadata
-- **Status**: not_implemented
-- **Layer**: validation
-
-- **Error Code**: E341
-- **Category**: cross\_utterance
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: +"/. terminator but next same-speaker utterance lacks +" linker
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,13 +18,12 @@ from the same speaker does not begin with a quotation precedes linker
 *CHI:	what .
 *MOT:	go to bed .
 @End
-```
+'''
 
-## Example 2
-
-**Trigger**: +"/. terminator with no subsequent same-speaker utterance
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -45,7 +31,14 @@ from the same speaker does not begin with a quotation precedes linker
 @ID:	eng|test|MOT||female|||Mother|||
 *MOT:	she said +"/.
 @End
-```
+'''
++++
+
+## Description
+
+A quotation-follows terminator (`+"/.`) is used but the next utterance
+from the same speaker does not begin with a quotation precedes linker
+(`+"`). This indicates an unbalanced cross-utterance quotation sequence.
 
 ## Expected Behavior
 

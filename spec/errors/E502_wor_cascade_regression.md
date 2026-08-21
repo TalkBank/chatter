@@ -1,4 +1,9 @@
-# E502: false positive, a %wor parse error cascades to the entire file
++++
+code = 'E502'
+name = 'false positive, a %wor parse error cascades to the entire file'
+kind = 'Invalidity'
+status = 'implemented'
++++
 
 ## Description
 
@@ -13,16 +18,6 @@ becomes one ERROR node. This causes:
 
 This is NOT a missing `@End`, all 160 affected files have `@End`. It is a tree-sitter
 error recovery cascade triggered by long invalid %wor content.
-
-## Metadata
-
-- **Error Code**: E502
-- **Category**: parser
-- **Level**: file
-- **Layer**: parser
-- **Root Cause**: tree-sitter error recovery threshold exceeded by long invalid %wor
-- **Kind**: Invalidity
-- **Status**: implemented
 
 ## Minimal Reproduction
 
@@ -84,3 +79,7 @@ to parse subsequent lines. When the invalid region is long (7+ words with timing
 - The %wor content (`&=head:no`, `&=ges:fall`, etc.) is pre-existing legacy CLAN data
 - Once these files are re-aligned with the Rust backend, the bad %wor content will be
   replaced and E502 will no longer fire
+
+## Root Cause
+
+tree-sitter error recovery threshold exceeded by long invalid %wor

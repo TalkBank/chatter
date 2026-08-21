@@ -1,22 +1,15 @@
-# E303: Unexpected node - helper function
++++
+code = 'E303'
+name = 'Unexpected node - helper function'
+kind = 'Invalidity'
+status = 'not_implemented'
+status_note = "Unreachable via tree-sitter parser for this example. E303 (SyntaxError) is emitted by `error_analysis/file.rs` and by the re2c parser, but the example's missing `@UTF8`/`@Participants`/`@ID` scaffolding triggers header-level errors (E501-E505) before the syntax-error path is reached. Tree-sitter's error recovery also absorbs `{{{ world }}}` into ERROR nodes routed through other codes (E316/E375)."
 
-## Description
-
-Unexpected node - helper function
-
-## Metadata
-- **Status**: not_implemented
-- **Status note**: Unreachable via tree-sitter parser for this example. E303 (SyntaxError) is emitted by `error_analysis/file.rs` and by the re2c parser, but the example's missing `@UTF8`/`@Participants`/`@ID` scaffolding triggers header-level errors (E501-E505) before the syntax-error path is reached. Tree-sitter's error recovery also absorbs `{{{ world }}}` into ERROR nodes routed through other codes (E316/E375).
-
-- **Error Code**: E303
-- **Category**: Parser bugs (experimental)
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example
-
-```chat
+[[example]]
+level = 'utterance'
+claim = { subsumed_by = 'E316' }
+chat = '''
+@UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
@@ -24,7 +17,12 @@ Unexpected node - helper function
 @Comment:	Note: This may need adjustment after testing
 *CHI:	hello {{{ world }}} .
 @End
-```
+'''
++++
+
+## Description
+
+Unexpected node - helper function
 
 ## Expected Behavior
 

@@ -1,25 +1,14 @@
-# E244: Auto-generated from corpus
++++
+code = 'E244'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E244
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E244_consecutive_stress.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E244
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E244_consecutive_stress.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +18,12 @@ Auto-generated from corpus
 @Comment:	Invalid: 'ˈˈhello' - Two stress marks in a row
 *CHI:	ˈˈhello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

@@ -21,6 +21,24 @@ use generators::spec::ErrorSpec;
 use generators::spec::error::ErrorKind;
 use talkbank_model::ErrorCode;
 
+/// The observation snapshot, which regenerates BEFORE everything else.
+///
+/// R3 of the spec-system redesign: for every spec example, what the current
+/// binary actually emits, by stage. The corpus differential aimed at the spec
+/// suite; a diff is adjudicated, never silently regenerated.
+///
+/// Its own slice rather than a row below, because [`all`] yields it FIRST:
+/// since R4, the tree-sitter corpus DERIVES its membership from this file, so
+/// generating in declaration order would read a stale snapshot on any
+/// behaviour change and need a second run to converge. The registry is a DAG
+/// and the iteration order is its topological sort.
+pub static SNAPSHOT_ARTIFACT: &[Artifact] = &[Artifact {
+    what: "example-diagnostics observation snapshot",
+    root: "spec/observations",
+    ownership: Ownership::WholeDirectory,
+    build: crate::observations::build_snapshot,
+}];
+
 /// Artifacts generated from `spec/` that need the live model.
 pub static RUNTIME_ARTIFACTS: &[Artifact] = &[
     Artifact {
@@ -88,8 +106,11 @@ fn build_book_artifact_table(_repo_root: &Path) -> Result<GeneratedFiles> {
 /// The order is deliberate: the pure-markdown half first, so a failure there
 /// is reported before the half that has to link the model runs.
 pub fn all() -> impl Iterator<Item = &'static Artifact> {
-    generators::artifacts::ARTIFACTS
+    // Topological order, not declaration order: the snapshot first, because
+    // the tree-sitter corpus in the generators half reads it as an input.
+    SNAPSHOT_ARTIFACT
         .iter()
+        .chain(generators::artifacts::ARTIFACTS.iter())
         .chain(RUNTIME_ARTIFACTS.iter())
 }
 
@@ -126,26 +147,25 @@ fn build_diagnostic_kind(repo_root: &Path) -> Result<GeneratedFiles> {
     // one vocabulary and this key should become `SpecErrorCode`.
     let mut by_code: BTreeMap<String, (ErrorKind, RepoRelativePath)> = BTreeMap::new();
     for spec in &specs {
-        for def in &spec.errors {
-            let kind = spec.metadata.kind;
-            match by_code.entry(def.code.to_string()) {
-                Entry::Vacant(slot) => {
-                    slot.insert((kind, RepoRelativePath::new(repo_root, &spec.source_file)));
-                }
-                Entry::Occupied(slot) => {
-                    // A second spec file for the same code is fine; disagreeing
-                    // about Kind is not, since Kind is a property of the CODE.
-                    let (existing_kind, existing_file) = slot.get();
-                    if *existing_kind != kind {
-                        bail!(
-                            "code {} has conflicting Kind across spec files: {} says {:?}, {} says {:?}",
-                            def.code,
-                            existing_file,
-                            existing_kind,
-                            RepoRelativePath::new(repo_root, &spec.source_file),
-                            kind
-                        );
-                    }
+        let def = &spec.error;
+        let kind = spec.metadata.kind;
+        match by_code.entry(def.code.to_string()) {
+            Entry::Vacant(slot) => {
+                slot.insert((kind, RepoRelativePath::new(repo_root, spec.source_file())));
+            }
+            Entry::Occupied(slot) => {
+                // A second spec file for the same code is fine; disagreeing
+                // about Kind is not, since Kind is a property of the CODE.
+                let (existing_kind, existing_file) = slot.get();
+                if *existing_kind != kind {
+                    bail!(
+                        "code {} has conflicting Kind across spec files: {} says {:?}, {} says {:?}",
+                        def.code,
+                        existing_file,
+                        existing_kind,
+                        RepoRelativePath::new(repo_root, spec.source_file()),
+                        kind
+                    );
                 }
             }
         }

@@ -1,25 +1,14 @@
-# E301: Empty speaker code
++++
+code = 'E301'
+name = 'Empty speaker code'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Empty speaker code
-
-## Metadata
-
-- **Error Code**: E301
-- **Category**: Main tier validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E301_empty_speaker.cha`
-**Trigger**: Main tier with * but no speaker code
-**Expected Error Codes**: E301
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E301_empty_speaker.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@ Empty speaker code
 @ID:	eng|corpus|CHI|||||Child|||
 *:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+Empty speaker code
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

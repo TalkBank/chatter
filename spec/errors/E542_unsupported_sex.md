@@ -1,22 +1,13 @@
-# E542: Unsupported @ID Sex Value
++++
+code = 'E542'
+name = 'Unsupported @ID Sex Value'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@ID` header contains a sex field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E542
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E542
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -24,7 +15,12 @@ An `@ID` header contains a sex field value that is not one of the recognized val
 @ID:	eng|corpus|CHI|3;06.|badsex|||Target_Child|||
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@ID` header contains a sex field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

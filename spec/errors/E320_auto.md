@@ -1,26 +1,13 @@
-# E320: UnparsableHeader
++++
+code = 'E320'
+name = 'UnparsableHeader'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-A header line (starting with @) could not be parsed. This is a fallback
-error emitted when tree-sitter produces an ERROR node in header context,
-but the header type is not one of the specifically handled types
-(@Participants, @Languages, @Date, @Media, @ID).
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E320
-- **Category**: parser\_recovery
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A malformed known header type (not @Participants/@Languages/@Date/@Media/@ID)
-
-```chat
+[[example]]
+level = 'utterance'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,15 @@ but the header type is not one of the specifically handled types
 @Transcription:	[malformed content with [unbalanced brackets
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+A header line (starting with @) could not be parsed. This is a fallback
+error emitted when tree-sitter produces an ERROR node in header context,
+but the header type is not one of the specifically handled types
+(@Participants, @Languages, @Date, @Media, @ID).
 
 ## Expected Behavior
 

@@ -39,47 +39,6 @@ fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
     report.outcome().map(|summary| println!("{summary}"))
 }
 
-/// The number of examples that assert NOTHING may only go down.
-///
-/// An example with no `Expected Error Codes` is parsed and checked against
-/// nothing, so it cannot fail. It looks like coverage in a directory listing
-/// and provides none, which is worse than an absent spec, because an absent
-/// spec is visibly absent.
-///
-/// The backlog is now EMPTY, so the ceiling is zero and this is an ordinary
-/// invariant rather than a ratchet. It stays a test because the field remains
-/// optional in the format: nothing in a type stops the next spec omitting it.
-///
-/// It also keeps two runners agreeing. The validation-corpus builder falls back to
-/// the spec's TITLE code when an example declares none, so an undeclared
-/// example was asserted by the corpus runner and ignored by this one: one
-/// question, two answers, nothing relating them. With every example declaring
-/// its codes the fallback is unreachable, and this test is what keeps it so.
-#[test]
-fn examples_asserting_nothing_do_not_increase() {
-    /// Was 22 when `just spec-status` first reported it; worked to zero the
-    /// same day by declaring, on each example, the code it was measured to
-    /// emit (which is the code that builder was already assuming).
-    ///
-    /// The ratchet has reached its floor, so this is `==` rather than `<=`:
-    /// a count cannot go below zero, and `<= 0` on an unsigned type is an
-    /// absurd comparison that clippy denies. If a lower bound ever becomes
-    /// meaningful again the shape can go back.
-    const CEILING: u32 = 0;
-
-    let root = generators::repo_paths::RepoRoot::resolve(None)
-        .expect(generators::repo_paths::NOT_A_CHECKOUT);
-    let report = run(&Request::for_repo(&root)).expect("the spec corpus must load");
-    assert!(
-        report.no_expected_codes == CEILING,
-        "{} example(s) declare no `Expected Error Codes`, up from {CEILING}. \
-         Such an example is parsed and nothing more: it cannot fail. Give the \
-         new one its codes, or mark its spec `not_implemented` so it counts as \
-         deferred rather than as covered. `just spec-status` lists the totals.",
-        report.no_expected_codes
-    );
-}
-
 /// A spec marked deferred must not already emit its own code.
 ///
 /// `not_implemented` skips the example here and puts `#[ignore]` on its
@@ -108,18 +67,19 @@ fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
         if spec.metadata.status == generators::spec::metadata::Status::Implemented {
             continue;
         }
-        for definition in &spec.errors {
-            for example in &definition.examples {
-                let emitted = spec_runtime_tools::error_spec_validation::emit_for(&parser, example);
-                if emitted
-                    .iter()
-                    .any(|error| error.code.as_str() == definition.code.as_str())
-                {
-                    stale.push(format!(
-                        "{} is `{}` but already emits {}",
-                        spec.source_file, spec.metadata.status, definition.code
-                    ));
-                }
+        let definition = &spec.error;
+        for example in &definition.examples {
+            let emitted = spec_runtime_tools::error_spec_validation::emit_for(&parser, example);
+            if emitted
+                .all()
+                .any(|error| error.code.as_str() == definition.code.as_str())
+            {
+                stale.push(format!(
+                    "{} is `{}` but already emits {}",
+                    spec.source_file(),
+                    spec.metadata.status,
+                    definition.code
+                ));
             }
         }
     }

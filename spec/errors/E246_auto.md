@@ -1,4 +1,25 @@
-# E246: Lengthening marker not after spoken material
++++
+code = 'E246'
+name = 'Lengthening marker not after spoken material'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E246_lengthening_before_material.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: Lengthening (:) must follow spoken material
+@Comment:	Invalid: ':hello' - Lengthening before text
+*CHI:	:hello .
+@End
+'''
++++
 
 ## Description
 
@@ -13,34 +34,6 @@ content and checks whether a `Lengthening` element has preceding spoken
 material. However, the example `:hello` is likely parsed by the grammar as
 a single token (colon followed by text) rather than as a `Lengthening` content
 element followed by text, so the validator never sees the expected structure.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E246
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E246_lengthening_before_material.cha`
-**Trigger**: Lengthening marker before spoken text
-**Expected Error Codes**: E246
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Lengthening (:) must follow spoken material
-@Comment:	Invalid: ':hello' - Lengthening before text
-*CHI:	:hello .
-@End
-```
 
 ## Expected Behavior
 

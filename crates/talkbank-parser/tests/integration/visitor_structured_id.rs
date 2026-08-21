@@ -56,28 +56,28 @@ const ABSENT: &str = include_str!("../../../../corpus/reference/content/words-ma
 
 // Existing @ID error-corpus fixtures (NOT hand-authored).
 const E505_1: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_Invalid_ID_format.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_auto_1.cha"
 );
 const E505_2: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_Invalid_ID_format_2.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_auto_2.cha"
 );
 const E505_3: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_Invalid_ID_format_3.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_auto_3.cha"
 );
 const E514: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E514_Empty_corpus_field_in_ID.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E514_empty_id_corpus_1.cha"
 );
 const E542: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E542_Unsupported_ID_Sex_Value.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E542_unsupported_sex_1.cha"
 );
 const E546: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E546_Unsupported_ID_SES_Value.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E546_unsupported_ses_1.cha"
 );
 const E518: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E518_Auto_generated_from_corpus.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E518_auto_1.cha"
 );
 const E517: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern.cha"
+    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E517_invalid_age_format_1.cha"
 );
 
 /// Parse `input` at the real streaming boundary and return the `Debug` string of

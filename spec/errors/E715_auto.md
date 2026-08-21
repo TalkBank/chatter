@@ -1,4 +1,25 @@
-# E715: `%pho` alignment count mismatch, too many tokens
++++
+code = 'E715'
+name = '%pho alignment count mismatch, too many tokens'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/E715_pho_count_too_many.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+*CHI:	want cookie .
+%pho:	aɪ wɑnt kʊki
+@Comment:	ERROR: Main tier has 2 words but %pho has 3 tokens (extra aɪ)
+@End
+'''
++++
 
 ## Description
 
@@ -11,36 +32,9 @@ timing sidecar (`WorTimingSidecar`) modeled in
 so no E7xx error fires on a `%wor` count mismatch; drift is reported
 structurally via the `Drifted` variant, not via `ParseError`.
 
-## Metadata
-
-- **Error Code**: E715
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E4xx_alignment_errors/E715_pho_count_too_many.cha`
-**Trigger**: Main tier has 2 words, but %pho has 3 tokens
-**Expected Error Codes**: E715
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
-*CHI:	want cookie .
-%pho:	aɪ wɑnt kʊki
-@Comment:	ERROR: Main tier has 2 words but %pho has 3 tokens (extra aɪ)
-@End
-```
-
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

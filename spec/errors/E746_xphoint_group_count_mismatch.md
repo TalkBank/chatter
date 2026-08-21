@@ -1,34 +1,29 @@
-# E746: Xphoint group count does not match the pho word count
++++
+code = 'E746'
+name = 'Xphoint group count does not match the pho word count'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-`%xphoint` must have exactly one ' / '-separated group per `%pho` word.
-
-## Metadata
-
-- **Error Code**: E746
-- **Category**: Phon phone interval
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E746
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = """
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	cat dog . 0_500
+*CHI:	cat dog . \u00150_500\u0015
 %pho:	kæt dɒɡ
-%xphoint:	k 0_100 æ 100_200 t 200_300
+%xphoint:	k \u00150_100\u0015 æ \u0015100_200\u0015 t \u0015200_300\u0015
 @Comment:	ERROR: %xphoint has 1 group but %pho has 2 words
 @End
-```
+"""
++++
+
+## Description
+
+`%xphoint` must have exactly one ' / '-separated group per `%pho` word.
 
 ## Expected Behavior
 

@@ -178,13 +178,34 @@ mod tests {
     /// rustfmt-wrapped in the tree and unwrapped by the generator, so `just
     /// fmt` and `just symbols-gen` each undid the other. The generator now
     /// formats its Rust output, exactly as `render_rust` does here.
+    ///
+    /// The script list is DISCOVERED, not written down. It used to name two
+    /// generators, so the two added on 2026-08-20 (the CA types and the book
+    /// tables) would have been ungated by omission, which is how a gate quietly
+    /// stops covering the thing it is named for. Any `spec/symbols/generate_*.js`
+    /// is now in scope the moment it exists.
     #[test]
     fn generated_symbol_sets_are_current() {
-        for script in [
-            "generate_grammar_symbol_sets.js",
-            "generate_rust_symbol_sets.js",
-        ] {
-            let path = root().join("spec").join("symbols").join(script);
+        let symbols_dir = root().join("spec").join("symbols");
+        let mut scripts: Vec<String> = std::fs::read_dir(&symbols_dir)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", symbols_dir.display()))
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| name.starts_with("generate_") && name.ends_with(".js"))
+            .collect();
+        scripts.sort();
+
+        // What this gate verified, counted from what the generators actually
+        // reported rather than from a number written here. An earlier cut
+        // asserted `scripts.len() >= 2` beside a directory holding four, which
+        // is a hand-written census of the list it had just enumerated: deleting
+        // two generators left it green. Counting `current:` lines instead means
+        // a broken glob (no scripts), a script that emits nothing, and a script
+        // that fails to run are all the same failure, which is what they are.
+        let mut artifacts_verified = 0usize;
+
+        for script in &scripts {
+            let path = symbols_dir.join(script);
             let output = std::process::Command::new("node")
                 .arg(&path)
                 .arg("--check")
@@ -196,7 +217,19 @@ mod tests {
                  `just symbols-gen`.\n{}",
                 String::from_utf8_lossy(&output.stderr)
             );
+            artifacts_verified += String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter(|line| line.starts_with("current:"))
+                .count();
         }
+
+        assert!(
+            artifacts_verified > 0,
+            "ran {} generator(s) from {} and not one reported a verified artifact, \
+             so this gate checked nothing.",
+            scripts.len(),
+            symbols_dir.display()
+        );
     }
 
     /// An unknown field is a rename that missed a site, so it fails rather than

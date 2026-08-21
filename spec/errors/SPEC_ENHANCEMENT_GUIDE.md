@@ -2,21 +2,22 @@
 
 This document provides guidelines for improving auto-generated error specifications with better descriptions, examples, and CHAT Rule sections.
 
-## Current Status
+## Current status
 
-### Auto-Generated Specs: 59 files
+This section carried fixed counts ("59 auto-generated", "3 manual") that were
+roughly four times out of date and cited no command, and it named two files
+that do not exist (`E522_undefined_participant_in_utterance.md`,
+`E604_gra_tier_without_mor_tier.md`). Ask the tools, which derive from the same
+loader the gates use:
 
-All auto-generated specs (`*_auto.md`) have been enhanced with:
-- ✅ **CHAT manual references** - All specs now link to https://talkbank.org/0info/manuals/CHAT.pdf with contextual descriptions
-- ✅ **Corrected Expected Behavior** - All specs now correctly describe parser vs validation behavior
-- ⏳ **Basic descriptions** - Descriptions are concise but could be more explanatory
+```bash
+just spec-status                          # counts by status, and the example tally
+cargo run --bin coverage -- --errors      # which specs demonstrate their own code
+```
 
-### Manual Specs: 3 files
-
-These specs serve as examples of good documentation:
-- `E241_illegal_untranscribed_marker.md` - Detailed description, clear rule
-- `E522_undefined_participant_in_utterance.md` - Well-documented validation error
-- `E604_gra_tier_without_mor_tier.md` - Clear dependent tier requirement
+Specs worth reading as examples of good documentation:
+`E241_illegal_untranscribed_marker.md`, `E522_undefined_participant.md`,
+`E604_gra_without_mor.md`.
 
 ## Description Quality
 
@@ -116,19 +117,24 @@ For complex errors, multiple examples showing different triggers can be helpful.
 
 The manual spec shows how to document variations:
 
-```markdown
-## Example
-
-### Using 'xx' (invalid)
-```chat
+````markdown
+[[example]]
+title = "Using 'xx', which is invalid"
+claim = 'violates'
+chat = '''
 *CHI:	I said xx today .
-```
+'''
 
-### Correct usage of 'xxx'
-```chat
+[[example]]
+title = "Correct usage of 'xxx'"
+claim = 'legal'
+chat = '''
 *CHI:	I said xxx today .
-```
-```
+'''
+````
+
+Each example carries its own input, so there is no ordering rule between a
+declaration and a fence to get wrong.
 
 ### 4. Notes Section Enhancement
 
@@ -227,4 +233,4 @@ Focus on clarity and usefulness for:
 
 ---
 
-Last Updated: 2026-01-19
+Last Updated: 2026-08-21

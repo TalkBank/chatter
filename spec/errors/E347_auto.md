@@ -1,4 +1,24 @@
-# E347, Unbalanced cross-speaker overlap (indexed markers)
++++
+code = 'E347'
+name = 'Unbalanced cross-speaker overlap (indexed markers)'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+*CHI:	⌈2hello⌉2 .
+*MOT:	hi .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 08:15 EDT
@@ -13,32 +33,6 @@ conventions exist.
 Unindexed markers are deliberately not checked, multi-party overlaps without
 numeric indices are inherently ambiguous (validated empirically against SBCSAE,
 CLAPI, and Forrester corpora).
-
-## Metadata
-
-- **Error Code**: E347
-- **Category**: validation
-- **Level**: cross_utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Indexed top overlap `⌈2...⌉2` with no matching bottom `⌊2...⌋2`
-**Expected Error Codes**: E347
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child, MOT Mother
-@ID:	eng|corpus|CHI|||||Child|||
-@ID:	eng|corpus|MOT|||||Mother|||
-*CHI:	⌈2hello⌉2 .
-*MOT:	hi .
-@End
-```
 
 ## Expected Behavior
 

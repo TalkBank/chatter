@@ -1,4 +1,51 @@
-# E763: prefix marker in a language that does not use it
++++
+code = 'E763'
+name = 'prefix marker in a language that does not use it'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	sun# dog .
+@Comment:	ERROR: English does not write the prefix marker
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	sun#shine is nice .
+@Comment:	ERROR: presence of the marker is what is gated, not its position
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	heb, eng
+@Participants:	CHI Target_Child
+@ID:	heb, eng|corpus|CHI|||||Target_Child|||
+*CHI:	ha#@s:eng kelev .
+@Comment:	ERROR: the word resolves to eng, which does not use the marker
+@End
+'''
++++
 
 ## Description
 
@@ -12,67 +59,6 @@ header. This is the same policy the digits rule (`E220`) applies, and for the
 same reason: an English-headed file may legitimately contain a Hebrew word,
 and that word brings its own rules with it. A word carrying its own `@s:`
 marker carries its own language.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-26 22:49 EDT
-
-- **Error Code**: E763
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a word-final marker in a language that does not use it.
-
-**Expected Error Codes**: E763
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	sun# dog .
-@Comment:	ERROR: English does not write the prefix marker
-@End
-```
-
-## Example 2
-
-**Trigger**: a word-internal marker in a language that does not use it.
-
-**Expected Error Codes**: E763
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	sun#shine is nice .
-@Comment:	ERROR: presence of the marker is what is gated, not its position
-@End
-```
-
-## Example 3
-
-**Trigger**: a marked word tagged as a switch to a language without the marker.
-
-**Expected Error Codes**: E763
-
-```chat
-@UTF8
-@Begin
-@Languages:	heb, eng
-@Participants:	CHI Target_Child
-@ID:	heb, eng|corpus|CHI|||||Target_Child|||
-*CHI:	ha#@s:eng kelev .
-@Comment:	ERROR: the word resolves to eng, which does not use the marker
-@End
-```
 
 ## Expected Behavior
 

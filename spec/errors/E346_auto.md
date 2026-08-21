@@ -1,27 +1,14 @@
-# E346: Unmatched scoped annotation end
++++
+code = 'E346'
+name = 'Unmatched scoped annotation end'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-**Last updated:** 2026-04-04 08:15 EDT
-
-## Description
-
-Unmatched scoped annotation end marker (`>` without matching `<`). This is a cross-utterance validator (`check_quoted_linker`) that is currently DISABLED (`enable_quotation_validation: false`).
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E346
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/parse_errors/E346_unmatched_scoped_end.cha`
-**Trigger**: Closing `>` without matching `<`, tree-sitter absorbs into ERROR node
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'error_corpus/parse_errors/E346_unmatched_scoped_end.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,14 @@ Unmatched scoped annotation end marker (`>` without matching `<`). This is a cro
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello world> [/] .
 @End
-```
+'''
++++
+
+**Last updated:** 2026-04-04 08:15 EDT
+
+## Description
+
+Unmatched scoped annotation end marker (`>` without matching `<`). This is a cross-utterance validator (`check_quoted_linker`) that is currently DISABLED (`enable_quotation_validation: false`).
 
 ## Expected Behavior
 

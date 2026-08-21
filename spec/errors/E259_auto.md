@@ -1,25 +1,14 @@
-# E259: Comma after non-spoken content
++++
+code = 'E259'
+name = 'Comma after non-spoken content'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Comma without any preceding spoken word in the utterance
-
-## Metadata
-
-- **Error Code**: E259
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `spec`
-**Trigger**: Paralinguistic event before comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,15 +16,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	&=coughs , sure .
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `spec`
-**Trigger**: Paralinguistic event before attached comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -43,15 +30,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	&=coughs, sure .
 @End
-```
+'''
 
-## Example 3
-
-**Source**: `spec`
-**Trigger**: Filler before comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -59,15 +44,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	&-ah , more .
 @End
-```
+'''
 
-## Example 4
-
-**Source**: `spec`
-**Trigger**: Filler before attached comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -75,15 +58,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	&-ah, more .
 @End
-```
+'''
 
-## Example 5
-
-**Source**: `spec`
-**Trigger**: Nonword before comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -91,15 +72,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	&~ah , more .
 @End
-```
+'''
 
-## Example 6
-
-**Source**: `spec`
-**Trigger**: Nonword before attached comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -107,15 +86,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	&~ah, more .
 @End
-```
+'''
 
-## Example 7
-
-**Source**: `spec`
-**Trigger**: Untranscribed speech before comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -123,15 +100,13 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	www , the rest .
 @End
-```
+'''
 
-## Example 8
-
-**Source**: `spec`
-**Trigger**: Untranscribed speech before attached comma
-**Expected Error Codes**: E259
-
-```chat
+[[example]]
+level = 'word'
+source = 'spec'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -139,7 +114,12 @@ Comma without any preceding spoken word in the utterance
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	www, the rest .
 @End
-```
+'''
++++
+
+## Description
+
+Comma without any preceding spoken word in the utterance
 
 ## Expected Behavior
 

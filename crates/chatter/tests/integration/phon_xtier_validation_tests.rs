@@ -318,7 +318,7 @@ fn suppression_does_not_hide_other_files_invalid_count() -> Result<(), TestError
     fs::copy(
         crate::common::reference_fixture(
             "crates/talkbank-parser-tests/tests/error_corpus/\
-             validation_errors/E241_Illegal_Untranscribed_Marker_xx.cha",
+             validation_errors/E241_illegal_untranscribed_marker_1.cha",
         ),
         corpus.path().join("really_invalid.cha"),
     )?;

@@ -1,4 +1,24 @@
-# E729: Cross-speaker bullet overlap
++++
+code = 'E729'
+name = 'Cross-speaker bullet overlap'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+*CHI:	hello . 1000_2000
+*MOT:	hi . 1500_2500
+@End
+'''
++++
 
 **Status:** Not implemented, reserved
 **Last updated:** 2026-07-31
@@ -18,34 +38,6 @@ workspace before this spec were the CHECK-parity number mapping
 (`crates/talkbank-parser-tests/src/check_error_map.rs`) and the reserved
 constant `crates/talkbank-model/src/errors/codes/temporal.rs::E729`. The
 bullet-timing overlap check itself does not exist.
-
-## Metadata
-
-- **Status**: not_implemented
-
-- **Error Code**: E729
-- **Category**: Temporal validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A different speaker's bullet begins before the previous
-speaker's bullet ends
-**Expected Error Codes**: E729
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child, MOT Mother
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@ID:	eng|corpus|MOT|||||Mother|||
-*CHI:	hello . 1000_2000
-*MOT:	hi . 1500_2500
-@End
-```
 
 ## Expected Behavior
 

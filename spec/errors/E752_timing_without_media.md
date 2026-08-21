@@ -1,4 +1,23 @@
-# E752: Timing bullets without an `@Media` header
++++
+code = 'E752'
+name = 'Timing bullets without an @Media header'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'file'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hey there .\u0015100_2500\u0015
+@Comment:	ERROR: bullet with no @Media header
+@End
+"""
++++
 
 ## Description
 
@@ -14,33 +33,6 @@ corresponds to CLAN CHECK error 112 ("Please add \"unlinked\" to
 Adjudicated MEANINGFUL 2026-07-14 (per-rule CHECK adjudication):
 grounding scan found bullet-bearing corpus files universally carry
 `@Media`, so the rule pins an invariant the wild data already holds.
-
-## Metadata
-
-- **Error Code**: E752
-- **Category**: header_validation
-- **Level**: file
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a main-tier utterance carries a timing bullet but the
-header block has no `@Media` at all.
-
-**Expected Error Codes**: E752
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hey there .100_2500
-@Comment:	ERROR: bullet with no @Media header
-@End
-```
 
 ## Expected Behavior
 

@@ -1,32 +1,26 @@
-# E510: Auto-generated from corpus
++++
+code = 'E510'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E510
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/E5xx_header_errors/E510_empty_id_language.cha`
-**Trigger**: @ID with empty language field (first field)
-**Expected Error Codes**: E505
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E510_empty_id_language.cha'
+claim = { subsumed_by = 'E505' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
 @ID:	|corpus|CHI|
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

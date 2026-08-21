@@ -212,3 +212,32 @@ fn a_media_name_containing_the_delimiter_is_rejected() {
             .map(|chat| media_header(chat).filename.as_str())
     );
 }
+
+/// A description naming no language is REFUSED, not given `eng`.
+///
+/// The default was silent and reached both `@Languages` and every `@ID`, so an
+/// invented language was indistinguishable from a stated one in the published
+/// file. A transcript's language is not something a file-assembler can know.
+#[test]
+fn no_language_is_refused_rather_than_defaulted() {
+    let mut desc = desc_with(None);
+    desc.langs = Vec::new();
+    assert!(
+        matches!(build_chat(&desc), Err(BuildChatError::NoLanguages)),
+        "an empty `langs` must be refused"
+    );
+}
+
+/// An empty corpus is REFUSED, not replaced with the literal `corpus_name`.
+///
+/// A plausible-looking invented value reaching a published `@ID` header is
+/// worse than a refusal: nothing downstream can tell it from a real corpus.
+#[test]
+fn an_empty_corpus_is_refused_rather_than_placeheld() {
+    let mut desc = desc_with(None);
+    desc.participants = vec![ParticipantDesc::new("CHI", "Target_Child", "")];
+    match build_chat(&desc) {
+        Err(BuildChatError::EmptyCorpus { speaker }) => assert_eq!(speaker, "CHI"),
+        other => panic!("an empty corpus must be refused, got {other:?}"),
+    }
+}

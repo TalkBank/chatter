@@ -1,25 +1,13 @@
-# E549: Duplicate speaker declaration
++++
+code = 'E549'
+name = 'Duplicate speaker declaration'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The same speaker code is declared more than once in the `@Participants` header.
-Each participant must be declared exactly once; a repeated speaker code is a
-declaration error.
-
-## Metadata
-
-- **Error Code**: E549
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Expected Error Codes**: E549
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,7 +15,14 @@ declaration error.
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+The same speaker code is declared more than once in the `@Participants` header.
+Each participant must be declared exactly once; a repeated speaker code is a
+declaration error.
 
 ## Expected Behavior
 

@@ -1,4 +1,20 @@
-# E003: Empty string input
++++
+code = 'E003'
+name = 'Empty string input'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'file'
+source = 'error_corpus/parse_errors/E003_empty_string.cha'
+claim = { subsumed_by = 'E316' }
+notes = '''
+Note: E003 is not reachable from an empty file. The parser emits header
+validation errors instead. E003 fires internally for empty `NonEmptyString`
+fields, not at the file level.
+'''
+chat = ''
++++
 
 **Last updated:** 2026-04-04 08:28 EDT
 
@@ -9,29 +25,6 @@ empty `NonEmptyString` fields during model validation, but an empty *file*
 does not trigger E003 end-to-end. Instead, the parser produces header
 validation errors (missing @UTF8, @End, @Participants, etc.) and E316
 (unparsable content) because there are no headers to find.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E003
-- **Category**: validation
-- **Level**: file
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/parse_errors/E003_empty_string.cha`
-**Trigger**: Empty input, no CHAT content at all
-**Expected Error Codes**: E316, E502, E503, E504
-
-Note: E003 is not reachable from an empty file. The parser emits header
-validation errors instead. E003 fires internally for empty `NonEmptyString`
-fields, not at the file level.
-
-```chat
-
-```
 
 ## Expected Behavior
 

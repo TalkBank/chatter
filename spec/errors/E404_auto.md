@@ -1,4 +1,24 @@
-# E404: Orphaned dependent tier
++++
+code = 'E404'
+name = 'Orphaned dependent tier'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+source = 'error_corpus/validation_errors/E404_orphaned_dependent_tier.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+%mor:	co|hello .
+*CHI:	hello .
+@End
+'''
++++
 
 **Last updated:** 2026-04-13 23:00 EDT
 
@@ -9,36 +29,6 @@ file. E404 (OrphanedDependentTier) is emitted by
 `report_top_level_dependent_tier_error()` in
 `crates/talkbank-parser/src/parser/chat_file_parser/chat_file/helpers.rs`
 when a `%`-prefixed ERROR node appears before any utterance.
-
-## Metadata
-- **Status**: implemented
-
-- **Error Code**: E404
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E404_orphaned_dependent_tier.cha`
-**Trigger**: `%mor:` tier appears before any `*SPK:` main tier, but a
-`*SPK:` line follows so that the grammar still recognizes the surrounding
-file structure. The orphaned dependent tier is captured as a top-level
-ERROR node, which `report_top_level_dependent_tier_error()` classifies
-and emits as E404.
-**Expected Error Codes**: E404
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-%mor:	co|hello .
-*CHI:	hello .
-@End
-```
 
 ## Expected Behavior
 

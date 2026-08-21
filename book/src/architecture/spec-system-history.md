@@ -1,14 +1,14 @@
 # Why the Spec System Looks Like That
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 13:33 EDT
 
 [Spec System](spec-system.md) says what the spec files contain and what checks
 them. This page answers the questions that page raises and does not settle, all
 of which a new contributor hits in the first hour:
 
 - Why are two thirds of the files named `_auto`?
-- Why does `E202_auto.md` contain an example that expects **E316**?
+- Why can a spec for one code carry an example that expects a different one?
 - Why do eleven codes have two spec files?
 - Why do so many descriptions say "Auto-generated from corpus"?
 
@@ -35,6 +35,11 @@ with the command named beside each number.
 | codes claimed by more than one spec file | 11 |
 
 ## Where `_auto` came from
+
+The tool is GONE: `corpus_to_specs` and `enhance_specs` were deleted under R5
+of the spec-system redesign, and `spec/errors/` now carries a `.human-authored`
+marker that every generator refuses to write into. This section is history, and
+the state it describes cannot be added to.
 
 A bootstrap tool, `corpus_to_specs`, converted a directory of error-corpus
 `.cha` fixtures into spec files. For each example it wrote an
@@ -66,10 +71,32 @@ That single sentence merges two facts of completely different kinds:
   binary that changes when we change the binary.
 
 When they are the same field, a spec that documents a GAP is indistinguishable
-from a spec that documents a RULE, and no gate can count the difference. That
-is how 54 codes reached a state where nothing demonstrates them.
+from a spec that documents a RULE, so a spec can exist, carry examples, pass
+every gate, and still demonstrate nothing about the rule it is named for.
 
-**What this means for you as a reader:** an `Expected Error Codes` line tells
+Measured 2026-08-20: of the 224 codes owned by a spec, **52 are declared by no
+example anywhere**, and **22 of those are `implemented`** (E001, E002, E208,
+E231, E232, E253, E307, E313, E314, E315, E324, E330, E340, E361, E363, E382,
+E506, E508, E510, E511, E512, E710). Reproduce it with `cargo run --bin coverage -- --errors`, which reports the
+same population from the loader. The original instruction here was to collect
+each spec's own `Error Code` bullet and subtract every code an
+`**Expected Error Codes**` line declared; neither exists since the format moved
+to frontmatter, so the stated method no longer runs.
+
+A gate used to count the difference: `SpecSelfDemonstrationGate` ratcheted a
+shrink-only 36-entry baseline of the specs in this state from 2026-08-15 until
+R2 (2026-08-21) made the claim REQUIRED, at which point "demonstrates nothing"
+stopped being writable and the gate was deleted with its baseline. The
+population survives as the `subsumed_by` worklist that `coverage --errors`
+prints. Most of
+that list declares E316, "unparsable content", meaning the mined input does not
+parse so the specific rule is never reached at all.
+
+`cargo run --bin coverage -- --errors` prints the live list with what each spec
+declares INSTEAD, which is what tells you which kind of problem you have: an
+E316 entry is a parser gap; a specific other code is usually a wrong fixture.
+
+**What this means for you as a reader:** a `subsumed_by` claim tells
 you what chatter emits, not necessarily what the rule is. Read the spec's
 Description and title for the rule, and treat a mismatch between the title code
 and the example's codes as an open question rather than as a specification.
@@ -94,6 +121,48 @@ no way to retire the machine's version. Nothing declares which is authoritative;
 nothing forbids a third. The hand-written ones are good, and
 `E522_undefined_participant.md` is the model: a real description, a `Kind`, a
 `Status`, and an example that declares its own code and emits it.
+
+**Two different things wear that shape, and they need opposite fixes.** Measured
+2026-08-19 by comparing each pair's declared fields:
+
+**Do not answer this from the metadata.** Two attempts did, and both were
+wrong, because `Level` was declared per file at the time and a generator
+wrote it for an unedited `_auto` stub by running the parser. Run the examples instead: take each spec's `chat` values, validate them, and
+compare the DIAGNOSTICS rather than the declarations.
+`scripts/analysis/adjudicate_contested_spec.sh` in the operator workspace does
+this. (It read fenced blocks when this was written; the examples moved into
+frontmatter in Phase 1b.) Measured that way on 2026-08-20:
+
+- **Residue, identical diagnostics from both files**: E202 ("Missing form type
+  after @" from each), E241 (`"xx" is not legal` from each), and E604 (E604 plus
+  E722 from each, differing only in a double space). These get deleted.
+- **Misfiled rather than duplicated**: `E243_auto.md` is filed for E243 and its
+  example emits E202.
+- **Different rules under one code**: E519's stub emits "disallowed
+  placeholder" while its sibling emits "not in the ISO 639-3 registry"; E316,
+  E342, E375 and E522 likewise pair genuinely different malformed inputs. E360
+  and E502 are authored on both sides.
+E519's two authored files are one rule, ISO 639-3 membership, reported once from
+a header and once from an utterance. `Level` was declared once per FILE (and
+`Layer` was too, until R4 deleted it in favour of the observation snapshot), so
+a rule with two triggering sites could not be written as one spec. Phase 2
+(2026-08-21) moved `level` onto the example, so such pairs are now mergeable;
+merging them is part of R8's adjudication rather than automatic.
+
+For telling an unedited stub from an authored spec, 91 spec files still carry
+the generator's "Review and enhance this specification as needed" note, all of
+them `_auto` and none hand-named. That is a reliable signal of ORIGIN. It is not
+a verdict about the file's worth, and neither is any declared field: only
+running the examples is.
+
+Until 2026-08-19 a fifth field, `Category`, split all eleven, which made the four
+look like the seven. It was a published grouping string that no generation
+decision read and that mostly restated `Level`, so it was deleted rather than
+normalised. Its 236 values are recoverable from the commit that removed them, and
+a future taxonomy should be a closed enum seeded from those rather than another
+free-text field. E202 now renders as two byte-identical index rows; the other
+three residue pairs are still told apart by the `Name` column. Making the
+duplication visible is the point.
 
 The one thing that IS enforced across a pair is `Kind`: it is a property of the
 code, so the `DiagnosticKind` generator refuses to run when two files disagree
@@ -128,7 +197,10 @@ you write are:
 - `legal` is new capability: today a spec cannot assert that a code must NOT
   fire, which is exactly the shape of every false-positive question;
 - metadata moves to frontmatter with one parser and one validation command, so
-  an agent writing a spec can check it without running the suite;
+  an agent writing a spec can check it without running the suite. **SHIPPED
+  2026-08-21 as Phase 1b**: all 236 specs are `+++` TOML deserialized against a
+  schema that refuses an unrecognised key, and the artifacts regenerated
+  byte-identical;
 - the machine-written residue is worked off per code, as a count that may only
   shrink.
 

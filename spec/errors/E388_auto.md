@@ -1,26 +1,14 @@
-# E388: Replacement on non-word
++++
+code = 'E388'
+name = 'Replacement on non-word'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Replacement annotation `[: ...]` is attached to a non-word element (e.g., a paralinguistic event like `&=laugh`), which cannot be replaced.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E388
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E388_replacement_on_nonword.cha`
-**Trigger**: Replacement annotation on a paralinguistic event (non-word)
-**Expected Error Codes**: E388
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E2xx_word_errors/E388_replacement_on_nonword.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,11 +17,16 @@ Replacement annotation `[: ...]` is attached to a non-word element (e.g., a para
 @Comment:	ERROR: Replacement not allowed on nonword (&~ prefix means not a real word)
 *CHI:	&~um [: um] .
 @End
-```
+'''
++++
+
+## Description
+
+Replacement annotation `[: ...]` is attached to a non-word element (e.g., a paralinguistic event like `&=laugh`), which cannot be replaced.
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

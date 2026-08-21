@@ -1,26 +1,13 @@
-# E738: Phosyl does not reproduce the pho word
++++
+code = 'E738'
+name = 'Phosyl does not reproduce the pho word'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Stripping `:CODE` from each `%xphosyl` unit must reproduce the
-corresponding `%pho` word. A pause filler (`(.)`, `(..)`, `(...)`) on
-`%xphosyl` must mirror the same pause token as the `%pho` word at that
-position.
-
-## Metadata
-
-- **Error Code**: E738
-- **Category**: Phon syllabification content
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E738
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,15 @@ position.
 %xphosyl:	k:Oæ:N
 @Comment:	ERROR: stripping codes from %xphosyl gives 'kæ', which does not match %pho 'kæt'
 @End
-```
+'''
++++
+
+## Description
+
+Stripping `:CODE` from each `%xphosyl` unit must reproduce the
+corresponding `%pho` word. A pause filler (`(.)`, `(..)`, `(...)`) on
+`%xphosyl` must mirror the same pause token as the `%pho` word at that
+position.
 
 ## Expected Behavior
 

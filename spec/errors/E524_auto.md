@@ -1,25 +1,14 @@
-# E524: @Birth header for unknown participant
++++
+code = 'E524'
+name = '@Birth header for unknown participant'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-@Birth header for unknown participant
-
-## Metadata
-
-- **Error Code**: E524
-- **Category**: Participant validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E524_birth_unknown_participant.cha`
-**Trigger**: @Birth of MOT but MOT not in @Participants
-**Expected Error Codes**: E524
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E524_birth_unknown_participant.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +17,16 @@
 @Birth of MOT:	01-JAN-2000
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+@Birth header for unknown participant
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

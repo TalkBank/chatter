@@ -1,32 +1,21 @@
-# E364: Malformed word content
++++
+code = 'E364'
+name = 'Malformed word content'
+kind = 'Invalidity'
+status = 'not_implemented'
+status_note = "Difficult to trigger via tree-sitter parser. E364 requires tree-sitter to insert a MISSING node where a word is expected, creating a structurally valid word node with malformed internal content. Tree-sitter's error recovery typically produces E316 (unparsable content), E305 (empty utterance), or more specific error codes instead. The `@s:+` example triggers E246+E249, not E364. An utterance with only a terminator (` .`) triggers E305. The re2c parser may reach this code path."
 
-## Description
-
-Word content is structurally malformed, the parser recognized a word node but its internal structure is invalid (e.g., `@s:+` with `+` instead of a language code).
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-13 14:42 EDT
-- **Status note**: Difficult to trigger via tree-sitter parser. E364 requires tree-sitter to insert a MISSING node where a word is expected, creating a structurally valid word node with malformed internal content. Tree-sitter's error recovery typically produces E316 (unparsable content), E305 (empty utterance), or more specific error codes instead. The `@s:+` example triggers E246+E249, not E364. An utterance with only a terminator (` .`) triggers E305. The re2c parser may reach this code path.
-
-- **Error Code**: E364
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E364_malformed_word_content.cha`
-**Trigger**: `@s:+`, language marker with `+` instead of language code
-**Expected Error Codes**: E246, E249
-
+[[example]]
+level = 'utterance'
+source = 'E2xx_word_errors/E364_malformed_word_content.cha'
+claim = { subsumed_by = ['E246', 'E249'] }
+notes = '''
 Note: The parser successfully parses `hello@s:+` but the `+` after `@s:` is
 not a valid language code. This triggers E246 (LengtheningMarkerPosition, since
 `+` is misinterpreted) and E249 (MissingLanguageContext), rather than E316
 (UnparsableContent) or E364 (MalformedWordContent).
-
-```chat
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -34,7 +23,12 @@ not a valid language code. This triggers E246 (LengtheningMarkerPosition, since
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello@s:+ .
 @End
-```
+'''
++++
+
+## Description
+
+Word content is structurally malformed, the parser recognized a word node but its internal structure is invalid (e.g., `@s:+` with `+` instead of a language code).
 
 ## Expected Behavior
 

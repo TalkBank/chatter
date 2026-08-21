@@ -1,25 +1,14 @@
-# E718: Sin count mismatch - too few sin tokens
++++
+code = 'E718'
+name = 'Sin count mismatch - too few sin tokens'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Sin count mismatch - too few sin tokens
-
-## Metadata
-
-- **Error Code**: E718
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E4xx_alignment_errors/E718_sin_count_too_few.cha`
-**Trigger**: Main tier has 3 words, but %sin has only 2 tokens
-**Expected Error Codes**: E718
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/E718_sin_count_too_few.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,11 +18,16 @@ Sin count mismatch - too few sin tokens
 %sin:	POINT REACH
 @Comment:	ERROR: Main tier has 3 words but %sin only has 2 tokens (missing gesture for cookie)
 @End
-```
+'''
++++
+
+## Description
+
+Sin count mismatch - too few sin tokens
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

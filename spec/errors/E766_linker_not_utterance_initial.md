@@ -1,4 +1,51 @@
-# E766: linker not utterance-initial
++++
+code = 'E766'
+name = 'linker not utterance-initial'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	yeah that go +" okay .
+@Comment:	ERROR: the linker must open the utterance
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I know ++ and then .
+@Comment:	ERROR: the linker must open the utterance
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello +< there .
+@Comment:	ERROR: the linker must open the utterance
+@End
+'''
++++
 
 ## Description
 
@@ -24,67 +71,6 @@ content parses normally, and the file is invalid.
 Linkers in the legal utterance-initial run (including several in a row) are
 unaffected. A linker after the terminator is not a content item and stays on
 the generic unparsable path in both parser front ends.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-30 08:47 EDT
-
-- **Error Code**: E766
-- **Category**: Main tier structure
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a quotation-follows linker after content.
-
-**Expected Error Codes**: E766
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	yeah that go +" okay .
-@Comment:	ERROR: the linker must open the utterance
-@End
-```
-
-## Example 2
-
-**Trigger**: a quick-uptake linker between words.
-
-**Expected Error Codes**: E766
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	I know ++ and then .
-@Comment:	ERROR: the linker must open the utterance
-@End
-```
-
-## Example 3
-
-**Trigger**: a lazy-overlap linker between words.
-
-**Expected Error Codes**: E766
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello +< there .
-@Comment:	ERROR: the linker must open the utterance
-@End
-```
 
 ## Expected Behavior
 

@@ -1,25 +1,14 @@
-# E307: Auto-generated from corpus
++++
+code = 'E307'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E307
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E307_invalid_speaker_chars.cha`
-**Trigger**: Speaker code containing a colon (`*A:B:`), which the lexer reads as a lengthening marker before spoken material
-**Expected Error Codes**: E246
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E307_invalid_speaker_chars.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@ Auto-generated from corpus
 @ID:	eng|corpus|A:B|||||Child|||
 *A:B:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

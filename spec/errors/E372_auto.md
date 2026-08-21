@@ -1,30 +1,14 @@
-# E372: Nested quotation
++++
+code = 'E372'
+name = 'Nested quotation'
+kind = 'Invalidity'
+status = 'implemented'
 
-Detected at ANY depth, through every container. Until 2026-08-07 the predicate
-recursed into annotated groups only, so a quotation inside a retrace, a
-phonological group, a sign group, or another quotation was invisible: examples
-2 and 3 below reported nothing while example 1 reported E372.
-
-## Description
-
-Nested quotation
-
-## Metadata
-
-- **Error Code**: E372
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/nested-quotation.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E372
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'validation_gaps/nested-quotation.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -38,14 +22,13 @@ Nested quotation
 *MOT:	he said “hello” and “goodbye” .
 @Comment:	VALID: Two separate quotations, not nested
 @End
-```
+'''
 
-## Example 2: nesting below a retrace
-
-**Trigger**: the inner quotation sits inside a retrace, not directly inside the outer quotation
-**Expected Error Codes**: E372
-
-```chat
+[[example]]
+level = 'utterance'
+title = 'nesting below a retrace'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -54,14 +37,13 @@ Nested quotation
 @Comment:	ERROR: the model is quotation -> retrace -> quotation
 *CHI:	“a <“b”> [/] c” .
 @End
-```
+'''
 
-## Example 3: nesting below a phonological group
-
-**Trigger**: the inner quotation sits inside a phonological group
-**Expected Error Codes**: E372
-
-```chat
+[[example]]
+level = 'utterance'
+title = 'nesting below a phonological group'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -70,11 +52,21 @@ Nested quotation
 @Comment:	ERROR: nesting is nesting at any depth, through any container
 *CHI:	“a ‹“b”› c” .
 @End
-```
+'''
++++
+
+Detected at ANY depth, through every container. Until 2026-08-07 the predicate
+recursed into annotated groups only, so a quotation inside a retrace, a
+phonological group, a sign group, or another quotation was invisible: examples
+2 and 3 below reported nothing while example 1 reported E372.
+
+## Description
+
+Nested quotation
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

@@ -1,0 +1,34 @@
+[package]
+name = "talkbank-spec-vocabulary"
+# LITERAL, not `workspace = true`, for every field a workspace could supply.
+#
+# This crate is a member of the `spec/` workspace AND a path dependency of
+# `crates/talkbank-parser-tests` in the ROOT workspace, so anything inherited
+# resolves against whichever workspace is building it. The two lockfiles proved
+# it: version 0.1.0 from one side and 0.12.0 from the other, with different
+# serde feature sets. Nothing was broken, but a crate whose whole purpose is
+# "one owner, because two copies drift" should not have two resolutions of its
+# own manifest.
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# DEPENDENCY-LIGHT ON PURPOSE. This crate exists so BOTH cargo workspaces can
+# share the spec format's vocabulary, and the main workspace pulls it into its
+# test graph. Anything added here is compiled by the main test suite, so a
+# markdown parser, a template engine or a CLI framework does not belong.
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"
+# Enumerating the spec directory is shared too, not just the predicate that
+# decides which files count. Already in both workspaces' graphs, so it adds
+# no new crate to either.
+walkdir = "2.5"
+# The format's own reader, as of Phase 1b. This is the one exception to the
+# rule above it, and it is deliberate: the metadata IS TOML now, so a TOML
+# deserializer is not an incidental convenience but the thing that makes one
+# schema serve both workspaces. Both already declare `toml` at workspace level
+# and both resolve to the same 1.x, so no new crate enters either graph.
+# LITERAL for the reason stated at the top of this file.
+toml = "1"

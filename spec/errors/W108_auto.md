@@ -1,25 +1,14 @@
-# W108: Auto-generated from corpus
++++
+code = 'W108'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: W108
-- **Category**: validation
-- **Level**: file
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/warnings/W108_speaker_not_in_participants.cha`
-**Trigger**: See example below
-**Expected Error Codes**: W108
-
-```chat
+[[example]]
+level = 'file'
+source = 'error_corpus/warnings/W108_speaker_not_in_participants.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,7 +16,12 @@ Auto-generated from corpus
 @ID:	eng|corpus|CHI|||||Child|||
 *MOT:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

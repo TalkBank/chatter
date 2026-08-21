@@ -4,7 +4,9 @@
 //!
 //! ## Template Types
 //!
-//! - **`MinimalChatFile`** - Simple single-speaker files (good for basic tests and CLI usage)
+//! `MinimalChatFile` used to live here too. It was never a fixture: its only
+//! consumer was `chatter new-file`, which now builds a typed `ChatFile`
+//! directly, so the template and its tests are gone rather than moved.
 //! - **`ChatFileBuilder`** - Full-featured builder for complex validation tests:
 //!   - Multiple speakers
 //!   - Multiple utterances (for cross-utterance linkers: `[>]`, `[<]`, `[<1]`)
@@ -13,12 +15,6 @@
 //!   - Custom headers
 //!
 //! ## Examples
-//!
-//! ### Simple file (CLI or basic tests)
-//! ```
-//! use talkbank_parser_tests::minimal_chat_file;
-//! let content = minimal_chat_file();
-//! ```
 //!
 //! ### Multi-utterance file (linker validation)
 //! ```
@@ -49,10 +45,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 mod builder;
-mod minimal;
 
 pub use builder::ChatFileBuilder;
-pub use minimal::{MinimalChatFile, minimal_chat_file};
 
 #[cfg(test)]
 mod tests;

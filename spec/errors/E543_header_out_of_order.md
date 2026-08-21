@@ -1,23 +1,13 @@
-# E543: Header out of canonical order
++++
+code = 'E543'
+name = 'Header out of canonical order'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-A header appears out of canonical order. For example, `@Options` or `@ID` appears before `@Participants`. CHAT headers must follow the canonical ordering: `@UTF8`, `@Begin`, `@Languages`, `@Participants`, then other headers like `@Options` and `@ID`.
-
-## Metadata
-
-- **Error Code**: E543
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Expected Error Codes**: E543
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -26,7 +16,12 @@ A header appears out of canonical order. For example, `@Options` or `@ID` appear
 @ID:	eng|corpus|CHI|3;06.|male|||Target_Child|||
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+A header appears out of canonical order. For example, `@Options` or `@ID` appears before `@Participants`. CHAT headers must follow the canonical ordering: `@UTF8`, `@Begin`, `@Languages`, `@Participants`, then other headers like `@Options` and `@ID`.
 
 ## Expected Behavior
 

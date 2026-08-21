@@ -1,96 +1,39 @@
 #!/usr/bin/env node
 
-const fs = require('node:fs');
-const path = require('node:path');
+// Reports on spec/symbols/symbol_registry.json.
+//
+// This is a REPORT, not a gate. Every structural check now lives in
+// registry.js, which every generator reads the registry through, so a malformed
+// registry cannot reach a generator whether or not anyone runs this script.
+// Leaving a second copy of those checks here would be the same duplication the
+// registry exists to remove.
+//
+// One check was DELETED rather than moved: ca_delimiter_symbols and
+// ca_element_symbols used to be two hand-written arrays that had to be proved
+// disjoint. They are now derived from a single `parse_role` field, so a symbol
+// in both is unrepresentable and there is nothing left to assert.
 
-const REQUIRED_CATEGORY_KEYS = [
-  'ca_delimiter_symbols',
-  'ca_element_symbols',
-  'word_segment_forbidden_start_symbols',
-  'word_segment_forbidden_rest_symbols',
-  'word_segment_forbidden_common_symbols',
-  'event_segment_forbidden_symbols',
-  'event_segment_forbidden_common_symbols',
-];
+const { loadRegistry } = require('./registry.js');
 
-function fail(message) {
-  console.error(`symbol registry validation failed: ${message}`);
-  process.exit(1);
-}
-
-function isSingleUnicodeScalar(value) {
-  return typeof value === 'string' && value.length > 0 && [...value].length === 1;
-}
-
-function ensureSortedUnique(name, values) {
-  if (!Array.isArray(values) || values.length === 0) {
-    fail(`${name} must be a non-empty array`);
-  }
-
-  const seen = new Set();
-  for (const symbol of values) {
-    if (!isSingleUnicodeScalar(symbol)) {
-      fail(`${name} entries must be single Unicode scalar values, got: ${JSON.stringify(symbol)}`);
-    }
-    if (seen.has(symbol)) {
-      fail(`${name} contains duplicate symbol: ${JSON.stringify(symbol)}`);
-    }
-    seen.add(symbol);
-  }
-
-  // No sort requirement, semantic grouping is more useful than forced ordering.
-}
-
-function ensureDisjoint(nameA, arrA, nameB, arrB) {
-  const setA = new Set(arrA);
-  const overlap = arrB.filter((value) => setA.has(value));
-  if (overlap.length > 0) {
-    fail(`${nameA} and ${nameB} must be disjoint, overlap: ${overlap.map((s) => JSON.stringify(s)).join(', ')}`);
-  }
+function tally(items, key) {
+  const counts = new Map();
+  for (const item of items) counts.set(item[key], (counts.get(item[key]) ?? 0) + 1);
+  return counts;
 }
 
 function main() {
-  const repoRoot = path.resolve(__dirname, '..', '..');
-  const registryPath = path.join(repoRoot, 'spec', 'symbols', 'symbol_registry.json');
-
-  if (!fs.existsSync(registryPath)) {
-    fail(`missing registry file at ${registryPath}`);
-  }
-
-  let registry;
-  try {
-    registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-  } catch (err) {
-    fail(`invalid JSON: ${err.message}`);
-  }
-
-  if (!Number.isInteger(registry.version) || registry.version <= 0) {
-    fail('version must be a positive integer');
-  }
-  if (typeof registry.description !== 'string' || registry.description.trim().length === 0) {
-    fail('description must be a non-empty string');
-  }
-  if (!registry.categories || typeof registry.categories !== 'object') {
-    fail('categories must be an object');
-  }
-
-  for (const key of REQUIRED_CATEGORY_KEYS) {
-    if (!(key in registry.categories)) {
-      fail(`missing required category: ${key}`);
-    }
-    ensureSortedUnique(key, registry.categories[key]);
-  }
-
-  ensureDisjoint(
-    'ca_delimiter_symbols',
-    registry.categories.ca_delimiter_symbols,
-    'ca_element_symbols',
-    registry.categories.ca_element_symbols,
-  );
+  const { symbols, categories } = loadRegistry();
 
   console.log('symbol registry validation: ok');
-  for (const key of REQUIRED_CATEGORY_KEYS) {
-    console.log(`  - ${key}: ${registry.categories[key].length}`);
+  console.log(`  - symbols: ${symbols.length}`);
+  for (const [role, count] of tally(symbols, 'parse_role')) {
+    console.log(`      parse_role ${role}: ${count}`);
+  }
+  for (const [family, count] of tally(symbols, 'notation_family')) {
+    console.log(`      notation_family ${family}: ${count}`);
+  }
+  for (const [key, values] of Object.entries(categories)) {
+    console.log(`  - ${key}: ${values.length}${key.startsWith('ca_') ? ' (derived)' : ''}`);
   }
 }
 

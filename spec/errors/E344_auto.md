@@ -1,27 +1,14 @@
-# E344: Invalid scoped annotation nesting
++++
+code = 'E344'
+name = 'Invalid scoped annotation nesting'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-**Last updated:** 2026-04-04 08:15 EDT
-
-## Description
-
-Invalid nesting of scoped annotations (quotation precedes pattern). This is a cross-utterance validator (`check_quotation_precedes`) that is currently DISABLED (`enable_quotation_validation: false`).
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E344
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/parse_errors/E344_invalid_scoped_nesting.cha`
-**Trigger**: Overlapping scoped annotations, tree-sitter absorbs nested angle brackets into ERROR node
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'error_corpus/parse_errors/E344_invalid_scoped_nesting.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,14 @@ Invalid nesting of scoped annotations (quotation precedes pattern). This is a cr
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello <world <foo> bar> .
 @End
-```
+'''
++++
+
+**Last updated:** 2026-04-04 08:15 EDT
+
+## Description
+
+Invalid nesting of scoped annotations (quotation precedes pattern). This is a cross-utterance validator (`check_quotation_precedes`) that is currently DISABLED (`enable_quotation_validation: false`).
 
 ## Expected Behavior
 

@@ -1,25 +1,14 @@
-# E258: Consecutive commas
++++
+code = 'E258'
+name = 'Consecutive commas'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Consecutive commas
-
-## Metadata
-
-- **Error Code**: E258
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E258_consecutive_commas.cha`
-**Trigger**: Two comma separators in a row
-**Expected Error Codes**: E258
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E258_consecutive_commas.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,7 +16,12 @@ Consecutive commas
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello ,, world .
 @End
-```
+'''
++++
+
+## Description
+
+Consecutive commas
 
 ## Expected Behavior
 

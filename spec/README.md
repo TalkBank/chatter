@@ -1,12 +1,12 @@
 # spec, CHAT Specification
 
-**Last modified:** 2026-05-29 18:36 EDT
+**Last modified:** 2026-08-21 07:05 EDT
 
 ## Overview
 
 Markdown specification files define valid constructs and error cases for CHAT.
 `spec/tools/` turns these specs into tree-sitter corpus tests, Rust tests, and
-documentation. Runtime-aware bootstrap and validation helpers live in the
+documentation. Corpus candidate selection and live parser/model validation live in the
 sibling `spec/runtime-tools/` crate.
 
 **Specs are the source of truth.** Generated artifacts should never be edited
@@ -27,7 +27,7 @@ spec/
 ├── tools/                Core generator crate in the spec workspace
 │   ├── src/bin/          Spec-to-artifact entry points
 │   └── templates/        Tera templates for wrapping test fragments
-├── runtime-tools/        Runtime-aware bootstrap/validation tooling
+├── runtime-tools/        Candidate selection + live parser/model validation
 │   └── src/bin/          Live parser/model-aware entry points
 └── docs/                 Format reference and guides
     ├── ERROR_SPEC_FORMAT.md   ← Comprehensive spec format reference
@@ -47,23 +47,24 @@ just spec-check
 
 # (docs/errors/ is a spec-gen artifact; no separate command.)
 
-# Validate spec format
-cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_specs
+# Do the error specs' examples produce the codes they declare?
+just spec-validate-examples
 
-# Check error coverage
-cargo run --manifest-path spec/tools/Cargo.toml --bin coverage \
-  -- --spec-dir spec --errors
+# Which codes have specs, and which specs demonstrate their own code?
+just spec-coverage
 ```
 
-## Current Coverage
+## Current coverage
 
-| Metric | Count |
-|--------|-------|
-| Construct specs | 164 |
-| Error specs (total) | 197 files |
-| Error codes covered | 181/181 (100%) |
-| Error specs with CHAT examples | 169 |
-| Documented stubs (untriggerable) | 12 |
+**Run `just spec-coverage` and `just spec-status`.** This section used to hold a
+five-row table of counts, and on 2026-08-21 every one of them was wrong:
+construct specs 164 against 134, error specs 197 against 238, codes covered
+181/181 against 224/224, examples 169 against 180, stubs 12 against 4. It had
+been wrong long enough that the doc-dates ratchet listed this file as known
+stale, and a sweep that restamped the header without re-grounding the body
+briefly made it certify as CURRENT, which is worse than being listed as stale.
+
+Numbers that two commands derive do not belong in prose.
 
 ## Workflows
 

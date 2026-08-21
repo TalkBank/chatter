@@ -10,29 +10,22 @@
     clippy::unimplemented
 )]
 
-//! Validation error corpus, driven by the spec-generated manifest.
+//! Data-driven runner for the generated validation corpus.
 //!
-//! `spec/errors/` is the single source of truth. The generator
-//! (`just spec-gen`) emits one `.cha` fixture per validation example plus
-//! a `manifest.json` recording the codes each fixture must produce and the
-//! source spec's implementation status. This runner reads that manifest, skips
-//! any fixture whose status is not `implemented` (e.g. `not_implemented`,
-//! `deprecated`), and asserts every other fixture produces all its expected
-//! codes.
+//! `just spec-gen` emits one `.cha` fixture per error-spec EXAMPLE (every
+//! spec, both pipeline stages, since R4 made the corpus total) plus a
+//! `manifest.json` recording each fixture's spec code and its CLAIM. This
+//! test:
 //!
-//! ## Test strategy
-//! 1. Parse the fixture (syntactically valid CHAT that should parse).
-//! 2. Run `validate_with_alignment`.
-//! 3. Assert every expected code appears among the parse + validation diagnostics.
-//! 4. Hard coverage gate: fail if any implemented validation spec contributed no
-//!    example (`manifest.implemented_specs_without_examples`), so a new
-//!    implemented spec cannot ship without a test.
-//!
-//! ## Usage
-//! ```bash
-//! cargo test -p talkbank-parser-tests validation_errors_detected
-//! ```
-
+//! 1. Reads the manifest (fails if missing: regenerate with `just spec-gen`).
+//! 2. Parses each implemented fixture with streaming diagnostics, then runs
+//!    `validate_with_alignment`, collecting BOTH stages' codes.
+//! 3. Judges the fixture's claim via the shared `Claim::satisfied_by`,
+//!    negative halves included (`legal`, and `subsumed_by`'s own-code-absent
+//!    part).
+//! 4. Enforces the manifest's per-code coverage gate
+//!    (`implemented_codes_without_examples`), so a newly-implemented rule
+//!    cannot silently ship with no triggering example anywhere.
 use std::fs;
 use std::path::PathBuf;
 use talkbank_model::model::TranscriptName;
@@ -43,35 +36,19 @@ use talkbank_model::ParseOutcome;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
 
-/// Implementation status carried in the manifest. The runner asserts only
-/// `Implemented` fixtures and skips the rest (`not_implemented`, `deprecated`).
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum FixtureStatus {
-    Implemented,
-    NotImplemented,
-    Deprecated,
-}
-
-/// An expected error/warning code from the manifest, compared against the
-/// runtime diagnostic codes the parser/validator produces.
-#[derive(Deserialize)]
-#[serde(transparent)]
-struct ExpectedCode(String);
-
-impl ExpectedCode {
-    fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 /// One fixture's expectations, mirrored from the generator's
-/// `ValidationFixtureEntry`.
+/// `ValidationFixtureEntry` FIELD NAMES only: every typed value (`code`,
+/// `claim`, `status`) is the shared vocabulary type, so the wire's meaning has
+/// one owner and a variant added on the generator side deserializes here
+/// without a second enum to update. (A local three-variant `FixtureStatus`
+/// mirror sat here and was already missing `unreachable_from_chat`.)
 #[derive(Deserialize)]
 struct ManifestEntry {
     fixture: String,
-    expected_codes: Vec<ExpectedCode>,
-    status: FixtureStatus,
+    /// The spec's own code, which the claim is about.
+    code: talkbank_spec_vocabulary::SpecErrorCode,
+    claim: talkbank_spec_vocabulary::frontmatter::Claim,
+    status: talkbank_spec_vocabulary::Status,
     source_spec: String,
 }
 
@@ -79,13 +56,15 @@ struct ManifestEntry {
 #[derive(Deserialize)]
 struct Manifest {
     fixtures: Vec<ManifestEntry>,
-    /// Implemented validation specs that produced no example, so nothing
-    /// tests the rule.
-    #[serde(default)]
-    implemented_specs_without_examples: Vec<String>,
+    /// Implemented CODES with no triggering example in any spec.
+    ///
+    /// NOT `#[serde(default)]`: the generator always writes both gate lists,
+    /// so a missing or renamed field must be a loud deserialization failure.
+    /// Defaulted, the R4 rename of this very field would have made the
+    /// coverage gate pass vacuously on the un-renamed side.
+    implemented_codes_without_examples: Vec<String>,
     /// Specs marked `unreachable_from_chat` that carry an example anyway,
     /// which means CHAT input does reach them and the status is wrong.
-    #[serde(default)]
     unreachable_specs_with_examples: Vec<String>,
 }
 
@@ -94,7 +73,7 @@ fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/error_corpus/validation_errors")
 }
 
-/// Verify each implemented validation fixture produces all its expected codes.
+/// Verify each implemented fixture SATISFIES ITS CLAIM, absences included.
 #[test]
 fn validation_errors_detected() -> Result<(), TestError> {
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
@@ -121,7 +100,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
     let mut skipped = 0usize;
 
     for entry in &manifest.fixtures {
-        if entry.status != FixtureStatus::Implemented {
+        if entry.status != talkbank_spec_vocabulary::Status::Implemented {
             skipped += 1;
             println!(
                 "  ⊘ {} → skipped (status: {:?}, {})",
@@ -158,30 +137,38 @@ fn validation_errors_detected() -> Result<(), TestError> {
             );
         }
 
-        for expected in &entry.expected_codes {
-            if codes.iter().any(|code| code == expected.as_str()) {
-                println!(
-                    "  ✓ {} → {} ({})",
-                    expected.as_str(),
-                    entry.fixture,
-                    codes.join(", ")
-                );
-            } else {
-                failures.push(format!(
-                    "{} (expected {}, got {:?}) [{}]",
-                    entry.fixture,
-                    expected.as_str(),
-                    codes,
-                    entry.source_spec
-                ));
-                println!(
-                    "  ✗ {} → {:?} (expected {}) [{}]",
-                    entry.fixture,
-                    codes,
-                    expected.as_str(),
-                    entry.source_spec
-                );
-            }
+        // The claim's MEANING lives on the claim (`Claim::satisfied_by`, the
+        // one owner in the vocabulary crate); only the rendering of what was
+        // wanted is local to this report.
+        use talkbank_spec_vocabulary::frontmatter::Claim;
+        let satisfied = entry.claim.satisfied_by(&entry.code, |code| {
+            codes.iter().any(|got| got == code.as_str())
+        });
+        let wants = match &entry.claim {
+            Claim::Violates => entry.code.as_str().to_owned(),
+            Claim::Legal => format!("absence of {}", entry.code.as_str()),
+            Claim::SubsumedBy(targets) => format!(
+                "{} and absence of {}",
+                targets
+                    .as_slice()
+                    .iter()
+                    .map(|target| target.as_str())
+                    .collect::<Vec<_>>()
+                    .join("+"),
+                entry.code.as_str()
+            ),
+        };
+        if satisfied {
+            println!("  ✓ {} → {} ({})", wants, entry.fixture, codes.join(", "));
+        } else {
+            failures.push(format!(
+                "{} (claim wants {}, got {:?}) [{}]",
+                entry.fixture, wants, codes, entry.source_spec
+            ));
+            println!(
+                "  ✗ {} → {:?} (claim wants {}) [{}]",
+                entry.fixture, codes, wants, entry.source_spec
+            );
         }
     }
 
@@ -191,7 +178,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
     // least one example, so a newly-implemented spec cannot silently ship without
     // a test. The generator records any offenders in the manifest; a
     // non-empty list fails the run alongside any fixture mismatches above.
-    let coverage_gaps = &manifest.implemented_specs_without_examples;
+    let coverage_gaps = &manifest.implemented_codes_without_examples;
 
     // Collect each non-empty failure category as its own section, then join.
     let mut sections = Vec::new();
@@ -204,7 +191,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
     }
     if !coverage_gaps.is_empty() {
         sections.push(format!(
-            "{} implemented validation specs lack examples (add a triggering \
+            "{} implemented codes have no triggering example in any spec (add a triggering \
              example; or Status: not_implemented with a reason; or, only when \
              no CHAT input can reach the rule at all, Status: \
              unreachable_from_chat naming its out-of-corpus test):\n  {}",

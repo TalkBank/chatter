@@ -1,25 +1,14 @@
-# E241: Auto-generated from corpus
++++
+code = 'E241'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E241
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E241_illegal_untranscribed.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E241
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E241_illegal_untranscribed.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +18,12 @@ Auto-generated from corpus
 @Comment:	Invalid: 'xx' - Only xxx, yyy, www are allowed
 *CHI:	xx .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

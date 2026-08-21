@@ -1,25 +1,14 @@
-# E401: Duplicate dependent tiers
++++
+code = 'E401'
+name = 'Duplicate dependent tiers'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Duplicate dependent tiers
-
-## Metadata
-
-- **Error Code**: E401
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/duplicate-dependent-tier.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E401
-
-```chat
+[[example]]
+level = 'tier'
+source = 'validation_gaps/duplicate-dependent-tier.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -34,15 +23,13 @@ Duplicate dependent tiers
 %gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 @Comment:	ERROR: Duplicate %gra tier for the same utterance
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `E4xx_alignment_errors/E401_duplicate_mor.cha`
-**Trigger**: Multiple %mor tiers for the same utterance
-**Expected Error Codes**: E401
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/E401_duplicate_mor.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -53,11 +40,16 @@ Duplicate dependent tiers
 %mor:	pro|I v|want n|cookie .
 @Comment:	ERROR: Duplicate %mor tier should trigger E401
 @End
-```
+'''
++++
+
+## Description
+
+Duplicate dependent tiers
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

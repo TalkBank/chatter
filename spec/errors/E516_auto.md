@@ -1,25 +1,14 @@
-# E516: Auto-generated from corpus
++++
+code = 'E516'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E516
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E516_empty_date.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E516
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/validation_errors/E516_empty_date.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +18,12 @@ Auto-generated from corpus
 @Comment:	ERROR: Date header cannot be empty
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

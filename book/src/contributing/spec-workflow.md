@@ -1,7 +1,7 @@
 # Spec Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 13:12 EDT
 
 How to change `spec/` and leave the repository consistent. For what the fields
 MEAN, read [Spec System](../architecture/spec-system.md) first; this page is
@@ -17,7 +17,7 @@ just spec-status      # what state the spec system is in, derived from the gates
 ```
 
 Run it before you start, so you know what "unchanged" looks like, and again at
-the end. A change that moves the "assert NOTHING" or "deferred" counts in the
+the end. A change that moves the "deferred" or "failing" counts in the
 wrong direction is worth a second look.
 
 ## Adding a construct spec
@@ -70,31 +70,21 @@ Copy the tree, dropping byte positions and field names.
 
 An error spec is INVALID CHAT plus the codes it must produce.
 
-**1. Write the file** in `spec/errors/`, named `E###_<slug>.md`:
+**1. Write the file** in `spec/errors/`, named `E###_<slug>.md`. Everything
+declared goes in `+++` TOML frontmatter; the prose goes in the body.
 
 ````markdown
-# E301: Empty speaker code
++++
+code = 'E301'
+name = 'Empty speaker code'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Empty speaker code.
-
-## Metadata
-
-- **Error Code**: E301
-- **Category**: Main tier validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E301_empty_speaker.cha`
-**Trigger**: Main tier with * but no speaker code
-**Expected Error Codes**: E301
-
-```chat
+[[example]]
+source = 'E3xx_main_tier_errors/E301_empty_speaker.cha'
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -102,21 +92,36 @@ Empty speaker code.
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+Empty speaker code.
 ````
+
+A misspelled or unrecognised key is a LOAD ERROR, so you find out from
+`just spec-check` rather than from a field that silently did nothing.
 
 **Four things decide whether your spec asserts anything**, and each is easy to
 get wrong. They are covered in full in
 [Spec System](../architecture/spec-system.md); in short:
 
-- **`Expected Error Codes` is the only field that asserts.** Omit it and the
-  example can never fail. It is a SUBSET check, so extra emitted codes pass.
-- **`Layer` decides what the generated test can see.** A `parser`-layer test
-  sees parse diagnostics only, so a validation-layer code declared there can
-  never be observed.
-- **`Status: not_implemented` DEFERS the example** and `#[ignore]`s its
-  generated tests. Omitting `Status` entirely defaults to `implemented`.
-- **`Source`'s stem names the transcript**, which is what rules about the
+- **`claim` is the field that asserts, and it is REQUIRED.** `violates` (the
+  spec's code must appear), `legal` (it must not), or `subsumed_by <code(s)>`
+  (the targets appear and the spec's code does not). Extra emitted codes still
+  pass; the exact per-stage sets are the snapshot's business.
+- **There is no `layer` field.** Which stage catches a rule is observed, not
+  declared: every example is a fixture whose runner checks both stages, and
+  the per-stage record lives in the observation snapshot. (The field existed
+  until R4, and deciding it wrongly produced tests that could never see their
+  own code.)
+- **`status = 'not_implemented'` DEFERS the example** and `#[ignore]`s its
+  generated tests. `status` is REQUIRED: a spec that omits it does not load.
+  (This bullet said omitting it "defaults to `implemented`" until 2026-08-21;
+  that default was removed on 2026-08-11, because an invented answer to
+  "is this rule live" is the kind of wrong value nothing notices.)
+- **`source`'s stem names the transcript**, which is what rules about the
   file's own name (E531) compare against.
 
 **Write the failing case first.** A new error spec should fail before the rule
@@ -131,9 +136,11 @@ just spec-gen      # rewrite every generated artifact from the specs
 just spec-check    # or ask whether the committed copies are current
 ```
 
-It regenerates all four: the tree-sitter corpus tests, the Rust test bodies,
-the validation fixture corpus and its `manifest.json`, and the `DiagnosticKind`
-registry in `talkbank-model`. There is nothing to choose and no path to type:
+It regenerates every artifact in the registry, in dependency order (the
+observation snapshot first, since the tree-sitter corpus derives its
+membership from it); the generated artifact
+table included in the
+[spec-system chapter](../architecture/spec-system.md) is the live list. There is nothing to choose and no path to type:
 every destination is a constant in `spec/tools/src/artifacts.rs`, so a
 generator cannot be aimed at the wrong tree.
 
@@ -193,11 +200,13 @@ cannot do:
 ## Common mistakes
 
 - **Editing generated files.** Change the spec or the registry, then regenerate.
-- **Declaring no `Expected Error Codes`.** The example is then parsed and
-  nothing more. `just spec-status` counts these.
-- **Declaring a validation-layer code in a parser-layer spec.** The generated
-  test cannot see it.
-- **Flipping `Status` to `implemented` without regenerating.** The generated
-  tests stay `#[ignore]`d, so nothing you just enabled actually runs.
+- **Wishing for an example that asserts nothing.** There is no such state:
+  `claim` is required, and an example that cannot honestly say `violates` says
+  `subsumed_by` (the worklist) or `legal` (the boundary).
+- **Flipping `status` to `implemented` without regenerating.** The fixture
+  manifest still carries the old status, so the runner keeps skipping what you
+  just enabled. (A third mistake used to sit here, declaring a
+  validation-layer code in a parser-layer spec; R4 deleted the `layer` field
+  and with it the possibility.)
 - **Regenerating reflexively.** Regeneration is for artifacts that genuinely
   changed, not a substitute for deciding what the change needs.

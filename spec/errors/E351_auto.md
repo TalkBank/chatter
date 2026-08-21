@@ -1,26 +1,13 @@
-# E351: MissingQuoteBegin
++++
+code = 'E351'
+name = 'MissingQuoteBegin'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-A self-completion linker (`+,`) was used but there is no prior utterance
-from the same speaker. The `+,` linker requires a preceding interrupted
-utterance from the same speaker to complete.
-
-## Metadata
-- **Status**: not_implemented
-- **Layer**: validation
-
-- **Error Code**: E351
-- **Category**: cross\_utterance
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: +, self-completion as the very first utterance from this speaker
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,7 +15,14 @@ utterance from the same speaker to complete.
 @ID:	eng|test|CHI||male|||Target_Child|||
 *CHI:	+, hello .
 @End
-```
+'''
++++
+
+## Description
+
+A self-completion linker (`+,`) was used but there is no prior utterance
+from the same speaker. The `+,` linker requires a preceding interrupted
+utterance from the same speaker to complete.
 
 ## Expected Behavior
 

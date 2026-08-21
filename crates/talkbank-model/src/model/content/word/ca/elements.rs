@@ -1,4 +1,4 @@
-//! Conversation-analysis (CA) single-point prosodic markers used inside words.
+//! Word-internal markers that attach to a word token.
 //!
 //! CHAT reference anchors:
 //! - [CA Subwords](https://talkbank.org/0info/manuals/CHAT.html#CA_Subwords)
@@ -11,112 +11,37 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
-/// Single-point CA prosodic marker type.
-///
-/// Symbol mapping is defined by [`CAElementType::to_symbol`] and must stay
-/// aligned with the parser grammar.
-///
-/// # Variants
-///
-/// **Pitch Markers:**
-/// - `PitchUp` (↑)
-/// - `PitchDown` (↓)
-/// - `PitchReset` (↻)
-///
-/// **Other Markers:**
-/// - `BlockedSegments` (≠)
-/// - `Constriction` (∾)
-/// - `Hardening` (⁑)
-/// - `HurriedStart` (⤇)
-/// - `Inhalation` (∙)
-/// - `LaughInWord` (Ἡ)
-/// - `SuddenStop` (⤆)
-///
-/// # CHAT Format Examples
-///
-/// ```text
-/// ↑hello             # pitch up
-/// ↓there             # pitch down
-/// ≠blocked           # blocked segment
-/// ```
-///
-/// # References
-///
-/// - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
-/// - [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    SemanticEq,
-    SpanShift,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum CAElementType {
-    /// `≠`
-    BlockedSegments,
-    /// `∾`
-    Constriction,
-    /// `⁑`
-    Hardening,
-    /// `⤇`
-    HurriedStart,
-    /// `∙`
-    Inhalation,
-    /// `Ἡ`
-    LaughInWord,
-    /// `↓`
-    PitchDown,
-    /// `↻`
-    PitchReset,
-    /// `↑`
-    PitchUp,
-    /// `⤆`
-    SuddenStop,
-}
+// CAElementType is GENERATED from spec/symbols/symbol_registry.json; what stays
+// here is what the registry cannot express: validation and serialization.
+pub use crate::generated::ca_symbols::{CAElementType, NotationFamily};
 
-impl CAElementType {
-    /// Returns the CHAT symbol for this CA element type.
-    ///
-    /// Symbols must remain synchronized with `tree-sitter-talkbank` token
-    /// definitions so parsing and rendering are inverse-compatible.
-    pub fn to_symbol(&self) -> &'static str {
-        match self {
-            CAElementType::BlockedSegments => "≠", // U+2260 NOT EQUAL TO
-            CAElementType::Constriction => "∾",    // U+223E INVERTED LAZY S
-            CAElementType::Hardening => "⁑",       // U+2051 TWO ASTERISKS
-            CAElementType::HurriedStart => "⤇",    // U+2907 RIGHTWARDS DOUBLE DASH ARROW
-            CAElementType::Inhalation => "∙",      // U+2219 BULLET OPERATOR
-            CAElementType::LaughInWord => "Ἡ",     // U+1F29 GREEK CAPITAL ETA WITH DASIA
-            CAElementType::PitchDown => "↓",       // U+2193 DOWNWARDS ARROW
-            CAElementType::PitchReset => "↻",      // U+21BB CLOCKWISE OPEN CIRCLE ARROW
-            CAElementType::PitchUp => "↑",         // U+2191 UPWARDS ARROW
-            CAElementType::SuddenStop => "⤆",      // U+2906 LEFTWARDS DOUBLE DASH ARROW
-        }
-    }
-}
-
-/// One concrete CA prosodic marker token.
+/// One marker token that attaches to a word rather than bracketing a stretch.
 ///
 /// # Structure
 ///
 /// A CA element consists of:
-/// - **type**: The kind of prosodic marker (pitch, stress, etc.)
+/// - **type**: which marker, from [`CAElementType`]
 /// - **span**: Optional source location information
+///
+/// # Not all of these are Conversation Analysis notation
+///
+/// The category name describes the PARSE ROLE (attaches to a word) and not
+/// the provenance. `BlockedSegments` (`≠`) is a disfluency mark from the CHAT
+/// manual's Disfluency Transcription chapter, a word attack rather than a
+/// prosodic feature, and CLAN names it `NOTCA_CROSSED_EQUAL` for that reason.
+/// It lives here because it attaches to a word exactly as `↑` does.
 ///
 /// # CHAT Format Examples
 ///
+/// Every example here is a variant of [`CAElementType`]. The stress markers
+/// `ˈ` and `ˌ` are NOT (they are `WordContent::StressMarker`), so an example
+/// using one cannot be built as a `CAElement`.
+///
 /// ```text
-/// *CHI: ↑hello .                         # Pitch rise
-/// *MOT: ˈvery nice .                     # Primary stress
-/// *CHI: I ↓know .                        # Pitch fall
-/// *INV: ≠wait .                          # Blocked segment
+/// *CHI: ↑hello .                         # Shift to high pitch
+/// *CHI: I ↓know .                        # Shift to low pitch
+/// *INV: ≠wait .                          # Blocking, a disfluency word attack
+/// *PAR: swi≠mming .                      # Blocking inside a word
 /// ```
 ///
 /// # Usage

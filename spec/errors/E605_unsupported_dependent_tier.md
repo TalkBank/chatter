@@ -1,22 +1,13 @@
-# E605: Unsupported Dependent Tier
++++
+code = 'E605'
+name = 'Unsupported Dependent Tier'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An utterance contains a dependent tier with a label that is not a standard CHAT tier name and does not follow the `%x` user-defined tier naming convention. The file parses successfully but the tier is stored as `DependentTier::Unsupported` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E605
-- **Category**: tier_validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E605
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An utterance contains a dependent tier with a label that is not a standard CHAT 
 *CHI:	hello world .
 %foo:	unknown tier content
 @End
-```
+'''
++++
+
+## Description
+
+An utterance contains a dependent tier with a label that is not a standard CHAT tier name and does not follow the `%x` user-defined tier naming convention. The file parses successfully but the tier is stored as `DependentTier::Unsupported` and flagged during validation.
 
 ## Expected Behavior
 

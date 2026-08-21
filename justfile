@@ -14,6 +14,18 @@ mdbook_version := "0.5.3"
 mdbook_mermaid_version := "0.17.0"
 lychee_version := "0.24.2"
 book_tools_root := justfile_directory() + "/.tooling/book-tools"
+
+# The spec workspace is a SECOND cargo workspace, so every spec binary needs its
+# manifest named. This was spelled out per recipe and had drifted into two
+# spellings of `justfile_directory()`. Two recipes stay expanded on purpose and
+# cannot use this: `spec-ca-census` adds `--release` (it runs over a corpus) and
+# `form-markers-gen` deliberately omits `--quiet`. Do not "tidy" either into
+# `spec_run`; doing so silently drops what makes them different.
+#
+# Recipe descriptions use the `[doc("...")]` attribute where the comment block
+# is more than one line, because `just --list` shows only the LAST comment line
+# and would otherwise render a sentence fragment.
+spec_run := "cargo run --quiet --manifest-path " + justfile_directory() + "/spec/Cargo.toml --bin"
 book_tools_bin := book_tools_root + "/bin"
 
 # Default: list available recipes.
@@ -53,6 +65,7 @@ test-all: test check-feature-off test-spec
 # and the validation fixture corpus, so a break here stops the regeneration
 # every other gate depends on. It went untested by CI and by this justfile
 # until 2026-08-04.
+[doc("Run the spec workspace's own tests.")]
 test-spec:
     cargo test --manifest-path spec/Cargo.toml --workspace
 
@@ -77,6 +90,7 @@ test-spec:
 # 22 s. The cost is disk: target/feature-off is 1.4 GB beside target/'s 13 GB,
 # plus one cold build of it (181 crates, 21 s).
 
+[doc("Build with default features off, which CI does and `just test` cannot.")]
 check-feature-off:
     CARGO_TARGET_DIR=target/feature-off cargo test -p talkbank-transform --no-default-features --tests
 
@@ -119,7 +133,7 @@ corpus-parse-equivalence:
 # printed "Skipping" or worked on an empty input set, both of which cargo
 # reports as a pass.
 #
-# Set TALKBANK_DATA to point somewhere other than ~/0tb/data.
+# Requires TALKBANK_DATA, set to a directory holding the `*-data` corpus repos.
 corpus-tests:
     cargo test -p talkbank-parser-re2c --test integration --release -- --ignored
 
@@ -242,8 +256,12 @@ deps-check:
 # `.git/hooks` does not survive a clone, so an untracked hook is a gate that
 # exists on exactly one machine. The one this replaces was untracked, ran two
 # checks, and printed "fast gate passed" while letting a broken push through.
+#
+# REPORTS WHAT IT DISPLACES; see `scripts/report-displaced-hooks.sh`, which is
+# what a person actually reads at the moment it matters.
 install-hooks:
     git config core.hooksPath .githooks
+    @scripts/report-displaced-hooks.sh
     @echo "hooks installed: pre-push now requires a gate stamp (see just gate)"
 
 # Assert CI and the gate cannot describe different checks.
@@ -308,10 +326,14 @@ push *ARGS:
     git push {{ARGS}}
 
 # Regenerate symbol registry outputs for grammar and Rust consumers.
+# The generator list is DISCOVERED, not written here. The drift gate
+# (`generated_symbol_sets_are_current`) globs the same `generate_*.js`, so a
+# generator cannot be gated-but-never-run, which is what a hand-written list one
+# recipe away from a glob eventually produces.
+[doc("Regenerate every artifact derived from the symbol registry.")]
 symbols-gen:
     node {{ justfile_directory() }}/spec/symbols/validate_symbol_registry.js
-    node {{ justfile_directory() }}/spec/symbols/generate_grammar_symbol_sets.js
-    node {{ justfile_directory() }}/spec/symbols/generate_rust_symbol_sets.js
+    for g in {{ justfile_directory() }}/spec/symbols/generate_*.js; do node "$g" || exit 1; done
 
 # Fail when a doc's `Last modified` header is older than the doc itself.
 #
@@ -328,25 +350,76 @@ doc-dates:
 # invocations, each carrying its own `--output-dir`. The destinations are
 # constants in the registry now, so a generator cannot be aimed at the wrong
 # tree. Review the diff before committing.
+[doc("Regenerate every artifact derived from spec/.")]
 spec-gen:
-    cargo run --quiet --manifest-path {{justfile_directory()}}/spec/Cargo.toml --bin spec_gen
+    {{ spec_run }} spec_gen
 
 # Report whether every generated artifact is current. Writes nothing.
 #
 # This is what `every_generated_artifact_is_current` runs; use it for the same
 # answer without waiting for the test binary.
+[doc("Are the committed generated artifacts current with the specs?")]
 spec-check:
-    cargo run --quiet --manifest-path {{justfile_directory()}}/spec/Cargo.toml --bin spec_gen -- --check
+    {{ spec_run }} spec_gen -- --check
 
 
 # What state is the spec system in? Derived from the same code the gates use.
 #
 # Answers the questions that used to need a grep: how many specs there are and
 # what they declare, how many examples are verified, how many are DEFERRED, how
-# many assert nothing at all, the CLAN CHECK parity counts, and which gate
+# many are deferred, the CLAN CHECK parity counts, and which gate
 # checks which artifact.
+[doc("What state is the spec system in?")]
 spec-status:
-    cargo run --quiet --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin spec_status
+    {{ spec_run }} spec_status
+
+# Spec coverage: which codes have specs, which specs demonstrate their own
+# code, and which specs nothing distinguishes.
+#
+# The undemonstrated list is the one to act on: an entry declaring E316 means
+# the mined input does not parse, so the rule is unreachable and the fix is in
+# the parser; a specific other code usually means the fixture is simply wrong.
+[doc("Which codes have specs, and which specs demonstrate their own code.")]
+spec-coverage:
+    {{ spec_run }} coverage -- --errors --spec-dir {{ justfile_directory() }}/spec
+
+# Do the error specs' examples actually produce the codes they declare?
+#
+# Runs the live parser and validator over every example, which is the question
+# no amount of reading the spec files can answer.
+[doc("Do the error specs' examples produce the codes they declare?")]
+spec-validate-examples:
+    {{ spec_run }} validate_error_specs
+
+# Which grammar node types does `corpus/reference/` actually exercise?
+#
+# A renderer; the computation is `generators::node_coverage` and has its own
+# test. Use it when adding grammar rules, to see what the corpus never reaches.
+[doc("Which grammar node types does the reference corpus exercise?")]
+spec-node-coverage:
+    {{ spec_run }} corpus_node_coverage
+
+# A per-mark attestation census for Conversation Analysis notation.
+#
+# CA is the one region of CHAT chatter has never specified, and the rules it has
+# were each added because something broke. This measures what transcribers
+# actually do, per mark, so the specification can be written from evidence.
+# Reads CHAT meaning only from the typed AST.
+[doc("Per-mark attestation census for CA notation. Takes a corpus root.")]
+spec-ca-census *ARGS:
+    cargo run --quiet --release --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin ca_census -- {{ ARGS }}
+
+# Generate error-triggering CHAT by perturbing valid corpus files.
+#
+# The adversarial half of spec work: CHECK parity is found by CONSTRUCTING
+# invalid input chatter wrongly accepts, never by running over valid corpora.
+[doc("Generate error-triggering CHAT by perturbing valid corpus files.")]
+spec-perturb *ARGS:
+    {{ spec_run }} perturb_corpus -- {{ ARGS }}
+
+# Find representative CHAT files in the data repos, for corpus curation.
+spec-corpus-candidates *ARGS:
+    {{ spec_run }} extract_corpus_candidates -- {{ ARGS }}
 
 # Regenerate every site that carries the CHAT form-marker inventory.
 #
@@ -354,6 +427,7 @@ spec-status:
 # generator cannot run over an unchecked registry. The gate that fails when a
 # committed artifact disagrees is `generated_form_marker_sites_are_current` in
 # spec/tools, which calls these same renderers.
+[doc("Regenerate every site carrying the CHAT form-marker inventory.")]
 form-markers-gen:
     cargo run --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin gen_form_markers
 

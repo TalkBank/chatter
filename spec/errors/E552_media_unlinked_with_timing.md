@@ -1,4 +1,39 @@
-# E552: `@Media` declares `unlinked` but transcript carries timing
++++
+code = 'E552'
+name = '@Media declares unlinked but transcript carries timing'
+kind = 'Invalidity'
+status = 'implemented'
+status_note = "`check_media_unlinked_has_no_timing` in `crates/talkbank-model/src/model/file/chat_file/validate/checks.rs`, sharing the collected main-tier bullets with E544's check. NOTE: the `%wor`-only surface is detected via `utt.alignments`, so it requires alignment processing (the CLI default); `--skip-alignment` skips it. Message-quality regression tests: `crates/talkbank-transform/tests/e552_message_quality.rs`; CLAN-parity grounding for the main-bullet case: `check_parity/fixtures/CHECK_124_media_unlinked_with_bullet.cha`."
+
+[[example]]
+level = 'file'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	session-01, audio, unlinked
+*CHI:	hello world .\u00150_1500\u0015
+@End
+"""
+
+[[example]]
+level = 'file'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	session-01, audio, unlinked
+*CHI:	hello .
+%wor:	hello \u00150_500\u0015 .
+@End
+"""
++++
 
 ## Description
 
@@ -21,65 +56,6 @@ fired, because they demand different advice:
   CLAN CHECK does NOT fire 124 on this case (grounded empirically
   2026-07-07); flagging it is deliberate chatter-stricter modernization,
   so the message must carry the full explanation itself.
-
-## Metadata
-
-- **Status**: implemented
-- **Status note**: `check_media_unlinked_has_no_timing` in
-  `crates/talkbank-model/src/model/file/chat_file/validate/checks.rs`,
-  sharing the collected main-tier bullets with E544's check. NOTE: the
-  `%wor`-only surface is detected via `utt.alignments`, so it requires
-  alignment processing (the CLI default); `--skip-alignment` skips it.
-  Message-quality regression tests:
-  `crates/talkbank-transform/tests/e552_message_quality.rs`; CLAN-parity
-  grounding for the main-bullet case:
-  `check_parity/fixtures/CHECK_124_media_unlinked_with_bullet.cha`.
-- **Last updated**: 2026-07-07 14:09 EDT
-
-- **Error Code**: E552
-- **Category**: header_validation
-- **Level**: file
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: `@Media` declares `unlinked` but a main-tier utterance
-carries a timing bullet (CLAN CHECK 124's case).
-
-**Expected Error Codes**: E552
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	session-01, audio, unlinked
-*CHI:	hello world .0_1500
-@End
-```
-
-## Example 2
-
-**Trigger**: `@Media` declares `unlinked`; no main-tier bullets, but the
-`%wor` tier carries word-level timing bullets. Chatter-stricter than
-CLAN (which accepts this); the message names the `%wor` tier and offers
-both remedies.
-
-**Expected Error Codes**: E552
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	session-01, audio, unlinked
-*CHI:	hello .
-%wor:	hello 0_500 .
-@End
-```
 
 ## Counter-examples (documentation only, do not fire E552)
 

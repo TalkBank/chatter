@@ -1,29 +1,14 @@
-# E709: Invalid grammar index
++++
+code = 'E709'
+name = 'Invalid grammar index'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-A `%gra` relation uses an invalid index. `%gra` indices are 1-indexed: the
-first word is `1`, and `0` is reserved for the ROOT attachment in the
-dependent slot (`n|0|ROOT`). Using `0` in the first (index) slot of a
-relation triggers E709.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-04-13 22:00 EDT
-
-- **Error Code**: E709
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E709_invalid_grammar_index.cha`
-**Trigger**: First slot of a `%gra` relation is `0` (indices are 1-indexed)
-**Expected Error Codes**: E709
-
-```chat
+[[example]]
+level = 'tier'
+source = 'error_corpus/validation_errors/E709_invalid_grammar_index.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -33,7 +18,15 @@ relation triggers E709.
 %mor:	co|hello .
 %gra:	0|0|ROOT 1|0|PUNCT
 @End
-```
+'''
++++
+
+## Description
+
+A `%gra` relation uses an invalid index. `%gra` indices are 1-indexed: the
+first word is `1`, and `0` is reserved for the ROOT attachment in the
+dependent slot (`n|0|ROOT`). Using `0` in the first (index) slot of a
+relation triggers E709.
 
 ## Expected Behavior
 

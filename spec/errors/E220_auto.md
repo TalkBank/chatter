@@ -1,4 +1,35 @@
-# E220, Illegal digits in word content
++++
+code = 'E220'
+name = 'Illegal digits in word content'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello3 .
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	spa
+@Participants:	CHI Target_Child
+@ID:	spa|corpus|CHI|||||Target_Child|||
+*CHI:	hola2 .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 08:15 EDT
@@ -10,45 +41,6 @@ not permit them. Most natural languages (English, Spanish, French, etc.) do not
 allow bare digits in words on the main tier. A small set of languages (Chinese,
 Welsh, Vietnamese, Thai, Cantonese, etc.) permit digits as part of tone
 notation or numerals.
-
-## Metadata
-
-- **Error Code**: E220
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: English word containing a digit
-**Expected Error Codes**: E220
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello3 .
-@End
-```
-
-## Example 2
-
-**Trigger**: Word with digits in Spanish (also not digit-allowing)
-**Expected Error Codes**: E220
-
-```chat
-@UTF8
-@Begin
-@Languages:	spa
-@Participants:	CHI Target_Child
-@ID:	spa|corpus|CHI|||||Target_Child|||
-*CHI:	hola2 .
-@End
-```
 
 ## Expected Behavior
 

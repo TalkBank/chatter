@@ -1,27 +1,13 @@
-# E354: MissingTrailingOffTerminator
++++
+code = 'E354'
+name = 'MissingTrailingOffTerminator'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-An other-completion linker (`++`) was used and the preceding utterance is
-from a different speaker, but that preceding utterance did not end with
-`+...` (trailing off). The other-completion convention requires the
-previous speaker to have trailed off.
-
-## Metadata
-- **Status**: not_implemented
-- **Layer**: validation
-
-- **Error Code**: E354
-- **Category**: cross\_utterance
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: ++ other-completion but prior different-speaker utterance ends with "."
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +17,15 @@ previous speaker to have trailed off.
 *MOT:	go to bed .
 *CHI:	++ no I won't .
 @End
-```
+'''
++++
+
+## Description
+
+An other-completion linker (`++`) was used and the preceding utterance is
+from a different speaker, but that preceding utterance did not end with
+`+...` (trailing off). The other-completion convention requires the
+previous speaker to have trailed off.
 
 ## Expected Behavior
 

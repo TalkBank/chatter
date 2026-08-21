@@ -1,34 +1,21 @@
-# E253: Empty word content
++++
+code = 'E253'
+name = 'Empty word content'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last modified:** 2026-05-30 19:04 EDT
-
-## Description
-
-A parsed Word object has empty content, the word node exists in the CST but contains no text.
-
-## Metadata
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E253
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E253_empty_word_content.cha`
-**Trigger**: Utterance with only whitespace before terminator, current parser recovery yields an empty utterance
-**Expected Error Codes**: E306
-
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E253_empty_word_content.cha'
+claim = 'violates'
+notes = '''
 Note: The example produces E306 (EmptyUtterance) rather than E253
 (EmptyWordContent, a word-level validation). The current parser recovery
 collapses whitespace-only content into a terminator-only utterance, so the
 validator sees “no content” at the main-tier level instead of a parsed word
 node with empty text.
-
-```chat
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -38,7 +25,14 @@ node with empty text.
 @Comment:	Invalid: Empty word element
 *CHI:	  .
 @End
-```
+'''
++++
+
+**Last modified:** 2026-05-30 19:04 EDT
+
+## Description
+
+A parsed Word object has empty content, the word node exists in the CST but contains no text.
 
 ## Expected Behavior
 

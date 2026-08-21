@@ -12,8 +12,10 @@
 //! - **Lengthening**: Syllable lengthening marker (:)
 //! - **SyllablePause**: Pause between syllables (^)
 //! - **OverlapPoint**: CA overlap point markers within words (⌈⌉⌊⌋ with optional indices)
-//! - **CAElement**: Individual CA prosodic markers (pitch, stress, etc.)
-//! - **CADelimiter**: Paired CA prosodic markers (faster, softer, etc.)
+//! - **CAElement**: markers that attach to a word (`↑`, `↓`, `∙`, and the
+//!   `≠` blocking disfluency mark, which attaches the same way)
+//! - **CADelimiter**: PAIRED markers that bracket a stretch (`∆` faster,
+//!   `°` softer, and the `↫` segment-repetition disfluency mark)
 //! - **UnderlineBegin/End**: Control characters for underlined text
 //!
 //! # CHAT Format Examples
@@ -61,8 +63,9 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// - **Text**: Plain text segment (e.g., `hello`, `want`)
 /// - **Shortening**: Omitted sound in parentheses (e.g., `(be)` in `(be)cause`)
 /// - **OverlapPoint**: CA overlap point marker within word (`⌈`, `⌉`, `⌊`, `⌋` with optional indices)
-/// - **CAElement**: Individual CA prosodic marker (e.g., `↑`, `ˈ`, `∙`)
-/// - **CADelimiter**: Paired CA prosodic marker (e.g., `∆`, `°`, `∬`)
+/// - **CAElement**: word-attached marker (e.g. `↑`, `∙`, `≠`). Named for its
+///   parse role, not its provenance: `≠` is a disfluency mark, not CA notation.
+/// - **CADelimiter**: PAIRED marker bracketing a stretch (e.g. `∆`, `°`, `∬`)
 /// - **StressMarker**: Primary/secondary stress markers (ˈ, ˌ)
 /// - **Lengthening**: Syllable lengthening marker (:)
 /// - **SyllablePause**: Pause between syllables (^)
@@ -102,10 +105,12 @@ pub enum WordContent {
     Shortening(WordShortening),
     /// Overlap point within word
     OverlapPoint(OverlapPoint),
-    /// CA element (individual prosody marker like ↑, ↓, ≠, ∾)
+    /// Word-attached marker (`↑`, `↓`, `∾` prosody; `≠` blocking, a disfluency
+    /// mark rather than prosody, grouped here because it attaches the same way)
     #[serde(rename = "ca_element")]
     CAElement(super::ca::CAElement),
-    /// CA delimiter (paired prosody marker like ∆, ∇, °, ▁)
+    /// Paired marker bracketing a stretch (`∆`, `∇`, `°`, `▁` prosody; `↫`
+    /// segment repetition, a disfluency mark, grouped here for the same reason)
     #[serde(rename = "ca_delimiter")]
     CADelimiter(super::ca::CADelimiter),
     /// Stress marker (ˈ, ˌ) - NOT a CA element

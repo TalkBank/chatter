@@ -17,5 +17,6 @@ tree-sitter = { workspace = true }
 tree-sitter-talkbank = { workspace = true }
 
 generators = { path = "../tools" }
+talkbank-spec-vocabulary = { workspace = true }
 talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }

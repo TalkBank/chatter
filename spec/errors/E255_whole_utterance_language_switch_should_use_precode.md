@@ -1,4 +1,37 @@
-# E255: Whole-utterance language switch should use precode
++++
+code = 'E255'
+name = 'Whole-utterance language switch should use precode'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+title = 'Two-word whole-utterance switch'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hola@s amiga@s .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+title = 'Single-word switch'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	si@s .
+@End
+'''
++++
 
 ## Description
 
@@ -8,57 +41,6 @@ When an entire utterance switches language, CHAT provides the utterance
 precode `[- LANG]` for exactly this case; tagging every word individually
 with `@s` instead of using the precode is flagged so the file is rewritten
 into the operationally correct form.
-
-## Metadata
-
-- **Error Code**: E255
-- **Category**: main_tier_validation
-- **Level**: main_tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1: Two-word whole-utterance switch
-
-**Trigger**: Every word in the utterance carries `@s` and resolves to the
-same non-default language
-**Expected Error Codes**: E255
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng, spa
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hola@s amiga@s .
-@End
-```
-
-## Example 2: Single-word switch
-
-**Trigger**: A one-word utterance whose one word carries `@s`. E255
-deliberately fires here too (maintainer ruling, 2026-07-30, superseding an
-earlier 2-word threshold that was implemented and reverted): linguistically
-whether a lone tagged word is an insertion or a whole-utterance switch is a
-judgment call that cannot be formalized, so the tiebreak is operational.
-The Batchalign morphotag pipeline routes `[- LANG]`-precoded utterances
-wholesale to that language's Stanza model, while `@s`-tagged words go
-through its L2 splice machinery, which assumes an `@s` span is a proper
-SUBSET of the utterance; a whole-utterance `@s` (one word is the degenerate
-case) exercises that machinery's unsupported shape. E255 and `chatter debug
-fix-s` share the same detection predicate, so both keep the one-word
-behavior together.
-**Expected Error Codes**: E255
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng, spa
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	si@s .
-@End
-```
 
 ## Expected Behavior
 

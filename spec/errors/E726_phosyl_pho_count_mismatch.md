@@ -1,23 +1,13 @@
-# E726: Phosyl tier word count does not match pho tier
++++
+code = 'E726'
+name = 'Phosyl tier word count does not match pho tier'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The `%xphosyl` tier word count does not match the `%pho` tier word count. Each word-level entry in `%xphosyl` must correspond one-to-one with a word-level entry in `%pho`.
-
-## Metadata
-
-- **Error Code**: E726
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E726
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	nld
@@ -29,7 +19,12 @@ The `%xphosyl` tier word count does not match the `%pho` tier word count. Each w
 %xphosyl:	ˈm:Oʉ:Ns:Ct:C
 @Comment:	ERROR: %pho has 2 words but %xphosyl has only 1
 @End
-```
+'''
++++
+
+## Description
+
+The `%xphosyl` tier word count does not match the `%pho` tier word count. Each word-level entry in `%xphosyl` must correspond one-to-one with a word-level entry in `%pho`.
 
 ## Expected Behavior
 

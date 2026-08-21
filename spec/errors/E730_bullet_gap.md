@@ -1,4 +1,24 @@
-# E730: Bullet timing gap
++++
+code = 'E730'
+name = 'Bullet timing gap'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+*CHI:	hello . 1000_2000
+*MOT:	hi . 10000_11000
+@End
+'''
++++
 
 **Status:** Not implemented, reserved
 **Last updated:** 2026-07-31
@@ -17,34 +37,6 @@ mapping (`crates/talkbank-parser-tests/src/check_error_map.rs`) and the
 enum variant's own doc comment
 (`crates/talkbank-model/src/errors/codes/error_code.rs`); there is no
 reserved constant for it in `temporal.rs` (unlike E729/E731).
-
-## Metadata
-
-- **Status**: not_implemented
-
-- **Error Code**: E730
-- **Category**: Temporal validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A large, unexplained gap between one tier's bullet end and the
-next tier's bullet start
-**Expected Error Codes**: E730
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child, MOT Mother
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@ID:	eng|corpus|MOT|||||Mother|||
-*CHI:	hello . 1000_2000
-*MOT:	hi . 10000_11000
-@End
-```
 
 ## Expected Behavior
 

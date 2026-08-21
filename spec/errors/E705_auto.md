@@ -1,25 +1,14 @@
-# E705: Mor count mismatch - too few items
++++
+code = 'E705'
+name = 'Mor count mismatch - too few items'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Mor count mismatch - too few items
-
-## Metadata
-
-- **Error Code**: E705
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E4xx_alignment_errors/tag_marker_alignment.cha`
-**Trigger**: Tag markers (±) should have corresponding mor items
-**Expected Error Codes**: E705
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/tag_marker_alignment.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -32,15 +21,13 @@ Mor count mismatch - too few items
 @Comment:	Main tier alignable: I, want, ±, cookie = 4 words
 @Comment:	Mor tier: Should have 4 items (missing item for ±)
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `E4xx_alignment_errors/E705_mor_count_too_few.cha`
-**Trigger**: Main tier has 3 words + terminator = 4 alignable items, but %mor has only 2
-**Expected Error Codes**: E705
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/E705_mor_count_too_few.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -50,11 +37,16 @@ Mor count mismatch - too few items
 %mor:	pro|I v|want .
 @Comment:	ERROR: Main tier has 3 words but %mor only has 2 items (missing n|cookie)
 @End
-```
+'''
++++
+
+## Description
+
+Mor count mismatch - too few items
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

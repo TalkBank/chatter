@@ -1,4 +1,37 @@
-# E316: Angle-bracketed annotation inside %mor stem is invalid
++++
+code = 'E316'
+name = 'Angle-bracketed annotation inside %mor stem is invalid'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	fin
+@Participants:	CHI Target_Child
+@ID:	fin|test|CHI|||||Target_Child|||
+*CHI:	kato tos .
+%mor:	intj|kato noun|<sos>tos .
+@End
+'''
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	fin
+@Participants:	CHI Target_Child
+@ID:	fin|test|CHI|||||Target_Child|||
+*CHI:	tos ei .
+%mor:	sconj|<sos>tos~aux|ei-Fin-Neg-S3 .
+@End
+'''
++++
 
 ## Description
 
@@ -21,55 +54,6 @@ fixtures, not by corpus attestation.
 CLAN's `check` behavior on this pattern should be consulted before any
 grammar change; this spec locks in the current-correct rejection so
 the parser cannot silently start accepting invalid CHAT later.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-29 14:56 EDT
-
-- **Error Code**: E316
-- **Category**: Dependent tier validation
-- **Level**: tier
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: `<sos>` annotation appears as a prefix on the stem of a
-`%mor` tier entry. The parser cannot tokenize the boundary between the
-POS pipe and the stem text.
-
-**Expected Error Codes**: E316
-
-```chat
-@UTF8
-@Begin
-@Languages:	fin
-@Participants:	CHI Target_Child
-@ID:	fin|test|CHI|||||Target_Child|||
-*CHI:	kato tos .
-%mor:	intj|kato noun|<sos>tos .
-@End
-```
-
-## Example 2
-
-**Trigger**: Same angle-bracket stem prefix inside a clitic chain, as
-seen in the real Kirjavainen-MPI data: `sconj|<sos>tos~aux|...`. The
-error still fires at the `|<` boundary; the clitic `~` is never
-reached.
-
-**Expected Error Codes**: E316
-
-```chat
-@UTF8
-@Begin
-@Languages:	fin
-@Participants:	CHI Target_Child
-@ID:	fin|test|CHI|||||Target_Child|||
-*CHI:	tos ei .
-%mor:	sconj|<sos>tos~aux|ei-Fin-Neg-S3 .
-@End
-```
 
 ## Expected Behavior
 

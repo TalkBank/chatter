@@ -1,4 +1,57 @@
-# E761: %gra relation head is not a Universal Dependencies relation
++++
+code = 'E761'
+name = '%gra relation head is not a Universal Dependencies relation'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the dog .
+%mor:	det|the-Def-Art noun|dog .
+%gra:	1|2|DET 2|0|ROOT 3|2|PUNCTT
+@Comment:	ERROR: PUNCTT is a typo for the universal relation PUNCT
+@End
+'''
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	give me it .
+%mor:	verb|give pron|me-Prs-Acc-S1 pron|it-Prs-S3 .
+%gra:	1|0|ROOT 2|1|IOB 3|1|OBJ 4|1|PUNCT
+@Comment:	ERROR: IOB is a truncation of the universal relation IOBJ
+@End
+'''
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I want cookies .
+%mor:	pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres noun|cookie-Plur .
+%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+@Comment:	ERROR: SUBJ is the retired TalkBank label; UD writes NSUBJ
+@End
+'''
++++
 
 ## Description
 
@@ -19,73 +72,6 @@ tier's tree shape (`E721`-`E724`) or on its cardinality agreeing with `%mor`
 (`E720`), and it is not suppressed when those fail: a label is wrong or right
 regardless, and hiding it behind an unrelated diagnostic would leave the
 transcriber fixing the wrong thing.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-26 22:49 EDT
-
-- **Error Code**: E761
-- **Category**: Dependent tier validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a relation head that is a typo for a universal relation.
-
-**Expected Error Codes**: E761
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	the dog .
-%mor:	det|the-Def-Art noun|dog .
-%gra:	1|2|DET 2|0|ROOT 3|2|PUNCTT
-@Comment:	ERROR: PUNCTT is a typo for the universal relation PUNCT
-@End
-```
-
-## Example 2
-
-**Trigger**: a truncated relation head.
-
-**Expected Error Codes**: E761
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	give me it .
-%mor:	verb|give pron|me-Prs-Acc-S1 pron|it-Prs-S3 .
-%gra:	1|0|ROOT 2|1|IOB 3|1|OBJ 4|1|PUNCT
-@Comment:	ERROR: IOB is a truncation of the universal relation IOBJ
-@End
-```
-
-## Example 3
-
-**Trigger**: a retired TalkBank relation label.
-
-**Expected Error Codes**: E761
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	I want cookies .
-%mor:	pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres noun|cookie-Plur .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
-@Comment:	ERROR: SUBJ is the retired TalkBank label; UD writes NSUBJ
-@End
-```
 
 ## Expected Behavior
 

@@ -1,4 +1,22 @@
-# E375: Replacement `[: ...]` glued to a word without a preceding space
++++
+code = 'E375'
+name = 'Replacement [: ...] glued to a word without a preceding space'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	word[: foo] .
+@End
+'''
++++
 
 ## Description
 
@@ -18,31 +36,3 @@ This corresponds to CLAN CHECK error 161 ("Space character is required before
 for the replacement branch (an inconsistency with every sibling annotation),
 silently accepting the glued form; this spec locks in the rejection so the
 parser cannot regress to accepting it.
-
-## Metadata
-
-- **Status**: implemented
-- **Last updated**: 2026-06-23 09:32 EDT
-
-- **Error Code**: E375
-- **Category**: Word annotation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A replacement `[: foo]` is written with no space before the `[`,
-glued to the preceding word.
-
-**Expected Error Codes**: E375
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	word[: foo] .
-@End
-```

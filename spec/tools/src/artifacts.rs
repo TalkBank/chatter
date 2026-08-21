@@ -42,6 +42,7 @@ use anyhow::{Context, Result};
 
 use crate::output::{markdown, rust_test, tree_sitter, validation_corpus};
 use crate::owned_output::clear_owned;
+use crate::spec::by_code::SpecsByCode;
 use crate::spec::{ConstructSpec, ErrorSpec};
 
 /// The complete contents of one artifact: relative path to file body.
@@ -192,15 +193,24 @@ fn build_error_docs(repo_root: &Path) -> Result<GeneratedFiles> {
     let specs = ErrorSpec::load_all(error_dir(repo_root))
         .map_err(|e| anyhow::anyhow!("Failed to load error specs: {e}"))?;
 
+    // ONE grouping, shared by the pages and the index, and it DISCARDS NOTHING.
+    //
+    // The page loop used to get last-wins for free from `GeneratedFiles::insert`
+    // keyed on `{code}.md`, and the index re-stated the same rule in its own
+    // `BTreeMap`, with a doc comment as the only thing holding the two
+    // together. Both rules threw specs away, because a map keyed on the code
+    // has nowhere to put the second spec that claims it. See
+    // `crate::spec::by_code` for why several specs under one code is a
+    // legitimate state rather than a conflict to adjudicate.
+    let by_code = SpecsByCode::group(specs);
+
     let mut files = GeneratedFiles::new();
-    files.insert("index.md".into(), markdown::generate_error_index(&specs));
-    for spec in &specs {
-        for error in &spec.errors {
-            files.insert(
-                format!("{}.md", error.code).into(),
-                markdown::generate_error_page(error, spec.metadata.status, spec.metadata.kind),
-            );
-        }
+    files.insert("index.md".into(), markdown::generate_error_index(&by_code));
+    for (code, specs) in by_code.codes() {
+        files.insert(
+            format!("{code}.md").into(),
+            markdown::generate_error_page(code, specs),
+        );
     }
     Ok(files)
 }
@@ -212,12 +222,26 @@ fn build_tree_sitter_corpus(repo_root: &Path) -> Result<GeneratedFiles> {
     let error_specs = ErrorSpec::load_all(error_dir(repo_root))
         .map_err(|e| anyhow::anyhow!("Failed to load error specs: {e}"))?;
 
-    // Parser-layer only: a validation-layer example parses cleanly, so it has
-    // no ERROR node for a corpus test to assert.
-    let parser_errors: Vec<&ErrorSpec> = error_specs
-        .iter()
-        .filter(|s| !s.metadata.layer.is_validation())
-        .collect();
+    // Membership is decided per EXAMPLE from the observation snapshot, an
+    // artifact this generator READS (the registry regenerates it first; see
+    // `spec_runtime_tools::artifacts::all`). The file is data, so this crate's
+    // no-live-parser boundary holds, the same way the main workspace consumes
+    // manifest.json. An absent snapshot is refused: generating an empty error
+    // corpus from a missing input would read as "no parser-stage examples".
+    let snapshot_path = repo_root
+        .join("spec/observations")
+        .join(talkbank_spec_vocabulary::observations::SNAPSHOT_FILE);
+    let snapshot_text = std::fs::read_to_string(&snapshot_path).map_err(|err| {
+        anyhow::anyhow!(
+            "cannot read the observation snapshot at {}: {err}. It is an input \
+             to corpus membership; `just spec-gen` generates it first",
+            snapshot_path.display()
+        )
+    })?;
+    let snapshot: talkbank_spec_vocabulary::observations::ObservationSnapshot =
+        serde_json::from_str(&snapshot_text)
+            .map_err(|err| anyhow::anyhow!("parsing {}: {err}", snapshot_path.display()))?;
+    let all_errors: Vec<&ErrorSpec> = error_specs.iter().collect();
 
     let templates = repo_root.join("spec/tools/templates");
     let mut files = GeneratedFiles::new();
@@ -227,7 +251,7 @@ fn build_tree_sitter_corpus(repo_root: &Path) -> Result<GeneratedFiles> {
     {
         files.insert(name.into(), content);
     }
-    for (name, content) in tree_sitter::generate_error_corpus_files(&parser_errors)
+    for (name, content) in tree_sitter::generate_error_corpus_files(&all_errors, &snapshot)
         .map_err(|e| anyhow::anyhow!("{e}"))?
     {
         files.insert(name.into(), content);
@@ -239,14 +263,12 @@ fn build_tree_sitter_corpus(repo_root: &Path) -> Result<GeneratedFiles> {
 fn build_rust_tests(repo_root: &Path) -> Result<GeneratedFiles> {
     let construct_specs = ConstructSpec::load_all(construct_dir(repo_root))
         .map_err(|e| anyhow::anyhow!("Failed to load construct specs: {e}"))?;
-    let error_specs = ErrorSpec::load_all(error_dir(repo_root))
-        .map_err(|e| anyhow::anyhow!("Failed to load error specs: {e}"))?;
 
     let mut files = GeneratedFiles::new();
     for file in rust_test::GeneratedTestFile::ALL {
         files.insert(
             file.file_name().into(),
-            file.render(&construct_specs, &error_specs, TEST_ERROR_PATH),
+            file.render(&construct_specs, TEST_ERROR_PATH),
         );
     }
     Ok(files)

@@ -1,21 +1,13 @@
-# E522: Undefined Participant in Utterance
++++
+code = 'E522'
+name = 'Undefined Participant in Utterance'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An utterance uses a speaker code that was not defined in the @Participants header. All speaker codes used in utterances must be declared in the @Participants header.
-
-## Metadata
-
-- **Category**: header_validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E522
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -24,7 +16,12 @@ An utterance uses a speaker code that was not defined in the @Participants heade
 *MOT:	hello dear .
 *CHI:	hi mommy .
 @End
-```
+'''
++++
+
+## Description
+
+An utterance uses a speaker code that was not defined in the @Participants header. All speaker codes used in utterances must be declared in the @Participants header.
 
 ## Expected Behavior
 

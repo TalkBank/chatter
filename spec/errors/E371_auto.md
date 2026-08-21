@@ -1,25 +1,14 @@
-# E371: Pause inside phonological group
++++
+code = 'E371'
+name = 'Pause inside phonological group'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Pause inside phonological group
-
-## Metadata
-
-- **Error Code**: E371
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/pause-in-pho-group.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E371
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'validation_gaps/pause-in-pho-group.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,11 +19,16 @@ Pause inside phonological group
 *CHI:	goodbye ‹gʊd baɪ› friend .
 @Comment:	VALID: No pause inside ‹...›
 @End
-```
+'''
++++
+
+## Description
+
+Pause inside phonological group
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

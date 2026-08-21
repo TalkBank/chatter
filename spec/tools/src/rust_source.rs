@@ -18,6 +18,12 @@
 //! (2026-08-15, in `artifacts.rs`, in this same crate). A sentence asking the
 //! next person to think is not a mechanism; a module they have to import is.
 //!
+//! A fourth copy exists and is named here so this list does not read as
+//! complete: the symbol registry's generators are JavaScript
+//! (`spec/symbols/registry.js`), so they spawn their own `rustfmt` and cannot
+//! call this one. It already differs, passing no `--quiet`. Only porting those
+//! generators into this crate would remove it.
+//!
 //! The genuinely separate copy is `talkbank-parser-tests`'s
 //! `conformance_inventory::format_rust_source`, which lives in the OTHER cargo
 //! workspace. That one stays: `spec/` deliberately depends on no root crate but

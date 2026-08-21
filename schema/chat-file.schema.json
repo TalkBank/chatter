@@ -1299,87 +1299,87 @@
       "type": "object"
     },
     "CADelimiterType": {
-      "description": "Paired CA prosodic delimiter type.\n\nSymbol mapping is defined by [`CADelimiterType::to_symbol`] and must stay\naligned with the parser grammar.\n\n# Variants\n\n**Speech Rate:**\n- `Faster` (∆) - Faster speech\n- `Slower` (∇) - Slower speech\n\n**Volume:**\n- `Softer` (°)\n- `Louder` (◉)\n\n**Pitch Range:**\n- `LowPitch` (▁)\n- `HighPitch` (▔)\n\n**Voice Quality:**\n- `SmileVoice` (☺) - Smile voice/laughter quality\n- `BreathyVoice` (♋) - Breathy voice quality\n- `Whisper` (∬) - Whispered speech\n- `Creaky` (⁎) - Creaky voice\n- `Yawn` (Ϋ) - Yawning quality\n- `Singing` (∮) - Singing voice\n\n**Other:**\n- `Unsure` (⁇)\n- `SegmentRepetition` (↫) - Segment repetition\n- `Precise` (§) - Precise articulation\n\n# CHAT Format Examples\n\n```text\n∆fast∆             # Faster\n∇slow∇             # Slower\n°soft°             # Softer\n☺smile☺            # SmileVoice\n∬whisper∬          # Whisper\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
+      "description": "A PAIRED marker that opens and closes a stretch of a word.\n\nEach of these must appear an even number of times in a word; an\nunmatched one is rejected as an unbalanced delimiter.",
       "oneOf": [
         {
-          "const": "faster",
-          "description": "`∆`",
-          "type": "string"
-        },
-        {
-          "const": "slower",
-          "description": "`∇`",
-          "type": "string"
-        },
-        {
-          "const": "softer",
-          "description": "`°`",
-          "type": "string"
-        },
-        {
-          "const": "low_pitch",
-          "description": "`▁`",
-          "type": "string"
-        },
-        {
-          "const": "high_pitch",
-          "description": "`▔`",
-          "type": "string"
-        },
-        {
-          "const": "smile_voice",
-          "description": "`☺`",
-          "type": "string"
-        },
-        {
-          "const": "breathy_voice",
-          "description": "`♋`",
-          "type": "string"
-        },
-        {
           "const": "unsure",
-          "description": "`⁇`",
-          "type": "string"
-        },
-        {
-          "const": "whisper",
-          "description": "`∬`",
-          "type": "string"
-        },
-        {
-          "const": "yawn",
-          "description": "`Ϋ`",
-          "type": "string"
-        },
-        {
-          "const": "singing",
-          "description": "`∮`",
-          "type": "string"
-        },
-        {
-          "const": "segment_repetition",
-          "description": "`↫`",
-          "type": "string"
-        },
-        {
-          "const": "creaky",
-          "description": "`⁎`",
-          "type": "string"
-        },
-        {
-          "const": "louder",
-          "description": "`◉`",
+          "description": "`⁇` U+2047: Unsure transcription",
           "type": "string"
         },
         {
           "const": "precise",
-          "description": "`§`",
+          "description": "`§` U+00A7: Precise articulation",
+          "type": "string"
+        },
+        {
+          "const": "creaky",
+          "description": "`⁎` U+204E: Creaky voice",
+          "type": "string"
+        },
+        {
+          "const": "softer",
+          "description": "`°` U+00B0: Softer",
+          "type": "string"
+        },
+        {
+          "const": "segment_repetition",
+          "description": "`↫` U+21AB: Segment repetition, brackets repeated material that is NOT lexical (a disfluency mark, not CA notation)",
+          "type": "string"
+        },
+        {
+          "const": "faster",
+          "description": "`∆` U+2206: Faster",
+          "type": "string"
+        },
+        {
+          "const": "slower",
+          "description": "`∇` U+2207: Slower",
+          "type": "string"
+        },
+        {
+          "const": "whisper",
+          "description": "`∬` U+222C: Whisper",
+          "type": "string"
+        },
+        {
+          "const": "singing",
+          "description": "`∮` U+222E: Singing",
+          "type": "string"
+        },
+        {
+          "const": "low_pitch",
+          "description": "`▁` U+2581: Low pitch register",
+          "type": "string"
+        },
+        {
+          "const": "high_pitch",
+          "description": "`▔` U+2594: High pitch register",
+          "type": "string"
+        },
+        {
+          "const": "louder",
+          "description": "`◉` U+25C9: Louder",
+          "type": "string"
+        },
+        {
+          "const": "smile_voice",
+          "description": "`☺` U+263A: Smile voice",
+          "type": "string"
+        },
+        {
+          "const": "breathy_voice",
+          "description": "`♋` U+264B: Breathy voice",
+          "type": "string"
+        },
+        {
+          "const": "yawn",
+          "description": "`Ϋ` U+03AB: Yawn",
           "type": "string"
         }
       ]
     },
     "CAElement": {
-      "description": "One concrete CA prosodic marker token.\n\n# Structure\n\nA CA element consists of:\n- **type**: The kind of prosodic marker (pitch, stress, etc.)\n- **span**: Optional source location information\n\n# CHAT Format Examples\n\n```text\n*CHI: ↑hello .                         # Pitch rise\n*MOT: ˈvery nice .                     # Primary stress\n*CHI: I ↓know .                        # Pitch fall\n*INV: ≠wait .                          # Blocked segment\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CAElement, CAElementType};\n\nlet pitch_up = CAElement::new(CAElementType::PitchUp);\nlet pitch = CAElement::new(CAElementType::PitchUp);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
+      "description": "One marker token that attaches to a word rather than bracketing a stretch.\n\n# Structure\n\nA CA element consists of:\n- **type**: which marker, from [`CAElementType`]\n- **span**: Optional source location information\n\n# Not all of these are Conversation Analysis notation\n\nThe category name describes the PARSE ROLE (attaches to a word) and not\nthe provenance. `BlockedSegments` (`≠`) is a disfluency mark from the CHAT\nmanual's Disfluency Transcription chapter, a word attack rather than a\nprosodic feature, and CLAN names it `NOTCA_CROSSED_EQUAL` for that reason.\nIt lives here because it attaches to a word exactly as `↑` does.\n\n# CHAT Format Examples\n\nEvery example here is a variant of [`CAElementType`]. The stress markers\n`ˈ` and `ˌ` are NOT (they are `WordContent::StressMarker`), so an example\nusing one cannot be built as a `CAElement`.\n\n```text\n*CHI: ↑hello .                         # Shift to high pitch\n*CHI: I ↓know .                        # Shift to low pitch\n*INV: ≠wait .                          # Blocking, a disfluency word attack\n*PAR: swi≠mming .                      # Blocking inside a word\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CAElement, CAElementType};\n\nlet pitch_up = CAElement::new(CAElementType::PitchUp);\nlet pitch = CAElement::new(CAElementType::PitchUp);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
       "properties": {
         "element_type": {
           "$ref": "#/$defs/CAElementType",
@@ -1403,56 +1403,56 @@
       "type": "object"
     },
     "CAElementType": {
-      "description": "Single-point CA prosodic marker type.\n\nSymbol mapping is defined by [`CAElementType::to_symbol`] and must stay\naligned with the parser grammar.\n\n# Variants\n\n**Pitch Markers:**\n- `PitchUp` (↑)\n- `PitchDown` (↓)\n- `PitchReset` (↻)\n\n**Other Markers:**\n- `BlockedSegments` (≠)\n- `Constriction` (∾)\n- `Hardening` (⁑)\n- `HurriedStart` (⤇)\n- `Inhalation` (∙)\n- `LaughInWord` (Ἡ)\n- `SuddenStop` (⤆)\n\n# CHAT Format Examples\n\n```text\n↑hello             # pitch up\n↓there             # pitch down\n≠blocked           # blocked segment\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
+      "description": "A marker that attaches to a word token.\n\nNamed for its PARSE ROLE and not its provenance: the type carries any\nsymbol that joins the word token, whatever notation it comes from. Ask\n[`CAElementType::notation_family`] for provenance; never infer it from\nthe name of this type or of the array it is generated into.",
       "oneOf": [
         {
-          "const": "blocked_segments",
-          "description": "`≠`",
-          "type": "string"
-        },
-        {
-          "const": "constriction",
-          "description": "`∾`",
-          "type": "string"
-        },
-        {
           "const": "hardening",
-          "description": "`⁑`",
-          "type": "string"
-        },
-        {
-          "const": "hurried_start",
-          "description": "`⤇`",
-          "type": "string"
-        },
-        {
-          "const": "inhalation",
-          "description": "`∙`",
-          "type": "string"
-        },
-        {
-          "const": "laugh_in_word",
-          "description": "`Ἡ`",
-          "type": "string"
-        },
-        {
-          "const": "pitch_down",
-          "description": "`↓`",
-          "type": "string"
-        },
-        {
-          "const": "pitch_reset",
-          "description": "`↻`",
+          "description": "`⁑` U+2051: Hardening",
           "type": "string"
         },
         {
           "const": "pitch_up",
-          "description": "`↑`",
+          "description": "`↑` U+2191: Shift to high pitch",
+          "type": "string"
+        },
+        {
+          "const": "pitch_down",
+          "description": "`↓` U+2193: Shift to low pitch",
+          "type": "string"
+        },
+        {
+          "const": "pitch_reset",
+          "description": "`↻` U+21BB: Pitch reset",
+          "type": "string"
+        },
+        {
+          "const": "blocked_segments",
+          "description": "`≠` U+2260: Blocking, a word attack (a disfluency mark, not CA notation)",
+          "type": "string"
+        },
+        {
+          "const": "inhalation",
+          "description": "`∙` U+2219: Inhalation",
+          "type": "string"
+        },
+        {
+          "const": "constriction",
+          "description": "`∾` U+223E: Constriction",
           "type": "string"
         },
         {
           "const": "sudden_stop",
-          "description": "`⤆`",
+          "description": "`⤆` U+2906: Sudden stop",
+          "type": "string"
+        },
+        {
+          "const": "hurried_start",
+          "description": "`⤇` U+2907: Hurried start",
+          "type": "string"
+        },
+        {
+          "const": "laugh_in_word",
+          "description": "`Ἡ` U+1F29: Laugh inside a word",
           "type": "string"
         }
       ]
@@ -7745,7 +7745,7 @@
       "type": "object"
     },
     "WordContent": {
-      "description": "One token in a word's internal content stream.\n\nA complete [`crate::model::Word`] is an ordered sequence of these items plus\noptional outer markers (category, form, language, POS).\n\n# Variants\n\n- **Text**: Plain text segment (e.g., `hello`, `want`)\n- **Shortening**: Omitted sound in parentheses (e.g., `(be)` in `(be)cause`)\n- **OverlapPoint**: CA overlap point marker within word (`⌈`, `⌉`, `⌊`, `⌋` with optional indices)\n- **CAElement**: Individual CA prosodic marker (e.g., `↑`, `ˈ`, `∙`)\n- **CADelimiter**: Paired CA prosodic marker (e.g., `∆`, `°`, `∬`)\n- **StressMarker**: Primary/secondary stress markers (ˈ, ˌ)\n- **Lengthening**: Syllable lengthening marker (:)\n- **SyllablePause**: Pause between syllables (^)\n- **UnderlineBegin/End**: Control characters for underlined text\n\n# CHAT Format Examples\n\n```text\n(be)cause          # Shortening + Text\n↑hello             # CAElement + Text\nwo⌈rd              # Text + OverlapPoint (overlap begins mid-word)\n∆fast∆             # CADelimiter + Text + CADelimiter\nˈvery              # StressMarker + Text\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Overlap](https://talkbank.org/0info/manuals/CHAT.html#Overlap)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
+      "description": "One token in a word's internal content stream.\n\nA complete [`crate::model::Word`] is an ordered sequence of these items plus\noptional outer markers (category, form, language, POS).\n\n# Variants\n\n- **Text**: Plain text segment (e.g., `hello`, `want`)\n- **Shortening**: Omitted sound in parentheses (e.g., `(be)` in `(be)cause`)\n- **OverlapPoint**: CA overlap point marker within word (`⌈`, `⌉`, `⌊`, `⌋` with optional indices)\n- **CAElement**: word-attached marker (e.g. `↑`, `∙`, `≠`). Named for its\n  parse role, not its provenance: `≠` is a disfluency mark, not CA notation.\n- **CADelimiter**: PAIRED marker bracketing a stretch (e.g. `∆`, `°`, `∬`)\n- **StressMarker**: Primary/secondary stress markers (ˈ, ˌ)\n- **Lengthening**: Syllable lengthening marker (:)\n- **SyllablePause**: Pause between syllables (^)\n- **UnderlineBegin/End**: Control characters for underlined text\n\n# CHAT Format Examples\n\n```text\n(be)cause          # Shortening + Text\n↑hello             # CAElement + Text\nwo⌈rd              # Text + OverlapPoint (overlap begins mid-word)\n∆fast∆             # CADelimiter + Text + CADelimiter\nˈvery              # StressMarker + Text\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Overlap](https://talkbank.org/0info/manuals/CHAT.html#Overlap)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
       "oneOf": [
         {
           "description": "Plain text segment",
@@ -7816,7 +7816,7 @@
           "type": "object"
         },
         {
-          "description": "CA element (individual prosody marker like ↑, ↓, ≠, ∾)",
+          "description": "Word-attached marker (`↑`, `↓`, `∾` prosody; `≠` blocking, a disfluency\nmark rather than prosody, grouped here because it attaches the same way)",
           "properties": {
             "content": {
               "$ref": "#/$defs/CAElement"
@@ -7833,7 +7833,7 @@
           "type": "object"
         },
         {
-          "description": "CA delimiter (paired prosody marker like ∆, ∇, °, ▁)",
+          "description": "Paired marker bracketing a stretch (`∆`, `∇`, `°`, `▁` prosody; `↫`\nsegment repetition, a disfluency mark, grouped here for the same reason)",
           "properties": {
             "content": {
               "$ref": "#/$defs/CADelimiter"

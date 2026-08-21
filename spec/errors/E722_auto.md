@@ -1,29 +1,14 @@
-# E722: GRA has no ROOT
++++
+code = 'E722'
+name = 'GRA has no ROOT'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last modified:** 2026-05-30 19:04 EDT
-
-**Last updated:** 2026-04-04 08:15 EDT
-
-## Description
-
-`%gra` tier has no ROOT relation. Every `%gra` tier must have exactly one relation with `head=0` or `head=self` (the ROOT of the dependency tree).
-
-## Metadata
-
-- **Error Code**: E722
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E722_gra_no_root.cha`
-**Trigger**: `%gra` has no non-terminator ROOT relation while `%mor/%gra` counts still match
-**Expected Error Codes**: E722
-
-```chat
+[[example]]
+level = 'tier'
+source = 'error_corpus/validation_errors/E722_gra_no_root.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -33,7 +18,16 @@
 %mor:	pro|I v|want .
 %gra:	1|2|NSUBJ 2|3|OBJ 3|0|PUNCT
 @End
-```
+'''
++++
+
+**Last modified:** 2026-05-30 19:04 EDT
+
+**Last updated:** 2026-04-04 08:15 EDT
+
+## Description
+
+`%gra` tier has no ROOT relation. Every `%gra` tier must have exactly one relation with `head=0` or `head=self` (the ROOT of the dependency tree).
 
 ## Expected Behavior
 

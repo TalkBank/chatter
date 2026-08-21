@@ -1,0 +1,2894 @@
+{
+  "generated_by": "just spec-gen (spec-runtime-tools::observations); adjudicate diffs like a corpus differential",
+  "examples": [
+    {
+      "spec": "E003_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E502",
+        "E503",
+        "E504"
+      ]
+    },
+    {
+      "spec": "E101_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E501"
+      ],
+      "validation": [
+        "E502",
+        "E503",
+        "E504"
+      ]
+    },
+    {
+      "spec": "E202_auto.md",
+      "example": 1,
+      "parse": [
+        "E202"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E202_missing_form_type.md",
+      "example": 1,
+      "parse": [
+        "E202"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E202_missing_form_type.md",
+      "example": 2,
+      "parse": [
+        "E203"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E203_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E207_auto.md",
+      "example": 1,
+      "parse": [
+        "E207"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E208_auto.md",
+      "example": 1,
+      "parse": [
+        "E342",
+        "E376"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E209_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E209"
+      ]
+    },
+    {
+      "spec": "E210_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E387"
+      ]
+    },
+    {
+      "spec": "E212_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E213_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E391"
+      ]
+    },
+    {
+      "spec": "E214_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E220_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E220"
+      ]
+    },
+    {
+      "spec": "E220_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E220"
+      ]
+    },
+    {
+      "spec": "E230_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E230"
+      ]
+    },
+    {
+      "spec": "E231_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E232_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E342"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E233_auto.md",
+      "example": 1,
+      "parse": [
+        "E233"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E241_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E241"
+      ]
+    },
+    {
+      "spec": "E241_illegal_untranscribed_marker.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E241"
+      ]
+    },
+    {
+      "spec": "E241_illegal_untranscribed_marker.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E241"
+      ]
+    },
+    {
+      "spec": "E242_auto.md",
+      "example": 1,
+      "parse": [
+        "E242",
+        "E342"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E243_auto.md",
+      "example": 1,
+      "parse": [
+        "E202"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E243_pipe_in_word.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E243"
+      ]
+    },
+    {
+      "spec": "E244_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E244",
+        "E247"
+      ]
+    },
+    {
+      "spec": "E245_auto.md",
+      "example": 1,
+      "parse": [
+        "E245"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E246_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E765"
+      ]
+    },
+    {
+      "spec": "E247_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E247"
+      ]
+    },
+    {
+      "spec": "E248_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E220",
+        "E248"
+      ]
+    },
+    {
+      "spec": "E249_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E249"
+      ]
+    },
+    {
+      "spec": "E250_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E250"
+      ]
+    },
+    {
+      "spec": "E251_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E255"
+      ]
+    },
+    {
+      "spec": "E252_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E252"
+      ]
+    },
+    {
+      "spec": "E253_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E253",
+        "E306",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E255_whole_utterance_language_switch_should_use_precode.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E255"
+      ]
+    },
+    {
+      "spec": "E255_whole_utterance_language_switch_should_use_precode.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E255"
+      ]
+    },
+    {
+      "spec": "E256.md",
+      "example": 1,
+      "parse": [
+        "E256"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E258_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E258"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 6,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 7,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E259_auto.md",
+      "example": 8,
+      "parse": [],
+      "validation": [
+        "E259"
+      ]
+    },
+    {
+      "spec": "E301_auto.md",
+      "example": 1,
+      "parse": [
+        "E301"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E302_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E505"
+      ],
+      "validation": [
+        "E502",
+        "E503",
+        "E504"
+      ]
+    },
+    {
+      "spec": "E303_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E342"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E304_auto.md",
+      "example": 1,
+      "parse": [
+        "E301"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E305_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E305"
+      ]
+    },
+    {
+      "spec": "E306_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E253",
+        "E306"
+      ]
+    },
+    {
+      "spec": "E307_auto.md",
+      "example": 1,
+      "parse": [
+        "E246",
+        "E316",
+        "E320",
+        "E513",
+        "E523"
+      ],
+      "validation": [
+        "E307",
+        "E506",
+        "E522"
+      ]
+    },
+    {
+      "spec": "E308_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E308",
+        "E522",
+        "W108"
+      ]
+    },
+    {
+      "spec": "E308_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E308",
+        "E522",
+        "W108"
+      ]
+    },
+    {
+      "spec": "E309_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E505"
+      ],
+      "validation": [
+        "E502",
+        "E503",
+        "E504"
+      ]
+    },
+    {
+      "spec": "E310_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E311_auto.md",
+      "example": 1,
+      "parse": [
+        "E311"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E311_auto.md",
+      "example": 2,
+      "parse": [
+        "E311"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E312_auto.md",
+      "example": 1,
+      "parse": [
+        "E342",
+        "E375"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E313_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E314_auto.md",
+      "example": 1,
+      "parse": [
+        "E375"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E315_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_angle_bracket_in_mor_stem.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E316_angle_bracket_in_mor_stem.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 2,
+      "parse": [
+        "E316",
+        "E342"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 5,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 6,
+      "parse": [
+        "E501"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 7,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E316_auto.md",
+      "example": 8,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E319_auto.md",
+      "example": 1,
+      "parse": [
+        "E602"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E320_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E539"
+      ]
+    },
+    {
+      "spec": "E321_auto.md",
+      "example": 1,
+      "parse": [
+        "E342",
+        "E375"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E322_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E323_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E505"
+      ],
+      "validation": [
+        "E502",
+        "E503",
+        "E504"
+      ]
+    },
+    {
+      "spec": "E324_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E325_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E600"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E326_auto.md",
+      "example": 1,
+      "parse": [
+        "E326"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E330_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E331_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600",
+        "E724"
+      ]
+    },
+    {
+      "spec": "E341_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E341_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E342_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E390"
+      ]
+    },
+    {
+      "spec": "E342_auto.md",
+      "example": 2,
+      "parse": [
+        "E760"
+      ],
+      "validation": [
+        "E600",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E342_auto.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E342_auto.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E604"
+      ]
+    },
+    {
+      "spec": "E342_group_without_annotation.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E757"
+      ]
+    },
+    {
+      "spec": "E344_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E346_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E347_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E347"
+      ]
+    },
+    {
+      "spec": "E348_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E351_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E352_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E353_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E354_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E355_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E356_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E356"
+      ]
+    },
+    {
+      "spec": "E357_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E357"
+      ]
+    },
+    {
+      "spec": "E358_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E358",
+        "E515",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E359_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E359",
+        "E515",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E360_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E360_deprecated_skip_bullet.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E361_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E362_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E362",
+        "E531",
+        "E701",
+        "E704"
+      ]
+    },
+    {
+      "spec": "E363_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E364_auto.md",
+      "example": 1,
+      "parse": [
+        "E246"
+      ],
+      "validation": [
+        "E249"
+      ]
+    },
+    {
+      "spec": "E365_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": []
+    },
+    {
+      "spec": "E367_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E367",
+        "E515",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E368_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E368",
+        "E515",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E370_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E370"
+      ]
+    },
+    {
+      "spec": "E370_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E370"
+      ]
+    },
+    {
+      "spec": "E371_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E371"
+      ]
+    },
+    {
+      "spec": "E372_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E372"
+      ]
+    },
+    {
+      "spec": "E372_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E372"
+      ]
+    },
+    {
+      "spec": "E372_auto.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E372"
+      ]
+    },
+    {
+      "spec": "E373_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E347",
+        "E373"
+      ]
+    },
+    {
+      "spec": "E373_auto.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E375_auto.md",
+      "example": 1,
+      "parse": [
+        "E375"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E375_replacement_needs_preceding_space.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E375"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E376_auto.md",
+      "example": 1,
+      "parse": [
+        "E342",
+        "E376"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E377_retrace_with_no_material.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E377"
+      ]
+    },
+    {
+      "spec": "E377_retrace_with_no_material.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E377"
+      ]
+    },
+    {
+      "spec": "E377_retrace_with_no_material.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E377"
+      ]
+    },
+    {
+      "spec": "E378_retrace_without_words.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E378"
+      ]
+    },
+    {
+      "spec": "E378_retrace_without_words.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E378"
+      ]
+    },
+    {
+      "spec": "E378_retrace_without_words.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E378"
+      ]
+    },
+    {
+      "spec": "E382_auto.md",
+      "example": 1,
+      "parse": [
+        "E760"
+      ],
+      "validation": [
+        "E600",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E382_auto.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E382_auto.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E387_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E387"
+      ]
+    },
+    {
+      "spec": "E388_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E388"
+      ]
+    },
+    {
+      "spec": "E389_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E389"
+      ]
+    },
+    {
+      "spec": "E390_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E390"
+      ]
+    },
+    {
+      "spec": "E391_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E391"
+      ]
+    },
+    {
+      "spec": "E401_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E401",
+        "E604"
+      ]
+    },
+    {
+      "spec": "E401_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E401"
+      ]
+    },
+    {
+      "spec": "E404_auto.md",
+      "example": 1,
+      "parse": [
+        "E404"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E501_auto.md",
+      "example": 1,
+      "parse": [
+        "E501"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E501_auto.md",
+      "example": 2,
+      "parse": [
+        "E513",
+        "E523"
+      ],
+      "validation": [
+        "E506",
+        "E522",
+        "E532"
+      ]
+    },
+    {
+      "spec": "E502_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E502"
+      ]
+    },
+    {
+      "spec": "E503_auto.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E505"
+      ],
+      "validation": [
+        "E502",
+        "E503",
+        "E504"
+      ]
+    },
+    {
+      "spec": "E504_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E504"
+      ]
+    },
+    {
+      "spec": "E504_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E504"
+      ]
+    },
+    {
+      "spec": "E505_auto.md",
+      "example": 1,
+      "parse": [
+        "E505",
+        "E522"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E505_auto.md",
+      "example": 2,
+      "parse": [
+        "E505",
+        "E522"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E505_auto.md",
+      "example": 3,
+      "parse": [
+        "E505",
+        "E522"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E506_auto.md",
+      "example": 1,
+      "parse": [
+        "E342",
+        "E747"
+      ],
+      "validation": [
+        "E506"
+      ]
+    },
+    {
+      "spec": "E507_auto.md",
+      "example": 1,
+      "parse": [
+        "E507"
+      ],
+      "validation": [
+        "E504"
+      ]
+    },
+    {
+      "spec": "E508_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E516"
+      ]
+    },
+    {
+      "spec": "E509_auto.md",
+      "example": 1,
+      "parse": [
+        "E509"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E510_auto.md",
+      "example": 1,
+      "parse": [
+        "E505",
+        "E522"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E511_auto.md",
+      "example": 1,
+      "parse": [
+        "E522",
+        "E523"
+      ],
+      "validation": [
+        "E511",
+        "E522"
+      ]
+    },
+    {
+      "spec": "E512_auto.md",
+      "example": 1,
+      "parse": [
+        "E513"
+      ],
+      "validation": [
+        "E506",
+        "E522"
+      ]
+    },
+    {
+      "spec": "E513_auto.md",
+      "example": 1,
+      "parse": [
+        "E513",
+        "E523"
+      ],
+      "validation": [
+        "E506",
+        "E522",
+        "E532"
+      ]
+    },
+    {
+      "spec": "E514_empty_id_corpus.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E514"
+      ]
+    },
+    {
+      "spec": "E515_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E515"
+      ]
+    },
+    {
+      "spec": "E516_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E516"
+      ]
+    },
+    {
+      "spec": "E517_invalid_age_format.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E517"
+      ]
+    },
+    {
+      "spec": "E517_invalid_age_format.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E517"
+      ]
+    },
+    {
+      "spec": "E517_invalid_age_format.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E517"
+      ]
+    },
+    {
+      "spec": "E517_invalid_age_format.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E517"
+      ]
+    },
+    {
+      "spec": "E517_invalid_age_format.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E517"
+      ]
+    },
+    {
+      "spec": "E518_auto.md",
+      "example": 1,
+      "parse": [
+        "E501"
+      ],
+      "validation": [
+        "E502",
+        "E518"
+      ]
+    },
+    {
+      "spec": "E518_auto.md",
+      "example": 2,
+      "parse": [
+        "E501"
+      ],
+      "validation": [
+        "E502",
+        "E518"
+      ]
+    },
+    {
+      "spec": "E518_auto.md",
+      "example": 3,
+      "parse": [
+        "E501"
+      ],
+      "validation": [
+        "E502",
+        "E518"
+      ]
+    },
+    {
+      "spec": "E518_auto.md",
+      "example": 4,
+      "parse": [
+        "E501"
+      ],
+      "validation": [
+        "E502",
+        "E518"
+      ]
+    },
+    {
+      "spec": "E518_auto.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E518"
+      ]
+    },
+    {
+      "spec": "E518_auto.md",
+      "example": 6,
+      "parse": [
+        "E501"
+      ],
+      "validation": [
+        "E502",
+        "E518"
+      ]
+    },
+    {
+      "spec": "E519_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E519"
+      ]
+    },
+    {
+      "spec": "E519_l1_of_language_code.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E519"
+      ]
+    },
+    {
+      "spec": "E519_word_level_language_code.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E519"
+      ]
+    },
+    {
+      "spec": "E522_auto.md",
+      "example": 1,
+      "parse": [
+        "E342",
+        "E747"
+      ],
+      "validation": [
+        "E506"
+      ]
+    },
+    {
+      "spec": "E522_auto.md",
+      "example": 2,
+      "parse": [
+        "E522"
+      ],
+      "validation": [
+        "E308",
+        "E522",
+        "W108"
+      ]
+    },
+    {
+      "spec": "E522_undefined_participant.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E308",
+        "E522",
+        "W108"
+      ]
+    },
+    {
+      "spec": "E523_auto.md",
+      "example": 1,
+      "parse": [
+        "E523"
+      ],
+      "validation": [
+        "E522"
+      ]
+    },
+    {
+      "spec": "E524_auto.md",
+      "example": 1,
+      "parse": [
+        "E524"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E525_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E529"
+      ]
+    },
+    {
+      "spec": "E525_auto.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E530"
+      ]
+    },
+    {
+      "spec": "E525_auto.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E525"
+      ]
+    },
+    {
+      "spec": "E525_auto.md",
+      "example": 4,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E515",
+        "E526",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E525_auto.md",
+      "example": 5,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E515",
+        "E527",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E526_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E515",
+        "E526",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E527_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E515",
+        "E527",
+        "E546"
+      ]
+    },
+    {
+      "spec": "E528_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E526",
+        "E527",
+        "E528"
+      ]
+    },
+    {
+      "spec": "E529_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E529"
+      ]
+    },
+    {
+      "spec": "E530_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E530"
+      ]
+    },
+    {
+      "spec": "E531_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E531",
+        "E544"
+      ]
+    },
+    {
+      "spec": "E532_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E532"
+      ]
+    },
+    {
+      "spec": "E533_auto.md",
+      "example": 1,
+      "parse": [
+        "E342"
+      ],
+      "validation": [
+        "E533",
+        "E543"
+      ]
+    },
+    {
+      "spec": "E534_unsupported_option.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E534",
+        "E551"
+      ]
+    },
+    {
+      "spec": "E535_unsupported_media_type.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E535",
+        "E544"
+      ]
+    },
+    {
+      "spec": "E536_unsupported_media_status.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E536"
+      ]
+    },
+    {
+      "spec": "E537_unsupported_number.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E537"
+      ]
+    },
+    {
+      "spec": "E538_unsupported_recording_quality.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E538"
+      ]
+    },
+    {
+      "spec": "E539_unsupported_transcription.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E539"
+      ]
+    },
+    {
+      "spec": "E540_invalid_time_duration.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E540"
+      ]
+    },
+    {
+      "spec": "E540_invalid_time_duration.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E540"
+      ]
+    },
+    {
+      "spec": "E540_invalid_time_duration.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E540"
+      ]
+    },
+    {
+      "spec": "E540_invalid_time_duration.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E540"
+      ]
+    },
+    {
+      "spec": "E541_invalid_time_start.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E541"
+      ]
+    },
+    {
+      "spec": "E541_invalid_time_start.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E541"
+      ]
+    },
+    {
+      "spec": "E541_invalid_time_start.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E541"
+      ]
+    },
+    {
+      "spec": "E542_unsupported_sex.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E542"
+      ]
+    },
+    {
+      "spec": "E543_header_out_of_order.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E543"
+      ]
+    },
+    {
+      "spec": "E544_media_linkage_without_timing.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E544"
+      ]
+    },
+    {
+      "spec": "E544_media_linkage_without_timing.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E544"
+      ]
+    },
+    {
+      "spec": "E545_invalid_birth_date_format.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E545"
+      ]
+    },
+    {
+      "spec": "E545_invalid_birth_date_format.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E545"
+      ]
+    },
+    {
+      "spec": "E545_invalid_birth_date_format.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E545"
+      ]
+    },
+    {
+      "spec": "E545_invalid_birth_date_format.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E545"
+      ]
+    },
+    {
+      "spec": "E546_unsupported_ses.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E546"
+      ]
+    },
+    {
+      "spec": "E547_constant_header_out_of_order.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E547"
+      ]
+    },
+    {
+      "spec": "E548_id_header_out_of_order.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E548"
+      ]
+    },
+    {
+      "spec": "E549_duplicate_speaker_declaration.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E549"
+      ]
+    },
+    {
+      "spec": "E550_trailing_comma_participants.md",
+      "example": 1,
+      "parse": [
+        "E316",
+        "E550"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E551_options_header_out_of_order.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E551"
+      ]
+    },
+    {
+      "spec": "E552_media_unlinked_with_timing.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E552"
+      ]
+    },
+    {
+      "spec": "E552_media_unlinked_with_timing.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E552"
+      ]
+    },
+    {
+      "spec": "E600_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E601_auto.md",
+      "example": 1,
+      "parse": [
+        "E601"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E602_auto.md",
+      "example": 1,
+      "parse": [
+        "E602"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E603_invalid_tim_tier_format.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E603"
+      ]
+    },
+    {
+      "spec": "E604_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E604",
+        "E722"
+      ]
+    },
+    {
+      "spec": "E604_gra_without_mor.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E604",
+        "E722"
+      ]
+    },
+    {
+      "spec": "E605_unsupported_dependent_tier.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E605"
+      ]
+    },
+    {
+      "spec": "E701_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E362",
+        "E701",
+        "E704",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E701_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E362",
+        "E701",
+        "E704",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E702_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E704_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E704"
+      ]
+    },
+    {
+      "spec": "E705_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E705"
+      ]
+    },
+    {
+      "spec": "E705_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E705"
+      ]
+    },
+    {
+      "spec": "E706_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E706"
+      ]
+    },
+    {
+      "spec": "E706_auto.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E706"
+      ]
+    },
+    {
+      "spec": "E706_auto.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E706"
+      ]
+    },
+    {
+      "spec": "E706_auto.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E706"
+      ]
+    },
+    {
+      "spec": "E707.md",
+      "example": 1,
+      "parse": [
+        "E305"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E707.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E305"
+      ]
+    },
+    {
+      "spec": "E708_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E604"
+      ]
+    },
+    {
+      "spec": "E709_auto.md",
+      "example": 1,
+      "parse": [
+        "E709"
+      ],
+      "validation": [
+        "E600",
+        "E722"
+      ]
+    },
+    {
+      "spec": "E710_auto.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E604"
+      ]
+    },
+    {
+      "spec": "E711.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E711.md",
+      "example": 2,
+      "parse": [
+        "E760"
+      ],
+      "validation": [
+        "E600",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E712_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E712"
+      ]
+    },
+    {
+      "spec": "E713_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E713"
+      ]
+    },
+    {
+      "spec": "E714_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E714"
+      ]
+    },
+    {
+      "spec": "E715_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E715"
+      ]
+    },
+    {
+      "spec": "E716.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E716"
+      ]
+    },
+    {
+      "spec": "E716.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E716"
+      ]
+    },
+    {
+      "spec": "E716.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E716"
+      ]
+    },
+    {
+      "spec": "E718_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E718"
+      ]
+    },
+    {
+      "spec": "E719_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E719"
+      ]
+    },
+    {
+      "spec": "E720_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E720"
+      ]
+    },
+    {
+      "spec": "E721_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E721"
+      ]
+    },
+    {
+      "spec": "E722_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E722"
+      ]
+    },
+    {
+      "spec": "E723_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E723"
+      ]
+    },
+    {
+      "spec": "E724_gra_circular_dependency.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E724"
+      ]
+    },
+    {
+      "spec": "E724_gra_circular_dependency.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E724"
+      ]
+    },
+    {
+      "spec": "E724_gra_circular_dependency.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E724"
+      ]
+    },
+    {
+      "spec": "E725_modsyl_mod_count_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E725"
+      ]
+    },
+    {
+      "spec": "E726_phosyl_pho_count_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E726"
+      ]
+    },
+    {
+      "spec": "E727_phoaln_mod_count_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E727"
+      ]
+    },
+    {
+      "spec": "E728_phoaln_pho_count_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E728"
+      ]
+    },
+    {
+      "spec": "E729_bullet_overlap.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E730_bullet_gap.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E731_speaker_bullet_self_overlap.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E732_missing_bullet.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E733_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E733"
+      ]
+    },
+    {
+      "spec": "E734_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E734"
+      ]
+    },
+    {
+      "spec": "E735_syl_unit_malformed.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E735"
+      ]
+    },
+    {
+      "spec": "E736_syl_illegal_constituent_code.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E736"
+      ]
+    },
+    {
+      "spec": "E737_modsyl_reconstruction_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E737"
+      ]
+    },
+    {
+      "spec": "E738_phosyl_reconstruction_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E738"
+      ]
+    },
+    {
+      "spec": "E739_phoaln_pair_malformed.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E739"
+      ]
+    },
+    {
+      "spec": "E740_phoaln_mod_reconstruction_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E740"
+      ]
+    },
+    {
+      "spec": "E741_phoaln_pho_reconstruction_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E741"
+      ]
+    },
+    {
+      "spec": "E742_xphoint_bullet_invalid.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E742",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E743_xphoint_interval_not_monotonic.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E743",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E744_xphoint_media_bounds_violation.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E744",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E745_xphoint_phone_reconstruction_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E745",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E746_xphoint_group_count_mismatch.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E746",
+        "E752"
+      ]
+    },
+    {
+      "spec": "E747_blank_line_not_allowed.md",
+      "example": 1,
+      "parse": [
+        "E747"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E748_leading_zero_bullet_time.md",
+      "example": 1,
+      "parse": [
+        "E748"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E748_leading_zero_bullet_time.md",
+      "example": 2,
+      "parse": [
+        "E748"
+      ],
+      "validation": [
+        "E362"
+      ]
+    },
+    {
+      "spec": "E749_comma_glued_to_next_word.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E749"
+      ]
+    },
+    {
+      "spec": "E750_space_inside_angle_group.md",
+      "example": 1,
+      "parse": [
+        "E750"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E750_space_inside_angle_group.md",
+      "example": 2,
+      "parse": [
+        "E750"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E751_pause_glued_to_word.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E751"
+      ]
+    },
+    {
+      "spec": "E752_timing_without_media.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E752"
+      ]
+    },
+    {
+      "spec": "E753_word_only_repetition_segments.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E753"
+      ]
+    },
+    {
+      "spec": "E755_undeclared_utterance_language.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E755"
+      ]
+    },
+    {
+      "spec": "E756_empty_dependent_tier.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E756",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E756_empty_dependent_tier.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E756"
+      ]
+    },
+    {
+      "spec": "E756_empty_dependent_tier.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E756"
+      ]
+    },
+    {
+      "spec": "E756_empty_dependent_tier.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E756"
+      ]
+    },
+    {
+      "spec": "E757_code_glued_to_following_content.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E757"
+      ]
+    },
+    {
+      "spec": "E757_code_glued_to_following_content.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E757"
+      ]
+    },
+    {
+      "spec": "E757_code_glued_to_following_content.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E757"
+      ]
+    },
+    {
+      "spec": "E758_leading_space_on_main_tier.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E758"
+      ]
+    },
+    {
+      "spec": "E758_leading_space_on_main_tier.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E758"
+      ]
+    },
+    {
+      "spec": "E758_leading_space_on_main_tier.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E758"
+      ]
+    },
+    {
+      "spec": "E758_leading_space_on_main_tier.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E758"
+      ]
+    },
+    {
+      "spec": "E758_leading_space_on_main_tier.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E308",
+        "E522",
+        "E758",
+        "W108"
+      ]
+    },
+    {
+      "spec": "E759_annotation_at_utterance_start.md",
+      "example": 1,
+      "parse": [
+        "E759"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E759_annotation_at_utterance_start.md",
+      "example": 2,
+      "parse": [
+        "E759"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E759_annotation_at_utterance_start.md",
+      "example": 3,
+      "parse": [
+        "E759"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E760_mor_item_empty_pos.md",
+      "example": 1,
+      "parse": [
+        "E760"
+      ],
+      "validation": [
+        "E600",
+        "E758"
+      ]
+    },
+    {
+      "spec": "E760_mor_item_empty_pos.md",
+      "example": 2,
+      "parse": [
+        "E760"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "E761_gra_relation_head_not_universal.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E761"
+      ]
+    },
+    {
+      "spec": "E761_gra_relation_head_not_universal.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E761"
+      ]
+    },
+    {
+      "spec": "E761_gra_relation_head_not_universal.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E761"
+      ]
+    },
+    {
+      "spec": "E762_prefix_marker_illegal_position.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E762"
+      ]
+    },
+    {
+      "spec": "E762_prefix_marker_illegal_position.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E762"
+      ]
+    },
+    {
+      "spec": "E762_prefix_marker_illegal_position.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E762"
+      ]
+    },
+    {
+      "spec": "E763_prefix_marker_language_not_allowed.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E763"
+      ]
+    },
+    {
+      "spec": "E763_prefix_marker_language_not_allowed.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E763"
+      ]
+    },
+    {
+      "spec": "E763_prefix_marker_language_not_allowed.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E763"
+      ]
+    },
+    {
+      "spec": "E764_prefixed_form_glued_to_preceding_word.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E764"
+      ]
+    },
+    {
+      "spec": "E764_prefixed_form_glued_to_preceding_word.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E764"
+      ]
+    },
+    {
+      "spec": "E764_prefixed_form_glued_to_preceding_word.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E764"
+      ]
+    },
+    {
+      "spec": "E765_separator_glued_to_following_content.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E765"
+      ]
+    },
+    {
+      "spec": "E765_separator_glued_to_following_content.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E765"
+      ]
+    },
+    {
+      "spec": "E765_separator_glued_to_following_content.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E765"
+      ]
+    },
+    {
+      "spec": "E766_linker_not_utterance_initial.md",
+      "example": 1,
+      "parse": [
+        "E766"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E766_linker_not_utterance_initial.md",
+      "example": 2,
+      "parse": [
+        "E766"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E766_linker_not_utterance_initial.md",
+      "example": 3,
+      "parse": [
+        "E766"
+      ],
+      "validation": []
+    },
+    {
+      "spec": "E767_media_whitespace_before_comma.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E544",
+        "E767"
+      ]
+    },
+    {
+      "spec": "E767_media_whitespace_before_comma.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E767"
+      ]
+    },
+    {
+      "spec": "E999_auto.md",
+      "example": 1,
+      "parse": [
+        "E305"
+      ],
+      "validation": [
+        "E600"
+      ]
+    },
+    {
+      "spec": "W108_auto.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E308",
+        "E522",
+        "W108"
+      ]
+    }
+  ]
+}

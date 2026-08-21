@@ -1,22 +1,13 @@
-# E603: Invalid %tim Tier Format
++++
+code = 'E603'
+name = 'Invalid %tim Tier Format'
+kind = 'Unmodeled'
+status = 'implemented'
 
-## Description
-
-A `%tim` dependent tier contains content that does not match the expected time format. The tier parses successfully but the invalid content is stored as `Unsupported` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E603
-- **Category**: tier_validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Unmodeled
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E603
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ A `%tim` dependent tier contains content that does not match the expected time f
 *CHI:	hello world .
 %tim:	afternoon session
 @End
-```
+'''
++++
+
+## Description
+
+A `%tim` dependent tier contains content that does not match the expected time format. The tier parses successfully but the invalid content is stored as `Unsupported` and flagged during validation.
 
 ## Expected Behavior
 

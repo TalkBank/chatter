@@ -26,8 +26,10 @@
 //! exercises `validate_with_alignment`, never the config path.
 //!
 //! `E544`/`E552`/`E752`/`E755` reuse the exact fixtures the spec-generated
-//! `error_corpus/validation_errors/` manifest already carries (preferred
-//! over hand-written CHAT). `check_cross_header_consistency`'s two rules
+//! corpus commits (real spec-authored CHAT, preferred over hand-written),
+//! named `<spec stem>_<example index>` since R4 made fixture identity derive
+//! from the example rather than from iteration order.
+//! `check_cross_header_consistency`'s two rules
 //! (CHECK 122: `@ID` language not in `@Languages`; CHECK 142: `@ID` role
 //! disagrees with `@Participants`) have no existing fixture anywhere in the
 //! corpus (grep confirms no spec references either CHECK number), so those
@@ -106,34 +108,22 @@ fn assert_fixture_code_fires_through_config_path(
 
 #[test]
 fn e544_media_linkage_without_timing_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path(
-        "E544_Media_claims_linkage_but_transcript_has_no_timing_evidence",
-        "E544",
-    )
+    assert_fixture_code_fires_through_config_path("E544_media_linkage_without_timing_1", "E544")
 }
 
 #[test]
 fn e552_media_unlinked_with_timing_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path(
-        "E552_Media_declares_unlinked_but_transcript_carries_timing",
-        "E552",
-    )
+    assert_fixture_code_fires_through_config_path("E552_media_unlinked_with_timing_1", "E552")
 }
 
 #[test]
 fn e752_timing_without_media_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path(
-        "E752_Timing_bullets_without_an_Media_header",
-        "E752",
-    )
+    assert_fixture_code_fires_through_config_path("E752_timing_without_media_1", "E752")
 }
 
 #[test]
 fn e755_undeclared_utterance_language_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path(
-        "E755_Utterance_language_not_declared_in_Languages",
-        "E755",
-    )
+    assert_fixture_code_fires_through_config_path("E755_undeclared_utterance_language_1", "E755")
 }
 
 /// CHECK 122: `@ID`'s language field names a real ISO 639-3 code (`fra`,

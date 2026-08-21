@@ -1,4 +1,37 @@
-# E370, Structural order error
++++
+code = 'E370'
+name = 'Structural order error'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: retrace [/] is not followed by repeated material
+*CHI:	<the> [/] .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: retrace [//] is not followed by corrected material
+*CHI:	the cat [//] .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-06-16 18:11 EDT
@@ -10,47 +43,6 @@ or repetition marker (`[/]`, `[//]`, `[///]`) must be followed by the repeated o
 corrected material: per the CHAT manual the marker is necessarily followed by the
 material it retraces. A retrace marker followed only by a terminator (e.g.
 `<the> [/] .`) has nothing to retrace and is reported as E370.
-
-## Metadata
-
-- **Error Code**: E370
-- **Category**: retrace
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Retrace marker `[/]` with no following material (only a terminator)
-**Expected Error Codes**: E370
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: retrace [/] is not followed by repeated material
-*CHI:	<the> [/] .
-@End
-```
-
-## Example 2
-
-**Trigger**: Retrace-with-correction `[//]` with no following corrected material
-**Expected Error Codes**: E370
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: retrace [//] is not followed by corrected material
-*CHI:	the cat [//] .
-@End
-```
 
 ## Expected Behavior
 

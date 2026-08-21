@@ -1,4 +1,24 @@
-# E212: Invalid word format
++++
+code = 'E212'
+name = 'Invalid word format'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'word'
+source = 'E2xx_word_errors/E212_unexpected_text.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Note: This is a parser error, hard to trigger with valid grammar
+*CHI:	hello world .
+@End
+'''
++++
 
 ## Description
 
@@ -12,34 +32,6 @@ spoken text, or standalone shortenings.
 `word_validate.rs` fires for specific structural issues (CA omissions outside CA
 mode, malformed CA omissions, standalone shortenings) that this example does not
 exhibit.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-- **Layer**: validation
-
-- **Error Code**: E212
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E212_unexpected_text.cha`
-**Trigger**: Malformed word syntax caught by parser
-**Expected Error Codes**: E212
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	Note: This is a parser error, hard to trigger with valid grammar
-*CHI:	hello world .
-@End
-```
 
 ## Expected Behavior
 

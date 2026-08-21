@@ -1,25 +1,14 @@
-# E529: Nested background with identical label
++++
+code = 'E529'
+name = 'Nested background with identical label'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Nested background with identical label
-
-## Metadata
-
-- **Error Code**: E529
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/nested-bg-same-label.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E529
-
-```chat
+[[example]]
+level = 'header'
+source = 'validation_gaps/nested-bg-same-label.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -32,11 +21,16 @@ Nested background with identical label
 @Eg:test
 @Eg:test
 @End
-```
+'''
++++
+
+## Description
+
+Nested background with identical label
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

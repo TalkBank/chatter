@@ -1,27 +1,13 @@
-# E740: Phoaln model side does not reproduce the mod word
++++
+code = 'E740'
+name = 'Phoaln model side does not reproduce the mod word'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must
-reproduce the `%mod` word. The comparison is segment-level: stress markers (`\u{02C8}`, `\u{02CC}`)
-and syllable-boundary notation (Phon's `^`, IPA's `.`) in either string are
-ignored, since the alignment pairs carry bare segments while the source
-word may carry suprasegmental and boundary notation.
-
-## Metadata
-
-- **Error Code**: E740
-- **Category**: Phon phone alignment
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E740
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -33,7 +19,16 @@ word may carry suprasegmental and boundary notation.
 %xphoaln:	k↔k,æ↔æ
 @Comment:	ERROR: the %xphoaln model side concatenates to 'kæ', which does not match %mod 'kæt'
 @End
-```
+'''
++++
+
+## Description
+
+Concatenating the model (left) sides of `%xphoaln`, skipping ∅, must
+reproduce the `%mod` word. The comparison is segment-level: stress markers (`\u{02C8}`, `\u{02CC}`)
+and syllable-boundary notation (Phon's `^`, IPA's `.`) in either string are
+ignored, since the alignment pairs carry bare segments while the source
+word may carry suprasegmental and boundary notation.
 
 ## Expected Behavior
 

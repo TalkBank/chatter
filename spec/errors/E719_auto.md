@@ -1,25 +1,14 @@
-# E719: Sin count mismatch - too many sin tokens
++++
+code = 'E719'
+name = 'Sin count mismatch - too many sin tokens'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Sin count mismatch - too many sin tokens
-
-## Metadata
-
-- **Error Code**: E719
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E4xx_alignment_errors/E719_sin_count_too_many.cha`
-**Trigger**: Main tier has 2 words, but %sin has 3 tokens
-**Expected Error Codes**: E719
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/E719_sin_count_too_many.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,11 +18,16 @@ Sin count mismatch - too many sin tokens
 %sin:	POINT REACH GRAB
 @Comment:	ERROR: Main tier has 2 words but %sin has 3 tokens (extra GRAB)
 @End
-```
+'''
++++
+
+## Description
+
+Sin count mismatch - too many sin tokens
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

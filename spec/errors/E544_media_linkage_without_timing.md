@@ -1,4 +1,38 @@
-# E544: `@Media` claims linkage but transcript has no timing evidence
++++
+code = 'E544'
+name = '@Media claims linkage but transcript has no timing evidence'
+kind = 'Invalidity'
+status = 'implemented'
+status_note = 'Validator lives inline in `crates/talkbank-model/src/model/file/chat_file/validate.rs` (`check_media_linkage_has_timing`), called from `ChatFile::validate` after the E362 bullet-monotonicity check so it can reuse the already-collected main-tier bullets. Timing evidence: main-tier bullets OR positional `%wor` sidecar. Affected reference-corpus fixtures carry `, unlinked` status.'
+
+[[example]]
+level = 'file'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|3;00.||||Target_Child|||
+@Media:	session-01, audio
+*CHI:	hello world .
+@End
+'''
+
+[[example]]
+level = 'file'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;00.||||Target_Child|||
+@Media:	session-01, video
+*CHI:	hello .
+@End
+'''
++++
 
 ## Description
 
@@ -16,24 +50,6 @@ tooling did (as `semantic failure: not 'unlinked' or 'missing' or
 proposes reinstating the check in Rust with a broader definition of
 "timing evidence" that accounts for CHAT format evolution since
 that legacy tooling was last updated.
-
-## Metadata
-
-- **Status**: implemented
-- **Status note**: Validator lives inline in
-  `crates/talkbank-model/src/model/file/chat_file/validate.rs`
-  (`check_media_linkage_has_timing`), called from `ChatFile::validate`
-  after the E362 bullet-monotonicity check so it can reuse the
-  already-collected main-tier bullets. Timing evidence: main-tier
-  bullets OR positional `%wor` sidecar. Affected reference-corpus
-  fixtures carry `, unlinked` status.
-- **Last updated**: 2026-05-01 09:47 EDT
-
-- **Error Code**: E544
-- **Category**: header_validation
-- **Level**: file
-- **Layer**: validation
-- **Kind**: Invalidity
 
 ## Resolved design decisions
 
@@ -84,42 +100,6 @@ additionally carries timing via:
 "Open questions" at the end of this spec. A minimally-principled
 implementation treats *any* bullet anywhere, main-tier utterance
 bullet, `%wor` bullet, `@Bg`/`@Eg` time range, as evidence.
-
-## Example 1
-
-**Trigger**: `@Media` declares linked audio but no utterance carries
-a timing bullet.
-
-**Expected Error Codes**: E544
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|3;00.||||Target_Child|||
-@Media:	session-01, audio
-*CHI:	hello world .
-@End
-```
-
-## Example 2
-
-**Trigger**: Same pattern with `video`. The rule does not distinguish
-audio from video; any unqualified `@Media` header requires timing.
-
-**Expected Error Codes**: E544
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;00.||||Target_Child|||
-@Media:	session-01, video
-*CHI:	hello .
-@End
-```
 
 ## Counter-examples (documentation only, do not fire E544)
 

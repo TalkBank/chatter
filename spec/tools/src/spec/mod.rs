@@ -10,16 +10,16 @@
 //! consume these types to emit tree-sitter corpus tests, Rust validation tests,
 //! and error documentation.
 
+pub mod by_code;
 /// Reading text back out of a comrak AST, shared by every parser here.
 pub(crate) mod comrak_text;
 pub mod construct;
 pub mod error;
-pub mod error_corpus;
 pub mod markdown;
 pub mod metadata;
 pub mod validation_manifest;
 
+pub use by_code::{CodeSpecs, CodeSpecsView, SpecsByCode};
 pub use construct::ConstructSpec;
 pub use error::ErrorSpec;
-pub use error_corpus::ErrorCorpusSpec;
 pub use markdown::{MarkdownCategory, MarkdownExample, WrapperStrategy};

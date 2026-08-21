@@ -1,29 +1,13 @@
-# E519: @L1 of language code not in the ISO 639-3 registry
++++
+code = 'E519'
+name = '@L1 of language code not in the ISO 639-3 registry'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The `@L1 of SPK` header names a participant's first language. Wild
-usage is uniformly ISO 639-3 codes (16 distinct values across 1,158
-kept files, all registry-valid), so the field is a language CODE and
-is held to the same registry rule as `@Languages` / `@ID` / word-level
-switches (maintainer ruling 2026-07-15, part 2).
-
-## Metadata
-
-- **Error Code**: E519
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: `@L1 of` carrying an unassigned three-letter code.
-
-**Expected Error Codes**: E519
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -32,7 +16,16 @@ switches (maintainer ruling 2026-07-15, part 2).
 @L1 of CHI:	qzz
 *CHI:	hi .
 @End
-```
+'''
++++
+
+## Description
+
+The `@L1 of SPK` header names a participant's first language. Wild
+usage is uniformly ISO 639-3 codes (16 distinct values across 1,158
+kept files, all registry-valid), so the field is a language CODE and
+is held to the same registry rule as `@Languages` / `@ID` / word-level
+switches (maintainer ruling 2026-07-15, part 2).
 
 ## Expected Behavior
 

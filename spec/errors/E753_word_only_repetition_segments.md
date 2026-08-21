@@ -1,4 +1,23 @@
-# E753: Word consisting only of repetition segments
++++
+code = 'E753'
+name = 'Word consisting only of repetition segments'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	↫hi↫ there .
+@Comment:	ERROR: the first word is only a repetition segment
+@End
+'''
++++
 
 ## Description
 
@@ -19,32 +38,6 @@ character outside the arrows suffices. Wild-data grounding: 13,145
 repetition-bearing words in the kept corpus carry a stem; the only 2
 fully-wrapped tokens are `&-`-prefixed fillers, which this rule
 accordingly keeps valid.
-
-## Metadata
-
-- **Error Code**: E753
-- **Category**: Main tier words
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: the word's only material is inside `↫...↫`.
-
-**Expected Error Codes**: E753
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	↫hi↫ there .
-@Comment:	ERROR: the first word is only a repetition segment
-@End
-```
 
 ## Expected Behavior
 

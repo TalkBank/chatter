@@ -19,6 +19,7 @@
 //! ```
 
 use generators::repo_paths::RepoRoot;
+use generators::spec::error::ErrorSpec;
 use generators::spec::metadata::Status;
 use spec_runtime_tools::error_spec_validation::{self, Request, spec_dir};
 use std::collections::BTreeMap;
@@ -51,74 +52,30 @@ fn repo_root() -> Result<RepoRoot, String> {
     RepoRoot::resolve(None).map_err(|why| why.to_string())
 }
 
-/// Count spec files by their declared `Status`, and by NOT declaring one.
+/// Count the loaded specs by their declared `Status`.
 ///
-/// The absent case is still reported separately, even though the loader now
-/// refuses a spec without the bullet: this reader walks the directory, so it
-/// also sees the non-spec files (`README.md` and the enhancement guide) that
-/// the loader filters out. Folding them into a status tally would misreport
-/// them as specs.
-fn spec_statuses(spec_dir: &Path) -> Result<BTreeMap<String, usize>, String> {
+/// # Derived from the LOADER, not from the file text
+///
+/// This walked the directory itself and scanned every line for a
+/// `- **Status**:` prefix, which made it a sixth reader of a format that now
+/// has a schema. When the format moved to frontmatter on 2026-08-21 the scan
+/// matched nothing, so the report put all 238 files in a `(none declared,
+/// defaulted)` bucket and exited 0: a status report that had stopped reading
+/// statuses, printing a confident wrong answer under a heading that says
+/// STATUS.
+///
+/// Taking the tally from the loaded specs also deletes the bucket. The loader
+/// refuses a spec that declares no status and filters non-spec files out by
+/// the code-shaped stem rule, so "declared nothing" is no longer a state a row
+/// can report.
+fn spec_statuses(specs: &[ErrorSpec]) -> BTreeMap<String, usize> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    let entries = std::fs::read_dir(spec_dir).map_err(|e| format!("read {spec_dir:?}: {e}"))?;
-    for entry in entries {
-        let path = entry.map_err(|e| format!("entry: {e}"))?.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).map_err(|e| format!("read {path:?}: {e}"))?;
-        let declared = text
-            .lines()
-            .find_map(|line| line.trim().strip_prefix("- **Status**:"))
-            .map(|value| value.trim().to_owned());
-        let key = declared.unwrap_or_else(|| "(none declared, defaulted)".to_owned());
-        *counts.entry(key).or_default() += 1;
+    for spec in specs {
+        *counts
+            .entry(spec.metadata.status.as_str().to_owned())
+            .or_default() += 1;
     }
-    Ok(counts)
-}
-
-/// List every example that declares no `Expected Error Codes`, with what it
-/// actually emits.
-///
-/// This is what makes the backlog workable rather than merely counted: the
-/// codes come from `emit_for`, the same path the gate runs, so what you see is
-/// what the example would be asserting. Deciding whether those codes are RIGHT
-/// is still adjudication; this only removes the archaeology.
-fn list_unasserted(spec_dir: &Path) -> Result<(), String> {
-    let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
-    let specs = generators::spec::error::ErrorSpec::load_all(spec_dir)?;
-    let mut listed = 0usize;
-    for spec in &specs {
-        for definition in &spec.errors {
-            for (index, example) in definition.examples.iter().enumerate() {
-                if !example.expected_codes.is_empty() {
-                    continue;
-                }
-                let mut codes: Vec<String> = error_spec_validation::emit_for(&parser, example)
-                    .iter()
-                    .map(|error| error.code.as_str().to_owned())
-                    .collect();
-                codes.sort();
-                codes.dedup();
-                let emitted = if codes.is_empty() {
-                    "nothing at all".to_owned()
-                } else {
-                    codes.join(", ")
-                };
-                println!(
-                    "  {} (example {})  status={}  emits: {emitted}",
-                    spec.source_file,
-                    index + 1,
-                    spec.metadata.status
-                );
-                listed += 1;
-            }
-        }
-    }
-    println!("\n  {listed} example(s) assert nothing. An example emitting NOTHING is the");
-    println!("  worse case: it is invalid CHAT that chatter accepts, or it is not");
-    println!("  invalid and the spec is wrong about its own premise.");
-    Ok(())
+    counts
 }
 
 /// List deferred specs whose code the validator ALREADY emits.
@@ -135,38 +92,32 @@ fn list_deferred(spec_dir: &Path) -> Result<(), String> {
         if spec.metadata.status == Status::Implemented {
             continue;
         }
-        for definition in &spec.errors {
-            for (index, example) in definition.examples.iter().enumerate() {
-                let mut codes: Vec<String> = error_spec_validation::emit_for(&parser, example)
-                    .iter()
-                    .map(|error| error.code.as_str().to_owned())
-                    .collect();
-                codes.sort();
-                codes.dedup();
-                let own = &definition.code;
-                let emits_own = codes.iter().any(|c| c == own.as_str());
-                if emits_own {
-                    ready += 1;
-                } else {
-                    genuine += 1;
-                }
-                println!(
-                    "  {:<44} ex{} {:<16} {} emits: {}",
-                    spec.source_file,
-                    index + 1,
-                    spec.metadata.status,
-                    if emits_own {
-                        "IMPLEMENTED ->"
-                    } else {
-                        "still deferred"
-                    },
-                    if codes.is_empty() {
-                        "nothing".to_owned()
-                    } else {
-                        codes.join(", ")
-                    },
-                );
+        let definition = &spec.error;
+        for (index, example) in definition.examples.iter().enumerate() {
+            let codes = error_spec_validation::emit_for(&parser, example).all_distinct_codes();
+            let own = &definition.code;
+            let emits_own = codes.iter().any(|c| c == own.as_str());
+            if emits_own {
+                ready += 1;
+            } else {
+                genuine += 1;
             }
+            println!(
+                "  {:<44} ex{} {:<16} {} emits: {}",
+                spec.source_file(),
+                index + 1,
+                spec.metadata.status,
+                if emits_own {
+                    "IMPLEMENTED ->"
+                } else {
+                    "still deferred"
+                },
+                if codes.is_empty() {
+                    "nothing".to_owned()
+                } else {
+                    codes.join(", ")
+                },
+            );
         }
     }
     println!(
@@ -180,23 +131,22 @@ fn main() -> Result<(), String> {
     if std::env::args().any(|arg| arg == "--deferred") {
         return list_deferred(&spec_dir(&root));
     }
-    if std::env::args().any(|arg| arg == "--unasserted") {
-        return list_unasserted(&spec_dir(&root));
-    }
     let spec_dir = spec_dir(&root);
 
     println!("SPEC SYSTEM STATUS");
     println!("==================\n");
 
+    let specs = ErrorSpec::load_all(&spec_dir)?;
     println!("Error specs in {}:", spec_dir.display());
-    for (status, count) in spec_statuses(&spec_dir)? {
+    for (status, count) in spec_statuses(&specs) {
         println!("  {count:>4}  {status}");
     }
     println!(
-        "\n  `Status` is REQUIRED: a spec without the bullet fails to load, naming\n  \
-         the file. It used to default to `implemented`, so 104 of 238 specs said\n  \
-         nothing and had an answer invented for them (fixed 2026-08-11). Any row\n  \
-         above reading `(none declared)` is a non-spec file in the directory."
+        "\n  `status` is REQUIRED: a spec that declares none does not load, and the\n  \
+         file is named. It used to default to `implemented`, so 104 of 238 specs\n  \
+         said nothing and had an answer invented for them (fixed 2026-08-11).\n  \
+         These counts are the LOADED specs, so a non-spec file in the directory\n  \
+         cannot appear as a row."
     );
 
     // The same REQUEST the CI gate builds, not a copy of its four fields. The
@@ -213,19 +163,16 @@ fn main() -> Result<(), String> {
         "  {:>4}  deferred: spec is not_implemented / deprecated / unreachable",
         report.deferred
     );
-    println!(
-        "  {:>4}  assert NOTHING: they declare no Expected Error Codes",
-        report.no_expected_codes
-    );
     println!("  {:>4}  failing", report.failures.len());
     for failure in &report.failures {
         println!("        {failure}");
     }
 
     println!(
-        "\n  The check is a SUBSET test: an example passes when every code it\n  \
-         declares was emitted. Extra codes are allowed, so declaring fewer is\n  \
-         always safe and an example declaring NONE can never fail."
+        "\n  Every example carries a CLAIM: `violates` (the spec's code must\n  \
+         appear), `legal` (it must not), or `subsumed_by` (the targets appear\n  \
+         and the spec's code does not). Extra emitted codes are allowed; the\n  \
+         exact per-stage sets are the snapshot's business."
     );
 
     let manifest_path = root.join("crates/talkbank-parser-tests/tests/check_parity/manifest.json");

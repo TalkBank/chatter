@@ -1,26 +1,13 @@
-# E319: UnparsableLine
++++
+code = 'E319'
+name = 'UnparsableLine'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-A line could not be classified as a header, utterance, or dependent tier.
-This is a fallback error emitted when tree-sitter produces an ERROR node
-for a line whose children cannot be identified as either a header or
-utterance context.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E319
-- **Category**: parser\_recovery
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A line that doesn't start with @, \*, or % and isn't recognizable
-
-```chat
+[[example]]
+level = 'utterance'
+claim = { subsumed_by = 'E602' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,15 @@ utterance context.
 *CHI:	hello .
 %%%broken line content here
 @End
-```
+'''
++++
+
+## Description
+
+A line could not be classified as a header, utterance, or dependent tier.
+This is a fallback error emitted when tree-sitter produces an ERROR node
+for a line whose children cannot be identified as either a header or
+utterance context.
 
 ## Expected Behavior
 

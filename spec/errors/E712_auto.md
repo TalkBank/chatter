@@ -1,25 +1,14 @@
-# E712: Auto-generated from corpus
++++
+code = 'E712'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E712
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E712_gra_invalid_word_index.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E712
-
-```chat
+[[example]]
+level = 'tier'
+source = 'error_corpus/validation_errors/E712_gra_invalid_word_index.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,7 +19,12 @@ Auto-generated from corpus
 %mor:	pro|I v|want .
 %gra:	1|2|NSUBJ 5|0|ROOT 3|2|PUNCT
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

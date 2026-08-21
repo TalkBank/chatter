@@ -1,17 +1,27 @@
-# E502: Missing required @End header
++++
+code = 'E502'
+name = 'Missing required @End header'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'header'
+title = 'Truncated file'
+source = 'error_corpus/validation_errors/E502_missing_end_header.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*CHI:	hello world .
+'''
++++
 
 ## Description
 
 Every valid CHAT file must end with an `@End` header. This error indicates the file is missing `@End`, usually because the file is truncated, empty, or was saved incompletely.
-
-## Metadata
-
-- **Error Code**: E502
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
 
 ## Corpus Impact
 
@@ -25,22 +35,7 @@ Every valid CHAT file must end with an `@End` header. This error indicates the f
 | slabank-data | 3 |
 | **Total** | **160** (unique files) |
 
-## Example 1: Truncated file
-
-**Source**: `error_corpus/validation_errors/E502_missing_end_header.cha`
-**Trigger**: File ends without `@End`
-**Expected Error Codes**: E502
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*CHI:	hello world .
-```
-
-## Example 2: Corpus, Kurland PWA (aphasia-data)
+## Corpus Occurrences: Kurland PWA (aphasia-data)
 
 **Trigger**: Many files in aphasia-data Kurland/PWA corpus lack `@End`
 **Corpus**: aphasia-data/English/Protocol/Kurland/PWA

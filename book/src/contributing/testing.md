@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 12:45 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -39,7 +39,7 @@ flowchart LR
 
     subgraph generators["spec/tools generators\n(run only what changed)"]
         gen_ts["just spec-gen: corpus tests"]
-        gen_rust["just spec-gen: Rust test bodies"]
+        gen_rust["just spec-gen: construct test bodies"]
         gen_validation["just spec-gen: validation fixtures"]
         gen_docs["docs/errors/ (spec-gen artifact)"]
     end
@@ -53,7 +53,7 @@ flowchart LR
 
     constructs & errors --> gen_ts
     templates --> gen_ts
-    constructs & errors --> gen_rust
+    constructs --> gen_rust
     errors --> gen_validation
     errors --> gen_docs
 
@@ -81,8 +81,8 @@ change earns the same scrutiny as one that looks worse.
 |---|---|---|
 | Parser equivalence | `cargo test -p talkbank-parser-tests --tests parser_equivalence` | The re2c oracle and the tree-sitter parser agree on every reference file. A divergence means one parser is wrong, or a construct spec is missing. |
 | Roundtrip idempotency, and reference coverage | `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for EVERY reference file. One test carries both guarantees: it iterates the whole corpus (coverage) and checks semantic equality on each (idempotency). |
-| Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses and every parser-layer error spec still rejects, with the code it declares. |
-| Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every validation-layer error spec still fires its code against its generated `.cha` fixture. |
+| Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses cleanly. (Error specs no longer feed this: R4 deleted the string-based error tests as strictly weaker than the fixture corpus plus the observation snapshot.) |
+| Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every ERROR-spec example (both stages, since R4) still satisfies its CLAIM against its generated `.cha` fixture, absences included. |
 | The gate registry | `cargo test -p talkbank-parser-tests --tests gates` | Runs every registered repository-wide gate, including error-code spec coverage, construct coverage, catch-all protection, golden-word validity and spec status. |
 
 File and test counts deliberately appear nowhere on this page. They change
@@ -120,7 +120,7 @@ break it on purpose and watch it fail, before believing the citation.
 ```mermaid
 flowchart TD
     unit["Unit + integration tests\n(cargo test)"]
-    specgen["Spec-generated tests\nparser + validation layers"]
+    specgen["Spec-generated construct tests\n+ the claim-judging fixture corpus"]
     grammar["Grammar corpus\n(tree-sitter test)"]
     ref["Reference corpus\n(corpus/reference/)"]
     gates["Registered gates + CI"]

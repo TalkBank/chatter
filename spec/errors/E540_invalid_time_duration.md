@@ -1,4 +1,70 @@
-# E540: `@Time Duration` does not match a legal CLAN time pattern
++++
+code = 'E540'
+name = '@Time Duration does not match a legal CLAN time pattern'
+kind = 'Invalidity'
+status = 'implemented'
+status_note = "Extended 2026-04-21 from \"free-text is flagged\" to \"must match one of three depfile.cut patterns exactly\". Historical Rust validator also accepted semicolon separators and comma-joined multi-segment values; both are non-depfile. Severity raised from `Warning` to `Error` to match CLAN's rejection semantics."
+
+[[example]]
+level = 'header'
+title = '(semicolon separator, not in depfile)'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
+@Time Duration:	00:00:00;01:30:00
+*CHI:	hello .
+@End
+'''
+
+[[example]]
+level = 'header'
+title = '(comma-joined multiple segments, not in depfile)'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
+@Time Duration:	00:01:00, 00:02:00
+*CHI:	hello .
+@End
+'''
+
+[[example]]
+level = 'header'
+title = '(free text)'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
+@Time Duration:	not-a-time
+*CHI:	hello .
+@End
+'''
+
+[[example]]
+level = 'header'
+title = '(MM:SS two-component, not in depfile)'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
+@Time Duration:	30:45
+*CHI:	hello .
+@End
+'''
++++
 
 ## Description
 
@@ -18,93 +84,6 @@ That is, the value is exactly one of:
 Nothing else: no semicolon separator, no comma-joined multi-segment
 value, no millisecond suffix, no `MM:SS` two-component form. CLAN
 CHECK rejects anything else; Rust chatter must match.
-
-## Metadata
-
-- **Status**: implemented
-- **Status note**: Extended 2026-04-21 from "free-text is flagged"
-  to "must match one of three depfile.cut patterns exactly".
-  Historical Rust validator also accepted semicolon separators and
-  comma-joined multi-segment values; both are non-depfile. Severity
-  raised from `Warning` to `Error` to match CLAN's rejection
-  semantics.
-- **Last updated**: 2026-04-21 23:55 EDT
-- **Error Code**: E540
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1 (semicolon separator, not in depfile)
-
-**Trigger**: `@Time Duration: 00:00:00;01:30:00`, semicolon is not
-one of the depfile separators.
-
-**Expected Error Codes**: E540
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
-@Time Duration:	00:00:00;01:30:00
-*CHI:	hello .
-@End
-```
-
-## Example 2 (comma-joined multiple segments, not in depfile)
-
-**Trigger**: `@Time Duration: 00:01:00, 00:02:00`, comma-joined
-segments are not in the depfile template.
-
-**Expected Error Codes**: E540
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
-@Time Duration:	00:01:00, 00:02:00
-*CHI:	hello .
-@End
-```
-
-## Example 3 (free text)
-
-**Trigger**: `@Time Duration: not-a-time`, not remotely a time.
-
-**Expected Error Codes**: E540
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
-@Time Duration:	not-a-time
-*CHI:	hello .
-@End
-```
-
-## Example 4 (MM:SS two-component, not in depfile)
-
-**Trigger**: `@Time Duration: 30:45`, two components only, which
-matches `@Time Start` patterns but not `@Time Duration` templates.
-
-**Expected Error Codes**: E540
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.||||Target_Child|||
-@Time Duration:	30:45
-*CHI:	hello .
-@End
-```
 
 ## Expected Behavior
 

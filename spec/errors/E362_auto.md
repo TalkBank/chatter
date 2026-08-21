@@ -1,44 +1,38 @@
-# E362: Bullet timestamps must be monotonic
++++
+code = 'E362'
+name = 'Bullet timestamps must be monotonic'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Bullet timestamps must be monotonic
-
-## Metadata
-
-- **Error Code**: E362
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/bullet-timestamp-backwards.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E362
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'validation_gaps/bullet-timestamp-backwards.cha'
+claim = 'violates'
+chat = """
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
 @Media:	sample, audio
-*CHI:	hello there . 10000_12000
+*CHI:	hello there . \u001510000_12000\u0015
 @Comment:	First bullet: 10000-12000ms
-*CHI:	how are you . 8000_9000
+*CHI:	how are you . \u00158000_9000\u0015
 @Comment:	ERROR: Second bullet starts at 8000ms, which is BEFORE the first bullet
 @Comment:	Timestamps must be monotonically increasing
-*CHI:	I am fine . 15000_17000
+*CHI:	I am fine . \u001515000_17000\u0015
 @Comment:	VALID: 15000 > 12000
 @End
-```
+"""
++++
+
+## Description
+
+Bullet timestamps must be monotonic
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

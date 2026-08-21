@@ -1,4 +1,37 @@
-# E750: Space inside angle-bracket group delimiters
++++
+code = 'E750'
+name = 'Space inside angle-bracket group delimiters'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	< dog> [/] dog .
+@Comment:	ERROR: space directly after the opening angle bracket
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	<dog > [/] dog .
+@Comment:	ERROR: space directly before the closing angle bracket
+@End
+'''
++++
 
 ## Description
 
@@ -10,45 +43,6 @@ whitespace as an explicit optional `whitespaces` CST node so the parse
 recovers, but the construct is invalid CHAT; before this rule the
 parser silently DROPPED that whitespace, so accepted files were also
 being silently rewritten on normalize.
-
-## Metadata
-
-- **Error Code**: E750
-- **Category**: Main tier groups
-- **Level**: utterance
-- **Layer**: parser
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E750
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	< dog> [/] dog .
-@Comment:	ERROR: space directly after the opening angle bracket
-@End
-```
-
-## Example 2
-
-**Expected Error Codes**: E750
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	<dog > [/] dog .
-@Comment:	ERROR: space directly before the closing angle bracket
-@End
-```
 
 ## Expected Behavior
 

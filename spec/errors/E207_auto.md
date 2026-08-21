@@ -1,25 +1,14 @@
-# E207: Unknown scoped annotation marker
++++
+code = 'E207'
+name = 'Unknown scoped annotation marker'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Unknown scoped annotation marker
-
-## Metadata
-
-- **Error Code**: E207
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E207_multiple_form_types.cha`
-**Trigger**: Scoped annotation with unrecognized marker
-**Expected Error Codes**: E207
-
-```chat
+[[example]]
+level = 'word'
+source = 'E2xx_word_errors/E207_multiple_form_types.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@ Unknown scoped annotation marker
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello [@ xyz] world .
 @End
-```
+'''
++++
+
+## Description
+
+Unknown scoped annotation marker
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

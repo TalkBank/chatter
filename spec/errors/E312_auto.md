@@ -1,33 +1,22 @@
-# E312: Unclosed bracket
++++
+code = 'E312'
+name = 'Unclosed bracket'
+kind = 'Invalidity'
+status = 'not_implemented'
+status_note = "Unreachable via tree-sitter parser. The E312 check in `helpers.rs` fires when an ERROR node's text starts with `[` and doesn't end with `]`. However, tree-sitter's error recovery for unclosed brackets produces E375 (ContentAnnotationParseError) or E304 (missing terminator) instead of creating a single ERROR node matching the `[`...not-`]` pattern. Tested with `[= explanation`, `[//`, `[*`, `[%`, `[<`, `[=!`, none trigger E312. The re2c parser may reach this code path."
 
-## Description
-
-Opening bracket `[` on the main tier has no matching closing bracket `]`.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-13 14:42 EDT
-- **Status note**: Unreachable via tree-sitter parser. The E312 check in `helpers.rs` fires when an ERROR node's text starts with `[` and doesn't end with `]`. However, tree-sitter's error recovery for unclosed brackets produces E375 (ContentAnnotationParseError) or E304 (missing terminator) instead of creating a single ERROR node matching the `[`...not-`]` pattern. Tested with `[= explanation`, `[//`, `[*`, `[%`, `[<`, `[=!`, none trigger E312. The re2c parser may reach this code path.
-
-- **Error Code**: E312
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E312_unclosed_bracket.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E304, E375
-
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E312_unclosed_bracket.cha'
+claim = { subsumed_by = 'E375' }
+notes = '''
 Note: The unclosed bracket `[= comment .` causes the parser to misparse the
 line structure. The parser produces E304 (missing speaker code, because the
 continuation after the bracket is misinterpreted as a new line) and E375
 (ContentAnnotationParseError) rather than E312 (UnclosedBracket) or E316
 (UnparsableContent).
-
-```chat
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -35,7 +24,12 @@ continuation after the bracket is misinterpreted as a new line) and E375
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	word [= comment .
 @End
-```
+'''
++++
+
+## Description
+
+Opening bracket `[` on the main tier has no matching closing bracket `]`.
 
 ## Expected Behavior
 

@@ -1,23 +1,13 @@
-# E739: Phoaln pair is malformed
++++
+code = 'E739'
+name = 'Phoaln pair is malformed'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Every `%xphoaln` pair has exactly one ↔ with a non-null phone on at least one side.
-
-## Metadata
-
-- **Error Code**: E739
-- **Category**: Phon phone alignment
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E739
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +19,12 @@ Every `%xphoaln` pair has exactly one ↔ with a non-null phone on at least one 
 %xphoaln:	∅↔∅,k↔k,æ↔æ,t↔t
 @Comment:	ERROR: the '∅↔∅' pair is never legal (both sides null)
 @End
-```
+'''
++++
+
+## Description
+
+Every `%xphoaln` pair has exactly one ↔ with a non-null phone on at least one side.
 
 ## Expected Behavior
 

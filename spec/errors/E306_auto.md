@@ -1,25 +1,14 @@
-# E306: Utterance has no content
++++
+code = 'E306'
+name = 'Utterance has no content'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Utterance has no content
-
-## Metadata
-
-- **Error Code**: E306
-- **Category**: Main tier validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E306_no_content.cha`
-**Trigger**: Main tier with only terminator, no actual words
-**Expected Error Codes**: E306
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E306_no_content.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@ Utterance has no content
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	.
 @End
-```
+'''
++++
+
+## Description
+
+Utterance has no content
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

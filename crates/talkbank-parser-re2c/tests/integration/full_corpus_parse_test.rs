@@ -40,17 +40,15 @@
 //!
 //! # It could pass by doing nothing, and on most machines it did
 //!
-//! Its default corpus path was `$HOME/talkbank/data`, the retired split
-//! layout. On the maintainer's machine that path still resolves, through a
-//! legacy symlink to the same directory `~/0tb/data` points at, which is
-//! exactly why the staleness went unnoticed: it worked in the one place
-//! anybody ran it. Anywhere without that symlink, including every other fleet
-//! host and CI, it found no directory, RETURNED EARLY, and reported success.
+//! It defaulted to a hard-coded path under `$HOME`. On the one machine anybody
+//! ran it, a legacy symlink made that path resolve to the real corpus, which
+//! is exactly why the staleness went unnoticed. Anywhere without that symlink,
+//! including CI, it found no directory, RETURNED EARLY, and reported success.
 //!
 //! An absent corpus and a clean corpus produced the same verdict, which is the
 //! rule this workspace states as "a gate that can skip itself is not a gate".
-//! The default is now `~/0tb/data`, the only supported layout, and a missing
-//! corpus fails.
+//! There is now no default at all: `$TALKBANK_DATA` is required, and a missing
+//! or unset corpus fails loudly. See [`crate::corpus_root::CorpusRoot`].
 
 use crate::corpus_root::CorpusRoot;
 use talkbank_model::errors::ErrorCollector;

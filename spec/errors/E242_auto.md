@@ -1,27 +1,14 @@
-# E242: Unbalanced quotation marks
++++
+code = 'E242'
+name = 'Unbalanced quotation marks'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last updated:** 2026-07-19 08:30 EDT
-
-## Description
-
-Quotation marks must be balanced within an utterance.
-
-## Metadata
-
-- **Error Code**: E242
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E242_unbalanced_quotation.cha`
-**Trigger**: Unbalanced opening quote; improved recovery now surfaces the quotation-balance check directly
-**Expected Error Codes**: E242
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E242_unbalanced_quotation.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,14 @@ Quotation marks must be balanced within an utterance.
 @Comment:	Invalid: '"hello' - Missing closing quote
 *CHI:	"hello .
 @End
-```
+'''
++++
+
+**Last updated:** 2026-07-19 08:30 EDT
+
+## Description
+
+Quotation marks must be balanced within an utterance.
 
 ## Expected Behavior
 

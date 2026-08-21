@@ -1,9 +1,9 @@
 //! Build the validation-error fixture corpus and its typed manifest from
 //! `spec/errors/`.
 //!
-//! For every `Layer: validation` spec this produces one `.cha` fixture per
-//! EXAMPLE, plus `manifest.json` recording the codes that fixture must produce
-//! (the example's own `Expected Error Codes`, not the spec title), its
+//! For EVERY spec this produces one `.cha` fixture per
+//! EXAMPLE, plus `manifest.json` recording each fixture's spec code, its
+//! CLAIM (`violates` / `legal` / `subsumed_by`, both halves enforced), its
 //! implementation status, and its source spec. The data-driven runner
 //! (`validation_error_corpus.rs`) consumes the manifest.
 //!
@@ -16,17 +16,12 @@
 //! to answer a read-only question. Returning the files instead lets
 //! [`crate::artifacts`] both write them and compare them, from one description.
 
-use std::collections::HashSet;
-
 use crate::artifacts::GeneratedFiles;
 use crate::repo_paths::RepoRelativePath;
-use crate::spec::error_corpus::{ErrorCorpusExample, ErrorCorpusSpec};
+use crate::spec::error::{Demonstration, ErrorSpec};
+use crate::spec::metadata::SpecErrorCode;
 use crate::spec::metadata::Status;
 use crate::spec::validation_manifest::{FixtureName, ValidationFixtureEntry, ValidationManifest};
-
-/// Fallback fixture-name prefix for an example with no codes (should not occur:
-/// `parse_markdown` fills every example with at least the title code).
-const UNKNOWN_CODE: &str = "UNKNOWN";
 
 /// One fixture to write: the CHAT input plus the manifest entry (which carries
 /// the unique filename and what the runner must assert). Produced from one spec
@@ -42,14 +37,17 @@ struct PlannedFixture {
 /// spec directory, because every recorded `source_spec` must be relative to
 /// that root and nothing else can compute it.
 pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
-    let validation_specs: Vec<ErrorCorpusSpec> =
-        ErrorCorpusSpec::load_all(crate::artifacts::error_dir(repo_root))
-            .map_err(|e| anyhow::anyhow!("Failed to load error corpus specs: {}", e))?
-            .into_iter()
-            .filter(|spec| spec.metadata.layer.is_validation())
-            .collect();
+    // EVERY spec, since R4. The `layer.is_validation()` filter that stood
+    // here kept the runner partial: the runner has always collected BOTH
+    // stages' codes against a real file, so it was already the total
+    // instrument, and the authored field was the only thing routing 85
+    // parse-stage examples away from it. Measured before the change: zero
+    // implemented examples fail the runner's union check, and five examples'
+    // codes are SPLIT across stages, which no per-stage harness can assert.
+    let specs: Vec<ErrorSpec> = ErrorSpec::load_all(crate::artifacts::error_dir(repo_root))
+        .map_err(|e| anyhow::anyhow!("Failed to load error corpus specs: {}", e))?;
 
-    let planned = plan_fixtures(&validation_specs, repo_root);
+    let planned = plan_fixtures(&specs, repo_root);
 
     let mut files = GeneratedFiles::new();
     for fixture in &planned {
@@ -60,22 +58,40 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
 
     let mut manifest = ValidationManifest {
         fixtures: planned.into_iter().map(|f| f.entry).collect(),
-        // An implemented rule owes a fixture. `UnreachableFromChat` is the
-        // one state that cannot pay: no CHAT input reaches the rule, so it
-        // owes a named out-of-corpus test instead, and is excluded here rather
-        // than being quietly absent from the loader as before.
-        implemented_specs_without_examples: validation_specs
-            .iter()
-            .filter(|spec| spec.metadata.status == Status::Implemented && spec.examples.is_empty())
-            .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
-            .collect(),
+        // An implemented rule owes a fixture, and the obligation is the
+        // CODE's: several spec files may claim one code, and a no-example
+        // spec whose sibling demonstrates the code is documentation, not a
+        // gap. `UnreachableFromChat` is the one state that cannot pay: no
+        // CHAT input reaches the rule, so it owes a named out-of-corpus test
+        // instead, and is excluded rather than being quietly absent.
+        implemented_codes_without_examples: {
+            /// What the specs claiming one code jointly establish about it.
+            #[derive(Default)]
+            struct CodeStanding {
+                implemented: bool,
+                has_example: bool,
+            }
+            let mut per_code: std::collections::BTreeMap<&SpecErrorCode, CodeStanding> =
+                std::collections::BTreeMap::new();
+            for spec in &specs {
+                let standing = per_code.entry(&spec.error.code).or_default();
+                standing.implemented |= spec.metadata.status == Status::Implemented;
+                standing.has_example |= !matches!(spec.demonstration(), Demonstration::NoExamples);
+            }
+            per_code
+                .into_iter()
+                .filter(|(_, standing)| standing.implemented && !standing.has_example)
+                .map(|(code, _)| code.clone())
+                .collect()
+        },
         // The converse, so the new state cannot become a way to opt a
         // perfectly reachable rule out of its fixture: if an example exists,
         // the rule is reachable and the status is wrong.
-        unreachable_specs_with_examples: validation_specs
+        unreachable_specs_with_examples: specs
             .iter()
             .filter(|spec| {
-                spec.metadata.status == Status::UnreachableFromChat && !spec.examples.is_empty()
+                spec.metadata.status == Status::UnreachableFromChat
+                    && !matches!(spec.demonstration(), Demonstration::NoExamples)
             })
             .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
             .collect(),
@@ -83,7 +99,7 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
     manifest
         .fixtures
         .sort_by(|a, b| a.fixture.as_str().cmp(b.fixture.as_str()));
-    manifest.implemented_specs_without_examples.sort();
+    manifest.implemented_codes_without_examples.sort();
     manifest.unreachable_specs_with_examples.sort();
 
     files.insert(
@@ -93,24 +109,21 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
     Ok(files)
 }
 
-/// Plan one fixture per example across all validation specs, assigning each a
-/// filename unique within the corpus dir (multi-example specs would otherwise
-/// collide on the shared spec title; the per-example code usually disambiguates,
-/// and a numeric suffix covers the rest).
-fn plan_fixtures(specs: &[ErrorCorpusSpec], repo_root: &std::path::Path) -> Vec<PlannedFixture> {
-    let mut used: HashSet<String> = HashSet::new();
+/// Plan one fixture per example, named by the example's identity (see
+/// [`fixture_name`]).
+fn plan_fixtures(specs: &[ErrorSpec], repo_root: &std::path::Path) -> Vec<PlannedFixture> {
     let mut planned = Vec::new();
     for spec in specs {
         // Computed once per spec; every example of the spec shares them.
         let source_spec = RepoRelativePath::new(repo_root, &spec.source_path_display());
         let status = spec.metadata.status;
-        for example in &spec.examples {
-            let name = unique_fixture_name(&mut used, &fixture_base(example));
+        for (index, example) in spec.error.examples.iter().enumerate() {
             planned.push(PlannedFixture {
                 input: example.input.clone(),
                 entry: ValidationFixtureEntry {
-                    fixture: FixtureName::new(name),
-                    expected_codes: example.expected_codes.clone(),
+                    fixture: FixtureName::new(fixture_name(spec, index)),
+                    code: spec.error.code.clone(),
+                    claim: example.claim.clone(),
                     status,
                     source_spec: source_spec.clone(),
                 },
@@ -120,38 +133,14 @@ fn plan_fixtures(specs: &[ErrorCorpusSpec], repo_root: &std::path::Path) -> Vec<
     planned
 }
 
-/// The `<code>_<sanitized name>` stem for one example (no extension).
-fn fixture_base(example: &ErrorCorpusExample) -> String {
-    let code = example
-        .expected_codes
-        .first()
-        .map(|c| c.as_str().to_string())
-        .unwrap_or_else(|| UNKNOWN_CODE.to_string());
-    format!("{}_{}", code, sanitize_filename(&example.name))
-}
-
-/// Append `.cha`, disambiguating with a numeric suffix on collision so no
-/// fixture silently overwrites another.
-fn unique_fixture_name(used: &mut HashSet<String>, base: &str) -> String {
-    let mut candidate = format!("{base}.cha");
-    let mut n = 2;
-    while !used.insert(candidate.clone()) {
-        candidate = format!("{base}_{n}.cha");
-        n += 1;
-    }
-    candidate
-}
-
-/// Sanitize an example name for use in a fixture filename: non-alphanumerics
-/// become underscores, with consecutive underscores collapsed.
-fn sanitize_filename(s: &str) -> String {
-    s.chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect::<String>()
-        .split('_')
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("_")
+/// The fixture's name IS the example's identity; [`ExampleId`] owns the rule.
+///
+/// The history of why (the collision-counter scheme that renamed other specs'
+/// fixtures when the corpus grew) is on `ExampleId` itself, where the next
+/// generator will actually read it.
+fn fixture_name(spec: &ErrorSpec, index: usize) -> String {
+    talkbank_spec_vocabulary::observations::ExampleId::from_enumerate(spec.source_file(), index)
+        .fixture_name()
 }
 
 #[cfg(test)]
@@ -168,37 +157,41 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_collapses_runs_of_separators() {
-        assert_eq!(
-            sanitize_filename("Illegal 'xx' marker"),
-            "Illegal_xx_marker"
-        );
-        assert_eq!(sanitize_filename("a -- b"), "a_b");
-    }
-
-    #[test]
     fn plans_one_fixture_per_example_with_its_own_codes() {
         let dir = tempfile::tempdir().expect("tempdir");
         // A two-example spec whose examples declare different codes.
         write_spec(
             dir.path(),
             "E999_multi.md",
-            "# E999: Multi\n\n## Description\n\nDemo.\n\n## Metadata\n\n\
-             - **Category**: demo\n- **Level**: utterance\n- **Layer**: validation\n\
-             - **Status**: implemented\n\n\
-             ## Example 1\n\n**Expected Error Codes**: E316\n\n```chat\n@UTF8\n@Begin\none\n@End\n```\n\n\
-             ## Example 2\n\n**Expected Error Codes**: E600\n\n```chat\n@UTF8\n@Begin\ntwo\n@End\n```\n",
+            "+++\n\
+             code = 'E999'\n\
+             name = 'Multi'\n\
+             kind = 'Invalidity'\n\
+             status = 'implemented'\n\n\
+             [[example]]\n\
+             level = 'utterance'\n\
+             claim = { subsumed_by = 'E316' }\n\
+             chat = \"@UTF8\\n@Begin\\none\\n@End\"\n\n\
+             [[example]]\n\
+             level = 'utterance'\n\
+             claim = { subsumed_by = 'E600' }\n\
+             chat = \"@UTF8\\n@Begin\\ntwo\\n@End\"\n\
+             +++\n\n## Description\n\nDemo.\n",
         );
-        let specs = ErrorCorpusSpec::load_all(dir.path()).expect("load specs");
+        let specs = ErrorSpec::load_all(dir.path()).expect("load specs");
         let planned = plan_fixtures(&specs, dir.path());
 
         assert_eq!(planned.len(), 2, "one fixture per example");
-        let codes: Vec<&str> = planned
+        use talkbank_spec_vocabulary::frontmatter::Claim;
+        let targets: Vec<&str> = planned
             .iter()
-            .flat_map(|f| f.entry.expected_codes.iter())
+            .flat_map(|f| match &f.entry.claim {
+                Claim::SubsumedBy(t) => t.as_slice(),
+                Claim::Violates | Claim::Legal => &[],
+            })
             .map(|c| c.as_str())
             .collect();
-        assert!(codes.contains(&"E316") && codes.contains(&"E600"));
+        assert!(targets.contains(&"E316") && targets.contains(&"E600"));
         // Distinct codes give distinct filenames.
         assert_ne!(
             planned[0].entry.fixture.as_str(),
@@ -230,10 +223,16 @@ mod tests {
         write_spec(
             &dir,
             "E999_one.md",
-            "# E999: One\n\n## Description\n\nDemo.\n\n## Metadata\n\n\
-             - **Category**: demo\n- **Level**: utterance\n- **Layer**: validation\n\
-             - **Status**: implemented\n\n\
-             ## Example 1\n\n**Expected Error Codes**: E999\n\n```chat\n@UTF8\n@Begin\none\n@End\n```\n",
+            "+++\n\
+             code = 'E999'\n\
+             name = 'One'\n\
+             kind = 'Invalidity'\n\
+             status = 'implemented'\n\n\
+             [[example]]\n\
+             level = 'utterance'\n\
+             claim = 'violates'\n\
+             chat = \"@UTF8\\n@Begin\\none\\n@End\"\n\
+             +++\n\n## Description\n\nDemo.\n",
         );
         let files = build(root.path()).expect("build");
         assert!(files.contains_key(Path::new("manifest.json")));

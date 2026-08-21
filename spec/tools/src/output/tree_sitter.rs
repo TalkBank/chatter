@@ -15,6 +15,16 @@ use tree_sitter_talkbank::LANGUAGE;
 pub enum TreeSitterTestError {
     #[error("Failed to load TalkBank grammar for tree-sitter")]
     GrammarLoadFailed,
+    #[error(
+        "the observation snapshot has no entry for {spec} example {example}; it is \
+         stale. `just spec-gen` regenerates it first"
+    )]
+    StaleSnapshot {
+        /// The spec file whose example the snapshot does not know.
+        spec: String,
+        /// The 1-based example position.
+        example: usize,
+    },
     #[error("Failed to load templates from {path}: {source}")]
     TemplateLoadFailed {
         path: String,
@@ -248,81 +258,109 @@ fn tree_has_missing(node: tree_sitter::Node<'_>) -> bool {
 /// Returns `(filename, content)` pairs to be written under `errors/` subdirectory.
 pub fn generate_error_corpus_files(
     specs: &[&ErrorSpec],
+    snapshot: &talkbank_spec_vocabulary::observations::ObservationSnapshot,
 ) -> Result<Vec<(String, String)>, TreeSitterTestError> {
     let mut parser = create_parser()?;
     let mut files = Vec::new();
     let mut no_error_warnings: Vec<String> = Vec::new();
     let mut missing_warnings: Vec<String> = Vec::new();
+    let observed = snapshot.by_example();
 
     for spec in specs {
-        for error_def in &spec.errors {
-            for (idx, example) in error_def.examples.iter().enumerate() {
-                // Ensure input has @UTF8 prefix (tree-sitter document rule expects optional utf8_header)
-                let mut input = if example.input.starts_with("@UTF8") {
-                    example.input.clone()
-                } else {
-                    format!("@UTF8\n{}", example.input)
-                };
-
-                // Ensure input ends with newline, the grammar's `end_header` rule
-                // requires a trailing newline token. Without it, tree-sitter inserts
-                // a MISSING node, which the test format cannot represent.
-                if !input.ends_with('\n') {
-                    input.push('\n');
-                }
-
-                let tree = match parser.parse(&input, None) {
-                    Some(tree) => tree,
-                    None => continue,
-                };
-
-                if !tree.root_node().has_error() {
-                    // Grammar is too permissive for this parser-layer error
-                    no_error_warnings.push(format!(
-                        "{} ({}): grammar accepts input without ERROR nodes",
-                        error_def.code, error_def.name
-                    ));
-                    continue;
-                }
-
-                // Tree-sitter's test format cannot represent MISSING nodes at all.
-                // If the parse tree has any MISSING nodes, the test will always fail
-                // because the test runner treats them as "extra" nodes in comparison.
-                // Skip these; they're still tested by the Rust parser tests.
-                if tree_has_missing(tree.root_node()) {
-                    missing_warnings.push(format!(
-                        "{} ({}): tree has MISSING nodes (test format limitation)",
-                        error_def.code, error_def.name
-                    ));
-                    continue;
-                }
-
-                let cst = tree.root_node().to_sexp();
-
-                // Build test name
-                let suffix = if error_def.examples.len() > 1 {
-                    format!("_{}", idx + 1)
-                } else {
-                    String::new()
-                };
-                let test_name = format!("{}{} - {}", error_def.code, suffix, error_def.name);
-
-                let separator = "=".repeat(80);
-                let divider = "-".repeat(80);
-                let content = format!(
-                    "{separator}\n{name}\n{separator}\n{input}\n{divider}\n\n{cst}\n",
-                    name = test_name,
-                    input = input,
-                    cst = cst,
-                );
-
-                let filename = format!(
-                    "errors/{}{}.txt",
-                    error_def.code.as_str().to_lowercase(),
-                    suffix
-                );
-                files.push((filename, content));
+        let error_def = &spec.error;
+        for (idx, example) in error_def.examples.iter().enumerate() {
+            // Membership is DERIVED, since R4: an example joins the corpus iff
+            // the snapshot records parse-stage diagnostics for it, meaning
+            // there is parse-stage behaviour to pin structurally. The authored
+            // `layer` field this replaces disagreed with the observed stage on
+            // 17 examples, and the derivation was measured strictly additive
+            // (55 examples join, none leave) before the switch.
+            //
+            // A missing snapshot entry is a STALE SNAPSHOT, refused rather
+            // than skipped: skipping would silently shrink the corpus exactly
+            // when the inputs are out of sync.
+            let id = talkbank_spec_vocabulary::observations::ExampleId::from_enumerate(
+                spec.source_file(),
+                idx,
+            );
+            let entry = observed
+                .get(&id)
+                .ok_or_else(|| TreeSitterTestError::StaleSnapshot {
+                    spec: spec.source_file().to_owned(),
+                    example: idx + 1,
+                })?;
+            if entry.parse.is_empty() {
+                continue;
             }
+            // Ensure input has @UTF8 prefix (tree-sitter document rule expects optional utf8_header)
+            let mut input = if example.input.starts_with("@UTF8") {
+                example.input.clone()
+            } else {
+                format!("@UTF8\n{}", example.input)
+            };
+
+            // Ensure input ends with newline, the grammar's `end_header` rule
+            // requires a trailing newline token. Without it, tree-sitter inserts
+            // a MISSING node, which the test format cannot represent.
+            if !input.ends_with('\n') {
+                input.push('\n');
+            }
+
+            let tree = match parser.parse(&input, None) {
+                Some(tree) => tree,
+                None => continue,
+            };
+
+            if !tree.root_node().has_error() {
+                // Parse diagnostics were observed, but the TREE is clean: the
+                // diagnostics came from the parser's lowering, not from
+                // tree-sitter recovery, so there is no structural shape for a
+                // corpus test to pin. Skipped, and said aloud rather than
+                // silently, because a growing count here means lowering is
+                // diagnosing what the grammar accepts.
+                no_error_warnings.push(format!(
+                    "{} ({}): parse diagnostics without ERROR nodes (lowering-caught)",
+                    error_def.code, error_def.name
+                ));
+                continue;
+            }
+
+            // Tree-sitter's test format cannot represent MISSING nodes at all.
+            // If the parse tree has any MISSING nodes, the test will always fail
+            // because the test runner treats them as "extra" nodes in comparison.
+            // Skip these; they're still tested by the Rust parser tests.
+            if tree_has_missing(tree.root_node()) {
+                missing_warnings.push(format!(
+                    "{} ({}): tree has MISSING nodes (test format limitation)",
+                    error_def.code, error_def.name
+                ));
+                continue;
+            }
+
+            let cst = tree.root_node().to_sexp();
+
+            // The name IS the example's identity, and [`ExampleId`] owns the
+            // derivation. Files were named by CODE (`errors/e316_1.txt`), and
+            // two specs legitimately share a code (the duplicate pairs), so
+            // both produced the same filenames and the later map insert
+            // silently swallowed the earlier spec's entries: E316's two specs
+            // have ten examples and the committed corpus held eight.
+            // Identity-derived names make that collision unconstructible; the
+            // review then found this file and the fixture namer each spelling
+            // the rule inline, already diverging on case, which is why the
+            // identity became a type.
+            let test_name = id.corpus_test_name(&error_def.name);
+
+            let separator = "=".repeat(80);
+            let divider = "-".repeat(80);
+            let content = format!(
+                "{separator}\n{name}\n{separator}\n{input}\n{divider}\n\n{cst}\n",
+                name = test_name,
+                input = input,
+                cst = cst,
+            );
+
+            files.push((id.corpus_file_name(), content));
         }
     }
 

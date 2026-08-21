@@ -27,35 +27,44 @@ themselves.
 
 ## Spec Format
 
-Each error specification is a markdown file with the following sections:
+Each error specification is `+++` TOML frontmatter, then markdown prose:
 
-```markdown
-# Error Title
+````markdown
++++
+code = 'E###'
+name = 'Error title'
+kind = 'Invalidity'     # Invalidity | Unmodeled | Deprecation | Style
+status = 'implemented'  # implemented | not_implemented | deprecated | unreachable_from_chat
+level = 'word'          # word | utterance | tier | header | file
+
+[[example]]
+claim = 'violates'
+chat = '''
+... example CHAT that triggers the error ...
+'''
++++
 
 ## Description
-Brief description of the error
 
-## Metadata
-- **Error Code**: E###
-- **Category**: error_category
-- **Level**: word|utterance|tier|header|file
-- **Layer**: parser|validation
+Brief description of the error.
 
-## Example
-### CHAT Input
-```chat
-... example CHAT code that triggers the error ...
-```
+## Expected Behavior
 
-### Expected Behavior
-Description of what should happen
+What should happen.
 
-## CHAT Specification Rule
-Link to relevant section in CHAT manual
+## CHAT Rule
+
+What CHAT requires here, and therefore what a maintainer must write instead.
 
 ## Notes
-Additional implementation notes
-```
+
+Additional implementation notes.
+````
+
+**The frontmatter schema is the reference**
+(`talkbank_spec_vocabulary::frontmatter`): it carries every field with its type
+and whether it is required, and an unrecognised key is a load error rather than
+a line that silently does nothing.
 
 See [../docs/ERROR_SPEC_FORMAT.md](../docs/ERROR_SPEC_FORMAT.md) for complete format documentation.
 
@@ -72,38 +81,30 @@ See [../docs/ERROR_SPEC_FORMAT.md](../docs/ERROR_SPEC_FORMAT.md) for complete fo
    cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.toml -- --spec-dir spec/errors
    ```
 
-#### Option 2: Generate from Error Corpus
+#### Option 2: there is no longer a route from the implementation
 
-If an error corpus file already exists:
+There used to be one: `corpus_to_specs` read a fixture, ran chatter on it, and
+wrote down what came out; `fix_spec_layers` decided the layer field by running
+the parser; `enhance_specs` filled in descriptions and manual links. Between them
+they produced 152 files, and the effect was that the SPECIFICATION was derived
+from the IMPLEMENTATION, which was then tested against the specification. Every
+gate passed by construction, and none of them could tell a finished rule from a
+gap.
 
-**Step 1: Generate specs from corpus**
-```bash
-cd spec/tools
-cargo run --bin corpus_to_specs -- \
-  --corpus-dir tests/error_corpus \
-  --spec-dir ../spec/errors
-```
+Those tools are gone (`corpus_to_specs`, `enhance_specs`) or refused
+(`fix_spec_layers`, deleted with R4). `spec/errors/` carries a
+`.human-authored` marker and `WritableDir::claim` refuses to write into a
+directory that has one, so this is mechanical rather than a request.
 
-**Step 2: Fix layer classifications**
-```bash
-cargo run --bin fix_spec_layers -- --spec-dir ../spec/errors
-```
+**Write the spec by hand.** A spec says what CHAT requires and why; that is a
+decision about the format, and running the current parser cannot make it. If a
+bootstrap tool is ever wanted again it writes to `spec/proposals/`, which a
+person reads, completes and moves.
 
-**Step 3: Enhance specs with manual references**
-```bash
-cargo run --bin enhance_specs -- --spec-dir ../spec/errors
-```
-
-**Step 4: Validate specs**
+**Then validate the spec**
 ```bash
 cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.toml -- --spec-dir spec/errors
 ```
-
-This automated pipeline generates `E###_auto.md` files with:
-- Correct layer classification (parser vs validation)
-- CHAT manual references
-- Proper Expected Behavior text
-- 100% validation pass rate
 
 ### Generating the Validation Corpus
 
@@ -115,8 +116,8 @@ just spec-check    # or: is the committed copy current?
 ```
 
 This generates:
-- One `.cha` fixture per validation example
-- `manifest.json` (each fixture's expected codes + status + source spec),
+- One `.cha` fixture per example (every spec, both stages)
+- `manifest.json` (each fixture's spec code + claim + status + source spec),
   consumed by the data-driven runner `validation_error_corpus.rs`
 
 ### Implementing Validators
@@ -175,59 +176,28 @@ cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.to
 ```
 
 Checks:
-- Required sections present
-- Metadata fields complete
-- Layer classification correct (parser vs validation)
-- Error code format valid
+- Every example produces the codes its spec declares, by running the real
+  parser and validator over it.
 
-### corpus_to_specs
+It does NOT check that fields are present or well formed: the frontmatter
+schema does that when the file loads, which is the point of having one.
 
-Converts existing error corpus files to markdown specs.
+### The three tools that wrote into this directory, and why they are gone
 
-```bash
-cargo run --bin corpus_to_specs -- \
-  --corpus-dir tests/error_corpus \
-  --spec-dir ../spec/errors \
-  [--overwrite]
-```
+`corpus_to_specs` and `enhance_specs` were DELETED under R5 of the spec-system
+redesign; `fix_spec_layers` was refused from Phase 1b and deleted with R4.
 
-Options:
-- `--overwrite`: Overwrite existing spec files
+All three decided what a spec should say by running the implementation:
+`corpus_to_specs` recorded whatever chatter emitted on a fixture,
+`fix_spec_layers` set the `Layer` bullet from whether the parser succeeded, and
+`enhance_specs` wrote descriptions and manual links. The result is that the
+specification was derived from the implementation and then used to test it, so
+every gate passed by construction. 152 of the files here came from that route,
+and 91 still carry the stub sentence they were born with.
 
-Generates `E###_auto.md` files with basic metadata, descriptions, and CHAT examples extracted from `@Comment` headers.
-
-### fix_spec_layers
-
-Automatically corrects layer classification (parser vs validation) based on actual parse behavior.
-
-```bash
-cargo run --bin fix_spec_layers -- \
-  --spec-dir ../spec/errors \
-  [--dry-run]
-```
-
-**How it works**:
-- Tests if CHAT example parses successfully using tree-sitter
-- If parsing **fails** → layer should be `parser` (structural error)
-- If parsing **succeeds** → layer should be `validation` (semantic error)
-
-Run this after generating specs from corpus to ensure correct layer classification.
-
-### enhance_specs
-
-Enhances auto-generated specs with CHAT manual references and corrected Expected Behavior text.
-
-```bash
-cargo run --bin enhance_specs -- \
-  --spec-dir ../spec/errors \
-  [--dry-run]
-```
-
-**Enhancements**:
-- Adds CHAT manual links to CHAT Rule section (contextual by error category)
-- Fixes Expected Behavior text to match layer:
-  - Parser layer: "parser should reject this CHAT input"
-  - Validation layer: "parser should succeed, validation should report error"
+There is nothing to run in their place. Deciding what CHAT requires is the work;
+see the liquidation queue (R8) in
+`docs/design/2026-08-15-spec-system-redesign.md`.
 
 ### Regenerating the validation corpus
 
@@ -239,41 +209,27 @@ just spec-check    # or: is the committed copy current?
 ```
 
 Generates:
-- One `.cha` fixture per validation example
-- `manifest.json` (expected codes + status + source spec per fixture)
+- One `.cha` fixture per example (every spec, both stages)
+- `manifest.json` (spec code + claim + status + source spec per fixture)
 
 ## Status
 
-### Specification Coverage
+Every count that used to sit here was roughly four times out of date: "Total
+Specs: 62 files" against 236, "Auto-generated specs: 59" against 152, and a
+"Parser layer: 51 / Validation layer: 3" split that had been wrong for months.
+None carried the command that produced it, which is why nobody noticed.
 
-**Total Specs**: 62 files
-- **Manual specs**: 3 (E241, E522, E604) - Fully documented validation-layer errors
-- **Auto-generated specs**: 59 - Generated from error corpus, enhanced with CHAT manual links
+Ask the tools instead, all of which derive their answer from the same loader
+the gates use:
 
-**Layer Classification**:
-- **Parser layer**: 51 specs (structural/syntactic errors caught by grammar)
-- **Validation layer**: 3 specs (semantic errors caught post-parse)
-- **Other**: 8 specs (non-E### codes: Alignment, Complex, Events, etc.)
-
-### Implemented Validators with Specs
-
-- **E241**: Illegal Untranscribed Marker ('xx' should be 'xxx') ✅
-- **E522**: Undefined Participant in Utterance ✅
-- **E604**: %gra Tier Without Required %mor Tier ✅
-- **E401**: Duplicate Dependent Tiers ✅ (implemented, test may need review)
-
-### Enhancement Status
-
-All 59 auto-generated specs have been enhanced with:
-- ✅ **CHAT manual references** - Links to https://talkbank.org/0info/manuals/CHAT.pdf with contextual descriptions
-- ✅ **Corrected Expected Behavior** - Text matches actual layer (parser vs validation)
-- ⏳ **Basic descriptions** - Concise and accurate, could be enhanced further
-
-For guidelines on manually improving descriptions and examples, see [SPEC_ENHANCEMENT_GUIDE.md](SPEC_ENHANCEMENT_GUIDE.md).
+```bash
+just spec-status                          # counts by status, and the example tally
+cargo run --bin coverage -- --errors      # which specs demonstrate their own code
+```
 
 ### Error Corpus
 
-The legacy error corpus (`tests/error_corpus/`) contains 101 test files covering ~60 unique error codes. These files use `@Comment` headers to document expected errors and can be converted to formal specs using `corpus_to_specs`.
+The legacy error corpus (`tests/error_corpus/`) contains 101 test files covering ~60 unique error codes. These files use `@Comment` headers to document expected errors and were once converted by `corpus_to_specs`, which R5 DELETED for writing into the source of truth; there is nothing to run in its place.
 
 ## Contributing
 
@@ -294,4 +250,4 @@ When adding a new validation rule:
 
 ---
 
-Last Updated: 2026-05-21
+Last Updated: 2026-08-21

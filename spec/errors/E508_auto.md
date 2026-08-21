@@ -1,25 +1,14 @@
-# E508: @Date header cannot be empty
++++
+code = 'E508'
+name = '@Date header cannot be empty'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-@Date header cannot be empty
-
-## Metadata
-
-- **Error Code**: E508
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E508_empty_date.cha`
-**Trigger**: @Date with no content after colon-tab
-**Expected Error Codes**: E516
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E508_empty_date.cha'
+claim = { subsumed_by = 'E516' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@
 @ID:	eng|corpus|CHI|||||Child|||
 @Date:
 @End
-```
+'''
++++
+
+## Description
+
+@Date header cannot be empty
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

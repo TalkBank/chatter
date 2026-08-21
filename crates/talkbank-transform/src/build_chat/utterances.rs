@@ -14,7 +14,6 @@ use super::UtteranceDesc;
 pub(super) fn build_utterance_lines(
     utterances: &[UtteranceDesc],
     parser: &TreeSitterParser,
-    langs: &[LanguageCode],
     primary_lang: &LanguageCode,
 ) -> Result<Vec<Line>, String> {
     let mut lines = Vec::with_capacity(utterances.len());
@@ -26,7 +25,6 @@ pub(super) fn build_utterance_lines(
             &utterance.text,
             utterance.start_ms,
             utterance.end_ms,
-            langs,
         )?;
 
         if let Some(mut line) = built {
@@ -68,7 +66,6 @@ fn build_text_utterance(
     text: &str,
     start_ms: Option<u64>,
     end_ms: Option<u64>,
-    langs: &[LanguageCode],
 ) -> Result<Option<Line>, String> {
     let text = text.trim();
     if text.is_empty() {
@@ -80,25 +77,19 @@ fn build_text_utterance(
         _ => String::new(),
     };
 
-    let lang_code = langs.first().map(LanguageCode::as_str).unwrap_or("eng");
-    let mini_chat = format!(
-        "@UTF8\n@Begin\n@Languages:\t{lang}\n@Participants:\t{speaker} Participant Participant\n\
-         @ID:\t{lang}|corpus_name|{speaker}|||||Participant|||\n*{speaker}:\t{text}{bullet}\n@End\n",
-        lang = lang_code,
-        speaker = speaker,
-        text = text,
-        bullet = bullet_str,
-    );
-
-    let parsed = crate::parse::parse_strict(parser, &mini_chat).map_err(|error| {
-        format!("Failed to parse text utterance for speaker {speaker}: {error}")
-    })?;
-
-    for parsed_line in parsed.lines.into_iter() {
-        if let Line::Utterance(utterance) = parsed_line {
-            return Ok(Some(Line::Utterance(utterance)));
-        }
-    }
-
-    Ok(None)
+    // THE FRAGMENT PARSER, not a fabricated document.
+    //
+    // This used to `format!` a whole `@UTF8`/`@Begin`/`@Languages`/
+    // `@Participants`/`@ID`/`@End` document around the utterance, parse it
+    // strictly, then walk the result to dig the one `Line::Utterance` back out.
+    // The scaffolding carried two invented values of its own along the way, an
+    // `unwrap_or("eng")` language and a literal `corpus_name`, both discarded
+    // after they had served to make the fake document parse.
+    //
+    // `parse_utterance` is the entry point for exactly this: a main tier line.
+    let line = format!("*{speaker}:\t{text}{bullet_str}");
+    let utterance = parser
+        .parse_utterance(&line)
+        .map_err(|error| format!("Failed to parse utterance for speaker {speaker}: {error}"))?;
+    Ok(Some(Line::Utterance(Box::new(utterance))))
 }

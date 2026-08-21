@@ -1,36 +1,30 @@
-# E513: Participant entry should have both code and role
++++
+code = 'E513'
+name = 'Participant entry should have both code and role'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Participant entry should have both code and role
-
-## Metadata
-
-- **Error Code**: E513
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E512_participant_no_role.cha`
-**Trigger**: @Participants with only participant code, no role
-**Expected Error Codes**: E513
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E512_participant_no_role.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI
 @ID:	eng|corpus|CHI|||||CHI|||
 @End
-```
+'''
++++
+
+## Description
+
+Participant entry should have both code and role
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

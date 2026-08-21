@@ -1,25 +1,14 @@
-# E509: @Media header cannot be empty
++++
+code = 'E509'
+name = '@Media header cannot be empty'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-@Media header cannot be empty
-
-## Metadata
-
-- **Error Code**: E509
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E509_empty_media.cha`
-**Trigger**: @Media with no content after colon-tab
-**Expected Error Codes**: E509
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E509_empty_media.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@
 @ID:	eng|corpus|CHI|||||Child|||
 @Media:
 @End
-```
+'''
++++
+
+## Description
+
+@Media header cannot be empty
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

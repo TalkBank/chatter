@@ -1,34 +1,29 @@
-# E743: Xphoint interval starts are not non-decreasing
++++
+code = 'E743'
+name = 'Xphoint interval starts are not non-decreasing'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-`%xphoint` interval start times must be non-decreasing across the tier.
-
-## Metadata
-
-- **Error Code**: E743
-- **Category**: Phon phone interval
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E743
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = """
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	cat . 0_300
+*CHI:	cat . \u00150_300\u0015
 %pho:	kæt
-%xphoint:	k 0_100 æ 200_300 t 50_150
+%xphoint:	k \u00150_100\u0015 æ \u0015200_300\u0015 t \u001550_150\u0015
 @Comment:	ERROR: the third interval start 50 is before the previous start 200
 @End
-```
+"""
++++
+
+## Description
+
+`%xphoint` interval start times must be non-decreasing across the tier.
 
 ## Expected Behavior
 

@@ -1,28 +1,22 @@
-# E724: GRA has circular dependency
++++
+code = 'E724'
+name = 'GRA has circular dependency'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last updated:** 2026-04-04 08:28 EDT
-
-## Description
-
-A %gra tier contains a circular dependency where following parent pointers creates a cycle. This violates the fundamental requirement that dependency structures must form a tree.
-
-## Metadata
-
-- **Error Code**: E724
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Severity**: error
-- **Kind**: Invalidity
-
-## Example 1: Simple 2-Node Cycle
-
-**Source**: Manual example
-**Trigger**: Word A points to word B, word B points to word A
-**Expected Error Codes**: E724
-
-```chat
+[[example]]
+level = 'tier'
+title = 'Simple 2-Node Cycle'
+source = 'Manual example'
+claim = 'violates'
+notes = '''
+**Analysis:**
+Word 1 → 2 (DISCOURSE),
+Word 2 → 1 (ADVMOD),
+Word 3 → 1 (PUNCT).
+Cycle: 1 → 2 → 1.
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -32,21 +26,22 @@ A %gra tier contains a circular dependency where following parent pointers creat
 %mor:	co|hello adv|there .
 %gra:	1|2|DISCOURSE 2|1|ADVMOD 3|1|PUNCT
 @End
-```
+'''
 
+[[example]]
+level = 'tier'
+title = 'Complex Multi-Node Cycle'
+source = 'Real corpus data (aphasia-data, non-conforming tool output)'
+claim = 'violates'
+notes = '''
 **Analysis:**
-Word 1 → 2 (DISCOURSE),
-Word 2 → 1 (ADVMOD),
-Word 3 → 1 (PUNCT).
-Cycle: 1 → 2 → 1.
-
-## Example 2: Complex Multi-Node Cycle
-
-**Source**: Real corpus data (aphasia-data, non-conforming tool output)
-**Trigger**: ROOT points to a dependent that points back to ROOT
-**Expected Error Codes**: E724
-
-```chat
+Word 1 → 3 (FLAT),
+Word 2 → 3 (PUNCT),
+Word 3 → 1 (APPOS) -- points back to word 1,
+Word 4 → 1 (PUNCT).
+Cycle: 1 → 3 → 1.
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -56,22 +51,22 @@ Cycle: 1 → 2 → 1.
 %mor:	n|bong punct|, num|seven .
 %gra:	1|3|FLAT 2|3|PUNCT 3|1|APPOS 4|1|PUNCT
 @End
-```
+'''
 
+[[example]]
+level = 'tier'
+title = 'ROOT with Non-Self Head (Python Bug Pattern)'
+source = 'Real corpus data (non-conforming tool output)'
+claim = 'violates'
+notes = '''
 **Analysis:**
-Word 1 → 3 (FLAT),
-Word 2 → 3 (PUNCT),
-Word 3 → 1 (APPOS) -- points back to word 1,
-Word 4 → 1 (PUNCT).
-Cycle: 1 → 3 → 1.
-
-## Example 3: ROOT with Non-Self Head (Python Bug Pattern)
-
-**Source**: Real corpus data (non-conforming tool output)
-**Trigger**: Word marked as ROOT but points to another word (not self or 0)
-**Expected Error Codes**: E724
-
-```chat
+Word 1 → 2 (NSUBJ),
+Word 2 → 3 (ROOT) -- ROOT shouldn't point to another word,
+Word 3 → 2 (OBJ) -- points back to word 2,
+Word 4 → 2 (PUNCT).
+Cycle: 2 → 3 → 2.
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -81,14 +76,14 @@ Cycle: 1 → 3 → 1.
 %mor:	pro|I v|want pro|it .
 %gra:	1|2|NSUBJ 2|3|ROOT 3|2|OBJ 4|2|PUNCT
 @End
-```
+'''
++++
 
-**Analysis:**
-Word 1 → 2 (NSUBJ),
-Word 2 → 3 (ROOT) -- ROOT shouldn't point to another word,
-Word 3 → 2 (OBJ) -- points back to word 2,
-Word 4 → 2 (PUNCT).
-Cycle: 2 → 3 → 2.
+**Last updated:** 2026-04-04 08:28 EDT
+
+## Description
+
+A %gra tier contains a circular dependency where following parent pointers creates a cycle. This violates the fundamental requirement that dependency structures must form a tree.
 
 ## Detection Algorithm
 

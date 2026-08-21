@@ -102,7 +102,6 @@ pub const UNPROTECTED: &[&str] = &[
     "crates/talkbank-model/src/validation/utterance/repetition_segment.rs",
     "crates/talkbank-model/src/validation/word/structure.rs",
     "crates/talkbank-parser/src/parser/tree_parsing/main_tier/word/mod.rs",
-    "crates/talkbank-transform/src/capitalize.rs",
     "crates/talkbank-parser/src/parser/tree_parsing/main_tier/structure/contents.rs",
 ];
 

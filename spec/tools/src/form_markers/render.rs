@@ -317,7 +317,7 @@ fn render_suggestion(registry: &FormMarkerRegistry) -> String {
 /// directions of the marker mapping.
 ///
 /// Formatted by `rustfmt` before it is returned, so a committed copy is
-/// simultaneously up to date and formatted; see [`rustfmt`] for why that has
+/// simultaneously up to date and formatted; see `rustfmt` below for why that has
 /// to be one state rather than two.
 pub fn render_rust(registry: &FormMarkerRegistry) -> Result<String, RenderError> {
     crate::rust_source::format_generated_rust(&format!(

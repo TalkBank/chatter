@@ -10,6 +10,11 @@ publish = false
 
 [dependencies]
 clap = { workspace = true }
+# The spec format's vocabulary, owned in the OTHER cargo workspace. A path
+# dependency across the two, deliberately dependency-light (serde + thiserror)
+# so the main test graph does not inherit the spec loader's comrak/tera/clap.
+# Before it, this crate kept its own copy of the closed sets, and they diverged.
+talkbank-spec-vocabulary = { path = "../../spec/vocabulary" }
 comrak = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 regex = { workspace = true } #unified

@@ -1,4 +1,39 @@
-# E760: %mor item has an empty part-of-speech field
++++
+code = 'E760'
+name = '%mor item has an empty part-of-speech field'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	we go .
+%mor:	|we v|go .
+@Comment:	ERROR: the first mor item has an empty POS field
+@End
+'''
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	we go home .
+%mor:	pro|we v|go |home .
+@Comment:	ERROR: the third mor item has an empty POS field
+@End
+'''
++++
 
 ## Description
 
@@ -15,52 +50,6 @@ generic E316 unparsable-dependent-tier catch-all covering the whole
 tier content. This spec gives it a dedicated code and pins the span to
 the offending item, so the operator sees "this item is missing its
 POS" rather than "something on this tier is unparsable".
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-23 22:27 EDT
-
-- **Error Code**: E760
-- **Category**: Dependent tier validation
-- **Level**: tier
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a `%mor` item starts with the pipe separator (empty POS).
-
-**Expected Error Codes**: E760
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	we go .
-%mor:	|we v|go .
-@Comment:	ERROR: the first mor item has an empty POS field
-@End
-```
-
-## Example 2
-
-**Trigger**: the empty-POS item is not the first item on the tier.
-
-**Expected Error Codes**: E760
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	we go home .
-%mor:	pro|we v|go |home .
-@Comment:	ERROR: the third mor item has an empty POS field
-@End
-```
 
 ## Expected Behavior
 

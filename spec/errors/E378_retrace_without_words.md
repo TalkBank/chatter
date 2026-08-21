@@ -1,4 +1,51 @@
-# E378, A retracing marker over material with no words
++++
+code = 'E378'
+name = 'A retracing marker over material with no words'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: a laugh is not a word, so the marker retraces nothing
+*CHI:	&=laughs [//] water .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: the retraced group contains no words
+*CHI:	<&=sigh> [/] &=sigh ok .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: neither the pause nor the event is a word
+*CHI:	<(.) &=laughs> [//] ok .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-08-07 17:24 EDT
@@ -26,63 +73,6 @@ repair:
 The test recurses, because 205 corpus retraces hold their words one level down
 inside an annotated group or a quotation (`<<the dog> [?]> [/] the dog`) and are
 perfectly legal.
-
-## Metadata
-
-- **Error Code**: E378
-- **Category**: retrace
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a retracing marker on a bare event
-**Expected Error Codes**: E378
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: a laugh is not a word, so the marker retraces nothing
-*CHI:	&=laughs [//] water .
-@End
-```
-
-## Example 2
-
-**Trigger**: a group holding nothing but an event
-**Expected Error Codes**: E378
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: the retraced group contains no words
-*CHI:	<&=sigh> [/] &=sigh ok .
-@End
-```
-
-## Example 3
-
-**Trigger**: a pause alongside the event does not supply a word
-**Expected Error Codes**: E378
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: neither the pause nor the event is a word
-*CHI:	<(.) &=laughs> [//] ok .
-@End
-```
 
 ## Expected Behavior
 

@@ -1,32 +1,21 @@
-# E208: Empty replacement
++++
+code = 'E208'
+name = 'Empty replacement'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Empty replacement
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-04-13 23:00 EDT
-
-- **Error Code**: E208
-- **Category**: validation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E208_empty_replacement.cha`
-**Trigger**: Replacement with empty target
-**Expected Error Codes**: E376
-
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E208_empty_replacement.cha'
+claim = { subsumed_by = 'E376' }
+notes = '''
 Note: The parser produces E376 (ReplacementParseError) for `[: ]` because
 tree-sitter's error recovery inserts a placeholder node for the missing word.
 E208 (EmptyReplacement) exists in model validation but requires the parser to
 successfully build a Replacement with zero words, which does not currently
 happen for this input.
-
-```chat
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -34,7 +23,12 @@ happen for this input.
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello [: ] .
 @End
-```
+'''
++++
+
+## Description
+
+Empty replacement
 
 ## Expected Behavior
 

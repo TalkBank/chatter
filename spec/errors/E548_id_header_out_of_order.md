@@ -1,27 +1,13 @@
-# E548: @ID header out of order
++++
+code = 'E548'
+name = '@ID header out of order'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@ID` header does not immediately follow the `@Participants` / `@Options`
-headers (or another `@ID`). The `@ID` block must come directly after
-`@Participants` (and the optional `@Options`), with no other header in between.
-A changeable header such as `@Comment` between `@Participants`/`@Options` and
-the `@ID` block is an ordering violation.
-
-## Metadata
-
-- **Error Code**: E548
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Expected Error Codes**: E548
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,7 +16,16 @@ the `@ID` block is an ordering violation.
 @ID:	eng|corpus|CHI|3;06.|male|||Target_Child|||
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@ID` header does not immediately follow the `@Participants` / `@Options`
+headers (or another `@ID`). The `@ID` block must come directly after
+`@Participants` (and the optional `@Options`), with no other header in between.
+A changeable header such as `@Comment` between `@Participants`/`@Options` and
+the `@ID` block is an ordering violation.
 
 ## Expected Behavior
 

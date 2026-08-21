@@ -1,25 +1,14 @@
-# E501: Auto-generated from corpus
++++
+code = 'E501'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E501
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/E5xx_header_errors/E501_duplicate_header.cha`
-**Trigger**: Two @Begin headers
-**Expected Error Codes**: E501
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E501_duplicate_header.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Begin
@@ -27,22 +16,25 @@ Auto-generated from corpus
 @Participants:	CHI Child
 @ID:	eng|corpus|CHI|||||Child|||
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `error_corpus/E5xx_header_errors/E512_participant_no_role.cha`
-**Trigger**: @Participants with only participant code, no role
-**Expected Error Codes**: E513
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E512_participant_no_role.cha'
+claim = { subsumed_by = 'E513' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI
 @ID:	eng|corpus|CHI|||||CHI|||
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

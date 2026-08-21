@@ -68,3 +68,21 @@ for half in fast slow; do
 done
 
 echo "[pre-push] both gate stamps match this tree."
+
+# Chain to an optional local pre-push hook, AFTER the gate stamps, so a stamp
+# failure short-circuits first and a contributor's own check never masks it.
+#
+# `core.hooksPath` points git at this directory, which means it ignores
+# `.git/hooks` ENTIRELY: anything a contributor installed there stops running,
+# silently. This is the seam that gives it back, and it is the same one
+# `.githooks/pre-commit` offers.
+#
+# `exec`, not a call: git feeds pre-push its ref list on stdin, and execing
+# hands that stream to the local hook unread rather than consuming it here.
+#
+# Keep this free of any specific local hook's identity. It is tracked and
+# public; what an individual checks on their own machine is theirs.
+LOCAL_HOOK="$(git rev-parse --git-dir)/hooks/pre-push.local"
+if [ -x "$LOCAL_HOOK" ]; then
+    exec "$LOCAL_HOOK" "$@"
+fi

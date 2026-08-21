@@ -1,4 +1,23 @@
-# E749: Comma glued to the following word
++++
+code = 'E749'
+name = 'Comma glued to the following word'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hey ,you .
+@Comment:	ERROR: the comma is glued to the word after it
+@End
+'''
++++
 
 ## Description
 
@@ -9,30 +28,6 @@ to the next word. The rule fires only when the next in-order item is a
 word starting at the byte immediately after the comma; constructs that
 put any other character after the comma (group `<`, overlap marks, CA
 marks) are not flagged, matching CLAN's CA exemptions conservatively.
-
-## Metadata
-
-- **Error Code**: E749
-- **Category**: Main tier separators
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E749
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hey ,you .
-@Comment:	ERROR: the comma is glued to the word after it
-@End
-```
 
 ## Expected Behavior
 

@@ -1,25 +1,14 @@
-# E710: Invalid GRA format
++++
+code = 'E710'
+name = 'Invalid GRA format'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Invalid GRA format
-
-## Metadata
-- **Status**: implemented
-
-- **Error Code**: E710
-- **Category**: Dependent tier parsing
-- **Level**: tier
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E7xx_tier_parsing/E708_invalid_gra_format.cha`
-**Trigger**: %gra relation without enough pipe separators
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E7xx_tier_parsing/E708_invalid_gra_format.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +17,16 @@ Invalid GRA format
 *CHI:	hello world .
 %gra:	1-2-SUBJ 2|0|ROOT
 @End
-```
+'''
++++
+
+## Description
+
+Invalid GRA format
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

@@ -1,24 +1,13 @@
-# E720: Mor-Gra count mismatch
++++
+code = 'E720'
+name = 'Mor-Gra count mismatch'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The number of `%mor` chunks does not equal the number of `%gra` relations
-for an utterance. `%gra` aligns 1-to-1 with `%mor` chunks (not items, a
-`%mor` item with post-clitics produces multiple chunks).
-
-## Metadata
-
-- **Error Code**: E720
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example
-**Expected Error Codes**: E720
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,7 +19,14 @@ for an utterance. `%gra` aligns 1-to-1 with `%mor` chunks (not items, a
 %gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|4|DEP 5|2|PUNCT
 @Comment:	ERROR: %mor has 4 chunks (3 words + terminator) but %gra has 5 relations
 @End
-```
+'''
++++
+
+## Description
+
+The number of `%mor` chunks does not equal the number of `%gra` relations
+for an utterance. `%gra` aligns 1-to-1 with `%mor` chunks (not items, a
+`%mor` item with post-clitics produces multiple chunks).
 
 ## Expected Behavior
 

@@ -1,27 +1,14 @@
-# E723: GRA has multiple ROOTs
++++
+code = 'E723'
+name = 'GRA has multiple ROOTs'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last updated:** 2026-04-04 08:15 EDT
-
-## Description
-
-`%gra` tier has multiple ROOT relations. Every `%gra` tier should have exactly one ROOT (relation with `head=0` or `head=self`).
-
-## Metadata
-
-- **Error Code**: E723
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E723_gra_multiple_roots.cha`
-**Trigger**: Multiple relations with head=self (ROOT), excluding terminator PUNCT
-**Expected Error Codes**: E723
-
-```chat
+[[example]]
+level = 'tier'
+source = 'error_corpus/validation_errors/E723_gra_multiple_roots.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,14 @@
 %mor:	pro|I v|want n|cookie .
 %gra:	1|1|ROOT 2|2|ROOT 3|1|OBJ 4|1|PUNCT
 @End
-```
+'''
++++
+
+**Last updated:** 2026-04-04 08:15 EDT
+
+## Description
+
+`%gra` tier has multiple ROOT relations. Every `%gra` tier should have exactly one ROOT (relation with `head=0` or `head=self`).
 
 ## Expected Behavior
 

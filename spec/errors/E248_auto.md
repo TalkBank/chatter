@@ -1,4 +1,27 @@
-# E248, Bare `@s` shortcut in tertiary language context
++++
+code = 'E248'
+name = 'Bare @s shortcut in tertiary language context'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+notes = '''
+A file declares three languages. The utterance is scoped to the third language
+(`zho`) via `[- zho]`. Using bare `@s` is ambiguous, does it mean `eng` or
+`spa`?
+'''
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng, spa, zho
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	[- zho] ni3hao3@s .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 07:36 EDT
@@ -10,33 +33,6 @@ The bare `@s` shortcut toggles between the first two languages declared in
 3 or later in the `@Languages` list) via `[- code]`, bare `@s` is ambiguous,
 it could mean either the primary or secondary language. The speaker must use an
 explicit code (`@s:eng`, `@s:spa`, etc.) instead.
-
-## Metadata
-
-- **Error Code**: E248
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-A file declares three languages. The utterance is scoped to the third language
-(`zho`) via `[- zho]`. Using bare `@s` is ambiguous, does it mean `eng` or
-`spa`?
-
-**Expected Error Codes**: E248
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng, spa, zho
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	[- zho] ni3hao3@s .
-@End
-```
 
 ## Expected Behavior
 

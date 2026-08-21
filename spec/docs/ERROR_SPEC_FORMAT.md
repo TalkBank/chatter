@@ -1,271 +1,85 @@
 # Error Spec Format Reference
 
+**Last modified:** 2026-08-21 13:12 EDT
+
 This document defines the exact format of `spec/errors/*.md` files. These files
 are the **source of truth** for error code test cases. Generators in
 `spec/tools/` read them to produce tree-sitter corpus tests, Rust tests, and
 documentation.
 
-## File Naming
+## The format is a schema now, and the schema is the reference
+
+**As of Phase 1b (2026-08-21) an error spec's metadata is `+++` TOML
+frontmatter, deserialized by serde into a typed struct.** This document no
+longer describes it field by field, and that is deliberate: a prose description
+of a format is a second statement of something the code already states exactly,
+and this one had drifted. It said `**Level**` "determines which parse method the
+test calls", which was false, and it listed `**Error Code**` as required while
+every hand-written spec omitted it and loaded fine.
+
+**The reference is `talkbank_spec_vocabulary::frontmatter`**, whose
+`SpecFrontmatter` and `ExampleFrontmatter` carry every field, its type, whether
+it is required, and why. An unrecognised key is a load error, so the schema is
+also the enforcement.
+
+A spec looks like this:
+
+```markdown
++++
+code = 'E256'
+name = 'Illegal curly single quote'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	don’t .
+@End
+'''
++++
+
+## Description
+
+What is illegal here, and why.
+
+## Expected Behavior
+
+## CHAT Rule
+
+## Notes
+```
+
+**Declared data goes in the frontmatter; prose goes in the body.** The
+`## Description` and `## CHAT Rule` sections are still read from the body,
+because they are markdown that is republished as markdown on the code's
+page. Everything a generator branches on is a declared field.
+
+### File naming
 
 ```
 spec/errors/E{NNN}_{suffix}.md
 ```
 
-- `NNN`: 3-digit error code (e.g., `202`, `501`)
-- `suffix`: typically `auto` (auto-generated from corpus) or a descriptive name
-- Examples: `E202_auto.md`, `E501_auto.md`, `E707.md`
-
-## Required Sections
-
-### H1: Title
-
-```markdown
-# E202: Missing form type after @
-```
-
-Format: `E{code}: {human-readable name}`. The code must match the filename.
-
-### Description
-
-```markdown
-## Description
-
-Missing form type after @ symbol in a word. The `@` character marks a
-special form type (e.g., `@b` for babbling, `@l` for letter) but the
-form type identifier is missing.
-```
-
-First paragraph under `## Description` is extracted as the spec's description.
-
-### Metadata
-
-```markdown
-## Metadata
-
-- **Error Code**: E202
-- **Category**: Parser error
-- **Level**: word
-- **Layer**: parser
-- **Status**: not_implemented
-```
-
-All fields use the `**Field**: value` format inside a markdown list.
-
-#### Metadata Fields
-
-| Field | Required | Values | Effect on Test Generation |
-|-------|----------|--------|--------------------------|
-| **Error Code** | Yes | `E{NNN}` or `W{NNN}` | Must match filename. Used for expected error code assertions. |
-| **Category** | Yes | Free text | Grouping only. Common: `Parser error`, `Header validation`, `Word validation`, `parser_recovery`, `tier_parse` |
-| **Level** | Yes | `word`, `tier`, `utterance`, `header`, `file` | Determines which parse method the test calls |
-| **Layer** | Yes | `parser` or `validation` | **Critical.** Determines test structure (see below). |
-| **Status** | No | `not_implemented` | If present, generates `#[ignore]` on the test function. |
-
-#### Layer: How It Affects Tests
-
-**`Layer: parser`**: The generated test calls `parser.parse_chat_file()`, which
-returns a `ParseProduct` (never a bare `Result`: a document that builds a model
-always hands the model back, even alongside diagnostics), and expects at least
-one error-severity diagnostic. The test then checks that the diagnostics
-contain the expected error code. Use this for inputs that cause a hard parse
-failure (the parser cannot produce a valid AST at all) or that recover with an
-error-severity diagnostic.
-
-```rust
-// Generated code for a "chat_file"-context Layer: parser example
-let product = parser.parse_chat_file(input);
-if !product.has_error_diagnostics() {
-    return Err("Expected parse error but parsing succeeded");
-}
-let diagnostics = product.diagnostics();
-// Assert expected error code is in diagnostics
-```
-
-**`Layer: validation`**: The generated test uses the streaming parse+validate
-path. The parser may succeed (return `Ok`) but errors are collected in the
-error sink during both parsing and validation. Use this for inputs where the
-parser recovers but reports warnings/errors, or where the error is caught by
-post-parse validation.
-
-```rust
-// Generated code for Layer: validation
-let (chat_file, errors) = parse_and_validate(input);
-// Assert expected error code is in errors
-```
-
-**Common mistake**: Parser recovery errors (e.g., E326 `unsupported_line`) should
-use `Layer: validation` because the tree-sitter parser recovers and returns `Ok`
-with errors in the sink. Using `Layer: parser` would fail because
-`parse_chat_file()` succeeds.
-
-#### Status: not_implemented
-
-Adds `#[ignore]` to the generated test. Use for:
-- Error codes defined in Rust but not yet wired to emission sites
-- Error codes that are internal/deprecated (E001, E002, E211, etc.)
-- Specs where the example doesn't trigger the intended code due to tree-sitter
-  error recovery routing
-
-### Examples
-
-```markdown
-## Example 1
-
-**Source**: `error_corpus/E2xx_word_errors/E202_empty_word.cha`
-**Trigger**: @ symbol with no form type marker
-**Expected Error Codes**: E316
-
-\```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*CHI:	hello@ world .
-@End
-\```
-```
-
-#### Example Fields
-
-| Field | Required | Effect |
-|-------|----------|--------|
-| **Source** | No | Provenance note (informational only) |
-| **Trigger** | No | Human description of what triggers the error |
-| **Expected Error Codes** | No | Comma-separated list. **Overrides** the spec's own error code for this example. |
-
-#### Code Block Info String
-
-An error example's code fence **must** be `` ```chat ``. The example is parsed
-as a whole CHAT file, headers and `@End` included, and the generated test calls
-`parse_chat_file()`. Any other info string, including an empty one, is refused
-at load time and names the file it came from.
-
-This is not the same rule as the CONSTRUCT spec fences documented under
-"Templates" below, where the info string genuinely selects a template that wraps
-a fragment. Error specs have no template step.
-
-> **Corrected 2026-08-15.** This section previously tabled five further info
-> strings mapping to parse methods. The generator performed no mapping: it
-> interpolated the raw string into `parser.parse_{info}`, and none of those
-> methods exist, so every documented alternative generated a test that could
-> not compile. All 330 example fences were already `` ```chat ``. The table
-> described the CONSTRUCT spec rules below, where the template names are real.
-
-#### Expected Error Codes Override
-
-By default, each example tests for the spec's own error code (from the Metadata
-section). The `**Expected Error Codes**` field overrides this per-example. This
-is useful when:
-- A spec's input triggers a different error code than the spec itself documents
-- Multiple error codes are expected from one input
-- The spec demonstrates related errors
-
-Example:
-```markdown
-**Expected Error Codes**: E316, E501
-```
-
-### Expected Behavior
-
-```markdown
-## Expected Behavior
-
-The parser should reject this input and report E202 at the location of the
-bare @ symbol.
-```
-
-Optional. Human-readable description of what should happen.
-
-### CHAT Rule
-
-```markdown
-## CHAT Rule
-
-See CHAT manual: https://talkbank.org/0info/manuals/CHAT.pdf
-```
-
-Optional. Link to the relevant CHAT manual section.
-
-### Notes
-
-```markdown
-## Notes
-
-- Auto-generated from error corpus
-- The tree-sitter grammar routes this through the X fallback path
-```
-
-Optional. Implementation notes, caveats, status explanations.
-
-## Multiple Examples
-
-A spec can have multiple examples. Each gets its own test function:
-
-```markdown
-## Example 1
-
-**Trigger**: First trigger scenario
-
-\```chat
-... first CHAT input ...
-\```
-
-## Example 2
-
-**Trigger**: Second trigger scenario
-**Expected Error Codes**: E316
-
-\```chat
-... second CHAT input ...
-\```
-```
-
-Generated test names: `test_e202_auto_utf8_begin_languages_0` (example 1),
-`test_e202_auto_utf8_begin_languages_1` (example 2).
-
-## Complete Example
-
-```markdown
-# E501: MissingParticipantsHeader
-
-## Description
-
-The required @Participants header is missing from the CHAT file.
-
-## Metadata
-
-- **Error Code**: E501
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: parser
-
-## Example 1
-
-**Trigger**: CHAT file without @Participants line
-
-\```chat
-@UTF8
-@Begin
-@Languages:	eng
-@End
-\```
-
-## Expected Behavior
-
-The parser should report E501 because @Participants is a required header.
-
-## CHAT Rule
-
-CHAT files must contain @Participants before any utterance lines.
-See: https://talkbank.org/0info/manuals/CHAT.pdf
-
-## Notes
-
-- One of the most common validation errors in real-world CHAT files.
-```
-
----
+`NNN` is the three-digit code and `suffix` is typically `auto` (seeded from
+corpus data) or a descriptive name. A file whose stem is not code-shaped is not
+a spec, which is what `talkbank_spec_vocabulary::spec_file_paths` decides.
+
+### Three things worth knowing that the schema cannot tell you
+
+- **Every example carries a required `claim`**: `violates`, `legal`, or
+  `subsumed_by <code(s)>`, whose negative halves (absences) are enforced by
+  the runner; see `ExampleFrontmatter::claim`.
+- **The newline before a `'''` block's closing delimiter is not part of the
+  value**, exactly as a fenced code block's closing line was not part of it.
+- (`trigger` and `expected_error_codes` were Phase 1b carryovers; R2 deleted
+  both, the first as pure residue and the second in favour of the claim.)
 
 # Construct Spec Format Reference
 
@@ -394,53 +208,58 @@ normalized during comparison.
 
 | Artifact | Built from |
 |--------|-------------------|
-| tree-sitter corpus tests | construct specs + parser-layer error specs |
+| tree-sitter corpus tests | construct specs + every error example the snapshot observed parse-stage diagnostics for |
 | Rust test bodies | construct + error specs |
-| validation fixture corpus + `manifest.json` | validation-layer error specs |
-| `DiagnosticKind` registry | every error spec's `Kind` |
-
+| validation fixture corpus + `manifest.json` | EVERY error example; the runner checks both stages |
+| `DiagnosticKind` registry | every error spec's `kind` |
 | published error documentation (`docs/errors/`) | every error spec |
 
-## Validators
+## Tooling: what kinds exist, and how to see the real list
 
-| Binary | What it checks |
-|--------|----------------|
-| `validate_spec` | Construct spec format integrity |
-| `validate_error_specs` (`spec/runtime-tools`) | Error spec format, layer correctness |
+**This page used to mirror the binary list and the mirror rotted.** The "Corpus
+Tools" table named seven binaries of which FOUR no longer exist (`bootstrap` and
+`bootstrap_tiers`, removed 2026-03-22 with the mining machinery; `corpus_to_specs`
+and `enhance_specs`, deleted by R5 because they wrote INTO the source of truth),
+and it described `fix_spec_layers` as an auto-corrector when it was inert, refused
+at the door by `spec/errors/.human-authored`. The golden-generator table held ten rows
+against nineteen files in that directory, so it was neither a complete mirror
+nor a useful subset. Four other files carried their
+own copies of the same list, and no two agreed.
 
-## Coverage
+So this page states the PURPOSE and lets the list be looked up:
 
-| Binary | What it measures |
-|--------|-----------------|
-| `coverage` | Error spec coverage (specs per error code) |
-| `corpus_node_coverage` | Grammar node type coverage in corpus |
+- **`just --list`** shows every spec command that is wired, each with a one-line
+  summary of the question it answers. That is the list a contributor wants.
+- **`ls spec/*/src/bin crates/talkbank-parser-tests/src/bin`** shows everything
+  that exists, wired or not.
 
-## Corpus Tools
+The kinds, which is the part worth writing down:
 
-| Binary | Purpose |
-|--------|---------|
-| `bootstrap` | Initial spec bootstrapping |
-| `bootstrap_tiers` (`spec/runtime-tools`) | Tier spec bootstrapping |
-| `corpus_to_specs` | Convert error corpus fixtures to specs |
-| `extract_corpus_candidates` (`spec/runtime-tools`) | Select reference corpus files from corpus data |
-| `perturb_corpus` | Generate error files by mutating valid files |
-| `enhance_specs` | Bulk-fix spec metadata and formatting |
-| `fix_spec_layers` | Auto-correct parser/validation layer mismatches |
+- **Registry generators** write every site that names a closed vocabulary, and
+  each has its own drift gate: `just symbols-gen`, `just form-markers-gen`.
+- **The artifact driver** is `just spec-gen` / `just spec-check`, one registry
+  owning every generated destination. Its table in the book is itself generated.
+- **Reporters** answer a question and write nothing: `just spec-status`,
+  `just spec-coverage`, `just spec-node-coverage`, `just spec-validate-examples`.
+- **Corpus tooling** finds or makes CHAT to specify against:
+  `just spec-corpus-candidates`, `just spec-perturb` (the adversarial half, which
+  is how CHECK gaps are found), `just spec-ca-census`.
+- **Golden generators** live in `talkbank-parser-tests` and emit the committed
+  `golden_*.txt` corpora, one per tier kind.
 
-## Golden Artifact Generators (in talkbank-parser-tests)
+**The golden generators are the one place `just --list` does not help.**
+`crates/talkbank-parser-tests/src/bin` holds nineteen binaries and NO recipes,
+so for that half the pointer is true only vacuously and `ls` there mixes
+goldens with audits and bootstraps. They want recipes, not a better pointer.
 
-| Binary | Output |
-|--------|--------|
-| `generate_golden_words` | `golden_words.txt`, word corpus |
-| `generate_golden_mor_tiers` | `golden_mor_tiers.txt`, %mor tiers |
-| `generate_golden_gra_tiers` | `golden_gra_tiers.txt`, %gra tiers |
-| `generate_golden_pho_tiers` | `golden_pho_tiers.txt`, %pho tiers |
-| `generate_golden_wor_tiers` | `golden_wor_tiers.txt`, %wor tiers |
-| `generate_golden_sin_tiers` | `golden_sin_tiers.txt`, %sin tiers |
-| `generate_golden_com_tiers` | `golden_com_tiers.txt`, %com tiers |
-| `generate_golden_main_tiers` | `golden_main_tiers.txt`, main tiers |
-| `audit_golden_words` | `golden_words_featured.txt`, `golden_words_minimal.txt` |
-| `bootstrap_reference_corpus` | `tests/generated/reference_corpus.rs` |
+**And one question this page can no longer answer, deliberately.** "Is this
+rule implemented in the validator?" had an answer here until 2026-08-20, and it
+was fabricated: a coverage dashboard computing percentages from a hand-written
+five-entry map. Deleting it is better than keeping a wrong number, but the gap
+is real. `spec-coverage` answers which codes have specs and which specs
+demonstrate their own code; `spec-status` answers example counts and parity.
+Neither observes the validator. The honest successor is DERIVED, not declared:
+run the validator over the fixture corpus and record which codes actually fire,
+which is most of what `just spec-validate-examples` already does. Each spec's
+hand-declared `status` is the same mirror one layer down.
 
----
-Last Updated: 2026-02-27

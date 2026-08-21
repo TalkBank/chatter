@@ -5,5 +5,13 @@
 # Drift against the latest stable is caught by the weekly
 # clippy-rolling.yml workflow against `@stable`; when that goes red,
 # bump this pin in a focused commit that also fixes the new lints.
-channel = "1.97.1"
+channel = "1.98.0"
 components = ["rustfmt", "clippy"]
+# Declared so rustup INSTALLS it, rather than a runbook asking a human to
+# remember. `just wasm-check` needs it, and on the 1.98.0 bump a
+# `--profile minimal` install of the new toolchain carried only the host
+# target, so the gate failed with "can't find crate for `core`", which reads
+# like a broken toolchain and is a missing target. Same mechanism as
+# `components` above; ci.yml's wasm job names the target separately, and this
+# is the owner.
+targets = ["wasm32-unknown-unknown"]

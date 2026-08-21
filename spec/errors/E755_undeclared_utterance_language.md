@@ -1,4 +1,23 @@
-# E755: Utterance language not declared in `@Languages`
++++
+code = 'E755'
+name = 'Utterance language not declared in @Languages'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	[- fra] bonjour .
+@Comment:	ERROR: utterance language fra is not declared
+@End
+'''
++++
 
 ## Description
 
@@ -15,32 +34,6 @@ word-level `@s:CODE` insertions, which remain free (part 1 of the
 same ruling; the corpus grounding found 0 of 7,167 precode-bearing
 files violate this invariant while 854 files legitimately use
 undeclared word-level codes).
-
-## Metadata
-
-- **Error Code**: E755
-- **Category**: header_validation
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: `[- fra]` utterance in a transcript declaring only `eng`.
-
-**Expected Error Codes**: E755
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	[- fra] bonjour .
-@Comment:	ERROR: utterance language fra is not declared
-@End
-```
 
 ## Expected Behavior
 

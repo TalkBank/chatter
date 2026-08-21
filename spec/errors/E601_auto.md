@@ -1,25 +1,14 @@
-# E601: Auto-generated from corpus
++++
+code = 'E601'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E601
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E6xx_dependent_tier_errors/E601_invalid_dependent_tier.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E601
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E6xx_dependent_tier_errors/E601_invalid_dependent_tier.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,11 +18,16 @@ Auto-generated from corpus
 *CHI:	hello .
 %mor:	|||
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

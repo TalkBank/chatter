@@ -31,6 +31,8 @@ indexmap = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+# The spec format's vocabulary, shared with the spec workspace.
+talkbank-spec-vocabulary = { path = "../../spec/vocabulary" }
 divan = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }

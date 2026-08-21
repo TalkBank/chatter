@@ -1,22 +1,13 @@
-# E538: Unsupported @Recording Quality Value
++++
+code = 'E538'
+name = 'Unsupported @Recording Quality Value'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@Recording Quality` header contains a value that is not one of the recognized quality ratings. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E538
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E538
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An `@Recording Quality` header contains a value that is not one of the recognize
 @Recording Quality:	badquality
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@Recording Quality` header contains a value that is not one of the recognized quality ratings. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

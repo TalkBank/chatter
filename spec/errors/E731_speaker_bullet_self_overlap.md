@@ -1,4 +1,23 @@
-# E731: Speaker bullet self-overlap via timing
++++
+code = 'E731'
+name = 'Speaker bullet self-overlap via timing'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello . 1000_2000
+*CHI:	world . 1500_2500
+@End
+'''
++++
 
 **Status:** Not implemented, reserved
 **Last updated:** 2026-07-31
@@ -17,33 +36,6 @@ workspace before this spec were the CHECK-parity number mapping
 (`crates/talkbank-parser-tests/src/check_error_map.rs`) and the reserved
 constant `crates/talkbank-model/src/errors/codes/temporal.rs::E731`. The
 bullet-timing self-overlap check itself does not exist.
-
-## Metadata
-
-- **Status**: not_implemented
-
-- **Error Code**: E731
-- **Category**: Temporal validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: The same speaker's next bullet begins before their previous
-bullet ends
-**Expected Error Codes**: E731
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello . 1000_2000
-*CHI:	world . 1500_2500
-@End
-```
 
 ## Expected Behavior
 

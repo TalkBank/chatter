@@ -1,32 +1,26 @@
-# E506: Auto-generated from corpus
++++
+code = 'E506'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E506
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/E5xx_header_errors/E506_empty_participants.cha`
-**Trigger**: @Participants with empty content after colon-tab
-**Expected Error Codes**: E342
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E506_empty_participants.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	
 
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

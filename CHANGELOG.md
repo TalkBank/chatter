@@ -7,6 +7,87 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
+## [Unreleased]
+
+**Validation verdicts: UNCHANGED.** Nothing here moves what `validate` reports
+on a CHAT file. Every prior entry states this either way, and the published
+promise is that an entry without the note did not move its verdicts, so an
+entry that omits it cannot be told from one nobody filled in.
+
+### Removed
+
+- **`talkbank_transform::capitalize` is GONE.** The English capitalization
+  transform announced in 0.7.0 (`capitalize_english`, `capitalized_pronoun_i`,
+  `is_capitalizable_initial`, `capitalize_first`) is deleted. It is the only
+  change here that affects a library consumer.
+
+  Why: chatter is the CHAT-format authority, and English orthography is a
+  convention of one language rather than a fact about CHAT. Nothing inside
+  chatter ever called it; its two users were downstream generators, which
+  wanted different policies. One of them had already written its own version
+  of `is_capitalizable_initial` and documented that chatter's answered a
+  different question. The module also had no stopping rule: pronoun "I" and
+  sentence capitals today, then contractions and proper nouns on request.
+
+  If you used it: copy it into your own generator, where the policy belongs.
+  It is built entirely on public API (`walk_words_mut`, `Word::category`,
+  `Word::untranscribed`), so nothing about the move needs chatter internals.
+  Note that the version shipped here had three defects in
+  `is_capitalizable_initial`, all from deciding a structural question from
+  `cleaned_text()`, which strips the very prefixes the question needs: a
+  non-letter-initial word did not consume the utterance-initial slot, so the
+  capital landed on the following word; an apostrophe-initial word received no
+  capital at all; and the `&`-fragment guard could never fire, so a filler took
+  the sentence capital. Ask the typed model instead.
+
+  `num_words` is unaffected and stays: it serves E220, a rule chatter enforces.
+
+### Changed
+
+- **`chatter new-file` builds its template through the typed model.** The
+  emitted skeleton is produced by parsing and serializing a typed `ChatFile`
+  rather than formatting text, so it is roundtrip-proven by construction; the
+  default output is unchanged.
+
+- **`docs/errors/index.md` is one table, sorted by code.** It emitted one `##`
+  section per spec, 236 of them with 31 exact duplicates, each over a
+  single-row table, and reprinted every description. It is now a flat table
+  with Code, Name, Category, Kind, Level and Status columns: 234 lines where it
+  was 2,247. Anything that scraped the old section structure will need
+  updating; anything that followed the `E###.md` links is unaffected.
+
+- **The error-spec format is TOML frontmatter with a required CLAIM per
+  example.** Landed in stages within this unreleased window, superseding
+  earlier entries' details: metadata moved from `## Metadata` bullets to `+++`
+  frontmatter (an unknown or missing field is a load error); the authored
+  `Layer` field was then DELETED (which pipeline stage catches a rule is
+  recorded per example in the generated `spec/observations/` snapshot, and
+  every example is a fixture in the validation corpus); and
+  `Expected Error Codes` was replaced by `claim = 'violates' | 'legal' |
+  { subsumed_by = ... }`, whose negative halves (a code that must NOT fire)
+  are enforced. `level` moved from the spec file to the example, where it is
+  required: a code can be violated at one level in one example and another in
+  the next (E519 has header-level and utterance-level violations), so the fault site
+  is a fact about the example; a code's page renders the distinct set. A
+  non-empty `Description` remains required. This matters only if you author
+  specs against `spec/errors/`.
+
+- **Corpus tests require `TALKBANK_DATA`.** The re2c integration tests defaulted
+  to a hard-coded directory under `$HOME`, which could only ever be right on one
+  machine and silently sent everyone else to a path that does not exist. The
+  variable is now required and its absence fails loudly. `just corpus-tests`
+  needs it set; the default test suite is unaffected, since those tests are
+  `#[ignore]`d.
+
+### Internal
+
+Not part of any published API, listed because the commits are marked breaking:
+`spec/errors/*.md` now has ONE parser in the spec workspace rather than two (`ErrorCorpusSpec` and
+its types are deleted), and the spec format's vocabulary moved to a new
+dependency-light `talkbank-spec-vocabulary` crate that both cargo workspaces
+share. The `generators` and `talkbank-parser-tests` crates are `publish =
+false`.
+
 ## [0.12.0] - 2026-08-16
 
 **Validation verdicts: CHANGED.** Four rules report where they were silent:
@@ -1455,7 +1536,7 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.12.0...HEAD
 [0.12.0]: https://github.com/TalkBank/chatter/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/TalkBank/chatter/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/TalkBank/chatter/compare/v0.9.1...v0.10.0

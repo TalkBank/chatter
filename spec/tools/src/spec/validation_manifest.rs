@@ -1,5 +1,5 @@
-//! Typed expectations manifest linking each generated validation fixture to the
-//! error codes it must produce and its implementation status. This is the only
+//! Typed expectations manifest linking each generated validation fixture to
+//! its spec's code, its CLAIM, and its implementation status. This is the only
 //! contract between the spec generator and the data-driven runner; it is
 //! serialized to the corpus dir as `manifest.json`.
 
@@ -30,8 +30,15 @@ impl FixtureName {
 pub struct ValidationFixtureEntry {
     /// Fixture filename, relative to the validation_errors corpus dir.
     pub fixture: FixtureName,
-    /// All error codes the fixture must produce (parse + validation).
-    pub expected_codes: Vec<SpecErrorCode>,
+    /// The spec's own code, which the claim is ABOUT.
+    ///
+    /// With `claim` it replaces the pre-R2 `expected_codes` list, which mixed
+    /// the normative assertion with incidental observations and could not
+    /// express an absence at all.
+    pub code: SpecErrorCode,
+    /// What this fixture asserts; the runner enforces both halves
+    /// (`subsumed_by` and `legal` carry negative assertions).
+    pub claim: talkbank_spec_vocabulary::frontmatter::Claim,
     /// Implementation status carried from the source spec; the runner skips
     /// anything that is not `Implemented`.
     pub status: Status,
@@ -44,10 +51,18 @@ pub struct ValidationFixtureEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ValidationManifest {
     pub fixtures: Vec<ValidationFixtureEntry>,
-    /// Implemented validation specs that produced no example/fixture. Populated
-    /// by the generator; consumed by the runner's coverage gate.
+    /// Implemented CODES with no example in ANY spec that claims them.
+    ///
+    /// Per-code, not per-spec, as of R4: a code may be claimed by several spec
+    /// files (the duplicate pairs), and the obligation "a rule owes a
+    /// triggering example" belongs to the RULE. A no-example spec whose code
+    /// is demonstrated by its sibling is documentation, not a gap; the
+    /// per-spec version of this list reported exactly that false positive the
+    /// moment the corpus became total (`E502_wor_cascade_regression.md`, a
+    /// false-positive regression record whose code E502 is demonstrated by
+    /// `E502_auto.md`).
     #[serde(default)]
-    pub implemented_specs_without_examples: Vec<RepoRelativePath>,
+    pub implemented_codes_without_examples: Vec<SpecErrorCode>,
 
     /// Specs marked `unreachable_from_chat` that nonetheless carry an example.
     ///
@@ -67,20 +82,22 @@ mod tests {
         let m = ValidationManifest {
             fixtures: vec![ValidationFixtureEntry {
                 fixture: FixtureName::new("E370_retrace.cha"),
-                expected_codes: vec![SpecErrorCode::parse("E370").expect("valid code")],
+                code: SpecErrorCode::parse("E370").expect("valid code"),
+                claim: talkbank_spec_vocabulary::frontmatter::Claim::Violates,
                 status: Status::Implemented,
                 source_spec: RepoRelativePath::new(
                     std::path::Path::new("/checkout"),
                     "/checkout/spec/errors/E370_retrace_missing_content.md",
                 ),
             }],
-            implemented_specs_without_examples: Vec::new(),
+            implemented_codes_without_examples: Vec::new(),
             unreachable_specs_with_examples: Vec::new(),
         };
         let json = serde_json::to_string_pretty(&m).expect("serialize");
-        // Codes and status serialize transparently as JSON strings.
+        // Codes, status and the claim serialize as their written forms.
         assert!(json.contains("\"E370\""));
         assert!(json.contains("\"implemented\""));
+        assert!(json.contains("\"violates\""));
         // The newtype is `serde(transparent)`, so the wire format is unchanged.
         assert!(json.contains("\"spec/errors/E370_retrace_missing_content.md\""));
         let back: ValidationManifest = serde_json::from_str(&json).expect("deserialize");

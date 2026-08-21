@@ -1,30 +1,14 @@
-# E233: Empty compound part
++++
+code = 'E233'
+name = 'Empty compound part'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Compound markers (`+`) must connect two non-empty parts. Adjacent compound markers
-(`un++do`) create an empty part between them, which is invalid.
-
-Note: Trailing `+` on a word (e.g., `hello+`) is structurally prevented by the
-grammar, the `+` cannot be the last character of a word token, so it splits
-into a separate token. This error covers internal empty parts only.
-
-## Metadata
-
-- **Error Code**: E233
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E233_empty_compound_part.cha`
-**Trigger**: Adjacent compound markers create an empty part
-**Expected Error Codes**: E233
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E233_empty_compound_part.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -34,7 +18,17 @@ into a separate token. This error covers internal empty parts only.
 @Comment:	Invalid: 'un++do' - Empty part between compound markers
 *CHI:	un++do .
 @End
-```
+'''
++++
+
+## Description
+
+Compound markers (`+`) must connect two non-empty parts. Adjacent compound markers
+(`un++do`) create an empty part between them, which is invalid.
+
+Note: Trailing `+` on a word (e.g., `hello+`) is structurally prevented by the
+grammar, the `+` cannot be the last character of a word token, so it splits
+into a separate token. This error covers internal empty parts only.
 
 ## Expected Behavior
 

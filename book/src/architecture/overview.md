@@ -1,7 +1,7 @@
 # Architecture Overview
 
 **Status:** Current
-**Last modified:** 2026-07-29 18:20 EDT
+**Last modified:** 2026-08-21 13:12 EDT
 
 `TalkBank/chatter` is the standalone home of the TalkBank CHAT specification,
 tree-sitter grammar, Rust crates, `chatter` CLI, LSP server, and desktop app.
@@ -71,7 +71,7 @@ chatter/
 ├── grammar/                Tree-sitter grammar
 ├── spec/                   CHAT specification (source of truth)
 │   ├── constructs/         Valid CHAT examples + expected parse trees
-│   ├── errors/             Invalid CHAT examples + expected error codes
+│   ├── errors/             Invalid CHAT examples + claims
 │   ├── symbols/            Shared symbol registry (JSON)
 │   ├── tools/              Core spec generators
 │   └── runtime-tools/      Runtime-aware spec bootstrap/validation tools

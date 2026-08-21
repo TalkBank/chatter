@@ -178,6 +178,30 @@ impl ChatFileBuilder {
     }
 
     /// Build the CHAT file content.
+    /// Render the file as CHAT TEXT, assembled with `format!`.
+    ///
+    /// # Why this is not the `MinimalChatFile` case, and must not be "fixed"
+    ///
+    /// Design rule 15 bans hand-writing CHAT and fabricating
+    /// `@UTF8`/`@Begin`/`@End` scaffolding, and `MinimalChatFile` was deleted on
+    /// 2026-08-19 for doing exactly that. This looks like the same defect and is
+    /// not, for a reason that is easy to miss and worth stating once:
+    ///
+    /// **THIS BUILDS DELIBERATELY INVALID CHAT.** Its production consumer is
+    /// `error_corpus_gen`, which writes the error corpus: `hello <world <foo>
+    /// bar> .` for E344's invalid scoped nesting, `hello world> [/] .` for
+    /// E346's unmatched annotation end. A typed model cannot construct those,
+    /// because refusing them is what the model is FOR. `build_chat`'s
+    /// `TranscriptDescription` parses each utterance through the real parser,
+    /// so every fixture here would fail to build.
+    ///
+    /// `MinimalChatFile` built a VALID file, which the model could represent
+    /// and therefore should have built. That is the distinction: the rule
+    /// applies wherever a typed model CAN express the output.
+    ///
+    /// Two further gaps, secondary to that one: `TranscriptDescription` carries
+    /// no dependent tiers and no arbitrary headers, and it appends timing
+    /// bullets where this prepends them.
     pub fn build(self) -> String {
         let mut output = String::new();
 

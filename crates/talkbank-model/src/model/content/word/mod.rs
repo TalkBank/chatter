@@ -32,7 +32,7 @@ mod word_type;
 /// [`Validate`] implementations for [`Word`] and [`WordContents`].
 mod word_validate;
 
-pub use ca::{CADelimiter, CADelimiterType, CAElement, CAElementType};
+pub use ca::{CADelimiter, CADelimiterType, CAElement, CAElementType, NotationFamily};
 pub use category::{WordCategory, WordMaterial};
 pub use content::{
     UnderlineMarker, WordCliticBoundary, WordCompoundMarker, WordContent, WordLengthening,

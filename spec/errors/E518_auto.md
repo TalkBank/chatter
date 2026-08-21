@@ -1,25 +1,14 @@
-# E518: Auto-generated from corpus
++++
+code = 'E518'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E518
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/E5xx_header_errors/E518_date_single_digit_day.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E518
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E518_date_single_digit_day.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,15 +18,13 @@ Auto-generated from corpus
 @End
 
 *CHI:	hello .
-```
+'''
 
-## Example 2
-
-**Source**: `error_corpus/E5xx_header_errors/E518_date_wrong_separator.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E518
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E518_date_wrong_separator.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -47,15 +34,13 @@ Auto-generated from corpus
 @End
 
 *CHI:	hello .
-```
+'''
 
-## Example 3
-
-**Source**: `error_corpus/E5xx_header_errors/E518_date_invalid_month.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E518
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E518_date_invalid_month.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -65,15 +50,13 @@ Auto-generated from corpus
 @End
 
 *CHI:	hello .
-```
+'''
 
-## Example 4
-
-**Source**: `error_corpus/E5xx_header_errors/E518_date_day_out_of_range.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E518
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E518_date_day_out_of_range.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -83,15 +66,13 @@ Auto-generated from corpus
 @End
 
 *CHI:	hello .
-```
+'''
 
-## Example 5
-
-**Source**: `error_corpus/E5xx_header_errors/E513_invalid_date_format.cha`
-**Trigger**: @Date with invalid format (should be DD-MMM-YYYY not full month name)
-**Expected Error Codes**: E518
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E513_invalid_date_format.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -99,15 +80,13 @@ Auto-generated from corpus
 @ID:	eng|corpus|CHI|||||Child|||
 @Date:	01-January-2025
 @End
-```
+'''
 
-## Example 6
-
-**Source**: `error_corpus/E5xx_header_errors/E518_date_lowercase_month.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E518
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E518_date_lowercase_month.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -117,7 +96,12 @@ Auto-generated from corpus
 @End
 
 *CHI:	hello .
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

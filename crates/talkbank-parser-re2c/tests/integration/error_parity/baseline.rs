@@ -26,6 +26,25 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 /// Delete an entry in the commit that makes the case agree. Adding one is an
 /// admission of a new divergence and wants a sentence saying why it ships.
 ///
+/// # Two entries left on 2026-08-21, and what they were measuring
+///
+/// `E502_wor_cascade_regression.md#0` and `#1` went when the spec format moved
+/// to frontmatter, and the reason is worth more than the entries were. That
+/// spec declares NO examples: its two ```` ```chat ```` blocks sit under
+/// `## Minimal Reproduction`, and the second is labelled in the file as a
+/// CONTROL that must NOT produce the code. The reader this suite used scanned
+/// the whole file for fences and fell back to the FILENAME for an expectation,
+/// so it asserted E502 on both, including the block documented as expecting
+/// the opposite.
+///
+/// So they were not two divergences; they were one fabricated expectation,
+/// recorded as a divergence, defended by a baseline entry. Reading examples
+/// from the file's own declarations is what made them stop existing.
+///
+/// If those blocks SHOULD be measured, the fix is to declare them as examples
+/// in the spec, which changes what is generated and is a separate, adjudicated
+/// change.
+///
 /// # What was here when the gate was first closed, 2026-08-09
 ///
 /// 99 of 283 cases, so the backends agree on **184/283 (65.0%)**. The number
@@ -177,8 +196,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E382_auto.md#2", Conflicting),
     ("E404_auto.md", Conflicting),
     ("E501_auto.md#1", Re2cIncomplete),
-    ("E502_wor_cascade_regression.md#0", Conflicting),
-    ("E502_wor_cascade_regression.md#1", Conflicting),
     ("E503_auto.md", Re2cIncomplete),
     ("E505_auto.md#0", Conflicting),
     ("E505_auto.md#1", Conflicting),

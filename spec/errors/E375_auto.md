@@ -1,25 +1,14 @@
-# E375: Scoped annotation parse error
++++
+code = 'E375'
+name = 'Scoped annotation parse error'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Scoped annotation parse error
-
-## Metadata
-
-- **Error Code**: E375
-- **Category**: Parser bugs (experimental)
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E350_unexpected_annotation_node.cha`
-**Trigger**: Try to trigger internal parser bug in annotation parsing
-**Expected Error Codes**: E375
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E350_unexpected_annotation_node.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +17,16 @@ Scoped annotation parse error
 @Comment:	Note: This may need adjustment after testing
 *CHI:	hello [[[[ test ]]]] world .
 @End
-```
+'''
++++
+
+## Description
+
+Scoped annotation parse error
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

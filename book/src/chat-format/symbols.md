@@ -1,7 +1,7 @@
 # Symbols
 
 **Status:** Reference
-**Last modified:** 2026-08-12 22:55 EDT
+**Last modified:** 2026-08-20 22:38 EDT
 
 CHAT uses a rich set of symbols for transcription conventions. This
 page documents the symbol categories and the symbol registry that
@@ -43,50 +43,40 @@ Punctuation that ends an utterance:
 | `+!?` | Broken question | Exclamation-question |
 | `+"/.` | Quoted new line | Quotation continues on next line |
 
-### CA (Conversation Analysis) Symbols
+### CA and Disfluency Symbols
 
-CA notation symbols fall into three parser-distinct categories in
-`spec/symbols/symbol_registry.json`. They are not interchangeable,
-the grammar treats them as different node kinds.
+The tables below are GENERATED from `spec/symbols/symbol_registry.json`, which
+is the single owner of what each symbol means. The Rust types
+`CAElementType` and `CADelimiterType`, the grammar's character constants and
+these tables all come from the same record, so they cannot disagree.
 
-**CA element symbols** (`ca_element_symbols`) attach to a word, so
-`book↑` is a single token whose content carries the symbol:
+**The category names describe a PARSING ROLE, not a provenance.** A
+`ca_element_symbol` attaches to a word token; a `ca_delimiter_symbol` brackets
+a stretch. Ask a symbol's `notation_family()` for provenance; never read it off
+the name of the array the symbol sits in. That confusion is what once filed the
+blocking and segment-repetition disfluency marks as Conversation Analysis
+notation.
 
-| Symbol | Meaning |
-|--------|---------|
-| `↑` | Rising pitch (attaches to a word) |
-| `↓` | Falling pitch (attaches to a word) |
-| `∙` | Micropause |
-| `≠` | Inhalation marker |
-| `⁑` `↻` `∾` `⤆` `⤇` `Ἡ` | Other CA element symbols |
+{{#include generated/ca-symbols.md}}
 
-**CA arrow separators** (in `word_segment_forbidden_start_symbols`)
-are own-node separators between words, not word-attachments. The
-parser splits them as their own nodes:
+### CA arrow separators
 
-| Symbol | Meaning |
-|--------|---------|
-| `→` | Level pitch contour |
-| `↗` | Rising-to-mid contour |
-| `↘` | Falling-to-mid contour |
-| `⇗` | Rising-to-high contour |
-| `⇘` | Falling-to-low contour |
-| `↖` `↙` `←` | Other CA arrow separators |
+These are own-node separators between words rather than word-attachments, and
+the parser splits them as their own nodes. They are NOT yet registry-owned, and
+this table is still hand-written. They are not untyped: five of them are
+`Separator` variants in `talkbank-model`, whose glyph table is hand-written
+again in `WriteChat` and in several places across the grammar and the re2c
+backend. Bringing them into the registry is the same move the two families
+above have already made, and it is outstanding work rather than a decision.
 
-**CA delimiter symbols** (`ca_delimiter_symbols`) bracket annotated
-prosodic regions:
-
-| Symbol | Meaning |
-|--------|---------|
-| `°` | Quiet speech |
-| `∆` `∇` | Higher / lower pitch register |
-| `∬` `∮` | Other prosodic-region delimiters |
-| `▁` `▔` | Low / high prosodic-region delimiters |
-| `⁇` `§` `⁎` `↫` `◉` `☺` `♋` `Ϋ` | Additional registered CA delimiters |
-
-Confirm the current contents of each category by reading
-`spec/symbols/symbol_registry.json` directly, that is the file
-`just symbols-gen` derives the grammar and Rust constants from.
+| Symbol | Codepoint | Meaning |
+|--------|-----------|---------|
+| `→` | U+2192 | Level pitch contour |
+| `↗` | U+2197 | Rising to mid |
+| `↘` | U+2198 | Falling to mid |
+| `⇗` | U+21D7 | Rising to high |
+| `⇘` | U+21D8 | Falling to low |
+| `↖` `↙` `←` | U+2196, U+2199, U+2190 | Registered as separators; named in neither the CHAT manual's symbol table nor CLAN's symbol enum. |
 
 ### Word Segment Characters
 

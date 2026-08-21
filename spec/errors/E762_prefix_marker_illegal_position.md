@@ -1,4 +1,51 @@
-# E762: prefix marker stands alone or opens a word
++++
+code = 'E762'
+name = 'prefix marker stands alone or opens a word'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the # dog .
+@Comment:	ERROR: the prefix marker is not a word
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the #dog .
+@Comment:	ERROR: the marker attaches to the end of a prefix, not the start of a stem
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	heb
+@Participants:	CHI Target_Child
+@ID:	heb|corpus|CHI|||||Target_Child|||
+*CHI:	ha# # kelev .
+@Comment:	ERROR: position is illegal in every language, Hebrew included
+@End
+'''
++++
 
 ## Description
 
@@ -20,67 +67,6 @@ This rule is about POSITION and is language-independent. Whether a word's
 language uses the marker at all is a separate rule (`E763`); a word rejected
 here is not additionally reported there, because "change the language" is not
 the fix for either shape.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-26 22:49 EDT
-
-- **Error Code**: E762
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: the marker stands alone as a main-tier word.
-
-**Expected Error Codes**: E762
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	the # dog .
-@Comment:	ERROR: the prefix marker is not a word
-@End
-```
-
-## Example 2
-
-**Trigger**: a word opens with the marker.
-
-**Expected Error Codes**: E762
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	the #dog .
-@Comment:	ERROR: the marker attaches to the end of a prefix, not the start of a stem
-@End
-```
-
-## Example 3
-
-**Trigger**: the same shape in a language that DOES use the marker.
-
-**Expected Error Codes**: E762
-
-```chat
-@UTF8
-@Begin
-@Languages:	heb
-@Participants:	CHI Target_Child
-@ID:	heb|corpus|CHI|||||Target_Child|||
-*CHI:	ha# # kelev .
-@Comment:	ERROR: position is illegal in every language, Hebrew included
-@End
-```
 
 ## Expected Behavior
 

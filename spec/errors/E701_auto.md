@@ -1,4 +1,38 @@
-# E701, Per-speaker start-time not monotonically increasing
++++
+code = 'E701'
+name = 'Per-speaker start-time not monotonically increasing'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello . \u00155000_6000\u0015
+*CHI:	world . \u00153000_4000\u0015
+@End
+"""
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@Options:	CA
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello . \u00155000_6000\u0015
+*CHI:	world . \u00153000_4000\u0015
+@End
+"""
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 08:15 EDT
@@ -8,53 +42,6 @@
 Each utterance's first media bullet must have a start time greater than or
 equal to the previous utterance's first bullet start time (for the same
 speaker). Corresponds to CLAN CHECK Error 83.
-
-## Metadata
-
-- **Error Code**: E701
-- **Category**: Temporal validation
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Same speaker's second utterance starts before the first
-**Expected Error Codes**: E701
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello . 5000_6000
-*CHI:	world . 3000_4000
-@End
-```
-
-## Example 2
-
-**Trigger**: the identical timing defect in a CA file. `@Options: CA` is not
-a timing statement: the ungrounded wholesale skip it used to trigger was
-removed 2026-07-29 (protected zero occurrences across all 994 kept
-CA-declared files; see
-docs/investigations/2026-07-29-ca-mode-gate-adjudication.md in the operator
-workspace).
-**Expected Error Codes**: E701
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@Options:	CA
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello . 5000_6000
-*CHI:	world . 3000_4000
-@End
-```
 
 ## Expected Behavior
 

@@ -1,27 +1,14 @@
-# E721: GRA non-sequential index
++++
+code = 'E721'
+name = 'GRA non-sequential index'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last updated:** 2026-04-04 08:15 EDT
-
-## Description
-
-`%gra` tier indices must be sequential (1, 2, 3, ..., N). Non-sequential indices indicate a malformed dependency structure.
-
-## Metadata
-
-- **Error Code**: E721
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E721_gra_non_sequential.cha`
-**Trigger**: GRA indices not in sequential order (1, 3, 2 instead of 1, 2, 3)
-**Expected Error Codes**: E721
-
-```chat
+[[example]]
+level = 'tier'
+source = 'error_corpus/validation_errors/E721_gra_non_sequential.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,14 @@
 %mor:	pro|I v|want n|cookie .
 %gra:	1|3|NSUBJ 3|0|ROOT 2|3|OBJ 4|3|PUNCT
 @End
-```
+'''
++++
+
+**Last updated:** 2026-04-04 08:15 EDT
+
+## Description
+
+`%gra` tier indices must be sequential (1, 2, 3, ..., N). Non-sequential indices indicate a malformed dependency structure.
 
 ## Expected Behavior
 

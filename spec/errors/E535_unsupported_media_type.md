@@ -1,22 +1,13 @@
-# E535: Unsupported @Media Type
++++
+code = 'E535'
+name = 'Unsupported @Media Type'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@Media` header contains a media type that is not one of the recognized values. The file parses successfully but the unsupported type is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E535
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E535
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An `@Media` header contains a media type that is not one of the recognized value
 @Media:	recording, badtype
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@Media` header contains a media type that is not one of the recognized values. The file parses successfully but the unsupported type is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

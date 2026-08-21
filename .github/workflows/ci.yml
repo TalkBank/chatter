@@ -46,13 +46,17 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: just
-      # Pinned in lockstep with rust-toolchain.toml (channel =
-      # "1.97.1"). Drift against latest-stable is caught by the
+      # Pinned in lockstep with rust-toolchain.toml's channel, by
+      # `just rust-sync`. The version is deliberately NOT repeated here:
+      # this second copy is what went stale on the 1.98.0 bump, and the
+      # gate cannot see it, because `sync-rust-versions.py`'s PIN_RE
+      # matches a real pin and never a version quoted in prose.
+      # Drift against latest-stable is caught by the
       # weekly .github/workflows/clippy-rolling.yml job; bump this
       # action version + the rust-toolchain.toml channel together
       # when that job goes red.
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: rustfmt, clippy
 
@@ -184,7 +188,7 @@ jobs:
           tool: just
       # Same lockstep pin as the rust job above.
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.98.0
         with:
           targets: wasm32-unknown-unknown
 

@@ -1,26 +1,14 @@
-# E252: Syntax error - caret at word start
++++
+code = 'E252'
+name = 'Syntax error - caret at word start'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Syntax error - caret at word start
-
-## Metadata
-- **Status**: implemented
-- **Layer**: validation
-
-- **Error Code**: E252
-- **Category**: Prosodic marker placement
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E303_caret_at_word_start.cha`
-**Trigger**: Caret (^) used at word start instead of mid-word
-**Expected Error Codes**: E252
-
-```chat
+[[example]]
+level = 'word'
+source = 'E3xx_main_tier_errors/E303_caret_at_word_start.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,11 +18,16 @@ Syntax error - caret at word start
 @Comment:	not at the start of a word
 *CHI:	^test .
 @End
-```
+'''
++++
+
+## Description
+
+Syntax error - caret at word start
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

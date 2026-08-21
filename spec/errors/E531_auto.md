@@ -1,4 +1,25 @@
-# E531: Media filename mismatch
++++
+code = 'E531'
+name = 'Media filename mismatch'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'header'
+source = 'error_corpus/validation_errors/E531_media_filename_mismatch.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	different, audio
+@Comment:	ERROR: Media filename must match transcript
+*CHI:	hello .
+@End
+'''
++++
 
 ## Description
 
@@ -12,34 +33,6 @@ E531 requires the validator to be invoked with the file's name: the check in
 runner passes each fixture's stem to `validate_with_alignment`, so the check
 fires: `@Media: different, audio` in a file not named `different.cha` triggers
 E531.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-08-11 16:20 EDT
-
-- **Error Code**: E531
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E531_media_filename_mismatch.cha`
-**Trigger**: Media filename does not match the CHAT file name
-**Expected Error Codes**: E531
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	different, audio
-@Comment:	ERROR: Media filename must match transcript
-*CHI:	hello .
-@End
-```
 
 ## Expected Behavior
 
@@ -70,5 +63,5 @@ https://talkbank.org/0info/manuals/CHAT.pdf
   `Anonymous` rather than leaving a reader to work out what `None` switched off.
 - This example also emits E544 (`@Media` declares linkage but the transcript
   carries no timing evidence), which is correct and independent: it has no
-  bullets. The expected-codes check is a subset test, so E544 is not declared
+  bullets. Extra emitted codes never fail a claim, so E544 is not declared
   here; it is declared by E544's own spec.

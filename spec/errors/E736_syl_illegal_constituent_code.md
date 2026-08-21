@@ -1,23 +1,13 @@
-# E736: Illegal syllable constituent code
++++
+code = 'E736'
+name = 'Illegal syllable constituent code'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D U.
-
-## Metadata
-
-- **Error Code**: E736
-- **Category**: Phon syllabification content
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E736
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,7 +18,12 @@ Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D U.
 %xphosyl:	k:Oæ:Nt:Z
 @Comment:	ERROR: 'Z' is not a legal constituent code (legal: O N C L R E A D U)
 @End
-```
+'''
++++
+
+## Description
+
+Constituent codes on `%xmodsyl`/`%xphosyl` must be one of O N C L R E A D U.
 
 ## Expected Behavior
 

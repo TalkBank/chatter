@@ -1,4 +1,26 @@
-# E600: Tier alignment skipped due to parse errors
++++
+code = 'E600'
+name = 'Tier alignment skipped due to parse errors'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+title = 'Non-integer index in %gra'
+claim = 'violates'
+notes = '**Expected**: E600 warning, could not fully parse dependent tier content.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*CHI:	hello world .
+%mor:	int|hello n|world .
+%gra:	abc|0|ROOT 2|0|ROOT
+@End
+'''
++++
 
 ## Description
 
@@ -9,36 +31,6 @@ still parses, but alignment correctness is unverified for tainted tiers.
 
 E600 fires in pairs: if `%mor` is tainted, both main↔%mor and %mor↔%gra alignment
 checks are skipped, producing two E600 warnings for the same utterance.
-
-## Metadata
-- **Status**: implemented
-
-- **Error Code**: E600
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1, Non-integer index in %gra
-
-**Trigger**: `abc|0|ROOT` in `%gra`, a non-numeric index causes the tree-sitter
-grammar to reject the token, creating an ERROR node. The error recovery recognizes
-this as a `%gra:` tier with parse errors and emits E600.
-**Expected Error Codes**: E600
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*CHI:	hello world .
-%mor:	int|hello n|world .
-%gra:	abc|0|ROOT 2|0|ROOT
-@End
-```
-
-**Expected**: E600 warning, could not fully parse dependent tier content.
 
 ## Root Cause
 

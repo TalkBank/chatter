@@ -42,7 +42,6 @@ serde_json = { workspace = true }
 toml = { workspace = true }
 talkbank-llm = { workspace = true }
 talkbank-model = { workspace = true }
-talkbank-parser-tests = { workspace = true }
 talkbank-transform = { workspace = true }
 talkbank-parser = { workspace = true }
 thiserror = { workspace = true } #unified
@@ -52,6 +51,10 @@ unicode-width = { workspace = true }
 walkdir = { workspace = true } #unified
 
 [dev-dependencies]
+# TEST-ONLY. It was a regular dependency until 2026-08-19, because `new-file`
+# used a template that lived here, so this test-support crate compiled into the
+# release binary.
+talkbank-parser-tests = { workspace = true }
 assert_cmd = { workspace = true }
 httpmock = "0.8.3"
 predicates = { workspace = true }

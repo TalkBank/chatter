@@ -1,4 +1,22 @@
-# E342: Angle-bracket group with no following annotation is invalid
++++
+code = 'E342'
+name = 'Angle-bracket group with no following annotation is invalid'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	PAR Participant
+@ID:	eng|corpus|PAR|||||Participant|||
+*PAR:	<I don't> &-uh I know xxx .
+@End
+'''
++++
 
 ## Description
 
@@ -23,34 +41,6 @@ real `<...> [//]`, which is why the invalidity is detected at the parser
 This pattern is a data error. The fix is in the corpus, not the parser:
 add the intended annotation after the group (e.g., `<I don't> [//]`), or
 remove the angle brackets if no scope was meant.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-06-23 13:21 EDT
-
-- **Error Code**: E342
-- **Category**: Main tier structure
-- **Level**: main_tier
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A `<...>` group on the main tier is not followed by any
-annotation. Tree-sitter inserts a synthetic `MISSING retrace_complete`
-recovery node; the parser surfaces E342 on it.
-
-**Expected Error Codes**: E342
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	PAR Participant
-@ID:	eng|corpus|PAR|||||Participant|||
-*PAR:	<I don't> &-uh I know xxx .
-@End
-```
 
 ## Expected Behavior
 

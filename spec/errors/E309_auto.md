@@ -1,4 +1,29 @@
-# E309: Unexpected syntax
++++
+code = 'E309'
+name = 'Unexpected syntax'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'utterance'
+source = 'error_corpus/parse_errors/E309_unexpected_syntax.cha'
+claim = { subsumed_by = 'E505' }
+notes = '''
+Note: E309 fires from ERROR nodes in tree-sitter's parse tree, but `##` in
+an utterance does not produce an ERROR node, the grammar absorbs it. The
+example also lacks `@UTF8` and `@End`, so header validation errors dominate.
+With proper scaffolding and this specific input, the parser produces zero
+errors (the `##` is silently accepted).
+'''
+chat = '''
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*CHI:	hello ## world .
+@End
+'''
++++
 
 **Last updated:** 2026-04-04 08:28 EDT
 
@@ -8,38 +33,6 @@ Unexpected syntax encountered during parsing. E309 (UnexpectedSyntax) fires
 when the parser encounters an ERROR node from tree-sitter that contains
 unexpected content. The error is emitted from `make_error_from_node()` in
 `helpers.rs`.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E309
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/parse_errors/E309_unexpected_syntax.cha`
-**Trigger**: `##` in utterance, intended to trigger unexpected syntax, but
-the tree-sitter grammar silently accepts `##` as valid content. The missing
-headers (`@UTF8`, `@End`) dominate the error output.
-**Expected Error Codes**: E501, E502, E503, E504, E505
-
-Note: E309 fires from ERROR nodes in tree-sitter's parse tree, but `##` in
-an utterance does not produce an ERROR node, the grammar absorbs it. The
-example also lacks `@UTF8` and `@End`, so header validation errors dominate.
-With proper scaffolding and this specific input, the parser produces zero
-errors (the `##` is silently accepted).
-
-```chat
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*CHI:	hello ## world .
-@End
-```
 
 ## Expected Behavior
 

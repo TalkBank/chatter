@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 00:36 EDT
 
 Guidance for Claude Code when working in this repository
 (`TalkBank/chatter`). This file carries invariants, danger rules, and
@@ -167,6 +167,28 @@ comment, or a doc, the type is wrong. If the answer is the compiler, it
 is right.
 
 Not a licence to rewrite: apply it to what you touch and to new design.
+
+**HUNT FOR TYPESTATE, and do it on every read AND explicitly during every
+review pass (maintainer, 2026-08-20).** The rule above deletes an ASSERTION
+when a type can hold an invariant. This is the stronger form: encode the STATE
+of a thing in its type, so an operation invalid in that state has no signature
+to travel through and whole SCENARIOS stop being writable. Not "this test is
+redundant" but "this test cannot be written, and neither can the bug".
+
+**Ordering is the tell.** Whenever a comment, a test name or a docstring says
+"X happens strictly AFTER Y", "only once Y has succeeded", or
+"confirm-then-write", that is a sequence maintained by convention, and it is
+exactly what a phase type expresses: `fn(Previous) -> Next`, so the later step
+cannot be reached without the earlier one's RESULT in hand. A test that
+arranges a failure at Y and asserts X did not happen is a whole scenario the
+phase type deletes.
+
+Do not accept "no type expresses this" quickly; that sentence is usually the
+convention defending itself. Two real limits: a scenario about the OUTSIDE
+world (a subprocess, a clock, the generated grammar) still needs a test,
+because no type of ours reaches it; and type-parameter typestate
+(`Worker<Idle>`) fights a collection of mixed-state values, so knowing which
+form fits is part of the work. A review that only tidies has skipped this.
 
 **FABRICATED VALUES ARE BANNED, IN NEW CODE AND OLD (maintainer, 2026-08-11).**
 A fabricated value is one the code INVENTS because a total function was forced

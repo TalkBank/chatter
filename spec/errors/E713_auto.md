@@ -1,28 +1,13 @@
-# E713: Gra head index invalid
++++
+code = 'E713'
+name = 'Gra head index invalid'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-A `%gra` relation has a head index that falls outside the valid range
-`0..=N`, where `N` is the number of `%mor` chunks in the utterance. Index
-`0` is reserved for the ROOT head; otherwise the head index must point to
-an existing chunk.
-
-## Metadata
-
-- **Error Code**: E713
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Trigger**: head index exceeds %mor chunk count (per-relation validation,
-cardinalities match)
-**Expected Error Codes**: E713
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -33,7 +18,15 @@ cardinalities match)
 %mor:	pro|I v|want .
 %gra:	1|2|NSUBJ 2|0|ROOT 3|9|PUNCT
 @End
-```
+'''
++++
+
+## Description
+
+A `%gra` relation has a head index that falls outside the valid range
+`0..=N`, where `N` is the number of `%mor` chunks in the utterance. Index
+`0` is reserved for the ROOT head; otherwise the head index must point to
+an existing chunk.
 
 ## Expected Behavior
 

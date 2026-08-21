@@ -13,44 +13,11 @@ use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-/// Map a single Unicode character to a CA element type.
-fn ca_element_type_from_char(ch: char) -> Option<CAElementType> {
-    match ch {
-        '\u{2260}' => Some(CAElementType::BlockedSegments), // ≠
-        '\u{223E}' => Some(CAElementType::Constriction),    // ∾
-        '\u{2051}' => Some(CAElementType::Hardening),       // ⁑
-        '\u{2907}' => Some(CAElementType::HurriedStart),    // ⤇
-        '\u{2219}' => Some(CAElementType::Inhalation),      // ∙
-        '\u{1F29}' => Some(CAElementType::LaughInWord),     // Ἡ
-        '\u{2193}' => Some(CAElementType::PitchDown),       // ↓
-        '\u{21BB}' => Some(CAElementType::PitchReset),      // ↻
-        '\u{2191}' => Some(CAElementType::PitchUp),         // ↑
-        '\u{2906}' => Some(CAElementType::SuddenStop),      // ⤆
-        _ => None,
-    }
-}
-
-/// Map a single Unicode character to a CA delimiter type.
-fn ca_delimiter_type_from_char(ch: char) -> Option<CADelimiterType> {
-    match ch {
-        '\u{2206}' => Some(CADelimiterType::Faster),       // ∆
-        '\u{2207}' => Some(CADelimiterType::Slower),       // ∇
-        '\u{00B0}' => Some(CADelimiterType::Softer),       // °
-        '\u{2581}' => Some(CADelimiterType::LowPitch),     // ▁
-        '\u{2594}' => Some(CADelimiterType::HighPitch),    // ▔
-        '\u{263A}' => Some(CADelimiterType::SmileVoice),   // ☺
-        '\u{264B}' => Some(CADelimiterType::BreathyVoice), // ♋
-        '\u{2047}' => Some(CADelimiterType::Unsure),       // ⁇
-        '\u{222C}' => Some(CADelimiterType::Whisper),      // ∬
-        '\u{03AB}' => Some(CADelimiterType::Yawn),         // Ϋ
-        '\u{222E}' => Some(CADelimiterType::Singing),      // ∮
-        '\u{21AB}' => Some(CADelimiterType::SegmentRepetition), // ↫
-        '\u{204E}' => Some(CADelimiterType::Creaky),       // ⁎
-        '\u{25C9}' => Some(CADelimiterType::Louder),       // ◉
-        '\u{00A7}' => Some(CADelimiterType::Precise),      // §
-        _ => None,
-    }
-}
+// The two character-to-variant dispatch tables that used to live here are
+// gone. They were a hand-written copy of the symbol registry, one arm per
+// symbol, sitting next to `to_symbol`, which is the same table written
+// backwards. Both directions are now generated from one record per symbol:
+// `CAElementType::from_char` and `CADelimiterType::from_char`.
 
 /// Converts one `ca_element` token node to `CAElement`.
 ///
@@ -75,7 +42,7 @@ pub(crate) fn parse_ca_element_node(
         return ParseOutcome::rejected();
     };
 
-    match ca_element_type_from_char(ch) {
+    match CAElementType::from_char(ch) {
         Some(element_type) => ParseOutcome::parsed(CAElement::new(element_type).with_span(span)),
         None => {
             errors.report(ParseError::new(
@@ -113,7 +80,7 @@ pub(crate) fn parse_ca_delimiter_node(
         return ParseOutcome::rejected();
     };
 
-    match ca_delimiter_type_from_char(ch) {
+    match CADelimiterType::from_char(ch) {
         Some(delimiter_type) => {
             ParseOutcome::parsed(CADelimiter::new(delimiter_type).with_span(span))
         }

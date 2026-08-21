@@ -1,22 +1,13 @@
-# E539: Unsupported @Transcription Value
++++
+code = 'E539'
+name = 'Unsupported @Transcription Value'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@Transcription` header contains a value that is not one of the recognized transcription types. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E539
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E539
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An `@Transcription` header contains a value that is not one of the recognized tr
 @Transcription:	badtype
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@Transcription` header contains a value that is not one of the recognized transcription types. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

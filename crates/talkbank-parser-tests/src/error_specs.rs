@@ -17,7 +17,7 @@
 //!
 //! # What is deliberately NOT shared
 //!
-//! [`SpecStatus`] is the vocabulary; what to DO about each state is the
+//! [`Status`] is the vocabulary; what to DO about each state is the
 //! caller's policy and stays with the caller. `SpecStatusGate` treats only
 //! `NotImplemented` as unenforced; the re2c parity gate measures everything
 //! except `NotImplemented`; `spec/runtime-tools` skips `Deprecated` and
@@ -25,48 +25,71 @@
 //! judgements about the same fact, and collapsing them would be inventing a
 //! policy none of them holds.
 //!
-//! # The fourth reader, and why it is still separate
+//! # What is shared, and what is not
 //!
-//! `spec/tools` and `spec/runtime-tools` live in a SEPARATE cargo workspace
-//! that depends downward into `talkbank-model`. They cannot import this crate.
-//! Sharing with them would mean putting a markdown reader into a published CHAT
-//! model crate, which is the wrong home for it: `talkbank-model` describes CHAT
-//! transcripts, not this project's spec-authoring format. The remaining
-//! duplication across the workspace boundary is therefore deliberate, and is
-//! recorded here rather than left for the next reader to rediscover.
+//! The VALUE types are shared: `talkbank-spec-vocabulary` is a dependency-light
+//! crate (serde and thiserror, nothing else) that both cargo workspaces depend
+//! on by path, and it owns `Status`, the error-code newtype and the
+//! code-shaped filename rule. This paragraph said sharing was impossible until
+//! 2026-08-19, on the grounds that it would mean putting a markdown reader into
+//! a published CHAT model crate; that was an argument against sharing the
+//! READER, and it was read as an argument against sharing anything.
+//!
+//! The markdown READERS are still separate, and that part still holds: a
+//! markdown parser does not belong in a published CHAT model crate, and this
+//! one answers a different question anyway (it joins spec filenames against the
+//! live `ErrorCode` enum, which the spec workspace cannot see).
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use talkbank_model::ErrorCode;
 
+use serde::de::IgnoredAny;
+use talkbank_spec_vocabulary::SpecErrorCode;
 /// What a spec declares about its own implementation state.
 ///
-/// The closed set actually written in `spec/errors`, verified against all 239
-/// files: 89 `implemented`, 42 `not_implemented`, 2 `deprecated`, 1
-/// `unreachable_from_chat`, and 105 declaring nothing at all.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SpecStatus {
-    /// Enforced by the validator.
-    Implemented,
-    /// Documented but not yet enforced.
-    NotImplemented,
-    /// Superseded; kept for the record.
-    Deprecated,
-    /// Describes a state no CHAT input can reach.
-    UnreachableFromChat,
-    /// No `**Status**:` line at all, which is the majority.
-    Undeclared,
-}
+/// The status vocabulary, owned by [`talkbank_spec_vocabulary`].
+///
+/// This was a local `SpecStatus` enum, and it is the reason that crate exists.
+/// It carried a FIFTH variant, `Undeclared`, whose doc read: "verified against
+/// all 239 files: 89 `implemented`, 42 `not_implemented`, 2 `deprecated`, 1
+/// `unreachable_from_chat`, and 105 declaring nothing at all."
+///
+/// Measured 2026-08-19: 236 files, 192 implemented, 41 not_implemented, 2
+/// deprecated, 1 unreachable_from_chat, and ZERO declaring nothing. Every
+/// number in that doc had drifted, and the last one mattered: the spec-side
+/// loader REFUSES a spec with no `**Status**:` bullet, so one reader treated
+/// the case as the normal majority while the other treated it as fatal. The
+/// variant was unreachable and the counts were three months stale.
+pub use talkbank_spec_vocabulary::Status;
+use talkbank_spec_vocabulary::frontmatter::{Claim, ExampleFrontmatter, SpecFrontmatter};
 
-/// One spec file, read once.
+/// One spec file, read and PARSED once.
+///
+/// # What Phase 1b deleted here
+///
+/// This used to carry the whole file as text, and each caller scanned those
+/// lines for the field it wanted: one for `**Status**:`, two more for
+/// `**Expected Error Codes**:`, and one of those three additionally
+/// re-implemented a markdown scanner to find ```` ```chat ```` fences and pair
+/// each with the declarations above it. That scanner was the FIFTH reader of
+/// this format, and its pairing rule (`declarations between the previous fence
+/// and this one, last wins`) was a fourth answer to the question the loader's
+/// `raw_after_fence_declares_codes` guard existed to police.
+///
+/// The frontmatter schema answers all of it by deserializing, so the text is
+/// no longer a field: what a caller wants is a value, and there is one way to
+/// get it.
 pub struct SpecFile {
     /// The file's own name, e.g. `E375_replacement_needs_preceding_space.md`.
     pub filename: String,
-    /// Absolute path, for a diagnostic that has to name the file on disk.
-    pub path: PathBuf,
-    /// The whole file, read once and shared by every caller.
-    pub content: String,
+    /// What the file declares, parsed at load.
+    ///
+    /// `IgnoredAny` for the kind: this workspace has no use for it, and the
+    /// type parameter is what lets the schema live in a crate that cannot name
+    /// `DiagnosticKind`.
+    front: SpecFrontmatter<IgnoredAny>,
 }
 
 /// The code a spec FILENAME names: `E375_replacement....md` -> `E375`.
@@ -83,23 +106,21 @@ pub struct SpecFile {
 /// one accessor and is the shape this workspace keeps deleting.
 #[must_use]
 pub fn code_of(filename: &str) -> Option<ErrorCode> {
-    let stem = filename.strip_suffix(".md")?;
-    ErrorCode::parse_exact(stem.split_once('_').map_or(stem, |(code, _)| code))
+    ErrorCode::parse_exact(stem_code_of(filename)?)
 }
 
-/// The text after an `**Expected Error Codes**:` label, if this line is one.
+/// The code TEXT a spec filename names, before any join to the live enum.
 ///
-/// Here for the same reason [`SpecFile::status`] is: the `spec/errors` markdown
-/// conventions get re-derived by every new reader, and the optional `- ` list
-/// marker plus the bold-label spelling are exactly the details that drift. This
-/// field had two independent matchers, character-for-character identical, in
-/// two crates of one workspace.
+/// Split out so `load` can compare a filename against a declared code without
+/// dragging in the separate question of whether the live `ErrorCode` enum has
+/// a matching variant. `code_of`'s doc justified being a free function
+/// "because one caller has a filename and no file"; that caller was the
+/// markdown scanner Phase 1b deleted, so the justification outlived its
+/// subject by one commit.
 #[must_use]
-pub fn expected_codes_declaration(line: &str) -> Option<&str> {
-    line.trim_start()
-        .trim_start_matches("- ")
-        .strip_prefix("**Expected Error Codes**:")
-        .map(str::trim)
+fn stem_code_of(filename: &str) -> Option<&str> {
+    let stem = filename.strip_suffix(".md")?;
+    Some(stem.split_once('_').map_or(stem, |(code, _)| code))
 }
 
 impl SpecFile {
@@ -109,61 +130,117 @@ impl SpecFile {
         code_of(&self.filename)
     }
 
-    /// What the `**Status**:` line declares.
+    /// What this spec declares about its own implementation state.
     ///
-    /// Anchored at the start of a line after trimming an optional list marker,
-    /// NOT a substring search of the whole file. `Err` for a status nobody has
-    /// modelled, so a typo stops the caller rather than silently becoming one
-    /// of the five real states.
-    pub fn status(&self) -> Result<SpecStatus, String> {
-        let Some(raw) = self.content.lines().find_map(|line| {
-            line.trim_start()
-                .trim_start_matches("- ")
-                .strip_prefix("**Status**:")
-                .map(str::trim)
-        }) else {
-            return Ok(SpecStatus::Undeclared);
-        };
-        match raw {
-            "implemented" => Ok(SpecStatus::Implemented),
-            "not_implemented" => Ok(SpecStatus::NotImplemented),
-            "deprecated" => Ok(SpecStatus::Deprecated),
-            "unreachable_from_chat" => Ok(SpecStatus::UnreachableFromChat),
-            other => Err(format!(
-                "{}: unrecognised status {other:?}; add it to SpecStatus",
-                self.filename
-            )),
-        }
+    /// Infallible, where it used to return a `Result`. A missing or misspelled
+    /// status is refused when the file is PARSED, so by the time a `SpecFile`
+    /// exists the question has an answer. That is the shape this repository
+    /// keeps looking for: not a better error message, but a state that cannot
+    /// be reached.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        self.front.status
+    }
+
+    /// The code this spec DECLARES, as a spec-format code.
+    ///
+    /// Distinct from [`Self::code`], which reads the FILENAME and joins it to
+    /// the live `ErrorCode` enum. The two agree across all 236 specs today,
+    /// and collapsing them is R1's job (`ErrorCode` generated from the specs),
+    /// not this phase's: one is a fact about the file's name and the other is
+    /// a fact about its content, and Phase 1b is the change that makes the
+    /// second one available at all.
+    #[must_use]
+    pub fn declared_code(&self) -> &SpecErrorCode {
+        &self.front.code
+    }
+
+    /// This spec's examples, in file order.
+    #[must_use]
+    pub fn examples(&self) -> &[ExampleFrontmatter] {
+        &self.front.examples
+    }
+
+    /// Every code this spec's examples POSITIVELY assert, over every example.
+    ///
+    /// Claim-derived since R2: `violates` contributes the spec's own code,
+    /// `subsumed_by` its targets, `legal` nothing (its content is an absence).
+    #[must_use]
+    pub fn declared_codes(&self) -> BTreeSet<SpecErrorCode> {
+        self.front
+            .examples
+            .iter()
+            .flat_map(|example| example.effective_codes(&self.front.code))
+            .collect()
     }
 }
 
-/// Every `.md` under `dir`, read, in filename order so a run is reproducible.
+/// Every error SPEC under `dir`, read, in filename order so a run is
+/// reproducible.
+///
+/// # Specs, not every `.md`
+///
+/// This took every markdown file, so `README.md` and `SPEC_ENHANCEMENT_GUIDE.md`
+/// arrived as specs and every caller had to recognise and skip them. That is
+/// what the deleted `Status::Undeclared` variant was really for: prose has no
+/// `**Status**:` bullet, so "declares nothing" doubled as "is not a spec", and
+/// a genuine spec that forgot the bullet was indistinguishable from a README.
+///
+/// The rule is now [`talkbank_spec_vocabulary::looks_like_a_code`] on the stem, shared with the
+/// spec-side loader, which is the same question asked once.
 ///
 /// `Err` on an empty directory: a caller comparing against nothing reports
 /// clean, and a clean report from a broken read is indistinguishable from a
 /// clean report from a healthy one.
 pub fn load(dir: &Path) -> Result<Vec<SpecFile>, String> {
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .map_err(|err| format!("cannot read {}: {err}", dir.display()))?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "md"))
-        .collect();
-    entries.sort_by_key(std::fs::DirEntry::file_name);
+    // ONE enumeration, shared with the spec-side loader. This had its own
+    // `read_dir` plus `sort_by_key(file_name)`, which agreed with
+    // `spec_file_paths`'s full-path sort only because `spec/errors` is flat.
+    // Bare `?`: the shared walker's error already names the directory, so
+    // wrapping it printed the path and a verb twice.
+    let paths = talkbank_spec_vocabulary::spec_file_paths(dir)?;
 
     let mut specs = Vec::new();
-    for entry in entries {
-        let path = entry.path();
-        specs.push(SpecFile {
-            filename: entry.file_name().to_string_lossy().into_owned(),
-            content: std::fs::read_to_string(&path)
-                .map_err(|err| format!("cannot read {}: {err}", path.display()))?,
-            path,
-        });
+    for path in paths {
+        // No fallible arm: `spec_file_paths` only yields a path whose STEM is
+        // valid UTF-8 and code-shaped, so a file name exists and is UTF-8 by
+        // construction. An error branch here would be unreachable, and an
+        // unreachable branch needs a fabricated message to fill it.
+        let filename = match path.file_name().and_then(|name| name.to_str()) {
+            Some(name) => name.to_owned(),
+            None => continue,
+        };
+        let content = std::fs::read_to_string(&path)
+            .map_err(|err| format!("cannot read {}: {err}", path.display()))?;
+        // ONE call, because the schema crate owns the verb now. This was a
+        // `split` then a `toml::from_str` with its own error prefix, which is
+        // the same two steps the spec-side loader was writing separately.
+        let (front, _body): (SpecFrontmatter<IgnoredAny>, &str) =
+            talkbank_spec_vocabulary::frontmatter::read(&content)
+                .map_err(|why| format!("{filename}: {why}"))?;
+
+        // The FILENAME and the DECLARED code are two statements of one fact.
+        // Phase 1b made the second one available and left them uncompared,
+        // which is a drift nothing would have reported: rename a spec file and
+        // the parity suite asserts one code while three coverage gates count
+        // another, silently and forever. Merging them is R1's job (`ErrorCode`
+        // generated from the specs); refusing a disagreement is not, and costs
+        // four lines.
+        if let Some(stem_code) = stem_code_of(&filename)
+            && stem_code != front.code.as_str()
+        {
+            return Err(format!(
+                "{filename}: the filename names {stem_code} and the frontmatter \
+                 declares {}. One spec, one code.",
+                front.code
+            ));
+        }
+        specs.push(SpecFile { filename, front });
     }
-    match specs.first() {
-        None => Err(format!("no spec files under {}", dir.display())),
-        Some(_) => Ok(specs),
+    if specs.is_empty() {
+        return Err(format!("no spec files under {}", dir.display()));
     }
+    Ok(specs)
 }
 
 /// Every code that some spec filename names, for coverage questions.

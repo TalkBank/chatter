@@ -1,2032 +1,2567 @@
 {
   "fixtures": [
     {
-      "fixture": "E202_Illegal_characters_in_word.cha",
-      "expected_codes": [
-        "E202"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E243_auto.md"
+      "fixture": "E003_auto_1.cha",
+      "code": "E003",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E003_auto.md"
     },
     {
-      "fixture": "E209_Word_has_no_spoken_content.cha",
-      "expected_codes": [
-        "E209"
-      ],
+      "fixture": "E101_auto_1.cha",
+      "code": "E101",
+      "claim": {
+        "subsumed_by": [
+          "E501"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E101_auto.md"
+    },
+    {
+      "fixture": "E202_auto_1.cha",
+      "code": "E202",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E202_auto.md"
+    },
+    {
+      "fixture": "E202_missing_form_type_1.cha",
+      "code": "E202",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E202_missing_form_type.md"
+    },
+    {
+      "fixture": "E202_missing_form_type_2.cha",
+      "code": "E202",
+      "claim": {
+        "subsumed_by": [
+          "E203"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E202_missing_form_type.md"
+    },
+    {
+      "fixture": "E203_auto_1.cha",
+      "code": "E203",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E203_auto.md"
+    },
+    {
+      "fixture": "E207_auto_1.cha",
+      "code": "E207",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E207_auto.md"
+    },
+    {
+      "fixture": "E208_auto_1.cha",
+      "code": "E208",
+      "claim": {
+        "subsumed_by": [
+          "E376"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E208_auto.md"
+    },
+    {
+      "fixture": "E209_auto_1.cha",
+      "code": "E209",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E209_auto.md"
     },
     {
-      "fixture": "E212_Invalid_word_format.cha",
-      "expected_codes": [
-        "E212"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E212_auto.md"
-    },
-    {
-      "fixture": "E214_Empty_scoped_annotation_content.cha",
-      "expected_codes": [
-        "E214"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E214_auto.md"
-    },
-    {
-      "fixture": "E220_Illegal_digits_in_word_content.cha",
-      "expected_codes": [
-        "E220"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E220_auto.md"
-    },
-    {
-      "fixture": "E220_Illegal_digits_in_word_content_2.cha",
-      "expected_codes": [
-        "E220"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E220_auto.md"
-    },
-    {
-      "fixture": "E230_Unbalanced_CA_delimiter.cha",
-      "expected_codes": [
-        "E230"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E230_auto.md"
-    },
-    {
-      "fixture": "E233_Empty_compound_part.cha",
-      "expected_codes": [
-        "E233"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E233_auto.md"
-    },
-    {
-      "fixture": "E241_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E241"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E241_auto.md"
-    },
-    {
-      "fixture": "E241_Illegal_Untranscribed_Marker_xx.cha",
-      "expected_codes": [
-        "E241"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
-    },
-    {
-      "fixture": "E241_Illegal_Untranscribed_Marker_xx_2.cha",
-      "expected_codes": [
-        "E241"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
-    },
-    {
-      "fixture": "E242_Unbalanced_quotation_marks.cha",
-      "expected_codes": [
-        "E242"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E242_auto.md"
-    },
-    {
-      "fixture": "E243_Pipe_character_in_main_tier_word_text.cha",
-      "expected_codes": [
-        "E243"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E243_pipe_in_word.md"
-    },
-    {
-      "fixture": "E244_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E244"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E244_auto.md"
-    },
-    {
-      "fixture": "E246_Lengthening_marker_not_after_spoken_material.cha",
-      "expected_codes": [
-        "E246"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E246_auto.md"
-    },
-    {
-      "fixture": "E247_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E247"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E247_auto.md"
-    },
-    {
-      "fixture": "E248_Bare_s_shortcut_in_tertiary_language_context.cha",
-      "expected_codes": [
-        "E248"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E248_auto.md"
-    },
-    {
-      "fixture": "E249_Bare_s_shortcut_with_no_secondary_language.cha",
-      "expected_codes": [
-        "E249"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E249_auto.md"
-    },
-    {
-      "fixture": "E250_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E250"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E250_auto.md"
-    },
-    {
-      "fixture": "E252_Syntax_error_caret_at_word_start.cha",
-      "expected_codes": [
-        "E252"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E252_auto.md"
-    },
-    {
-      "fixture": "E255_Whole_utterance_language_switch_should_use_precode.cha",
-      "expected_codes": [
-        "E255"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E255_whole_utterance_language_switch_should_use_precode.md"
-    },
-    {
-      "fixture": "E255_Whole_utterance_language_switch_should_use_precode_2.cha",
-      "expected_codes": [
-        "E255"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E255_whole_utterance_language_switch_should_use_precode.md"
-    },
-    {
-      "fixture": "E258_Consecutive_commas.cha",
-      "expected_codes": [
-        "E258"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E258_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_2.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_3.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_4.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_5.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_6.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_7.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E259_Comma_after_non_spoken_content_8.cha",
-      "expected_codes": [
-        "E259"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E259_auto.md"
-    },
-    {
-      "fixture": "E305_Missing_terminator.cha",
-      "expected_codes": [
-        "E305"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E305_auto.md"
-    },
-    {
-      "fixture": "E305_Unknown_error.cha",
-      "expected_codes": [
-        "E305",
-        "E600"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E999_auto.md"
-    },
-    {
-      "fixture": "E306_Empty_word_content.cha",
-      "expected_codes": [
-        "E306"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E253_auto.md"
-    },
-    {
-      "fixture": "E306_Utterance_has_no_content.cha",
-      "expected_codes": [
-        "E306"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E306_auto.md"
-    },
-    {
-      "fixture": "E308_Invalid_speaker_format.cha",
-      "expected_codes": [
-        "E308"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E308_auto.md"
-    },
-    {
-      "fixture": "E308_Invalid_speaker_format_2.cha",
-      "expected_codes": [
-        "E308"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E308_auto.md"
-    },
-    {
-      "fixture": "E310_Parser_failed_to_produce_valid_parse_tree.cha",
-      "expected_codes": [
-        "E310"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E310_auto.md"
-    },
-    {
-      "fixture": "E316_Compound_marker_at_word_start.cha",
-      "expected_codes": [
-        "E316"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E232_auto.md"
-    },
-    {
-      "fixture": "E316_Deprecated_Skip_Bullet.cha",
-      "expected_codes": [
-        "E316"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E360_deprecated_skip_bullet.md"
-    },
-    {
-      "fixture": "E316_InvalidOverlapIndex.cha",
-      "expected_codes": [
-        "E316"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E373_auto.md"
-    },
-    {
-      "fixture": "E326_UnexpectedLineType.cha",
-      "expected_codes": [
-        "E326"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E326_auto.md"
-    },
-    {
-      "fixture": "E341_UnbalancedQuotationCrossUtterance.cha",
-      "expected_codes": [
-        "E341"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E341_auto.md"
-    },
-    {
-      "fixture": "E341_UnbalancedQuotationCrossUtterance_2.cha",
-      "expected_codes": [
-        "E341"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E341_auto.md"
-    },
-    {
-      "fixture": "E342_Participants_header_cannot_be_empty.cha",
-      "expected_codes": [
-        "E342"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E522_auto.md"
-    },
-    {
-      "fixture": "E347_Unbalanced_cross_speaker_overlap_indexed_markers.cha",
-      "expected_codes": [
-        "E347"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E347_auto.md"
-    },
-    {
-      "fixture": "E348_Unpaired_overlap_marker_within_utterance.cha",
-      "expected_codes": [
-        "E348"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E348_auto.md"
-    },
-    {
-      "fixture": "E351_MissingQuoteBegin.cha",
-      "expected_codes": [
-        "E351"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E351_auto.md"
-    },
-    {
-      "fixture": "E352_MissingQuoteEnd.cha",
-      "expected_codes": [
-        "E352"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E352_auto.md"
-    },
-    {
-      "fixture": "E353_MissingOtherCompletionContext.cha",
-      "expected_codes": [
-        "E353"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E353_auto.md"
-    },
-    {
-      "fixture": "E354_MissingTrailingOffTerminator.cha",
-      "expected_codes": [
-        "E354"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E354_auto.md"
-    },
-    {
-      "fixture": "E355_InterleavedScopedAnnotations.cha",
-      "expected_codes": [
-        "E355"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E355_auto.md"
-    },
-    {
-      "fixture": "E356_UnmatchedUnderlineBegin.cha",
-      "expected_codes": [
-        "E356"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E356_auto.md"
-    },
-    {
-      "fixture": "E357_UnmatchedUnderlineEnd.cha",
-      "expected_codes": [
-        "E357"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E357_auto.md"
-    },
-    {
-      "fixture": "E358_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E358"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E358_auto.md"
-    },
-    {
-      "fixture": "E359_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E359"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E359_auto.md"
-    },
-    {
-      "fixture": "E362_Bullet_timestamps_must_be_monotonic.cha",
-      "expected_codes": [
-        "E362"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E362_auto.md"
-    },
-    {
-      "fixture": "E365_Malformed_tier_content.cha",
-      "expected_codes": [
-        "E365"
-      ],
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E365_auto.md"
-    },
-    {
-      "fixture": "E367_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E367"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E367_auto.md"
-    },
-    {
-      "fixture": "E368_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E368"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E368_auto.md"
-    },
-    {
-      "fixture": "E370_Structural_order_error.cha",
-      "expected_codes": [
-        "E370"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E370_auto.md"
-    },
-    {
-      "fixture": "E370_Structural_order_error_2.cha",
-      "expected_codes": [
-        "E370"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E370_auto.md"
-    },
-    {
-      "fixture": "E371_Pause_inside_phonological_group.cha",
-      "expected_codes": [
-        "E371"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E371_auto.md"
-    },
-    {
-      "fixture": "E372_Nested_quotation.cha",
-      "expected_codes": [
-        "E372"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E372_auto.md"
-    },
-    {
-      "fixture": "E372_Nested_quotation_2.cha",
-      "expected_codes": [
-        "E372"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E372_auto.md"
-    },
-    {
-      "fixture": "E372_Nested_quotation_3.cha",
-      "expected_codes": [
-        "E372"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E372_auto.md"
-    },
-    {
-      "fixture": "E373_InvalidOverlapIndex.cha",
-      "expected_codes": [
-        "E373"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E373_auto.md"
-    },
-    {
-      "fixture": "E377_A_retracing_marker_with_no_material_of_its_own.cha",
-      "expected_codes": [
-        "E377"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
-    },
-    {
-      "fixture": "E377_A_retracing_marker_with_no_material_of_its_own_2.cha",
-      "expected_codes": [
-        "E377"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
-    },
-    {
-      "fixture": "E377_A_retracing_marker_with_no_material_of_its_own_3.cha",
-      "expected_codes": [
-        "E377"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
-    },
-    {
-      "fixture": "E378_A_retracing_marker_over_material_with_no_words.cha",
-      "expected_codes": [
-        "E378"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E378_retrace_without_words.md"
-    },
-    {
-      "fixture": "E378_A_retracing_marker_over_material_with_no_words_2.cha",
-      "expected_codes": [
-        "E378"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E378_retrace_without_words.md"
-    },
-    {
-      "fixture": "E378_A_retracing_marker_over_material_with_no_words_3.cha",
-      "expected_codes": [
-        "E378"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E378_retrace_without_words.md"
-    },
-    {
-      "fixture": "E387_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E387"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E387_auto.md"
-    },
-    {
-      "fixture": "E387_Deprecated_replaced_by_E387.cha",
-      "expected_codes": [
-        "E387"
-      ],
+      "fixture": "E210_auto_1.cha",
+      "code": "E210",
+      "claim": {
+        "subsumed_by": [
+          "E387"
+        ]
+      },
       "status": "deprecated",
       "source_spec": "spec/errors/E210_auto.md"
     },
     {
-      "fixture": "E388_Replacement_on_non_word.cha",
-      "expected_codes": [
-        "E388"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E388_auto.md"
+      "fixture": "E212_auto_1.cha",
+      "code": "E212",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E212_auto.md"
     },
     {
-      "fixture": "E389_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E389"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E389_auto.md"
-    },
-    {
-      "fixture": "E390_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E390"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E390_auto.md"
-    },
-    {
-      "fixture": "E391_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E391"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E391_auto.md"
-    },
-    {
-      "fixture": "E391_Deprecated_replaced_by_E391.cha",
-      "expected_codes": [
-        "E391"
-      ],
+      "fixture": "E213_auto_1.cha",
+      "code": "E213",
+      "claim": {
+        "subsumed_by": [
+          "E391"
+        ]
+      },
       "status": "deprecated",
       "source_spec": "spec/errors/E213_auto.md"
     },
     {
-      "fixture": "E401_Duplicate_dependent_tiers.cha",
-      "expected_codes": [
-        "E401"
-      ],
+      "fixture": "E214_auto_1.cha",
+      "code": "E214",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E214_auto.md"
+    },
+    {
+      "fixture": "E220_auto_1.cha",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_auto.md"
+    },
+    {
+      "fixture": "E220_auto_2.cha",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_auto.md"
+    },
+    {
+      "fixture": "E230_auto_1.cha",
+      "code": "E230",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E230_auto.md"
+    },
+    {
+      "fixture": "E231_auto_1.cha",
+      "code": "E231",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E231_auto.md"
+    },
+    {
+      "fixture": "E232_auto_1.cha",
+      "code": "E232",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E232_auto.md"
+    },
+    {
+      "fixture": "E233_auto_1.cha",
+      "code": "E233",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E233_auto.md"
+    },
+    {
+      "fixture": "E241_auto_1.cha",
+      "code": "E241",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_auto.md"
+    },
+    {
+      "fixture": "E241_illegal_untranscribed_marker_1.cha",
+      "code": "E241",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
+    },
+    {
+      "fixture": "E241_illegal_untranscribed_marker_2.cha",
+      "code": "E241",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
+    },
+    {
+      "fixture": "E242_auto_1.cha",
+      "code": "E242",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E242_auto.md"
+    },
+    {
+      "fixture": "E243_auto_1.cha",
+      "code": "E243",
+      "claim": {
+        "subsumed_by": [
+          "E202"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E243_auto.md"
+    },
+    {
+      "fixture": "E243_pipe_in_word_1.cha",
+      "code": "E243",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E243_pipe_in_word.md"
+    },
+    {
+      "fixture": "E244_auto_1.cha",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_auto.md"
+    },
+    {
+      "fixture": "E245_auto_1.cha",
+      "code": "E245",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E245_auto.md"
+    },
+    {
+      "fixture": "E246_auto_1.cha",
+      "code": "E246",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E246_auto.md"
+    },
+    {
+      "fixture": "E247_auto_1.cha",
+      "code": "E247",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E247_auto.md"
+    },
+    {
+      "fixture": "E248_auto_1.cha",
+      "code": "E248",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E248_auto.md"
+    },
+    {
+      "fixture": "E249_auto_1.cha",
+      "code": "E249",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E249_auto.md"
+    },
+    {
+      "fixture": "E250_auto_1.cha",
+      "code": "E250",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E250_auto.md"
+    },
+    {
+      "fixture": "E251_auto_1.cha",
+      "code": "E251",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E251_auto.md"
+    },
+    {
+      "fixture": "E252_auto_1.cha",
+      "code": "E252",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E252_auto.md"
+    },
+    {
+      "fixture": "E253_auto_1.cha",
+      "code": "E253",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E253_auto.md"
+    },
+    {
+      "fixture": "E255_whole_utterance_language_switch_should_use_precode_1.cha",
+      "code": "E255",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E255_whole_utterance_language_switch_should_use_precode.md"
+    },
+    {
+      "fixture": "E255_whole_utterance_language_switch_should_use_precode_2.cha",
+      "code": "E255",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E255_whole_utterance_language_switch_should_use_precode.md"
+    },
+    {
+      "fixture": "E256_1.cha",
+      "code": "E256",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E256.md"
+    },
+    {
+      "fixture": "E258_auto_1.cha",
+      "code": "E258",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258_auto.md"
+    },
+    {
+      "fixture": "E259_auto_1.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_2.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_3.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_4.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_5.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_6.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_7.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E259_auto_8.cha",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_auto.md"
+    },
+    {
+      "fixture": "E301_auto_1.cha",
+      "code": "E301",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E301_auto.md"
+    },
+    {
+      "fixture": "E302_auto_1.cha",
+      "code": "E302",
+      "claim": {
+        "subsumed_by": [
+          "E505"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E302_auto.md"
+    },
+    {
+      "fixture": "E303_auto_1.cha",
+      "code": "E303",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E303_auto.md"
+    },
+    {
+      "fixture": "E304_auto_1.cha",
+      "code": "E304",
+      "claim": {
+        "subsumed_by": [
+          "E301"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E304_auto.md"
+    },
+    {
+      "fixture": "E305_auto_1.cha",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_auto.md"
+    },
+    {
+      "fixture": "E306_auto_1.cha",
+      "code": "E306",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E306_auto.md"
+    },
+    {
+      "fixture": "E307_auto_1.cha",
+      "code": "E307",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E307_auto.md"
+    },
+    {
+      "fixture": "E308_auto_1.cha",
+      "code": "E308",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E308_auto.md"
+    },
+    {
+      "fixture": "E308_auto_2.cha",
+      "code": "E308",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E308_auto.md"
+    },
+    {
+      "fixture": "E309_auto_1.cha",
+      "code": "E309",
+      "claim": {
+        "subsumed_by": [
+          "E505"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E309_auto.md"
+    },
+    {
+      "fixture": "E310_auto_1.cha",
+      "code": "E310",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E310_auto.md"
+    },
+    {
+      "fixture": "E311_auto_1.cha",
+      "code": "E311",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E311_auto.md"
+    },
+    {
+      "fixture": "E311_auto_2.cha",
+      "code": "E311",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E311_auto.md"
+    },
+    {
+      "fixture": "E312_auto_1.cha",
+      "code": "E312",
+      "claim": {
+        "subsumed_by": [
+          "E375"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E312_auto.md"
+    },
+    {
+      "fixture": "E313_auto_1.cha",
+      "code": "E313",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E313_auto.md"
+    },
+    {
+      "fixture": "E314_auto_1.cha",
+      "code": "E314",
+      "claim": {
+        "subsumed_by": [
+          "E375"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E314_auto.md"
+    },
+    {
+      "fixture": "E315_auto_1.cha",
+      "code": "E315",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E315_auto.md"
+    },
+    {
+      "fixture": "E316_angle_bracket_in_mor_stem_1.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_angle_bracket_in_mor_stem.md"
+    },
+    {
+      "fixture": "E316_angle_bracket_in_mor_stem_2.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_angle_bracket_in_mor_stem.md"
+    },
+    {
+      "fixture": "E316_auto_1.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_2.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_3.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_4.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_5.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_6.cha",
+      "code": "E316",
+      "claim": {
+        "subsumed_by": [
+          "E501"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_7.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E316_auto_8.cha",
+      "code": "E316",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316_auto.md"
+    },
+    {
+      "fixture": "E319_auto_1.cha",
+      "code": "E319",
+      "claim": {
+        "subsumed_by": [
+          "E602"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E319_auto.md"
+    },
+    {
+      "fixture": "E320_auto_1.cha",
+      "code": "E320",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E320_auto.md"
+    },
+    {
+      "fixture": "E321_auto_1.cha",
+      "code": "E321",
+      "claim": {
+        "subsumed_by": [
+          "E375"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E321_auto.md"
+    },
+    {
+      "fixture": "E322_auto_1.cha",
+      "code": "E322",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E322_auto.md"
+    },
+    {
+      "fixture": "E323_auto_1.cha",
+      "code": "E323",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E323_auto.md"
+    },
+    {
+      "fixture": "E324_auto_1.cha",
+      "code": "E324",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E324_auto.md"
+    },
+    {
+      "fixture": "E325_auto_1.cha",
+      "code": "E325",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E325_auto.md"
+    },
+    {
+      "fixture": "E326_auto_1.cha",
+      "code": "E326",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E326_auto.md"
+    },
+    {
+      "fixture": "E330_auto_1.cha",
+      "code": "E330",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E330_auto.md"
+    },
+    {
+      "fixture": "E331_auto_1.cha",
+      "code": "E331",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E331_auto.md"
+    },
+    {
+      "fixture": "E341_auto_1.cha",
+      "code": "E341",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E341_auto.md"
+    },
+    {
+      "fixture": "E341_auto_2.cha",
+      "code": "E341",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E341_auto.md"
+    },
+    {
+      "fixture": "E342_auto_1.cha",
+      "code": "E342",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_auto.md"
+    },
+    {
+      "fixture": "E342_auto_2.cha",
+      "code": "E342",
+      "claim": {
+        "subsumed_by": [
+          "E760"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_auto.md"
+    },
+    {
+      "fixture": "E342_auto_3.cha",
+      "code": "E342",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_auto.md"
+    },
+    {
+      "fixture": "E342_auto_4.cha",
+      "code": "E342",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_auto.md"
+    },
+    {
+      "fixture": "E342_group_without_annotation_1.cha",
+      "code": "E342",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_group_without_annotation.md"
+    },
+    {
+      "fixture": "E344_auto_1.cha",
+      "code": "E344",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E344_auto.md"
+    },
+    {
+      "fixture": "E346_auto_1.cha",
+      "code": "E346",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E346_auto.md"
+    },
+    {
+      "fixture": "E347_auto_1.cha",
+      "code": "E347",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E347_auto.md"
+    },
+    {
+      "fixture": "E348_auto_1.cha",
+      "code": "E348",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E348_auto.md"
+    },
+    {
+      "fixture": "E351_auto_1.cha",
+      "code": "E351",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E351_auto.md"
+    },
+    {
+      "fixture": "E352_auto_1.cha",
+      "code": "E352",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E352_auto.md"
+    },
+    {
+      "fixture": "E353_auto_1.cha",
+      "code": "E353",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E353_auto.md"
+    },
+    {
+      "fixture": "E354_auto_1.cha",
+      "code": "E354",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E354_auto.md"
+    },
+    {
+      "fixture": "E355_auto_1.cha",
+      "code": "E355",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E355_auto.md"
+    },
+    {
+      "fixture": "E356_auto_1.cha",
+      "code": "E356",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E356_auto.md"
+    },
+    {
+      "fixture": "E357_auto_1.cha",
+      "code": "E357",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E357_auto.md"
+    },
+    {
+      "fixture": "E358_auto_1.cha",
+      "code": "E358",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E358_auto.md"
+    },
+    {
+      "fixture": "E359_auto_1.cha",
+      "code": "E359",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E359_auto.md"
+    },
+    {
+      "fixture": "E360_auto_1.cha",
+      "code": "E360",
+      "claim": "legal",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E360_auto.md"
+    },
+    {
+      "fixture": "E360_deprecated_skip_bullet_1.cha",
+      "code": "E360",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E360_deprecated_skip_bullet.md"
+    },
+    {
+      "fixture": "E361_auto_1.cha",
+      "code": "E361",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E361_auto.md"
+    },
+    {
+      "fixture": "E362_auto_1.cha",
+      "code": "E362",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E362_auto.md"
+    },
+    {
+      "fixture": "E363_auto_1.cha",
+      "code": "E363",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E363_auto.md"
+    },
+    {
+      "fixture": "E364_auto_1.cha",
+      "code": "E364",
+      "claim": {
+        "subsumed_by": [
+          "E246",
+          "E249"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E364_auto.md"
+    },
+    {
+      "fixture": "E365_auto_1.cha",
+      "code": "E365",
+      "claim": "violates",
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E365_auto.md"
+    },
+    {
+      "fixture": "E367_auto_1.cha",
+      "code": "E367",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E367_auto.md"
+    },
+    {
+      "fixture": "E368_auto_1.cha",
+      "code": "E368",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E368_auto.md"
+    },
+    {
+      "fixture": "E370_auto_1.cha",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_auto.md"
+    },
+    {
+      "fixture": "E370_auto_2.cha",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_auto.md"
+    },
+    {
+      "fixture": "E371_auto_1.cha",
+      "code": "E371",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E371_auto.md"
+    },
+    {
+      "fixture": "E372_auto_1.cha",
+      "code": "E372",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E372_auto.md"
+    },
+    {
+      "fixture": "E372_auto_2.cha",
+      "code": "E372",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E372_auto.md"
+    },
+    {
+      "fixture": "E372_auto_3.cha",
+      "code": "E372",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E372_auto.md"
+    },
+    {
+      "fixture": "E373_auto_1.cha",
+      "code": "E373",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E373_auto.md"
+    },
+    {
+      "fixture": "E373_auto_2.cha",
+      "code": "E373",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E373_auto.md"
+    },
+    {
+      "fixture": "E375_auto_1.cha",
+      "code": "E375",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E375_auto.md"
+    },
+    {
+      "fixture": "E375_replacement_needs_preceding_space_1.cha",
+      "code": "E375",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E375_replacement_needs_preceding_space.md"
+    },
+    {
+      "fixture": "E376_auto_1.cha",
+      "code": "E376",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E376_auto.md"
+    },
+    {
+      "fixture": "E377_retrace_with_no_material_1.cha",
+      "code": "E377",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
+    },
+    {
+      "fixture": "E377_retrace_with_no_material_2.cha",
+      "code": "E377",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
+    },
+    {
+      "fixture": "E377_retrace_with_no_material_3.cha",
+      "code": "E377",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E377_retrace_with_no_material.md"
+    },
+    {
+      "fixture": "E378_retrace_without_words_1.cha",
+      "code": "E378",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E378_retrace_without_words.md"
+    },
+    {
+      "fixture": "E378_retrace_without_words_2.cha",
+      "code": "E378",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E378_retrace_without_words.md"
+    },
+    {
+      "fixture": "E378_retrace_without_words_3.cha",
+      "code": "E378",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E378_retrace_without_words.md"
+    },
+    {
+      "fixture": "E382_auto_1.cha",
+      "code": "E382",
+      "claim": {
+        "subsumed_by": [
+          "E760"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E382_auto.md"
+    },
+    {
+      "fixture": "E382_auto_2.cha",
+      "code": "E382",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E382_auto.md"
+    },
+    {
+      "fixture": "E382_auto_3.cha",
+      "code": "E382",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E382_auto.md"
+    },
+    {
+      "fixture": "E387_auto_1.cha",
+      "code": "E387",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E387_auto.md"
+    },
+    {
+      "fixture": "E388_auto_1.cha",
+      "code": "E388",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E388_auto.md"
+    },
+    {
+      "fixture": "E389_auto_1.cha",
+      "code": "E389",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E389_auto.md"
+    },
+    {
+      "fixture": "E390_auto_1.cha",
+      "code": "E390",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E390_auto.md"
+    },
+    {
+      "fixture": "E391_auto_1.cha",
+      "code": "E391",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E391_auto.md"
+    },
+    {
+      "fixture": "E401_auto_1.cha",
+      "code": "E401",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E401_auto.md"
     },
     {
-      "fixture": "E401_Duplicate_dependent_tiers_2.cha",
-      "expected_codes": [
-        "E401"
-      ],
+      "fixture": "E401_auto_2.cha",
+      "code": "E401",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E401_auto.md"
     },
     {
-      "fixture": "E404_Orphaned_dependent_tier.cha",
-      "expected_codes": [
-        "E404"
-      ],
+      "fixture": "E404_auto_1.cha",
+      "code": "E404",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E404_auto.md"
     },
     {
-      "fixture": "E502_Missing_required_End_header.cha",
-      "expected_codes": [
-        "E502"
-      ],
+      "fixture": "E501_auto_1.cha",
+      "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501_auto.md"
+    },
+    {
+      "fixture": "E501_auto_2.cha",
+      "code": "E501",
+      "claim": {
+        "subsumed_by": [
+          "E513"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E501_auto.md"
+    },
+    {
+      "fixture": "E502_auto_1.cha",
+      "code": "E502",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E502_auto.md"
     },
     {
-      "fixture": "E503_Missing_required_UTF8_header.cha",
-      "expected_codes": [
-        "E503"
-      ],
+      "fixture": "E503_auto_1.cha",
+      "code": "E503",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E503_auto.md"
     },
     {
-      "fixture": "E504_Missing_required_header.cha",
-      "expected_codes": [
-        "E504"
-      ],
+      "fixture": "E504_auto_1.cha",
+      "code": "E504",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E504_auto.md"
     },
     {
-      "fixture": "E504_Missing_required_header_2.cha",
-      "expected_codes": [
-        "E504"
-      ],
+      "fixture": "E504_auto_2.cha",
+      "code": "E504",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E504_auto.md"
     },
     {
-      "fixture": "E505_Invalid_ID_format.cha",
-      "expected_codes": [
-        "E505"
-      ],
+      "fixture": "E505_auto_1.cha",
+      "code": "E505",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E505_auto.md"
     },
     {
-      "fixture": "E505_Invalid_ID_format_2.cha",
-      "expected_codes": [
-        "E505"
-      ],
+      "fixture": "E505_auto_2.cha",
+      "code": "E505",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E505_auto.md"
     },
     {
-      "fixture": "E505_Invalid_ID_format_3.cha",
-      "expected_codes": [
-        "E505"
-      ],
+      "fixture": "E505_auto_3.cha",
+      "code": "E505",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E505_auto.md"
     },
     {
-      "fixture": "E507_Languages_header_cannot_be_empty.cha",
-      "expected_codes": [
-        "E507"
-      ],
+      "fixture": "E506_auto_1.cha",
+      "code": "E506",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E506_auto.md"
+    },
+    {
+      "fixture": "E507_auto_1.cha",
+      "code": "E507",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E507_auto.md"
     },
     {
-      "fixture": "E509_Media_header_cannot_be_empty.cha",
-      "expected_codes": [
-        "E509"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E509_auto.md"
-    },
-    {
-      "fixture": "E513_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E513"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E512_auto.md"
-    },
-    {
-      "fixture": "E513_Participant_entry_should_have_both_code_and_role.cha",
-      "expected_codes": [
-        "E513"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E513_auto.md"
-    },
-    {
-      "fixture": "E514_Empty_corpus_field_in_ID.cha",
-      "expected_codes": [
-        "E514"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E514_empty_id_corpus.md"
-    },
-    {
-      "fixture": "E515_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E515"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E515_auto.md"
-    },
-    {
-      "fixture": "E516_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E516"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E516_auto.md"
-    },
-    {
-      "fixture": "E516_Date_header_cannot_be_empty.cha",
-      "expected_codes": [
-        "E516"
-      ],
+      "fixture": "E508_auto_1.cha",
+      "code": "E508",
+      "claim": {
+        "subsumed_by": [
+          "E516"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E508_auto.md"
     },
     {
-      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern.cha",
-      "expected_codes": [
-        "E517"
-      ],
+      "fixture": "E509_auto_1.cha",
+      "code": "E509",
+      "claim": "violates",
       "status": "implemented",
-      "source_spec": "spec/errors/E517_invalid_age_format.md"
+      "source_spec": "spec/errors/E509_auto.md"
     },
     {
-      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_2.cha",
-      "expected_codes": [
-        "E517"
-      ],
+      "fixture": "E510_auto_1.cha",
+      "code": "E510",
+      "claim": {
+        "subsumed_by": [
+          "E505"
+        ]
+      },
       "status": "implemented",
-      "source_spec": "spec/errors/E517_invalid_age_format.md"
+      "source_spec": "spec/errors/E510_auto.md"
     },
     {
-      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_3.cha",
-      "expected_codes": [
-        "E517"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E517_invalid_age_format.md"
-    },
-    {
-      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_4.cha",
-      "expected_codes": [
-        "E517"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E517_invalid_age_format.md"
-    },
-    {
-      "fixture": "E517_ID_age_field_does_not_match_a_legal_CHAT_date_pattern_5.cha",
-      "expected_codes": [
-        "E517"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E517_invalid_age_format.md"
-    },
-    {
-      "fixture": "E518_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E518"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E518_auto.md"
-    },
-    {
-      "fixture": "E518_Auto_generated_from_corpus_2.cha",
-      "expected_codes": [
-        "E518"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E518_auto.md"
-    },
-    {
-      "fixture": "E518_Auto_generated_from_corpus_3.cha",
-      "expected_codes": [
-        "E518"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E518_auto.md"
-    },
-    {
-      "fixture": "E518_Auto_generated_from_corpus_4.cha",
-      "expected_codes": [
-        "E518"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E518_auto.md"
-    },
-    {
-      "fixture": "E518_Auto_generated_from_corpus_5.cha",
-      "expected_codes": [
-        "E518"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E518_auto.md"
-    },
-    {
-      "fixture": "E518_Auto_generated_from_corpus_6.cha",
-      "expected_codes": [
-        "E518"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E518_auto.md"
-    },
-    {
-      "fixture": "E519_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E519"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E519_auto.md"
-    },
-    {
-      "fixture": "E519_L1_of_language_code_not_in_the_ISO_639_3_registry.cha",
-      "expected_codes": [
-        "E519"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E519_l1_of_language_code.md"
-    },
-    {
-      "fixture": "E519_Word_level_language_code_not_in_the_ISO_639_3_registry.cha",
-      "expected_codes": [
-        "E519"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E519_word_level_language_code.md"
-    },
-    {
-      "fixture": "E522_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E522",
-        "E523"
-      ],
+      "fixture": "E511_auto_1.cha",
+      "code": "E511",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E511_auto.md"
     },
     {
-      "fixture": "E522_Participants_header_cannot_be_empty.cha",
-      "expected_codes": [
-        "E522"
-      ],
+      "fixture": "E512_auto_1.cha",
+      "code": "E512",
+      "claim": {
+        "subsumed_by": [
+          "E513"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E512_auto.md"
+    },
+    {
+      "fixture": "E513_auto_1.cha",
+      "code": "E513",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E513_auto.md"
+    },
+    {
+      "fixture": "E514_empty_id_corpus_1.cha",
+      "code": "E514",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E514_empty_id_corpus.md"
+    },
+    {
+      "fixture": "E515_auto_1.cha",
+      "code": "E515",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E515_auto.md"
+    },
+    {
+      "fixture": "E516_auto_1.cha",
+      "code": "E516",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E516_auto.md"
+    },
+    {
+      "fixture": "E517_invalid_age_format_1.cha",
+      "code": "E517",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_invalid_age_format_2.cha",
+      "code": "E517",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_invalid_age_format_3.cha",
+      "code": "E517",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_invalid_age_format_4.cha",
+      "code": "E517",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E517_invalid_age_format_5.cha",
+      "code": "E517",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E517_invalid_age_format.md"
+    },
+    {
+      "fixture": "E518_auto_1.cha",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_auto_2.cha",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_auto_3.cha",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_auto_4.cha",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_auto_5.cha",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E518_auto_6.cha",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518_auto.md"
+    },
+    {
+      "fixture": "E519_auto_1.cha",
+      "code": "E519",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E519_auto.md"
+    },
+    {
+      "fixture": "E519_l1_of_language_code_1.cha",
+      "code": "E519",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E519_l1_of_language_code.md"
+    },
+    {
+      "fixture": "E519_word_level_language_code_1.cha",
+      "code": "E519",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E519_word_level_language_code.md"
+    },
+    {
+      "fixture": "E522_auto_1.cha",
+      "code": "E522",
+      "claim": {
+        "subsumed_by": [
+          "E342"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E522_auto.md"
     },
     {
-      "fixture": "E522_Undefined_Participant_in_Utterance.cha",
-      "expected_codes": [
-        "E522"
-      ],
+      "fixture": "E522_auto_2.cha",
+      "code": "E522",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E522_auto.md"
+    },
+    {
+      "fixture": "E522_undefined_participant_1.cha",
+      "code": "E522",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E522_undefined_participant.md"
     },
     {
-      "fixture": "E523_Orphan_ID_header.cha",
-      "expected_codes": [
-        "E523"
-      ],
+      "fixture": "E523_auto_1.cha",
+      "code": "E523",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E523_auto.md"
     },
     {
-      "fixture": "E524_Birth_header_for_unknown_participant.cha",
-      "expected_codes": [
-        "E524"
-      ],
+      "fixture": "E524_auto_1.cha",
+      "code": "E524",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E524_auto.md"
     },
     {
-      "fixture": "E525_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E525"
-      ],
+      "fixture": "E525_auto_1.cha",
+      "code": "E525",
+      "claim": {
+        "subsumed_by": [
+          "E529"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E525_auto.md"
     },
     {
-      "fixture": "E526_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E526"
-      ],
+      "fixture": "E525_auto_2.cha",
+      "code": "E525",
+      "claim": {
+        "subsumed_by": [
+          "E530"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E525_auto.md"
     },
     {
-      "fixture": "E526_Auto_generated_from_corpus_2.cha",
-      "expected_codes": [
-        "E526"
-      ],
+      "fixture": "E525_auto_3.cha",
+      "code": "E525",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E525_auto_4.cha",
+      "code": "E525",
+      "claim": {
+        "subsumed_by": [
+          "E526"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E525_auto_5.cha",
+      "code": "E525",
+      "claim": {
+        "subsumed_by": [
+          "E527"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E525_auto.md"
+    },
+    {
+      "fixture": "E526_auto_1.cha",
+      "code": "E526",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E526_auto.md"
     },
     {
-      "fixture": "E527_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E527"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E525_auto.md"
-    },
-    {
-      "fixture": "E527_Auto_generated_from_corpus_2.cha",
-      "expected_codes": [
-        "E527"
-      ],
+      "fixture": "E527_auto_1.cha",
+      "code": "E527",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E527_auto.md"
     },
     {
-      "fixture": "E528_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E528"
-      ],
+      "fixture": "E528_auto_1.cha",
+      "code": "E528",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E528_auto.md"
     },
     {
-      "fixture": "E529_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E529"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E525_auto.md"
-    },
-    {
-      "fixture": "E529_Nested_background_with_identical_label.cha",
-      "expected_codes": [
-        "E529"
-      ],
+      "fixture": "E529_auto_1.cha",
+      "code": "E529",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E529_auto.md"
     },
     {
-      "fixture": "E530_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E530"
-      ],
-      "status": "implemented",
-      "source_spec": "spec/errors/E525_auto.md"
-    },
-    {
-      "fixture": "E530_Lazy_gem_inside_background.cha",
-      "expected_codes": [
-        "E530"
-      ],
+      "fixture": "E530_auto_1.cha",
+      "code": "E530",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E530_auto.md"
     },
     {
-      "fixture": "E531_Media_filename_mismatch.cha",
-      "expected_codes": [
-        "E531"
-      ],
+      "fixture": "E531_auto_1.cha",
+      "code": "E531",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E531_auto.md"
     },
     {
-      "fixture": "E532_Invalid_participant_role.cha",
-      "expected_codes": [
-        "E532"
-      ],
+      "fixture": "E532_auto_1.cha",
+      "code": "E532",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E532_auto.md"
     },
     {
-      "fixture": "E533_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E533"
-      ],
+      "fixture": "E533_auto_1.cha",
+      "code": "E533",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E533_auto.md"
     },
     {
-      "fixture": "E534_Unsupported_Options_Value.cha",
-      "expected_codes": [
-        "E534"
-      ],
+      "fixture": "E534_unsupported_option_1.cha",
+      "code": "E534",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E534_unsupported_option.md"
     },
     {
-      "fixture": "E535_Unsupported_Media_Type.cha",
-      "expected_codes": [
-        "E535"
-      ],
+      "fixture": "E535_unsupported_media_type_1.cha",
+      "code": "E535",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E535_unsupported_media_type.md"
     },
     {
-      "fixture": "E536_Unsupported_Media_Status.cha",
-      "expected_codes": [
-        "E536"
-      ],
+      "fixture": "E536_unsupported_media_status_1.cha",
+      "code": "E536",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E536_unsupported_media_status.md"
     },
     {
-      "fixture": "E537_Unsupported_Number_Value.cha",
-      "expected_codes": [
-        "E537"
-      ],
+      "fixture": "E537_unsupported_number_1.cha",
+      "code": "E537",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E537_unsupported_number.md"
     },
     {
-      "fixture": "E538_Unsupported_Recording_Quality_Value.cha",
-      "expected_codes": [
-        "E538"
-      ],
+      "fixture": "E538_unsupported_recording_quality_1.cha",
+      "code": "E538",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E538_unsupported_recording_quality.md"
     },
     {
-      "fixture": "E539_Unsupported_Transcription_Value.cha",
-      "expected_codes": [
-        "E539"
-      ],
+      "fixture": "E539_unsupported_transcription_1.cha",
+      "code": "E539",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E539_unsupported_transcription.md"
     },
     {
-      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern.cha",
-      "expected_codes": [
-        "E540"
-      ],
+      "fixture": "E540_invalid_time_duration_1.cha",
+      "code": "E540",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern_2.cha",
-      "expected_codes": [
-        "E540"
-      ],
+      "fixture": "E540_invalid_time_duration_2.cha",
+      "code": "E540",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern_3.cha",
-      "expected_codes": [
-        "E540"
-      ],
+      "fixture": "E540_invalid_time_duration_3.cha",
+      "code": "E540",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E540_Time_Duration_does_not_match_a_legal_CLAN_time_pattern_4.cha",
-      "expected_codes": [
-        "E540"
-      ],
+      "fixture": "E540_invalid_time_duration_4.cha",
+      "code": "E540",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E540_invalid_time_duration.md"
     },
     {
-      "fixture": "E541_Time_Start_does_not_match_a_legal_CLAN_time_pattern.cha",
-      "expected_codes": [
-        "E541"
-      ],
+      "fixture": "E541_invalid_time_start_1.cha",
+      "code": "E541",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E541_invalid_time_start.md"
     },
     {
-      "fixture": "E541_Time_Start_does_not_match_a_legal_CLAN_time_pattern_2.cha",
-      "expected_codes": [
-        "E541"
-      ],
+      "fixture": "E541_invalid_time_start_2.cha",
+      "code": "E541",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E541_invalid_time_start.md"
     },
     {
-      "fixture": "E541_Time_Start_does_not_match_a_legal_CLAN_time_pattern_3.cha",
-      "expected_codes": [
-        "E541"
-      ],
+      "fixture": "E541_invalid_time_start_3.cha",
+      "code": "E541",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E541_invalid_time_start.md"
     },
     {
-      "fixture": "E542_Unsupported_ID_Sex_Value.cha",
-      "expected_codes": [
-        "E542"
-      ],
+      "fixture": "E542_unsupported_sex_1.cha",
+      "code": "E542",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E542_unsupported_sex.md"
     },
     {
-      "fixture": "E543_Header_out_of_canonical_order.cha",
-      "expected_codes": [
-        "E543"
-      ],
+      "fixture": "E543_header_out_of_order_1.cha",
+      "code": "E543",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E543_header_out_of_order.md"
     },
     {
-      "fixture": "E544_Media_claims_linkage_but_transcript_has_no_timing_evidence.cha",
-      "expected_codes": [
-        "E544"
-      ],
+      "fixture": "E544_media_linkage_without_timing_1.cha",
+      "code": "E544",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E544_media_linkage_without_timing.md"
     },
     {
-      "fixture": "E544_Media_claims_linkage_but_transcript_has_no_timing_evidence_2.cha",
-      "expected_codes": [
-        "E544"
-      ],
+      "fixture": "E544_media_linkage_without_timing_2.cha",
+      "code": "E544",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E544_media_linkage_without_timing.md"
     },
     {
-      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern.cha",
-      "expected_codes": [
-        "E545"
-      ],
+      "fixture": "E545_invalid_birth_date_format_1.cha",
+      "code": "E545",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern_2.cha",
-      "expected_codes": [
-        "E545"
-      ],
+      "fixture": "E545_invalid_birth_date_format_2.cha",
+      "code": "E545",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern_3.cha",
-      "expected_codes": [
-        "E545"
-      ],
+      "fixture": "E545_invalid_birth_date_format_3.cha",
+      "code": "E545",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E545_Birth_of_date_does_not_match_a_legal_CHAT_date_pattern_4.cha",
-      "expected_codes": [
-        "E545"
-      ],
+      "fixture": "E545_invalid_birth_date_format_4.cha",
+      "code": "E545",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E545_invalid_birth_date_format.md"
     },
     {
-      "fixture": "E546_Unsupported_ID_SES_Value.cha",
-      "expected_codes": [
-        "E546"
-      ],
+      "fixture": "E546_unsupported_ses_1.cha",
+      "code": "E546",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E546_unsupported_ses.md"
     },
     {
-      "fixture": "E547_Constant_participant_header_out_of_order.cha",
-      "expected_codes": [
-        "E547"
-      ],
+      "fixture": "E547_constant_header_out_of_order_1.cha",
+      "code": "E547",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E547_constant_header_out_of_order.md"
     },
     {
-      "fixture": "E548_ID_header_out_of_order.cha",
-      "expected_codes": [
-        "E548"
-      ],
+      "fixture": "E548_id_header_out_of_order_1.cha",
+      "code": "E548",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E548_id_header_out_of_order.md"
     },
     {
-      "fixture": "E549_Duplicate_speaker_declaration.cha",
-      "expected_codes": [
-        "E549"
-      ],
+      "fixture": "E549_duplicate_speaker_declaration_1.cha",
+      "code": "E549",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E549_duplicate_speaker_declaration.md"
     },
     {
-      "fixture": "E551_Options_header_out_of_order.cha",
-      "expected_codes": [
-        "E551"
-      ],
+      "fixture": "E550_trailing_comma_participants_1.cha",
+      "code": "E550",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E550_trailing_comma_participants.md"
+    },
+    {
+      "fixture": "E551_options_header_out_of_order_1.cha",
+      "code": "E551",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E551_options_header_out_of_order.md"
     },
     {
-      "fixture": "E552_Media_declares_unlinked_but_transcript_carries_timing.cha",
-      "expected_codes": [
-        "E552"
-      ],
+      "fixture": "E552_media_unlinked_with_timing_1.cha",
+      "code": "E552",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E552_media_unlinked_with_timing.md"
     },
     {
-      "fixture": "E552_Media_declares_unlinked_but_transcript_carries_timing_2.cha",
-      "expected_codes": [
-        "E552"
-      ],
+      "fixture": "E552_media_unlinked_with_timing_2.cha",
+      "code": "E552",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E552_media_unlinked_with_timing.md"
     },
     {
-      "fixture": "E600_Tier_alignment_skipped_due_to_parse_errors.cha",
-      "expected_codes": [
-        "E600"
-      ],
+      "fixture": "E600_auto_1.cha",
+      "code": "E600",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E600_auto.md"
     },
     {
-      "fixture": "E601_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E601"
-      ],
+      "fixture": "E601_auto_1.cha",
+      "code": "E601",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E601_auto.md"
     },
     {
-      "fixture": "E602_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E602"
-      ],
+      "fixture": "E602_auto_1.cha",
+      "code": "E602",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E602_auto.md"
     },
     {
-      "fixture": "E603_Invalid_tim_Tier_Format.cha",
-      "expected_codes": [
-        "E603"
-      ],
+      "fixture": "E603_invalid_tim_tier_format_1.cha",
+      "code": "E603",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E603_invalid_tim_tier_format.md"
     },
     {
-      "fixture": "E604_Empty_GRA_relation.cha",
-      "expected_codes": [
-        "E604"
-      ],
+      "fixture": "E604_auto_1.cha",
+      "code": "E604",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E604_auto.md"
     },
     {
-      "fixture": "E604_gra_Tier_Without_mor_Tier.cha",
-      "expected_codes": [
-        "E604"
-      ],
+      "fixture": "E604_gra_without_mor_1.cha",
+      "code": "E604",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E604_gra_without_mor.md"
     },
     {
-      "fixture": "E605_Unsupported_Dependent_Tier.cha",
-      "expected_codes": [
-        "E605"
-      ],
+      "fixture": "E605_unsupported_dependent_tier_1.cha",
+      "code": "E605",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E605_unsupported_dependent_tier.md"
     },
     {
-      "fixture": "E701_Per_speaker_start_time_not_monotonically_increasing.cha",
-      "expected_codes": [
-        "E701"
-      ],
+      "fixture": "E701_auto_1.cha",
+      "code": "E701",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E701_auto.md"
     },
     {
-      "fixture": "E701_Per_speaker_start_time_not_monotonically_increasing_2.cha",
-      "expected_codes": [
-        "E701"
-      ],
+      "fixture": "E701_auto_2.cha",
+      "code": "E701",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E701_auto.md"
     },
     {
-      "fixture": "E704_Speaker_self_overlap_overlapping_overlap_markers.cha",
-      "expected_codes": [
-        "E704"
-      ],
+      "fixture": "E702_auto_1.cha",
+      "code": "E702",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E702_auto.md"
+    },
+    {
+      "fixture": "E704_auto_1.cha",
+      "code": "E704",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E704_auto.md"
     },
     {
-      "fixture": "E705_Mor_count_mismatch_too_few_items.cha",
-      "expected_codes": [
-        "E705"
-      ],
+      "fixture": "E705_auto_1.cha",
+      "code": "E705",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E705_auto.md"
     },
     {
-      "fixture": "E705_Mor_count_mismatch_too_few_items_2.cha",
-      "expected_codes": [
-        "E705"
-      ],
+      "fixture": "E705_auto_2.cha",
+      "code": "E705",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E705_auto.md"
     },
     {
-      "fixture": "E706_Mor_count_mismatch_too_many_mor_items.cha",
-      "expected_codes": [
-        "E706"
-      ],
+      "fixture": "E706_auto_1.cha",
+      "code": "E706",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E706_auto.md"
     },
     {
-      "fixture": "E706_Mor_count_mismatch_too_many_mor_items_2.cha",
-      "expected_codes": [
-        "E706"
-      ],
+      "fixture": "E706_auto_2.cha",
+      "code": "E706",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E706_auto.md"
     },
     {
-      "fixture": "E706_Mor_count_mismatch_too_many_mor_items_3.cha",
-      "expected_codes": [
-        "E706"
-      ],
+      "fixture": "E706_auto_3.cha",
+      "code": "E706",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E706_auto.md"
     },
     {
-      "fixture": "E706_Mor_count_mismatch_too_many_mor_items_4.cha",
-      "expected_codes": [
-        "E706"
-      ],
+      "fixture": "E706_auto_4.cha",
+      "code": "E706",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E706_auto.md"
     },
     {
-      "fixture": "E707_Mor_terminator_presence_mismatch.cha",
-      "expected_codes": [
-        "E707"
-      ],
+      "fixture": "E707_1.cha",
+      "code": "E707",
+      "claim": {
+        "subsumed_by": [
+          "E305"
+        ]
+      },
       "status": "not_implemented",
       "source_spec": "spec/errors/E707.md"
     },
     {
-      "fixture": "E707_Mor_terminator_presence_mismatch_2.cha",
-      "expected_codes": [
-        "E707"
-      ],
+      "fixture": "E707_2.cha",
+      "code": "E707",
+      "claim": {
+        "subsumed_by": [
+          "E305"
+        ]
+      },
       "status": "not_implemented",
       "source_spec": "spec/errors/E707.md"
     },
     {
-      "fixture": "E708_Malformed_grammar_relation_on_gra_tier.cha",
-      "expected_codes": [
-        "E708"
-      ],
+      "fixture": "E708_auto_1.cha",
+      "code": "E708",
+      "claim": "violates",
       "status": "not_implemented",
       "source_spec": "spec/errors/E708_auto.md"
     },
     {
-      "fixture": "E709_Invalid_grammar_index.cha",
-      "expected_codes": [
-        "E709"
-      ],
+      "fixture": "E709_auto_1.cha",
+      "code": "E709",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E709_auto.md"
     },
     {
-      "fixture": "E711_Mor_empty_content.cha",
-      "expected_codes": [
-        "E711"
-      ],
+      "fixture": "E710_auto_1.cha",
+      "code": "E710",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E710_auto.md"
+    },
+    {
+      "fixture": "E711_1.cha",
+      "code": "E711",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "not_implemented",
       "source_spec": "spec/errors/E711.md"
     },
     {
-      "fixture": "E711_Mor_empty_content_2.cha",
-      "expected_codes": [
-        "E711"
-      ],
+      "fixture": "E711_2.cha",
+      "code": "E711",
+      "claim": {
+        "subsumed_by": [
+          "E760"
+        ]
+      },
       "status": "not_implemented",
       "source_spec": "spec/errors/E711.md"
     },
     {
-      "fixture": "E712_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "E712"
-      ],
+      "fixture": "E712_auto_1.cha",
+      "code": "E712",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E712_auto.md"
     },
     {
-      "fixture": "E713_Gra_head_index_invalid.cha",
-      "expected_codes": [
-        "E713"
-      ],
+      "fixture": "E713_auto_1.cha",
+      "code": "E713",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E713_auto.md"
     },
     {
-      "fixture": "E714_pho_alignment_count_mismatch_too_few_tokens.cha",
-      "expected_codes": [
-        "E714"
-      ],
+      "fixture": "E714_auto_1.cha",
+      "code": "E714",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E714_auto.md"
     },
     {
-      "fixture": "E715_pho_alignment_count_mismatch_too_many_tokens.cha",
-      "expected_codes": [
-        "E715"
-      ],
+      "fixture": "E715_auto_1.cha",
+      "code": "E715",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E715_auto.md"
     },
     {
-      "fixture": "E716_Mor_terminator_value_mismatch.cha",
-      "expected_codes": [
-        "E716"
-      ],
+      "fixture": "E716_1.cha",
+      "code": "E716",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E716.md"
     },
     {
-      "fixture": "E716_Mor_terminator_value_mismatch_2.cha",
-      "expected_codes": [
-        "E716"
-      ],
+      "fixture": "E716_2.cha",
+      "code": "E716",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E716.md"
     },
     {
-      "fixture": "E716_Mor_terminator_value_mismatch_3.cha",
-      "expected_codes": [
-        "E716"
-      ],
+      "fixture": "E716_3.cha",
+      "code": "E716",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E716.md"
     },
     {
-      "fixture": "E718_Sin_count_mismatch_too_few_sin_tokens.cha",
-      "expected_codes": [
-        "E718"
-      ],
+      "fixture": "E718_auto_1.cha",
+      "code": "E718",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E718_auto.md"
     },
     {
-      "fixture": "E719_Sin_count_mismatch_too_many_sin_tokens.cha",
-      "expected_codes": [
-        "E719"
-      ],
+      "fixture": "E719_auto_1.cha",
+      "code": "E719",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E719_auto.md"
     },
     {
-      "fixture": "E720_Mor_Gra_count_mismatch.cha",
-      "expected_codes": [
-        "E720"
-      ],
+      "fixture": "E720_auto_1.cha",
+      "code": "E720",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E720_auto.md"
     },
     {
-      "fixture": "E721_GRA_non_sequential_index.cha",
-      "expected_codes": [
-        "E721"
-      ],
+      "fixture": "E721_auto_1.cha",
+      "code": "E721",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E721_auto.md"
     },
     {
-      "fixture": "E722_GRA_has_no_ROOT.cha",
-      "expected_codes": [
-        "E722"
-      ],
+      "fixture": "E722_auto_1.cha",
+      "code": "E722",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E722_auto.md"
     },
     {
-      "fixture": "E723_GRA_has_multiple_ROOTs.cha",
-      "expected_codes": [
-        "E723"
-      ],
+      "fixture": "E723_auto_1.cha",
+      "code": "E723",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E723_auto.md"
     },
     {
-      "fixture": "E724_GRA_has_circular_dependency.cha",
-      "expected_codes": [
-        "E724"
-      ],
+      "fixture": "E724_gra_circular_dependency_1.cha",
+      "code": "E724",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E724_gra_circular_dependency.md"
     },
     {
-      "fixture": "E724_GRA_has_circular_dependency_2.cha",
-      "expected_codes": [
-        "E724"
-      ],
+      "fixture": "E724_gra_circular_dependency_2.cha",
+      "code": "E724",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E724_gra_circular_dependency.md"
     },
     {
-      "fixture": "E724_GRA_has_circular_dependency_3.cha",
-      "expected_codes": [
-        "E724"
-      ],
+      "fixture": "E724_gra_circular_dependency_3.cha",
+      "code": "E724",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E724_gra_circular_dependency.md"
     },
     {
-      "fixture": "E725_Modsyl_tier_word_count_does_not_match_mod_tier.cha",
-      "expected_codes": [
-        "E725"
-      ],
+      "fixture": "E725_modsyl_mod_count_mismatch_1.cha",
+      "code": "E725",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E725_modsyl_mod_count_mismatch.md"
     },
     {
-      "fixture": "E726_Phosyl_tier_word_count_does_not_match_pho_tier.cha",
-      "expected_codes": [
-        "E726"
-      ],
+      "fixture": "E726_phosyl_pho_count_mismatch_1.cha",
+      "code": "E726",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E726_phosyl_pho_count_mismatch.md"
     },
     {
-      "fixture": "E727_Phoaln_tier_word_count_does_not_match_mod_tier.cha",
-      "expected_codes": [
-        "E727"
-      ],
+      "fixture": "E727_phoaln_mod_count_mismatch_1.cha",
+      "code": "E727",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E727_phoaln_mod_count_mismatch.md"
     },
     {
-      "fixture": "E728_Phoaln_tier_word_count_does_not_match_pho_tier.cha",
-      "expected_codes": [
-        "E728"
-      ],
+      "fixture": "E728_phoaln_pho_count_mismatch_1.cha",
+      "code": "E728",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E728_phoaln_pho_count_mismatch.md"
     },
     {
-      "fixture": "E729_Cross_speaker_bullet_overlap.cha",
-      "expected_codes": [
-        "E729"
-      ],
+      "fixture": "E729_bullet_overlap_1.cha",
+      "code": "E729",
+      "claim": "violates",
       "status": "not_implemented",
       "source_spec": "spec/errors/E729_bullet_overlap.md"
     },
     {
-      "fixture": "E730_Bullet_timing_gap.cha",
-      "expected_codes": [
-        "E730"
-      ],
+      "fixture": "E730_bullet_gap_1.cha",
+      "code": "E730",
+      "claim": "violates",
       "status": "not_implemented",
       "source_spec": "spec/errors/E730_bullet_gap.md"
     },
     {
-      "fixture": "E731_Speaker_bullet_self_overlap_via_timing.cha",
-      "expected_codes": [
-        "E731"
-      ],
+      "fixture": "E731_speaker_bullet_self_overlap_1.cha",
+      "code": "E731",
+      "claim": "violates",
       "status": "not_implemented",
       "source_spec": "spec/errors/E731_speaker_bullet_self_overlap.md"
     },
     {
-      "fixture": "E732_Missing_bullet_in_bullet_consistency_mode.cha",
-      "expected_codes": [
-        "E732"
-      ],
+      "fixture": "E732_missing_bullet_1.cha",
+      "code": "E732",
+      "claim": "violates",
       "status": "not_implemented",
       "source_spec": "spec/errors/E732_missing_bullet.md"
     },
     {
-      "fixture": "E733_mod_alignment_count_mismatch_too_few_tokens.cha",
-      "expected_codes": [
-        "E733"
-      ],
+      "fixture": "E733_auto_1.cha",
+      "code": "E733",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E733_auto.md"
     },
     {
-      "fixture": "E734_mod_alignment_count_mismatch_too_many_tokens.cha",
-      "expected_codes": [
-        "E734"
-      ],
+      "fixture": "E734_auto_1.cha",
+      "code": "E734",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E734_auto.md"
     },
     {
-      "fixture": "E735_Syllabification_unit_is_not_a_phone_CODE_pair.cha",
-      "expected_codes": [
-        "E735"
-      ],
+      "fixture": "E735_syl_unit_malformed_1.cha",
+      "code": "E735",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E735_syl_unit_malformed.md"
     },
     {
-      "fixture": "E736_Illegal_syllable_constituent_code.cha",
-      "expected_codes": [
-        "E736"
-      ],
+      "fixture": "E736_syl_illegal_constituent_code_1.cha",
+      "code": "E736",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E736_syl_illegal_constituent_code.md"
     },
     {
-      "fixture": "E737_Modsyl_does_not_reproduce_the_mod_word.cha",
-      "expected_codes": [
-        "E737"
-      ],
+      "fixture": "E737_modsyl_reconstruction_mismatch_1.cha",
+      "code": "E737",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E737_modsyl_reconstruction_mismatch.md"
     },
     {
-      "fixture": "E738_Phosyl_does_not_reproduce_the_pho_word.cha",
-      "expected_codes": [
-        "E738"
-      ],
+      "fixture": "E738_phosyl_reconstruction_mismatch_1.cha",
+      "code": "E738",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E738_phosyl_reconstruction_mismatch.md"
     },
     {
-      "fixture": "E739_Phoaln_pair_is_malformed.cha",
-      "expected_codes": [
-        "E739"
-      ],
+      "fixture": "E739_phoaln_pair_malformed_1.cha",
+      "code": "E739",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E739_phoaln_pair_malformed.md"
     },
     {
-      "fixture": "E740_Phoaln_model_side_does_not_reproduce_the_mod_word.cha",
-      "expected_codes": [
-        "E740"
-      ],
+      "fixture": "E740_phoaln_mod_reconstruction_mismatch_1.cha",
+      "code": "E740",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E740_phoaln_mod_reconstruction_mismatch.md"
     },
     {
-      "fixture": "E741_Phoaln_actual_side_does_not_reproduce_the_pho_word.cha",
-      "expected_codes": [
-        "E741"
-      ],
+      "fixture": "E741_phoaln_pho_reconstruction_mismatch_1.cha",
+      "code": "E741",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E741_phoaln_pho_reconstruction_mismatch.md"
     },
     {
-      "fixture": "E742_Xphoint_bullet_has_start_end.cha",
-      "expected_codes": [
-        "E742"
-      ],
+      "fixture": "E742_xphoint_bullet_invalid_1.cha",
+      "code": "E742",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E742_xphoint_bullet_invalid.md"
     },
     {
-      "fixture": "E743_Xphoint_interval_starts_are_not_non_decreasing.cha",
-      "expected_codes": [
-        "E743"
-      ],
+      "fixture": "E743_xphoint_interval_not_monotonic_1.cha",
+      "code": "E743",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E743_xphoint_interval_not_monotonic.md"
     },
     {
-      "fixture": "E744_Xphoint_intervals_fall_outside_the_media_bullet.cha",
-      "expected_codes": [
-        "E744"
-      ],
+      "fixture": "E744_xphoint_media_bounds_violation_1.cha",
+      "code": "E744",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E744_xphoint_media_bounds_violation.md"
     },
     {
-      "fixture": "E745_Xphoint_group_does_not_reproduce_the_pho_word.cha",
-      "expected_codes": [
-        "E745"
-      ],
+      "fixture": "E745_xphoint_phone_reconstruction_mismatch_1.cha",
+      "code": "E745",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E745_xphoint_phone_reconstruction_mismatch.md"
     },
     {
-      "fixture": "E746_Xphoint_group_count_does_not_match_the_pho_word_count.cha",
-      "expected_codes": [
-        "E746"
-      ],
+      "fixture": "E746_xphoint_group_count_mismatch_1.cha",
+      "code": "E746",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E746_xphoint_group_count_mismatch.md"
     },
     {
-      "fixture": "E749_Comma_glued_to_the_following_word.cha",
-      "expected_codes": [
-        "E749"
-      ],
+      "fixture": "E747_blank_line_not_allowed_1.cha",
+      "code": "E747",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E747_blank_line_not_allowed.md"
+    },
+    {
+      "fixture": "E748_leading_zero_bullet_time_1.cha",
+      "code": "E748",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E748_leading_zero_bullet_time.md"
+    },
+    {
+      "fixture": "E748_leading_zero_bullet_time_2.cha",
+      "code": "E748",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E748_leading_zero_bullet_time.md"
+    },
+    {
+      "fixture": "E749_comma_glued_to_next_word_1.cha",
+      "code": "E749",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E749_comma_glued_to_next_word.md"
     },
     {
-      "fixture": "E751_Pause_glued_to_the_preceding_word.cha",
-      "expected_codes": [
-        "E751"
-      ],
+      "fixture": "E750_space_inside_angle_group_1.cha",
+      "code": "E750",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E750_space_inside_angle_group.md"
+    },
+    {
+      "fixture": "E750_space_inside_angle_group_2.cha",
+      "code": "E750",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E750_space_inside_angle_group.md"
+    },
+    {
+      "fixture": "E751_pause_glued_to_word_1.cha",
+      "code": "E751",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E751_pause_glued_to_word.md"
     },
     {
-      "fixture": "E752_Timing_bullets_without_an_Media_header.cha",
-      "expected_codes": [
-        "E752"
-      ],
+      "fixture": "E752_timing_without_media_1.cha",
+      "code": "E752",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E752_timing_without_media.md"
     },
     {
-      "fixture": "E753_Word_consisting_only_of_repetition_segments.cha",
-      "expected_codes": [
-        "E753"
-      ],
+      "fixture": "E753_word_only_repetition_segments_1.cha",
+      "code": "E753",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E753_word_only_repetition_segments.md"
     },
     {
-      "fixture": "E755_Utterance_language_not_declared_in_Languages.cha",
-      "expected_codes": [
-        "E755"
-      ],
+      "fixture": "E755_undeclared_utterance_language_1.cha",
+      "code": "E755",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E755_undeclared_utterance_language.md"
     },
     {
-      "fixture": "E756_Empty_dependent_tier.cha",
-      "expected_codes": [
-        "E756"
-      ],
+      "fixture": "E756_empty_dependent_tier_1.cha",
+      "code": "E756",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E756_empty_dependent_tier.md"
     },
     {
-      "fixture": "E756_Empty_dependent_tier_2.cha",
-      "expected_codes": [
-        "E756"
-      ],
+      "fixture": "E756_empty_dependent_tier_2.cha",
+      "code": "E756",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E756_empty_dependent_tier.md"
     },
     {
-      "fixture": "E756_Empty_dependent_tier_3.cha",
-      "expected_codes": [
-        "E756"
-      ],
+      "fixture": "E756_empty_dependent_tier_3.cha",
+      "code": "E756",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E756_empty_dependent_tier.md"
     },
     {
-      "fixture": "E756_Empty_dependent_tier_4.cha",
-      "expected_codes": [
-        "E756"
-      ],
+      "fixture": "E756_empty_dependent_tier_4.cha",
+      "code": "E756",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E756_empty_dependent_tier.md"
     },
     {
-      "fixture": "E757_Bracketed_code_glued_to_the_following_content.cha",
-      "expected_codes": [
-        "E757"
-      ],
+      "fixture": "E757_code_glued_to_following_content_1.cha",
+      "code": "E757",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
     },
     {
-      "fixture": "E757_Bracketed_code_glued_to_the_following_content_2.cha",
-      "expected_codes": [
-        "E757"
-      ],
+      "fixture": "E757_code_glued_to_following_content_2.cha",
+      "code": "E757",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
     },
     {
-      "fixture": "E757_Bracketed_code_glued_to_the_following_content_3.cha",
-      "expected_codes": [
-        "E757"
-      ],
+      "fixture": "E757_code_glued_to_following_content_3.cha",
+      "code": "E757",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E757_code_glued_to_following_content.md"
     },
     {
-      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file.cha",
-      "expected_codes": [
-        "E758"
-      ],
+      "fixture": "E758_leading_space_on_main_tier_1.cha",
+      "code": "E758",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
-      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_2.cha",
-      "expected_codes": [
-        "E758"
-      ],
+      "fixture": "E758_leading_space_on_main_tier_2.cha",
+      "code": "E758",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
-      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_3.cha",
-      "expected_codes": [
-        "E758"
-      ],
+      "fixture": "E758_leading_space_on_main_tier_3.cha",
+      "code": "E758",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
-      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_4.cha",
-      "expected_codes": [
-        "E758"
-      ],
+      "fixture": "E758_leading_space_on_main_tier_4.cha",
+      "code": "E758",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
-      "fixture": "E758_Trailing_space_in_a_line_s_tier_separator_non_CA_file_5.cha",
-      "expected_codes": [
-        "E758"
-      ],
+      "fixture": "E758_leading_space_on_main_tier_5.cha",
+      "code": "E758",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E758_leading_space_on_main_tier.md"
     },
     {
-      "fixture": "E761_gra_relation_head_is_not_a_Universal_Dependencies_relation.cha",
-      "expected_codes": [
-        "E761"
-      ],
+      "fixture": "E759_annotation_at_utterance_start_1.cha",
+      "code": "E759",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E759_annotation_at_utterance_start.md"
+    },
+    {
+      "fixture": "E759_annotation_at_utterance_start_2.cha",
+      "code": "E759",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E759_annotation_at_utterance_start.md"
+    },
+    {
+      "fixture": "E759_annotation_at_utterance_start_3.cha",
+      "code": "E759",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E759_annotation_at_utterance_start.md"
+    },
+    {
+      "fixture": "E760_mor_item_empty_pos_1.cha",
+      "code": "E760",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E760_mor_item_empty_pos.md"
+    },
+    {
+      "fixture": "E760_mor_item_empty_pos_2.cha",
+      "code": "E760",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E760_mor_item_empty_pos.md"
+    },
+    {
+      "fixture": "E761_gra_relation_head_not_universal_1.cha",
+      "code": "E761",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E761_gra_relation_head_not_universal.md"
     },
     {
-      "fixture": "E761_gra_relation_head_is_not_a_Universal_Dependencies_relation_2.cha",
-      "expected_codes": [
-        "E761"
-      ],
+      "fixture": "E761_gra_relation_head_not_universal_2.cha",
+      "code": "E761",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E761_gra_relation_head_not_universal.md"
     },
     {
-      "fixture": "E761_gra_relation_head_is_not_a_Universal_Dependencies_relation_3.cha",
-      "expected_codes": [
-        "E761"
-      ],
+      "fixture": "E761_gra_relation_head_not_universal_3.cha",
+      "code": "E761",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E761_gra_relation_head_not_universal.md"
     },
     {
-      "fixture": "E762_prefix_marker_stands_alone_or_opens_a_word.cha",
-      "expected_codes": [
-        "E762"
-      ],
+      "fixture": "E762_prefix_marker_illegal_position_1.cha",
+      "code": "E762",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E762_prefix_marker_illegal_position.md"
     },
     {
-      "fixture": "E762_prefix_marker_stands_alone_or_opens_a_word_2.cha",
-      "expected_codes": [
-        "E762"
-      ],
+      "fixture": "E762_prefix_marker_illegal_position_2.cha",
+      "code": "E762",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E762_prefix_marker_illegal_position.md"
     },
     {
-      "fixture": "E762_prefix_marker_stands_alone_or_opens_a_word_3.cha",
-      "expected_codes": [
-        "E762"
-      ],
+      "fixture": "E762_prefix_marker_illegal_position_3.cha",
+      "code": "E762",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E762_prefix_marker_illegal_position.md"
     },
     {
-      "fixture": "E763_prefix_marker_in_a_language_that_does_not_use_it.cha",
-      "expected_codes": [
-        "E763"
-      ],
+      "fixture": "E763_prefix_marker_language_not_allowed_1.cha",
+      "code": "E763",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
     },
     {
-      "fixture": "E763_prefix_marker_in_a_language_that_does_not_use_it_2.cha",
-      "expected_codes": [
-        "E763"
-      ],
+      "fixture": "E763_prefix_marker_language_not_allowed_2.cha",
+      "code": "E763",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
     },
     {
-      "fixture": "E763_prefix_marker_in_a_language_that_does_not_use_it_3.cha",
-      "expected_codes": [
-        "E763"
-      ],
+      "fixture": "E763_prefix_marker_language_not_allowed_3.cha",
+      "code": "E763",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
     },
     {
-      "fixture": "E764_prefixed_form_glued_to_the_preceding_word.cha",
-      "expected_codes": [
-        "E764"
-      ],
+      "fixture": "E764_prefixed_form_glued_to_preceding_word_1.cha",
+      "code": "E764",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
     },
     {
-      "fixture": "E764_prefixed_form_glued_to_the_preceding_word_2.cha",
-      "expected_codes": [
-        "E764"
-      ],
+      "fixture": "E764_prefixed_form_glued_to_preceding_word_2.cha",
+      "code": "E764",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
     },
     {
-      "fixture": "E764_prefixed_form_glued_to_the_preceding_word_3.cha",
-      "expected_codes": [
-        "E764"
-      ],
+      "fixture": "E764_prefixed_form_glued_to_preceding_word_3.cha",
+      "code": "E764",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E764_prefixed_form_glued_to_preceding_word.md"
     },
     {
-      "fixture": "E765_separator_glued_to_the_following_content.cha",
-      "expected_codes": [
-        "E765"
-      ],
+      "fixture": "E765_separator_glued_to_following_content_1.cha",
+      "code": "E765",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
     },
     {
-      "fixture": "E765_separator_glued_to_the_following_content_2.cha",
-      "expected_codes": [
-        "E765"
-      ],
+      "fixture": "E765_separator_glued_to_following_content_2.cha",
+      "code": "E765",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
     },
     {
-      "fixture": "E765_separator_glued_to_the_following_content_3.cha",
-      "expected_codes": [
-        "E765"
-      ],
+      "fixture": "E765_separator_glued_to_following_content_3.cha",
+      "code": "E765",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E765_separator_glued_to_following_content.md"
     },
     {
-      "fixture": "E767_whitespace_before_the_comma_in_Media.cha",
-      "expected_codes": [
-        "E767"
-      ],
+      "fixture": "E766_linker_not_utterance_initial_1.cha",
+      "code": "E766",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E766_linker_not_utterance_initial.md"
+    },
+    {
+      "fixture": "E766_linker_not_utterance_initial_2.cha",
+      "code": "E766",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E766_linker_not_utterance_initial.md"
+    },
+    {
+      "fixture": "E766_linker_not_utterance_initial_3.cha",
+      "code": "E766",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E766_linker_not_utterance_initial.md"
+    },
+    {
+      "fixture": "E767_media_whitespace_before_comma_1.cha",
+      "code": "E767",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E767_media_whitespace_before_comma.md"
     },
     {
-      "fixture": "E767_whitespace_before_the_comma_in_Media_2.cha",
-      "expected_codes": [
-        "E767"
-      ],
+      "fixture": "E767_media_whitespace_before_comma_2.cha",
+      "code": "E767",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E767_media_whitespace_before_comma.md"
     },
     {
-      "fixture": "W108_Auto_generated_from_corpus.cha",
-      "expected_codes": [
-        "W108"
-      ],
+      "fixture": "E999_auto_1.cha",
+      "code": "E999",
+      "claim": {
+        "subsumed_by": [
+          "E305",
+          "E600"
+        ]
+      },
+      "status": "not_implemented",
+      "source_spec": "spec/errors/E999_auto.md"
+    },
+    {
+      "fixture": "W108_auto_1.cha",
+      "code": "W108",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/W108_auto.md"
     }
   ],
-  "implemented_specs_without_examples": [],
+  "implemented_codes_without_examples": [],
   "unreachable_specs_with_examples": []
 }

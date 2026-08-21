@@ -1,27 +1,13 @@
-# E547: Constant participant header out of order
++++
+code = 'E547'
+name = 'Constant participant header out of order'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-A constant participant-specific header (`@Birth of`, `@Birthplace of`, or
-`@L1 of`) does not immediately follow the `@ID` block. These headers must come
-directly after the `@ID` headers, before any changeable header such as
-`@Comment`, `@Date`, `@Situation`, or `@Types`. A changeable header between the
-`@ID` block and a constant participant header is an ordering violation.
-
-## Metadata
-
-- **Error Code**: E547
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Expected Error Codes**: E547
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +17,16 @@ directly after the `@ID` headers, before any changeable header such as
 @Birth of CHI:	15-DEC-1970
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+A constant participant-specific header (`@Birth of`, `@Birthplace of`, or
+`@L1 of`) does not immediately follow the `@ID` block. These headers must come
+directly after the `@ID` headers, before any changeable header such as
+`@Comment`, `@Date`, `@Situation`, or `@Types`. A changeable header between the
+`@ID` block and a constant participant header is an ordering violation.
 
 ## Expected Behavior
 

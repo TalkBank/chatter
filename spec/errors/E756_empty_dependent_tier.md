@@ -1,4 +1,65 @@
-# E756: Empty dependent tier
++++
+code = 'E756'
+name = 'Empty dependent tier'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
+%xtst:	 
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
+%eng:	
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
+%com:	
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
+%tim:	
+@End
+'''
++++
 
 **Last updated:** 2026-08-16 01:22 EDT
 
@@ -47,91 +108,6 @@ lowering had to change), and last the five whose payloads could not
 answer at all. `TimTier` needed a third state, `Empty`, because both of
 its content variants hold a `NonEmptyString`; the three Phon tiers
 derive `is_empty` from the word or group count they already reported.
-
-## Metadata
-
-- **Error Code**: E756
-- **Category**: Dependent tier validation
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: whitespace-only content on a custom `%x` tier.
-
-**Expected Error Codes**: E756
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello .
-%xtst:	 
-@End
-```
-
-## Example 2
-
-**Trigger**: a standard text tier declaring nothing. This is the case the
-2026-08-15 widening added; before it, the re2c backend read this file as VALID.
-
-**Expected Error Codes**: E756
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello .
-%eng:	
-@End
-```
-
-## Example 3
-
-**Trigger**: a bullet-payload tier declaring nothing. Before 2026-08-16 the
-tree-sitter grammar required this body, so the line failed to parse and
-recovered as E342 while re2c already reported E756: the two backends disagreed
-on what the file said.
-
-**Expected Error Codes**: E756
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello .
-%com:	
-@End
-```
-
-## Example 4
-
-**Trigger**: `%tim` declaring nothing. This is the case that needed a new model
-state: both of `TimTier`'s content variants hold a `NonEmptyString`, so re2c had
-to lower an empty `%tim:` to an unsupported DEPENDENT TIER and reported E605,
-"unsupported dependent tier '%tim'", about a tier name that is perfectly
-supported.
-
-**Expected Error Codes**: E756
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello .
-%tim:	
-@End
-```
 
 ## Expected Behavior
 

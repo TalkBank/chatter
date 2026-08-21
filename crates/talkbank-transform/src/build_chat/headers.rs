@@ -109,11 +109,9 @@ fn build_id_headers(desc: &TranscriptDescription, langs: &[LanguageCode]) -> Vec
     desc.participants
         .iter()
         .map(|participant| {
-            let corpus = if participant.corpus.is_empty() {
-                "corpus_name"
-            } else {
-                participant.corpus.as_str()
-            };
+            // No `corpus_name` placeholder: a plausible-looking invented value
+            // reaching a published `@ID` header is worse than a refusal.
+            let corpus = participant.corpus.as_str();
             let mut header = IDHeader::new(
                 lang_code.clone(),
                 participant.id.as_str(),

@@ -4,51 +4,27 @@
 //!
 //! Three spec parsers each carried their own copy of these three functions:
 //! [`markdown`](super::markdown) for `spec/constructs/`, [`error`](super::error)
-//! and [`error_corpus`](super::error_corpus) for `spec/errors/`. Across those
+//! and the since-deleted `error_corpus`, both for `spec/errors/`. Across those
 //! three, `normalize_whitespace` and `strip_single_trailing_newline` were
 //! byte-identical, and `extract_text_from_children` differed only in whitespace
 //! and in whether it spelled `comrak::nodes::` out.
 //!
-//! Crate-wide the counts are higher and the copies are NOT all equivalent, which
-//! is the point of the next section: five `extract_text_from_children` in two
-//! behaviours, and five `normalize_whitespace` in two behaviours.
+//! The counts and the divergence they tracked are in the next section; they
+//! shrank twice in one day (Phase 1b's sweep, then R4's deletion), which is
+//! why they are stated ONCE there with their command, not here as well.
 //!
-//! # The copies that are NOT here, and what they prove
+//! # The copies that are NOT here any more
 //!
-//! Two more copies of `extract_text_from_children` live in
-//! `bin/enhance_specs.rs` and `bin/fix_spec_layers.rs`, and they are a DIFFERENT
-//! FUNCTION wearing the same name:
-//!
-//! ```text
-//! if let NodeValue::Text(text) = &child.data.borrow().value { result.push_str(text); }
-//! ```
-//!
-//! Text only. No `Code`, so a metadata value written with backticks reads as
-//! empty; no `SoftBreak`, so a value wrapped across two source lines loses its
-//! word boundary. Those two binaries are the reverse tools that WRITE into
-//! `spec/errors/`, so the readers and the writers of the source of truth do not
-//! agree on what a metadata line says.
-//!
-//! Their `normalize_whitespace` differs too, and less visibly: it collapses runs
-//! character by character and then trims only the TRAILING side, where
-//! `split_whitespace().join(" ")` trims both. A leading space survives one and
-//! not the other.
-//!
-//! They are deliberately NOT converted here. Pointing them at this module would
-//! change what they read and therefore what they write, which is a corpus-level
-//! behaviour change in tools the spec-system redesign plans to delete outright
-//! (its rules R4 and R5). Recording the divergence is the useful half; the fix
-//! is the deletion.
-//!
-//! That reason covers the reader-versus-writer divergence and NOT a second thing
-//! in the same two files: they are near-duplicates OF EACH OTHER. Seven
-//! functions are byte-identical between them, about 65 lines, including the two
-//! named above plus `display_filename`, `extract_metadata_value` and
-//! `parse_value_after_separator`. Factoring those into a shared module is
-//! behaviour-preserving and this module's stated reason does not excuse it; it
-//! is left undone because R4 and R5 delete both binaries, which is a different
-//! argument and is written here so the next reader does not have to reconstruct
-//! which one applies.
+//! `bin/fix_spec_layers.rs` carried a DIFFERENT `extract_text_from_children`
+//! under the same name (Text only: no `Code`, no `SoftBreak`) plus its own
+//! `normalize_whitespace`, and this header spent five paragraphs recording the
+//! divergence because the binary wrote into the source of truth while reading
+//! it differently from the loaders. R4 deleted the binary (2026-08-21), which
+//! was always the fix the record was waiting for. Measured after the
+//! deletion: ONE `extract_text_from_children` (this one) and TWO
+//! `normalize_whitespace` (this one, and a structurally different one in
+//! `generate_error_words`), counted with `rg -n 'fn <name>'` across both
+//! workspaces.
 
 use comrak::nodes::{AstNode, NodeValue};
 
@@ -73,6 +49,78 @@ pub(crate) fn extract_text_from_children<'a>(node: &'a AstNode<'a>) -> String {
 /// Collapse every run of whitespace to a single space and trim the ends.
 pub(crate) fn normalize_whitespace(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The VERBATIM markdown of the `## <heading>` section, or `None` if the file
+/// has no such section.
+///
+/// # Why source bytes and not [`extract_text_from_children`]
+///
+/// A section like `## Description` is prose written in markdown, and it is
+/// republished as markdown on the code's page under `docs/errors/`. Reading it
+/// back through the text extractor loses exactly the things an author put
+/// there on purpose: `` `backticks` `` become bare words, a link keeps its text
+/// and drops its URL, and emphasis vanishes. Taking the source is the only
+/// reading that survives the round trip it is about to make.
+///
+/// It also fixes what the two parsers did with a MULTI-paragraph section.
+/// `error.rs` took the first paragraph and dropped the rest, silently: measured
+/// 2026-08-18, 51 of the 236 specs have more than one, so 51 published pages
+/// ended mid-thought. E202's second paragraph is the pointer to where the valid
+/// form types are actually declared, which is precisely what a maintainer needs
+/// and precisely what was cut. `error_corpus.rs` joined them all with a space,
+/// which is a different wrong answer: it flattens paragraph breaks, and the six
+/// specs whose description contains a LIST would have had their bullets run
+/// together into one line.
+///
+/// Trailing and leading blank lines are trimmed; everything between is exact.
+pub(crate) fn section_source<'a>(
+    content: &str,
+    root: &'a AstNode<'a>,
+    heading: &str,
+) -> Option<String> {
+    // Top-level children only. `descendants()` would also visit the paragraphs
+    // nested inside a list item, which is how a "paragraph" count comes to
+    // disagree with what a reader sees.
+    let mut start_line: Option<usize> = None;
+    let mut end_line: Option<usize> = None;
+
+    for node in root.children() {
+        let data = node.data.borrow();
+        let NodeValue::Heading(ref h) = data.value else {
+            continue;
+        };
+        if h.level > 2 {
+            continue;
+        }
+        if start_line.is_none() {
+            if normalize_whitespace(&extract_text_from_children(node)) == heading {
+                start_line = Some(data.sourcepos.end.line + 1);
+            }
+        } else {
+            // The next heading at or above section level closes the section,
+            // and there is nothing left to look for.
+            end_line = Some(data.sourcepos.start.line.saturating_sub(1));
+            break;
+        }
+    }
+
+    let first = start_line?;
+    let lines: Vec<&str> = content.lines().collect();
+    let last = match end_line {
+        // A heading's own start line is a real line of `content`, so
+        // `start.line - 1` is at most `lines.len()`.
+        Some(line) => line,
+        // No following heading: the section runs to the end of the file.
+        None => lines.len(),
+    };
+    // Both arms are bounded by `lines.len()`, so this covers the slice below.
+    if first > last {
+        return Some(String::new());
+    }
+
+    let body = lines[first - 1..last].join("\n");
+    Some(body.trim_matches('\n').trim_end().to_string())
 }
 
 /// Remove at most one trailing newline (`\n` or `\r\n`) from code block content.

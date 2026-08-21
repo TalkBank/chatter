@@ -1,0 +1,10 @@
+The files in this directory are the SOURCE OF TRUTH and are written by people.
+
+No generator may write here. A tool that decides what a specification says by
+running the implementation makes the specification derived from the
+implementation, so every gate passes by construction and none of them can tell a
+finished rule from a gap. Three tools did exactly that; the marker is what stops
+the fourth.
+
+A bootstrap tool that proposes specs writes to `spec/proposals/`, which a person
+reads, completes and moves. It can never write the source of truth.

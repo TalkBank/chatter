@@ -1,28 +1,14 @@
-# E999: Unknown error
++++
+code = 'E999'
+name = 'Unknown error'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-**Last modified:** 2026-05-30 19:04 EDT
-
-## Description
-
-Unknown error
-
-## Metadata
-
-- **Error Code**: E999
-- **Status**: not_implemented
-- **Note**: UnknownError is an internal catch-all emitted in 0 validation sites; no triggering CHAT example exists.
-- **Category**: Alignment count mismatch
-- **Level**: file
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E4xx_alignment_errors/terminator_alignment.cha`
-**Trigger**: `%mor` omits its terminator, so the pipeline now reports missing-terminator and alignment-skipped diagnostics
-**Expected Error Codes**: E305, E600
-
-```chat
+[[example]]
+level = 'file'
+source = 'E4xx_alignment_errors/terminator_alignment.cha'
+claim = { subsumed_by = ['E305', 'E600'] }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -35,7 +21,14 @@ Unknown error
 @Comment:	Main tier: 3 words + terminator = 4 alignable
 @Comment:	Mor tier: Only 3 items (missing terminator)
 @End
-```
+'''
++++
+
+**Last modified:** 2026-05-30 19:04 EDT
+
+## Description
+
+Unknown error
 
 ## Expected Behavior
 
@@ -51,3 +44,7 @@ plus alignment skipped due to parse-taint.
 
 - Auto-generated from error corpus
 - Review and enhance this specification as needed
+
+## Note
+
+UnknownError is an internal catch-all emitted in 0 validation sites; no triggering CHAT example exists.

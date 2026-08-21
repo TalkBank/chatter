@@ -1,11 +1,13 @@
-// `_ => unreachable!()` arms in this file are guarded by upstream
-// char-classification: the outer `match ch` already filtered the
-// CA-element / CA-delimiter / overlap-point character set, and the
-// inner mapping match enumerates the same characters. New
-// characters added to the lexer's CA-element set without
-// corresponding `CaElementKind` variants would fail to compile,
-// caught before merge.
-#![allow(clippy::unreachable)]
+// This file used to carry `#![allow(clippy::unreachable)]` and a paragraph
+// explaining why three `_ => unreachable!()` arms were safe: each was guarded by
+// an outer char-classification match that enumerated the same characters. That
+// is a relationship between two lists maintained by convention, and the comment
+// was the receipt for it.
+//
+// All three mappings are now total functions returning `Option`, and the match
+// arms BIND that `Option` in an `if let` guard, so the classification happens
+// once and the "in a CA arm with no kind" state has no arm to live in. There is
+// nothing left to allow, and nothing left to explain away.
 
 //! Word body parser, scans a `&str` body for internal structure.
 //!
@@ -77,15 +79,8 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
                 chars.next();
                 items.push(WordBodyItem::CliticBoundary);
             }
-            // Overlap points: ⌈ ⌉ ⌊ ⌋ with optional digit
-            '\u{2308}' | '\u{2309}' | '\u{230A}' | '\u{230B}' => {
-                let kind = match ch {
-                    '\u{2308}' => OverlapKind::TopBegin,
-                    '\u{2309}' => OverlapKind::TopEnd,
-                    '\u{230A}' => OverlapKind::BottomBegin,
-                    '\u{230B}' => OverlapKind::BottomEnd,
-                    _ => unreachable!(),
-                };
+            // Overlap points: ⌈ ⌉ ⌊ ⌋ with optional digit.
+            _ if let Some(kind) = char_to_overlap_kind(ch) => {
                 chars.next();
                 // Include the overlap char + optional digit in the slice
                 let end = chars.peek().map_or(body.len(), |&(j, _)| j);
@@ -124,14 +119,14 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
                 }
             }
             // CA elements
-            _ if is_ca_element(ch) => {
+            _ if let Some(kind) = char_to_ca_element(ch) => {
                 chars.next();
-                items.push(WordBodyItem::CaElement(char_to_ca_element(ch)));
+                items.push(WordBodyItem::CaElement(kind));
             }
             // CA delimiters
-            _ if is_ca_delimiter(ch) => {
+            _ if let Some(kind) = char_to_ca_delimiter(ch) => {
                 chars.next();
-                items.push(WordBodyItem::CaDelimiter(char_to_ca_delimiter(ch)));
+                items.push(WordBodyItem::CaDelimiter(kind));
             }
             // Text segment: everything else until a special char
             _ => {
@@ -155,91 +150,58 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
 fn is_body_special_char(ch: char) -> bool {
     matches!(
         ch,
-        '(' | ':'
-            | '+'
-            | '^'
-            | '~'
-            | '\u{02C8}'
-            | '\u{02CC}'
-            | '\u{2308}'
-            | '\u{2309}'
-            | '\u{230A}'
-            | '\u{230B}'
-            | '\u{0002}'
-    ) || is_ca_element(ch)
-        || is_ca_delimiter(ch)
+        '(' | ':' | '+' | '^' | '~' | '\u{02C8}' | '\u{02CC}' | '\u{0002}'
+    ) || char_to_ca_element(ch).is_some()
+        || char_to_ca_delimiter(ch).is_some()
+        || char_to_overlap_kind(ch).is_some()
 }
 
-pub fn is_ca_element(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{2260}'
-            | '\u{223E}'
-            | '\u{2051}'
-            | '\u{2907}'
-            | '\u{2219}'
-            | '\u{1F29}'
-            | '\u{2193}'
-            | '\u{21BB}'
-            | '\u{2191}'
-            | '\u{2906}'
-    )
-}
-
-pub fn is_ca_delimiter(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{2047}'
-            | '\u{00A7}'
-            | '\u{204E}'
-            | '\u{00B0}'
-            | '\u{21AB}'
-            | '\u{2206}'
-            | '\u{2207}'
-            | '\u{222C}'
-            | '\u{222E}'
-            | '\u{2581}'
-            | '\u{2594}'
-            | '\u{25C9}'
-            | '\u{263A}'
-            | '\u{264B}'
-            | '\u{03AB}'
-    )
-}
-
-pub fn char_to_ca_element(ch: char) -> CaElementKind {
+/// The overlap point a character denotes, or `None` when it denotes none.
+fn char_to_overlap_kind(ch: char) -> Option<OverlapKind> {
     match ch {
-        '\u{2260}' => CaElementKind::BlockedSegments,
-        '\u{223E}' => CaElementKind::Constriction,
-        '\u{2051}' => CaElementKind::Hardening,
-        '\u{2907}' => CaElementKind::HurriedStart,
-        '\u{2219}' => CaElementKind::Inhalation,
-        '\u{1F29}' => CaElementKind::LaughInWord,
-        '\u{2193}' => CaElementKind::PitchDown,
-        '\u{21BB}' => CaElementKind::PitchReset,
-        '\u{2191}' => CaElementKind::PitchUp,
-        '\u{2906}' => CaElementKind::SuddenStop,
-        _ => unreachable!("not a CA element char"),
+        '\u{2308}' => Some(OverlapKind::TopBegin),
+        '\u{2309}' => Some(OverlapKind::TopEnd),
+        '\u{230A}' => Some(OverlapKind::BottomBegin),
+        '\u{230B}' => Some(OverlapKind::BottomEnd),
+        _ => None,
     }
 }
 
-pub fn char_to_ca_delimiter(ch: char) -> CaDelimiterKind {
+/// The CA element a character denotes, or `None` when it denotes none.
+fn char_to_ca_element(ch: char) -> Option<CaElementKind> {
     match ch {
-        '\u{2047}' => CaDelimiterKind::Unsure,
-        '\u{00A7}' => CaDelimiterKind::Precise,
-        '\u{204E}' => CaDelimiterKind::Creaky,
-        '\u{00B0}' => CaDelimiterKind::Softer,
-        '\u{21AB}' => CaDelimiterKind::SegmentRepetition,
-        '\u{2206}' => CaDelimiterKind::Faster,
-        '\u{2207}' => CaDelimiterKind::Slower,
-        '\u{222C}' => CaDelimiterKind::Whisper,
-        '\u{222E}' => CaDelimiterKind::Singing,
-        '\u{2581}' => CaDelimiterKind::LowPitch,
-        '\u{2594}' => CaDelimiterKind::HighPitch,
-        '\u{25C9}' => CaDelimiterKind::Louder,
-        '\u{263A}' => CaDelimiterKind::SmileVoice,
-        '\u{264B}' => CaDelimiterKind::BreathyVoice,
-        '\u{03AB}' => CaDelimiterKind::Yawn,
-        _ => unreachable!("not a CA delimiter char"),
+        '\u{2260}' => Some(CaElementKind::BlockedSegments),
+        '\u{223E}' => Some(CaElementKind::Constriction),
+        '\u{2051}' => Some(CaElementKind::Hardening),
+        '\u{2907}' => Some(CaElementKind::HurriedStart),
+        '\u{2219}' => Some(CaElementKind::Inhalation),
+        '\u{1F29}' => Some(CaElementKind::LaughInWord),
+        '\u{2193}' => Some(CaElementKind::PitchDown),
+        '\u{21BB}' => Some(CaElementKind::PitchReset),
+        '\u{2191}' => Some(CaElementKind::PitchUp),
+        '\u{2906}' => Some(CaElementKind::SuddenStop),
+        _ => None,
+    }
+}
+
+/// The CA delimiter a character denotes, or `None` when it denotes none.
+fn char_to_ca_delimiter(ch: char) -> Option<CaDelimiterKind> {
+    match ch {
+        '\u{2047}' => Some(CaDelimiterKind::Unsure),
+        '\u{00A7}' => Some(CaDelimiterKind::Precise),
+        '\u{204E}' => Some(CaDelimiterKind::Creaky),
+        '\u{00B0}' => Some(CaDelimiterKind::Softer),
+        '\u{21AB}' => Some(CaDelimiterKind::SegmentRepetition),
+        '\u{2206}' => Some(CaDelimiterKind::Faster),
+        '\u{2207}' => Some(CaDelimiterKind::Slower),
+        '\u{222C}' => Some(CaDelimiterKind::Whisper),
+        '\u{222E}' => Some(CaDelimiterKind::Singing),
+        '\u{2581}' => Some(CaDelimiterKind::LowPitch),
+        '\u{2594}' => Some(CaDelimiterKind::HighPitch),
+        '\u{25C9}' => Some(CaDelimiterKind::Louder),
+        '\u{263A}' => Some(CaDelimiterKind::SmileVoice),
+        '\u{264B}' => Some(CaDelimiterKind::BreathyVoice),
+        '\u{03AB}' => Some(CaDelimiterKind::Yawn),
+        _ => None,
     }
 }

@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 13:12 EDT
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -65,31 +65,21 @@ an error; add the template.
 
 ### Error specs, `spec/errors/`
 
-Invalid CHAT, and the codes it must produce.
+Invalid CHAT, and the codes it must produce. Everything declared lives in
+`+++` TOML frontmatter; everything published as prose lives in the body.
 
 ````markdown
-# E207: Unknown scoped annotation marker
++++
+code = 'E207'
+name = 'Unknown scoped annotation marker'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Unknown scoped annotation marker.
-
-## Metadata
-
-- **Error Code**: E207
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E207_multiple_form_types.cha`
-**Trigger**: Scoped annotation with unrecognized marker
-**Expected Error Codes**: E207
-
-```chat
+[[example]]
+source = 'E2xx_word_errors/E207_multiple_form_types.cha'
+level = 'word'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -97,66 +87,109 @@ Unknown scoped annotation marker.
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	word@zz .
 @End
-```
+'''
++++
+
+## Description
+
+Unknown scoped annotation marker.
 ````
 
 ## What every field actually does
 
-The fields are not decoration. Each one changes what is checked.
+The fields are not decoration. Each one changes what is checked. The
+authoritative list, with types, is `talkbank_spec_vocabulary::frontmatter`,
+which refuses an unrecognised key at load; this table says what each field
+DOES, which a type cannot.
 
 | Field | Effect |
 |-------|--------|
-| `**Error Code**` | The code the spec is about; names the generated tests. |
-| `**Layer**` | `parser` or `validation`. **Decides what a generated test can SEE**, see below. |
-| `**Kind**` | The `DiagnosticKind` axis. Required; a spec without it fails to load. |
-| `**Status**` | Whether examples are verified or deferred, see below. |
-| `**Category**`, `**Level**` | Documentation and grouping only. |
-| `**Source**` | The fixture the example came from. **Its stem NAMES the transcript**, see below. |
-| `**Trigger**` | Prose. Not read by any tool. |
-| `**Expected Error Codes**` | The codes the example must emit. **The only field that makes an example assert anything**, and it must appear BEFORE the code fence. |
+| `code` | The code the spec is about; names the generated tests. |
+| `name` | The spec's short name, published as the page's title. |
+| `kind` | The `DiagnosticKind` axis. |
+| `status` | Whether examples are verified or deferred, see below. |
+| `status_note` | A human's adjudication of the code's current state. Prose, published nowhere, read by people. |
+| `example.chat` | The input itself, a whole CHAT file. Required: an example without one is not an example. |
+| `example.source` | The fixture the example came from. **Its stem NAMES the transcript**, see below. |
+| `example.title`, `example.notes` | Prose about this example, read by people. |
+| `example.claim` | What the example asserts: `violates`, `legal`, or `subsumed_by <code(s)>`. REQUIRED, and both halves are enforced (absences included), see below. |
+| `example.level` | Where THIS example's fault is (`word`, `tier`, `utterance`, `header`, `file`). Required per example: a code like E519 is violated at header level in one example and at utterance level in another, so the fault site is a fact about the example, not the code. The page's Level line renders the distinct set. |
 
-### `Expected Error Codes` must precede the fence
+Two prose sections are published as well as read by humans:
 
-The loader reads it from the content BEFORE the ```chat block. A spec that puts
-the line after the fence declares nothing while reading, to a human, as fully
-specified; two of E757's examples did exactly that. The loader now REFUSES that
-placement rather than silently accepting an example that cannot fail.
+| Section | Effect |
+|---------|--------|
+| `## Description` | Published verbatim, markdown and paragraph breaks intact, as the page's description. Required. |
+| `## CHAT Rule` | Published verbatim as the page's `## CHAT Rule` section: what CHAT requires, and therefore what a maintainer must write instead. Optional; a spec without one publishes no such section. |
+| `## Expected Behavior`, `## Notes` | Prose for whoever opens the spec file. Read by no tool. |
 
-### `Expected Error Codes` is a SUBSET check
+Write the RULE in `## CHAT Rule`, not a bare manual link. The pages exist so a
+data maintainer can fix a file without reading the validator's source.
 
-An example passes when every code it declares was emitted. Emitting **extra**
-codes is fine, because one malformed line legitimately raises several
-diagnostics.
+### There is no longer a rule about where a field sits
 
-Two consequences worth stating plainly:
+This section used to say `Expected Error Codes` **must precede the fence**,
+because the loader read the content before the ```` ```chat ```` block and a
+spec that put the line below it declared nothing while reading, to a human, as
+fully specified. Two of E757's examples did exactly that, and the loader grew a
+guard that refused the placement.
 
-- Declaring fewer codes is always safe, so a spec cannot be used to assert that
-  a code is NOT emitted.
-- **An example declaring no `Expected Error Codes` can never fail** in this
-  runner. It is parsed and nothing more. `just spec-status` counts them, and a
-  test holds the count at ZERO, so a new one fails CI.
+Phase 1b deleted the rule and the guard together: an example is one value that
+carries its own input, so there is no fence for a field to be on the wrong side
+of. It is recorded here because it is the clearest example in this system of a
+type removing a rule rather than a document restating one.
 
-  This matters more than it looks, because the validation-corpus builder falls back
-  to the spec's TITLE code when an example declares none. An undeclared example
-  was therefore asserted by the corpus runner and ignored by this one: the same
-  question with two answers. On 2026-08-11 all 22 undeclared examples were given
-  the code they were MEASURED to emit, which in every case was the title code
-  the corpus generator had been assuming, so the two runners now agree by
-  construction.
+### Every example carries a CLAIM, and absences are assertable
 
-### `Layer` decides what a generated test can see
+Since R2 (2026-08-21) each example declares one of:
 
-A `parser`-layer test inspects PARSE diagnostics only; a `validation`-layer
-test runs validation as well. So declaring a validation-layer code in a
-parser-layer spec produces a test that can never see it.
+```toml
+claim = 'violates'                         # the spec's code MUST appear
+claim = 'legal'                            # the spec's code MUST NOT appear
+claim = { subsumed_by = 'E316' }           # E316 appears; this code does not
+claim = { subsumed_by = ['E246', 'E249'] } # all listed appear; this code does not
+```
 
-This is not hypothetical: `E342_auto.md`'s first example declared E390
-(`ReplacementContainsOmission`, a validation-layer code) in a parser-layer
-spec. The input genuinely raises both E342 and E390 in production, but the
-generated test only ever sees E342, and the mismatch sat undetected because
-the spec was ALSO marked `not_implemented`, so the test was `#[ignore]`d.
+The claim is REQUIRED: an example that asserts nothing is unwritable, which
+retired the self-demonstration gate and its 36-entry baseline outright, plus
+the zero-ratchet test whose own docstring had named exactly this retirement
+("nothing in a type stops the next spec omitting it").
 
-### `Status` decides whether an example is checked at all
+Extra emitted codes are still fine (one malformed line legitimately raises
+several diagnostics); the exact per-stage sets are the observation snapshot's
+business. What changed is the NEGATIVE half: `legal` and the own-code-absent
+part of `subsumed_by` are assertions the old subset check could not express at
+all, and this page used to say so ("a spec cannot be used to assert that a
+code is NOT emitted"). A spec whose examples are all `subsumed_by` is the
+parser-specificity worklist, verifiable against the snapshot rather than
+merely recorded; `coverage --errors` lists it.
+
+### There is no `layer` field, and the runner is total
+
+Until R4 (2026-08-21) every spec declared `layer = 'parser' | 'validation'`,
+and the field decided what a generated test could SEE: a parser-layer spec got
+a string-based test inspecting parse diagnostics only, a validation-layer spec
+got a fixture. Declaring a validation-layer code in a parser-layer spec
+therefore produced a test that could never see it, which the E342/E390 case
+demonstrated in production.
+
+R4 deleted the field and the failure mode together, in three moves:
+
+- **every example is a fixture**, and the fixture runner has always collected
+  BOTH stages' codes against a real file, so there is no stage a declared code
+  can hide in (five examples' codes are genuinely SPLIT across stages, which
+  no per-stage harness could assert);
+- **the string-based error tests are gone**, being strictly weaker than the
+  fixture runner plus the observation snapshot;
+- **which stage catches a rule is an OBSERVATION**, recorded per example in
+  `spec/observations/example-diagnostics.json`. The authored field disagreed
+  with the observation on 17 examples on the day it was measured.
+
+Tree-sitter corpus membership, which the field used to route, is derived from
+the snapshot instead: an example joins iff it produced parse-stage
+diagnostics, so there is structure to pin.
+
+### `status` decides whether an example is checked at all
 
 | Value | Effect |
 |-------|--------|
@@ -174,15 +207,30 @@ Changing a spec from `not_implemented` to `implemented` un-`#[ignore]`s its
 generated tests, and those tests may never have run. Regenerate and run them in
 the same change.
 
-### `Source` names the transcript
+### `source` names the transcript
 
 Some CHAT rules are about the file's own name: E531 requires the `@Media`
 header's filename to match the transcript's stem. The example runner therefore
-names each transcript after the stem of its `**Source**` path, and an example
-with no `**Source**` is anonymous, so those rules do not run for it.
+names each transcript after the stem of its `source`, and an example with no
+`source` is anonymous, so those rules do not run for it.
 
 This field was parsed by nothing until 2026-08-11, which is why E531's spec
 could not be verified and was reported as failing rather than as untestable.
+
+## The observation snapshot
+
+`spec/observations/example-diagnostics.json` (generated, gated) records, for
+every example of every spec, the exact diagnostic codes the current binary
+produces, split by the stage (parse or validation) that emitted them. It
+covers every spec regardless of `status`, because an observation is not an
+assertion: for an unimplemented rule the honest record is "nothing fires".
+
+It is the corpus differential aimed at the spec suite: **a diff in this file
+is a review event**, and every changed entry is adjudicated INTENDED (the
+behaviour change was the point; commit the regenerated snapshot in the same
+change) or UNINTENDED (a regression; fix the code, never the snapshot). It is
+also what makes a `subsumed by` claim verifiable and what the layer-of-capture
+question is answered from, observed rather than authored.
 
 ## What is generated, and by what
 

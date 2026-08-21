@@ -1,23 +1,13 @@
-# E725: Modsyl tier word count does not match mod tier
++++
+code = 'E725'
+name = 'Modsyl tier word count does not match mod tier'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The `%xmodsyl` tier word count does not match the `%mod` tier word count. Each word-level entry in `%xmodsyl` must correspond one-to-one with a word-level entry in `%mod`.
-
-## Metadata
-
-- **Error Code**: E725
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E725
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	nld
@@ -29,7 +19,12 @@ The `%xmodsyl` tier word count does not match the `%mod` tier word count. Each w
 %xmodsyl:	ˈm:Oœ:Nt:Cs:R
 @Comment:	ERROR: %mod has 2 words but %xmodsyl has only 1
 @End
-```
+'''
++++
+
+## Description
+
+The `%xmodsyl` tier word count does not match the `%mod` tier word count. Each word-level entry in `%xmodsyl` must correspond one-to-one with a word-level entry in `%mod`.
 
 ## Expected Behavior
 

@@ -1,4 +1,23 @@
-# E732: Missing bullet in bullet consistency mode
++++
+code = 'E732'
+name = 'Missing bullet in bullet consistency mode'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello . 1000_2000
+*CHI:	world .
+@End
+'''
++++
 
 **Status:** Not implemented, reserved
 **Last updated:** 2026-07-31
@@ -17,33 +36,6 @@ mapping (`crates/talkbank-parser-tests/src/check_error_map.rs`) and the
 enum variant's own doc comment
 (`crates/talkbank-model/src/errors/codes/error_code.rs`); there is no
 reserved constant for it in `temporal.rs` (unlike E729/E731).
-
-## Metadata
-
-- **Status**: not_implemented
-
-- **Error Code**: E732
-- **Category**: Temporal validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A main tier with no bullet while bullet consistency mode is
-active
-**Expected Error Codes**: E732
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello . 1000_2000
-*CHI:	world .
-@End
-```
 
 ## Expected Behavior
 

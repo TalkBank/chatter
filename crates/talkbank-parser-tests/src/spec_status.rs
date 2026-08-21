@@ -31,7 +31,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use talkbank_model::{CheckStatus, ErrorCode};
 
-use crate::error_specs::{self, SpecFile, SpecStatus};
+use crate::error_specs::{self, SpecFile, Status};
 use crate::gate::{Gate, GateOutcome, listing, report};
 use crate::repo_paths::workspace_root;
 
@@ -40,15 +40,14 @@ use crate::repo_paths::workspace_root;
 ///
 /// `deprecated` and `unreachable_from_chat` are not "planned"; they are checks
 /// that exist. That is the same judgement the CLI's old hand-written list made
-/// by omitting them, and it is deliberately NOT baked into `SpecStatus`, which
+/// by omitting them, and it is deliberately NOT baked into `Status`, which
 /// two other callers read with different policies.
-fn as_check_status(status: SpecStatus) -> CheckStatus {
+fn as_check_status(status: Status) -> CheckStatus {
     match status {
-        SpecStatus::NotImplemented => CheckStatus::Planned,
-        SpecStatus::Implemented
-        | SpecStatus::Deprecated
-        | SpecStatus::UnreachableFromChat
-        | SpecStatus::Undeclared => CheckStatus::Active,
+        Status::NotImplemented => CheckStatus::Planned,
+        Status::Implemented | Status::Deprecated | Status::UnreachableFromChat => {
+            CheckStatus::Active
+        }
     }
 }
 
@@ -67,16 +66,12 @@ fn declared_statuses(specs: &[SpecFile]) -> Result<Declarations, String> {
     let mut unresolved = Vec::new();
     let mut conflicting = Vec::new();
     for spec in specs {
-        // A file that declares nothing has nothing to compare, and that is the
-        // majority: 105 of 239, plus `README.md` and `SPEC_ENHANCEMENT_GUIDE.md`
-        // which are documentation rather than specs. Skipping them here is why
-        // `unresolved` means "declared a status but names no code", which is a
-        // real fault, rather than "is not an error spec", which is not.
-        let declared = spec.status()?;
-        if declared == SpecStatus::Undeclared {
-            continue;
-        }
-        let status = as_check_status(declared);
+        // No skip arm any more. `load` yields only files whose stem names a
+        // code, so `README.md` and `SPEC_ENHANCEMENT_GUIDE.md` never arrive,
+        // and every spec declares a status or fails loudly. `unresolved` keeps
+        // its meaning: "declared a status but names no code", a real fault,
+        // rather than "is not an error spec", which was never one.
+        let status = as_check_status(spec.status());
         let Some(code) = spec.code() else {
             unresolved.push(spec.filename.clone());
             continue;

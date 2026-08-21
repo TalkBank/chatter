@@ -1,7 +1,7 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 13:12 EDT
 
 ## Read the book first
 
@@ -23,11 +23,12 @@ tests, and error documentation. You never hand-edit generated test files.
 
 ```
 spec/constructs/*.md  ─┐
-                      ├──► spec/tools generators ──► grammar/test/corpus/generated/*.txt
-spec/errors/*.md      ─┤                            ──► crates/talkbank-parser-tests/tests/integration/generated/*.rs (parser tests)
-                      │                            ──► crates/talkbank-parser-tests/tests/error_corpus/validation_errors/ + manifest.json (validation)
+                      ├──► spec/tools generators ──► grammar/test/corpus/generated/*.txt (membership from the snapshot)
+spec/errors/*.md      ─┤                            ──► crates/.../integration/generated/*.rs (construct tests only)
+                      │                            ──► crates/.../error_corpus/validation_errors/ + manifest.json (EVERY example, claim-judged)
                       │                            ──► docs/errors/*.md
 spec/tools/templates/ ─┘
+spec/observations/    ◄── spec-runtime-tools (regenerated FIRST; what each example emits, by stage)
 ```
 
 Regenerate with `just spec-gen`, and ask `just spec-check` whether the
@@ -66,12 +67,13 @@ hand-maintained tests in `manual/`.
 | Location | Purpose |
 |----------|---------|
 | `spec/constructs/` | Valid CHAT examples with expected CSTs |
-| `spec/errors/` | Invalid CHAT examples with expected error codes |
+| `spec/errors/` | Invalid (or boundary-legal) CHAT examples, each with a CLAIM |
 | → `grammar/test/corpus/generated/` | Generated tree-sitter tests (wiped each run) |
 | `grammar/test/corpus/manual/` | Hand-maintained tree-sitter tests (never generated) |
 | → `crates/talkbank-parser-tests/tests/integration/generated/` | Generated Rust parser tests |
 | → `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | Validation fixtures + `manifest.json` (data-driven runner) |
 | → `docs/errors/` | Published error-reference pages; a registry artifact, gated |
+| → `spec/observations/` | Generated observation snapshot: what each example actually emits, by stage; a diff is adjudicated like a corpus differential |
 
 ## Adding a Test
 
@@ -119,30 +121,35 @@ fragment in a full CHAT document. Templates live in `spec/tools/templates/`.
 
 ### 3. Spec format (errors)
 
-```markdown
-# E999, Description
+Declared data in `+++` TOML frontmatter, prose in the body:
 
-Error for some condition.
+````markdown
++++
+code = 'E999'
+name = 'Description of the condition'
+kind = 'Invalidity'     # Invalidity | Unmodeled | Deprecation | Style
+status = 'implemented'  # implemented | not_implemented | deprecated | unreachable_from_chat
 
-- **Error Code**: E999
-- **Kind**: Invalidity | Unmodeled | Deprecation | Style
-- **Category**: validation
-- **Layer**: parser | validation
-- **Status**: implemented | not_implemented | deprecated | unreachable_from_chat
-
-## Example
-
-```chat
+[[example]]
+level = 'word'          # word | utterance | tier | header | file; a fact about THIS example
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 ...invalid content...
 @End
-```
+'''
++++
 
-## Expected Error Codes
+## Description
 
-- E999
-```
+Why this is not valid CHAT.
+````
+
+**The schema is the reference**, not this snippet:
+`talkbank_spec_vocabulary::frontmatter` carries every field with its type and
+its reason, and refuses an unrecognised key at load. `spec/docs/ERROR_SPEC_FORMAT.md`
+has the taxonomy and the handful of rules a type cannot state.
 
 ### 4. Check templates
 
@@ -184,28 +191,36 @@ just spec-check
 
 # (docs/errors/ is a spec-gen artifact; no separate command.)
 
-# Verify spec format integrity
-cargo run --manifest-path spec/runtime-tools/Cargo.toml --bin validate_error_specs
+# Do the error specs' examples produce the codes they declare?
+just spec-validate-examples
 ```
 
-## Generator Binaries (`spec/tools/src/bin/`)
+## The tooling, and why this file does not list it
 
-| Binary | What it generates |
-|--------|-------------------|
-| `spec_gen` | EVERY artifact below, from one registry: the tree-sitter corpus, the Rust test bodies, the validation fixtures + `manifest.json`, and the `DiagnosticKind` registry. `--check` reports staleness and writes nothing. Run it as `just spec-gen` / `just spec-check`. |
-| `gen_form_markers` | Every site carrying the CHAT form-marker inventory, from `spec/form_markers/form_marker_registry.json`: the model's `FormType` enum, the re2c lexer's code set, and the book's table. Run it as `just form-markers-gen`; see `spec/form_markers/README.md` for the two follow-ups it cannot do (the vendored re2c lexer and the JSON Schema). |
-| `validate_spec` | Validates spec format integrity (no output) |
-| `corpus_node_coverage` | Reports which grammar node types are exercised by `corpus/reference/` |
-| `coverage` | Reports spec coverage and error-code coverage |
-| `corpus_to_specs` | Migrates legacy `tests/error_corpus/` fixtures into spec format |
+`just --list` names every wired spec command with a one-line summary of the
+question it answers; `ls spec/*/src/bin` shows everything that exists. **This
+file used to carry its own table of binaries**, and it was one of FIVE
+hand-written copies across the tree that gave five different answers, one of
+them naming tools deleted months earlier. `spec/docs/ERROR_SPEC_FORMAT.md`
+carries the taxonomy (registry generators, artifact driver, reporters, corpus
+tooling, golden generators) that is worth writing down because it is not
+derivable; membership is derivable and so is not written down.
+
+The two that matter most here, because they are what you run:
+
+- `just spec-gen` / `just spec-check`: regenerate, or check, EVERY artifact
+  derived from `spec/`, from one registry that owns each destination.
+- `just spec-status`: what state the spec system is in, derived from the same
+  code the gates use.
 
 ## Cross-Spec Consistency
 
 Error spec examples can be cross-referenced, the same `.cha` content may
-appear in multiple specs with different expected error codes. When changing a
+appear in multiple specs with different claims. When changing a
 grammar rule so that previously-unparsable content now parses:
 
-1. Update the primary error spec: change `Layer: parser` → `Layer: validation`
+1. Regenerate: the observation snapshot records the new stage per example, and
+   corpus membership follows it (there is no authored `layer` to flip since R4)
 2. Audit `E316_auto.md`: remove examples that no longer produce E316
 3. Run `just spec-gen` and review the diff
 4. Run the concrete verification commands from `book/src/contributing/dev-checks.md`

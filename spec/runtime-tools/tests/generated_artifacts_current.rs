@@ -3,7 +3,7 @@
 //!
 //! # What this replaced
 //!
-//! Nothing, for four of the six artifacts. `spec/tools/tests/generated_test_output.rs`
+//! Nothing, for most of the artifacts (the registry has since grown; `all()` is the count). `spec/tools/tests/generated_test_output.rs`
 //! pins the SET of files one generator writes against the set the test tree
 //! `include!`s, and never compares their content to anything, so a spec change
 //! that was never regenerated left a stale artifact and every gate stayed green.

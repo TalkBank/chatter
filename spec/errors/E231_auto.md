@@ -1,25 +1,14 @@
-# E231: Auto-generated from corpus
++++
+code = 'E231'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E231
-- **Category**: validation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E231_unbalanced_shortening.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'word'
+source = 'E2xx_word_errors/E231_unbalanced_shortening.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@ Auto-generated from corpus
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hel(o .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

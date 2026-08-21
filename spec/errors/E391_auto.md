@@ -1,25 +1,14 @@
-# E391: Auto-generated from corpus
++++
+code = 'E391'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E391
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E391_replacement_contains_untranscribed.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E391
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E2xx_word_errors/E391_replacement_contains_untranscribed.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,11 +16,16 @@ Auto-generated from corpus
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	went [: xxx] .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

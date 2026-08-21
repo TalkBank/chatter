@@ -269,18 +269,12 @@ fn audit() -> GateOutcome {
     for (shape, count) in &shapes {
         summary.push_str(&format!("\n     {count:>4}  diverging: {shape:?}"));
     }
-    match corpus.unclassifiable.first() {
-        None => {}
-        Some(_) => summary.push_str(&format!(
-            "\n     {:>4}  chat block(s) with no expectation, UNTESTED: {}",
-            corpus.unclassifiable.len(),
-            corpus
-                .unclassifiable
-                .iter()
-                .map(SpecLabel::to_string)
-                .collect::<Vec<_>>()
-                .join(", "),
-        )),
+    if corpus.legal > 0 {
+        summary.push_str(&format!(
+            "\n     {:>4}  legal-claim example(s), asserting an absence this \
+             harness cannot measure (the fixture runner enforces them)",
+            corpus.legal,
+        ));
     }
 
     match reconciliation.agrees_with_baseline() {

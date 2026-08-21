@@ -1,4 +1,51 @@
-# E764: prefixed form glued to the preceding word
++++
+code = 'E764'
+name = 'prefixed form glued to the preceding word'
+kind = 'Style'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the dog&-um barked .
+@Comment:	ERROR: a missing space silently split this into two words
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the dog&~gaga barked .
+@Comment:	ERROR: the nonword is a word of its own and needs a space
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	the dog&+fr barked .
+@Comment:	ERROR: the fragment is a word of its own and needs a space
+@End
+'''
++++
 
 ## Description
 
@@ -23,67 +70,6 @@ relying on the reader to notice.
 
 Glued omission (`dog0is`) is NOT this rule: `0` is ordinary word text, so that
 shape produces a single malformed word and is already rejected (E220).
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-29 19:09 EDT
-
-- **Error Code**: E764
-- **Category**: Main tier separators
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Style
-
-## Example 1
-
-**Trigger**: a filler glued to the preceding word.
-
-**Expected Error Codes**: E764
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	the dog&-um barked .
-@Comment:	ERROR: a missing space silently split this into two words
-@End
-```
-
-## Example 2
-
-**Trigger**: a nonword glued to the preceding word.
-
-**Expected Error Codes**: E764
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	the dog&~gaga barked .
-@Comment:	ERROR: the nonword is a word of its own and needs a space
-@End
-```
-
-## Example 3
-
-**Trigger**: a phonological fragment glued to the preceding word.
-
-**Expected Error Codes**: E764
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	the dog&+fr barked .
-@Comment:	ERROR: the fragment is a word of its own and needs a space
-@End
-```
 
 ## Expected Behavior
 

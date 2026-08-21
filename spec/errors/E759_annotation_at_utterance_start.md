@@ -1,4 +1,51 @@
-# E759: Annotation at utterance start has nothing to attach to
++++
+code = 'E759'
+name = 'Annotation at utterance start has nothing to attach to'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	[/] we go home .
+@Comment:	ERROR: the leading retrace has no material to retrace
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	[<] no way .
+@Comment:	ERROR: the leading overlap marker has no scoped material
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	[: because] we go .
+@Comment:	ERROR: the leading replacement has no word to replace
+@End
+'''
++++
 
 ## Description
 
@@ -17,67 +64,6 @@ parse it; the parser's error analysis names the failure precisely
 instead of falling through to the generic E316 unparsable-content
 catch-all. Legal LEADING codes (`[- lang]` precodes, `[^ ...]`) are
 unaffected: they parse normally and never reach this path.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-23 22:27 EDT
-
-- **Error Code**: E759
-- **Category**: Main tier annotations
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: utterance content begins with a retrace marker.
-
-**Expected Error Codes**: E759
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	[/] we go home .
-@Comment:	ERROR: the leading retrace has no material to retrace
-@End
-```
-
-## Example 2
-
-**Trigger**: utterance content begins with an overlap marker.
-
-**Expected Error Codes**: E759
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	[<] no way .
-@Comment:	ERROR: the leading overlap marker has no scoped material
-@End
-```
-
-## Example 3
-
-**Trigger**: utterance content begins with a replacement.
-
-**Expected Error Codes**: E759
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	[: because] we go .
-@Comment:	ERROR: the leading replacement has no word to replace
-@End
-```
 
 ## Expected Behavior
 

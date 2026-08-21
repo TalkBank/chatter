@@ -34,7 +34,13 @@ pub(crate) use error_analysis::{
 pub(crate) use error_checking::{
     check_for_errors_recursive, collect_recovery_nodes, surface_unexpected,
 };
-pub(crate) use node_dispatch::{parse_pause_node, parse_separator_like, parse_separator_node};
+// `parse_separator_node` is deliberately NOT re-exported. Removing the
+// unreachable `separator` arm from `base/mod.rs` on 2026-08-20 revealed it has
+// no production caller and had not had one: `base_content_item` has no
+// `separator` alternative, so that arm was dead and was hiding the fact. It
+// still has its own tests in `node_dispatch::separator`; deleting it is a
+// separate decision from this one.
+pub(crate) use node_dispatch::{parse_pause_node, parse_separator_like};
 // parse_ca_element_node, parse_ca_delimiter_node removed, word-internal CA markers
 // are now parsed by the direct parser (Phase 2 word coarsening)
 #[allow(unused_imports)]

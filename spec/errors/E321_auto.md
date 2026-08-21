@@ -1,27 +1,14 @@
-# E321: UnparsableUtterance
++++
+code = 'E321'
+name = 'UnparsableUtterance'
+kind = 'Invalidity'
+status = 'not_implemented'
+status_note = 'Unreachable via tree-sitter parser. The catch-all fallback at utterance error analysis is always preempted by more specific error patterns (E316, E375). The re2c parser may reach this code path.'
 
-## Description
-
-An utterance line (starting with \*SPEAKER:) could not be parsed. The
-utterance body contains syntax errors that tree-sitter cannot recover
-from, and the error doesn't match any of the specifically checked
-patterns (missing form type, empty replacement, unknown annotation).
-
-## Metadata
-- **Status**: not_implemented
-- **Status note**: Unreachable via tree-sitter parser. The catch-all fallback at utterance error analysis is always preempted by more specific error patterns (E316, E375). The re2c parser may reach this code path.
-
-- **Error Code**: E321
-- **Category**: parser\_recovery
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Utterance body with malformed content that tree-sitter wraps in ERROR
-
-```chat
+[[example]]
+level = 'utterance'
+claim = { subsumed_by = 'E375' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,15 @@ patterns (missing form type, empty replacement, unknown annotation).
 @ID:	eng|test|CHI||female|||Target_Child|||
 *CHI:	hello [% broken [nested unclosed .
 @End
-```
+'''
++++
+
+## Description
+
+An utterance line (starting with \*SPEAKER:) could not be parsed. The
+utterance body contains syntax errors that tree-sitter cannot recover
+from, and the error doesn't match any of the specifically checked
+patterns (missing form type, empty replacement, unknown annotation).
 
 ## Expected Behavior
 

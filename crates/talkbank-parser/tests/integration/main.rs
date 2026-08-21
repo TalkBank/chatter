@@ -48,6 +48,7 @@ mod pho_mod_tier_characterization;
 mod raw_user_tier_characterization;
 mod recovery_tier_spans;
 mod sin_tier_characterization;
+mod symbol_registry_examples;
 mod test_debug_error_group;
 mod test_parse_health_recovery;
 mod text_tier_characterization;

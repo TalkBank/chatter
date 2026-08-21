@@ -1,25 +1,14 @@
-# E247: Auto-generated from corpus
++++
+code = 'E247'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E247
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E247_multiple_primary_stress.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E247
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E247_multiple_primary_stress.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +18,12 @@ Auto-generated from corpus
 @Comment:	Invalid: 'ˈheˈllo' - Two primary stress markers
 *CHI:	ˈheˈllo .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

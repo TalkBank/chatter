@@ -1,25 +1,14 @@
-# E604: Empty GRA relation
++++
+code = 'E604'
+name = 'Empty GRA relation'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Empty GRA relation
-
-## Metadata
-
-- **Error Code**: E604
-- **Category**: Dependent tier parsing
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E7xx_tier_parsing/E707_empty_gra_relation.cha`
-**Trigger**: %gra tier with empty relation (consecutive spaces)
-**Expected Error Codes**: E604
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E7xx_tier_parsing/E707_empty_gra_relation.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +17,16 @@ Empty GRA relation
 *CHI:	hello world .
 %gra:	1|2|NSUBJ  2|0|ROOT
 @End
-```
+'''
++++
+
+## Description
+
+Empty GRA relation
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

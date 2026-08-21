@@ -98,7 +98,7 @@ Test name
 Most test files are **generated** from specifications in the repository:
 
 - **Construct specs** (`spec/constructs/`) define valid CHAT examples with expected parse trees
-- **Error specs** (`spec/errors/`) define invalid CHAT examples with expected error codes
+- **Error specs** (`spec/errors/`) define invalid CHAT examples with claims
 
 The generation pipeline (from anywhere in the checkout):
 ```bash

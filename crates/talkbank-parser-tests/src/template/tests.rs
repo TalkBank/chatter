@@ -38,88 +38,9 @@ enum RequiredHeader {
     Begin,
     End,
     Languages,
-    Participants,
     Id,
     Comment,
     Date,
-}
-
-/// Tests minimal file has required headers.
-#[test]
-fn minimal_file_has_required_headers() -> Result<(), TestError> {
-    let content = minimal_chat_file();
-    let chat_file = parse_chat(&content)?;
-
-    require_header(&chat_file, RequiredHeader::Utf8)?;
-    require_header(&chat_file, RequiredHeader::Begin)?;
-    require_header(&chat_file, RequiredHeader::Languages)?;
-    require_header(&chat_file, RequiredHeader::Participants)?;
-    require_header(&chat_file, RequiredHeader::Id)?;
-    require_header(&chat_file, RequiredHeader::End)?;
-
-    require_language(&chat_file, "eng")?;
-    require_participant(&chat_file, "CHI", "Target_Child")?;
-    require_id_header(&chat_file, "eng", "corpus", "CHI", "Target_Child")?;
-    Ok(())
-}
-
-/// Tests custom speaker and role.
-#[test]
-fn custom_speaker_and_role() -> Result<(), TestError> {
-    let content = MinimalChatFile::new()
-        .speaker("MOT")
-        .role("Mother")
-        .to_string();
-
-    let chat_file = parse_chat(&content)?;
-    require_participant(&chat_file, "MOT", "Mother")?;
-    require_id_header(&chat_file, "eng", "corpus", "MOT", "Mother")?;
-    Ok(())
-}
-
-/// Tests with utterance.
-#[test]
-fn with_utterance() -> Result<(), TestError> {
-    let content = MinimalChatFile::new()
-        .utterance("hello world .")
-        .to_string();
-
-    let chat_file = parse_chat(&content)?;
-    require_utterance(&chat_file, "CHI", "hello world .")?;
-    Ok(())
-}
-
-/// Tests custom language and corpus.
-#[test]
-fn custom_language_and_corpus() -> Result<(), TestError> {
-    let content = MinimalChatFile::new()
-        .language("spa")
-        .corpus("test")
-        .to_string();
-
-    let chat_file = parse_chat(&content)?;
-    require_language(&chat_file, "spa")?;
-    require_id_header(&chat_file, "spa", "test", "CHI", "Target_Child")?;
-    Ok(())
-}
-
-/// Tests builder pattern chaining.
-#[test]
-fn builder_pattern_chaining() -> Result<(), TestError> {
-    let content = MinimalChatFile::new()
-        .speaker("INV")
-        .language("fra")
-        .role("Investigator")
-        .corpus("mydata")
-        .utterance("bonjour .")
-        .to_string();
-
-    let chat_file = parse_chat(&content)?;
-    require_language(&chat_file, "fra")?;
-    require_participant(&chat_file, "INV", "Investigator")?;
-    require_id_header(&chat_file, "fra", "mydata", "INV", "Investigator")?;
-    require_utterance(&chat_file, "INV", "bonjour .")?;
-    Ok(())
 }
 
 /// Tests chat file builder multiple speakers.
@@ -253,7 +174,6 @@ fn require_header(chat_file: &ChatFile, required: RequiredHeader) -> Result<(), 
                 | (RequiredHeader::Begin, Header::Begin)
                 | (RequiredHeader::End, Header::End)
                 | (RequiredHeader::Languages, Header::Languages { .. })
-                | (RequiredHeader::Participants, Header::Participants { .. })
                 | (RequiredHeader::Id, Header::ID(_))
                 | (RequiredHeader::Comment, Header::Comment { .. })
                 | (RequiredHeader::Date, Header::Date { .. })
@@ -264,23 +184,6 @@ fn require_header(chat_file: &ChatFile, required: RequiredHeader) -> Result<(), 
         Ok(())
     } else {
         Err(TestError::MissingHeader { header: required })
-    }
-}
-
-/// Tests require language.
-fn require_language(chat_file: &ChatFile, language: &str) -> Result<(), TestError> {
-    let expected = LanguageCode::new(language).expect("test call sites pass non-empty literals");
-    let found = chat_file.lines.iter().any(|line| match line.as_header() {
-        Some(Header::Languages { codes }) => codes.contains(&expected),
-        _ => false,
-    });
-
-    if found {
-        Ok(())
-    } else {
-        Err(TestError::MissingHeader {
-            header: RequiredHeader::Languages,
-        })
     }
 }
 
@@ -427,7 +330,6 @@ fn find_header_line_index(
                     | (RequiredHeader::Begin, Header::Begin)
                     | (RequiredHeader::End, Header::End)
                     | (RequiredHeader::Languages, Header::Languages { .. })
-                    | (RequiredHeader::Participants, Header::Participants { .. })
                     | (RequiredHeader::Id, Header::ID(_))
                     | (RequiredHeader::Comment, Header::Comment { .. })
                     | (RequiredHeader::Date, Header::Date { .. })

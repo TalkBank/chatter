@@ -1,26 +1,14 @@
-# E230: Unbalanced CA delimiter
++++
+code = 'E230'
+name = 'Unbalanced CA delimiter'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Compound delimiter (`∆`) is not properly balanced, opening delimiter has no matching closing delimiter.
-
-## Metadata
-- **Status**: implemented
-- **Layer**: validation
-
-- **Error Code**: E230
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E230_unbalanced_ca_delimiter.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E230
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E230_unbalanced_ca_delimiter.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,7 +18,12 @@ Compound delimiter (`∆`) is not properly balanced, opening delimiter has no ma
 @Comment:	Invalid: 'hello∆world' - Missing closing ∆
 *CHI:	hello∆world .
 @End
-```
+'''
++++
+
+## Description
+
+Compound delimiter (`∆`) is not properly balanced, opening delimiter has no matching closing delimiter.
 
 ## Expected Behavior
 

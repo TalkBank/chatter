@@ -1,23 +1,13 @@
-# E727: Phoaln tier word count does not match mod tier
++++
+code = 'E727'
+name = 'Phoaln tier word count does not match mod tier'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The `%xphoaln` tier word count does not match the `%mod` tier word count. Each word-level entry in `%xphoaln` must correspond one-to-one with a word-level entry in `%mod`.
-
-## Metadata
-
-- **Error Code**: E727
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E727
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	nld
@@ -29,7 +19,12 @@ The `%xphoaln` tier word count does not match the `%mod` tier word count. Each w
 %xphoaln:	m↔m,œ↔ʉ,t↔s,s↔t
 @Comment:	ERROR: %mod has 2 words but %xphoaln has only 1
 @End
-```
+'''
++++
+
+## Description
+
+The `%xphoaln` tier word count does not match the `%mod` tier word count. Each word-level entry in `%xphoaln` must correspond one-to-one with a word-level entry in `%mod`.
 
 ## Expected Behavior
 

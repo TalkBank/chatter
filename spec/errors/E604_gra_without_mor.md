@@ -1,21 +1,13 @@
-# E604: %gra Tier Without %mor Tier
++++
+code = 'E604'
+name = '%gra Tier Without %mor Tier'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-A %gra (grammatical relations) tier appears without a corresponding %mor (morphology) tier. According to CHAT rules, %gra depends on %mor and cannot exist independently.
-
-## Metadata
-
-- **Category**: tier_validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E604
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -24,7 +16,12 @@ A %gra (grammatical relations) tier appears without a corresponding %mor (morpho
 *CHI:	hello world .
 %gra:	1|2|NSUBJ 2|0|ROOT
 @End
-```
+'''
++++
+
+## Description
+
+A %gra (grammatical relations) tier appears without a corresponding %mor (morphology) tier. According to CHAT rules, %gra depends on %mor and cannot exist independently.
 
 ## Expected Behavior
 

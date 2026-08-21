@@ -1,4 +1,40 @@
-# E202: Missing form type after @
++++
+code = 'E202'
+name = 'Missing form type after @'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello@ .
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = { subsumed_by = 'E203' }
+notes = '''
+Note: `@j` is recognized as a form type syntactically, but `j` is not a valid
+form type value. This triggers E203 (InvalidFormType) rather than E202
+(MissingFormType).
+'''
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	dog@j .
+@End
+'''
++++
 
 ## Description
 
@@ -11,50 +47,6 @@ The valid form types are declared in
 marker, a separate construct that is not a form type.
 
 There used to be a copy of the list here, and it had drifted: it omitted `@u`.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-08-11 16:20 EDT
-
-- **Error Code**: E202
-- **Category**: Word validation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Word ending with bare `@`, no form type follows
-**Expected Error Codes**: E202
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello@ .
-@End
-```
-
-## Example 2
-
-**Trigger**: Word with `@` followed by invalid form letter
-**Expected Error Codes**: E203
-
-Note: `@j` is recognized as a form type syntactically, but `j` is not a valid
-form type value. This triggers E203 (InvalidFormType) rather than E202
-(MissingFormType).
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	dog@j .
-@End
-```
 
 ## Expected Behavior
 

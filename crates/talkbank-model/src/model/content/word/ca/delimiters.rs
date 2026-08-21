@@ -1,8 +1,11 @@
-//! Conversation-analysis (CA) paired prosodic delimiters used inside words.
+//! Word-internal PAIRED markers that bracket a stretch of a word.
+//!
+//! Named for the PARSE ROLE, not the provenance: one of these is a disfluency
+//! mark rather than Conversation Analysis notation. Ask `notation_family()`.
 //!
 //! CHAT reference anchors:
-//! - [CA Delimiters](https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters)
 //! - [CA Subwords](https://talkbank.org/0info/manuals/CHAT.html#CA_Subwords)
+//! - [CA Delimiters](https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters)
 
 use crate::model::WriteChat;
 use crate::validation::{Validate, ValidationContext};
@@ -11,124 +14,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
-/// Paired CA prosodic delimiter type.
-///
-/// Symbol mapping is defined by [`CADelimiterType::to_symbol`] and must stay
-/// aligned with the parser grammar.
-///
-/// # Variants
-///
-/// **Speech Rate:**
-/// - `Faster` (∆) - Faster speech
-/// - `Slower` (∇) - Slower speech
-///
-/// **Volume:**
-/// - `Softer` (°)
-/// - `Louder` (◉)
-///
-/// **Pitch Range:**
-/// - `LowPitch` (▁)
-/// - `HighPitch` (▔)
-///
-/// **Voice Quality:**
-/// - `SmileVoice` (☺) - Smile voice/laughter quality
-/// - `BreathyVoice` (♋) - Breathy voice quality
-/// - `Whisper` (∬) - Whispered speech
-/// - `Creaky` (⁎) - Creaky voice
-/// - `Yawn` (Ϋ) - Yawning quality
-/// - `Singing` (∮) - Singing voice
-///
-/// **Other:**
-/// - `Unsure` (⁇)
-/// - `SegmentRepetition` (↫) - Segment repetition
-/// - `Precise` (§) - Precise articulation
-///
-/// # CHAT Format Examples
-///
-/// ```text
-/// ∆fast∆             # Faster
-/// ∇slow∇             # Slower
-/// °soft°             # Softer
-/// ☺smile☺            # SmileVoice
-/// ∬whisper∬          # Whisper
-/// ```
-///
-/// # References
-///
-/// - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
-/// - [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    SemanticEq,
-    SpanShift,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum CADelimiterType {
-    /// `∆`
-    Faster,
-    /// `∇`
-    Slower,
-    /// `°`
-    Softer,
-    /// `▁`
-    LowPitch,
-    /// `▔`
-    HighPitch,
-    /// `☺`
-    SmileVoice,
-    /// `♋`
-    BreathyVoice,
-    /// `⁇`
-    Unsure,
-    /// `∬`
-    Whisper,
-    /// `Ϋ`
-    Yawn,
-    /// `∮`
-    Singing,
-    /// `↫`
-    SegmentRepetition,
-    /// `⁎`
-    Creaky,
-    /// `◉`
-    Louder,
-    /// `§`
-    Precise,
-}
-
-impl CADelimiterType {
-    /// Returns the CHAT symbol for this CA delimiter type.
-    ///
-    /// Symbols must remain synchronized with `tree-sitter-talkbank` token
-    /// definitions so parsing and rendering are inverse-compatible.
-    pub fn to_symbol(&self) -> &'static str {
-        match self {
-            CADelimiterType::Faster => "∆",            // U+2206 INCREMENT
-            CADelimiterType::Slower => "∇",            // U+2207 NABLA
-            CADelimiterType::Softer => "°",            // U+00B0 DEGREE SIGN
-            CADelimiterType::LowPitch => "▁",          // U+2581 LOWER ONE EIGHTH BLOCK
-            CADelimiterType::HighPitch => "▔",         // U+2594 UPPER ONE EIGHTH BLOCK
-            CADelimiterType::SmileVoice => "☺",        // U+263A WHITE SMILING FACE
-            CADelimiterType::BreathyVoice => "♋",     // U+264B CANCER
-            CADelimiterType::Unsure => "⁇",            // U+2047 DOUBLE QUESTION MARK
-            CADelimiterType::Whisper => "∬",           // U+222C DOUBLE INTEGRAL
-            CADelimiterType::Yawn => "Ϋ", // U+03AB GREEK CAPITAL UPSILON WITH DIALYTIKA
-            CADelimiterType::Singing => "∮", // U+222E CONTOUR INTEGRAL
-            CADelimiterType::SegmentRepetition => "↫", // U+21AB LEFTWARDS ARROW WITH LOOP
-            CADelimiterType::Creaky => "⁎", // U+204E LOW ASTERISK
-            CADelimiterType::Louder => "◉", // U+25C9 FISHEYE
-            CADelimiterType::Precise => "§", // U+00A7 SECTION SIGN
-        }
-    }
-}
+// CADelimiterType is GENERATED from spec/symbols/symbol_registry.json; what stays
+// here is what the registry cannot express: validation and serialization.
+pub use crate::generated::ca_symbols::CADelimiterType;
 
 /// One CA delimiter token used to bound a prosodic region.
 ///

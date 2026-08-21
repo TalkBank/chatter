@@ -1,4 +1,23 @@
-# E519: Word-level language code not in the ISO 639-3 registry
++++
+code = 'E519'
+name = 'Word-level language code not in the ISO 639-3 registry'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hi@s:qzz there .
+@Comment:	ERROR: qzz is not an ISO 639-3 language
+@End
+'''
++++
 
 ## Description
 
@@ -11,32 +30,6 @@ reuses E519, the same rule that already guards `@Languages` and `@ID`.
 
 Wild grounding (2026-07-16 probe): all 44 distinct word-level codes in
 the kept corpus are registry-valid, so this rule flags nothing today.
-
-## Metadata
-
-- **Error Code**: E519
-- **Category**: Main tier words
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: `@s:qzz`, an unassigned three-letter code.
-
-**Expected Error Codes**: E519
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hi@s:qzz there .
-@Comment:	ERROR: qzz is not an ISO 639-3 language
-@End
-```
 
 ## Expected Behavior
 

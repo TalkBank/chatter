@@ -1,36 +1,216 @@
 {
-  "version": 2,
-  "description": "Canonical symbol sets for CHAT grammar token policy",
-  "categories": {
-    "ca_delimiter_symbols": [
-      "⁇",
-      "§",
-      "⁎",
-      "°",
-      "↫",
-      "∆",
-      "∇",
-      "∬",
-      "∮",
-      "▁",
-      "▔",
-      "◉",
-      "☺",
-      "♋",
-      "Ϋ"
-    ],
-    "ca_element_symbols": [
-      "⁑",
-      "↑",
-      "↓",
-      "↻",
-      "≠",
-      "∙",
-      "∾",
-      "⤆",
-      "⤇",
-      "Ἡ"
-    ],
+  "version": 3,
+  "description": "Canonical CHAT symbol registry. `symbols` is the single owner of what each named symbol MEANS and how it parses; the ca_* character arrays consumed by the grammar and the model are DERIVED from it. `character_classes` are sets of characters with no individual identity, which is a different kind of thing and stays a set.",
+  "field_notes": {
+    "id": "The symbol name, and the ONLY spelling of it. The Rust variant is PascalCase of this and the serde tag is this verbatim, both derived; storing either beside it would be the same mirror this registry exists to remove.",
+    "codepoint": "The identity. The character is derived from it, never stored, because homoglyphs are invisible in a diff and a codepoint is not.",
+    "parse_role": "What the GRAMMAR does with it. word_attached joins the word token; paired_stretch opens and closes a region.",
+    "notation_family": "WHERE it comes from. Independent of parse_role: two of these are disfluency marks from the CHAT manual Disfluency Transcription chapter, not Conversation Analysis notation, and CLAN names them NOTCA_CROSSED_EQUAL and NOTCA_LEFT_ARROW_CIRCLE. Never gate CA leniency on a ca_* array; gate it on this field.",
+    "example": "A CHAT fragment that MUST parse. Generated into a parser test, so an example that stops working fails the build."
+  },
+  "symbols": [
+    {
+      "id": "hardening",
+      "codepoint": "U+2051",
+      "gloss": "Hardening",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t⁑hello there ."
+    },
+    {
+      "id": "pitch_up",
+      "codepoint": "U+2191",
+      "gloss": "Shift to high pitch",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t↑hello there ."
+    },
+    {
+      "id": "pitch_down",
+      "codepoint": "U+2193",
+      "gloss": "Shift to low pitch",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t↓hello there ."
+    },
+    {
+      "id": "pitch_reset",
+      "codepoint": "U+21BB",
+      "gloss": "Pitch reset",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t↻hello there ."
+    },
+    {
+      "id": "blocked_segments",
+      "codepoint": "U+2260",
+      "gloss": "Blocking, a word attack",
+      "parse_role": "word_attached",
+      "notation_family": "disfluency",
+      "example": "*PAR:\t≠hello there ."
+    },
+    {
+      "id": "inhalation",
+      "codepoint": "U+2219",
+      "gloss": "Inhalation",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t∙hello there ."
+    },
+    {
+      "id": "constriction",
+      "codepoint": "U+223E",
+      "gloss": "Constriction",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t∾hello there ."
+    },
+    {
+      "id": "sudden_stop",
+      "codepoint": "U+2906",
+      "gloss": "Sudden stop",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t⤆hello there ."
+    },
+    {
+      "id": "hurried_start",
+      "codepoint": "U+2907",
+      "gloss": "Hurried start",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\t⤇hello there ."
+    },
+    {
+      "id": "laugh_in_word",
+      "codepoint": "U+1F29",
+      "gloss": "Laugh inside a word",
+      "parse_role": "word_attached",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\tἩhello there ."
+    },
+    {
+      "id": "unsure",
+      "codepoint": "U+2047",
+      "gloss": "Unsure transcription",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ⁇hello there⁇ today ."
+    },
+    {
+      "id": "precise",
+      "codepoint": "U+00A7",
+      "gloss": "Precise articulation",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said §hello there§ today ."
+    },
+    {
+      "id": "creaky",
+      "codepoint": "U+204E",
+      "gloss": "Creaky voice",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ⁎hello there⁎ today ."
+    },
+    {
+      "id": "softer",
+      "codepoint": "U+00B0",
+      "gloss": "Softer",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said °hello there° today ."
+    },
+    {
+      "id": "segment_repetition",
+      "codepoint": "U+21AB",
+      "gloss": "Segment repetition, brackets repeated material that is NOT lexical",
+      "parse_role": "paired_stretch",
+      "notation_family": "disfluency",
+      "example": "*PAR:\t↫b-b-b↫boy ran away ."
+    },
+    {
+      "id": "faster",
+      "codepoint": "U+2206",
+      "gloss": "Faster",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ∆hello there∆ today ."
+    },
+    {
+      "id": "slower",
+      "codepoint": "U+2207",
+      "gloss": "Slower",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ∇hello there∇ today ."
+    },
+    {
+      "id": "whisper",
+      "codepoint": "U+222C",
+      "gloss": "Whisper",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ∬hello there∬ today ."
+    },
+    {
+      "id": "singing",
+      "codepoint": "U+222E",
+      "gloss": "Singing",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ∮hello there∮ today ."
+    },
+    {
+      "id": "low_pitch",
+      "codepoint": "U+2581",
+      "gloss": "Low pitch register",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ▁hello there▁ today ."
+    },
+    {
+      "id": "high_pitch",
+      "codepoint": "U+2594",
+      "gloss": "High pitch register",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ▔hello there▔ today ."
+    },
+    {
+      "id": "louder",
+      "codepoint": "U+25C9",
+      "gloss": "Louder",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ◉hello there◉ today ."
+    },
+    {
+      "id": "smile_voice",
+      "codepoint": "U+263A",
+      "gloss": "Smile voice",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ☺hello there☺ today ."
+    },
+    {
+      "id": "breathy_voice",
+      "codepoint": "U+264B",
+      "gloss": "Breathy voice",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said ♋hello there♋ today ."
+    },
+    {
+      "id": "yawn",
+      "codepoint": "U+03AB",
+      "gloss": "Yawn",
+      "parse_role": "paired_stretch",
+      "notation_family": "conversation_analysis",
+      "example": "*PAR:\the said Ϋhello thereΫ today ."
+    }
+  ],
+  "character_classes": {
     "word_segment_forbidden_start_symbols": [
       ",",
       ";",

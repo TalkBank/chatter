@@ -1,36 +1,30 @@
-# E507: @Languages header cannot be empty
++++
+code = 'E507'
+name = '@Languages header cannot be empty'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-@Languages header cannot be empty
-
-## Metadata
-
-- **Error Code**: E507
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E507_empty_languages.cha`
-**Trigger**: @Languages with no content after colon-tab
-**Expected Error Codes**: E507
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E507_empty_languages.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:
 @Participants:	CHI Child
 @ID:	eng|corpus|CHI|||||Child|||
 @End
-```
+'''
++++
+
+## Description
+
+@Languages header cannot be empty
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

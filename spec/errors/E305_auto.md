@@ -1,27 +1,14 @@
-# E305: Missing terminator
++++
+code = 'E305'
+name = 'Missing terminator'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last modified:** 2026-05-30 19:04 EDT
-
-## Description
-
-Main tier is missing its required utterance terminator.
-
-## Metadata
-
-- **Error Code**: E305
-- **Category**: Main tier validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E305_missing_terminator.cha`
-**Trigger**: Main tier has spoken content but no terminator
-**Expected Error Codes**: E305
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E305_missing_terminator.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,14 @@ Main tier is missing its required utterance terminator.
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello world
 @End
-```
+'''
++++
+
+**Last modified:** 2026-05-30 19:04 EDT
+
+## Description
+
+Main tier is missing its required utterance terminator.
 
 ## Expected Behavior
 

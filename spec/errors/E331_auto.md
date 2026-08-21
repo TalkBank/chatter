@@ -1,30 +1,21 @@
-# E331: UnexpectedNodeInContext
++++
+code = 'E331'
+name = 'UnexpectedNodeInContext'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
+[[example]]
+level = 'utterance'
+title = 'Missing stem in %mor word'
+source = 'childes-data/Eng-NA/MacWhinney/070518a.cha` (line 1800)'
+notes = '''
+**Expected**: E331 at `noun|-Acc`, unexpected `mor_content` in `mor_content` missing
+main chunk. Also triggers E342 (missing stem) and E600 (alignment skipped).
 
-A tree-sitter node appeared in a syntactic context where it is not expected. The node
-type itself is valid CHAT syntax, but it occurs at a position in the AST that violates
-the grammar. This error is emitted during tree-sitter error recovery, the parser
-attempts to continue after encountering invalid syntax, and the recovered structure
-contains nodes in unexpected positions.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E331
-- **Category**: parser_recovery
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1, Missing stem in %mor word
-
-**Source**: `childes-data/Eng-NA/MacWhinney/070518a.cha` (line 1800)
-**Trigger**: `noun|-Acc` in `%mor`; the stem is empty (nothing between `|` and `-`).
-Tree-sitter's error recovery produces a `mor_content` node where the "main chunk"
-(stem) should be, triggering E331.
-
-```chat
+**Error message**: `Unexpected 'mor_content' in mor_content missing main chunk`
+'''
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -34,12 +25,16 @@ Tree-sitter's error recovery produces a `mor_content` node where the "main chunk
 %mor:	aux|do-Fin-Imp-S~part|not verb|give-Fin-Imp-S pron|I-Prs-Acc-S1 det|a-Ind-Art noun|-Acc .
 %gra:	1|3|AUX 2|3|ADVMOD 3|6|ROOT 4|3|IOBJ 5|6|DET 6|3|OBJ 7|3|PUNCT
 @End
-```
+'''
++++
 
-**Expected**: E331 at `noun|-Acc`, unexpected `mor_content` in `mor_content` missing
-main chunk. Also triggers E342 (missing stem) and E600 (alignment skipped).
+## Description
 
-**Error message**: `Unexpected 'mor_content' in mor_content missing main chunk`
+A tree-sitter node appeared in a syntactic context where it is not expected. The node
+type itself is valid CHAT syntax, but it occurs at a position in the AST that violates
+the grammar. This error is emitted during tree-sitter error recovery, the parser
+attempts to continue after encountering invalid syntax, and the recovered structure
+contains nodes in unexpected positions.
 
 ## Root Cause
 

@@ -1,4 +1,10 @@
-# E768: `@Media` filename cannot be written and read back unchanged
++++
+code = 'E768'
+name = '@Media filename cannot be written and read back unchanged'
+kind = 'Invalidity'
+status = 'unreachable_from_chat'
+status_note = "The rule IS implemented and does fire; `unreachable_from_chat` says only that no `.cha` input can trigger it, so this spec carries no `## Example` and owes a named out-of-corpus test instead. That test is `media_filename_from_json_is_reported` in `talkbank-transform`'s integration tests, which drives the path that does reach the rule. This spec is why the status exists. It first shipped as `implemented` with no example, which made `parse_markdown` reject it and `load_all` downgrade the rejection to a stderr warning, so the spec vanished from the corpus generator and the `implemented_codes_without_examples` gate, whose entire job is to catch an implemented rule shipping untested, never saw it. Both halves are now fixed: the loader fails closed on a spec it cannot parse, and this state is representable instead of being faked with a `Status` that lies."
++++
 
 ## Description
 
@@ -17,30 +23,6 @@ does not.
 Programmatic construction in Rust is already closed: `MediaFilename::parse` is
 the type's only constructor and rejects the same set, sharing one rule
 definition, and one diagnostic, with this check.
-
-## Metadata
-- **Status**: unreachable_from_chat
-- **Last updated**: 2026-08-05 11:52 EDT
-
-- **Error Code**: E768
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-
-- **Status note**: The rule IS implemented and does fire; `unreachable_from_chat`
-  says only that no `.cha` input can trigger it, so this spec carries no
-  `## Example` and owes a named out-of-corpus test instead. That test is
-  `media_filename_from_json_is_reported` in `talkbank-transform`'s integration
-  tests, which drives the path that does reach the rule.
-
-  This spec is why the status exists. It first shipped as `implemented` with no
-  example, which made `parse_markdown` reject it and `load_all` downgrade the
-  rejection to a stderr warning, so the spec vanished from the corpus generator
-  and the `implemented_specs_without_examples` gate, whose entire job is to
-  catch an implemented rule shipping untested, never saw it. Both halves are
-  now fixed: the loader fails closed on a spec it cannot parse, and this state
-  is representable instead of being faked with a `Status` that lies.
 
 ## Expected Behavior
 

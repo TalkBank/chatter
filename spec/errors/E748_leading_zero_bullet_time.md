@@ -1,4 +1,39 @@
-# E748: Leading zero in bullet timestamp
++++
+code = 'E748'
+name = 'Leading zero in bullet timestamp'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	session, audio
+*CHI:	hey . \u0015012_200\u0015
+@Comment:	ERROR: start time 012 has a leading zero
+@End
+"""
+
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = """
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	session, audio
+*CHI:	hey . \u0015100_012\u0015
+@Comment:	ERROR: end time 012 has a leading zero
+@End
+"""
++++
 
 ## Description
 
@@ -8,47 +43,6 @@ millisecond integers; a leading zero is an illegal time representation
 (CLAN CHECK error 90, `check_getMediaTagInfo` res 3). A bare `0`
 timestamp (for example `0_200`) is legal: the rule fires only
 when a `0` is followed by another digit.
-
-## Metadata
-
-- **Error Code**: E748
-- **Category**: Media bullets
-- **Level**: tier
-- **Layer**: parser
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E748
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	session, audio
-*CHI:	hey . 012_200
-@Comment:	ERROR: start time 012 has a leading zero
-@End
-```
-
-## Example 2
-
-**Expected Error Codes**: E748
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	session, audio
-*CHI:	hey . 100_012
-@Comment:	ERROR: end time 012 has a leading zero
-@End
-```
 
 ## Expected Behavior
 

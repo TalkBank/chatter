@@ -1,66 +1,56 @@
-# E505: Invalid @ID format
++++
+code = 'E505'
+name = 'Invalid @ID format'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Invalid @ID format
-
-## Metadata
-
-- **Error Code**: E505
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E505_invalid_id_format.cha`
-**Trigger**: @ID with only 2 fields (needs 4+)
-**Expected Error Codes**: E505
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E505_invalid_id_format.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
 @ID:	eng|corpus
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `E5xx_header_errors/E511_empty_id_participant.cha`
-**Trigger**: @ID with empty participant field (third field)
-**Expected Error Codes**: E505
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E511_empty_id_participant.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
 @ID:	eng|corpus||
 @End
-```
+'''
 
-## Example 3
-
-**Source**: `E5xx_header_errors/E510_empty_id_language.cha`
-**Trigger**: @ID with empty language field (first field)
-**Expected Error Codes**: E505
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E510_empty_id_language.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
 @ID:	|corpus|CHI|
 @End
-```
+'''
++++
+
+## Description
+
+Invalid @ID format
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

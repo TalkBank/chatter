@@ -1,4 +1,51 @@
-# E765: separator glued to the following content
++++
+code = 'E765'
+name = 'separator glued to the following content'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I know :and then .
+@Comment:	ERROR: the separator needs a space after it
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I know ;; and then .
+@Comment:	ERROR: each separator is its own item and needs a space
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	I know (.)and then .
+@Comment:	ERROR: the pause needs a space after it
+@End
+'''
++++
 
 ## Description
 
@@ -44,67 +91,6 @@ been adjudicated against real data at all.
 
 Comma-specific shapes keep their own codes and are not reported here as well:
 `,dog` is E749 and `,,` is E258.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-07-29 20:17 EDT
-
-- **Error Code**: E765
-- **Category**: Main tier separators
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: a colon separator glued to the following word.
-
-**Expected Error Codes**: E765
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	I know :and then .
-@Comment:	ERROR: the separator needs a space after it
-@End
-```
-
-## Example 2
-
-**Trigger**: two separators glued together.
-
-**Expected Error Codes**: E765
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	I know ;; and then .
-@Comment:	ERROR: each separator is its own item and needs a space
-@End
-```
-
-## Example 3
-
-**Trigger**: a pause glued to the following word.
-
-**Expected Error Codes**: E765
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	I know (.)and then .
-@Comment:	ERROR: the pause needs a space after it
-@End
-```
 
 ## Expected Behavior
 

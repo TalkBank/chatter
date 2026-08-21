@@ -1,22 +1,13 @@
-# E537: Unsupported @Number Value
++++
+code = 'E537'
+name = 'Unsupported @Number Value'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@Number` header contains a value that is not one of the recognized number options. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E537
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E537
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An `@Number` header contains a value that is not one of the recognized number op
 @Number:	badnumber
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@Number` header contains a value that is not one of the recognized number options. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

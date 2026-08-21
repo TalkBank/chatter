@@ -1,32 +1,15 @@
-# E704: Speaker self-overlap, overlapping overlap markers
++++
+code = 'E704'
+name = 'Speaker self-overlap, overlapping overlap markers'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-A single speaker has consecutive utterances with overlap markers (`⌈⌉`/`⌊⌋`) that overlap with each other. Overlap markers should indicate simultaneous speech between **different** speakers, not self-overlap.
-
-## Metadata
-- **Status**: implemented
-
-- **Error Code**: E704
-- **Category**: validation
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Corpus Impact
-
-~90 occurrences across corpus data (2026-03-19 audit: childes-data 51, samtale-data 36,
-dementia-data 3). Concentrated in CA-heavy corpora with dense overlap transcription.
-Some are legitimate multi-party overlaps (speaker participates on both sides) or
-same-speaker layered annotation. See the overlap-validation audit for details.
-
-## Example 1: Basic self-overlap
-
-**Source**: `error_corpus/validation_errors/E704_speaker_self_overlap.cha`
-**Trigger**: Same speaker has adjacent utterances with conflicting overlap brackets
-**Expected Error Codes**: E704
-
-```chat
+[[example]]
+level = 'tier'
+title = 'Basic self-overlap'
+source = 'error_corpus/validation_errors/E704_speaker_self_overlap.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -35,7 +18,19 @@ same-speaker layered annotation. See the overlap-validation audit for details.
 *CHI:	hello ⌈ world ⌉ .
 *CHI:	⌊ testing ⌋ .
 @End
-```
+'''
++++
+
+## Description
+
+A single speaker has consecutive utterances with overlap markers (`⌈⌉`/`⌊⌋`) that overlap with each other. Overlap markers should indicate simultaneous speech between **different** speakers, not self-overlap.
+
+## Corpus Impact
+
+~90 occurrences across corpus data (2026-03-19 audit: childes-data 51, samtale-data 36,
+dementia-data 3). Concentrated in CA-heavy corpora with dense overlap transcription.
+Some are legitimate multi-party overlaps (speaker participates on both sides) or
+same-speaker layered annotation. See the overlap-validation audit for details.
 
 ## Corpus Evidence: Spanish CA data
 

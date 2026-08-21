@@ -1,4 +1,25 @@
-# E365: Malformed tier content
++++
+code = 'E365'
+name = 'Malformed tier content'
+kind = 'Invalidity'
+status = 'not_implemented'
+status_note = 'Unreachable via tree-sitter parser for this example. E365 (MalformedTierContent) fires from `header_dispatch/parse.rs` when a CST node in the header/tier area has an unrecognized node type. The `%pho` tier in the example is a recognized tier type and dispatches to the dedicated phonology tier parser, so it never reaches the generic header-dispatch fallback. Triggering E365 requires a CST-level anomaly where a node type is not registered in the dispatch table, difficult to produce from textual input.'
+
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E365_malformed_tier_content.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*CHI:	hello .
+%pho:	***bad***
+@End
+'''
++++
 
 ## Description
 
@@ -12,35 +33,6 @@ the dedicated phonology tier parser, not by the generic header dispatch that
 emits E365. The `MalformedTierContent` check in `header_dispatch/parse.rs`
 fires for unrecognized header node types in the CST, which requires a node
 that does not match any known header pattern.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-- **Layer**: validation
-- **Status note**: Unreachable via tree-sitter parser for this example. E365 (MalformedTierContent) fires from `header_dispatch/parse.rs` when a CST node in the header/tier area has an unrecognized node type. The `%pho` tier in the example is a recognized tier type and dispatches to the dedicated phonology tier parser, so it never reaches the generic header-dispatch fallback. Triggering E365 requires a CST-level anomaly where a node type is not registered in the dispatch table, difficult to produce from textual input.
-
-- **Error Code**: E365
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E365_malformed_tier_content.cha`
-**Trigger**: Tier with unrecognizable content
-**Expected Error Codes**: E365
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*CHI:	hello .
-%pho:	***bad***
-@End
-```
 
 ## Expected Behavior
 

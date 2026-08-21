@@ -1,64 +1,19 @@
 #!/usr/bin/env node
 
-const fs = require('node:fs');
+// Emits the grammar's character-class constants from the symbol registry.
+//
+// Regex character classes need their own escaping, which is why this generator
+// keeps `escapeRegexClassSymbol` rather than sharing the Rust literal escaper:
+// a regex class escapes `[`, `]` and `^`, and a Rust literal does not.
+
 const path = require('node:path');
+const { loadRegistry, writeGenerated } = require('./registry.js');
 
-const REQUIRED_CATEGORY_KEYS = [
-  'ca_delimiter_symbols',
-  'ca_element_symbols',
-  'word_segment_forbidden_start_symbols',
-  'word_segment_forbidden_rest_symbols',
-  'word_segment_forbidden_common_symbols',
-  'event_segment_forbidden_symbols',
-  'event_segment_forbidden_common_symbols',
-];
-
-function fail(message) {
-  console.error(`grammar symbol-set generation failed: ${message}`);
-  process.exit(1);
-}
-
-function readRegistry() {
-  const repoRoot = path.resolve(__dirname, '..', '..');
-  const registryPath = path.join(repoRoot, 'spec', 'symbols', 'symbol_registry.json');
-  if (!fs.existsSync(registryPath)) {
-    fail(`missing registry file at ${registryPath}`);
-  }
-
-  let registry;
-  try {
-    registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-  } catch (err) {
-    fail(`invalid JSON: ${err.message}`);
-  }
-
-  if (!registry.categories || typeof registry.categories !== 'object') {
-    fail('registry.categories must be an object');
-  }
-
-  for (const key of REQUIRED_CATEGORY_KEYS) {
-    if (!Array.isArray(registry.categories[key])) {
-      fail(`missing or invalid category: ${key}`);
-    }
-  }
-
-  return { repoRoot, registry };
-}
-
-function ensureSingleScalar(symbol) {
-  if (typeof symbol !== 'string' || symbol.length === 0) {
-    fail(`expected non-empty string, got: ${JSON.stringify(symbol)}`);
-  }
-
-  if ([...symbol].length !== 1) {
-    fail(`expected single Unicode scalar value, got: ${JSON.stringify(symbol)}`);
-  }
-
-  return symbol;
-}
-
-function escapeRegexClassSymbol(symbol) {
-  const value = ensureSingleScalar(symbol);
+// Every value reaching this has already been proved a single Unicode scalar by
+// `loadRegistry`, which validates each character class as it builds the view. An
+// earlier cut re-checked it here, which is a validity check reachable twice and
+// was additionally a private copy of a predicate the shared module owns.
+function escapeRegexClassSymbol(value) {
   const cp = value.codePointAt(0);
 
   switch (value) {
@@ -88,8 +43,7 @@ function renderRawTemplateLiteral(text) {
     .replaceAll('${', '\\${');
 }
 
-function renderGeneratedFile(registry) {
-  const categories = registry.categories;
+function renderGeneratedFile(categories) {
   const caDelimiter = categories.ca_delimiter_symbols.join('');
   const caElement = categories.ca_element_symbols.join('');
   const caAll = caDelimiter + caElement;
@@ -131,37 +85,13 @@ export const EVENT_SEGMENT_FORBIDDEN_COMMON = ${JSON.stringify(eventSegmentForbi
 `;
 }
 
-// `--check` renders and COMPARES, writing nothing and exiting non-zero on
-// drift. It exists so a test can gate these outputs: the generators write to
-// fixed repository paths, so a gate that simply ran them would mutate the tree
-// it is checking. Until 2026-08-11 nothing verified these files at all, and a
-// hand-edit to a generated symbol set was undetectable.
-const CHECK_ONLY = process.argv.includes('--check');
-
-function writeIfChanged(filePath, content) {
-  const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null;
-  if (CHECK_ONLY) {
-    if (existing !== content) {
-      console.error(
-        `STALE: ${filePath} does not match spec/symbols/symbol_registry.json. ` +
-          'Regenerate with `just symbols-gen`.',
-      );
-      process.exit(1);
-    }
-    return;
-  }
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  if (existing !== content) {
-    fs.writeFileSync(filePath, content, 'utf8');
-  }
-}
-
 function main() {
-  const { repoRoot, registry } = readRegistry();
-  const content = renderGeneratedFile(registry);
-  const outputPath = path.join(repoRoot, 'grammar', 'src', 'generated_symbol_sets.js');
-  writeIfChanged(outputPath, content);
-  console.log(`${CHECK_ONLY ? 'current' : 'updated'}: ${path.relative(repoRoot, outputPath)}`);
+  const { repoRoot, categories } = loadRegistry();
+  writeGenerated(
+    repoRoot,
+    path.join(repoRoot, 'grammar', 'src', 'generated_symbol_sets.js'),
+    renderGeneratedFile(categories),
+  );
 }
 
 main();

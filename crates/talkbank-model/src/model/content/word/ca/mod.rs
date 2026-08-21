@@ -60,7 +60,7 @@ mod omission;
 mod tests;
 
 pub use delimiters::{CADelimiter, CADelimiterType};
-pub use elements::{CAElement, CAElementType};
+pub use elements::{CAElement, CAElementType, NotationFamily};
 pub use omission::{
     normalize_ca_omission_word, normalize_ca_omissions_in_lines,
     normalize_ca_omissions_in_main_tier,

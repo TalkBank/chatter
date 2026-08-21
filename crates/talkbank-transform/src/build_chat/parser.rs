@@ -15,11 +15,12 @@ impl BuildChatContext {
     pub(super) fn new(desc: &TranscriptDescription) -> Result<Self, String> {
         let parser =
             TreeSitterParser::new().map_err(|e| format!("Failed to create parser: {e}"))?;
-        let raw_langs = if desc.langs.is_empty() {
-            vec!["eng".to_string()]
-        } else {
-            desc.langs.clone()
-        };
+        // No default here. An empty `langs` used to become `["eng"]`, so a
+        // caller that forgot to state a language got one invented for it, in
+        // `@Languages` and in every `@ID`, indistinguishable from a stated one.
+        // `build_chat` refuses the empty case with a typed error before this
+        // runs, which is why this can take the list as given.
+        let raw_langs = desc.langs.clone();
         // Parse language codes ONCE at this boundary (chatter 0.3.0 made
         // LanguageCode construction fallible); everything downstream
         // operates on typed codes.

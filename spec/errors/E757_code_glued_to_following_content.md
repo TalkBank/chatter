@@ -1,4 +1,51 @@
-# E757: Bracketed code glued to the following content
++++
+code = 'E757'
+name = 'Bracketed code glued to the following content'
+kind = 'Style'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello [/]x .
+@Comment:	ERROR: the retrace code is glued to the following word
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello [!]there .
+@Comment:	ERROR: the annotation code is glued to the following word
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	bobo [= toy]there .
+@Comment:	ERROR: the explanation code is glued to the following word
+@End
+'''
++++
 
 ## Description
 
@@ -17,63 +64,6 @@ space-delimited from what follows. The parse itself is unambiguous
 (the retrace closes at `]` and `x` becomes a separate word), which is
 exactly why this is a STYLE rule: sloppy but readable source that must
 still be rejected so the corpus stays canonically spaced.
-
-## Metadata
-- **Last updated**: 2026-07-29 19:51 EDT
-
-- **Error Code**: E757
-- **Category**: Main tier separators
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Style
-
-## Example 1
-
-**Expected Error Codes**: E757
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello [/]x .
-@Comment:	ERROR: the retrace code is glued to the following word
-@End
-```
-
-## Example 2
-
-**Trigger**: a scoped annotation's closing bracket glued to the next word.
-**Expected Error Codes**: E757
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello [!]there .
-@Comment:	ERROR: the annotation code is glued to the following word
-@End
-```
-
-## Example 3
-
-**Trigger**: an explanation code's closing bracket glued to the next word.
-**Expected Error Codes**: E757
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	bobo [= toy]there .
-@Comment:	ERROR: the explanation code is glued to the following word
-@End
-```
 
 ## Expected Behavior
 

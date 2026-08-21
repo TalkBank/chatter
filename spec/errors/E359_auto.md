@@ -1,25 +1,14 @@
-# E359: Auto-generated from corpus
++++
+code = 'E359'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E359
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E359_unmatched_longfeature_end.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E359
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E359_unmatched_longfeature_end.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +17,16 @@ Auto-generated from corpus
 *CHI:	happy birthday to you &}l=singing .
 *CHI:	another utterance .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

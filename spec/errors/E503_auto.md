@@ -1,31 +1,26 @@
-# E503: Missing required @UTF8 header
++++
+code = 'E503'
+name = 'Missing required @UTF8 header'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Every valid CHAT file must begin with an `@UTF8` header as its first line. This error indicates the file is missing `@UTF8`, which means the file's character encoding is unspecified. All modern CHAT files are expected to be UTF-8 encoded.
-
-## Metadata
-
-- **Error Code**: E503
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1: File without @UTF8
-
-**Trigger**: File lacks `@UTF8` header entirely
-**Expected Error Codes**: E503
-
-```chat
+[[example]]
+level = 'header'
+title = 'File without @UTF8'
+claim = 'violates'
+chat = '''
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+Every valid CHAT file must begin with an `@UTF8` header as its first line. This error indicates the file is missing `@UTF8`, which means the file's character encoding is unspecified. All modern CHAT files are expected to be UTF-8 encoded.
 
 ## Expected Behavior
 

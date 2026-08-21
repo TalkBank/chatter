@@ -1,26 +1,13 @@
-# E353: MissingOtherCompletionContext
++++
+code = 'E353'
+name = 'MissingOtherCompletionContext'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-An other-completion linker (`++`) was used but it is the very first
-utterance in the file. The `++` linker requires a preceding utterance
-(from a different speaker) to complete.
-
-## Metadata
-- **Status**: not_implemented
-- **Layer**: validation
-
-- **Error Code**: E353
-- **Category**: cross\_utterance
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: ++ other-completion as the very first utterance in the file
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,7 +15,14 @@ utterance in the file. The `++` linker requires a preceding utterance
 @ID:	eng|test|CHI||male|||Target_Child|||
 *CHI:	++ hello .
 @End
-```
+'''
++++
+
+## Description
+
+An other-completion linker (`++`) was used but it is the very first
+utterance in the file. The `++` linker requires a preceding utterance
+(from a different speaker) to complete.
 
 ## Expected Behavior
 

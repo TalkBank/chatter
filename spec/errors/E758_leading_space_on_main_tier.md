@@ -1,4 +1,79 @@
-# E758: Trailing space in a line's tier separator (non-CA file)
++++
+code = 'E758'
+name = "Trailing space in a line's tier separator (non-CA file)"
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	 dog .
+@Comment:	main tier has a trailing separator space
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	dog .
+@Comment:	 free-text header has a trailing separator space
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	dog .
+%com:	 text dependent tier has a trailing separator space
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	dog .
+%mor:	 n|dog .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*MOT:	ready ?
+*CHI:	 +, dog .
+@End
+'''
++++
 
 ## Description
 
@@ -28,90 +103,6 @@ content.
 Extra TABS (a second tab after the first) are a DIFFERENT error (CLAN
 CHECK 132, "Tabs should only be used to mark the beginning of lines")
 and are out of scope here.
-
-## Metadata
-
-- **Error Code**: E758
-- **Category**: Tier structure
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E758
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	 dog .
-@Comment:	main tier has a trailing separator space
-@End
-```
-
-## Example 2
-
-**Expected Error Codes**: E758
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	dog .
-@Comment:	 free-text header has a trailing separator space
-@End
-```
-
-## Example 3
-
-**Expected Error Codes**: E758
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	dog .
-%com:	 text dependent tier has a trailing separator space
-@End
-```
-
-## Example 4
-
-**Expected Error Codes**: E758
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	dog .
-%mor:	 n|dog .
-@End
-```
-
-## Example 5
-
-**Expected Error Codes**: E758
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*MOT:	ready ?
-*CHI:	 +, dog .
-@End
-```
 
 ## Expected Behavior
 

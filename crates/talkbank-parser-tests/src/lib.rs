@@ -84,7 +84,7 @@
 //! | [`feature_signature`] | Coarse word classification for deduplicating golden corpus |
 //! | [`golden`] | Golden word and tier loaders, shared round-trip runner |
 //! | [`snapshot`] | Cross-parser snapshot comparison infrastructure |
-//! | [`template`] | [`ChatFileBuilder`] and [`MinimalChatFile`] for synthesizing valid CHAT |
+//! | [`template`] | [`ChatFileBuilder`] for synthesizing valid CHAT |
 //! | [`test_error`] | Unified error type for test binaries and integration suites |
 //!
 //! # Examples
@@ -92,9 +92,9 @@
 //! Build a minimal CHAT file for a test:
 //!
 //! ```
-//! use talkbank_parser_tests::minimal_chat_file;
+//! use talkbank_parser_tests::ChatFileBuilder;
 //!
-//! let content = minimal_chat_file();
+//! let content = ChatFileBuilder::new().build();
 //! assert!(content.contains("@Begin"));
 //! assert!(content.contains("@End"));
 //! ```
@@ -136,7 +136,6 @@ pub use talkbank_parser::generated_traversal;
 pub mod error_specs;
 pub mod repo_paths;
 pub mod snapshot;
-pub mod spec_self_demonstration;
 pub mod spec_status;
 pub mod template;
 pub mod test_error;
@@ -144,7 +143,7 @@ pub mod test_hygiene;
 
 pub use bug_annotations::{BugAction, BugAnnotation, GoldenBugs};
 pub use feature_signature::WordFeatureSignature;
-pub use template::{ChatFileBuilder, MinimalChatFile, minimal_chat_file};
+pub use template::ChatFileBuilder;
 
 pub mod golden {
     //! Golden test helpers for parser implementations.

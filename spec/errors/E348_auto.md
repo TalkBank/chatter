@@ -1,4 +1,24 @@
-# E348, Unpaired overlap marker within utterance
++++
+code = 'E348'
+name = 'Unpaired overlap marker within utterance'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+*CHI:	hello ⌈ world .
+*MOT:	yes .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 08:15 EDT
@@ -21,33 +41,6 @@ suppressed after empirical validation.
 
 Onset-only marking (opening without closing) is a legitimate Jeffersonian CA
 convention, the transcriber marks where overlap begins, with the end implied.
-
-## Metadata
-
-- **Error Code**: E348
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: not_implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Opening overlap without closing in same utterance (legitimate
-cross-utterance span, not an error)
-**Expected Error Codes**: E348
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child, MOT Mother
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@ID:	eng|corpus|MOT|||||Mother|||
-*CHI:	hello ⌈ world .
-*MOT:	yes .
-@End
-```
 
 ## Notes
 

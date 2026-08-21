@@ -1,21 +1,13 @@
-# E241: Illegal Untranscribed Marker 'xx'
++++
+code = 'E241'
+name = "Illegal Untranscribed Marker 'xx'"
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The marker 'xx' is used for untranscribed speech, but this is not allowed in CHAT. The correct marker for untranscribed speech is 'xxx' (three x's).
-
-## Metadata
-
-- **Category**: word_validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E241
-
-```chat
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -23,16 +15,12 @@ The marker 'xx' is used for untranscribed speech, but this is not allowed in CHA
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	I said xx today .
 @End
-```
+'''
 
-## Example 2
-
-**Trigger**: the same illegal marker in a CA file. CA mode legalizes the
-`(word)` omission form, not arbitrary untranscribed markers; the wholesale
-E241 skip was ungrounded (no CLAN CHECK counterpart) and removed 2026-07-29.
-**Expected Error Codes**: E241
-
-```chat
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -41,7 +29,12 @@ E241 skip was ungrounded (no CLAN CHECK counterpart) and removed 2026-07-29.
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	I said xx today .
 @End
-```
+'''
++++
+
+## Description
+
+The marker 'xx' is used for untranscribed speech, but this is not allowed in CHAT. The correct marker for untranscribed speech is 'xxx' (three x's).
 
 ## Expected Behavior
 

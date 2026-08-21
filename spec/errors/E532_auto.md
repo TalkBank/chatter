@@ -1,25 +1,14 @@
-# E532: Invalid participant role
++++
+code = 'E532'
+name = 'Invalid participant role'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Invalid participant role
-
-## Metadata
-
-- **Error Code**: E532
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/invalid-participant-role.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E532
-
-```chat
+[[example]]
+level = 'header'
+source = 'validation_gaps/invalid-participant-role.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -34,11 +23,16 @@ Invalid participant role
 *MOT:	hi sweetie .
 *BOB:	I have an invalid role .
 @End
-```
+'''
++++
+
+## Description
+
+Invalid participant role
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

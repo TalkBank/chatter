@@ -1,25 +1,13 @@
-# E514: Empty corpus field in @ID
++++
+code = 'E514'
+name = 'Empty corpus field in @ID'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The corpus field (2nd field) of an `@ID` header is blank. The `@ID` header is
-`lang|corpus|code|age|sex|group|SES|role|education|custom|`, and the corpus name
-is required: a blank corpus is invalid.
-
-## Metadata
-
-- **Error Code**: E514
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Expected Error Codes**: E514
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,7 +15,14 @@ is required: a blank corpus is invalid.
 @ID:	eng||CHI|||||Target_Child|||
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+The corpus field (2nd field) of an `@ID` header is blank. The `@ID` header is
+`lang|corpus|code|age|sex|group|SES|role|education|custom|`, and the corpus name
+is required: a blank corpus is invalid.
 
 ## Expected Behavior
 

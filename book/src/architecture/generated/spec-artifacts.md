@@ -2,6 +2,7 @@
 
 | Artifact | Committed at | Directory ownership |
 |---|---|---|
+| example-diagnostics observation snapshot | `spec/observations/` | the whole directory, cleared on every run |
 | tree-sitter corpus tests | `grammar/test/corpus/generated/` | the whole directory, cleared on every run |
 | generated Rust test bodies | `crates/talkbank-parser-tests/tests/integration/generated/` | only the files it produces |
 | published error documentation | `docs/errors/` | the whole directory, cleared on every run |

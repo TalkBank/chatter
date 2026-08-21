@@ -1,25 +1,14 @@
-# E533: Auto-generated from corpus
++++
+code = 'E533'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E533
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E533_empty_options_header.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E533
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E533_empty_options_header.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +17,16 @@ Auto-generated from corpus
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

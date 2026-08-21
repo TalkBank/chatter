@@ -4,9 +4,15 @@
 //! `@End`, `@Languages`, `@Participants`, `@ID`) so the output is immediately parseable
 //! by `chatter validate`. An optional utterance line can be included as a starting point.
 //!
-//! File generation delegates to [`MinimalChatFile`]
-//! from the parser-tests crate, ensuring the template stays in sync with the parser's own
-//! test fixtures.
+//! The file is built as a typed [`ChatFile`] and rendered with [`WriteChat`],
+//! the same path every other CHAT-emitting surface takes.
+//!
+//! It used to delegate to a `MinimalChatFile` template in the parser-tests
+//! crate, "ensuring the template stays in sync with the parser's own test
+//! fixtures". That reason was not true: no fixture ever used it, this command
+//! was its only consumer, and the coupling put a test crate in the release
+//! binary. The template also hand-wrote `@UTF8`/`@Begin`/`@End` with format
+//! strings, which design rule 15 forbids by name.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -16,7 +22,11 @@
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
-use talkbank_parser_tests::MinimalChatFile;
+use talkbank_model::errors::ErrorCollector;
+use talkbank_model::model::{TranscriptName, WriteChat};
+use talkbank_transform::build_chat::{
+    ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat,
+};
 
 /// Create a minimal valid CHAT file that conforms to the File Format and Header sections of the manual.
 ///
@@ -49,18 +59,13 @@ pub fn create_new_file(
     corpus: &str,
     utterance: Option<&str>,
 ) {
-    // Build the CHAT file content
-    let mut builder = MinimalChatFile::new()
-        .speaker(speaker)
-        .language(language)
-        .role(role)
-        .corpus(corpus);
-
-    if let Some(utterance) = utterance {
-        builder = builder.utterance(utterance);
-    }
-
-    let content = builder.to_string();
+    let content = match build_validated(speaker, language, role, corpus, utterance, output) {
+        Ok(text) => text,
+        Err(why) => {
+            eprintln!("Error: {why}");
+            std::process::exit(1);
+        }
+    };
 
     // Write to output
     match output {
@@ -89,6 +94,7 @@ mod tests {
     use talkbank_model::model::{
         ChatFile, CorpusName, Header, LanguageCode, Line, ParticipantRole, SpeakerCode,
     };
+    use talkbank_parser::ParseProduct;
     use talkbank_parser::TreeSitterParser;
     use tempfile::tempdir;
     use thiserror::Error;
@@ -325,4 +331,169 @@ mod tests {
             Err(TestError::MissingUtterance)
         }
     }
+
+    /// What the command promises: a file that `chatter validate` can read.
+    ///
+    /// The five tests this replaces lived in the parser-tests crate and
+    /// asserted the same thing about a string template. Most of what they
+    /// checked is now carried by the types: `build` returns a `ChatFile`, so
+    /// "is it a CHAT file" is not a question a test can ask any more. What
+    /// survives is the part no type covers, which is that the RENDERED TEXT
+    /// parses back.
+    #[test]
+    fn the_generated_file_parses() {
+        let text = build_validated("CHI", "eng", "Target_Child", "corpus", None, None)
+            .expect("a default file must build and validate");
+        let parser = TreeSitterParser::new().expect("parser");
+        let parsed = parser.parse_chat_file(&text);
+        assert!(
+            matches!(parsed, ParseProduct::Built { .. }),
+            "generated file must parse:\n{text}"
+        );
+    }
+
+    /// The optional utterance goes through the fragment parser, so it arrives
+    /// as a typed main tier rather than an interpolated line.
+    #[test]
+    fn the_generated_file_with_an_utterance_parses_and_keeps_it() {
+        let text = build_validated("MOT", "spa", "Mother", "brown", Some("hola mundo ."), None)
+            .expect("a file with an utterance must build and validate");
+        assert!(text.contains("*MOT:\thola mundo ."), "got:\n{text}");
+        let parser = TreeSitterParser::new().expect("parser");
+        let parsed = parser.parse_chat_file(&text);
+        assert!(
+            matches!(parsed, ParseProduct::Built { .. }),
+            "generated file must parse:\n{text}"
+        );
+    }
+
+    /// An EMPTY language is refused at construction, naming the flag.
+    ///
+    /// Pins the actual boundary, not the one I assumed. A malformed but
+    /// non-empty code like `not-a-language` constructs fine and is reported by
+    /// `chatter validate` instead; that split is the model's, deliberately, so
+    /// a parser can build a value it then diagnoses. The first version of this
+    /// test asserted `not-a-language` was refused and failed at once.
+    #[test]
+    fn an_empty_language_is_refused_by_name() {
+        let why = build_validated("CHI", "", "Target_Child", "corpus", None, None)
+            .expect_err("an empty language code must be refused");
+        assert!(why.contains("--language"), "{why}");
+    }
+}
+
+/// Describe the file this command writes, for the shared CHAT builder.
+///
+/// # Why a description and not lines
+///
+/// `talkbank_transform::build_chat` is the project's general CHAT-generation
+/// entry point, used by the MICASE converter and documented as the path "for
+/// any converter". This command assembled its own `Vec<Line>` instead, which
+/// made it a second owner of what a minimal file's header block IS: a header
+/// added to `build_header_lines` would not have reached `new-file`, and
+/// nothing would have caught the drift.
+///
+/// The struct literal is deliberate over a builder: a new
+/// `TranscriptDescription` field breaks this line rather than silently
+/// defaulting, which is the failure worth having.
+fn describe(
+    speaker: &str,
+    language: &str,
+    role: &str,
+    corpus: &str,
+    utterance: Option<&str>,
+) -> TranscriptDescription {
+    TranscriptDescription {
+        langs: vec![language.to_string()],
+        participants: vec![ParticipantDesc::new(speaker, role, corpus)],
+        media_name: None,
+        media_type: None,
+        pid: None,
+        media_status: None,
+        date: None,
+        situation: None,
+        options: None,
+        transcriber: None,
+        comments: Vec::new(),
+        utterances: utterance
+            .map(|text| UtteranceDesc {
+                speaker: speaker.to_string(),
+                text: text.to_string(),
+                start_ms: None,
+                end_ms: None,
+                lang: None,
+            })
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// Build the file, RUN VALIDATION on it, and refuse to write one that fails.
+///
+/// # The command's promise is a state, so it goes through the state transition
+///
+/// `new-file`'s contract is "a minimal VALID CHAT file". `build` returns a
+/// `ChatFile<NotValidated>`, so until this existed that contract lived in a doc
+/// comment and a test, and a `--speaker` the validator rejects would have been
+/// written to disk under a command that calls its output valid. The model
+/// already has the phase transition, `validate_into`, and this runs it.
+///
+/// Note what the marker does and does not prove. `validate_into` streams
+/// diagnostics into the sink and changes state UNCONDITIONALLY, so
+/// `ChatFile<Validated>` means validation RAN, not that it passed. The sink is
+/// therefore checked here rather than trusted to the type; a `Validated` that
+/// any input can reach is a label rather than a proof, and treating it as the
+/// latter is how this would go wrong.
+fn build_validated(
+    speaker: &str,
+    language: &str,
+    role: &str,
+    corpus: &str,
+    utterance: Option<&str>,
+    output: Option<&Path>,
+) -> Result<String, String> {
+    // The FLAGS are this command's input, so their names are this command's to
+    // report. `build_chat` refuses an empty language too, but it can only name
+    // `@Languages`, because a builder does not know it was fed by a CLI.
+    if language.trim().is_empty() {
+        return Err("--language cannot be empty".to_string());
+    }
+    if corpus.trim().is_empty() {
+        return Err("--corpus cannot be empty".to_string());
+    }
+    if speaker.trim().is_empty() {
+        return Err("--speaker cannot be empty".to_string());
+    }
+
+    let desc = describe(speaker, language, role, corpus, utterance);
+    let file = build_chat(&desc).map_err(|e| e.to_string())?;
+
+    // Rules about a transcript's own file name (E531) compare against the stem
+    // the file will be WRITTEN as, so the destination is what to validate under.
+    let errors = ErrorCollector::new();
+
+    // Rules about a transcript's own file name (E531) compare against the stem
+    // it will be WRITTEN as, so the destination is what to validate under.
+    // `Anonymous` for stdout is a DECISION: with no file there is no file name,
+    // so those rules correctly do not run.
+    let name = match output {
+        Some(path) => TranscriptName::for_path(path),
+        None => TranscriptName::Anonymous,
+    };
+
+    let validated = file.validate_into(&errors, name);
+
+    if errors.has_errors() {
+        return Err(format!(
+            "the requested file does not validate, so it was not written. \
+             `chatter validate` would reject it:\n{}",
+            errors
+                .to_vec()
+                .iter()
+                .map(|e| format!("  {} {}", e.code.as_str(), e.message))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
+    Ok(validated.to_chat_string())
 }

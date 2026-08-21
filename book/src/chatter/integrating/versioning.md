@@ -1,7 +1,7 @@
 # What a Version Bump Promises
 
 **Status:** Current
-**Last modified:** 2026-08-12 23:00 EDT
+**Last modified:** 2026-08-18 19:46 EDT
 
 If you depend on chatter, two different things can move under you and they move
 independently:
@@ -50,6 +50,27 @@ Both, and they are not symmetric:
 
 Neither direction is a breaking change in the SemVer sense, because neither
 touches the API.
+
+### Retiring a code is not a clean removal
+
+A code names a rule at a moment in time, and downstream records cite it: an
+adjudication log, a repair ledger, a review note all say "this edit was made
+because E754 fired", and that remains true after the rule is withdrawn. So a
+retired code keeps two obligations. It is never reused, as above. And a
+consumer holding historical citations should NOT validate them against the
+current code set, because doing so makes a correct old record un-loadable over
+a rule that was withdrawn for reasons that have nothing to do with that record.
+
+If you keep such citations, validate them as a closed list that includes the
+retirements you know about, so a typo still fails and a NEW retirement fails
+loudly until someone records why. That is the check worth having; checking
+against today's live set is not.
+
+Reported by an external consumer in August 2026, whose ledger cited E754
+(`LetterFormMultipleLetters`, retired 2026-08-11) for a repair that is still
+correct: a digit zero typed for the letter `o` in `0@l`. The rule went away
+because it counted characters and a digraph is one letter written with two;
+the repair it surfaced was right either way.
 
 ## What to do about it
 

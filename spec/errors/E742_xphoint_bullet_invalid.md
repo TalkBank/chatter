@@ -1,34 +1,29 @@
-# E742: Xphoint bullet has start >= end
++++
+code = 'E742'
+name = 'Xphoint bullet has start >= end'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Each `%xphoint` phone interval must have start strictly less than end.
-
-## Metadata
-
-- **Error Code**: E742
-- **Category**: Phon phone interval
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E742
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = """
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	cat . 0_300
+*CHI:	cat . \u00150_300\u0015
 %pho:	kæt
-%xphoint:	k 0_100 æ 100_200 t 250_200
+%xphoint:	k \u00150_100\u0015 æ \u0015100_200\u0015 t \u0015250_200\u0015
 @Comment:	ERROR: the bullet for 't' has start 250 >= end 200
 @End
-```
+"""
++++
+
+## Description
+
+Each `%xphoint` phone interval must have start strictly less than end.
 
 ## Expected Behavior
 

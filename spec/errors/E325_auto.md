@@ -1,26 +1,13 @@
-# E325: UnexpectedUtteranceChild
++++
+code = 'E325'
+name = 'UnexpectedUtteranceChild'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-An unexpected child node was found inside a parsed utterance. The CST
-contains a node that is neither the main tier nor a recognized dependent
-tier kind. This typically indicates a tree-sitter error recovery scenario
-where an unusual node type ends up inside an utterance subtree.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E325
-- **Category**: parser\_recovery
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: A line between main tier and dependent tier that tree-sitter groups into the utterance
-
-```chat
+[[example]]
+level = 'utterance'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -30,7 +17,15 @@ where an unusual node type ends up inside an utterance subtree.
 @@@unexpected content
 %mor:	co|hello .
 @End
-```
+'''
++++
+
+## Description
+
+An unexpected child node was found inside a parsed utterance. The CST
+contains a node that is neither the main tier nor a recognized dependent
+tier kind. This typically indicates a tree-sitter error recovery scenario
+where an unusual node type ends up inside an utterance subtree.
 
 ## Expected Behavior
 

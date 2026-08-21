@@ -1,25 +1,14 @@
-# E525: Auto-generated from corpus
++++
+code = 'E525'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E525
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_gaps/nested-bg-same-label.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E529
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/validation_gaps/nested-bg-same-label.cha'
+claim = { subsumed_by = 'E529' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -32,15 +21,13 @@ Auto-generated from corpus
 @Eg:test
 @Eg:test
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `error_corpus/validation_gaps/lazy-gem-inside-bg.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E530
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/validation_gaps/lazy-gem-inside-bg.cha'
+claim = { subsumed_by = 'E530' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -52,15 +39,13 @@ Auto-generated from corpus
 @Comment:	ERROR: @G (lazy gem) should not be allowed inside @Bg/@Eg scope
 @Eg:activity
 @End
-```
+'''
 
-## Example 3
-
-**Source**: `error_corpus/E5xx_header_errors/E525_unknown_header.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E525
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E525_unknown_header.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -69,15 +54,13 @@ Auto-generated from corpus
 @UnknownHeader:	this header does not exist
 *CHI:	hello .
 @End
-```
+'''
 
-## Example 4
-
-**Source**: `error_corpus/E5xx_header_errors/E526_unmatched_begin_gem.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E526
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E526_unmatched_begin_gem.cha'
+claim = { subsumed_by = 'E526' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -86,15 +69,13 @@ Auto-generated from corpus
 @Bg:	episode1
 *CHI:	hello world .
 @End
-```
+'''
 
-## Example 5
-
-**Source**: `error_corpus/E5xx_header_errors/E527_unmatched_end_gem.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E527
-
-```chat
+[[example]]
+level = 'header'
+source = 'error_corpus/E5xx_header_errors/E527_unmatched_end_gem.cha'
+claim = { subsumed_by = 'E527' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -103,7 +84,12 @@ Auto-generated from corpus
 *CHI:	hello world .
 @Eg:	episode1
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

@@ -1,24 +1,14 @@
-# E382: Auto-generated from corpus
++++
+code = 'E382'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E382
-- **Category**: Dependent tier parsing
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/E7xx_tier_parsing/E704_empty_mor_pos.cha`
-**Trigger**: %mor chunk with empty part-of-speech before pipe
-**Expected Error Codes**: E760
-
+[[example]]
+level = 'utterance'
+source = 'error_corpus/E7xx_tier_parsing/E704_empty_mor_pos.cha'
+claim = { subsumed_by = 'E760' }
+notes = '''
 <!-- History: the earlier expectation listed E702, a mislabel (E702 is
 InvalidMorphologyFormat, "missing pipe separator", and `|hello` HAS a
 pipe); it was then corrected to the E316 catch-all with a note that a
@@ -26,9 +16,8 @@ dedicated empty-POS code "does not exist yet (parity gap, tracked)".
 That gap CLOSED 2026-07-24: E760 (MorItemEmptyPos, spec
 E760_mor_item_empty_pos.md) is the dedicated code, so this example now
 expects it. -->
-
-
-```chat
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -37,15 +26,13 @@ expects it. -->
 *CHI:	hello world .
 %mor:	|hello n|world .
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `error_corpus/E7xx_tier_parsing/E702_invalid_mor_format.cha`
-**Trigger**: %mor chunk without pipe separator
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'error_corpus/E7xx_tier_parsing/E702_invalid_mor_format.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -54,15 +41,13 @@ expects it. -->
 *CHI:	hello world .
 %mor:	hello n|world .
 @End
-```
+'''
 
-## Example 3
-
-**Source**: `error_corpus/E7xx_tier_parsing/E703_empty_mor_stem.cha`
-**Trigger**: %mor chunk with empty stem after pipe
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'error_corpus/E7xx_tier_parsing/E703_empty_mor_stem.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -71,7 +56,12 @@ expects it. -->
 *CHI:	hello world .
 %mor:	v| n|world .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

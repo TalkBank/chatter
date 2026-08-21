@@ -1,26 +1,13 @@
-# E376: Replacement parse error
++++
+code = 'E376'
+name = 'Replacement parse error'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Failed to parse replacement annotation content. The `[:` replacement
-annotation contains content that cannot be parsed as valid replacement
-words.
-
-## Metadata
-
-- **Error Code**: E376
-- **Category**: Word validation
-- **Level**: utterance
-- **Layer**: parser
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Replacement with empty corrected form
-**Expected Error Codes**: E376
-
-```chat
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,7 +15,14 @@ words.
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello [:] world .
 @End
-```
+'''
++++
+
+## Description
+
+Failed to parse replacement annotation content. The `[:` replacement
+annotation contains content that cannot be parsed as valid replacement
+words.
 
 ## Expected Behavior
 

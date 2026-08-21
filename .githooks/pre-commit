@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Chains to an optional local pre-commit hook.
+#
+# `core.hooksPath` (set by `just install-hooks`, so the tracked pre-push gate
+# survives a clone) makes git ignore `.git/hooks` ENTIRELY. Anything installed
+# there stops running, silently, including hooks a contributor installed for
+# their own workflow and had every reason to think were still active.
+#
+# This file is the seam that gives them back: drop an executable at
+# `.git/hooks/pre-commit.local` and it runs on every commit. Nothing is
+# required, and a checkout without one commits exactly as before.
+#
+# Keep this file free of any specific local hook's identity. It is tracked and
+# public; what an individual contributor checks on their own machine is theirs.
+set -euo pipefail
+
+LOCAL_HOOK="$(git rev-parse --git-dir)/hooks/pre-commit.local"
+
+if [ -x "$LOCAL_HOOK" ]; then
+    exec "$LOCAL_HOOK" "$@"
+fi
+
+exit 0

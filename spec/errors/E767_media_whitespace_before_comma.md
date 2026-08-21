@@ -1,4 +1,39 @@
-# E767: whitespace before the comma in `@Media`
++++
+code = 'E767'
+name = 'whitespace before the comma in @Media'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	SD02_recording , audio
+*CHI:	hello .
+@Comment:	ERROR: the filename ends where the comma begins
+@End
+'''
+
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	SD02_recording  , video, missing
+*CHI:	hello .
+@Comment:	ERROR: the filename ends where the comma begins
+@End
+'''
++++
 
 ## Description
 
@@ -31,52 +66,6 @@ Related: the same 2026-08-05 change widened `media_filename` from an ASCII
 allowlist to a delimiter-based token, so dots, parentheses, interior spaces and
 non-ASCII characters are now legal in a media filename. This rule is the one
 piece of the old behaviour deliberately kept as a rejection.
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-08-05 08:20 EDT
-
-- **Error Code**: E767
-- **Category**: Header validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: one space between the filename and the comma.
-
-**Expected Error Codes**: E767
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	SD02_recording , audio
-*CHI:	hello .
-@Comment:	ERROR: the filename ends where the comma begins
-@End
-```
-
-## Example 2
-
-**Trigger**: whitespace before the comma with a media status also present.
-
-**Expected Error Codes**: E767
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Media:	SD02_recording  , video, missing
-*CHI:	hello .
-@Comment:	ERROR: the filename ends where the comma begins
-@End
-```
 
 ## Expected Behavior
 

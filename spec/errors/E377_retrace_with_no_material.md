@@ -1,4 +1,51 @@
-# E377, A retracing marker with no material of its own
++++
+code = 'E377'
+name = 'A retracing marker with no material of its own'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: the second marker has nothing before it to retrace
+*CHI:	the [//] [/] the dog .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: the second marker has nothing before it to retrace
+*CHI:	<the dog> [/] [//] the cat ran .
+@End
+'''
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: the outer marker retraces nothing but the inner marker
+*CHI:	<<a> [/]> [//] b .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-08-07 11:20 EDT
@@ -27,63 +74,6 @@ the CHAT manual presents it:
 
 There the `[/]` refers to the preceding word `the`. Only the bare adjacency is
 an error.
-
-## Metadata
-
-- **Error Code**: E377
-- **Category**: retrace
-- **Level**: utterance
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: `[//]` immediately followed by `[/]` on a single word
-**Expected Error Codes**: E377
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: the second marker has nothing before it to retrace
-*CHI:	the [//] [/] the dog .
-@End
-```
-
-## Example 2
-
-**Trigger**: two markers after a bracketed group
-**Expected Error Codes**: E377
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: the second marker has nothing before it to retrace
-*CHI:	<the dog> [/] [//] the cat ran .
-@End
-```
-
-## Example 3
-
-**Trigger**: the bracketed spelling of the same shape
-**Expected Error Codes**: E377
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: the outer marker retraces nothing but the inner marker
-*CHI:	<<a> [/]> [//] b .
-@End
-```
 
 ## Expected Behavior
 

@@ -1,6 +1,6 @@
 # Grammar, Tree-sitter Grammar for CHAT
 
-**Last modified:** 2026-07-25 22:19 EDT
+**Last modified:** 2026-08-21 12:45 EDT
 
 ## Overview
 Tree-sitter grammar definition for CHAT (`grammar.js`) plus generated parser and corpus tests.
@@ -170,9 +170,11 @@ generic_option_name: $ => /[^\s,\r\n\t]+/,
 
 **Key pitfall:** When adding a catch-all, also audit error specs (`spec/errors/`) that referenced E316 (parse error) for the field. Those examples will now parse successfully, so:
 1. Remove them from E316_auto.md
-2. Move them to the field-specific error spec (e.g., E518_auto.md) with `Layer: validation`
-3. Update the relevant `tests/error_corpus/` expectations (parse_errors/ / validation_errors/ / warnings/)
-4. Re-run the relevant `spec/tools` generators to regenerate
+2. Move them to the field-specific error spec (e.g., E518_auto.md), changing
+   the claim from `subsumed_by 'E316'` to `violates` (there is no authored
+   layer since R4; which stage catches the rule is observed in the snapshot)
+3. Run `just spec-gen` and adjudicate the observation-snapshot diff like a
+   corpus differential
 
 ## Design Documentation
 

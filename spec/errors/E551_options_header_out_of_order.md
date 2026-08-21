@@ -1,4 +1,23 @@
-# E551: @Options header out of order
++++
+code = 'E551'
+name = '@Options header out of order'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Options:	CA
+*CHI:	hello world .
+@End
+'''
++++
 
 ## Description
 
@@ -8,31 +27,6 @@ CHAT spec the optional `@Options` line, when present, comes directly after
 gated on `@Participants` already having been seen; `@Options` appearing
 *before* `@Participants` is a distinct case reported as E543 instead, so
 the two do not double-report the same header.
-
-## Metadata
-
-- **Error Code**: E551
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Trigger**: `@Options` follows `@ID`, not `@Participants`
-**Expected Error Codes**: E551
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Options:	CA
-*CHI:	hello world .
-@End
-```
 
 ## Expected Behavior
 

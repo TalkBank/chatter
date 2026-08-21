@@ -1,4 +1,23 @@
-# E251: Empty word content text
++++
+code = 'E251'
+name = 'Empty word content text'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E251_empty_word_content_text.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	@s:eng .
+@End
+'''
++++
 
 ## Description
 
@@ -13,32 +32,6 @@ marker, not as a word with an empty text content segment. The
 `EmptyWordContentText` check fires on `WordContent::Text` and
 `WordContent::ShorteningText` elements with empty inner text, but the parser
 does not produce these from the example.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E251
-- **Category**: validation
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E251_empty_word_content_text.cha`
-**Trigger**: Word with annotations but empty text
-**Expected Error Codes**: E251
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	@s:eng .
-@End
-```
 
 ## Expected Behavior
 

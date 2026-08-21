@@ -1,7 +1,7 @@
 # spec/tools - Core Generators Crate
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 10:03 EDT
 
 ## Read the book first
 
@@ -14,7 +14,7 @@ crate-level detail only.
 ## Overview
 Rust generators that turn CHAT specs into tests and documentation artifacts.
 This crate lives in the separate `spec/Cargo.toml` workspace alongside
-`spec/runtime-tools`, which owns runtime-aware bootstrap/mining/validation
+`spec/runtime-tools`, which owns corpus candidate selection and live parser/model validation
 tasks.
 
 ## Key Commands
@@ -31,39 +31,26 @@ artifact, carrying its destination as a constant and a `build` that returns the
 files rather than writing them. That is what lets the gate compare without
 writing, and what stops a generator being pointed at the wrong directory.
 
-## Binary Reference
+## Binaries
 
-### Core Workflow (used regularly by contributors)
+`just --list` names every wired spec command with the question it answers, and
+`ls spec/*/src/bin` shows everything that exists. **This section used to carry
+four tables**, and between them they omitted `ca_census` and `spec_status` while
+four other files in the tree carried their own differing copies of the same
+list. `spec/docs/ERROR_SPEC_FORMAT.md` now holds the taxonomy, which is the part
+that is not derivable.
 
-| Binary | Purpose |
-|--------|---------|
-| `spec_gen` (in `spec/runtime-tools`) | Every artifact in the registry: tree-sitter corpus tests, Rust test bodies, the validation fixture corpus + `manifest.json`, and the `DiagnosticKind` registry. `just spec-gen` / `just spec-check`. |
-| `gen_form_markers` | Generate the model enum, re2c code set and book table from the form-marker registry (`just form-markers-gen`) |
-| `validate_spec` | Validate a single spec file |
+What is worth knowing HERE, because it is about this crate rather than about the
+list:
 
-### Analysis (useful for maintainers)
-
-| Binary | Purpose |
-|--------|---------|
-| `corpus_node_coverage` | Report which tree-sitter node types are covered by the reference corpus |
-| `gen_coverage_dashboard` | Generate HTML coverage dashboard |
-| `coverage` | Report spec coverage statistics |
-
-### Bootstrap / Migration (one-off tools, rarely needed)
-
-| Binary | Purpose |
-|--------|---------|
-| `corpus_to_specs` | Migrate legacy `tests/error_corpus/` fixtures to spec format |
-| `enhance_specs` | Batch-enhance specs with CHAT manual links and descriptions |
-| `fix_spec_layers` | One-off migration to fix layer classifications |
-| `perturb_corpus` | Generate perturbed corpus files for fuzz-like testing |
-
-### Runtime-Aware Sibling Crate
-
-`spec/runtime-tools` owns the tools that need the live Rust parser/model crates:
-- `spec_gen` (the whole registry; its own half needs the live `ErrorCode` enum)
-- `validate_error_specs`
-- `extract_corpus_candidates`
+- **`spec/tools` must stay usable without the live parser/model crates.** That
+  is the whole reason for the split: ordinary spec generation should not pull
+  runtime parser dependencies. Anything needing the live `ErrorCode` enum, the
+  parser or the model belongs in the sibling `spec/runtime-tools`, which is why
+  `spec_gen` has a half in each.
+- **`fix_spec_layers` is DELETED** (R4, 2026-08-21). It rewrote an authored
+  `layer` field by running the parser; the field is gone and which stage
+  catches a rule is observed in `spec/observations/` instead.
 
 ## Architecture
 ```

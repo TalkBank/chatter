@@ -1,27 +1,14 @@
-# E304: Missing speaker code
++++
+code = 'E304'
+name = 'Missing speaker code'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-**Last modified:** 2026-05-30 19:04 EDT
-
-## Description
-
-Main tier line is missing its speaker code after `*`.
-
-## Metadata
-
-- **Status**: not_implemented
-- **Error Code**: E304
-- **Category**: Main tier validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `synthetic missing-speaker recovery case`
-**Trigger**: Main tier begins with `*:` instead of `*SPK:`
-**Expected Error Codes**: E301
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'synthetic missing-speaker recovery case'
+claim = { subsumed_by = 'E301' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +16,14 @@ Main tier line is missing its speaker code after `*`.
 @ID:	eng|corpus|CHI|||||Child|||
 *:	hello .
 @End
-```
+'''
++++
+
+**Last modified:** 2026-05-30 19:04 EDT
+
+## Description
+
+Main tier line is missing its speaker code after `*`.
 
 ## Expected Behavior
 

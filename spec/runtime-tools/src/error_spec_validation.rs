@@ -130,19 +130,6 @@ impl Request {
     }
 }
 
-/// Why an example was not checked.
-///
-/// A closed set, not the `String` it was: `run` discarded the reason entirely,
-/// so "skipped: 73" could not distinguish a spec deliberately deferred from one
-/// that asserts nothing at all. Those want opposite follow-up.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SkipReason {
-    /// Marked not_implemented, deprecated, or unreachable from CHAT.
-    Deferred,
-    /// Declares no Expected Error Codes, so there is nothing to check.
-    NoExpectedCodes,
-}
-
 /// Which example a finding is about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExampleLabel {
@@ -168,8 +155,12 @@ pub enum ExampleOutcome {
     Verified,
     /// Parsed and validated; codes deliberately not compared.
     Parsed,
-    /// Not run.
-    Skipped(SkipReason),
+    /// Not run: the spec is not_implemented, deprecated, or unreachable.
+    ///
+    /// This was `Skipped(SkipReason)` while there were two reasons; R2 made
+    /// the other one ("declares nothing to check") unwritable, and a
+    /// one-variant enum inside a variant was indirection carrying nothing.
+    Deferred,
     /// Codes were compared and at least one declared code did not appear.
     CodeMismatch {
         expected: Vec<String>,
@@ -188,15 +179,17 @@ pub enum ExampleOutcome {
 ///
 /// Not merely inelegant. The gate matched its exemption list with
 /// `line.starts_with(code)` over those strings, and a `NoErrorDefinitions` line
-/// begins with a FILE NAME (`E531_media_no_timing.md`), so a structural loading
+/// began with a FILE NAME (`E531_media_no_timing.md`), so a structural loading
 /// fault in any spec whose filename starts with an exempted code was silently
 /// swallowed AND kept the stale-exemption check satisfied. Both directions of a
-/// both-directions check, corrupted by one prefix match. [`Self::code`] answers
-/// `None` for findings about a FILE, so nothing can excuse them.
+/// both-directions check, corrupted by one prefix match.
+///
+/// That variant is GONE as of 2026-08-18, and with it the whole hazard: it
+/// reported a spec whose definition list was empty, which stopped being
+/// possible when the list stopped being a list. Every finding is now about a
+/// CODE, so [`Self::code`] returns one rather than an `Option` nothing could
+/// excuse.
 pub enum Failure {
-    NoErrorDefinitions {
-        source_file: String,
-    },
     CodeMismatch {
         label: ExampleLabel,
         expected: Vec<String>,
@@ -209,11 +202,10 @@ pub enum Failure {
 }
 
 impl Failure {
-    /// The declared error code this finding is about, when it has one.
-    pub fn code(&self) -> Option<&str> {
+    /// The declared error code this finding is about.
+    pub fn code(&self) -> &str {
         match self {
-            Self::NoErrorDefinitions { .. } => None,
-            Self::CodeMismatch { label, .. } | Self::Panicked { label, .. } => Some(&label.code),
+            Self::CodeMismatch { label, .. } | Self::Panicked { label, .. } => &label.code,
         }
     }
 }
@@ -221,9 +213,6 @@ impl Failure {
 impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NoErrorDefinitions { source_file } => {
-                write!(f, "{source_file}: no error definitions")
-            }
             Self::CodeMismatch {
                 label,
                 expected,
@@ -258,27 +247,20 @@ pub struct Report {
     pub verified: u32,
     pub parsed: u32,
     pub deferred: u32,
-    pub no_expected_codes: u32,
     pub failures: Vec<Failure>,
 }
 
 impl Report {
     pub fn total(&self) -> usize {
-        self.verified as usize
-            + self.parsed as usize
-            + self.deferred as usize
-            + self.no_expected_codes as usize
-            + self.failures.len()
+        self.verified as usize + self.parsed as usize + self.deferred as usize + self.failures.len()
     }
 
     pub fn summary(&self) -> String {
         format!(
-            "{} verified, {} parsed-only, {} deferred, {} without expected codes, \
-             {} failing (of {} examples)",
+            "{} verified, {} parsed-only, {} deferred, {} failing (of {} examples)",
             self.verified,
             self.parsed,
             self.deferred,
-            self.no_expected_codes,
             self.failures.len(),
             self.total()
         )
@@ -300,19 +282,14 @@ impl Report {
         let unexpected: Vec<String> = self
             .failures
             .iter()
-            .filter(|failure| !failure.code().is_some_and(|code| exempt.contains(code)))
+            .filter(|failure| !exempt.contains(failure.code()))
             .map(ToString::to_string)
             .collect();
 
         let stale: Vec<&str> = exempt
             .iter()
             .copied()
-            .filter(|code| {
-                !self
-                    .failures
-                    .iter()
-                    .any(|failure| failure.code() == Some(*code))
-            })
+            .filter(|code| !self.failures.iter().any(|failure| failure.code() == *code))
             .collect();
 
         if unexpected.is_empty() && stale.is_empty() {
@@ -369,47 +346,35 @@ pub fn run(request: &Request) -> Result<Report, String> {
         verified: 0,
         parsed: 0,
         deferred: 0,
-        no_expected_codes: 0,
         failures: Vec::new(),
     };
 
     for spec in &specs {
-        let Some(first) = spec.errors.first() else {
-            report.failures.push(Failure::NoErrorDefinitions {
-                source_file: spec.source_file.clone(),
-            });
-            continue;
-        };
-        if !request.filter.covers(first.code.as_str()) {
+        if !request.filter.covers(spec.error.code.as_str()) {
             continue;
         }
         let status = spec.metadata.status;
 
-        for (def_idx, error_def) in spec.errors.iter().enumerate() {
-            for (example_idx, example) in error_def.examples.iter().enumerate() {
-                match check_example(&parser, status, example, request) {
-                    ExampleOutcome::Verified => report.verified += 1,
-                    ExampleOutcome::Parsed => report.parsed += 1,
-                    ExampleOutcome::Skipped(SkipReason::Deferred) => report.deferred += 1,
-                    ExampleOutcome::Skipped(SkipReason::NoExpectedCodes) => {
-                        report.no_expected_codes += 1;
-                    }
-                    // The label is built ONLY here, on the two failure paths. It
-                    // was built for all 330 examples and read by the two, so a
-                    // clean run allocated 328 strings it dropped unread.
-                    ExampleOutcome::CodeMismatch { expected, actual } => {
-                        report.failures.push(Failure::CodeMismatch {
-                            label: label_for(spec, error_def.examples.len(), def_idx, example_idx),
-                            expected,
-                            actual,
-                        });
-                    }
-                    ExampleOutcome::Panicked { message } => {
-                        report.failures.push(Failure::Panicked {
-                            label: label_for(spec, error_def.examples.len(), def_idx, example_idx),
-                            message,
-                        });
-                    }
+        for (example_idx, example) in spec.error.examples.iter().enumerate() {
+            match check_example(&parser, status, &spec.error.code, example, request) {
+                ExampleOutcome::Verified => report.verified += 1,
+                ExampleOutcome::Parsed => report.parsed += 1,
+                ExampleOutcome::Deferred => report.deferred += 1,
+                // The label is built ONLY here, on the two failure paths. It
+                // was built for all 330 examples and read by the two, so a
+                // clean run allocated 328 strings it dropped unread.
+                ExampleOutcome::CodeMismatch { expected, actual } => {
+                    report.failures.push(Failure::CodeMismatch {
+                        label: label_for(spec, example_idx),
+                        expected,
+                        actual,
+                    });
+                }
+                ExampleOutcome::Panicked { message } => {
+                    report.failures.push(Failure::Panicked {
+                        label: label_for(spec, example_idx),
+                        message,
+                    });
                 }
             }
         }
@@ -418,25 +383,82 @@ pub fn run(request: &Request) -> Result<Report, String> {
     Ok(report)
 }
 
-fn label_for(
-    spec: &ErrorSpec,
-    examples: usize,
-    def_idx: usize,
-    example_idx: usize,
-) -> ExampleLabel {
-    let code = spec
-        .errors
-        .get(def_idx)
-        .map_or("<unknown>", |def| def.code.as_str())
-        .to_owned();
-    let position = if examples > 1 {
+/// Name one failing example, for a report a human reads.
+///
+/// This took a `def_idx` and looked the definition up with
+/// `.map_or("<unknown>", ...)`, a fabricated code for a lookup that could not
+/// miss, plus a `spec.errors.len() > 1` arm that could not be reached. Both
+/// were artefacts of the definition list being a `Vec` that always held one.
+fn label_for(spec: &ErrorSpec, example_idx: usize) -> ExampleLabel {
+    let position = if spec.error.examples.len() > 1 {
         Some(format!("example {}", example_idx + 1))
-    } else if spec.errors.len() > 1 {
-        Some(format!("def {}", def_idx + 1))
     } else {
         None
     };
-    ExampleLabel { code, position }
+    ExampleLabel {
+        code: spec.error.code.as_str().to_owned(),
+        position,
+    }
+}
+
+/// The diagnostics one example produced, kept apart by the STAGE that emitted
+/// them.
+///
+/// # Why the split is in the type and not a field on the diagnostic
+///
+/// `ParseError` does not carry which stage produced it, and the only place the
+/// fact is knowable is the seam between the two calls inside [`emit_for`].
+/// Flattening both stages into one `Vec` is how that fact used to die: R4 of
+/// the spec-system redesign derives a spec's layer-of-capture from "where the
+/// diagnostic actually came", and the observation snapshot (R3) records it, so
+/// the seam now returns what it knows instead of discarding it (preserve
+/// information; a total function silently discarding what it learned is shape
+/// C).
+///
+/// Two sinks rather than one drained twice: the [`talkbank_model::ErrorSink`]
+/// trait is write-only, and parse taint travels in the `ChatFile` itself, so
+/// the split is observationally identical to the single sink it replaces.
+pub struct StagedDiagnostics {
+    /// What the parser emitted while building the tree.
+    pub parse: Vec<talkbank_model::ParseError>,
+    /// What validation (with alignment) emitted over the parsed model.
+    pub validation: Vec<talkbank_model::ParseError>,
+}
+
+impl StagedDiagnostics {
+    /// Every diagnostic, both stages, in emission order.
+    pub fn all(&self) -> impl Iterator<Item = &talkbank_model::ParseError> {
+        self.parse.iter().chain(self.validation.iter())
+    }
+
+    /// The distinct codes across both stages, sorted.
+    ///
+    /// The snapshot's normalization ("a sorted, deduplicated SET per stage"),
+    /// stated as policy in the observations module and then implemented three
+    /// times by hand across this crate. One owner; the per-stage variant is
+    /// [`distinct_codes`].
+    #[must_use]
+    pub fn all_distinct_codes(&self) -> Vec<String> {
+        let mut codes: Vec<String> = self.all().map(|err| err.code.as_str().to_owned()).collect();
+        codes.sort();
+        codes.dedup();
+        codes
+    }
+}
+
+/// The distinct codes of ONE stage's diagnostics, sorted.
+///
+/// Free, because the snapshot builder normalizes each stage separately while
+/// every other caller wants the union.
+#[must_use]
+pub fn distinct_codes(errors: &[talkbank_model::ParseError]) -> Vec<String> {
+    let mut codes: Vec<String> = errors
+        .iter()
+        .map(|err| err.code.as_str().to_owned())
+        .collect();
+    codes.sort();
+    codes.dedup();
+    codes
 }
 
 /// Parse and validate one example, returning every diagnostic it emits.
@@ -445,12 +467,9 @@ fn label_for(
 /// the same code path as the gate that CHECKS it. A second implementation of
 /// "run an example" would be a second thing to drift, and the whole point of
 /// listing is to decide what the example should assert.
-pub fn emit_for(
-    parser: &TreeSitterParser,
-    example: &ErrorExample,
-) -> Vec<talkbank_model::ParseError> {
-    let sink = ErrorCollector::new();
-    let mut chat_file = parser.parse_chat_file_streaming(&example.input, &sink);
+pub fn emit_for(parser: &TreeSitterParser, example: &ErrorExample) -> StagedDiagnostics {
+    let parse_sink = ErrorCollector::new();
+    let mut chat_file = parser.parse_chat_file_streaming(&example.input, &parse_sink);
     // A spec example is text, not a file, but some rules are ABOUT the file's
     // name: E531 compares the `@Media` filename against the transcript's own
     // stem. The name comes from the example's own `**Source**` line; an example
@@ -461,22 +480,34 @@ pub fn emit_for(
         .map_or(TranscriptName::Anonymous, |stem| {
             TranscriptName::Named(FileStem::from_str(stem))
         });
-    chat_file.validate_with_alignment(&sink, name);
-    sink.into_vec()
+    let validation_sink = ErrorCollector::new();
+    chat_file.validate_with_alignment(&validation_sink, name);
+    StagedDiagnostics {
+        parse: parse_sink.into_vec(),
+        validation: validation_sink.into_vec(),
+    }
 }
 
-/// Run one example through parse + validate.
+/// Run one example through parse + validate, judging its CLAIM.
+///
+/// # The negative halves are new capability
+///
+/// The pre-R2 check was subset-only ("every declared code appears"), so no
+/// spec could assert that a code does NOT fire, and the book said so plainly.
+/// `legal` asserts exactly that, and `subsumed_by` asserts its targets fire
+/// AND the spec's own code does not, which is what makes a subsumption
+/// verifiable rather than merely recorded.
 fn check_example(
     parser: &TreeSitterParser,
     status: Status,
+    own_code: &SpecErrorCode,
     example: &ErrorExample,
     request: &Request,
 ) -> ExampleOutcome {
+    use talkbank_spec_vocabulary::frontmatter::Claim;
+
     if request.skipped == SkippedSpecs::Omit && is_skipped(status) {
-        return ExampleOutcome::Skipped(SkipReason::Deferred);
-    }
-    if request.code_check == CodeCheck::Verify && example.expected_codes.is_empty() {
-        return ExampleOutcome::Skipped(SkipReason::NoExpectedCodes);
+        return ExampleOutcome::Deferred;
     }
 
     // A spec example that panics must be reported, not allowed to abort the
@@ -501,31 +532,32 @@ fn check_example(
         return ExampleOutcome::Parsed;
     }
 
-    let mut actual: Vec<String> = emitted
-        .iter()
-        .map(|err| err.code.as_str().to_owned())
-        .collect();
-    actual.sort();
-    actual.dedup();
+    let actual = emitted.all_distinct_codes();
+    let fired = |code: &SpecErrorCode| actual.iter().any(|got| got == code.as_str());
 
-    if example
-        .expected_codes
-        .iter()
-        .all(|expected| actual.iter().any(|got| got == expected.as_str()))
-    {
-        ExampleOutcome::Verified
-    } else {
-        ExampleOutcome::CodeMismatch {
-            // `expected` is spec-side and validated; `actual` is what the
-            // parser emitted. They stay different types on purpose, and this
-            // report struct renders both as text.
-            expected: example
-                .expected_codes
+    // The MEANING lives on the claim (`Claim::satisfied_by`); only the
+    // rendering of what was wanted is local.
+    let satisfied = example.claim.satisfied_by(own_code, fired);
+    let expected = match &example.claim {
+        Claim::Violates => vec![own_code.to_string()],
+        Claim::Legal => vec![format!("absent: {own_code}")],
+        Claim::SubsumedBy(targets) => {
+            let mut expected: Vec<String> = targets
+                .as_slice()
                 .iter()
                 .map(SpecErrorCode::to_string)
-                .collect(),
-            actual,
+                .collect();
+            expected.push(format!("absent: {own_code}"));
+            expected
         }
+    };
+
+    if satisfied {
+        ExampleOutcome::Verified
+    } else {
+        // `expected` renders the CLAIM, absences included; `actual` is what
+        // the pipeline emitted. They stay different types on purpose.
+        ExampleOutcome::CodeMismatch { expected, actual }
     }
 }
 

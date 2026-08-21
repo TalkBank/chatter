@@ -1,25 +1,14 @@
-# E519: Auto-generated from corpus
++++
+code = 'E519'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E519
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E5xx_header_errors/E519_invalid_language_code.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E519
-
-```chat
+[[example]]
+level = 'header'
+source = 'E5xx_header_errors/E519_invalid_language_code.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	xxx
@@ -27,11 +16,16 @@ Auto-generated from corpus
 @ID:	xxx|corpus|CHI|||||Child|||
 *CHI:	hello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

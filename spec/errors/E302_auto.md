@@ -1,4 +1,29 @@
-# E302: Missing required node
++++
+code = 'E302'
+name = 'Missing required node'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'utterance'
+source = 'error_corpus/parse_errors/E302_missing_node.cha'
+claim = { subsumed_by = 'E505' }
+notes = '''
+Note: E302 fires when tree-sitter inserts a MISSING node during error
+recovery, which is difficult to trigger reliably from specific input. The
+example is missing `@UTF8` and `@End` headers, so the parser produces header
+validation errors (E501-E505) instead of E302. The lowercase speaker `*ch:`
+would trigger E308/E522 (undeclared speaker) if the file had proper scaffolding.
+'''
+chat = '''
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+*ch:	hello .
+@End
+'''
++++
 
 **Last updated:** 2026-04-04 08:28 EDT
 
@@ -10,37 +35,6 @@ the grammar expected a specific construct that was not found. This is an
 internal parser condition triggered by tree-sitter error recovery, not by
 specific CHAT syntax patterns. It also fires in speaker code validation for
 invalid characters.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E302
-- **Category**: validation
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/parse_errors/E302_missing_node.cha`
-**Trigger**: Missing `@UTF8` and `@End` headers; lowercase speaker code `*ch:`
-is not directly what triggers E302, the missing headers dominate.
-**Expected Error Codes**: E501, E502, E503, E504, E505
-
-Note: E302 fires when tree-sitter inserts a MISSING node during error
-recovery, which is difficult to trigger reliably from specific input. The
-example is missing `@UTF8` and `@End` headers, so the parser produces header
-validation errors (E501-E505) instead of E302. The lowercase speaker `*ch:`
-would trigger E308/E522 (undeclared speaker) if the file had proper scaffolding.
-
-```chat
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*ch:	hello .
-@End
-```
 
 ## Expected Behavior
 

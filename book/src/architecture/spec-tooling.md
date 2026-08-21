@@ -1,7 +1,7 @@
 # Spec Tooling
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-08-21 12:45 EDT
 
 What the generator crates ARE. For the spec system's contract, which is what
 you need to write or change a spec, read
@@ -26,9 +26,13 @@ corpus) lives in `spec/runtime-tools`.
 
 The artifact registry is split along the same line, and for the same reason:
 `generators::artifacts::ARTIFACTS` holds everything derivable from markdown
-alone, and `spec_runtime_tools::artifacts::RUNTIME_ARTIFACTS` holds the one
-artifact that has to enumerate the live `ErrorCode` enum. `spec_gen` runs both,
-so a contributor sees one command and one list.
+alone (plus, since R4, the observation snapshot as a data-file input), and the
+runtime half holds the artifacts that need the live parser or `ErrorCode`
+enum: the observation snapshot itself (which regenerates FIRST, being an input
+to the tree-sitter corpus), the `DiagnosticKind` registry, and the book's
+artifact table. `spec_gen` runs both halves in dependency order, so a
+contributor sees one command and one list; the generated artifact table included in [the spec-system chapter](spec-system.md) is the
+live inventory.
 
 ## Layout of `spec/tools`
 

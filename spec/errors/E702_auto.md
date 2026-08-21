@@ -1,21 +1,14 @@
-# E702: Invalid MOR chunk format - missing |
++++
+code = 'E702'
+name = 'Invalid MOR chunk format - missing |'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-Invalid MOR chunk format - missing |
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E702
-- **Category**: Dependent tier parsing
-- **Level**: tier
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example
-
-```chat
+[[example]]
+level = 'tier'
+claim = { subsumed_by = 'E316' }
+chat = '''
+@UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Child
@@ -23,7 +16,12 @@ Invalid MOR chunk format - missing |
 *CHI:	hello world .
 %mor:	hello n|world .
 @End
-```
+'''
++++
+
+## Description
+
+Invalid MOR chunk format - missing |
 
 ## Expected Behavior
 

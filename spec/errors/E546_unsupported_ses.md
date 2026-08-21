@@ -1,22 +1,13 @@
-# E546: Unsupported @ID SES Value
++++
+code = 'E546'
+name = 'Unsupported @ID SES Value'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@ID` header contains an SES (socioeconomic status) field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E546
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E546
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -24,7 +15,12 @@ An `@ID` header contains an SES (socioeconomic status) field value that is not o
 @ID:	eng|corpus|CHI|3;06.|female||badses|Target_Child|||
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@ID` header contains an SES (socioeconomic status) field value that is not one of the recognized values. The file parses successfully but the unsupported value is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

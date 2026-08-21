@@ -1,4 +1,26 @@
-# E249, Bare `@s` shortcut with no secondary language
++++
+code = 'E249'
+name = 'Bare @s shortcut with no secondary language'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+notes = '''
+A monolingual file (`@Languages: eng`) uses the bare `@s` shortcut. There is
+no secondary language, so `@s` cannot resolve.
+'''
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello@s .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 07:36 EDT
@@ -10,32 +32,6 @@ and secondary language declared in `@Languages`. When there is **no secondary
 language** (the `@Languages` header lists only one language), `@s` has no
 target to resolve to. The speaker must use an explicit language code
 (`@s:spa`, `@s:zho`, etc.) or add a second language to the `@Languages` header.
-
-## Metadata
-
-- **Error Code**: E249
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-A monolingual file (`@Languages: eng`) uses the bare `@s` shortcut. There is
-no secondary language, so `@s` cannot resolve.
-
-**Expected Error Codes**: E249
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello@s .
-@End
-```
 
 ## Expected Behavior
 

@@ -1,25 +1,14 @@
-# E250: Auto-generated from corpus
++++
+code = 'E250'
+name = 'Auto-generated from corpus'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Auto-generated from corpus
-
-## Metadata
-
-- **Error Code**: E250
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E250_secondary_without_primary.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E250
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E250_secondary_without_primary.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -29,7 +18,12 @@ Auto-generated from corpus
 @Comment:	Invalid: 'ˌhello' - Secondary stress without primary
 *CHI:	ˌhello .
 @End
-```
+'''
++++
+
+## Description
+
+Auto-generated from corpus
 
 ## Expected Behavior
 

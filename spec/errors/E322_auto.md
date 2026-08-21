@@ -1,25 +1,13 @@
-# E322: EmptyColon
++++
+code = 'E322'
+name = 'EmptyColon'
+kind = 'Invalidity'
+status = 'not_implemented'
 
-## Description
-
-The main tier speaker prefix has a zero-width (MISSING) colon node.
-This occurs when tree-sitter synthesizes an empty colon placeholder
-because the speaker code has no colon at all.
-
-## Metadata
-- **Status**: not_implemented
-
-- **Error Code**: E322
-- **Category**: parser\_recovery
-- **Level**: utterance
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Speaker code without a colon separator
-
-```chat
+[[example]]
+level = 'utterance'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,7 +15,14 @@ because the speaker code has no colon at all.
 @ID:	eng|test|CHI||female|||Target_Child|||
 *CHI hello .
 @End
-```
+'''
++++
+
+## Description
+
+The main tier speaker prefix has a zero-width (MISSING) colon node.
+This occurs when tree-sitter synthesizes an empty colon placeholder
+because the speaker code has no colon at all.
 
 ## Expected Behavior
 

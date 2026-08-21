@@ -1,5 +1,5 @@
 [workspace]
-members = ["tools", "runtime-tools"]
+members = ["tools", "runtime-tools", "vocabulary"]
 resolver = "3"
 
 [workspace.package]
@@ -10,6 +10,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/TalkBank/chatter"
 
 [workspace.dependencies]
+
+# The spec format's vocabulary, shared with the OTHER cargo workspace.
+talkbank-spec-vocabulary = { path = "vocabulary" }
 
 # Error handling
 anyhow = "1.0"

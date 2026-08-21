@@ -1,4 +1,25 @@
-# E214: Empty scoped annotation content
++++
+code = 'E214'
+name = 'Empty scoped annotation content'
+kind = 'Invalidity'
+status = 'not_implemented'
+
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E214_empty_scoped_annotation.cha'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: Scoped annotation cannot be empty
+@Comment:	Invalid: 'hello [*]' - Empty error annotation
+*CHI:	hello [*] .
+@End
+'''
++++
 
 ## Description
 
@@ -12,34 +33,6 @@ annotation. The `EmptyAnnotatedContentAnnotations` check in `annotated.rs`
 validates that annotated content has at least one scoped annotation, but `[*]`
 is parsed as a single annotation (an error marker with no specific code), so the
 list is not empty.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E214
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E214_empty_scoped_annotation.cha`
-**Trigger**: Annotated content with empty annotation list
-**Expected Error Codes**: E214
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Scoped annotation cannot be empty
-@Comment:	Invalid: 'hello [*]' - Empty error annotation
-*CHI:	hello [*] .
-@End
-```
 
 ## Expected Behavior
 

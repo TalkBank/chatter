@@ -1,27 +1,14 @@
-# E232: Compound marker at word start
++++
+code = 'E232'
+name = 'Compound marker at word start'
+kind = 'Invalidity'
+status = 'implemented'
 
-**Last updated:** 2026-04-04 08:15 EDT
-
-## Description
-
-Compound marker (`+`) cannot be at the start of a word. Valid compounds have the form `left+right`.
-
-## Metadata
-
-- **Error Code**: E232
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E232_compound_marker_at_start.cha`
-**Trigger**: Leading `+` in word, tree-sitter absorbs into ERROR node before word validation runs
-**Expected Error Codes**: E316
-
-```chat
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E232_compound_marker_at_start.cha'
+claim = { subsumed_by = 'E316' }
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,14 @@ Compound marker (`+`) cannot be at the start of a word. Valid compounds have the
 @Comment:	Invalid: '+hello' - Compound marker at start
 *CHI:	+hello .
 @End
-```
+'''
++++
+
+**Last updated:** 2026-04-04 08:15 EDT
+
+## Description
+
+Compound marker (`+`) cannot be at the start of a word. Valid compounds have the form `left+right`.
 
 ## Expected Behavior
 

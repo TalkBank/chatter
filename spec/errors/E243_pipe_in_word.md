@@ -1,4 +1,23 @@
-# E243: Pipe character in main-tier word text
++++
+code = 'E243'
+name = 'Pipe character in main-tier word text'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello | there .
+@Comment:	ERROR: bare pipe is not a word
+@End
+'''
++++
 
 ## Description
 
@@ -10,30 +29,6 @@ existing E243 (IllegalCharactersInWord) rule, not a new code: the
 word scanner already rejects whitespace, bullet markers, control
 characters, and private-use code points; the pipe joins that set as a
 reserved tier-delimiter character.
-
-## Metadata
-
-- **Error Code**: E243
-- **Category**: Word structure
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E243
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello | there .
-@Comment:	ERROR: bare pipe is not a word
-@End
-```
 
 ## Expected Behavior
 

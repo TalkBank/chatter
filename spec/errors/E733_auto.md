@@ -1,29 +1,14 @@
-# E733: `%mod` alignment count mismatch, too few tokens
++++
+code = 'E733'
+name = '%mod alignment count mismatch, too few tokens'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The `%mod` (model/target phonology) tier has fewer alignable tokens than the
-main tier. Each main-tier word must have a corresponding `%mod` token.
-
-This code is scoped to `%mod` only. `%pho` count mismatches use E714. `%wor`
-is a timing-annotation tier and is never validated for count mismatches.
-
-## Metadata
-
-- **Error Code**: E733
-- **Category**: Alignment count mismatch
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E4xx_alignment_errors/E733_mod_count_too_few.cha`
-**Trigger**: Main tier has 3 words, but %mod has only 2 tokens
-**Expected Error Codes**: E733
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E4xx_alignment_errors/E733_mod_count_too_few.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -33,11 +18,20 @@ is a timing-annotation tier and is never validated for count mismatches.
 %mod:	aɪ wɑnt
 @Comment:	ERROR: Main tier has 3 words but %mod only has 2 tokens (missing cookie)
 @End
-```
+'''
++++
+
+## Description
+
+The `%mod` (model/target phonology) tier has fewer alignable tokens than the
+main tier. Each main-tier word must have a corresponding `%mod` token.
+
+This code is scoped to `%mod` only. `%pho` count mismatches use E714. `%wor`
+is a timing-annotation tier and is never validated for count mismatches.
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

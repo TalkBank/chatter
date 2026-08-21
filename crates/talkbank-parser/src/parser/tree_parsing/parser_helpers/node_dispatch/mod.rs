@@ -15,4 +15,4 @@ mod pause;
 mod separator;
 
 pub(crate) use pause::parse_pause_node;
-pub(crate) use separator::{parse_separator_like, parse_separator_node};
+pub(crate) use separator::parse_separator_like;

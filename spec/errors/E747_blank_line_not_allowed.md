@@ -1,27 +1,14 @@
-# E747: Blank line not allowed
++++
+code = 'E747'
+name = 'Blank line not allowed'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-CHAT does not allow blank lines anywhere in the transcript (CLAN CHECK 91).
-The grammar represents a blank line as a structural `blank_line` node (a
-lone newline at a line boundary), so the parser emits this diagnostic
-directly from the tree rather than by scanning the source text.
-
-## Metadata
-
-- **Error Code**: E747
-- **Category**: parser
-- **Level**: file
-- **Layer**: parser
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1: Blank line between utterances
-
-**Trigger**: A lone blank line separates two `*CHI:` utterances
-**Expected Error Codes**: E747
-
-```chat
+[[example]]
+level = 'file'
+title = 'Blank line between utterances'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,15 @@ directly from the tree rather than by scanning the source text.
 
 *CHI:	bye .
 @End
-```
+'''
++++
+
+## Description
+
+CHAT does not allow blank lines anywhere in the transcript (CLAN CHECK 91).
+The grammar represents a blank line as a structural `blank_line` node (a
+lone newline at a line boundary), so the parser emits this diagnostic
+directly from the tree rather than by scanning the source text.
 
 ## Expected Behavior
 

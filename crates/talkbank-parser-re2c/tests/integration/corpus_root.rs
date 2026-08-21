@@ -3,11 +3,10 @@
 //! # Why this is shared rather than repeated
 //!
 //! Five files in this directory each had their own `corpus_base()`, in two
-//! return types, all defaulting to `$HOME/talkbank/data`: the retired split
-//! layout. On the maintainer's machine that path still resolves through a
-//! legacy symlink to the same directory `~/0tb/data` points at, which is
-//! precisely why five stale copies survived. It worked in the one place
-//! anybody ran it, and silently found nothing anywhere else.
+//! return types, all defaulting to a hard-coded path under `$HOME`. On the one
+//! machine anybody ran them, a legacy symlink made that path resolve to the
+//! real corpus, which is precisely why five stale copies survived: it worked
+//! there, and silently found nothing anywhere else.
 //!
 //! The copies also disagreed about failure. Some printed "Skipping: not found"
 //! and returned, which cargo reports as a pass; one used
@@ -25,28 +24,42 @@ use std::path::PathBuf;
 /// somewhere that does not exist" need different fixes, and an `Option`
 /// carries neither.
 pub enum CorpusRoot {
+    /// The corpus is here.
     At(PathBuf),
-    Missing { looked_at: PathBuf, from_env: bool },
+    /// `$TALKBANK_DATA` names a path that is not a directory.
+    Missing { looked_at: PathBuf },
+    /// `$TALKBANK_DATA` is not set, so no corpus location was ever stated.
+    ///
+    /// A third variant rather than `Missing { from_env: false }`: "you pointed
+    /// me somewhere wrong" and "you pointed me nowhere" need different words
+    /// from the operator, and the boolean made the caller reconstruct which
+    /// one it was holding.
+    Unset,
 }
 
 impl CorpusRoot {
-    /// `$TALKBANK_DATA` if set, else the only supported workspace layout.
+    /// `$TALKBANK_DATA`, and nothing else.
     ///
-    /// The default is `~/0tb/data`, which is what `tb`'s workspace discovery
-    /// resolves; the split layouts it replaced are retired.
+    /// # There is deliberately no default
+    ///
+    /// There was one, a hard-coded directory under `$HOME`, and it was a
+    /// default that could only ever be right on ONE machine: this is a public
+    /// repository, and a contributor cloning it has no such directory. So the
+    /// default silently sent everybody else to a path that does not exist,
+    /// while reading, in the source, as though the location were a known fact.
+    ///
+    /// Requiring the variable makes the requirement visible to the person who
+    /// has to satisfy it, and the [`Self::Unset`] arm says so by name rather
+    /// than reporting a path nobody chose.
     pub fn resolve() -> Self {
-        let from_env = std::env::var("TALKBANK_DATA").ok();
-        let path = match &from_env {
-            Some(value) => PathBuf::from(value),
-            None => PathBuf::from(std::env::var("HOME").expect("HOME is set")).join("0tb/data"),
+        let Ok(value) = std::env::var("TALKBANK_DATA") else {
+            return Self::Unset;
         };
+        let path = PathBuf::from(value);
         if path.is_dir() {
             Self::At(path)
         } else {
-            Self::Missing {
-                looked_at: path,
-                from_env: from_env.is_some(),
-            }
+            Self::Missing { looked_at: path }
         }
     }
 
@@ -58,22 +71,17 @@ impl CorpusRoot {
     pub fn require(self) -> PathBuf {
         match self {
             Self::At(path) => path,
-            Self::Missing {
-                looked_at,
-                from_env,
-            } => {
-                let source = if from_env {
-                    "TALKBANK_DATA points at"
-                } else {
-                    "the default corpus layout is"
-                };
-                panic!(
-                    "no corpus to compare against: {source} {}, which is not a directory. \
-                     This test exists to run over real data; passing without it would report \
-                     agreement that was never measured.",
-                    looked_at.display()
-                )
-            }
+            Self::Missing { looked_at } => panic!(
+                "no corpus to compare against: TALKBANK_DATA points at {}, which is not a \
+                 directory. This test exists to run over real data; passing without it would \
+                 report agreement that was never measured.",
+                looked_at.display()
+            ),
+            Self::Unset => panic!(
+                "no corpus to compare against: TALKBANK_DATA is not set. Set it to a directory \
+                 containing the `*-data` corpus repositories. This test exists to run over real \
+                 data; passing without it would report agreement that was never measured."
+            ),
         }
     }
 }

@@ -1,25 +1,14 @@
-# E530: Lazy gem inside background
++++
+code = 'E530'
+name = 'Lazy gem inside background'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Lazy gem inside background
-
-## Metadata
-
-- **Error Code**: E530
-- **Category**: validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `validation_gaps/lazy-gem-inside-bg.cha`
-**Trigger**: See example below
-**Expected Error Codes**: E530
-
-```chat
+[[example]]
+level = 'header'
+source = 'validation_gaps/lazy-gem-inside-bg.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,11 +20,16 @@ Lazy gem inside background
 @Comment:	ERROR: @G (lazy gem) should not be allowed inside @Bg/@Eg scope
 @Eg:activity
 @End
-```
+'''
++++
+
+## Description
+
+Lazy gem inside background
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

@@ -1,4 +1,22 @@
-# E209, Word has no spoken content
++++
+code = 'E209'
+name = 'Word has no spoken content'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	(the) dog .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-04 08:15 EDT
@@ -11,30 +29,6 @@ is not the same as the word being spoken. To mark an omitted word, use
 `0the` (zero-word) instead.
 
 This is the Rust equivalent of CLAN CHECK error 155.
-
-## Metadata
-
-- **Error Code**: E209
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Standalone shortening `(the)` as entire word, no spoken material
-**Expected Error Codes**: E209
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	(the) dog .
-@End
-```
 
 ## Expected Behavior
 

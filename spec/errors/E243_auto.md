@@ -1,32 +1,21 @@
-# E243: Illegal characters in word
++++
+code = 'E243'
+name = 'Illegal characters in word'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Word contains illegal characters such as whitespace, control characters, or bullet markers that are not valid in word content.
-
-## Metadata
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E243
-- **Category**: validation
-- **Level**: word
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `error_corpus/validation_errors/E243_illegal_characters.cha`
-**Trigger**: Word ending with bare `@` (no form type), triggers E202 instead
-**Expected Error Codes**: E202
-
+[[example]]
+level = 'word'
+source = 'error_corpus/validation_errors/E243_illegal_characters.cha'
+claim = { subsumed_by = 'E202' }
+notes = '''
 Note: The example `hell@` triggers E202 (MissingFormType) rather than E243
 (IllegalCharactersInWord) because the parser detects the bare `@` as a missing
 form type marker. E243 fires at the validation layer on parsed words containing
 whitespace, control characters, or bullet markers, conditions that are
 difficult to reach via normal CHAT input.
-
-```chat
+'''
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -36,7 +25,12 @@ difficult to reach via normal CHAT input.
 @Comment:	Invalid: 'hell@' - @ in wrong position
 *CHI:	hell@ .
 @End
-```
+'''
++++
+
+## Description
+
+Word contains illegal characters such as whitespace, control characters, or bullet markers that are not valid in word content.
 
 ## Expected Behavior
 

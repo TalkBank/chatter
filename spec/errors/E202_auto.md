@@ -1,26 +1,14 @@
-# E202: Missing form type after @
++++
+code = 'E202'
+name = 'Missing form type after @'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Missing form type after @
-
-## Metadata
-- **Status**: implemented
-- **Last updated**: 2026-04-04 08:15 EDT
-
-- **Error Code**: E202
-- **Category**: Parser error
-- **Level**: word
-- **Layer**: parser
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E2xx_word_errors/E202_empty_word.cha`
-**Trigger**: @ symbol with no form type marker
-**Expected Error Codes**: E202
-
-```chat
+[[example]]
+level = 'word'
+source = 'E2xx_word_errors/E202_empty_word.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -28,11 +16,16 @@ Missing form type after @
 @ID:	eng|corpus|CHI|||||Child|||
 *CHI:	hello@ world .
 @End
-```
+'''
++++
+
+## Description
+
+Missing form type after @
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

@@ -1,26 +1,13 @@
-# E737: Modsyl does not reproduce the mod word
++++
+code = 'E737'
+name = 'Modsyl does not reproduce the mod word'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Stripping `:CODE` from each `%xmodsyl` unit must reproduce the
-corresponding `%mod` word. A pause filler (`(.)`, `(..)`, `(...)`) on
-`%xmodsyl` must mirror the same pause token as the `%mod` word at that
-position.
-
-## Metadata
-
-- **Error Code**: E737
-- **Category**: Phon syllabification content
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E737
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -31,7 +18,15 @@ position.
 %xmodsyl:	k:Oæ:N
 @Comment:	ERROR: stripping codes from %xmodsyl gives 'kæ', which does not match %mod 'kæt'
 @End
-```
+'''
++++
+
+## Description
+
+Stripping `:CODE` from each `%xmodsyl` unit must reproduce the
+corresponding `%mod` word. A pause filler (`(.)`, `(..)`, `(...)`) on
+`%xmodsyl` must mirror the same pause token as the `%mod` word at that
+position.
 
 ## Expected Behavior
 

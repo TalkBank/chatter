@@ -1,4 +1,22 @@
-# E245, Stress marker without following spoken material
++++
+code = 'E245'
+name = 'Stress marker without following spoken material'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	ˈ .
+@End
+'''
++++
 
 **Status:** Current
 **Last updated:** 2026-04-13 12:00 EDT
@@ -8,30 +26,6 @@
 A primary stress marker (`ˈ`) or secondary stress marker appears at the start
 of a word but is not followed by any spoken material. The marker has nothing
 to attach to.
-
-## Metadata
-
-- **Error Code**: E245
-- **Category**: validation
-- **Level**: word
-- **Layer**: parser
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Trigger**: Lone stress marker as entire word content
-**Expected Error Codes**: E245
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	ˈ .
-@End
-```
 
 ## Expected Behavior
 

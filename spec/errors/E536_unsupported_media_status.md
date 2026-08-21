@@ -1,22 +1,13 @@
-# E536: Unsupported @Media Status
++++
+code = 'E536'
+name = 'Unsupported @Media Status'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-An `@Media` header contains a status value that is not one of the recognized values. The file parses successfully but the unsupported status is stored as `Unsupported(String)` and flagged during validation.
-
-## Metadata
-
-- **Error Code**: E536
-- **Category**: header_validation
-- **Level**: header
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example
-**Expected Error Codes**: E536
-
-```chat
+[[example]]
+level = 'header'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -25,7 +16,12 @@ An `@Media` header contains a status value that is not one of the recognized val
 @Media:	recording, audio, badstatus
 *CHI:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+An `@Media` header contains a status value that is not one of the recognized values. The file parses successfully but the unsupported status is stored as `Unsupported(String)` and flagged during validation.
 
 ## Expected Behavior
 

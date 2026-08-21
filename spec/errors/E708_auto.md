@@ -1,30 +1,15 @@
-# E708: Malformed grammar relation on %gra tier
++++
+code = 'E708'
+name = 'Malformed grammar relation on %gra tier'
+kind = 'Invalidity'
+status = 'not_implemented'
+status_note = "Unreachable via tree-sitter parser. The grammar rule `gra_index: $ => /[0-9]+/` pre-validates that indices are numeric, so non-integer indices cause a tier-level ERROR node (E600) before relation-level parsing runs. The `MalformedGrammarRelation` code path in `gra/relation.rs` would fire for parse failures of structurally-valid GRA relation nodes, but tree-sitter's strict regex prevents such nodes from being created with invalid index/head content. The re2c parser may reach this code path."
 
-## Description
-
-A grammar relation on the `%gra` tier is malformed, missing an index, head,
-or relation label, or containing non-integer values where integers are expected.
-The `%gra` tier format is `index|head|RELATION` for each word.
-
-## Metadata
-- **Status**: not_implemented
-- **Last updated**: 2026-04-13 14:42 EDT
-- **Layer**: validation
-- **Status note**: Unreachable via tree-sitter parser. The grammar rule `gra_index: $ => /[0-9]+/` pre-validates that indices are numeric, so non-integer indices cause a tier-level ERROR node (E600) before relation-level parsing runs. The `MalformedGrammarRelation` code path in `gra/relation.rs` would fire for parse failures of structurally-valid GRA relation nodes, but tree-sitter's strict regex prevents such nodes from being created with invalid index/head content. The re2c parser may reach this code path.
-
-- **Error Code**: E708
-- **Category**: Dependent tier parsing
-- **Level**: tier
-- **Layer**: validation
-- **Kind**: Invalidity
-
-## Example 1
-
-**Source**: `E7xx_tier_parsing/E709_gra_missing_index.cha`
-**Trigger**: %gra relation with empty index field
-**Expected Error Codes**: E708
-
-```chat
+[[example]]
+level = 'tier'
+source = 'E7xx_tier_parsing/E709_gra_missing_index.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -33,7 +18,14 @@ The `%gra` tier format is `index|head|RELATION` for each word.
 *CHI:	hello world .
 %gra:	|2|SUBJ 2|0|ROOT
 @End
-```
+'''
++++
+
+## Description
+
+A grammar relation on the `%gra` tier is malformed, missing an index, head,
+or relation label, or containing non-integer values where integers are expected.
+The `%gra` tier format is `index|head|RELATION` for each word.
 
 ## Expected Behavior
 

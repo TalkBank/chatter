@@ -1,4 +1,23 @@
-# E326: UnexpectedLineType
++++
+code = 'E326'
+name = 'UnexpectedLineType'
+kind = 'Invalidity'
+status = 'implemented'
+
+[[example]]
+level = 'utterance'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+*CHI:	hello .
+this is just a bare line of text
+@End
+'''
++++
 
 ## Description
 
@@ -10,31 +29,6 @@ This covers two sub-cases:
    shape (header, utterance, or dependent tier).
 2. **Error**: A child of a LINE node whose kind is completely unknown to the
    Rust parser, a grammar/parser mismatch.
-
-## Metadata
-
-- **Error Code**: E326
-- **Category**: parser\_recovery
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Trigger**: A line that doesn't start with @, \*, or % (unsupported\_line)
-**Expected Error Codes**: E326
-
-```chat
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|test|CHI||female|||Target_Child|||
-*CHI:	hello .
-this is just a bare line of text
-@End
-```
 
 ## Expected Behavior
 

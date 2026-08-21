@@ -1,25 +1,14 @@
-# E308: Invalid speaker format
++++
+code = 'E308'
+name = 'Invalid speaker format'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-Invalid speaker format
-
-## Metadata
-
-- **Error Code**: E308
-- **Category**: Main tier validation
-- **Level**: utterance
-- **Layer**: validation
-- **Kind**: Invalidity
-- **Status**: implemented
-
-## Example 1
-
-**Source**: `E3xx_main_tier_errors/E302_invalid_speaker_format.cha`
-**Trigger**: Speaker code with invalid characters
-**Expected Error Codes**: E308
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E302_invalid_speaker_format.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -27,15 +16,13 @@ Invalid speaker format
 @ID:	eng|corpus|CHI|||||Child|||
 *CH-I:	hello world .
 @End
-```
+'''
 
-## Example 2
-
-**Source**: `E3xx_main_tier_errors/E308_speaker_not_in_participants.cha`
-**Trigger**: Speaker code not listed in @Participants header
-**Expected Error Codes**: E308
-
-```chat
+[[example]]
+level = 'utterance'
+source = 'E3xx_main_tier_errors/E308_speaker_not_in_participants.cha'
+claim = 'violates'
+chat = '''
 @UTF8
 @Begin
 @Languages:	eng
@@ -43,11 +30,16 @@ Invalid speaker format
 @ID:	eng|corpus|CHI|||||Child|||
 *MOT:	hello world .
 @End
-```
+'''
++++
+
+## Description
+
+Invalid speaker format
 
 ## Expected Behavior
 
-The parser should successfully parse these CHAT files (unless marked as parser layer), and the appropriate error should be reported.
+The appropriate error should be reported; which stage catches it is observed in the snapshot, not declared.
 
 ## CHAT Rule
 

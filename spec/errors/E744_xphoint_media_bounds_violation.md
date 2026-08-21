@@ -1,34 +1,29 @@
-# E744: Xphoint intervals fall outside the media bullet
++++
+code = 'E744'
+name = 'Xphoint intervals fall outside the media bullet'
+kind = 'Invalidity'
+status = 'implemented'
 
-## Description
-
-The first start and last end of `%xphoint` must lie within the `*SPK:` media bullet (1 ms tolerance).
-
-## Metadata
-
-- **Error Code**: E744
-- **Category**: Phon phone interval
-- **Level**: tier
-- **Layer**: validation
-- **Status**: implemented
-- **Kind**: Invalidity
-
-## Example 1
-
-**Expected Error Codes**: E744
-
-```chat
+[[example]]
+level = 'tier'
+claim = 'violates'
+chat = """
 @UTF8
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	cat . 0_300
+*CHI:	cat . \u00150_300\u0015
 %pho:	kæt
-%xphoint:	k 0_100 æ 100_200 t 200_400
+%xphoint:	k \u00150_100\u0015 æ \u0015100_200\u0015 t \u0015200_400\u0015
 @Comment:	ERROR: the last interval end 400 is outside the record media bullet 0-300
 @End
-```
+"""
++++
+
+## Description
+
+The first start and last end of `%xphoint` must lie within the `*SPK:` media bullet (1 ms tolerance).
 
 ## Expected Behavior
 

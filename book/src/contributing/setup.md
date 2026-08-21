@@ -1,7 +1,7 @@
 # Setup
 
 **Status:** Current
-**Last modified:** 2026-08-13 00:05 EDT
+**Last modified:** 2026-08-20 16:11 EDT
 
 Getting a working checkout, and what you need installed for each surface you
 might touch. What to RUN once you are set up is in
@@ -15,7 +15,7 @@ use Unix shell syntax; on Windows use PowerShell or Git Bash.
 **Always:**
 
 - **Rust** via [rustup](https://rustup.rs/). Do NOT install a version by hand:
-  `rust-toolchain.toml` pins the exact stable release (currently 1.97.1) and
+  `rust-toolchain.toml` pins the exact stable release and
   rustup honours it automatically. The pin exists so a new stable's clippy
   lints cannot turn every open PR red overnight.
 - **[just](https://github.com/casey/just)** for the repo's recipes. Not
