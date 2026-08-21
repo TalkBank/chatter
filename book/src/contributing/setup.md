@@ -1,7 +1,7 @@
 # Setup
 
 **Status:** Current
-**Last modified:** 2026-08-20 16:11 EDT
+**Last modified:** 2026-08-21 13:42 EDT
 
 Getting a working checkout, and what you need installed for each surface you
 might touch. What to RUN once you are set up is in

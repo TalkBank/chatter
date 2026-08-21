@@ -9,6 +9,8 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-21
+
 **Validation verdicts: UNCHANGED.** Nothing here moves what `validate` reports
 on a CHAT file. Every prior entry states this either way, and the published
 promise is that an entry without the note did not move its verdicts, so an
@@ -1536,7 +1538,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/TalkBank/chatter/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/TalkBank/chatter/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/TalkBank/chatter/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/TalkBank/chatter/compare/v0.9.1...v0.10.0
