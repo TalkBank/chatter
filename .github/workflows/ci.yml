@@ -331,8 +331,10 @@ jobs:
       # The version range is read out of `grammar/package.json` rather than
       # written here, so the manifest stays the single source of truth and this
       # job cannot silently drift onto a different generator than developers
-      # use. Verified 2026-08-24: the declared `^0.26.13` resolves to 0.26.13,
-      # which is what the local CLI runs. A generator skew would make the
+      # use. Verified 2026-08-24: the declared range resolves to the version the
+      # local CLI runs. The version is deliberately not restated here; the whole
+      # point of reading it from the manifest is that this file does not carry a
+      # second copy to go stale. A generator skew would make the
       # staleness check below emit spurious diffs, so this matters.
       - name: Install pinned tree-sitter CLI
         run: |
