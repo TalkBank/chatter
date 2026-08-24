@@ -71,7 +71,7 @@ sha2 = "0.11"
 
 # Serialization, schema, error reporting
 csv = "1"
-jsonschema = { version = "0.50", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.51", default-features = false, features = ["resolve-file"] }
 miette = { version = "7.6.0", features = ["derive"] }
 schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
@@ -92,7 +92,7 @@ sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate"] }
 tokio = { version = "1.53", features = ["full"] }
 
 # Tree-sitter parsing
-tree-sitter = "0.26.12"
+tree-sitter = "0.26.13"
 tree-sitter-talkbank = { path = "grammar", version = "0.1.0" }
 
 # Re2c parser deps
@@ -130,7 +130,7 @@ whatlang = "0.18"
 
 # LSP infrastructure
 tower-lsp = "0.20"
-tree-sitter-highlight = "0.26.12"
+tree-sitter-highlight = "0.26.13"
 
 # C compiler driver for send2clan
 cc = "1.4"

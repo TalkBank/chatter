@@ -9,6 +9,28 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- **Tree-sitter 0.26.13** across the workspace, the grammar crate, the spec
+  workspace and the `tree-sitter-cli` devDependency, plus desktop npm
+  devDependency bumps and jsonschema 0.51.
+
+  **Validation verdicts: UNCHANGED over the sampled corpus, and that needed
+  measuring rather than assuming.** 0.26.13 avoids wide error nodes on
+  unparseable input, which is a change to RECOVERY, so it can move what
+  `validate` reports on malformed CHAT without changing one byte of the
+  regenerated `parser.c` (which is in fact byte-identical here) and without any
+  fixture in the suites noticing, because they all parse. The corpus
+  differential is what can see it: over 2,147 files at stride 50, stratified per
+  repo, against the v0.13.0 fleet build, there were no new error codes, no
+  per-code count increases, no newly failing roundtrips and no new cross-backend
+  disagreements. That is a statement about the sample, not about the whole
+  corpus; at this stride a defect in a few dozen of ~106,000 files could still
+  hide.
+
+  The generated typed CST traversal is byte-identical apart from its generator
+  provenance stamp, and `just spec-gen` moved no artifact.
+
 ## [0.13.0] - 2026-08-21
 
 **Validation verdicts: UNCHANGED.** Nothing here moves what `validate` reports
