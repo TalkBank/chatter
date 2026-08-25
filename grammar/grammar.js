@@ -28,9 +28,9 @@
 // @ts-check
 
 import {
-  CA_DELIMITER_SYMBOLS,
-  CA_ELEMENT_SYMBOLS,
-  CA_ALL_SYMBOLS,
+  PAIRED_STRETCH_SYMBOLS,
+  WORD_ATTACHED_SYMBOLS,
+  ALL_MARKER_SYMBOLS,
   EVENT_SEGMENT_FORBIDDEN_BASE,
   EVENT_SEGMENT_FORBIDDEN_COMMON,
   WORD_SEGMENT_FORBIDDEN_START_BASE,
@@ -42,8 +42,8 @@ import {
 // are tokenized as event + CA-marked speech, not one giant event token.
 // Keep colon allowed (e.g., &=clears:throat).
 const EVENT_SEGMENT_FORBIDDEN = EVENT_SEGMENT_FORBIDDEN_BASE
-  + CA_ELEMENT_SYMBOLS
-  + CA_DELIMITER_SYMBOLS
+  + WORD_ATTACHED_SYMBOLS
+  + PAIRED_STRETCH_SYMBOLS
   + EVENT_SEGMENT_FORBIDDEN_COMMON;
 
 // Shared regex for @ID pipe-delimited fields with leading/trailing whitespace trimming.
@@ -71,11 +71,11 @@ const EVENT_SEGMENT_RE = new RegExp(`[^${EVENT_SEGMENT_FORBIDDEN}]+`);
 // to extract overlap markers, CA elements, underline markers, etc.
 // First char also excludes 0 (omission prefix → zero token, not word_segment)
 const WORD_SEGMENT_FORBIDDEN_FIRST = WORD_SEGMENT_FORBIDDEN_START_BASE
-  + CA_ALL_SYMBOLS
+  + ALL_MARKER_SYMBOLS
   + WORD_SEGMENT_FORBIDDEN_COMMON
   + '0';
 const WORD_SEGMENT_FORBIDDEN_REST = WORD_SEGMENT_FORBIDDEN_REST_BASE
-  + CA_ALL_SYMBOLS
+  + ALL_MARKER_SYMBOLS
   + WORD_SEGMENT_FORBIDDEN_COMMON;
 const WORD_SEGMENT_FIRST_RE = new RegExp(`[^${WORD_SEGMENT_FORBIDDEN_FIRST}]`);
 const WORD_SEGMENT_REST_RE = new RegExp(`[^${WORD_SEGMENT_FORBIDDEN_REST}]*`);
@@ -1329,12 +1329,15 @@ export default grammar({
     )),
 
     // CA elements: individual markers within words (pitch, articulation, etc.)
-    // Built from symbol registry CA_ELEMENT_SYMBOLS
-    ca_element: $ => token(prec(10, new RegExp(`[${CA_ELEMENT_SYMBOLS}]`))),
+    // Built from symbol registry WORD_ATTACHED_SYMBOLS. The NODE name stays
+    // `ca_element`: it is a CHAT-format concept name and renaming those is
+    // out of bounds. Only the symbol-set constant, which named provenance
+    // while holding a parse role, moves.
+    ca_element: $ => token(prec(10, new RegExp(`[${WORD_ATTACHED_SYMBOLS}]`))),
 
     // CA delimiters: paired markers within words (tempo, voice quality, etc.)
-    // Built from symbol registry CA_DELIMITER_SYMBOLS
-    ca_delimiter: $ => token(prec(10, new RegExp(`[${CA_DELIMITER_SYMBOLS}]`))),
+    // Built from symbol registry PAIRED_STRETCH_SYMBOLS; the node name stays.
+    ca_delimiter: $ => token(prec(10, new RegExp(`[${PAIRED_STRETCH_SYMBOLS}]`))),
 
     // A word segment is a run of PURE SPOKEN TEXT characters.
     //

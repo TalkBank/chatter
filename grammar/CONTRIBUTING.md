@@ -157,8 +157,12 @@ Changes that only affect internal parser states (precedence, conflict resolution
 
 `src/generated_symbol_sets.js` exports symbol constants used by `grammar.js`:
 
-- `CA_DELIMITER_SYMBOLS`: CA delimiter characters
-- `CA_ELEMENT_SYMBOLS`: CA element characters
+- `PAIRED_STRETCH_SYMBOLS`: characters that open and close a stretch
+- `WORD_ATTACHED_SYMBOLS`: characters that attach to a word
+
+  Named for the PARSE ROLE they hold, not for provenance: two of them are
+  disfluency marks rather than CA notation. The `ca_element` / `ca_delimiter`
+  NODE names are unchanged.
 - `EVENT_SEGMENT_FORBIDDEN_BASE`: characters that terminate event segments
 - `EVENT_SEGMENT_FORBIDDEN_COMMON`: additional forbidden event characters
 

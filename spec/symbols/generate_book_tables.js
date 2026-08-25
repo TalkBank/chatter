@@ -27,12 +27,12 @@ const fail = failWith('book table generation failed');
 const ROLE_SECTIONS = {
   word_attached: {
     heading: 'Word-attached symbols',
-    category: '`ca_element_symbols`',
+    category: '`word_attached_symbols`',
     blurb: 'These attach to a word, so `book↑` is a single token whose content\ncarries the symbol.',
   },
   paired_stretch: {
     heading: 'Paired delimiter symbols',
-    category: '`ca_delimiter_symbols`',
+    category: '`paired_stretch_symbols`',
     blurb:
       'These are PAIRED: each opens and closes a stretch, and an unmatched one\nis rejected (E230).',
   },

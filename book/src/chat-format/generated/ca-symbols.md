@@ -11,7 +11,7 @@ categories purely because of how they parse.
 Every example is parsed and validated by a test, so a row here cannot drift
 from what the grammar accepts.
 
-### Word-attached symbols (`ca_element_symbols`)
+### Word-attached symbols (`word_attached_symbols`)
 
 These attach to a word, so `book↑` is a single token whose content
 carries the symbol.
@@ -29,7 +29,7 @@ carries the symbol.
 | `⤇` | U+2907 | Hurried start | CA | `⤇hello there .` |
 | `Ἡ` | U+1F29 | Laugh inside a word | CA | `Ἡhello there .` |
 
-### Paired delimiter symbols (`ca_delimiter_symbols`)
+### Paired delimiter symbols (`paired_stretch_symbols`)
 
 These are PAIRED: each opens and closes a stretch, and an unmatched one
 is rejected (E230).

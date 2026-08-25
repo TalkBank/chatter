@@ -27,8 +27,12 @@ forbidden (start, rest, common) and event-segment forbidden (base, common).
 Storing a set as a list of records, or an entity as a bare character, would be
 the same category error in opposite directions.
 
-The `ca_delimiter_symbols` and `ca_element_symbols` arrays the grammar and the
-model consume are **derived** from `parse_role` and appear nowhere in the file.
+The `paired_stretch_symbols` and `word_attached_symbols` arrays the grammar and
+the model consume are **derived** from `parse_role` and appear nowhere in the
+file, and they are NAMED for the role they are derived from. Until 2026-08-25
+they were `ca_delimiter_symbols` and `ca_element_symbols`: a name asserting
+provenance on a value holding a parse role, which is the collapse the next
+section warns about, sitting in the array names themselves.
 
 ## parse_role is not provenance
 
@@ -56,9 +60,8 @@ snake_case and unique, codepoints well-formed and unique, `parse_role` and
 symbol. `validate_symbol_registry.js` adds the character-class checks (single
 Unicode scalar values, no duplicates) and prints the report.
 
-One check was DELETED rather than moved. `ca_delimiter_symbols` and
-`ca_element_symbols` used to be two hand-written arrays that had to be proved
-disjoint; they are now derived from a single `parse_role` field, so a symbol in
+One check was DELETED rather than moved. The two derived arrays used to be
+hand-written and had to be proved disjoint; they are now derived from a single `parse_role` field, so a symbol in
 both is unrepresentable and there is nothing left to assert.
 
 Every example is additionally PARSED AND VALIDATED by

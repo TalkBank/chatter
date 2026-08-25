@@ -992,7 +992,7 @@ impl<'a> Iterator for Lexer<'a> {
         // ── Word segment (catch-all for text runs) ──
         // grammar.js: word_segment = token(prec(5, seq(WORD_SEGMENT_FIRST_RE, WORD_SEGMENT_REST_RE)))
         // WORD_SEGMENT_FORBIDDEN_FIRST includes: ,;:!?.()[]{}⌈⌉⌊⌋〔〕\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋
-        //   + CA_ALL_SYMBOLS + \u0015\u0001-\u0004\u0007\u0008\t\n\r ‹›""„@*&%‡+=~∞≡$ + 0
+        //   + ALL_MARKER_SYMBOLS + \u0015\u0001-\u0004\u0007\u0008\t\n\r ‹›""„@*&%‡+=~∞≡$ + 0
         // WORD_SEGMENT_FORBIDDEN_REST is same but without 0 and with \\ extra
         //
         // Simplified: exclude all structural chars. Anything not matched by

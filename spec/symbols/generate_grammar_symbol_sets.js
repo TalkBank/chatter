@@ -44,9 +44,12 @@ function renderRawTemplateLiteral(text) {
 }
 
 function renderGeneratedFile(categories) {
-  const caDelimiter = categories.ca_delimiter_symbols.join('');
-  const caElement = categories.ca_element_symbols.join('');
-  const caAll = caDelimiter + caElement;
+  const pairedStretch = categories.paired_stretch_symbols.join('');
+  const wordAttached = categories.word_attached_symbols.join('');
+  // Every symbol in the registry, both roles. Forbidden inside a
+  // `word_segment`, which is a statement about them all being structural
+  // MARKERS, not about where their notation came from.
+  const allMarkers = pairedStretch + wordAttached;
 
   const wordSegmentForbiddenStartBase = categories.word_segment_forbidden_start_symbols
     .map(escapeRegexClassSymbol)
@@ -72,9 +75,9 @@ function renderGeneratedFile(categories) {
  *   just symbols-gen
  */
 
-export const CA_DELIMITER_SYMBOLS = String.raw\`${renderRawTemplateLiteral(caDelimiter)}\`;
-export const CA_ELEMENT_SYMBOLS = String.raw\`${renderRawTemplateLiteral(caElement)}\`;
-export const CA_ALL_SYMBOLS = String.raw\`${renderRawTemplateLiteral(caAll)}\`;
+export const PAIRED_STRETCH_SYMBOLS = String.raw\`${renderRawTemplateLiteral(pairedStretch)}\`;
+export const WORD_ATTACHED_SYMBOLS = String.raw\`${renderRawTemplateLiteral(wordAttached)}\`;
+export const ALL_MARKER_SYMBOLS = String.raw\`${renderRawTemplateLiteral(allMarkers)}\`;
 
 export const WORD_SEGMENT_FORBIDDEN_START_BASE = ${JSON.stringify(wordSegmentForbiddenStartBase)};
 export const WORD_SEGMENT_FORBIDDEN_REST_BASE = ${JSON.stringify(wordSegmentForbiddenRestBase)};

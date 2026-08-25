@@ -8,8 +8,9 @@
 // Leaving a second copy of those checks here would be the same duplication the
 // registry exists to remove.
 //
-// One check was DELETED rather than moved: ca_delimiter_symbols and
-// ca_element_symbols used to be two hand-written arrays that had to be proved
+// One check was DELETED rather than moved: the two derived symbol arrays (then
+// named ca_delimiter_symbols and ca_element_symbols, now paired_stretch_symbols
+// and word_attached_symbols) used to be hand-written and had to be proved
 // disjoint. They are now derived from a single `parse_role` field, so a symbol
 // in both is unrepresentable and there is nothing left to assert.
 

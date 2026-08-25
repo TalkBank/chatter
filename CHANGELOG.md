@@ -11,6 +11,40 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **"CA" named three different things, and two names picked the wrong one.**
+  The symbol registry's exported arrays are computed from `parse_role` and were
+  called `ca_element_symbols` and `ca_delimiter_symbols`, naming PROVENANCE on a
+  value holding a PARSE ROLE. They are now `word_attached_symbols` and
+  `paired_stretch_symbols`, and their union, which builds the set forbidden
+  inside a `word_segment`, is `ALL_MARKER_SYMBOLS`. Library consumers reading
+  `talkbank_model::generated::symbol_sets` see the renamed constants.
+
+  The registry already carried both facts: `notation_family` says where a
+  symbol's notation came from, and 2 of the 25 are `disfluency` rather than
+  Conversation Analysis. Those two are `≠` (blocking) and `↫` (segment
+  repetition), which every fluency corpus depends on, so the old name was false
+  for exactly its load-bearing members. **The `ca_element` and `ca_delimiter`
+  NODE names are unchanged**, and `parser.c`, `grammar.json` and
+  `node-types.json` regenerate byte-identical.
+
+- **`ChatOptionFlag::enables_ca_mode` is replaced by
+  `has_effect(CaOptionEffect)`.** The old name asserted that `@Options: CA`
+  turns Conversation Analysis parsing on. It does not: CA-originated markup
+  needs no option at all, and the flag's scope is material judged specifically
+  weird CA. A predicate that reads "is this file CA" is what invites gating
+  SYMBOL ADMISSIBILITY on the option, which would be wrong for every symbol,
+  including the genuinely CA-originated ones.
+
+  The two effects are named separately because they are not the same kind of
+  thing: `TerminatorRequirementWaived` waives a requirement, while
+  `ParentheticalIsCaOmission` changes what a construct MEANS. Calling both
+  leniency would be a quieter version of the same conflation. The match on the
+  effect is exhaustive, so a third effect, or a second flag granting one, breaks
+  compilation rather than silently inheriting `CA`'s answer.
+
+  **Validation verdicts: UNCHANGED.** Renames and one predicate; every call site
+  computes what it computed before.
+
 - **Tree-sitter 0.26.13** across the workspace, the grammar crate, the spec
   workspace and the `tree-sitter-cli` devDependency, plus desktop npm
   devDependency bumps and jsonschema 0.51.

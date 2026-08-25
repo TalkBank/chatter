@@ -8,15 +8,22 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Words>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Shortenings>
 
-use crate::model::{Header, Line, MainTier};
+use crate::model::{CaOptionEffect, Header, Line, MainTier};
 
-/// Return whether the `@Options` header enables CA mode.
+/// Return whether `@Options: CA` reinterprets a standalone parenthetical as a
+/// CA omission.
 ///
-/// CA mode is used by multiple downstream passes (including validation rules such as terminator handling).
-/// This module uses the flag to decide whether to run CA-omission normalization.
+/// This module uses it to decide whether to run CA-omission normalization. It
+/// is a REINTERPRETATION rather than a leniency waiver: the same bytes mean
+/// something different. The flag's other effect, waiving the terminator
+/// requirement, is a separate variant, and neither says anything about which
+/// notation the file uses.
 pub(super) fn headers_enable_ca_mode(headers: &[Header]) -> bool {
     headers.iter().any(|header| {
-        matches!(header, Header::Options { options } if options.iter().any(|opt| opt.enables_ca_mode()))
+        matches!(header, Header::Options { options }
+            if options
+                .iter()
+                .any(|opt| opt.has_effect(CaOptionEffect::ParentheticalIsCaOmission)))
     })
 }
 

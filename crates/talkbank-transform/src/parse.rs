@@ -112,11 +112,17 @@ pub fn is_no_align(chat_file: &ChatFile) -> bool {
     chat_file.options.iter().any(|f| f.skips_alignment())
 }
 
-/// Check whether a parsed CHAT file has `@Options: CA`.
+/// Check whether a parsed CHAT file carries the `@Options: CA` flag.
 ///
-/// Files with `CA` should skip morphotagging by default.
+/// A CONSUMER POLICY, not a format fact: this crate skips morphotagging on such
+/// files by default. It asks about the flag's presence, so it does not name a
+/// `CaOptionEffect`; the flag says nothing about whether the file uses
+/// CA-originated notation.
 pub fn is_ca(chat_file: &ChatFile) -> bool {
-    chat_file.options.iter().any(|f| f.enables_ca_mode())
+    chat_file
+        .options
+        .iter()
+        .any(|f| matches!(f, talkbank_model::model::ChatOptionFlag::Ca))
 }
 
 #[cfg(test)]

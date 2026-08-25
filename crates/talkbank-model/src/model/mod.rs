@@ -97,6 +97,7 @@ pub use header::{
     AgeValue,
     BackgroundDescription,
     BirthplaceDescription,
+    CaOptionEffect,
     ChatDate,
     ChatOptionFlag,
     ChatOptionFlags,

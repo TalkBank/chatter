@@ -63,7 +63,7 @@ use talkbank_spec_vocabulary::SpecErrorCode;
 /// the case as the normal majority while the other treated it as fatal. The
 /// variant was unreachable and the counts were three months stale.
 pub use talkbank_spec_vocabulary::Status;
-use talkbank_spec_vocabulary::frontmatter::{Claim, ExampleFrontmatter, SpecFrontmatter};
+use talkbank_spec_vocabulary::frontmatter::{ExampleFrontmatter, SpecFrontmatter};
 
 /// One spec file, read and PARSED once.
 ///

@@ -546,7 +546,9 @@ fn main() -> Result<()> {
             eprintln!("  {files_parsed} files parsed...");
         }
         let ca_declared = parsed.headers().any(|header| match header {
-            Header::Options { options } => options.iter().any(ChatOptionFlag::enables_ca_mode),
+            Header::Options { options } => options
+                .iter()
+                .any(|flag| matches!(flag, ChatOptionFlag::Ca)),
             _ => false,
         });
         let file = FileFacts {

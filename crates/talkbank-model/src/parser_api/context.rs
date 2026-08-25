@@ -35,12 +35,16 @@ impl FragmentSemanticContext {
         self
     }
 
-    /// Return whether CA mode is enabled for this fragment.
+    /// Return whether this fragment's `@Options` carry the `CA` flag.
+    ///
+    /// The presence of the FLAG, not a claim that the fragment uses
+    /// CA-originated notation; see
+    /// [`CaOptionEffect`](crate::model::CaOptionEffect).
     #[inline]
     pub fn ca_mode(&self) -> bool {
         self.option_flags
             .iter()
-            .any(ChatOptionFlag::enables_ca_mode)
+            .any(|flag| matches!(flag, ChatOptionFlag::Ca))
     }
 
     /// Return whether bullets mode is enabled for this fragment.

@@ -13,8 +13,11 @@ how it parses. Everything downstream is generated from it.
 - **`character_classes` are SETS.** Bags of characters with no individual
   identity, used to build the grammar's word and event regexes.
 
-The `ca_delimiter_symbols` and `ca_element_symbols` arrays the grammar and the
-model consume are **derived** from `parse_role` and appear nowhere in the file.
+The `paired_stretch_symbols` and `word_attached_symbols` arrays the grammar and
+the model consume are **derived** from `parse_role` and appear nowhere in the
+file. They are named for the role they are derived FROM: until 2026-08-25 they
+were `ca_delimiter_symbols` and `ca_element_symbols`, which named provenance on
+a value holding a parse role.
 
 **`parse_role` is not provenance.** It says what the grammar does with a symbol;
 `notation_family` says where the symbol comes from. Two of the 25 are disfluency

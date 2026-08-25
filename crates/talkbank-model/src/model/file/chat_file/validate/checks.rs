@@ -28,15 +28,18 @@ fn media_headers<'a>(
     })
 }
 
-/// Return whether any `@Options` header enables CA mode.
+/// Return whether any `@Options` header carries the `CA` flag.
 ///
-/// CA mode relaxes some structural constraints and is propagated into the
-/// shared validation context for downstream checks.
+/// This is the presence of the FLAG, propagated into the shared validation
+/// context for downstream checks. It is not a statement that the file uses
+/// CA-originated notation, which needs no option at all; see
+/// [`CaOptionEffect`](crate::model::CaOptionEffect) for what the flag actually
+/// does.
 pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
     headers.iter().any(|header| match header {
         Header::Options { options } => options
             .iter()
-            .any(crate::model::ChatOptionFlag::enables_ca_mode),
+            .any(|flag| matches!(flag, crate::model::ChatOptionFlag::Ca)),
         _ => false,
     })
 }

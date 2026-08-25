@@ -30,7 +30,9 @@ mod write_chat;
 // Re-export everything from the split modules
 pub use codes::*;
 pub use enums::*;
-pub use header_enum::{ChatOptionFlag, ChatOptionFlags, Header, LanguageCodes, ParticipantEntries};
+pub use header_enum::{
+    CaOptionEffect, ChatOptionFlag, ChatOptionFlags, Header, LanguageCodes, ParticipantEntries,
+};
 pub use id::IDHeader;
 pub use media::{DeclaredRecording, MediaHeader};
 pub use types_header::*;

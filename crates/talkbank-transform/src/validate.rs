@@ -15,7 +15,7 @@
 //! Each level includes all checks from lower levels.
 
 use talkbank_model::ParseError;
-use talkbank_model::model::{ChatFile, ChatOptionFlag, Line};
+use talkbank_model::model::{CaOptionEffect, ChatFile, Line};
 pub use talkbank_model::{GateValidationError as ValidationError, ValidityLevel};
 
 /// Validate a CHAT file to the specified minimum validity level.
@@ -113,15 +113,18 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
         });
     }
 
-    // CA files (Conversation Analysis) can have utterances without terminators,
-    // incomplete turns, backchannels, trailing-off speech. Skip the terminator
-    // check when @Options: CA is set.
-    let is_ca = file.options.iter().any(|f| matches!(f, ChatOptionFlag::Ca));
+    // `@Options: CA` waives the terminator requirement: the material it covers
+    // has incomplete turns, backchannels and trailing-off speech. It says
+    // nothing about which notation the file uses.
+    let terminators_waived = file
+        .options
+        .iter()
+        .any(|f| f.has_effect(CaOptionEffect::TerminatorRequirementWaived));
 
     // Check every utterance has a terminator (non-CA) and a declared speaker
     for line in &file.lines {
         if let Line::Utterance(utt) = line {
-            if !is_ca && utt.main.content.terminator.is_none() {
+            if !terminators_waived && utt.main.content.terminator.is_none() {
                 let speaker = utt.main.speaker.as_str();
                 errors.push(ValidationError {
                     message: format!("Utterance by *{speaker} has no terminator"),
@@ -175,11 +178,14 @@ fn check_main_tier_valid(file: &ChatFile, errors: &mut Vec<ValidationError>) {
 pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
 
-    // Check every utterance still has a terminator.
-    // CA transcripts (@Options: CA) are exempt, terminators are optional in CA mode.
-    let is_ca = file.options.iter().any(|f| f.enables_ca_mode());
+    // Check every utterance still has a terminator, unless `@Options: CA` has
+    // waived the requirement (see `CaOptionEffect`).
+    let terminators_waived = file
+        .options
+        .iter()
+        .any(|f| f.has_effect(CaOptionEffect::TerminatorRequirementWaived));
 
-    if !is_ca {
+    if !terminators_waived {
         for line in &file.lines {
             if let Line::Utterance(utt) = line
                 && utt.main.content.terminator.is_none()
@@ -347,7 +353,7 @@ mod tests {
         let mut chat = parse_chat_file(MOR_GRA_CHAT);
 
         // Add @Options: CA and remove terminators
-        chat.options.push(ChatOptionFlag::Ca);
+        chat.options.push(talkbank_model::model::ChatOptionFlag::Ca);
         for line in &mut chat.lines {
             if let Line::Utterance(utt) = line {
                 utt.main.content.terminator = None;

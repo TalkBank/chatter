@@ -6,9 +6,9 @@
  *   just symbols-gen
  */
 
-export const CA_DELIMITER_SYMBOLS = String.raw`⁇§⁎°↫∆∇∬∮▁▔◉☺♋Ϋ`;
-export const CA_ELEMENT_SYMBOLS = String.raw`⁑↑↓↻≠∙∾⤆⤇Ἡ`;
-export const CA_ALL_SYMBOLS = String.raw`⁇§⁎°↫∆∇∬∮▁▔◉☺♋Ϋ⁑↑↓↻≠∙∾⤆⤇Ἡ`;
+export const PAIRED_STRETCH_SYMBOLS = String.raw`⁇§⁎°↫∆∇∬∮▁▔◉☺♋Ϋ`;
+export const WORD_ATTACHED_SYMBOLS = String.raw`⁑↑↓↻≠∙∾⤆⤇Ἡ`;
+export const ALL_MARKER_SYMBOLS = String.raw`⁇§⁎°↫∆∇∬∮▁▔◉☺♋Ϋ⁑↑↓↻≠∙∾⤆⤇Ἡ`;
 
 export const WORD_SEGMENT_FORBIDDEN_START_BASE = ",;:!?.()\\[\\]{}⌈⌉⌊⌋〔〕\\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋";
 export const WORD_SEGMENT_FORBIDDEN_REST_BASE = ",;:!?.()\\[\\]{}⌈⌉⌊⌋〔〕\\\\\\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋";

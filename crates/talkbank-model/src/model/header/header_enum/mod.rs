@@ -16,4 +16,4 @@ mod impls;
 mod options;
 
 pub use header::{ChatOptionFlags, Header, LanguageCodes, ParticipantEntries};
-pub use options::ChatOptionFlag;
+pub use options::{CaOptionEffect, ChatOptionFlag};

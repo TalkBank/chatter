@@ -5,6 +5,7 @@ use crate::ast;
 use crate::token::Token;
 use talkbank_model::ErrorSink;
 use talkbank_model::Span;
+use talkbank_model::model::CaOptionEffect;
 use talkbank_model::model::content::word::ca::normalize_ca_omissions_in_lines;
 use talkbank_model::model::*;
 
@@ -445,13 +446,13 @@ pub fn chat_file_to_model(
         talkbank_model::model::participant::join::build_participants_from_lines(&lines)
             .report_into(errors);
 
-    // CA omission normalization: if @Options includes CA mode,
-    // reclassify standalone (word) shortenings as CAOmission category.
-    // This matches TreeSitterParser's post-parse normalization.
+    // `@Options: CA` REINTERPRETS a standalone (word) shortening as a CA
+    // omission rather than an error. Not a leniency waiver: the same bytes mean
+    // something different. Matches TreeSitterParser's post-parse normalization.
     let ca_mode = lines.iter().any(|line| {
         if let talkbank_model::model::Line::Header { header, .. } = line {
             matches!(header.as_ref(), Header::Options { options }
-                if options.iter().any(|opt| opt.enables_ca_mode()))
+                if options.iter().any(|opt| opt.has_effect(CaOptionEffect::ParentheticalIsCaOmission)))
         } else {
             false
         }

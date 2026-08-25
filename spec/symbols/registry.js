@@ -247,12 +247,22 @@ function loadRegistry() {
 
   const byRole = (role) => symbols.filter((s) => s.parse_role === role).map((s) => s.char);
 
-  // The view every generator consumes, in emission order. `ca_element_symbols`
-  // and `ca_delimiter_symbols` are computed from parse_role and appear nowhere
-  // in the registry file, so they cannot drift from the records.
+  // The view every generator consumes, in emission order. Both are computed
+  // from `parse_role` and appear nowhere in the registry file, so they cannot
+  // drift from the records.
+  //
+  // NAMED FOR THE ROLE THEY ARE DERIVED FROM. They were `ca_element_symbols`
+  // and `ca_delimiter_symbols` until 2026-08-25, which named a THIRD thing.
+  // "CA" is overloaded across three independent axes here: where a symbol's
+  // notation came from (`notation_family`, and 2 of the 25 are `disfluency`,
+  // not CA); what the parser does with it (`parse_role`, which is what these
+  // arrays hold); and `@Options: CA`, a per-file leniency waiver that is not a
+  // property of any symbol at all. A name asserting the first, on a value
+  // holding the second, is a standing invitation to gate the second on the
+  // third.
   const categories = {
-    ca_delimiter_symbols: byRole('paired_stretch'),
-    ca_element_symbols: byRole('word_attached'),
+    paired_stretch_symbols: byRole('paired_stretch'),
+    word_attached_symbols: byRole('word_attached'),
   };
   for (const key of CHARACTER_CLASS_KEYS) {
     const values = raw.character_classes[key];

@@ -123,7 +123,7 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::gate::{GateOutcome, listing, report};
 
 use baseline::KNOWN_DIVERGENCES;
-use model::{CaseReport, ConformanceTally, Divergence, DivergingCase, Reported, SpecLabel};
+use model::{CaseReport, ConformanceTally, Divergence, DivergingCase, Reported};
 use spec_corpus::{SpecCorpus, load_spec_corpus};
 use talkbank_model::model::TranscriptName;
 
