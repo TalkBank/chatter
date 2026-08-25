@@ -9,6 +9,24 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-25
+
+### Removed
+
+- **`resolve_word_language` is gone from the public API.** It answered "what
+  language is this word?" without saying what SCOPE it was asking under, and
+  silently assumed a word's own marker was the whole story. Once `<...> [@s]`
+  spans existed that was false, and the function had nowhere to put the span.
+  Use `GoverningMarker::of(word, enclosing_span)` followed by `.resolve(..)`:
+  the constructor takes the scope, so a caller with none writes `None`
+  explicitly. `resolve_word_language_with_marker` is no longer public either;
+  it is a primitive of that operation.
+
+- **`FileStem::from_str` is renamed `from_stem`.** It can never implement
+  `std::str::FromStr`, whose signature has no input lifetime, while this type
+  borrows its stem; the old name invited callers to expect a trait they could
+  use generically.
+
 ### Added
 
 - **Multi-word code-switch spans: `<word word> [@s]` and `<word word> [@s:code]`.**
@@ -52,6 +70,32 @@ version and are listed under "Changed" / "Removed".
   grammar requires. Invisible for as long as each fixture also emitted a real
   diagnostic to hide it behind. Restoring it changed the diagnostics of zero of
   the 335 existing examples.
+
+- **`chatter debug fix-s` no longer rewrites an utterance containing a
+  code-switch span.** It strips each word's `@s` suffix after writing the
+  `[- LANG]` precode, so for a word inside a span the span would then govern it
+  and its language would silently change: `<how@s:fra to@s:fra> [@s:eng] .`
+  became `[- fra] <how to> [@s:eng] .`, whose words resolve to eng. It now
+  refuses such utterances, which is lossless where rewriting was not. **No
+  released version could do this**, because `[@s:eng]` did not parse before
+  this release; it was found and fixed within the same cycle.
+
+- **`E220` no longer fires on a word whose language is unresolved.** It treated
+  an empty candidate set as "no language permits digits", so an unresolvable
+  `@s` produced "illegal digits in language X" with no X. `E763` already
+  skipped in that case and the two are documented as agreeing. The visible
+  effect: `[- zho] ni3hao3@s .` now reports `E248` alone, which names the
+  actual defect, rather than `E248` plus a consequence of it.
+
+- **Language-gated word rules run whenever the language is KNOWN, not only when
+  the file declares one.** The gate asked whether `@Languages` exists, which is
+  a different question: `<...> [@s:eng]` names a word's language with no header
+  present, and nothing was checking those words.
+
+- **A word carrying its own `@s` inside a span, and a span on a replaced word or
+  a retrace, are now validated under the span** like any other span-governed
+  word. Only annotated GROUPS were handled, so `hallo [@s]` was recorded as
+  switched in metadata while being validated against the tier language.
 
 ### Changed
 
@@ -1638,7 +1682,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/TalkBank/chatter/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/TalkBank/chatter/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/TalkBank/chatter/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/TalkBank/chatter/compare/v0.10.0...v0.11.0
