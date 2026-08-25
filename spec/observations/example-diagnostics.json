@@ -247,7 +247,6 @@
       "example": 1,
       "parse": [],
       "validation": [
-        "E220",
         "E248"
       ]
     },
@@ -2780,6 +2779,20 @@
       "validation": [
         "E763"
       ]
+    },
+    {
+      "spec": "E763_prefix_marker_language_not_allowed.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E763"
+      ]
+    },
+    {
+      "spec": "E763_prefix_marker_language_not_allowed.md",
+      "example": 5,
+      "parse": [],
+      "validation": []
     },
     {
       "spec": "E764_prefixed_form_glued_to_preceding_word.md",

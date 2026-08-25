@@ -57,6 +57,7 @@ impl ChatFileBuilder {
     /// also arrives through `..Default::default()` and through any derive that
     /// needs it, which are two routes to a fabricated language code that read
     /// like they cost nothing.
+    #[allow(clippy::new_without_default)] // The doc above says why: a `Default` is a second route to a fabricated language code.
     pub fn new() -> Self {
         Self {
             language: "eng".to_string(),

@@ -583,7 +583,7 @@ pub fn run_adjudication(
     let mut remaining: Vec<PendingEntry> = Vec::new();
     // Process in document order; clone into the working vec so we
     // can rebuild `pending.entries` from `remaining` after the loop.
-    let drained: Vec<PendingEntry> = pending.entries.drain(..).collect();
+    let drained: Vec<PendingEntry> = std::mem::take(&mut pending.entries);
     for entry in drained {
         let decision = prompter.ask(&entry)?;
         match apply_decision(&entry, &decision, &operator, overrides) {

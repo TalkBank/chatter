@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	nld, eng, hin
+@Participants:	MOT Mother Mother, CHI Child Target_Child
+@ID:	nld, eng, hin|corpus|MOT||female|||Mother|||
+@ID:	nld, eng, hin|corpus|CHI|4;02.|male|||Target_Child|||
+@Comment:	Constructs: multi-word code-switch spans, <...> [@s] and [@s:code]
+@Comment:	The word-attached forms word@s and word@s:code are covered elsewhere
+*CHI:	ik weet niet <how to do it> [@s] .
+*MOT:	kijk <one two three> [@s:eng] .
+*CHI:	<rocket@s:eng jaise jaataa hai> [@s:hin] .
+@Comment:	The inner word marker wins over the span, which is attested usage
+*MOT:	hallo [@s] .
+@Comment:	One content item takes the annotation without angle brackets
+@End

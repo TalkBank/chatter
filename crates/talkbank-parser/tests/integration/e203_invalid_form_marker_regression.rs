@@ -48,7 +48,7 @@ fn unknown_form_marker_emits_e203_not_e316() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         input,
-        TranscriptName::Named(FileStem::from_str("e203_regression")),
+        TranscriptName::Named(FileStem::from_stem("e203_regression")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
@@ -70,7 +70,7 @@ fn valid_builtin_form_marker_not_flagged() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         input,
-        TranscriptName::Named(FileStem::from_str("e203_regression")),
+        TranscriptName::Named(FileStem::from_stem("e203_regression")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
@@ -92,7 +92,7 @@ fn valid_language_suffix_not_flagged() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         input,
-        TranscriptName::Named(FileStem::from_str("e203_regression")),
+        TranscriptName::Named(FileStem::from_stem("e203_regression")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 

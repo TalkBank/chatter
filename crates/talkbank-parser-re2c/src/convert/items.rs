@@ -717,6 +717,18 @@ pub(crate) fn parsed_annotation_to_scoped(
         }
         crate::ast::ParsedAnnotation::Uncertain => Some(ContentAnnotation::Uncertain),
         crate::ast::ParsedAnnotation::Exclude => Some(ContentAnnotation::Exclude),
+        crate::ast::ParsedAnnotation::CodeSwitchShortcut => Some(ContentAnnotation::CodeSwitch(
+            talkbank_model::model::CodeSwitchSpan::Shortcut,
+        )),
+        crate::ast::ParsedAnnotation::CodeSwitchExplicit(code) => Some(
+            ContentAnnotation::CodeSwitch(talkbank_model::model::CodeSwitchSpan::Explicit(
+                // Same justification as the word-level `@s:` suffix above: the
+                // lexer's `[a-z]{2,4}` matches `language_code` exactly, so this
+                // is defensive only.
+                talkbank_model::LanguageCode::new(*code)
+                    .expect("lexer-guaranteed language_code shape"),
+            )),
+        ),
         crate::ast::ParsedAnnotation::Error(s) => {
             let code = if s.is_empty() {
                 None

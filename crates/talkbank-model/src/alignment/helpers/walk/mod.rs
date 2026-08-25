@@ -17,9 +17,9 @@
 
 use crate::alignment::helpers::domain::TierDomain;
 use crate::model::{
-    Action, Bullet, Event, Freecode, LongFeatureBegin, LongFeatureEnd, NonvocalBegin, NonvocalEnd,
-    NonvocalSimple, OtherSpokenEvent, OverlapPoint, Pause, ReplacedWord, Separator,
-    UnderlineMarker, UtteranceContent, Word,
+    Action, Bullet, CodeSwitchSpan, ContentAnnotation, Event, Freecode, LongFeatureBegin,
+    LongFeatureEnd, NonvocalBegin, NonvocalEnd, NonvocalSimple, OtherSpokenEvent, OverlapPoint,
+    Pause, ReplacedWord, Separator, UnderlineMarker, UtteranceContent, Word,
 };
 
 // The bracketed-content recursors and group-gating predicates live in a sibling
@@ -436,63 +436,178 @@ pub fn walk_content_mut<'a>(
 // walk_words, word-like items only (replacement for walk_words)
 // ---------------------------------------------------------------------------
 
-/// Walk utterance content and call `f` for each word-like leaf item.
+/// The language scope a walked leaf sits in.
 ///
-/// This is a convenience filter over [`walk_content`] that only emits
-/// words, replaced words, and separators. It replaces the deprecated
-/// [`walk_words`] function.
+/// A word inside `<...> [@s]` takes the span's language exactly as if it
+/// carried the `@s` suffix itself, so the resolver needs to know which scope
+/// produced the leaf. Carrying that as a VALUE handed to the callback, rather
+/// than as a flag the caller maintains across calls, is what keeps the rule out
+/// of convention: there is no state to forget to clear when the walk leaves the
+/// group.
+///
+/// Nesting resolves innermost-wins: a span inside a span replaces the outer
+/// scope for its own contents, which is the only reading under which each word
+/// has one answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageScope<'a> {
+    /// No enclosing code-switch span. The word's own marker and the utterance
+    /// language decide, as they always have.
+    Utterance,
+
+    /// Inside a `<...> [@s]` or `<...> [@s:lang]` span.
+    CodeSwitch(&'a CodeSwitchSpan),
+}
+
+/// Walk utterance content and call `f` for each word-like leaf item, telling it
+/// which [`LanguageScope`] the leaf was found in.
+///
+/// A convenience filter over the content walk that emits only words, replaced
+/// words and separators.
 ///
 /// When `domain` is `Some(Mor)`, annotated groups with retrace/reformulation
 /// annotations are skipped. When `domain` is `Some(Pho)` or `Some(Sin)`,
-/// PhoGroup and SinGroup are skipped (treated as atomic units by those domains).
-/// When `domain` is `None`, all groups are recursed unconditionally.
+/// PhoGroup and SinGroup are skipped (treated as atomic units by those
+/// domains). When `domain` is `None`, all groups are recursed unconditionally.
+///
+/// This is the one descent for word-like leaves: [`walk_words`] wraps it and
+/// discards the scope, so the two cannot disagree about which leaves exist. A
+/// private second walk with its own leaf set is the bug this module's history
+/// is made of.
+///
+/// An earlier version of this paragraph claimed
+/// `model::content::main_tier::language_switch` still ran a walk of its own. It
+/// did not; it called [`walk_words`], the scope-DISCARDING wrapper, which was a
+/// different and worse problem: its predicate deletes per-word `@s` markers, and
+/// without the scope it could not see that an enclosing span would inherit the
+/// word. It now calls this function.
+pub fn walk_words_scoped<'a>(
+    content: &'a [UtteranceContent],
+    domain: Option<TierDomain>,
+    f: &mut impl FnMut(WordItem<'a>, LanguageScope<'a>),
+) {
+    walk_words_in_scope(content, domain, LanguageScope::Utterance, f);
+}
+
+impl<'a> LanguageScope<'a> {
+    /// The scope in force INSIDE a group carrying `annotations`.
+    ///
+    /// A `<...> [@s]` group opens a code-switch scope for its contents;
+    /// anything else leaves the enclosing scope alone. Innermost wins, so a
+    /// nested span replaces this one rather than combining with it.
+    ///
+    /// One owner on purpose. This was spelled out at both descent sites, in two
+    /// files, so "innermost wins" was a rule two call sites had to keep
+    /// agreeing on and a change to precedence was two edits that could silently
+    /// disagree.
+    ///
+    /// At most one span per group is meaningful; a second is a validation
+    /// finding rather than something to merge, so the first is taken. Nothing
+    /// reports the second yet.
+    pub(super) fn inside(self, annotations: &'a [ContentAnnotation]) -> Self {
+        match Self::selected_by(annotations) {
+            Some(span) => Self::CodeSwitch(span),
+            None => self,
+        }
+    }
+
+    /// The span governing this scope, if any.
+    ///
+    /// The bridge to [`GoverningMarker::of`], which takes the `Option` rather
+    /// than this enum: the walk threads a scope, word validation stores one,
+    /// and only this accessor converts between them.
+    #[must_use]
+    pub fn span(self) -> Option<&'a CodeSwitchSpan> {
+        match self {
+            Self::CodeSwitch(span) => Some(span),
+            Self::Utterance => None,
+        }
+    }
+
+    /// The span an annotation list opens, if any.
+    ///
+    /// The ONE answer to "does this annotation list open a code-switch scope",
+    /// shared by the alignment walk (which threads a borrowed scope) and by
+    /// word VALIDATION (which stores an owned span on its context). Those two
+    /// carry the scope differently and must not decide it differently: a word
+    /// whose metadata says the span governs it, but whose `E220`/`E763` checks
+    /// ran against the tier language, is the exact disagreement this prevents.
+    #[must_use]
+    pub fn selected_by(annotations: &[ContentAnnotation]) -> Option<&CodeSwitchSpan> {
+        annotations.iter().find_map(|annotation| match annotation {
+            ContentAnnotation::CodeSwitch(span) => Some(span),
+            _ => None,
+        })
+    }
+}
+
+/// Walk utterance content and call `f` for each word-like leaf item.
+///
+/// Thin wrapper over [`walk_words_scoped`] that discards the language scope, so
+/// there is one descent and one leaf set. Callers that need to know whether a
+/// word sits inside a `<...> [@s]` span use the scoped form.
 pub fn walk_words<'a>(
     content: &'a [UtteranceContent],
     domain: Option<TierDomain>,
     f: &mut impl FnMut(WordItem<'a>),
 ) {
+    walk_words_scoped(content, domain, &mut |item, _scope| f(item));
+}
+
+fn walk_words_in_scope<'a>(
+    content: &'a [UtteranceContent],
+    domain: Option<TierDomain>,
+    scope: LanguageScope<'a>,
+    f: &mut impl FnMut(WordItem<'a>, LanguageScope<'a>),
+) {
     for item in content {
         match item {
             UtteranceContent::Word(word) => {
-                f(WordItem::Word(word));
+                f(WordItem::Word(word), scope);
             }
             UtteranceContent::AnnotatedWord(annotated) => {
                 if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    f(WordItem::Word(&annotated.inner));
+                    // A scoped annotation may attach to ONE content item without
+                    // angle brackets, so `hallo [@s]` governs its own word just
+                    // as `<a b> [@s]` governs the words it encloses.
+                    f(
+                        WordItem::Word(&annotated.inner),
+                        scope.inside(&annotated.scoped_annotations),
+                    );
                 }
             }
             UtteranceContent::ReplacedWord(replaced) => {
-                f(WordItem::ReplacedWord(replaced));
+                f(WordItem::ReplacedWord(replaced), scope);
             }
             UtteranceContent::Separator(sep) => {
-                f(WordItem::Separator(sep));
+                f(WordItem::Separator(sep), scope);
             }
             UtteranceContent::Group(group) => {
-                walk_bracketed_words(&group.content.content, domain, f);
+                walk_bracketed_words(&group.content.content, domain, scope, f);
             }
             UtteranceContent::AnnotatedGroup(annotated) => {
                 if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_words(&annotated.inner.content.content, domain, f);
+                    let inner = scope.inside(&annotated.scoped_annotations);
+                    walk_bracketed_words(&annotated.inner.content.content, domain, inner, f);
                 }
             }
             UtteranceContent::PhoGroup(pho) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&pho.content.content, domain, f);
+                    walk_bracketed_words(&pho.content.content, domain, scope, f);
                 }
             }
             UtteranceContent::SinGroup(sin) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&sin.content.content, domain, f);
+                    walk_bracketed_words(&sin.content.content, domain, scope, f);
                 }
             }
             UtteranceContent::Quotation(quot) => {
-                walk_bracketed_words(&quot.content.content, domain, f);
+                walk_bracketed_words(&quot.content.content, domain, scope, f);
             }
             UtteranceContent::Retrace(retrace) => {
                 // Retrace content is excluded from %mor (not morphologically analyzed),
                 // but included in %pho/%sin/%wor and for domain-unspecified walks.
                 if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&retrace.content.content, domain, f);
+                    walk_bracketed_words(&retrace.content.content, domain, scope, f);
                 }
             }
             UtteranceContent::AnnotatedRetrace(annotated) => {
@@ -500,7 +615,7 @@ pub fn walk_words<'a>(
                 // wrapper, are not words, and are not walked; only the retraced
                 // content is.
                 if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&annotated.inner.content.content, domain, f);
+                    walk_bracketed_words(&annotated.inner.content.content, domain, scope, f);
                 }
             }
             // Non-word items: events, pauses, actions, overlap markers, bullets,

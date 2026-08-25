@@ -166,12 +166,12 @@ pub(crate) fn check_comma_after_non_spoken(utterance: &Utterance, errors: &impl 
     }
 }
 
-/// The source start byte of a content item, when the item is a word
-/// whose position can license E749. Non-word items return `None` by
-/// policy: a comma directly followed by a group, overlap, or CA mark is
-/// exempt in CLAN CHECK 92, and every such construct places its own
-/// character after the comma anyway, so word starts are the only
-/// adjacency that matters.
+// The source start byte of a content item, when the item is a word
+// whose position can license E749. Non-word items return `None` by
+// policy: a comma directly followed by a group, overlap, or CA mark is
+// exempt in CLAN CHECK 92, and every such construct places its own
+// character after the comma anyway, so word starts are the only
+// adjacency that matters.
 
 /// E749: a comma must be followed by a space or end-of-line (CLAN CHECK
 /// 92). Fires when the item after a comma, in document order via

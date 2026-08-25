@@ -57,6 +57,31 @@ The `@s:` suffix marks a word's language in multilingual transcripts:
 *CHI:	I want a Keks@s:deu .
 ```
 
+When a whole stretch switches language, annotate the group rather than
+suffixing every word:
+
+```chat
+*CHI:	ik weet niet <how to do it> [@s] .
+*TEA:	us samay <kyaa hotaa hai> [@s:hin] .
+```
+
+`[@s:code]` names the language; bare `[@s]` resolves the way a bare `word@s`
+does. Every word in the `<>` scope takes that language, exactly as if each
+carried the suffix. As with any scoped annotation, a single item needs no
+angle brackets: `hallo [@s]` is well-formed and means what `hallo@s` means.
+
+A word inside the span may carry its OWN marker, and the word wins:
+
+```chat
+*TEA:	<rocket@s:eng jaise jaataa hai> [@s:hin] .
+```
+
+That is not redundancy to avoid. It is how a borrowed word is marked inside a
+switched clause, and it is what transcribers actually write: the span carries
+the matrix language of the stretch, the suffix carries the donor language of
+one item. Resolution is innermost-first, and each layer is recorded with its
+own provenance, so a consumer can tell which mark decided a given word.
+
 A word can also carry one special-form marker naming what kind of form it is
 (`gumma@c` for a child-invented word, `b@l` for a letter). The complete set,
 with meanings and examples, is the table in

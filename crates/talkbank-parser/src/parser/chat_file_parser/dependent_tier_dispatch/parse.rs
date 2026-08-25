@@ -71,7 +71,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         // Bullet/text tiers: parse directly, no `has_error` gate (unchanged).
         C::ComDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_com_dependent_tier(n).child_1.slot(),
+                extract_com_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_com_tier(n.raw_node(), input, errors);
             utterance
@@ -83,7 +83,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::ExpDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_exp_dependent_tier(n).child_1.slot(),
+                extract_exp_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_exp_tier(n.raw_node(), input, errors);
             utterance
@@ -95,7 +95,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::AddDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_add_dependent_tier(n).child_1.slot(),
+                extract_add_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_add_tier(n.raw_node(), input, errors);
             utterance
@@ -107,7 +107,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::SpaDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_spa_dependent_tier(n).child_1.slot(),
+                extract_spa_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_spa_tier(n.raw_node(), input, errors);
             utterance
@@ -119,7 +119,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::SitDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_sit_dependent_tier(n).child_1.slot(),
+                extract_sit_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_sit_tier(n.raw_node(), input, errors);
             utterance
@@ -131,7 +131,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::IntDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_int_dependent_tier(n).child_1.slot(),
+                extract_int_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_int_tier(n.raw_node(), input, errors);
             utterance
@@ -143,7 +143,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::GpxDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_gpx_dependent_tier(n).child_1.slot(),
+                extract_gpx_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_gpx_tier(n.raw_node(), input, errors);
             utterance
@@ -155,7 +155,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::CodDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_cod_dependent_tier(n).child_1.slot(),
+                extract_cod_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_cod_tier(n.raw_node(), input, errors);
             utterance
@@ -167,7 +167,7 @@ pub(crate) fn parse_and_attach_dependent_tier(
         }
         C::ActDependentTier(n) => {
             let separator = super::helpers::dependent_tier_separator(
-                &extract_act_dependent_tier(n).child_1.slot(),
+                extract_act_dependent_tier(n).child_1.slot(),
             );
             let tier = parse_act_tier(n.raw_node(), input, errors);
             utterance

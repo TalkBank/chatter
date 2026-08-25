@@ -86,7 +86,7 @@ pub(crate) async fn validate_and_publish(
                 .and_then(|mut segments| segments.next_back())
                 .and_then(|f| f.strip_suffix(".cha"))
                 .map_or(TranscriptName::Anonymous, |stem| {
-                    TranscriptName::Named(FileStem::from_str(stem))
+                    TranscriptName::Named(FileStem::from_stem(stem))
                 });
 
             let old_tree = parse_trees.get(&uri).map(|entry| entry.clone());

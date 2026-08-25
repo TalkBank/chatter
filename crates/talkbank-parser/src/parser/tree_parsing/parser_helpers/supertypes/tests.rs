@@ -1,28 +1,25 @@
 //! Tests for this subsystem.
 //!
 
-use super::{is_base_annotation, is_dependent_tier, is_header, is_terminator};
+use super::{is_dependent_tier, is_header, is_terminator};
 
-/// Tests is base annotation.
-#[test]
-fn test_is_base_annotation() {
-    // Leaf annotations (Phase 5 coarsening inlined all intermediate wrappers)
-    assert!(is_base_annotation("error_marker_annotation"));
-    assert!(is_base_annotation("explanation_annotation"));
-    assert!(is_base_annotation("indexed_overlap_precedes"));
-    assert!(is_base_annotation("retrace_complete"));
-    assert!(is_base_annotation("scoped_stressing"));
-    assert!(is_base_annotation("exclude_marker"));
-    // Supertype wrapper
-    assert!(is_base_annotation("base_annotation"));
-    // Not annotations
-    assert!(!is_base_annotation("word"));
-    assert!(!is_base_annotation("header"));
-    // Removed intermediate wrappers (no longer in grammar)
-    assert!(!is_base_annotation("retrace_marker"));
-    assert!(!is_base_annotation("overlap"));
-    assert!(!is_base_annotation("scoped_symbol"));
-}
+// `test_is_base_annotation` was DELETED here on 2026-08-25, and nothing replaced
+// it, which is the point.
+//
+// It asserted membership kind by kind against a hand-written `matches!` list:
+// two spellings of one fact, and a test whose only job was to notice they had
+// drifted. It did not notice. By the time it was removed the list named three
+// kinds the grammar's `base_annotation` choice does not contain
+// (`duration_annotation`, `retrace_uncertain`, `scoped_best_guess`) and omitted
+// `code_switch_annotation`, which the grammar had just gained, so the predicate
+// rejected a construct the parser accepted.
+//
+// What guards the list now is behaviour rather than a second copy of it: the
+// spec-generated construct corpus tests parse each member through a real file,
+// and they are what failed loudly when `code_switch_annotation` was missing.
+// `is_base_annotation`'s own docstring is the single owner of the rest of the
+// explanation, including why deriving the list from the generated traversal was
+// tried and backed out.
 
 /// Tests is terminator.
 #[test]

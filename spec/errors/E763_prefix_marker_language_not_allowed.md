@@ -45,6 +45,34 @@ chat = '''
 @Comment:	ERROR: the word resolves to eng, which does not use the marker
 @End
 '''
+
+[[example]]
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	heb, eng
+@Participants:	CHI Target_Child
+@ID:	heb, eng|corpus|CHI|||||Target_Child|||
+*CHI:	ani amarti <the dog# there> [@s:eng] .
+@Comment:	ERROR: the span resolves its words to eng, which does not use the marker
+@End
+'''
+
+[[example]]
+level = 'word'
+claim = 'legal'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng, heb
+@Participants:	CHI Target_Child
+@ID:	eng, heb|corpus|CHI|||||Target_Child|||
+*CHI:	I said <ha# kelev> [@s:heb] .
+@Comment:	LEGAL: the span resolves its words to heb, which writes the marker
+@End
+'''
 +++
 
 ## Description
@@ -58,7 +86,17 @@ The gate reads the WORD's resolved language, never the file's `@Languages`
 header. This is the same policy the digits rule (`E220`) applies, and for the
 same reason: an English-headed file may legitimately contain a Hebrew word,
 and that word brings its own rules with it. A word carrying its own `@s:`
-marker carries its own language.
+marker carries its own language, and so does a word inside a `<...> [@s]`
+code-switch span.
+
+The span case is worth stating separately because it is the one that was
+WRONG. Span support landed with resolution wired into metadata but not into
+this check, so a word's recorded language and the language it was validated
+against could disagree: `<ha# kelev> [@s:heb]` in an English-headed file was
+reported E763 as English while its own metadata said Hebrew. Both paths now
+share one precedence decision (`GoverningMarker`), and the two examples above
+pin both directions, since a rule that never fires and a rule that always
+fires are equally wrong and look identical from one example.
 
 ## Expected Behavior
 

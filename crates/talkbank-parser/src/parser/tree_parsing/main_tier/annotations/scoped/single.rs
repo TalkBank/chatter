@@ -12,13 +12,16 @@
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::model::ContentAnnotation;
 use crate::node_types::{
-    ALT_ANNOTATION, BASE_ANNOTATION, ERROR_MARKER_ANNOTATION, EXCLUDE_MARKER,
-    EXPLANATION_ANNOTATION, INDEXED_OVERLAP_FOLLOWS, INDEXED_OVERLAP_PRECEDES, PARA_ANNOTATION,
-    PERCENT_ANNOTATION, RETRACE_COMPLETE, RETRACE_MULTIPLE, RETRACE_PARTIAL, RETRACE_REFORMULATION,
-    SCOPED_CONTRASTIVE_STRESSING, SCOPED_STRESSING, SCOPED_UNCERTAIN,
+    ALT_ANNOTATION, BASE_ANNOTATION, CODE_SWITCH_ANNOTATION, ERROR_MARKER_ANNOTATION,
+    EXCLUDE_MARKER, EXPLANATION_ANNOTATION, INDEXED_OVERLAP_FOLLOWS, INDEXED_OVERLAP_PRECEDES,
+    PARA_ANNOTATION, PERCENT_ANNOTATION, RETRACE_COMPLETE, RETRACE_MULTIPLE, RETRACE_PARTIAL,
+    RETRACE_REFORMULATION, SCOPED_CONTRASTIVE_STRESSING, SCOPED_STRESSING, SCOPED_UNCERTAIN,
 };
+use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use crate::tokens;
+use talkbank_model::LanguageCode;
 use talkbank_model::ParseOutcome;
+use talkbank_model::model::CodeSwitchSpan;
 use talkbank_model::model::RetraceKind;
 use tree_sitter::Node;
 
@@ -133,6 +136,30 @@ pub(crate) fn parse_single_annotation(
         // Exclude marker, already atomic token
         EXCLUDE_MARKER => {
             ParseOutcome::parsed(ParsedAnnotation::Content(ContentAnnotation::Exclude))
+        }
+        // Code-switch span: `[@s]` or `[@s:lang]`. The optional `code` field is
+        // what distinguishes the two forms, and its ABSENCE is the bare form
+        // rather than a missing value, so it maps to a variant and never to a
+        // defaulted code.
+        CODE_SWITCH_ANNOTATION => {
+            let span = match annotation_node.child_by_field_name("code") {
+                None => Some(CodeSwitchSpan::Shortcut),
+                Some(code_node) => LanguageCode::new(extract_utf8_text(
+                    code_node,
+                    source,
+                    errors,
+                    "code_switch_annotation language code",
+                    "",
+                ))
+                .ok()
+                .map(CodeSwitchSpan::Explicit),
+            };
+            delegate_content_or_error(
+                span.map(ContentAnnotation::CodeSwitch),
+                annotation_node,
+                source,
+                errors,
+            )
         }
         _ => {
             errors.report(ParseError::new(

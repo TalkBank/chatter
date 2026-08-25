@@ -52,6 +52,21 @@ pub enum WordLanguageMarker {
     Ambiguous(Vec<LanguageCode>),
 }
 
+impl From<&crate::model::CodeSwitchSpan> for WordLanguageMarker {
+    /// The marker an enclosing `<...> [@s]` span applies to each word it holds.
+    ///
+    /// Total and variant-for-variant, which is the whole content of "a span is
+    /// equivalent to marking every word inside it". It lives beside the enum so
+    /// every resolution consumer can reach it; keeping it private to the
+    /// utterance metadata module meant the next consumer would write its own.
+    fn from(span: &crate::model::CodeSwitchSpan) -> Self {
+        match span {
+            crate::model::CodeSwitchSpan::Shortcut => Self::Shortcut,
+            crate::model::CodeSwitchSpan::Explicit(code) => Self::explicit(code.clone()),
+        }
+    }
+}
+
 impl WordLanguageMarker {
     /// Build an explicit single-language override (`@s:code`).
     ///

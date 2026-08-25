@@ -1,14 +1,17 @@
 //! Whole-utterance language-switch detection for main tiers.
 //!
-//! This module intentionally depends on `crate::validation::resolve_word_language`.
-//! The same predicate is the detection seam behind validator E255 and the
-//! `chatter debug fix-s` rewrite tooling, so it must share the validation
-//! language-resolution rules rather than reimplementing them locally.
+//! This module intentionally resolves through `GoverningMarker`, the one
+//! route to a word's language. The same predicate is the detection seam behind
+//! validator E255 and the `chatter debug fix-s` rewrite tooling, so it must
+//! share the validation language-resolution rules rather than reimplementing
+//! them locally.
 
 use super::MainTier;
+use crate::model::CodeSwitchSpan;
 use crate::model::LanguageCode;
 use crate::model::content::UtteranceContent;
 use crate::model::content::word::Word;
+use crate::validation::word::language::GoverningMarker;
 
 impl MainTier {
     /// Return the utterance-level language that would replace whole-tier
@@ -52,11 +55,32 @@ impl MainTier {
         }
 
         let mut target_lang: Option<LanguageCode> = None;
-        for word in words {
+        for (word, enclosing) in words {
             word.lang.as_ref()?;
 
-            let outcome =
-                crate::validation::resolve_word_language(word, tier_language, declared_languages);
+            // A word inside a `<...> [@s]` span is NOT a rewrite candidate, and
+            // this guard is the whole reason the walk threads a scope here.
+            //
+            // The rewrite strips each word's own `@s` suffix after writing the
+            // `[- LANG]` precode. For a word inside a span, the span then
+            // governs it, so stripping SILENTLY CHANGES ITS LANGUAGE. Measured
+            // before the fix: `<how@s:fra to@s:fra> [@s:eng] .` was rewritten
+            // to `[- fra] <how to> [@s:eng] .`, whose words resolve to eng.
+            // A transform advertised as a normalization relabelled every word
+            // it touched, and reported success.
+            //
+            // Refusing is lossless; rewriting is not. Same-language spans are
+            // refused too, deliberately: the predicate's job is to be sure, and
+            // "the codes happen to agree today" is not a reason to edit.
+            if enclosing.is_some() {
+                return None;
+            }
+
+            let outcome = GoverningMarker::of(word, enclosing).resolve(
+                word,
+                tier_language,
+                declared_languages,
+            );
             let resolved = match outcome.resolution {
                 crate::validation::LanguageResolution::Single(code) => code,
                 _ => return None,
@@ -95,15 +119,27 @@ impl MainTier {
 /// A replaced word contributes BOTH sides: the word as produced and each word
 /// of its replacement, because either can carry the `@s` marker the caller is
 /// looking for. Separators carry no language and are dropped.
+type ScopedWord<'a> = (&'a Word, Option<&'a CodeSwitchSpan>);
+
 fn collect_main_tier_words_for_language_check<'a>(
     content: &'a [UtteranceContent],
-    out: &mut Vec<&'a Word>,
+    out: &mut Vec<ScopedWord<'a>>,
 ) {
-    crate::alignment::helpers::walk_words(content, None, &mut |item| match item {
-        crate::alignment::helpers::WordItem::Word(word) => out.push(word),
+    // The SCOPED walk, not `walk_words`: this predicate decides whether to
+    // delete per-word `@s` markers, and that decision is wrong for any word an
+    // enclosing span would inherit. Discarding the scope here is what let the
+    // rewrite corrupt language.
+    crate::alignment::helpers::walk_words_scoped(content, None, &mut |item, scope| match item {
+        crate::alignment::helpers::WordItem::Word(word) => out.push((word, scope.span())),
         crate::alignment::helpers::WordItem::ReplacedWord(replaced) => {
-            out.push(&replaced.word);
-            out.extend(replaced.replacement.words.iter());
+            out.push((&replaced.word, scope.span()));
+            out.extend(
+                replaced
+                    .replacement
+                    .words
+                    .iter()
+                    .map(|word| (word, scope.span())),
+            );
         }
         crate::alignment::helpers::WordItem::Separator(_) => {}
     });

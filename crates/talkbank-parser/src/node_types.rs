@@ -472,6 +472,8 @@ pub const ALT_ANNOTATION: &str = "alt_annotation";
 pub const DURATION_ANNOTATION: &str = "duration_annotation";
 /// Error marker annotation `[*]`.
 pub const ERROR_MARKER_ANNOTATION: &str = "error_marker_annotation";
+/// Code-switch span annotation `[@s]` / `[@s:lang]`.
+pub const CODE_SWITCH_ANNOTATION: &str = "code_switch_annotation";
 /// Exclude marker for omitting content from analysis.
 pub const EXCLUDE_MARKER: &str = "exclude_marker";
 /// Explanation annotation `[= text]`.

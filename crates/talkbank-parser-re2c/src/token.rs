@@ -147,6 +147,16 @@ pub enum Token<'a> {
     ScopedUncertain(&'a str),
     /// grammar.js: exclude_marker = `token('[e]')`
     ExcludeMarker(&'a str),
+    /// grammar.js: code_switch_annotation, bare form `[@s]`.
+    ///
+    /// Two tokens rather than one with an optional payload, mirroring
+    /// `CodeSwitchSpan`'s two variants: the bare form is not a MISSING code,
+    /// it is its own resolution rule, so an `Option` here would invite the
+    /// same confusion the model type exists to prevent.
+    CodeSwitchShortcut(&'a str),
+    /// grammar.js: code_switch_annotation, explicit form `[@s:code]`.
+    /// Rich token: the tag marks the language code alone.
+    CodeSwitchExplicit(&'a str),
     /// grammar.js: freecode = token(/\[\^ [^\]\r\n]+\]/)
     /// Rich token: [^ content] with tag marking content boundaries.
     Freecode(&'a str),
@@ -594,6 +604,8 @@ impl<'a> Token<'a> {
             | Token::ScopedContrastiveStressing(s)
             | Token::ScopedUncertain(s)
             | Token::ExcludeMarker(s)
+            | Token::CodeSwitchShortcut(s)
+            | Token::CodeSwitchExplicit(s)
             | Token::Freecode(s)
             | Token::CaContinuationMarker(s)
             | Token::LongFeatureBegin(s)

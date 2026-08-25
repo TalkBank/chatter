@@ -89,7 +89,14 @@ impl MarkdownExample {
                     let content = &code_block.literal;
 
                     if lang == "cst" {
-                        cst = strip_single_trailing_newline(content);
+                        let block = strip_single_trailing_newline(content);
+                        balanced_sexp(&block).map_err(|why| {
+                            format!(
+                                "{}: the ```cst``` block is not a well-formed s-expression: {why}",
+                                path.display()
+                            )
+                        })?;
+                        cst = block;
                     } else if !lang.is_empty() && input.is_empty() {
                         // Input fence - could be "word", "chat-file", "mor-word", etc.
                         input = strip_single_trailing_newline(content);
@@ -469,6 +476,58 @@ impl MarkdownCategory {
                 .collect(),
         }
     }
+}
+
+/// Refuse a ```cst``` block that is not a balanced s-expression.
+///
+/// PARSE, DON'T VALIDATE, applied to the spec loader: a malformed block stops
+/// being representable rather than being caught by whoever next reads the file.
+///
+/// This exists because a corrupted block shipped. A CST extracted by a script
+/// that counted parens per LINE overran, and the committed spec ended
+/// `(newline))))))` followed by two lines of paste debris (`_header`,
+/// `ewline))))`). EVERY gate passed: `tree-sitter test`, `spec-check`,
+/// `spec-gen`, the corpus differential. They passed because the generated
+/// corpus test is re-derived from an actual parse and never compared against
+/// this block, so the block is read only by humans, and no human read it.
+///
+/// A stronger gate would compare the block to the parse itself, which would
+/// also catch a block that is well-formed and WRONG. That needs the two
+/// spellings reconciled (this one carries no field labels and is indented; the
+/// parse emits labels on one line), so it is not free. Balance is the cheap
+/// half, and it is the half that would have caught this.
+fn balanced_sexp(block: &str) -> Result<(), String> {
+    let mut depth: i32 = 0;
+    for (index, line) in block.lines().enumerate() {
+        for ch in line.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth < 0 {
+                        return Err(format!(
+                            "line {} closes more nodes than are open",
+                            index + 1
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Depth returning to zero before the last line means the tree ended and
+        // something follows it, which is exactly what paste debris looks like.
+        if depth == 0 && index + 1 < block.lines().count() {
+            return Err(format!(
+                "the tree ends at line {}, but {} more line(s) follow",
+                index + 1,
+                block.lines().count() - index - 1
+            ));
+        }
+    }
+    if depth != 0 {
+        return Err(format!("{depth} node(s) left unclosed"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

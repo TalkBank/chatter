@@ -10,12 +10,10 @@ use talkbank_derive::{SpanShift, ValidationTagged};
 
 /// Source of language resolution for a word.
 ///
-/// CHAT supports multiple ways to specify language for words:
-/// - **Default**: From `@Languages` header (primary language)
-/// - **TierScoped**: From utterance-level `[- code]` marker
-/// - **WordExplicit**: From word-level `@s:code` marker
-/// - **WordShortcut**: From word-level `@s` shortcut (toggles between primary/secondary)
-/// - **Unresolved**: No language could be determined (validation error)
+/// Each variant documents the mechanism it comes from. This doc used to repeat
+/// them as a bullet list and the list went stale in the very commit that added
+/// `SpanShortcut` and `SpanExplicit`, having also shipped that way into the
+/// generated JSON schema description, so the mirror is gone.
 ///
 /// Keeping provenance separate from `WordLanguages` lets downstream tools
 /// distinguish "same resolved code, different source semantics" cases, which
@@ -49,6 +47,25 @@ pub enum LanguageSource {
     ///
     /// In dual-language contexts this flips between primary and secondary language.
     WordShortcut,
+
+    /// Resolved from a bare code-switch ANNOTATION, `[@s]`.
+    ///
+    /// Covers both of its scopes, because a scoped annotation may attach to one
+    /// content item without angle brackets: `<a b> [@s]` governs the words it
+    /// encloses, and `hallo [@s]` governs its own. Either way the rule applied
+    /// is the one bare `word@s` uses.
+    ///
+    /// A separate variant from [`Self::WordShortcut`] because the provenance
+    /// differs even when the resolved code is identical: a consumer asking "was
+    /// this marked with a suffix or with an annotation?" must be able to tell,
+    /// and a shared variant would answer neither.
+    SpanShortcut,
+
+    /// Resolved from a code-switch annotation with an explicit code,
+    /// `[@s:code]`, in either of the scopes described above.
+    ///
+    /// Distinct from [`Self::WordExplicit`] for the same reason.
+    SpanExplicit,
 
     /// No language could be resolved.
     ///

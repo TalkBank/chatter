@@ -2466,6 +2466,20 @@
       "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
     },
     {
+      "fixture": "E763_prefix_marker_language_not_allowed_4.cha",
+      "code": "E763",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
+    },
+    {
+      "fixture": "E763_prefix_marker_language_not_allowed_5.cha",
+      "code": "E763",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E763_prefix_marker_language_not_allowed.md"
+    },
+    {
       "fixture": "E764_prefixed_form_glued_to_preceding_word_1.cha",
       "code": "E764",
       "claim": "violates",

@@ -9,6 +9,50 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-word code-switch spans: `<word word> [@s]` and `<word word> [@s:code]`.**
+  Every word in the scope takes the switched language, exactly as if each
+  carried the `@s` / `@s:code` suffix, so a switched stretch no longer has to be
+  annotated word by word. Bare `[@s]` resolves the way a bare `word@s` does. As
+  with any scoped annotation, a single content item needs no angle brackets:
+  `hallo [@s]` is well-formed.
+
+  **A word inside the span may carry its own marker, and the word wins.** This
+  is attested usage rather than a case to reject: transcripts mark a switched
+  stretch with the span and individual borrowed words inside it with the donor
+  language. Resolution is innermost-first (word, then span, then utterance) and
+  each layer records its own provenance, so `language_metadata[].source` gains
+  `span_shortcut` and `span_explicit` alongside the existing `word_*` values. A
+  span and a suffix can resolve to the same CODE, and that field is the only way
+  to tell which mark decided it.
+
+  Consumers reading a word's `lang` field alone will under-report switches: a
+  span is an annotation on the group, and the words inside keep `lang: null`
+  unless suffixed. `language_metadata` carries the resolved answer for every
+  word regardless of which mark produced it.
+
+### Fixed
+
+- **`E220` and `E763` gated on the wrong language inside a code-switch span.**
+  Span resolution reached metadata but not word validation, so a word's recorded
+  language and the language it was checked against could disagree:
+  `<ha# kelev> [@s:heb]` in an English-headed file was reported `E763` as
+  English while its own metadata said Hebrew. Both paths now share one
+  precedence decision.
+
+- **A `[@s:code]` span could not be serialized to JSON at all.** The enum was
+  internally tagged, which serde cannot use for a variant carrying a string, so
+  `chatter to-json` failed at runtime on any transcript containing one while the
+  bare `[@s]` form worked. The committed JSON Schema described a shape the
+  serializer could never emit; it is regenerated and smaller.
+
+- **Every generated error fixture parsed with a spurious `MISSING newline`
+  recovery node**, because the generator stripped the trailing newline the
+  grammar requires. Invisible for as long as each fixture also emitted a real
+  diagnostic to hide it behind. Restoring it changed the diagnostics of zero of
+  the 335 existing examples.
+
 ### Changed
 
 - **"CA" named three different things, and two names picked the wrong one.**

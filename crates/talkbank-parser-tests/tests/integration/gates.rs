@@ -73,10 +73,10 @@ fn the_registry_lists_every_gate() -> Result<(), String> {
                 implementors.insert(rest.trim_end_matches(" {").trim().to_owned());
             }
             // Entries in `ALL` are written `&crate::<module>::<Type>,`.
-            if let Some(rest) = trimmed.strip_prefix("&crate::") {
-                if let Some(name) = rest.trim_end_matches(',').rsplit("::").next() {
-                    registered.insert(name.to_owned());
-                }
+            if let Some(rest) = trimmed.strip_prefix("&crate::")
+                && let Some(name) = rest.trim_end_matches(',').rsplit("::").next()
+            {
+                registered.insert(name.to_owned());
             }
         }
     }

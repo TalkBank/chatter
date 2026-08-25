@@ -118,6 +118,7 @@ impl_inspect_leaf!(
     CoarseNode,
     CodDependentTierNode,
     CodTierPrefixNode,
+    CodeSwitchAnnotationNode,
     CohDependentTierNode,
     CohTierPrefixNode,
     ColonNode,
@@ -228,6 +229,7 @@ impl_inspect_leaf!(
     K5Node,
     L1OfHeaderNode,
     L1OfPrefixNode,
+    LBrackAtSNode,
     LBrackEqBangNode,
     LBrackEqNode,
     LBrackEqQuestionNode,
@@ -476,6 +478,7 @@ impl_inspect_leaf!(
 // --- *Choice enum impls ---
 impl_inspect_choice!(BaseAnnotationChoice {
     AltAnnotation,
+    CodeSwitchAnnotation,
     ErrorMarkerAnnotation,
     ExcludeMarker,
     ExplanationAnnotation,
@@ -493,6 +496,7 @@ impl_inspect_choice!(BaseAnnotationChoice {
 });
 impl_inspect_choice!(BaseAnnotationsChild0Child1Choice {
     AltAnnotation,
+    CodeSwitchAnnotation,
     ErrorMarkerAnnotation,
     ExcludeMarker,
     ExplanationAnnotation,
@@ -510,6 +514,7 @@ impl_inspect_choice!(BaseAnnotationsChild0Child1Choice {
 });
 impl_inspect_choice!(BaseAnnotationsChild1Child1Choice {
     AltAnnotation,
+    CodeSwitchAnnotation,
     ErrorMarkerAnnotation,
     ExcludeMarker,
     ExplanationAnnotation,
@@ -1213,6 +1218,12 @@ impl_inspect_struct!(CodDependentTierChildren {
     child_1,
     child_2,
     child_3
+});
+impl_inspect_struct!(CodeSwitchAnnotationChild1Children { child_0, code });
+impl_inspect_struct!(CodeSwitchAnnotationChildren {
+    child_0,
+    child_1,
+    child_2
 });
 impl_inspect_struct!(CohDependentTierChildren {
     child_0,
@@ -1969,6 +1980,8 @@ pub(super) fn dispatch(node: tree_sitter::Node, out: &mut Vec<RawViolation>) {
         "bullet" => extract_bullet(BulletNode(node)).inspect("bullet", out),
         "cod_dependent_tier" => extract_cod_dependent_tier(CodDependentTierNode(node))
             .inspect("cod_dependent_tier", out),
+        "code_switch_annotation" => extract_code_switch_annotation(CodeSwitchAnnotationNode(node))
+            .inspect("code_switch_annotation", out),
         "coh_dependent_tier" => extract_coh_dependent_tier(CohDependentTierNode(node))
             .inspect("coh_dependent_tier", out),
         "color_words_header" => extract_color_words_header(ColorWordsHeaderNode(node))

@@ -34,8 +34,26 @@
 //! must now fail to compile here rather than being silently skipped.
 
 use crate::ErrorSink;
-use crate::model::{BracketedItem, UtteranceContent};
+use crate::alignment::helpers::LanguageScope;
+use crate::model::{BracketedItem, ContentAnnotation, UtteranceContent};
 use crate::validation::{Validate, ValidationContext};
+use std::borrow::Cow;
+
+/// The context to validate `annotations`' contents under.
+///
+/// Borrowed unchanged when the annotations open no code-switch scope, which is
+/// nearly every group; only a `[@s]` span pays for a clone. The selection rule
+/// itself is [`LanguageScope::selected_by`], shared with the alignment walk, so
+/// validation and metadata cannot disagree about which span governs a word.
+fn entering<'a>(
+    context: &'a ValidationContext,
+    annotations: &[ContentAnnotation],
+) -> Cow<'a, ValidationContext> {
+    match LanguageScope::selected_by(annotations) {
+        Some(span) => Cow::Owned(context.clone().with_code_switch_span(Some(span.clone()))),
+        None => Cow::Borrowed(context),
+    }
+}
 
 /// Validate every word-like item in `items`, recursing through all containers.
 pub(crate) fn validate_words_at_every_depth(
@@ -44,6 +62,12 @@ pub(crate) fn validate_words_at_every_depth(
     errors: &impl ErrorSink,
 ) {
     for item in items {
+        // ONE derivation per item, covering every annotation carrier, because
+        // `scoped_annotations()` answers that for all of them. `context` is
+        // shadowed deliberately: no arm below can reach the unscoped context
+        // even by accident, because the name no longer refers to it.
+        let scoped = entering(context, item.structure().scoped_annotations());
+        let context = &*scoped;
         match item {
             // Word-like leaves: each validates itself. `AnnotatedWord` must go
             // through its own impl, not through its inner word, so that scoped
@@ -111,6 +135,12 @@ fn validate_bracketed(
     errors: &impl ErrorSink,
 ) {
     for item in items {
+        // ONE derivation per item, covering every annotation carrier, because
+        // `scoped_annotations()` answers that for all of them. `context` is
+        // shadowed deliberately: no arm below can reach the unscoped context
+        // even by accident, because the name no longer refers to it.
+        let scoped = entering(context, item.structure().scoped_annotations());
+        let context = &*scoped;
         match item {
             BracketedItem::Word(word) => word.validate(context, errors),
             BracketedItem::AnnotatedWord(annotated) => annotated.validate(context, errors),
@@ -119,6 +149,8 @@ fn validate_bracketed(
             // Nested containers: groups inside groups are ordinary in CA
             // transcription, so recursion here is not a theoretical case.
             BracketedItem::AnnotatedGroup(annotated) => {
+                // Nested spans: the innermost wins, which falls out of the
+                // per-item derivation above running at every depth.
                 validate_bracketed(&annotated.inner.content.content, context, errors)
             }
             BracketedItem::Retrace(retrace) => {

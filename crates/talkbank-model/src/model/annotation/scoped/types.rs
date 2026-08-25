@@ -6,7 +6,9 @@
 //!
 
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{
+    ErrorCode, ErrorContext, ErrorSink, LanguageCode, ParseError, Severity, SourceLocation, Span,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -165,11 +167,69 @@ pub enum ContentAnnotation {
     /// See: [Excluded Material](https://talkbank.org/0info/manuals/CHAT.html#MorExclude_Scope)
     Exclude,
 
+    /// Code-switch span (`[@s]`, `[@s:lang]`).
+    ///
+    /// Every word in the annotated `<...>` scope takes the switched language,
+    /// exactly as if each carried the `@s` / `@s:lang` word suffix. The span is
+    /// a main-tier construct only; dependent tiers stay word-aligned and gain
+    /// nothing new from it.
+    ///
+    /// **Example:** `ik weet niet <how to do it> [@s] .`
+    CodeSwitch(CodeSwitchSpan),
+
     /// Unknown annotation (lenient parsing).
     ///
     /// Captures annotations with unrecognized markers. This allows the parser
     /// to accept all CHAT files while flagging unusual annotations for review.
     Unknown(ScopedUnknown),
+}
+
+/// Which language a [`ContentAnnotation::CodeSwitch`] span switches to.
+///
+/// Two variants rather than an `Option<LanguageCode>`, because the bare form is
+/// not a MISSING code: it is its own resolution rule, the same one bare
+/// `word@s` uses. An `Option` would invite a caller to treat `None` as "no
+/// language" and fall through to the default, which is the opposite of what the
+/// bare form means.
+///
+/// The span is deliberately single-language. `WordLanguageMarker` additionally
+/// carries `Multiple` and `Ambiguous`; a span is homogeneous by construction,
+/// so those states are not representable here rather than being rejected later.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, SemanticEq, SpanShift, JsonSchema,
+)]
+// ADJACENTLY tagged (`tag` + `content`), matching `WordLanguageMarker`, and
+// the pairing is load-bearing rather than cosmetic. An INTERNALLY tagged enum
+// (`tag` alone) cannot serialize a newtype variant whose payload is a string,
+// and serde reports that only at RUNTIME, when a document containing one is
+// written. So `[@s]` round-tripped through JSON while `[@s:hin]` failed, and
+// the compiler had nothing to say about it. The committed JSON Schema was no
+// help either: it described the explicit variant via an `allOf` workaround for
+// a shape the serializer could never actually emit.
+//
+// The general shape, for the next enum to gain a payload-carrying variant: a
+// serde container attribute is a claim about every variant, checked against
+// none of them until one is written. When adding a variant with a payload to a
+// tagged enum, serialize a value of it.
+#[serde(tag = "kind", content = "code", rename_all = "snake_case")]
+pub enum CodeSwitchSpan {
+    /// `[@s]`: resolves the way a bare `word@s` does.
+    ///
+    /// With two declared languages that is the non-primary one. With more, it
+    /// resolves to the SECOND declared language, unless the current language is
+    /// itself tertiary, in which case it is left unresolved with a diagnostic
+    /// asking for an explicit code. It never reports `Ambiguous`; only
+    /// `@s:eng&spa` produces that.
+    Shortcut,
+
+    /// `[@s:lang]`: names the code directly.
+    ///
+    /// Deliberately NOT required to appear in `@Languages`, matching the
+    /// word-level `@s:code` ruling of 2026-07-15: that header declares a
+    /// transcript's substantial languages, and an embedded insertion is not
+    /// substantial presence. The code must still be a real language, which
+    /// registry validation checks.
+    Explicit(LanguageCode),
 }
 
 /// Error marking data for `[*]` or `[* code]` annotations.

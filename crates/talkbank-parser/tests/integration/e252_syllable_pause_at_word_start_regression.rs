@@ -42,7 +42,7 @@ fn leading_syllable_pause_emits_e252_not_e316() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         input,
-        TranscriptName::Named(FileStem::from_str("e252_regression")),
+        TranscriptName::Named(FileStem::from_stem("e252_regression")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 

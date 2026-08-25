@@ -6,12 +6,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single>
 
 use super::super::Utterance;
+
 use crate::model::language_metadata::WordLanguages;
-use crate::validation::word::language::LanguageResolution;
-use crate::{
-    LanguageCode, LanguageMetadata, LanguageSource, UtteranceLanguage, UtteranceLanguageMetadata,
-    WordLanguageMarker,
-};
+use crate::validation::word::language::{GoverningMarker, LanguageResolution};
+use crate::{LanguageCode, LanguageMetadata, UtteranceLanguage, UtteranceLanguageMetadata};
 
 /// Convert validation-layer language resolution into persisted metadata representation.
 fn resolution_to_metadata_languages(resolution: &LanguageResolution) -> WordLanguages {
@@ -20,33 +18,6 @@ fn resolution_to_metadata_languages(resolution: &LanguageResolution) -> WordLang
         LanguageResolution::Multiple(codes) => WordLanguages::Multiple(codes.clone()),
         LanguageResolution::Ambiguous(codes) => WordLanguages::Ambiguous(codes.clone()),
         LanguageResolution::Unresolved => WordLanguages::Unresolved,
-    }
-}
-
-/// Map a word-level language marker to persisted `LanguageSource`.
-fn source_from_word_marker(marker: &WordLanguageMarker) -> LanguageSource {
-    match marker {
-        WordLanguageMarker::Shortcut => LanguageSource::WordShortcut,
-        WordLanguageMarker::Explicit(_)
-        | WordLanguageMarker::Multiple(_)
-        | WordLanguageMarker::Ambiguous(_) => LanguageSource::WordExplicit,
-    }
-}
-
-/// Resolve `WordLanguageInfo.source`, preserving unrecoverable state explicitly.
-fn resolve_word_language_source(
-    marker: Option<&WordLanguageMarker>,
-    resolution: &LanguageResolution,
-    utterance_language: &UtteranceLanguage,
-) -> LanguageSource {
-    if matches!(resolution, LanguageResolution::Unresolved) {
-        return LanguageSource::Unresolved;
-    }
-
-    if let Some(marker) = marker {
-        source_from_word_marker(marker)
-    } else {
-        utterance_language.source()
     }
 }
 
@@ -80,7 +51,6 @@ impl Utterance {
         let mut metadata = LanguageMetadata::new(tier_language.cloned());
 
         use crate::alignment::helpers::WordItem;
-        use crate::validation::resolve_word_language;
 
         // `walk_words` with no domain IS this traversal, and chatter design
         // rule 4 names it as the meaning of in-order main-tier order. With
@@ -92,25 +62,27 @@ impl Utterance {
         // which made it the fifth main-tier traversal in the crate. The bug it
         // was fixing was caused by exactly that: a private walk with its own
         // leaf set, disagreeing with the shared one.
-        crate::alignment::helpers::walk_words(&self.main.content.content, None, &mut |leaf| {
-            // The PRODUCED form for a replacement: `dog [: cat]` records
-            // the language of what was said, not of the correction.
-            let word = match leaf {
-                WordItem::Word(word) => word,
-                WordItem::ReplacedWord(replaced) => &replaced.word,
-                // A separator is not a word and gets no language record.
-                WordItem::Separator(_) => return,
-            };
-            let outcome = resolve_word_language(word, tier_language, declared_languages);
-            metadata.add_word(
-                resolution_to_metadata_languages(&outcome.resolution),
-                resolve_word_language_source(
-                    word.lang.as_ref(),
-                    &outcome.resolution,
-                    &self.utterance_language,
-                ),
-            );
-        });
+        crate::alignment::helpers::walk_words_scoped(
+            &self.main.content.content,
+            None,
+            &mut |leaf, scope| {
+                // The PRODUCED form for a replacement: `dog [: cat]` records
+                // the language of what was said, not of the correction.
+                let word = match leaf {
+                    WordItem::Word(word) => word,
+                    WordItem::ReplacedWord(replaced) => &replaced.word,
+                    // A separator is not a word and gets no language record.
+                    WordItem::Separator(_) => return,
+                };
+                let governor = GoverningMarker::of(word, scope.span());
+                let outcome = governor.resolve(word, tier_language, declared_languages);
+                let source = governor.source(&outcome.resolution, &self.utterance_language);
+                metadata.add_word(
+                    resolution_to_metadata_languages(&outcome.resolution),
+                    source,
+                );
+            },
+        );
 
         self.language_metadata = UtteranceLanguageMetadata::computed(metadata);
     }

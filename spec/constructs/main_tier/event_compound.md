@@ -24,7 +24,7 @@ The colon is part of the event segment text, not a structural delimiter.
           (event
             (event_marker)
             (event_segment)))))
-  (utterance_end ...))
+  (utterance_end ...)))
 ```
 
 ## Metadata

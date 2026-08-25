@@ -9,11 +9,11 @@ use crate::model::Quotation;
 use crate::model::dependent_tier::DependentTier;
 use crate::model::language_metadata::WordLanguages;
 use crate::model::{
-    Action, AlignmentUnits, Annotated, BracketedContent, BracketedItem, Bullet, GraTier,
-    GrammaticalRelation, Group, LanguageCode, LanguageSource, MainTier, Mor, MorTier, MorWord,
-    ParseHealthTier, PhoItem, PhoTier, PhoWord, PosCategory, SinItem, SinTier, SinToken,
-    Terminator, UtteranceContent, UtteranceLanguage, UtteranceLanguageMetadata, WorTier, Word,
-    WordLanguageMarker,
+    Action, AlignmentUnits, Annotated, BracketedContent, BracketedItem, Bullet, CodeSwitchSpan,
+    ContentAnnotation, GraTier, GrammaticalRelation, Group, LanguageCode, LanguageSource, MainTier,
+    Mor, MorTier, MorWord, ParseHealthTier, PhoItem, PhoTier, PhoWord, PosCategory, SinItem,
+    SinTier, SinToken, Terminator, UtteranceContent, UtteranceLanguage, UtteranceLanguageMetadata,
+    WorTier, Word, WordLanguageMarker,
 };
 use crate::validation::ValidationContext;
 use crate::{ErrorCode, Span};
@@ -668,5 +668,215 @@ fn parse_health_taints_main_dependent_alignments_but_keeps_mor_gra_alignment() -
             .is_error_free(),
         "main-tier taint must not block %mor↔%gra alignment"
     );
+    Ok(())
+}
+
+/// Words inside `<...> [@s]` resolve to the span's language, with the span
+/// named as the provenance.
+///
+/// This is the behaviour the code-switch span exists for, and it is a
+/// MEASUREMENT of resolution rather than an invariant a type could hold: the
+/// answer depends on the declared-language context, which is data. The parse
+/// shape is pinned separately by the generated construct corpus.
+///
+/// Both halves are asserted deliberately. The resolved CODE proves the span
+/// applies at all; the `LanguageSource` proves a consumer can still tell a
+/// span-governed word from one the transcriber marked individually, which is
+/// the distinction `SpanShortcut` exists to preserve and which a shared variant
+/// would have destroyed silently.
+#[test]
+fn span_words_resolve_to_the_span_language() -> Result<(), String> {
+    // `ik <how to> [@s] .` under nld+eng: the bare span resolves the way a bare
+    // `word@s` does, to the non-primary language.
+    let outside = Word::new_unchecked("ik", "ik");
+    let inside_first = Word::new_unchecked("how", "how");
+    let inside_second = Word::new_unchecked("to", "to");
+
+    let group = Annotated::new(Group::new(BracketedContent::new(vec![
+        BracketedItem::Word(Box::new(inside_first)),
+        BracketedItem::Word(Box::new(inside_second)),
+    ])))
+    .with_scoped_annotations(vec![ContentAnnotation::CodeSwitch(
+        CodeSwitchSpan::Shortcut,
+    )]);
+
+    let main_tier = MainTier::new(
+        "CHI",
+        vec![
+            UtteranceContent::Word(Box::new(outside)),
+            UtteranceContent::AnnotatedGroup(group),
+        ],
+        Terminator::Period { span: Span::DUMMY },
+    );
+
+    let mut utterance = Utterance::new(main_tier);
+    let declared = codes(&["nld", "eng"]);
+    utterance.compute_language_metadata(declared.first(), &declared);
+
+    let metadata = utterance
+        .language_metadata
+        .as_computed()
+        .ok_or_else(|| "expected computed language metadata".to_string())?;
+    assert_eq!(metadata.word_languages.len(), 3);
+
+    // The word outside the span keeps the utterance's language.
+    assert_eq!(
+        metadata.word_languages[0].languages,
+        WordLanguages::Single(lc("nld"))
+    );
+    assert_eq!(metadata.word_languages[0].source, LanguageSource::Default);
+
+    // Both words inside it switch, and say the SPAN put them there.
+    for index in [1, 2] {
+        assert_eq!(
+            metadata.word_languages[index].languages,
+            WordLanguages::Single(lc("eng")),
+            "word {index} should take the span's language"
+        );
+        assert_eq!(
+            metadata.word_languages[index].source,
+            LanguageSource::SpanShortcut,
+            "word {index} should name the span as its provenance"
+        );
+    }
+
+    Ok(())
+}
+
+/// An explicit `<...> [@s:code]` names the language directly, and says so.
+#[test]
+fn explicit_span_words_resolve_to_the_named_language() -> Result<(), String> {
+    let group = Annotated::new(Group::new(BracketedContent::new(vec![
+        BracketedItem::Word(Box::new(Word::new_unchecked("hola", "hola"))),
+    ])))
+    .with_scoped_annotations(vec![ContentAnnotation::CodeSwitch(
+        CodeSwitchSpan::Explicit(lc("spa")),
+    )]);
+
+    let main_tier = MainTier::new(
+        "CHI",
+        vec![UtteranceContent::AnnotatedGroup(group)],
+        Terminator::Period { span: Span::DUMMY },
+    );
+
+    let mut utterance = Utterance::new(main_tier);
+    // Deliberately NOT declared in @Languages: an explicit code carries no such
+    // requirement, matching word-level `@s:code`.
+    let declared = codes(&["eng"]);
+    utterance.compute_language_metadata(declared.first(), &declared);
+
+    let metadata = utterance
+        .language_metadata
+        .as_computed()
+        .ok_or_else(|| "expected computed language metadata".to_string())?;
+    assert_eq!(
+        metadata.word_languages[0].languages,
+        WordLanguages::Single(lc("spa"))
+    );
+    assert_eq!(
+        metadata.word_languages[0].source,
+        LanguageSource::SpanExplicit
+    );
+
+    Ok(())
+}
+
+/// A word's OWN marker wins over an enclosing span, and the provenance follows
+/// the marker rather than the span.
+///
+/// The redundant combination is a proposed validation finding that nothing
+/// reports yet; resolution must still answer, and this pins which answer.
+#[test]
+fn a_words_own_marker_wins_over_an_enclosing_span() -> Result<(), String> {
+    let mut marked = Word::new_unchecked("ciao@s:ita", "ciao");
+    marked.lang = Some(WordLanguageMarker::explicit(lc("ita")));
+
+    let group = Annotated::new(Group::new(BracketedContent::new(vec![
+        BracketedItem::Word(Box::new(marked)),
+    ])))
+    .with_scoped_annotations(vec![ContentAnnotation::CodeSwitch(
+        CodeSwitchSpan::Explicit(lc("spa")),
+    )]);
+
+    let main_tier = MainTier::new(
+        "CHI",
+        vec![UtteranceContent::AnnotatedGroup(group)],
+        Terminator::Period { span: Span::DUMMY },
+    );
+
+    let mut utterance = Utterance::new(main_tier);
+    let declared = codes(&["eng"]);
+    utterance.compute_language_metadata(declared.first(), &declared);
+
+    let metadata = utterance
+        .language_metadata
+        .as_computed()
+        .ok_or_else(|| "expected computed language metadata".to_string())?;
+    assert_eq!(
+        metadata.word_languages[0].languages,
+        WordLanguages::Single(lc("ita")),
+        "the word's own marker decides the code"
+    );
+    assert_eq!(
+        metadata.word_languages[0].source,
+        LanguageSource::WordExplicit,
+        "and the provenance names the word, not the span"
+    );
+
+    Ok(())
+}
+
+/// A code-switch annotation attached to ONE word, with no angle brackets,
+/// governs that word.
+///
+/// CHAT's convention is that any scoped annotation may attach to a single
+/// content item directly, so `hallo [@s]` is the one-word form of `<a b> [@s]`
+/// and means what `hallo@s` means. It is NOT an error to be rejected.
+///
+/// This is a regression guard with a real history: the first implementation
+/// opened the language scope only at an annotated GROUP, so this form parsed,
+/// validated and round-tripped byte-identically while resolving to the tier
+/// language. The transcriber's mark was preserved in the bytes and dropped in
+/// meaning, with no diagnostic anywhere.
+#[test]
+fn a_code_switch_annotation_on_one_word_governs_that_word() -> Result<(), String> {
+    let plain = Word::new_unchecked("ik", "ik");
+    let annotated =
+        Annotated::new(Word::new_unchecked("hallo", "hallo")).with_scoped_annotations(vec![
+            ContentAnnotation::CodeSwitch(CodeSwitchSpan::Shortcut),
+        ]);
+
+    let main_tier = MainTier::new(
+        "CHI",
+        vec![
+            UtteranceContent::Word(Box::new(plain)),
+            UtteranceContent::AnnotatedWord(Box::new(annotated)),
+        ],
+        Terminator::Period { span: Span::DUMMY },
+    );
+
+    let mut utterance = Utterance::new(main_tier);
+    let declared = codes(&["nld", "eng"]);
+    utterance.compute_language_metadata(declared.first(), &declared);
+
+    let metadata = utterance
+        .language_metadata
+        .as_computed()
+        .ok_or_else(|| "expected computed language metadata".to_string())?;
+
+    assert_eq!(
+        metadata.word_languages[0].languages,
+        WordLanguages::Single(lc("nld"))
+    );
+    assert_eq!(
+        metadata.word_languages[1].languages,
+        WordLanguages::Single(lc("eng")),
+        "the annotated word takes the switched language"
+    );
+    assert_eq!(
+        metadata.word_languages[1].source,
+        LanguageSource::SpanShortcut
+    );
+
     Ok(())
 }

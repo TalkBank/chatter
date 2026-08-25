@@ -201,6 +201,39 @@ fn test_ca_technical_break_separator() -> Result<(), talkbank_parser_tests::test
 
 #[test]
 /// Tests expected behavior.
+fn test_codeswitch_span_explicit() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tik weet <how to do> [@s:eng] .\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
+fn test_codeswitch_span_shortcut() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tik weet niet <how to do it> [@s] .\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
+fn test_codeswitch_span_word_override() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tik weet <how@s:fra to do> [@s:eng] .\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
 fn test_colon_separator() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
     // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic

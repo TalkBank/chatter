@@ -229,9 +229,9 @@ pub use content::{ContentStructure, GroupRef, LeafContent, LeafRef, RetraceRef, 
 
 // Re-export annotation types
 pub use annotation::{
-    Annotated, ContentAnnotation, OverlapMarkerIndex, ReplacedWord, Replacement, ScopedAlternative,
-    ScopedError, ScopedExplanation, ScopedOverlapBegin, ScopedOverlapEnd, ScopedParalinguistic,
-    ScopedPercentComment, ScopedUnknown,
+    Annotated, CodeSwitchSpan, ContentAnnotation, OverlapMarkerIndex, ReplacedWord, Replacement,
+    ScopedAlternative, ScopedError, ScopedExplanation, ScopedOverlapBegin, ScopedOverlapEnd,
+    ScopedParalinguistic, ScopedPercentComment, ScopedUnknown,
 };
 
 // Re-export dependent tier types

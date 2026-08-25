@@ -49,6 +49,6 @@ pub use rules::{
     annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator, should_skip_group,
 };
 pub use walk::{
-    ContentItem, ContentItemMut, WordItem, WordItemMut, walk_content, walk_content_mut, walk_words,
-    walk_words_mut,
+    ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut, walk_content,
+    walk_content_mut, walk_words, walk_words_mut, walk_words_scoped,
 };

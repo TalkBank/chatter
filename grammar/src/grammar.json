@@ -2646,6 +2646,51 @@
         }
       ]
     },
+    "code_switch_annotation": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "TOKEN",
+          "content": {
+            "type": "PREC",
+            "value": 8,
+            "content": {
+              "type": "STRING",
+              "value": "[@s"
+            }
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "colon"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "code",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "language_code"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "right_bracket"
+        }
+      ]
+    },
     "annotation_content": {
       "type": "PATTERN",
       "value": "[^\\]\\r\\n]+"
@@ -2980,6 +3025,10 @@
         {
           "type": "SYMBOL",
           "name": "exclude_marker"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "code_switch_annotation"
         }
       ]
     },

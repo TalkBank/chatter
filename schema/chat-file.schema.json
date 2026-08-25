@@ -1490,6 +1490,41 @@
       ],
       "type": "object"
     },
+    "CodeSwitchSpan": {
+      "description": "Which language a [`ContentAnnotation::CodeSwitch`] span switches to.\n\nTwo variants rather than an `Option<LanguageCode>`, because the bare form is\nnot a MISSING code: it is its own resolution rule, the same one bare\n`word@s` uses. An `Option` would invite a caller to treat `None` as \"no\nlanguage\" and fall through to the default, which is the opposite of what the\nbare form means.\n\nThe span is deliberately single-language. `WordLanguageMarker` additionally\ncarries `Multiple` and `Ambiguous`; a span is homogeneous by construction,\nso those states are not representable here rather than being rejected later.",
+      "oneOf": [
+        {
+          "description": "`[@s]`: resolves the way a bare `word@s` does.\n\nWith two declared languages that is the non-primary one. With more, it\nresolves to the SECOND declared language, unless the current language is\nitself tertiary, in which case it is left unresolved with a diagnostic\nasking for an explicit code. It never reports `Ambiguous`; only\n`@s:eng&spa` produces that.",
+          "properties": {
+            "kind": {
+              "const": "shortcut",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "`[@s:lang]`: names the code directly.\n\nDeliberately NOT required to appear in `@Languages`, matching the\nword-level `@s:code` ruling of 2026-07-15: that header declares a\ntranscript's substantial languages, and an embedded insertion is not\nsubstantial presence. The code must still be a real language, which\nregistry validation checks.",
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/LanguageCode"
+            },
+            "kind": {
+              "const": "explicit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "code"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ColorWordList": {
       "description": "Color word palette listed in `@Color words`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#ColorWords_Header>",
       "type": "string"
@@ -1701,6 +1736,26 @@
             "type"
           ],
           "type": "object"
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/CodeSwitchSpan"
+            },
+            {
+              "description": "Code-switch span (`[@s]`, `[@s:lang]`).\n\nEvery word in the annotated `<...>` scope takes the switched language,\nexactly as if each carried the `@s` / `@s:lang` word suffix. The span is\na main-tier construct only; dependent tiers stay word-aligned and gain\nnothing new from it.\n\n**Example:** `ik weet niet <how to do it> [@s] .`",
+              "properties": {
+                "type": {
+                  "const": "codeswitch",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
         },
         {
           "allOf": [
@@ -4736,7 +4791,7 @@
       "type": "object"
     },
     "LanguageSource": {
-      "description": "Source of language resolution for a word.\n\nCHAT supports multiple ways to specify language for words:\n- **Default**: From `@Languages` header (primary language)\n- **TierScoped**: From utterance-level `[- code]` marker\n- **WordExplicit**: From word-level `@s:code` marker\n- **WordShortcut**: From word-level `@s` shortcut (toggles between primary/secondary)\n- **Unresolved**: No language could be determined (validation error)\n\nKeeping provenance separate from `WordLanguages` lets downstream tools\ndistinguish \"same resolved code, different source semantics\" cases, which\nmatters for corpus QA and language-switching diagnostics.\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)",
+      "description": "Source of language resolution for a word.\n\nEach variant documents the mechanism it comes from. This doc used to repeat\nthem as a bullet list and the list went stale in the very commit that added\n`SpanShortcut` and `SpanExplicit`, having also shipped that way into the\ngenerated JSON schema description, so the mirror is gone.\n\nKeeping provenance separate from `WordLanguages` lets downstream tools\ndistinguish \"same resolved code, different source semantics\" cases, which\nmatters for corpus QA and language-switching diagnostics.\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)",
       "oneOf": [
         {
           "const": "default",
@@ -4756,6 +4811,16 @@
         {
           "const": "word_shortcut",
           "description": "Resolved from `@s` shortcut toggling rule.\n\nIn dual-language contexts this flips between primary and secondary language.",
+          "type": "string"
+        },
+        {
+          "const": "span_shortcut",
+          "description": "Resolved from a bare code-switch ANNOTATION, `[@s]`.\n\nCovers both of its scopes, because a scoped annotation may attach to one\ncontent item without angle brackets: `<a b> [@s]` governs the words it\nencloses, and `hallo [@s]` governs its own. Either way the rule applied\nis the one bare `word@s` uses.\n\nA separate variant from [`Self::WordShortcut`] because the provenance\ndiffers even when the resolved code is identical: a consumer asking \"was\nthis marked with a suffix or with an annotation?\" must be able to tell,\nand a shared variant would answer neither.",
+          "type": "string"
+        },
+        {
+          "const": "span_explicit",
+          "description": "Resolved from a code-switch annotation with an explicit code,\n`[@s:code]`, in either of the scopes described above.\n\nDistinct from [`Self::WordExplicit`] for the same reason.",
           "type": "string"
         },
         {

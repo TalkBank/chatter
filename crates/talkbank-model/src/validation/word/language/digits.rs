@@ -37,16 +37,28 @@ pub(crate) fn check_word_digits_multi(
         return;
     }
 
+    // UNKNOWN IS NOT DISALLOWED. An unresolved language means we do not know
+    // which rules apply, and reporting "digits are not legal in language X"
+    // without an X is a guess that reads as a finding. `E763` already states
+    // this policy for the prefix marker; the two rules are meant to agree, and
+    // this one did not.
+    //
+    // It was invisible while `Word::validate` gated the whole block on the FILE
+    // declaring a language, because then an unresolved word never reached here.
+    // Removing that gate (an explicit `<...> [@s:eng]` names a language with no
+    // `@Languages` header, and nothing was checking it) exposed the difference
+    // immediately: `test_e220_no_language_context` went red, which is the test
+    // doing its job.
+    if matches!(resolution, LanguageResolution::Unresolved) {
+        return;
+    }
+
     // For mixed/ambiguous language markers, allow digits if at least one candidate
     // language allows them. This matches permissive CHAT usage in reference data.
-    let allows_digits = if resolution.languages().is_empty() {
-        false
-    } else {
-        resolution
-            .languages()
-            .iter()
-            .any(|lang| mixed_language_allows_numbers(lang.as_str()))
-    };
+    let allows_digits = resolution
+        .languages()
+        .iter()
+        .any(|lang| mixed_language_allows_numbers(lang.as_str()));
 
     if !allows_digits {
         errors.report(

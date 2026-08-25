@@ -58,6 +58,10 @@
 //! knows what the rule catches. Do not re-derive this number from a search.
 //! Evidence: `docs/investigations/2026-08-07-retrace-shapes-in-the-wild.md`.
 
+// A CHAT speaker prefix is followed by a literal TAB, so the tabs in the
+// examples below are the format being described, not indentation. Corrupting
+// them to spaces would make the doc show invalid CHAT.
+#![allow(clippy::tabs_in_doc_comments)]
 // Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
 // a content enum means a future variant compiles clean and answers wrong.
 // Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.

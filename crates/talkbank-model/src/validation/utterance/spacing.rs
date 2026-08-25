@@ -25,9 +25,9 @@ use crate::alignment::helpers::{ContentItem, walk_content};
 use crate::model::{Utterance, UtteranceContent};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
-/// The source end byte of a content item, when the item is a word whose
-/// trailing edge can glue a following pause. Non-word items return
-/// `None`: CHECK 57 fires on the word-then-`(` shape specifically.
+// The source end byte of a content item, when the item is a word whose
+// trailing edge can glue a following pause. Non-word items return
+// `None`: CHECK 57 fires on the word-then-`(` shape specifically.
 
 /// The source start byte of a top-level item whose leading edge can be
 /// glued onto a preceding code's `]` (the word family). Other variants

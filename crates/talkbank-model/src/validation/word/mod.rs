@@ -21,4 +21,4 @@ mod tests;
 #[cfg(test)]
 mod snapshot_tests;
 
-pub use language::{LanguageResolutionOutcome, resolve_word_language};
+pub use language::{GoverningMarker, LanguageResolutionOutcome};

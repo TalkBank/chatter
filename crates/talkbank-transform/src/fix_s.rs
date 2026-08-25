@@ -220,7 +220,17 @@ fn clear_matching_word_language_marker(
         return false;
     };
 
-    let outcome = talkbank_model::resolve_word_language(word, tier_language, declared_languages);
+    // `None`: this only ever runs on words the predicate has already accepted,
+    // and the predicate REFUSES any utterance with a span-governed word,
+    // precisely because clearing `word.lang` inside a span hands the word to
+    // the span and changes its language. Writing the scope out is the point of
+    // `GoverningMarker::of` taking it: the old unscoped call could not express
+    // this claim, so nothing checked it, and the rewrite corrupted language.
+    let outcome = talkbank_model::GoverningMarker::of(word, None).resolve(
+        word,
+        tier_language,
+        declared_languages,
+    );
     if outcome.resolution == LanguageResolution::Single(target_language.clone()) {
         word.lang = None;
         true

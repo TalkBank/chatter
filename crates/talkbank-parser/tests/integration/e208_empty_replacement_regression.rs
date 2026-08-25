@@ -44,7 +44,7 @@ fn empty_replacement_detected_structurally_not_e316() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         input,
-        TranscriptName::Named(FileStem::from_str("e208_regression")),
+        TranscriptName::Named(FileStem::from_stem("e208_regression")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
@@ -66,7 +66,7 @@ fn well_formed_replacement_not_flagged() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         input,
-        TranscriptName::Named(FileStem::from_str("e208_regression")),
+        TranscriptName::Named(FileStem::from_stem("e208_regression")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 

@@ -80,7 +80,7 @@ pub use crate::AsyncChannelErrorSink;
 #[cfg(feature = "async")]
 pub use async_runtime::{AsyncValidationError, validate_async, validate_with_rules_async};
 pub use word::language::LanguageResolution;
-pub use word::{LanguageResolutionOutcome, resolve_word_language};
+pub use word::{GoverningMarker, LanguageResolutionOutcome};
 
 // Public bullet validation function
 pub(crate) use bullet::check_bullet;

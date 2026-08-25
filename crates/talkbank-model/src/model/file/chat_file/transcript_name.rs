@@ -59,7 +59,13 @@ impl<'a> FileStem<'a> {
 
     /// Treat text as a stem directly, for a transcript whose name is known
     /// without a path on disk.
-    pub fn from_str(stem: &'a str) -> Self {
+    ///
+    /// NOT `from_str`: that name reads as `std::str::FromStr::from_str`, which
+    /// this cannot be. The trait returns `Self` with no lifetime tied to its
+    /// input, and this type BORROWS its stem, so implementing it is impossible
+    /// rather than merely unimplemented. A name a reader can mistake for a
+    /// trait method they can call generically is worse than a longer one.
+    pub fn from_stem(stem: &'a str) -> Self {
         Self(stem)
     }
 

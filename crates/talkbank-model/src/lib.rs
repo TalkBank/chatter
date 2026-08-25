@@ -73,4 +73,4 @@ pub use model::*;
 pub use parser_api::*;
 pub use pipeline::*;
 pub use text_types::{ChatCleanedText, ChatRawText};
-pub use validation::{Validate, ValidationContext, resolve_word_language};
+pub use validation::{GoverningMarker, Validate, ValidationContext};

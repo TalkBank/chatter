@@ -51,9 +51,22 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
 
     let mut files = GeneratedFiles::new();
     for fixture in &planned {
-        // The input was already stripped of its trailing newline when the chat
-        // block was captured in parse_markdown, so store it verbatim.
-        files.insert(fixture.entry.fixture.as_str().into(), fixture.input.clone());
+        // `parse_markdown` strips the chat block's trailing newline, so it has
+        // to be put back: the grammar REQUIRES a final newline, and without one
+        // every fixture parsed with a `MISSING newline` recovery node. That was
+        // invisible for as long as every fixture also emitted a real
+        // diagnostic, which hid the spurious node behind a genuine one. The
+        // first `claim = 'legal'` example written inline surfaced it
+        // immediately, by failing `no_recovery_node_in_accepted_file`: a clean
+        // file has nothing to hide the node behind.
+        //
+        // A fixture that needs recovery is not the input its spec claims to
+        // describe, so this is not cosmetic; it is the difference between
+        // testing the rule and testing the rule plus an unrelated defect.
+        files.insert(
+            fixture.entry.fixture.as_str().into(),
+            format!("{}\n", fixture.input.trim_end_matches('\n')),
+        );
     }
 
     let mut manifest = ValidationManifest {

@@ -86,6 +86,122 @@ pub fn create_new_file(
     }
 }
 
+/// Describe the file this command writes, for the shared CHAT builder.
+///
+/// # Why a description and not lines
+///
+/// `talkbank_transform::build_chat` is the project's general CHAT-generation
+/// entry point, used by the MICASE converter and documented as the path "for
+/// any converter". This command assembled its own `Vec<Line>` instead, which
+/// made it a second owner of what a minimal file's header block IS: a header
+/// added to `build_header_lines` would not have reached `new-file`, and
+/// nothing would have caught the drift.
+///
+/// The struct literal is deliberate over a builder: a new
+/// `TranscriptDescription` field breaks this line rather than silently
+/// defaulting, which is the failure worth having.
+fn describe(
+    speaker: &str,
+    language: &str,
+    role: &str,
+    corpus: &str,
+    utterance: Option<&str>,
+) -> TranscriptDescription {
+    TranscriptDescription {
+        langs: vec![language.to_string()],
+        participants: vec![ParticipantDesc::new(speaker, role, corpus)],
+        media_name: None,
+        media_type: None,
+        pid: None,
+        media_status: None,
+        date: None,
+        situation: None,
+        options: None,
+        transcriber: None,
+        comments: Vec::new(),
+        utterances: utterance
+            .map(|text| UtteranceDesc {
+                speaker: speaker.to_string(),
+                text: text.to_string(),
+                start_ms: None,
+                end_ms: None,
+                lang: None,
+            })
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// Build the file, RUN VALIDATION on it, and refuse to write one that fails.
+///
+/// # The command's promise is a state, so it goes through the state transition
+///
+/// `new-file`'s contract is "a minimal VALID CHAT file". `build` returns a
+/// `ChatFile<NotValidated>`, so until this existed that contract lived in a doc
+/// comment and a test, and a `--speaker` the validator rejects would have been
+/// written to disk under a command that calls its output valid. The model
+/// already has the phase transition, `validate_into`, and this runs it.
+///
+/// Note what the marker does and does not prove. `validate_into` streams
+/// diagnostics into the sink and changes state UNCONDITIONALLY, so
+/// `ChatFile<Validated>` means validation RAN, not that it passed. The sink is
+/// therefore checked here rather than trusted to the type; a `Validated` that
+/// any input can reach is a label rather than a proof, and treating it as the
+/// latter is how this would go wrong.
+fn build_validated(
+    speaker: &str,
+    language: &str,
+    role: &str,
+    corpus: &str,
+    utterance: Option<&str>,
+    output: Option<&Path>,
+) -> Result<String, String> {
+    // The FLAGS are this command's input, so their names are this command's to
+    // report. `build_chat` refuses an empty language too, but it can only name
+    // `@Languages`, because a builder does not know it was fed by a CLI.
+    if language.trim().is_empty() {
+        return Err("--language cannot be empty".to_string());
+    }
+    if corpus.trim().is_empty() {
+        return Err("--corpus cannot be empty".to_string());
+    }
+    if speaker.trim().is_empty() {
+        return Err("--speaker cannot be empty".to_string());
+    }
+
+    let desc = describe(speaker, language, role, corpus, utterance);
+    let file = build_chat(&desc).map_err(|e| e.to_string())?;
+
+    // Rules about a transcript's own file name (E531) compare against the stem
+    // the file will be WRITTEN as, so the destination is what to validate under.
+    let errors = ErrorCollector::new();
+
+    // Rules about a transcript's own file name (E531) compare against the stem
+    // it will be WRITTEN as, so the destination is what to validate under.
+    // `Anonymous` for stdout is a DECISION: with no file there is no file name,
+    // so those rules correctly do not run.
+    let name = match output {
+        Some(path) => TranscriptName::for_path(path),
+        None => TranscriptName::Anonymous,
+    };
+
+    let validated = file.validate_into(&errors, name);
+
+    if errors.has_errors() {
+        return Err(format!(
+            "the requested file does not validate, so it was not written. \
+             `chatter validate` would reject it:\n{}",
+            errors
+                .to_vec()
+                .iter()
+                .map(|e| format!("  {} {}", e.code.as_str(), e.message))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
+    Ok(validated.to_chat_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,120 +496,4 @@ mod tests {
             .expect_err("an empty language code must be refused");
         assert!(why.contains("--language"), "{why}");
     }
-}
-
-/// Describe the file this command writes, for the shared CHAT builder.
-///
-/// # Why a description and not lines
-///
-/// `talkbank_transform::build_chat` is the project's general CHAT-generation
-/// entry point, used by the MICASE converter and documented as the path "for
-/// any converter". This command assembled its own `Vec<Line>` instead, which
-/// made it a second owner of what a minimal file's header block IS: a header
-/// added to `build_header_lines` would not have reached `new-file`, and
-/// nothing would have caught the drift.
-///
-/// The struct literal is deliberate over a builder: a new
-/// `TranscriptDescription` field breaks this line rather than silently
-/// defaulting, which is the failure worth having.
-fn describe(
-    speaker: &str,
-    language: &str,
-    role: &str,
-    corpus: &str,
-    utterance: Option<&str>,
-) -> TranscriptDescription {
-    TranscriptDescription {
-        langs: vec![language.to_string()],
-        participants: vec![ParticipantDesc::new(speaker, role, corpus)],
-        media_name: None,
-        media_type: None,
-        pid: None,
-        media_status: None,
-        date: None,
-        situation: None,
-        options: None,
-        transcriber: None,
-        comments: Vec::new(),
-        utterances: utterance
-            .map(|text| UtteranceDesc {
-                speaker: speaker.to_string(),
-                text: text.to_string(),
-                start_ms: None,
-                end_ms: None,
-                lang: None,
-            })
-            .into_iter()
-            .collect(),
-    }
-}
-
-/// Build the file, RUN VALIDATION on it, and refuse to write one that fails.
-///
-/// # The command's promise is a state, so it goes through the state transition
-///
-/// `new-file`'s contract is "a minimal VALID CHAT file". `build` returns a
-/// `ChatFile<NotValidated>`, so until this existed that contract lived in a doc
-/// comment and a test, and a `--speaker` the validator rejects would have been
-/// written to disk under a command that calls its output valid. The model
-/// already has the phase transition, `validate_into`, and this runs it.
-///
-/// Note what the marker does and does not prove. `validate_into` streams
-/// diagnostics into the sink and changes state UNCONDITIONALLY, so
-/// `ChatFile<Validated>` means validation RAN, not that it passed. The sink is
-/// therefore checked here rather than trusted to the type; a `Validated` that
-/// any input can reach is a label rather than a proof, and treating it as the
-/// latter is how this would go wrong.
-fn build_validated(
-    speaker: &str,
-    language: &str,
-    role: &str,
-    corpus: &str,
-    utterance: Option<&str>,
-    output: Option<&Path>,
-) -> Result<String, String> {
-    // The FLAGS are this command's input, so their names are this command's to
-    // report. `build_chat` refuses an empty language too, but it can only name
-    // `@Languages`, because a builder does not know it was fed by a CLI.
-    if language.trim().is_empty() {
-        return Err("--language cannot be empty".to_string());
-    }
-    if corpus.trim().is_empty() {
-        return Err("--corpus cannot be empty".to_string());
-    }
-    if speaker.trim().is_empty() {
-        return Err("--speaker cannot be empty".to_string());
-    }
-
-    let desc = describe(speaker, language, role, corpus, utterance);
-    let file = build_chat(&desc).map_err(|e| e.to_string())?;
-
-    // Rules about a transcript's own file name (E531) compare against the stem
-    // the file will be WRITTEN as, so the destination is what to validate under.
-    let errors = ErrorCollector::new();
-
-    // Rules about a transcript's own file name (E531) compare against the stem
-    // it will be WRITTEN as, so the destination is what to validate under.
-    // `Anonymous` for stdout is a DECISION: with no file there is no file name,
-    // so those rules correctly do not run.
-    let name = match output {
-        Some(path) => TranscriptName::for_path(path),
-        None => TranscriptName::Anonymous,
-    };
-
-    let validated = file.validate_into(&errors, name);
-
-    if errors.has_errors() {
-        return Err(format!(
-            "the requested file does not validate, so it was not written. \
-             `chatter validate` would reject it:\n{}",
-            errors
-                .to_vec()
-                .iter()
-                .map(|e| format!("  {} {}", e.code.as_str(), e.message))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ));
-    }
-    Ok(validated.to_chat_string())
 }

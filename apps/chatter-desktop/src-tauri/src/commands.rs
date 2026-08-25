@@ -228,6 +228,12 @@ fn start_validation(
 }
 
 /// Cancel the current validation run.
+///
+/// The `Result<(), ()>` clippy objects to is Tauri's requirement, not a
+/// discarded error: the body's own comment says cancelling has no failure mode.
+/// A fabricated error type would be worse than the empty one, since it would
+/// imply failures that cannot happen.
+#[allow(clippy::result_unit_err)]
 #[tauri::command]
 pub async fn cancel_validation(state: State<'_, ValidationState>) -> Result<(), ()> {
     // Atomically take the cancel sender (lock-free). Cancelling has no failure

@@ -1,0 +1,8 @@
+================================================================================
+codeswitch_span_explicit - Multi-word code-switch span with an explicit language, <word word> [@s:code].
+================================================================================
+*CHI:	ik weet <how to do> [@s:eng] .
+
+--------------------------------------------------------------------------------
+
+(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (group_with_annotations (less_than) content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment))))))) (greater_than) annotations: (base_annotations (whitespaces) (code_switch_annotation (colon) code: (language_code) (right_bracket))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

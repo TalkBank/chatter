@@ -10,6 +10,18 @@
 /// Check if a node kind is a `header` subtype
 ///
 /// **Subtypes:** activities_header, bck_header, bg_header, birth_of_header, etc.
+/// `thumbnail_header` is DELIBERATELY absent, and that is not drift.
+///
+/// It is a member of the grammar's `header` supertype, so an audit comparing
+/// this list against `node-types.json` reports it missing; one did. But
+/// `@Thumbnail` is deliberately unsupported: `header_parser::dispatch::thumbnail`
+/// reports `E525` and rejects, reproducing the pre-migration behaviour on
+/// purpose. Verified 2026-08-25 that the diagnostic still fires, so the
+/// exclusion here is consistent with it rather than defeating it.
+///
+/// Listed as an exclusion instead of being silently absent, because "absent"
+/// and "forgotten" look identical, and the base_annotation list one directory
+/// over WAS forgotten in exactly that way.
 pub fn is_header(kind: &str) -> bool {
     use crate::node_types::{
         ACTIVITIES_HEADER, BCK_HEADER, BEGIN_HEADER, BG_HEADER, BIRTH_OF_HEADER,

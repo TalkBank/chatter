@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	heb, eng
+@Participants:	CHI Target_Child
+@ID:	heb, eng|corpus|CHI|||||Target_Child|||
+*CHI:	ani amarti <the dog# there> [@s:eng] .
+@Comment:	ERROR: the span resolves its words to eng, which does not use the marker
+@End

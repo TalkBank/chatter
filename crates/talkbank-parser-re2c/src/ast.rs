@@ -349,6 +349,10 @@ pub enum ParsedAnnotation<'a> {
     Uncertain,
     /// `[e]`, exclude
     Exclude,
+    /// `[@s]`, code-switch span resolving the way a bare `word@s` does.
+    CodeSwitchShortcut,
+    /// `[@s:code]`, code-switch span naming its language. Content is the code.
+    CodeSwitchExplicit(&'a str),
     /// `[* code]`, error marker. Content is the code (may be empty).
     Error(&'a str),
     /// `[<]` or `[<1]`, overlap precedes. Content is the optional index digit.
@@ -397,6 +401,8 @@ impl<'a> ParsedAnnotation<'a> {
             Self::ContrastiveStressing => "[!!]".to_owned(),
             Self::Uncertain => "[?]".to_owned(),
             Self::Exclude => "[e]".to_owned(),
+            Self::CodeSwitchShortcut => "[@s]".to_owned(),
+            Self::CodeSwitchExplicit(code) => format!("[@s:{code}]"),
             Self::Error(code) => format!("[* {code}]"),
             Self::OverlapPrecedes(index) => format!("[<{index}]"),
             Self::OverlapFollows(index) => format!("[>{index}]"),

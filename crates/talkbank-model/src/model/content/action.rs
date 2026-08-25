@@ -41,6 +41,13 @@ pub struct Action {
     pub span: Span,
 }
 
+// NO `Default`, deliberately, and clippy's `new_without_default` is allowed
+// here rather than satisfied. `new()` fills in `Span::DUMMY`, and this
+// repository names exactly that as a sentinel that is also a legal value: a
+// dummy span equals the default equals a real zero-length position at offset 0.
+// A `Default` impl would make fabricating one the most natural thing a caller
+// can write, which is the affordance the ban exists to remove.
+#[allow(clippy::new_without_default)]
 impl Action {
     /// Build an action token with dummy span metadata.
     ///

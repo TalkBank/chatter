@@ -199,6 +199,15 @@ impl<'a> Iterator for Lexer<'a> {
         w_body = w_body_start w_cont*;
 
         // Word prefix
+        // grammar.js `language_code: /[a-z]{2,4}/`, ONE spelling.
+        //
+        // This file already spelled the same closed pattern three ways
+        // (`[a-z][a-z][a-z]?[a-z]?` for @Languages, `[a-z][a-z][a-z]?` inside
+        // `w_lang`), and the code-switch span was about to add a fourth. The
+        // grammar side has one owner, `$.language_code`; this is its
+        // counterpart. Where a rule below still spells it inline, that rule
+        // means something NARROWER than a language code and says so.
+        lang_code = [a-z]{2,4};
         w_prefix = "&-" | "&~" | "&+";
 
         // The closed set of form-marker codes, generated from
@@ -478,7 +487,7 @@ impl<'a> Iterator for Lexer<'a> {
         // RICH TOKEN: Each language code is a separate token.
         // ═══════════════════════════════════════════════════════
 
-        <LANGUAGES_CONTENT> [a-z][a-z][a-z]?[a-z]? {
+        <LANGUAGES_CONTENT> lang_code {
             emit!(LanguageCode);
         }
         <LANGUAGES_CONTENT> "," { emit!(Comma); }
@@ -663,6 +672,19 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "[?]" { emit!(ScopedUncertain); }
         // grammar.js: exclude_marker = token('[e]')
         <MAIN_CONTENT> "[e]" { emit!(ExcludeMarker); }
+
+        // grammar.js: code_switch_annotation = seq('[@s', optional(seq(':', language_code)), ']')
+        // Split in two so the bare form carries no payload at all, matching the
+        // model's `CodeSwitchSpan::{Shortcut, Explicit}`. The explicit rule is
+        // listed first: re2c prefers the longest match, but stating the more
+        // specific pattern first keeps the intent readable.
+        // `lang_code` is what makes the `LanguageCode::new(..).expect()` in
+        // `convert/items.rs` honest rather than a latent panic: a looser pattern
+        // here would admit text the constructor rejects. The two backends must
+        // also ADMIT the same token shape, or the equivalence harness reports a
+        // divergence that is really a lexer disagreement.
+        <MAIN_CONTENT> "[@s:" @t1 lang_code @t2 "]" { emit_t1t2!(CodeSwitchExplicit); }
+        <MAIN_CONTENT> "[@s]" { emit!(CodeSwitchShortcut); }
         // grammar.js: freecode = token(/\[\^ [^\]\r\n]+\]/)
         // Must come before ca_continuation_marker since [^c] is a special case of freecode.
         // Tag marks the content (between [^ and ])

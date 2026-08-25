@@ -1,6 +1,6 @@
 # Symbol Registry
 
-**Last modified:** 2026-08-21 13:42 EDT
+**Last modified:** 2026-08-25 14:14 EDT
 
 `symbol_registry.json` is the single owner of what each CHAT symbol MEANS and
 how it parses. Everything downstream is generated from it.

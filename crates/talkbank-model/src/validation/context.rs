@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Participants_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Options_Header>
 
-use crate::model::{LanguageCode, SpeakerCode};
+use crate::model::{CodeSwitchSpan, LanguageCode, SpeakerCode};
 use crate::{ErrorCode, Span};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -120,12 +120,13 @@ impl Default for SharedValidationData {
 ///
 /// # Design Notes
 ///
-/// File-level constants live in `shared` (`Arc<SharedValidationData>`), so cloning a
-/// context only copies the `Arc` pointer plus 5 small overlay fields.
+/// File-level constants live in `shared` (`Arc<SharedValidationData>`), so cloning
+/// a context copies the `Arc` pointer plus a few small overlay fields.
 ///
-/// The overlay fields (`tier_language`, `field_span`, `field_text`, `field_label`,
-/// `field_error_code`) vary per-tier or per-word and are set via builder methods
-/// before passing the context down.
+/// The overlay fields vary per-tier, per-item or per-word and are set via builder
+/// methods before passing the context down. They are not listed here: the struct
+/// below IS the list, and the copy that used to sit in this paragraph named five
+/// when there were seven, having gone stale twice without anyone noticing.
 #[derive(Clone, Debug)]
 pub struct ValidationContext {
     /// File-level constants (participants, languages, options, config).
@@ -148,6 +149,16 @@ pub struct ValidationContext {
     /// Optional error code override for field-level validation
     pub field_error_code: Option<ErrorCode>,
 
+    /// The code-switch span (`<...> [@s]`) enclosing the content being validated.
+    ///
+    /// Owned rather than borrowed because this context is owned and threaded by
+    /// value; `LanguageScope` is reconstructed from it at the one place that
+    /// asks, so the precedence rule itself stays in `GoverningMarker`.
+    ///
+    /// `None` is genuinely "no span here", not a missing value: it is the state
+    /// of every word outside a span, which is nearly all of them.
+    pub enclosing_code_switch: Option<CodeSwitchSpan>,
+
     /// Whether the active utterance's MAIN tier was parse-recovered.
     ///
     /// Set per-utterance from [`crate::model::ParseHealth`] before the main
@@ -169,6 +180,7 @@ impl Default for ValidationContext {
             field_text: None,
             field_label: None,
             field_error_code: None,
+            enclosing_code_switch: None,
             main_parse_tainted: false,
         }
     }
@@ -195,6 +207,7 @@ impl ValidationContext {
             field_text: None,
             field_label: None,
             field_error_code: None,
+            enclosing_code_switch: None,
             main_parse_tainted: false,
         }
     }
@@ -260,6 +273,16 @@ impl ValidationContext {
     /// context instance's overlay field.
     pub fn with_tier_language(mut self, lang: Option<LanguageCode>) -> Self {
         self.tier_language = lang;
+        self
+    }
+
+    /// Sets the code-switch span governing the content about to be validated.
+    ///
+    /// Called on descent into an annotated container carrying `[@s]`, so the
+    /// words inside are language-checked against the span rather than the tier.
+    #[must_use]
+    pub fn with_code_switch_span(mut self, span: Option<CodeSwitchSpan>) -> Self {
+        self.enclosing_code_switch = span;
         self
     }
 

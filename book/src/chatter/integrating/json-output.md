@@ -202,6 +202,15 @@ The `lang` field has variants: `{"type": "shortcut"}` (bare `@s`),
 `{"type": "explicit", "code": "fra"}` (`@s:fra`), and
 `{"type": "multiple", "code": ["eng", "zho"]}` (`@s:eng+zho`).
 
+A multi-word switch is an ANNOTATION on the group, not a field on each word:
+`<how to do it> [@s]` serializes as an annotation
+`{"type": "code_switch", "kind": "shortcut"}`, and `[@s:hin]` as
+`{"type": "code_switch", "kind": "explicit", "code": "hin"}`. The words inside
+keep `lang: null` unless they carry a suffix of their own, so a consumer
+reading only `lang` will under-report language switches. Read
+`language_metadata` instead, which is where the resolved answer lives for
+every word regardless of which mark produced it.
+
 ## Utterances
 
 An utterance line contains:
@@ -259,6 +268,14 @@ Three properties worth knowing before consuming it:
   and has a language, so it gets an entry.
 - **The produced form only.** For `dog [: cat]` the entry describes `dog`,
   what the speaker actually said, not the correction.
+- **`source` says which mark decided the language.** A span and a word suffix
+  can resolve to the identical CODE, so a consumer asking "did the transcriber
+  mark this word, or the stretch around it?" can only answer from this field.
+  Precedence is innermost-first: the word's own mark beats an enclosing span,
+  which beats the utterance. The values are enumerated with a description each
+  in `schema/chat-file.schema.json`, generated from the enum; they are
+  deliberately not copied here, because the copy that used to live in the
+  enum's own rustdoc went stale in the very commit that added the span values.
 - **Position is the array subscript**, and nothing else. There is no index
   field: read it with the equivalent of `enumerate()`. In particular this
   order is **not** an alignment index. The tier domains disagree about what

@@ -1,0 +1,8 @@
+================================================================================
+codeswitch_span_shortcut - Multi-word code-switch span in its bare form, <word word> [@s].
+================================================================================
+*CHI:	ik weet niet <how to do it> [@s] .
+
+--------------------------------------------------------------------------------
+
+(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (group_with_annotations (less_than) content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment))))))) (greater_than) annotations: (base_annotations (whitespaces) (code_switch_annotation (right_bracket))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

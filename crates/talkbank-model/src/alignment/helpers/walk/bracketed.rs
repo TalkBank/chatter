@@ -10,7 +10,7 @@
 use crate::alignment::helpers::{domain::TierDomain, rules::should_skip_group};
 use crate::model::{BracketedItem, ContentAnnotation};
 
-use super::{ContentItem, ContentItemMut, WordItem, WordItemMut};
+use super::{ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut};
 
 pub(super) fn walk_bracketed_content<'a>(
     items: &'a [BracketedItem],
@@ -237,45 +237,53 @@ pub(super) fn walk_bracketed_content_mut<'a>(
 pub(super) fn walk_bracketed_words<'a>(
     items: &'a [BracketedItem],
     domain: Option<TierDomain>,
-    f: &mut impl FnMut(WordItem<'a>),
+    scope: LanguageScope<'a>,
+    f: &mut impl FnMut(WordItem<'a>, LanguageScope<'a>),
 ) {
     for item in items {
         match item {
             BracketedItem::Word(word) => {
-                f(WordItem::Word(word));
+                f(WordItem::Word(word), scope);
             }
             BracketedItem::AnnotatedWord(annotated) => {
                 if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    f(WordItem::Word(&annotated.inner));
+                    // A scoped annotation may attach to ONE content item without
+                    // angle brackets, so `hallo [@s]` governs its own word just
+                    // as `<a b> [@s]` governs the words it encloses.
+                    f(
+                        WordItem::Word(&annotated.inner),
+                        scope.inside(&annotated.scoped_annotations),
+                    );
                 }
             }
             BracketedItem::ReplacedWord(replaced) => {
-                f(WordItem::ReplacedWord(replaced));
+                f(WordItem::ReplacedWord(replaced), scope);
             }
             BracketedItem::Separator(sep) => {
-                f(WordItem::Separator(sep));
+                f(WordItem::Separator(sep), scope);
             }
             BracketedItem::AnnotatedGroup(annotated) => {
                 if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_words(&annotated.inner.content.content, domain, f);
+                    let inner = scope.inside(&annotated.scoped_annotations);
+                    walk_bracketed_words(&annotated.inner.content.content, domain, inner, f);
                 }
             }
             BracketedItem::PhoGroup(pho) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&pho.content.content, domain, f);
+                    walk_bracketed_words(&pho.content.content, domain, scope, f);
                 }
             }
             BracketedItem::SinGroup(sin) => {
                 if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&sin.content.content, domain, f);
+                    walk_bracketed_words(&sin.content.content, domain, scope, f);
                 }
             }
             BracketedItem::Quotation(quot) => {
-                walk_bracketed_words(&quot.content.content, domain, f);
+                walk_bracketed_words(&quot.content.content, domain, scope, f);
             }
             BracketedItem::Retrace(retrace) => {
                 if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&retrace.content.content, domain, f);
+                    walk_bracketed_words(&retrace.content.content, domain, scope, f);
                 }
             }
             BracketedItem::AnnotatedRetrace(annotated) => {
@@ -283,7 +291,7 @@ pub(super) fn walk_bracketed_words<'a>(
                 // wrapper, are not words, and are not walked; only the retraced
                 // content is.
                 if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&annotated.inner.content.content, domain, f);
+                    walk_bracketed_words(&annotated.inner.content.content, domain, scope, f);
                 }
             }
             // Non-word bracketed items.

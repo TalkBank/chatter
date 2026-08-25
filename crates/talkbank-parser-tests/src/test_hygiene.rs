@@ -226,7 +226,9 @@ pub fn blank_literals(source: &str) -> String {
                     if bytes[j] == b'\\' {
                         j += 1;
                     }
-                    out.get_mut(j).map(|slot| *slot = b' ');
+                    if let Some(slot) = out.get_mut(j) {
+                        *slot = b' ';
+                    }
                     j += 1;
                 }
                 i = j + 1;
@@ -422,7 +424,7 @@ impl Gate for VacuousTestGate {
     }
 
     fn check(&self) -> GateOutcome {
-        let resolved = sources(&workspace_root()).resolve();
+        let resolved = sources(workspace_root()).resolve();
         let found = resolved.vacuous();
         let unreadable = &resolved.unreadable;
 
@@ -473,7 +475,7 @@ impl Gate for DuplicateTestGate {
     }
 
     fn check(&self) -> GateOutcome {
-        let scanned = sources(&workspace_root());
+        let scanned = sources(workspace_root());
         let (files, unreadable) = (&scanned.files, &scanned.unreadable);
 
         let mut by_shape: BTreeMap<WrittenShape, Vec<String>> = BTreeMap::new();

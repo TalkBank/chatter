@@ -1041,6 +1041,22 @@ export default grammar({
       $.right_bracket,
     ),
 
+    // Code-switch span: [@s] or [@s:lang], annotating a `<...>` scope.
+    //
+    // Every word inside the scope takes the switched language, exactly as if
+    // each carried the `@s` / `@s:lang` word suffix. The bare form resolves the
+    // way bare `word@s` does; the explicit form names the code, which like the
+    // word-level `@s:code` is NOT required to be declared in `@Languages`.
+    //
+    // `[@s` is safe as a prefix token: no other bracket annotation begins `[@`,
+    // so this cannot steal a match from one. The word-suffix use of `@s` is
+    // disjoint because that never appears inside brackets.
+    code_switch_annotation: $ => seq(
+      token(prec(8, '[@s')),
+      optional(seq($.colon, field('code', $.language_code))),
+      $.right_bracket,
+    ),
+
     // Free text content inside bracket annotations (postcode, freecode, etc.)
     annotation_content: $ => /[^\]\r\n]+/,
 
@@ -1192,6 +1208,7 @@ export default grammar({
       $.retrace_multiple,                // [///] - multiple retrace
       $.retrace_reformulation,           // [/-] - reformulation
       $.exclude_marker,                  // [e] - exclude from analysis
+      $.code_switch_annotation,          // [@s], [@s:lang] - code-switch span
     ),
 
     // ============================================================================

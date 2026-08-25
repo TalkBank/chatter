@@ -1,5 +1,5 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 29813eca0bb0
-//! Source grammar digest (sha256): grammar.json=7e784ff18524d19c07db4c6699fca270352fb413f7b0a2722b17a9a6ebb18b4a node-types.json=7b3ac2d08f2d94ace122333d5113072c2bed00722f5cc1323db6e240812bf2a5
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 44a596f848b8
+//! Source grammar digest (sha256): grammar.json=28ada41e6cba5f70150b8034c79b69d2bb4628fdcf17b90bf7b7158e3d196aa3 node-types.json=36a6aec7065785440f02ab5a08d57ad3e1c4a8f9c2c9629f668e6c4434b19073
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -1580,6 +1580,15 @@ impl<'tree> AsRawNode<'tree> for LBrackEqQuestionNode<'tree> {
         self.0
     }
 }
+/// Typed wrapper for `[@s` nodes (kind verified at construction).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct LBrackAtSNode<'tree>(pub tree_sitter::Node<'tree>);
+impl<'tree> AsRawNode<'tree> for LBrackAtSNode<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        self.0
+    }
+}
 /// Typed wrapper for `_` nodes (kind verified at construction).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -1999,6 +2008,15 @@ impl<'tree> AsRawNode<'tree> for CodDependentTierNode<'tree> {
 #[derive(Debug, Clone, Copy)]
 pub struct CodTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CodTierPrefixNode<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        self.0
+    }
+}
+/// Typed wrapper for `code_switch_annotation` nodes (kind verified at construction).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct CodeSwitchAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+impl<'tree> AsRawNode<'tree> for CodeSwitchAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
@@ -5045,6 +5063,7 @@ static SHAPE_13: ReconShape = ReconShape::Kind("alt_tier_prefix");
 static SHAPE_14: ReconShape = ReconShape::Kind("whitespaces");
 static SHAPE_15: ReconShape = ReconShape::Supertype(&[
     "alt_annotation",
+    "code_switch_annotation",
     "error_marker_annotation",
     "exclude_marker",
     "explanation_annotation",
@@ -5093,19 +5112,24 @@ static SHAPE_42: ReconShape = ReconShape::Kind("_");
 static SHAPE_43: ReconShape = ReconShape::Kind("bullet_end");
 static SHAPE_44: ReconShape = ReconShape::Kind("bullet_start");
 static SHAPE_45: ReconShape = ReconShape::Kind("cod_tier_prefix");
-static SHAPE_46: ReconShape = ReconShape::Kind("coh_tier_prefix");
-static SHAPE_47: ReconShape = ReconShape::Kind("color_words_prefix");
-static SHAPE_48: ReconShape = ReconShape::Kind("text_with_bullets_and_pics");
+static SHAPE_46: ReconShape = ReconShape::Kind("colon");
+static SHAPE_47: ReconShape = ReconShape::Kind("language_code");
+static SHAPE_48: ReconShape = ReconShape::Seq(&[&SHAPE_46, &SHAPE_47]);
 static SHAPE_49: ReconShape = ReconShape::Optional(&SHAPE_48);
-static SHAPE_50: ReconShape = ReconShape::Kind("com_tier_prefix");
-static SHAPE_51: ReconShape = ReconShape::Kind("comment_prefix");
-static SHAPE_52: ReconShape = ReconShape::Kind("base_content_item");
-static SHAPE_53: ReconShape = ReconShape::Kind("group_with_annotations");
-static SHAPE_54: ReconShape = ReconShape::Kind("quotation");
-static SHAPE_55: ReconShape = ReconShape::Kind("illegal_curly_quote");
-static SHAPE_56: ReconShape = ReconShape::Kind("main_pho_group");
-static SHAPE_57: ReconShape = ReconShape::Kind("main_sin_group");
-static SHAPE_58: ReconShape = ReconShape::Supertype(&[
+static SHAPE_50: ReconShape = ReconShape::Kind("[@s");
+static SHAPE_51: ReconShape = ReconShape::Kind("coh_tier_prefix");
+static SHAPE_52: ReconShape = ReconShape::Kind("color_words_prefix");
+static SHAPE_53: ReconShape = ReconShape::Kind("text_with_bullets_and_pics");
+static SHAPE_54: ReconShape = ReconShape::Optional(&SHAPE_53);
+static SHAPE_55: ReconShape = ReconShape::Kind("com_tier_prefix");
+static SHAPE_56: ReconShape = ReconShape::Kind("comment_prefix");
+static SHAPE_57: ReconShape = ReconShape::Kind("base_content_item");
+static SHAPE_58: ReconShape = ReconShape::Kind("group_with_annotations");
+static SHAPE_59: ReconShape = ReconShape::Kind("quotation");
+static SHAPE_60: ReconShape = ReconShape::Kind("illegal_curly_quote");
+static SHAPE_61: ReconShape = ReconShape::Kind("main_pho_group");
+static SHAPE_62: ReconShape = ReconShape::Kind("main_sin_group");
+static SHAPE_63: ReconShape = ReconShape::Supertype(&[
     "ca_no_break_linker",
     "ca_technical_break_linker",
     "linker_lazy_overlap",
@@ -5114,115 +5138,113 @@ static SHAPE_58: ReconShape = ReconShape::Supertype(&[
     "linker_quotation_follows",
     "linker_self_completion",
 ]);
-static SHAPE_59: ReconShape = ReconShape::Choice(&[
-    &SHAPE_52, &SHAPE_53, &SHAPE_54, &SHAPE_55, &SHAPE_56, &SHAPE_57, &SHAPE_58,
+static SHAPE_64: ReconShape = ReconShape::Choice(&[
+    &SHAPE_57, &SHAPE_58, &SHAPE_59, &SHAPE_60, &SHAPE_61, &SHAPE_62, &SHAPE_63,
 ]);
-static SHAPE_60: ReconShape = ReconShape::Kind("content_item");
-static SHAPE_61: ReconShape = ReconShape::Kind("separator");
-static SHAPE_62: ReconShape = ReconShape::Kind("overlap_point");
-static SHAPE_63: ReconShape = ReconShape::Choice(&[&SHAPE_14, &SHAPE_60, &SHAPE_61, &SHAPE_62]);
-static SHAPE_64: ReconShape = ReconShape::Repeat(&SHAPE_63);
-static SHAPE_65: ReconShape = ReconShape::Kind("strict_date");
-static SHAPE_66: ReconShape = ReconShape::Kind("generic_date");
-static SHAPE_67: ReconShape = ReconShape::Choice(&[&SHAPE_65, &SHAPE_66]);
-static SHAPE_68: ReconShape = ReconShape::Kind("date_prefix");
-static SHAPE_69: ReconShape = ReconShape::Kind("def_tier_prefix");
-static SHAPE_70: ReconShape = ReconShape::Kind("eg_prefix");
-static SHAPE_71: ReconShape = ReconShape::Kind("@End");
-static SHAPE_72: ReconShape = ReconShape::Kind("eng_tier_prefix");
-static SHAPE_73: ReconShape = ReconShape::Kind("err_tier_prefix");
-static SHAPE_74: ReconShape = ReconShape::Kind("event_segment");
-static SHAPE_75: ReconShape = ReconShape::Kind("event_marker");
-static SHAPE_76: ReconShape = ReconShape::Kind("exp_tier_prefix");
-static SHAPE_77: ReconShape = ReconShape::Kind("[=");
-static SHAPE_78: ReconShape = ReconShape::Kind("fac_tier_prefix");
-static SHAPE_79: ReconShape = ReconShape::Kind("postcode");
-static SHAPE_80: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_79]);
-static SHAPE_81: ReconShape = ReconShape::Repeat(&SHAPE_80);
-static SHAPE_82: ReconShape = ReconShape::Kind("flo_tier_prefix");
-static SHAPE_83: ReconShape = ReconShape::Kind("font_prefix");
-static SHAPE_84: ReconShape = ReconShape::Kind("rest_of_line");
-static SHAPE_85: ReconShape = ReconShape::Kind("continuation");
-static SHAPE_86: ReconShape = ReconShape::Choice(&[&SHAPE_84, &SHAPE_85]);
-static SHAPE_87: ReconShape = ReconShape::Repeat(&SHAPE_86);
-static SHAPE_88: ReconShape = ReconShape::Supertype(&[
+static SHAPE_65: ReconShape = ReconShape::Kind("content_item");
+static SHAPE_66: ReconShape = ReconShape::Kind("separator");
+static SHAPE_67: ReconShape = ReconShape::Kind("overlap_point");
+static SHAPE_68: ReconShape = ReconShape::Choice(&[&SHAPE_14, &SHAPE_65, &SHAPE_66, &SHAPE_67]);
+static SHAPE_69: ReconShape = ReconShape::Repeat(&SHAPE_68);
+static SHAPE_70: ReconShape = ReconShape::Kind("strict_date");
+static SHAPE_71: ReconShape = ReconShape::Kind("generic_date");
+static SHAPE_72: ReconShape = ReconShape::Choice(&[&SHAPE_70, &SHAPE_71]);
+static SHAPE_73: ReconShape = ReconShape::Kind("date_prefix");
+static SHAPE_74: ReconShape = ReconShape::Kind("def_tier_prefix");
+static SHAPE_75: ReconShape = ReconShape::Kind("eg_prefix");
+static SHAPE_76: ReconShape = ReconShape::Kind("@End");
+static SHAPE_77: ReconShape = ReconShape::Kind("eng_tier_prefix");
+static SHAPE_78: ReconShape = ReconShape::Kind("err_tier_prefix");
+static SHAPE_79: ReconShape = ReconShape::Kind("event_segment");
+static SHAPE_80: ReconShape = ReconShape::Kind("event_marker");
+static SHAPE_81: ReconShape = ReconShape::Kind("exp_tier_prefix");
+static SHAPE_82: ReconShape = ReconShape::Kind("[=");
+static SHAPE_83: ReconShape = ReconShape::Kind("fac_tier_prefix");
+static SHAPE_84: ReconShape = ReconShape::Kind("postcode");
+static SHAPE_85: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_84]);
+static SHAPE_86: ReconShape = ReconShape::Repeat(&SHAPE_85);
+static SHAPE_87: ReconShape = ReconShape::Kind("flo_tier_prefix");
+static SHAPE_88: ReconShape = ReconShape::Kind("font_prefix");
+static SHAPE_89: ReconShape = ReconShape::Kind("rest_of_line");
+static SHAPE_90: ReconShape = ReconShape::Kind("continuation");
+static SHAPE_91: ReconShape = ReconShape::Choice(&[&SHAPE_89, &SHAPE_90]);
+static SHAPE_92: ReconShape = ReconShape::Repeat(&SHAPE_91);
+static SHAPE_93: ReconShape = ReconShape::Supertype(&[
     "color_words_header",
     "font_header",
     "pid_header",
     "window_header",
 ]);
-static SHAPE_89: ReconShape = ReconShape::Repeat(&SHAPE_88);
-static SHAPE_90: ReconShape = ReconShape::Kind("begin_header");
-static SHAPE_91: ReconShape = ReconShape::Kind("line");
-static SHAPE_92: ReconShape = ReconShape::Repeat(&SHAPE_91);
-static SHAPE_93: ReconShape = ReconShape::Kind("end_header");
-static SHAPE_94: ReconShape = ReconShape::Kind("utf8_header");
-static SHAPE_95: ReconShape = ReconShape::Kind("g_prefix");
-static SHAPE_96: ReconShape = ReconShape::Kind("gls_tier_prefix");
-static SHAPE_97: ReconShape = ReconShape::Kind("gpx_tier_prefix");
-static SHAPE_98: ReconShape = ReconShape::Kind("gra_relation");
-static SHAPE_99: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_98]);
-static SHAPE_100: ReconShape = ReconShape::Repeat(&SHAPE_99);
-static SHAPE_101: ReconShape = ReconShape::Kind("gra_contents");
-static SHAPE_102: ReconShape = ReconShape::Kind("gra_tier_prefix");
-static SHAPE_103: ReconShape = ReconShape::Kind("pipe");
-static SHAPE_104: ReconShape = ReconShape::Kind("gra_head");
-static SHAPE_105: ReconShape = ReconShape::Kind("gra_relation_name");
-static SHAPE_106: ReconShape = ReconShape::Kind("gra_index");
-static SHAPE_107: ReconShape = ReconShape::Kind("contents");
-static SHAPE_108: ReconShape = ReconShape::Kind("greater_than");
-static SHAPE_109: ReconShape = ReconShape::Kind("base_annotations");
-static SHAPE_110: ReconShape = ReconShape::Kind("less_than");
-static SHAPE_111: ReconShape = ReconShape::Kind("tab");
-static SHAPE_112: ReconShape = ReconShape::Choice(&[&SHAPE_9, &SHAPE_111]);
-static SHAPE_113: ReconShape = ReconShape::Repeat(&SHAPE_112);
-static SHAPE_114: ReconShape = ReconShape::Kind("sep_trailing_space");
-static SHAPE_115: ReconShape = ReconShape::Optional(&SHAPE_114);
-static SHAPE_116: ReconShape = ReconShape::Kind("colon");
-static SHAPE_117: ReconShape = ReconShape::Kind("age_format");
-static SHAPE_118: ReconShape = ReconShape::LeafText;
-static SHAPE_119: ReconShape = ReconShape::Choice(&[&SHAPE_117, &SHAPE_118]);
-static SHAPE_120: ReconShape = ReconShape::Optional(&SHAPE_14);
-static SHAPE_121: ReconShape = ReconShape::Kind("id_corpus");
-static SHAPE_122: ReconShape = ReconShape::Optional(&SHAPE_121);
-static SHAPE_123: ReconShape = ReconShape::Kind("id_speaker");
-static SHAPE_124: ReconShape = ReconShape::Kind("id_age");
-static SHAPE_125: ReconShape = ReconShape::Optional(&SHAPE_124);
-static SHAPE_126: ReconShape = ReconShape::Kind("id_sex");
-static SHAPE_127: ReconShape = ReconShape::Optional(&SHAPE_126);
-static SHAPE_128: ReconShape = ReconShape::Kind("id_group");
+static SHAPE_94: ReconShape = ReconShape::Repeat(&SHAPE_93);
+static SHAPE_95: ReconShape = ReconShape::Kind("begin_header");
+static SHAPE_96: ReconShape = ReconShape::Kind("line");
+static SHAPE_97: ReconShape = ReconShape::Repeat(&SHAPE_96);
+static SHAPE_98: ReconShape = ReconShape::Kind("end_header");
+static SHAPE_99: ReconShape = ReconShape::Kind("utf8_header");
+static SHAPE_100: ReconShape = ReconShape::Kind("g_prefix");
+static SHAPE_101: ReconShape = ReconShape::Kind("gls_tier_prefix");
+static SHAPE_102: ReconShape = ReconShape::Kind("gpx_tier_prefix");
+static SHAPE_103: ReconShape = ReconShape::Kind("gra_relation");
+static SHAPE_104: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_103]);
+static SHAPE_105: ReconShape = ReconShape::Repeat(&SHAPE_104);
+static SHAPE_106: ReconShape = ReconShape::Kind("gra_contents");
+static SHAPE_107: ReconShape = ReconShape::Kind("gra_tier_prefix");
+static SHAPE_108: ReconShape = ReconShape::Kind("pipe");
+static SHAPE_109: ReconShape = ReconShape::Kind("gra_head");
+static SHAPE_110: ReconShape = ReconShape::Kind("gra_relation_name");
+static SHAPE_111: ReconShape = ReconShape::Kind("gra_index");
+static SHAPE_112: ReconShape = ReconShape::Kind("contents");
+static SHAPE_113: ReconShape = ReconShape::Kind("greater_than");
+static SHAPE_114: ReconShape = ReconShape::Kind("base_annotations");
+static SHAPE_115: ReconShape = ReconShape::Kind("less_than");
+static SHAPE_116: ReconShape = ReconShape::Kind("tab");
+static SHAPE_117: ReconShape = ReconShape::Choice(&[&SHAPE_9, &SHAPE_116]);
+static SHAPE_118: ReconShape = ReconShape::Repeat(&SHAPE_117);
+static SHAPE_119: ReconShape = ReconShape::Kind("sep_trailing_space");
+static SHAPE_120: ReconShape = ReconShape::Optional(&SHAPE_119);
+static SHAPE_121: ReconShape = ReconShape::Kind("age_format");
+static SHAPE_122: ReconShape = ReconShape::LeafText;
+static SHAPE_123: ReconShape = ReconShape::Choice(&[&SHAPE_121, &SHAPE_122]);
+static SHAPE_124: ReconShape = ReconShape::Optional(&SHAPE_14);
+static SHAPE_125: ReconShape = ReconShape::Kind("id_corpus");
+static SHAPE_126: ReconShape = ReconShape::Optional(&SHAPE_125);
+static SHAPE_127: ReconShape = ReconShape::Kind("id_speaker");
+static SHAPE_128: ReconShape = ReconShape::Kind("id_age");
 static SHAPE_129: ReconShape = ReconShape::Optional(&SHAPE_128);
-static SHAPE_130: ReconShape = ReconShape::Kind("id_ses");
+static SHAPE_130: ReconShape = ReconShape::Kind("id_sex");
 static SHAPE_131: ReconShape = ReconShape::Optional(&SHAPE_130);
-static SHAPE_132: ReconShape = ReconShape::Kind("id_role");
-static SHAPE_133: ReconShape = ReconShape::Kind("id_education");
-static SHAPE_134: ReconShape = ReconShape::Optional(&SHAPE_133);
-static SHAPE_135: ReconShape = ReconShape::Kind("id_custom_field");
-static SHAPE_136: ReconShape = ReconShape::Optional(&SHAPE_135);
-static SHAPE_137: ReconShape = ReconShape::Kind("id_languages");
-static SHAPE_138: ReconShape = ReconShape::Kind("id_contents");
-static SHAPE_139: ReconShape = ReconShape::Kind("id_prefix");
-static SHAPE_140: ReconShape = ReconShape::Kind("languages_contents");
-static SHAPE_141: ReconShape = ReconShape::Choice(&[&SHAPE_140, &SHAPE_118]);
-static SHAPE_142: ReconShape = ReconShape::Kind("ses_combined");
-static SHAPE_143: ReconShape = ReconShape::Kind("ses_code_value");
-static SHAPE_144: ReconShape = ReconShape::Kind("ethnicity_value");
-static SHAPE_145: ReconShape = ReconShape::Kind("generic_id_ses");
-static SHAPE_146: ReconShape =
-    ReconShape::Choice(&[&SHAPE_142, &SHAPE_143, &SHAPE_144, &SHAPE_145]);
-static SHAPE_147: ReconShape = ReconShape::Kind("male_value");
-static SHAPE_148: ReconShape = ReconShape::Kind("female_value");
-static SHAPE_149: ReconShape = ReconShape::Kind("generic_id_sex");
-static SHAPE_150: ReconShape = ReconShape::Choice(&[&SHAPE_147, &SHAPE_148, &SHAPE_149]);
-static SHAPE_151: ReconShape = ReconShape::Kind("int_tier_prefix");
-static SHAPE_152: ReconShape = ReconShape::Kind("language_code");
-static SHAPE_153: ReconShape = ReconShape::Kind("l1_of_prefix");
-static SHAPE_154: ReconShape = ReconShape::Kind("[-");
-static SHAPE_155: ReconShape = ReconShape::Kind("comma");
-static SHAPE_156: ReconShape = ReconShape::Seq(&[&SHAPE_120, &SHAPE_155, &SHAPE_14, &SHAPE_152]);
-static SHAPE_157: ReconShape = ReconShape::Repeat(&SHAPE_156);
-static SHAPE_158: ReconShape = ReconShape::Kind("languages_prefix");
-static SHAPE_159: ReconShape = ReconShape::Supertype(&[
+static SHAPE_132: ReconShape = ReconShape::Kind("id_group");
+static SHAPE_133: ReconShape = ReconShape::Optional(&SHAPE_132);
+static SHAPE_134: ReconShape = ReconShape::Kind("id_ses");
+static SHAPE_135: ReconShape = ReconShape::Optional(&SHAPE_134);
+static SHAPE_136: ReconShape = ReconShape::Kind("id_role");
+static SHAPE_137: ReconShape = ReconShape::Kind("id_education");
+static SHAPE_138: ReconShape = ReconShape::Optional(&SHAPE_137);
+static SHAPE_139: ReconShape = ReconShape::Kind("id_custom_field");
+static SHAPE_140: ReconShape = ReconShape::Optional(&SHAPE_139);
+static SHAPE_141: ReconShape = ReconShape::Kind("id_languages");
+static SHAPE_142: ReconShape = ReconShape::Kind("id_contents");
+static SHAPE_143: ReconShape = ReconShape::Kind("id_prefix");
+static SHAPE_144: ReconShape = ReconShape::Kind("languages_contents");
+static SHAPE_145: ReconShape = ReconShape::Choice(&[&SHAPE_144, &SHAPE_122]);
+static SHAPE_146: ReconShape = ReconShape::Kind("ses_combined");
+static SHAPE_147: ReconShape = ReconShape::Kind("ses_code_value");
+static SHAPE_148: ReconShape = ReconShape::Kind("ethnicity_value");
+static SHAPE_149: ReconShape = ReconShape::Kind("generic_id_ses");
+static SHAPE_150: ReconShape =
+    ReconShape::Choice(&[&SHAPE_146, &SHAPE_147, &SHAPE_148, &SHAPE_149]);
+static SHAPE_151: ReconShape = ReconShape::Kind("male_value");
+static SHAPE_152: ReconShape = ReconShape::Kind("female_value");
+static SHAPE_153: ReconShape = ReconShape::Kind("generic_id_sex");
+static SHAPE_154: ReconShape = ReconShape::Choice(&[&SHAPE_151, &SHAPE_152, &SHAPE_153]);
+static SHAPE_155: ReconShape = ReconShape::Kind("int_tier_prefix");
+static SHAPE_156: ReconShape = ReconShape::Kind("l1_of_prefix");
+static SHAPE_157: ReconShape = ReconShape::Kind("[-");
+static SHAPE_158: ReconShape = ReconShape::Kind("comma");
+static SHAPE_159: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_158, &SHAPE_14, &SHAPE_47]);
+static SHAPE_160: ReconShape = ReconShape::Repeat(&SHAPE_159);
+static SHAPE_161: ReconShape = ReconShape::Kind("languages_prefix");
+static SHAPE_162: ReconShape = ReconShape::Supertype(&[
     "activities_header",
     "bck_header",
     "bg_header",
@@ -5258,58 +5280,58 @@ static SHAPE_159: ReconShape = ReconShape::Supertype(&[
     "videos_header",
     "warning_header",
 ]);
-static SHAPE_160: ReconShape = ReconShape::Kind("utterance");
-static SHAPE_161: ReconShape = ReconShape::Kind("blank_line");
-static SHAPE_162: ReconShape = ReconShape::Kind("unsupported_line");
-static SHAPE_163: ReconShape =
-    ReconShape::Choice(&[&SHAPE_159, &SHAPE_160, &SHAPE_161, &SHAPE_162]);
-static SHAPE_164: ReconShape = ReconShape::Seq(&[&SHAPE_58, &SHAPE_14]);
-static SHAPE_165: ReconShape = ReconShape::Repeat(&SHAPE_164);
-static SHAPE_166: ReconShape = ReconShape::Kind("location_prefix");
-static SHAPE_167: ReconShape = ReconShape::Kind("long_feature_begin");
-static SHAPE_168: ReconShape = ReconShape::Kind("long_feature_end");
-static SHAPE_169: ReconShape = ReconShape::Choice(&[&SHAPE_167, &SHAPE_168]);
-static SHAPE_170: ReconShape = ReconShape::Kind("long_feature_begin_marker");
-static SHAPE_171: ReconShape = ReconShape::Kind("long_feature_label");
-static SHAPE_172: ReconShape = ReconShape::Kind("ampersand");
-static SHAPE_173: ReconShape = ReconShape::Kind("long_feature_end_marker");
-static SHAPE_174: ReconShape = ReconShape::Kind("pho_end_group");
-static SHAPE_175: ReconShape = ReconShape::Kind("pho_begin_group");
-static SHAPE_176: ReconShape = ReconShape::Kind("sin_end_group");
-static SHAPE_177: ReconShape = ReconShape::Kind("sin_begin_group");
-static SHAPE_178: ReconShape = ReconShape::Kind("tier_body");
-static SHAPE_179: ReconShape = ReconShape::Kind("star");
-static SHAPE_180: ReconShape = ReconShape::Kind("media_type");
-static SHAPE_181: ReconShape = ReconShape::Kind("media_status");
-static SHAPE_182: ReconShape = ReconShape::Seq(&[&SHAPE_155, &SHAPE_14, &SHAPE_181]);
-static SHAPE_183: ReconShape = ReconShape::Optional(&SHAPE_182);
-static SHAPE_184: ReconShape = ReconShape::Kind("media_filename");
-static SHAPE_185: ReconShape = ReconShape::Kind("double_quote");
-static SHAPE_186: ReconShape = ReconShape::Seq(&[&SHAPE_185, &SHAPE_118, &SHAPE_185]);
-static SHAPE_187: ReconShape = ReconShape::Choice(&[&SHAPE_186, &SHAPE_118]);
-static SHAPE_188: ReconShape = ReconShape::Kind("media_contents");
-static SHAPE_189: ReconShape = ReconShape::Kind("media_prefix");
-static SHAPE_190: ReconShape = ReconShape::Kind("missing_value");
-static SHAPE_191: ReconShape = ReconShape::Kind("unlinked_value");
-static SHAPE_192: ReconShape = ReconShape::Kind("notrans_value");
-static SHAPE_193: ReconShape = ReconShape::Kind("generic_media_status");
-static SHAPE_194: ReconShape =
-    ReconShape::Choice(&[&SHAPE_190, &SHAPE_191, &SHAPE_192, &SHAPE_193]);
-static SHAPE_195: ReconShape = ReconShape::Kind("video_value");
-static SHAPE_196: ReconShape = ReconShape::Kind("audio_value");
-static SHAPE_197: ReconShape = ReconShape::Kind("generic_media_type");
-static SHAPE_198: ReconShape =
-    ReconShape::Choice(&[&SHAPE_195, &SHAPE_196, &SHAPE_190, &SHAPE_197]);
-static SHAPE_199: ReconShape = ReconShape::Kind("pho_groups");
-static SHAPE_200: ReconShape = ReconShape::Kind("mod_tier_prefix");
-static SHAPE_201: ReconShape = ReconShape::Kind("modsyl_tier_prefix");
-static SHAPE_202: ReconShape = ReconShape::Kind("mor_post_clitic");
-static SHAPE_203: ReconShape = ReconShape::Repeat(&SHAPE_202);
-static SHAPE_204: ReconShape = ReconShape::Kind("mor_word");
-static SHAPE_205: ReconShape = ReconShape::Kind("mor_content");
-static SHAPE_206: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_205]);
-static SHAPE_207: ReconShape = ReconShape::Repeat(&SHAPE_206);
-static SHAPE_208: ReconShape = ReconShape::Supertype(&[
+static SHAPE_163: ReconShape = ReconShape::Kind("utterance");
+static SHAPE_164: ReconShape = ReconShape::Kind("blank_line");
+static SHAPE_165: ReconShape = ReconShape::Kind("unsupported_line");
+static SHAPE_166: ReconShape =
+    ReconShape::Choice(&[&SHAPE_162, &SHAPE_163, &SHAPE_164, &SHAPE_165]);
+static SHAPE_167: ReconShape = ReconShape::Seq(&[&SHAPE_63, &SHAPE_14]);
+static SHAPE_168: ReconShape = ReconShape::Repeat(&SHAPE_167);
+static SHAPE_169: ReconShape = ReconShape::Kind("location_prefix");
+static SHAPE_170: ReconShape = ReconShape::Kind("long_feature_begin");
+static SHAPE_171: ReconShape = ReconShape::Kind("long_feature_end");
+static SHAPE_172: ReconShape = ReconShape::Choice(&[&SHAPE_170, &SHAPE_171]);
+static SHAPE_173: ReconShape = ReconShape::Kind("long_feature_begin_marker");
+static SHAPE_174: ReconShape = ReconShape::Kind("long_feature_label");
+static SHAPE_175: ReconShape = ReconShape::Kind("ampersand");
+static SHAPE_176: ReconShape = ReconShape::Kind("long_feature_end_marker");
+static SHAPE_177: ReconShape = ReconShape::Kind("pho_end_group");
+static SHAPE_178: ReconShape = ReconShape::Kind("pho_begin_group");
+static SHAPE_179: ReconShape = ReconShape::Kind("sin_end_group");
+static SHAPE_180: ReconShape = ReconShape::Kind("sin_begin_group");
+static SHAPE_181: ReconShape = ReconShape::Kind("tier_body");
+static SHAPE_182: ReconShape = ReconShape::Kind("star");
+static SHAPE_183: ReconShape = ReconShape::Kind("media_type");
+static SHAPE_184: ReconShape = ReconShape::Kind("media_status");
+static SHAPE_185: ReconShape = ReconShape::Seq(&[&SHAPE_158, &SHAPE_14, &SHAPE_184]);
+static SHAPE_186: ReconShape = ReconShape::Optional(&SHAPE_185);
+static SHAPE_187: ReconShape = ReconShape::Kind("media_filename");
+static SHAPE_188: ReconShape = ReconShape::Kind("double_quote");
+static SHAPE_189: ReconShape = ReconShape::Seq(&[&SHAPE_188, &SHAPE_122, &SHAPE_188]);
+static SHAPE_190: ReconShape = ReconShape::Choice(&[&SHAPE_189, &SHAPE_122]);
+static SHAPE_191: ReconShape = ReconShape::Kind("media_contents");
+static SHAPE_192: ReconShape = ReconShape::Kind("media_prefix");
+static SHAPE_193: ReconShape = ReconShape::Kind("missing_value");
+static SHAPE_194: ReconShape = ReconShape::Kind("unlinked_value");
+static SHAPE_195: ReconShape = ReconShape::Kind("notrans_value");
+static SHAPE_196: ReconShape = ReconShape::Kind("generic_media_status");
+static SHAPE_197: ReconShape =
+    ReconShape::Choice(&[&SHAPE_193, &SHAPE_194, &SHAPE_195, &SHAPE_196]);
+static SHAPE_198: ReconShape = ReconShape::Kind("video_value");
+static SHAPE_199: ReconShape = ReconShape::Kind("audio_value");
+static SHAPE_200: ReconShape = ReconShape::Kind("generic_media_type");
+static SHAPE_201: ReconShape =
+    ReconShape::Choice(&[&SHAPE_198, &SHAPE_199, &SHAPE_193, &SHAPE_200]);
+static SHAPE_202: ReconShape = ReconShape::Kind("pho_groups");
+static SHAPE_203: ReconShape = ReconShape::Kind("mod_tier_prefix");
+static SHAPE_204: ReconShape = ReconShape::Kind("modsyl_tier_prefix");
+static SHAPE_205: ReconShape = ReconShape::Kind("mor_post_clitic");
+static SHAPE_206: ReconShape = ReconShape::Repeat(&SHAPE_205);
+static SHAPE_207: ReconShape = ReconShape::Kind("mor_word");
+static SHAPE_208: ReconShape = ReconShape::Kind("mor_content");
+static SHAPE_209: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_208]);
+static SHAPE_210: ReconShape = ReconShape::Repeat(&SHAPE_209);
+static SHAPE_211: ReconShape = ReconShape::Supertype(&[
     "break_for_coding",
     "broken_question",
     "exclamation",
@@ -5324,138 +5346,138 @@ static SHAPE_208: ReconShape = ReconShape::Supertype(&[
     "trailing_off",
     "trailing_off_question",
 ]);
-static SHAPE_209: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_208]);
-static SHAPE_210: ReconShape = ReconShape::Optional(&SHAPE_209);
-static SHAPE_211: ReconShape = ReconShape::Seq(&[&SHAPE_205, &SHAPE_207, &SHAPE_210]);
-static SHAPE_212: ReconShape = ReconShape::Choice(&[&SHAPE_211, &SHAPE_208]);
-static SHAPE_213: ReconShape = ReconShape::Kind("mor_contents");
-static SHAPE_214: ReconShape = ReconShape::Kind("mor_tier_prefix");
-static SHAPE_215: ReconShape = ReconShape::Kind("mor_feature_value");
-static SHAPE_216: ReconShape = ReconShape::Kind("hyphen");
-static SHAPE_217: ReconShape = ReconShape::Kind("tilde");
-static SHAPE_218: ReconShape = ReconShape::Kind("mor_lemma");
-static SHAPE_219: ReconShape = ReconShape::Kind("mor_feature");
-static SHAPE_220: ReconShape = ReconShape::Repeat(&SHAPE_219);
-static SHAPE_221: ReconShape = ReconShape::Kind("mor_pos");
-static SHAPE_222: ReconShape = ReconShape::Kind("new_episode_prefix");
-static SHAPE_223: ReconShape = ReconShape::Kind("semicolon");
-static SHAPE_224: ReconShape = ReconShape::Kind("tag_marker");
-static SHAPE_225: ReconShape = ReconShape::Kind("vocative_marker");
-static SHAPE_226: ReconShape = ReconShape::Kind("ca_continuation_marker");
-static SHAPE_227: ReconShape = ReconShape::Kind("unmarked_ending");
-static SHAPE_228: ReconShape = ReconShape::Kind("uptake_symbol");
-static SHAPE_229: ReconShape = ReconShape::Kind("ca_no_break");
-static SHAPE_230: ReconShape = ReconShape::Kind("ca_technical_break");
-static SHAPE_231: ReconShape = ReconShape::Kind("rising_to_high");
-static SHAPE_232: ReconShape = ReconShape::Kind("rising_to_mid");
-static SHAPE_233: ReconShape = ReconShape::Kind("level_pitch");
-static SHAPE_234: ReconShape = ReconShape::Kind("falling_to_mid");
-static SHAPE_235: ReconShape = ReconShape::Kind("falling_to_low");
-static SHAPE_236: ReconShape = ReconShape::Choice(&[
-    &SHAPE_155, &SHAPE_223, &SHAPE_224, &SHAPE_225, &SHAPE_226, &SHAPE_227, &SHAPE_228, &SHAPE_229,
-    &SHAPE_230, &SHAPE_231, &SHAPE_232, &SHAPE_233, &SHAPE_234, &SHAPE_235,
+static SHAPE_212: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_211]);
+static SHAPE_213: ReconShape = ReconShape::Optional(&SHAPE_212);
+static SHAPE_214: ReconShape = ReconShape::Seq(&[&SHAPE_208, &SHAPE_210, &SHAPE_213]);
+static SHAPE_215: ReconShape = ReconShape::Choice(&[&SHAPE_214, &SHAPE_211]);
+static SHAPE_216: ReconShape = ReconShape::Kind("mor_contents");
+static SHAPE_217: ReconShape = ReconShape::Kind("mor_tier_prefix");
+static SHAPE_218: ReconShape = ReconShape::Kind("mor_feature_value");
+static SHAPE_219: ReconShape = ReconShape::Kind("hyphen");
+static SHAPE_220: ReconShape = ReconShape::Kind("tilde");
+static SHAPE_221: ReconShape = ReconShape::Kind("mor_lemma");
+static SHAPE_222: ReconShape = ReconShape::Kind("mor_feature");
+static SHAPE_223: ReconShape = ReconShape::Repeat(&SHAPE_222);
+static SHAPE_224: ReconShape = ReconShape::Kind("mor_pos");
+static SHAPE_225: ReconShape = ReconShape::Kind("new_episode_prefix");
+static SHAPE_226: ReconShape = ReconShape::Kind("semicolon");
+static SHAPE_227: ReconShape = ReconShape::Kind("tag_marker");
+static SHAPE_228: ReconShape = ReconShape::Kind("vocative_marker");
+static SHAPE_229: ReconShape = ReconShape::Kind("ca_continuation_marker");
+static SHAPE_230: ReconShape = ReconShape::Kind("unmarked_ending");
+static SHAPE_231: ReconShape = ReconShape::Kind("uptake_symbol");
+static SHAPE_232: ReconShape = ReconShape::Kind("ca_no_break");
+static SHAPE_233: ReconShape = ReconShape::Kind("ca_technical_break");
+static SHAPE_234: ReconShape = ReconShape::Kind("rising_to_high");
+static SHAPE_235: ReconShape = ReconShape::Kind("rising_to_mid");
+static SHAPE_236: ReconShape = ReconShape::Kind("level_pitch");
+static SHAPE_237: ReconShape = ReconShape::Kind("falling_to_mid");
+static SHAPE_238: ReconShape = ReconShape::Kind("falling_to_low");
+static SHAPE_239: ReconShape = ReconShape::Choice(&[
+    &SHAPE_158, &SHAPE_226, &SHAPE_227, &SHAPE_228, &SHAPE_229, &SHAPE_230, &SHAPE_231, &SHAPE_232,
+    &SHAPE_233, &SHAPE_234, &SHAPE_235, &SHAPE_236, &SHAPE_237, &SHAPE_238,
 ]);
-static SHAPE_237: ReconShape = ReconShape::Kind("nonvocal_begin");
-static SHAPE_238: ReconShape = ReconShape::Kind("nonvocal_end");
-static SHAPE_239: ReconShape = ReconShape::Kind("nonvocal_simple");
-static SHAPE_240: ReconShape = ReconShape::Choice(&[&SHAPE_237, &SHAPE_238, &SHAPE_239]);
-static SHAPE_241: ReconShape = ReconShape::Kind("nonvocal_begin_marker");
-static SHAPE_242: ReconShape = ReconShape::Kind("nonvocal_end_marker");
-static SHAPE_243: ReconShape = ReconShape::Kind("right_brace");
-static SHAPE_244: ReconShape = ReconShape::Kind("event");
-static SHAPE_245: ReconShape = ReconShape::Kind("zero");
-static SHAPE_246: ReconShape = ReconShape::Choice(&[&SHAPE_244, &SHAPE_245]);
-static SHAPE_247: ReconShape = ReconShape::Optional(&SHAPE_109);
-static SHAPE_248: ReconShape = ReconShape::Kind("nonword");
-static SHAPE_249: ReconShape = ReconShape::Kind("number_option");
-static SHAPE_250: ReconShape = ReconShape::Kind("number_prefix");
-static SHAPE_251: ReconShape = ReconShape::Kind("1");
-static SHAPE_252: ReconShape = ReconShape::Kind("2");
-static SHAPE_253: ReconShape = ReconShape::Kind("3");
-static SHAPE_254: ReconShape = ReconShape::Kind("4");
-static SHAPE_255: ReconShape = ReconShape::Kind("5");
-static SHAPE_256: ReconShape = ReconShape::Kind("more");
-static SHAPE_257: ReconShape = ReconShape::Kind("audience");
-static SHAPE_258: ReconShape = ReconShape::Kind("generic_number");
-static SHAPE_259: ReconShape = ReconShape::Choice(&[
-    &SHAPE_251, &SHAPE_252, &SHAPE_253, &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258,
+static SHAPE_240: ReconShape = ReconShape::Kind("nonvocal_begin");
+static SHAPE_241: ReconShape = ReconShape::Kind("nonvocal_end");
+static SHAPE_242: ReconShape = ReconShape::Kind("nonvocal_simple");
+static SHAPE_243: ReconShape = ReconShape::Choice(&[&SHAPE_240, &SHAPE_241, &SHAPE_242]);
+static SHAPE_244: ReconShape = ReconShape::Kind("nonvocal_begin_marker");
+static SHAPE_245: ReconShape = ReconShape::Kind("nonvocal_end_marker");
+static SHAPE_246: ReconShape = ReconShape::Kind("right_brace");
+static SHAPE_247: ReconShape = ReconShape::Kind("event");
+static SHAPE_248: ReconShape = ReconShape::Kind("zero");
+static SHAPE_249: ReconShape = ReconShape::Choice(&[&SHAPE_247, &SHAPE_248]);
+static SHAPE_250: ReconShape = ReconShape::Optional(&SHAPE_114);
+static SHAPE_251: ReconShape = ReconShape::Kind("nonword");
+static SHAPE_252: ReconShape = ReconShape::Kind("number_option");
+static SHAPE_253: ReconShape = ReconShape::Kind("number_prefix");
+static SHAPE_254: ReconShape = ReconShape::Kind("1");
+static SHAPE_255: ReconShape = ReconShape::Kind("2");
+static SHAPE_256: ReconShape = ReconShape::Kind("3");
+static SHAPE_257: ReconShape = ReconShape::Kind("4");
+static SHAPE_258: ReconShape = ReconShape::Kind("5");
+static SHAPE_259: ReconShape = ReconShape::Kind("more");
+static SHAPE_260: ReconShape = ReconShape::Kind("audience");
+static SHAPE_261: ReconShape = ReconShape::Kind("generic_number");
+static SHAPE_262: ReconShape = ReconShape::Choice(&[
+    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_259, &SHAPE_260, &SHAPE_261,
 ]);
-static SHAPE_260: ReconShape = ReconShape::Kind("CA");
-static SHAPE_261: ReconShape = ReconShape::Kind("NoAlign");
-static SHAPE_262: ReconShape = ReconShape::Kind("generic_option_name");
-static SHAPE_263: ReconShape = ReconShape::Choice(&[&SHAPE_260, &SHAPE_261, &SHAPE_262]);
-static SHAPE_264: ReconShape = ReconShape::Kind("option_name");
-static SHAPE_265: ReconShape = ReconShape::Seq(&[&SHAPE_155, &SHAPE_14, &SHAPE_264]);
-static SHAPE_266: ReconShape = ReconShape::Repeat(&SHAPE_265);
-static SHAPE_267: ReconShape = ReconShape::Kind("options_contents");
-static SHAPE_268: ReconShape = ReconShape::Kind("options_prefix");
-static SHAPE_269: ReconShape = ReconShape::Kind("ort_tier_prefix");
-static SHAPE_270: ReconShape = ReconShape::Kind("standalone_word");
-static SHAPE_271: ReconShape = ReconShape::Kind("page_number");
-static SHAPE_272: ReconShape = ReconShape::Kind("page_prefix");
-static SHAPE_273: ReconShape = ReconShape::Kind("par_tier_prefix");
-static SHAPE_274: ReconShape = ReconShape::Kind("[=!");
-static SHAPE_275: ReconShape = ReconShape::Kind("participant_word");
-static SHAPE_276: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_275]);
-static SHAPE_277: ReconShape = ReconShape::Repeat(&SHAPE_276);
-static SHAPE_278: ReconShape = ReconShape::Kind("participant");
-static SHAPE_279: ReconShape = ReconShape::Seq(&[&SHAPE_155, &SHAPE_14, &SHAPE_278]);
+static SHAPE_263: ReconShape = ReconShape::Kind("CA");
+static SHAPE_264: ReconShape = ReconShape::Kind("NoAlign");
+static SHAPE_265: ReconShape = ReconShape::Kind("generic_option_name");
+static SHAPE_266: ReconShape = ReconShape::Choice(&[&SHAPE_263, &SHAPE_264, &SHAPE_265]);
+static SHAPE_267: ReconShape = ReconShape::Kind("option_name");
+static SHAPE_268: ReconShape = ReconShape::Seq(&[&SHAPE_158, &SHAPE_14, &SHAPE_267]);
+static SHAPE_269: ReconShape = ReconShape::Repeat(&SHAPE_268);
+static SHAPE_270: ReconShape = ReconShape::Kind("options_contents");
+static SHAPE_271: ReconShape = ReconShape::Kind("options_prefix");
+static SHAPE_272: ReconShape = ReconShape::Kind("ort_tier_prefix");
+static SHAPE_273: ReconShape = ReconShape::Kind("standalone_word");
+static SHAPE_274: ReconShape = ReconShape::Kind("page_number");
+static SHAPE_275: ReconShape = ReconShape::Kind("page_prefix");
+static SHAPE_276: ReconShape = ReconShape::Kind("par_tier_prefix");
+static SHAPE_277: ReconShape = ReconShape::Kind("[=!");
+static SHAPE_278: ReconShape = ReconShape::Kind("participant_word");
+static SHAPE_279: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_278]);
 static SHAPE_280: ReconShape = ReconShape::Repeat(&SHAPE_279);
-static SHAPE_281: ReconShape = ReconShape::Kind("participants_contents");
-static SHAPE_282: ReconShape = ReconShape::Kind("participants_prefix");
-static SHAPE_283: ReconShape = ReconShape::Kind("[%");
-static SHAPE_284: ReconShape = ReconShape::Kind("pho_tier_prefix");
-static SHAPE_285: ReconShape = ReconShape::Kind("pho_words");
-static SHAPE_286: ReconShape = ReconShape::Kind("pho_grouped_content");
-static SHAPE_287: ReconShape = ReconShape::Seq(&[&SHAPE_175, &SHAPE_286, &SHAPE_174]);
-static SHAPE_288: ReconShape = ReconShape::Choice(&[&SHAPE_285, &SHAPE_287]);
-static SHAPE_289: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_285]);
-static SHAPE_290: ReconShape = ReconShape::Repeat(&SHAPE_289);
-static SHAPE_291: ReconShape = ReconShape::Kind("pho_group");
-static SHAPE_292: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_291]);
+static SHAPE_281: ReconShape = ReconShape::Kind("participant");
+static SHAPE_282: ReconShape = ReconShape::Seq(&[&SHAPE_158, &SHAPE_14, &SHAPE_281]);
+static SHAPE_283: ReconShape = ReconShape::Repeat(&SHAPE_282);
+static SHAPE_284: ReconShape = ReconShape::Kind("participants_contents");
+static SHAPE_285: ReconShape = ReconShape::Kind("participants_prefix");
+static SHAPE_286: ReconShape = ReconShape::Kind("[%");
+static SHAPE_287: ReconShape = ReconShape::Kind("pho_tier_prefix");
+static SHAPE_288: ReconShape = ReconShape::Kind("pho_words");
+static SHAPE_289: ReconShape = ReconShape::Kind("pho_grouped_content");
+static SHAPE_290: ReconShape = ReconShape::Seq(&[&SHAPE_178, &SHAPE_289, &SHAPE_177]);
+static SHAPE_291: ReconShape = ReconShape::Choice(&[&SHAPE_288, &SHAPE_290]);
+static SHAPE_292: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_288]);
 static SHAPE_293: ReconShape = ReconShape::Repeat(&SHAPE_292);
-static SHAPE_294: ReconShape = ReconShape::Kind("plus");
-static SHAPE_295: ReconShape = ReconShape::Kind("pho_word");
-static SHAPE_296: ReconShape = ReconShape::Seq(&[&SHAPE_294, &SHAPE_295]);
-static SHAPE_297: ReconShape = ReconShape::Repeat(&SHAPE_296);
-static SHAPE_298: ReconShape = ReconShape::Kind("phoaln_tier_prefix");
-static SHAPE_299: ReconShape = ReconShape::Kind("phosyl_tier_prefix");
-static SHAPE_300: ReconShape = ReconShape::Kind("pid_prefix");
-static SHAPE_301: ReconShape = ReconShape::Kind("[+");
-static SHAPE_302: ReconShape = ReconShape::Kind("right_double_quote");
-static SHAPE_303: ReconShape = ReconShape::Kind("left_double_quote");
-static SHAPE_304: ReconShape = ReconShape::Kind("recording_quality_option");
-static SHAPE_305: ReconShape = ReconShape::Kind("recording_quality_prefix");
-static SHAPE_306: ReconShape = ReconShape::Kind("generic_recording_quality");
-static SHAPE_307: ReconShape = ReconShape::Choice(&[
-    &SHAPE_251, &SHAPE_252, &SHAPE_253, &SHAPE_254, &SHAPE_255, &SHAPE_306,
+static SHAPE_294: ReconShape = ReconShape::Kind("pho_group");
+static SHAPE_295: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_294]);
+static SHAPE_296: ReconShape = ReconShape::Repeat(&SHAPE_295);
+static SHAPE_297: ReconShape = ReconShape::Kind("plus");
+static SHAPE_298: ReconShape = ReconShape::Kind("pho_word");
+static SHAPE_299: ReconShape = ReconShape::Seq(&[&SHAPE_297, &SHAPE_298]);
+static SHAPE_300: ReconShape = ReconShape::Repeat(&SHAPE_299);
+static SHAPE_301: ReconShape = ReconShape::Kind("phoaln_tier_prefix");
+static SHAPE_302: ReconShape = ReconShape::Kind("phosyl_tier_prefix");
+static SHAPE_303: ReconShape = ReconShape::Kind("pid_prefix");
+static SHAPE_304: ReconShape = ReconShape::Kind("[+");
+static SHAPE_305: ReconShape = ReconShape::Kind("right_double_quote");
+static SHAPE_306: ReconShape = ReconShape::Kind("left_double_quote");
+static SHAPE_307: ReconShape = ReconShape::Kind("recording_quality_option");
+static SHAPE_308: ReconShape = ReconShape::Kind("recording_quality_prefix");
+static SHAPE_309: ReconShape = ReconShape::Kind("generic_recording_quality");
+static SHAPE_310: ReconShape = ReconShape::Choice(&[
+    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_309,
 ]);
-static SHAPE_308: ReconShape = ReconShape::Seq(&[&SHAPE_120, &SHAPE_270]);
-static SHAPE_309: ReconShape = ReconShape::Repeat(&SHAPE_308);
-static SHAPE_310: ReconShape = ReconShape::Kind("left_bracket");
-static SHAPE_311: ReconShape = ReconShape::Kind("room_layout_prefix");
-static SHAPE_312: ReconShape = ReconShape::Kind("non_colon_separator");
-static SHAPE_313: ReconShape = ReconShape::Choice(&[&SHAPE_312, &SHAPE_116]);
-static SHAPE_314: ReconShape = ReconShape::Kind("word_segment");
-static SHAPE_315: ReconShape = ReconShape::Kind(")");
-static SHAPE_316: ReconShape = ReconShape::Kind("(");
-static SHAPE_317: ReconShape = ReconShape::Kind("sin_groups");
-static SHAPE_318: ReconShape = ReconShape::Kind("sin_tier_prefix");
-static SHAPE_319: ReconShape = ReconShape::Kind("sin_word");
-static SHAPE_320: ReconShape = ReconShape::Kind("sin_grouped_content");
-static SHAPE_321: ReconShape = ReconShape::Seq(&[&SHAPE_177, &SHAPE_320, &SHAPE_176]);
-static SHAPE_322: ReconShape = ReconShape::Choice(&[&SHAPE_319, &SHAPE_321]);
-static SHAPE_323: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_319]);
-static SHAPE_324: ReconShape = ReconShape::Repeat(&SHAPE_323);
-static SHAPE_325: ReconShape = ReconShape::Kind("sin_group");
-static SHAPE_326: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_325]);
+static SHAPE_311: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_273]);
+static SHAPE_312: ReconShape = ReconShape::Repeat(&SHAPE_311);
+static SHAPE_313: ReconShape = ReconShape::Kind("left_bracket");
+static SHAPE_314: ReconShape = ReconShape::Kind("room_layout_prefix");
+static SHAPE_315: ReconShape = ReconShape::Kind("non_colon_separator");
+static SHAPE_316: ReconShape = ReconShape::Choice(&[&SHAPE_315, &SHAPE_46]);
+static SHAPE_317: ReconShape = ReconShape::Kind("word_segment");
+static SHAPE_318: ReconShape = ReconShape::Kind(")");
+static SHAPE_319: ReconShape = ReconShape::Kind("(");
+static SHAPE_320: ReconShape = ReconShape::Kind("sin_groups");
+static SHAPE_321: ReconShape = ReconShape::Kind("sin_tier_prefix");
+static SHAPE_322: ReconShape = ReconShape::Kind("sin_word");
+static SHAPE_323: ReconShape = ReconShape::Kind("sin_grouped_content");
+static SHAPE_324: ReconShape = ReconShape::Seq(&[&SHAPE_180, &SHAPE_323, &SHAPE_179]);
+static SHAPE_325: ReconShape = ReconShape::Choice(&[&SHAPE_322, &SHAPE_324]);
+static SHAPE_326: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_322]);
 static SHAPE_327: ReconShape = ReconShape::Repeat(&SHAPE_326);
-static SHAPE_328: ReconShape = ReconShape::Choice(&[&SHAPE_245, &SHAPE_118]);
-static SHAPE_329: ReconShape = ReconShape::Kind("sit_tier_prefix");
-static SHAPE_330: ReconShape = ReconShape::Kind("situation_prefix");
-static SHAPE_331: ReconShape = ReconShape::Kind("full_document");
-static SHAPE_332: ReconShape = ReconShape::Kind("main_tier");
-static SHAPE_333: ReconShape = ReconShape::Supertype(&[
+static SHAPE_328: ReconShape = ReconShape::Kind("sin_group");
+static SHAPE_329: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_328]);
+static SHAPE_330: ReconShape = ReconShape::Repeat(&SHAPE_329);
+static SHAPE_331: ReconShape = ReconShape::Choice(&[&SHAPE_248, &SHAPE_122]);
+static SHAPE_332: ReconShape = ReconShape::Kind("sit_tier_prefix");
+static SHAPE_333: ReconShape = ReconShape::Kind("situation_prefix");
+static SHAPE_334: ReconShape = ReconShape::Kind("full_document");
+static SHAPE_335: ReconShape = ReconShape::Kind("main_tier");
+static SHAPE_336: ReconShape = ReconShape::Supertype(&[
     "act_dependent_tier",
     "add_dependent_tier",
     "alt_dependent_tier",
@@ -5489,106 +5511,106 @@ static SHAPE_333: ReconShape = ReconShape::Supertype(&[
     "x_dependent_tier",
     "xphoint_dependent_tier",
 ]);
-static SHAPE_334: ReconShape = ReconShape::Choice(&[
-    &SHAPE_331, &SHAPE_160, &SHAPE_332, &SHAPE_333, &SHAPE_159, &SHAPE_88, &SHAPE_270,
+static SHAPE_337: ReconShape = ReconShape::Choice(&[
+    &SHAPE_334, &SHAPE_163, &SHAPE_335, &SHAPE_336, &SHAPE_162, &SHAPE_93, &SHAPE_273,
 ]);
-static SHAPE_335: ReconShape = ReconShape::Kind("spa_tier_prefix");
-static SHAPE_336: ReconShape = ReconShape::Kind("word_body");
-static SHAPE_337: ReconShape = ReconShape::Kind("form_marker");
-static SHAPE_338: ReconShape = ReconShape::Optional(&SHAPE_337);
-static SHAPE_339: ReconShape = ReconShape::Kind("word_lang_suffix");
-static SHAPE_340: ReconShape = ReconShape::Optional(&SHAPE_339);
-static SHAPE_341: ReconShape = ReconShape::Kind("pos_tag");
-static SHAPE_342: ReconShape = ReconShape::Optional(&SHAPE_341);
-static SHAPE_343: ReconShape = ReconShape::Kind("word_prefix");
-static SHAPE_344: ReconShape = ReconShape::Choice(&[&SHAPE_343, &SHAPE_245]);
-static SHAPE_345: ReconShape = ReconShape::Kind("t_prefix");
-static SHAPE_346: ReconShape = ReconShape::Kind("tape_location_prefix");
-static SHAPE_347: ReconShape = ReconShape::Kind("text_segment");
-static SHAPE_348: ReconShape = ReconShape::Repeat(&SHAPE_9);
-static SHAPE_349: ReconShape = ReconShape::Seq(&[&SHAPE_27, &SHAPE_348]);
-static SHAPE_350: ReconShape = ReconShape::Choice(&[&SHAPE_347, &SHAPE_349, &SHAPE_85]);
-static SHAPE_351: ReconShape = ReconShape::Repeat(&SHAPE_350);
-static SHAPE_352: ReconShape = ReconShape::Kind("inline_pic");
-static SHAPE_353: ReconShape = ReconShape::Seq(&[&SHAPE_352, &SHAPE_348]);
-static SHAPE_354: ReconShape = ReconShape::Choice(&[&SHAPE_347, &SHAPE_349, &SHAPE_353, &SHAPE_85]);
-static SHAPE_355: ReconShape = ReconShape::Repeat(&SHAPE_354);
-static SHAPE_356: ReconShape = ReconShape::Kind("thumbnail_prefix");
-static SHAPE_357: ReconShape = ReconShape::Kind("langcode");
-static SHAPE_358: ReconShape = ReconShape::Seq(&[&SHAPE_357, &SHAPE_14]);
-static SHAPE_359: ReconShape = ReconShape::Optional(&SHAPE_358);
-static SHAPE_360: ReconShape = ReconShape::Kind("utterance_end");
-static SHAPE_361: ReconShape = ReconShape::Kind("linkers");
-static SHAPE_362: ReconShape = ReconShape::Kind("tim_tier_prefix");
-static SHAPE_363: ReconShape = ReconShape::Kind("strict_time");
-static SHAPE_364: ReconShape = ReconShape::Kind("generic_time");
-static SHAPE_365: ReconShape = ReconShape::Choice(&[&SHAPE_363, &SHAPE_364]);
-static SHAPE_366: ReconShape = ReconShape::Kind("time_duration_contents");
-static SHAPE_367: ReconShape = ReconShape::Kind("time_duration_prefix");
-static SHAPE_368: ReconShape = ReconShape::Kind("time_start_prefix");
-static SHAPE_369: ReconShape = ReconShape::Kind("transcriber_prefix");
-static SHAPE_370: ReconShape = ReconShape::Kind("transcription_option");
-static SHAPE_371: ReconShape = ReconShape::Kind("transcription_prefix");
-static SHAPE_372: ReconShape = ReconShape::Kind("eye_dialect");
-static SHAPE_373: ReconShape = ReconShape::Kind("partial");
-static SHAPE_374: ReconShape = ReconShape::Kind("full");
-static SHAPE_375: ReconShape = ReconShape::Kind("detailed");
-static SHAPE_376: ReconShape = ReconShape::Kind("coarse");
-static SHAPE_377: ReconShape = ReconShape::Kind("checked");
-static SHAPE_378: ReconShape = ReconShape::Kind("anonymized");
-static SHAPE_379: ReconShape = ReconShape::Kind("generic_transcription");
-static SHAPE_380: ReconShape = ReconShape::Choice(&[
-    &SHAPE_372, &SHAPE_373, &SHAPE_374, &SHAPE_375, &SHAPE_376, &SHAPE_377, &SHAPE_378, &SHAPE_379,
+static SHAPE_338: ReconShape = ReconShape::Kind("spa_tier_prefix");
+static SHAPE_339: ReconShape = ReconShape::Kind("word_body");
+static SHAPE_340: ReconShape = ReconShape::Kind("form_marker");
+static SHAPE_341: ReconShape = ReconShape::Optional(&SHAPE_340);
+static SHAPE_342: ReconShape = ReconShape::Kind("word_lang_suffix");
+static SHAPE_343: ReconShape = ReconShape::Optional(&SHAPE_342);
+static SHAPE_344: ReconShape = ReconShape::Kind("pos_tag");
+static SHAPE_345: ReconShape = ReconShape::Optional(&SHAPE_344);
+static SHAPE_346: ReconShape = ReconShape::Kind("word_prefix");
+static SHAPE_347: ReconShape = ReconShape::Choice(&[&SHAPE_346, &SHAPE_248]);
+static SHAPE_348: ReconShape = ReconShape::Kind("t_prefix");
+static SHAPE_349: ReconShape = ReconShape::Kind("tape_location_prefix");
+static SHAPE_350: ReconShape = ReconShape::Kind("text_segment");
+static SHAPE_351: ReconShape = ReconShape::Repeat(&SHAPE_9);
+static SHAPE_352: ReconShape = ReconShape::Seq(&[&SHAPE_27, &SHAPE_351]);
+static SHAPE_353: ReconShape = ReconShape::Choice(&[&SHAPE_350, &SHAPE_352, &SHAPE_90]);
+static SHAPE_354: ReconShape = ReconShape::Repeat(&SHAPE_353);
+static SHAPE_355: ReconShape = ReconShape::Kind("inline_pic");
+static SHAPE_356: ReconShape = ReconShape::Seq(&[&SHAPE_355, &SHAPE_351]);
+static SHAPE_357: ReconShape = ReconShape::Choice(&[&SHAPE_350, &SHAPE_352, &SHAPE_356, &SHAPE_90]);
+static SHAPE_358: ReconShape = ReconShape::Repeat(&SHAPE_357);
+static SHAPE_359: ReconShape = ReconShape::Kind("thumbnail_prefix");
+static SHAPE_360: ReconShape = ReconShape::Kind("langcode");
+static SHAPE_361: ReconShape = ReconShape::Seq(&[&SHAPE_360, &SHAPE_14]);
+static SHAPE_362: ReconShape = ReconShape::Optional(&SHAPE_361);
+static SHAPE_363: ReconShape = ReconShape::Kind("utterance_end");
+static SHAPE_364: ReconShape = ReconShape::Kind("linkers");
+static SHAPE_365: ReconShape = ReconShape::Kind("tim_tier_prefix");
+static SHAPE_366: ReconShape = ReconShape::Kind("strict_time");
+static SHAPE_367: ReconShape = ReconShape::Kind("generic_time");
+static SHAPE_368: ReconShape = ReconShape::Choice(&[&SHAPE_366, &SHAPE_367]);
+static SHAPE_369: ReconShape = ReconShape::Kind("time_duration_contents");
+static SHAPE_370: ReconShape = ReconShape::Kind("time_duration_prefix");
+static SHAPE_371: ReconShape = ReconShape::Kind("time_start_prefix");
+static SHAPE_372: ReconShape = ReconShape::Kind("transcriber_prefix");
+static SHAPE_373: ReconShape = ReconShape::Kind("transcription_option");
+static SHAPE_374: ReconShape = ReconShape::Kind("transcription_prefix");
+static SHAPE_375: ReconShape = ReconShape::Kind("eye_dialect");
+static SHAPE_376: ReconShape = ReconShape::Kind("partial");
+static SHAPE_377: ReconShape = ReconShape::Kind("full");
+static SHAPE_378: ReconShape = ReconShape::Kind("detailed");
+static SHAPE_379: ReconShape = ReconShape::Kind("coarse");
+static SHAPE_380: ReconShape = ReconShape::Kind("checked");
+static SHAPE_381: ReconShape = ReconShape::Kind("anonymized");
+static SHAPE_382: ReconShape = ReconShape::Kind("generic_transcription");
+static SHAPE_383: ReconShape = ReconShape::Choice(&[
+    &SHAPE_375, &SHAPE_376, &SHAPE_377, &SHAPE_378, &SHAPE_379, &SHAPE_380, &SHAPE_381, &SHAPE_382,
 ]);
-static SHAPE_381: ReconShape = ReconShape::Kind("types_design");
-static SHAPE_382: ReconShape = ReconShape::Kind("types_activity");
-static SHAPE_383: ReconShape = ReconShape::Kind("types_group");
-static SHAPE_384: ReconShape = ReconShape::Kind("types_prefix");
-static SHAPE_385: ReconShape = ReconShape::Kind("unsupported_tier_prefix");
-static SHAPE_386: ReconShape = ReconShape::Kind("unsupported_header_prefix");
-static SHAPE_387: ReconShape = ReconShape::Kind("@UTF8");
-static SHAPE_388: ReconShape = ReconShape::Repeat(&SHAPE_333);
-static SHAPE_389: ReconShape = ReconShape::Kind("final_codes");
-static SHAPE_390: ReconShape = ReconShape::Optional(&SHAPE_389);
-static SHAPE_391: ReconShape = ReconShape::Seq(&[&SHAPE_120, &SHAPE_27]);
-static SHAPE_392: ReconShape = ReconShape::Optional(&SHAPE_391);
-static SHAPE_393: ReconShape = ReconShape::Kind("videos_prefix");
-static SHAPE_394: ReconShape = ReconShape::Kind("warning_prefix");
-static SHAPE_395: ReconShape = ReconShape::Kind("window_prefix");
-static SHAPE_396: ReconShape = ReconShape::Kind("wor_tier_body");
-static SHAPE_397: ReconShape = ReconShape::Kind("wor_tier_prefix");
-static SHAPE_398: ReconShape = ReconShape::Kind("wor_word_item");
-static SHAPE_399: ReconShape =
-    ReconShape::Choice(&[&SHAPE_398, &SHAPE_27, &SHAPE_155, &SHAPE_224, &SHAPE_225]);
-static SHAPE_400: ReconShape = ReconShape::Seq(&[&SHAPE_399, &SHAPE_14]);
-static SHAPE_401: ReconShape = ReconShape::Repeat(&SHAPE_400);
-static SHAPE_402: ReconShape = ReconShape::Optional(&SHAPE_208);
-static SHAPE_403: ReconShape = ReconShape::Kind("shortening");
-static SHAPE_404: ReconShape = ReconShape::Kind("stress_marker");
-static SHAPE_405: ReconShape = ReconShape::Choice(&[&SHAPE_314, &SHAPE_403, &SHAPE_404]);
-static SHAPE_406: ReconShape = ReconShape::Kind("lengthening");
-static SHAPE_407: ReconShape = ReconShape::Kind("ca_element");
-static SHAPE_408: ReconShape = ReconShape::Kind("ca_delimiter");
-static SHAPE_409: ReconShape = ReconShape::Kind("syllable_pause");
-static SHAPE_410: ReconShape = ReconShape::Kind("+");
-static SHAPE_411: ReconShape = ReconShape::Choice(&[
-    &SHAPE_406, &SHAPE_62, &SHAPE_407, &SHAPE_408, &SHAPE_18, &SHAPE_19, &SHAPE_409, &SHAPE_217,
-    &SHAPE_410,
+static SHAPE_384: ReconShape = ReconShape::Kind("types_design");
+static SHAPE_385: ReconShape = ReconShape::Kind("types_activity");
+static SHAPE_386: ReconShape = ReconShape::Kind("types_group");
+static SHAPE_387: ReconShape = ReconShape::Kind("types_prefix");
+static SHAPE_388: ReconShape = ReconShape::Kind("unsupported_tier_prefix");
+static SHAPE_389: ReconShape = ReconShape::Kind("unsupported_header_prefix");
+static SHAPE_390: ReconShape = ReconShape::Kind("@UTF8");
+static SHAPE_391: ReconShape = ReconShape::Repeat(&SHAPE_336);
+static SHAPE_392: ReconShape = ReconShape::Kind("final_codes");
+static SHAPE_393: ReconShape = ReconShape::Optional(&SHAPE_392);
+static SHAPE_394: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_27]);
+static SHAPE_395: ReconShape = ReconShape::Optional(&SHAPE_394);
+static SHAPE_396: ReconShape = ReconShape::Kind("videos_prefix");
+static SHAPE_397: ReconShape = ReconShape::Kind("warning_prefix");
+static SHAPE_398: ReconShape = ReconShape::Kind("window_prefix");
+static SHAPE_399: ReconShape = ReconShape::Kind("wor_tier_body");
+static SHAPE_400: ReconShape = ReconShape::Kind("wor_tier_prefix");
+static SHAPE_401: ReconShape = ReconShape::Kind("wor_word_item");
+static SHAPE_402: ReconShape =
+    ReconShape::Choice(&[&SHAPE_401, &SHAPE_27, &SHAPE_158, &SHAPE_227, &SHAPE_228]);
+static SHAPE_403: ReconShape = ReconShape::Seq(&[&SHAPE_402, &SHAPE_14]);
+static SHAPE_404: ReconShape = ReconShape::Repeat(&SHAPE_403);
+static SHAPE_405: ReconShape = ReconShape::Optional(&SHAPE_211);
+static SHAPE_406: ReconShape = ReconShape::Kind("shortening");
+static SHAPE_407: ReconShape = ReconShape::Kind("stress_marker");
+static SHAPE_408: ReconShape = ReconShape::Choice(&[&SHAPE_317, &SHAPE_406, &SHAPE_407]);
+static SHAPE_409: ReconShape = ReconShape::Kind("lengthening");
+static SHAPE_410: ReconShape = ReconShape::Kind("ca_element");
+static SHAPE_411: ReconShape = ReconShape::Kind("ca_delimiter");
+static SHAPE_412: ReconShape = ReconShape::Kind("syllable_pause");
+static SHAPE_413: ReconShape = ReconShape::Kind("+");
+static SHAPE_414: ReconShape = ReconShape::Choice(&[
+    &SHAPE_409, &SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_19, &SHAPE_412, &SHAPE_220,
+    &SHAPE_413,
 ]);
-static SHAPE_412: ReconShape =
-    ReconShape::Choice(&[&SHAPE_314, &SHAPE_403, &SHAPE_404, &SHAPE_411]);
-static SHAPE_413: ReconShape = ReconShape::Repeat(&SHAPE_412);
-static SHAPE_414: ReconShape = ReconShape::Seq(&[&SHAPE_405, &SHAPE_413]);
 static SHAPE_415: ReconShape =
-    ReconShape::Choice(&[&SHAPE_62, &SHAPE_407, &SHAPE_408, &SHAPE_18, &SHAPE_409]);
+    ReconShape::Choice(&[&SHAPE_317, &SHAPE_406, &SHAPE_407, &SHAPE_414]);
 static SHAPE_416: ReconShape = ReconShape::Repeat(&SHAPE_415);
-static SHAPE_417: ReconShape = ReconShape::Seq(&[&SHAPE_415, &SHAPE_416, &SHAPE_405, &SHAPE_413]);
-static SHAPE_418: ReconShape = ReconShape::Choice(&[&SHAPE_414, &SHAPE_417]);
-static SHAPE_419: ReconShape = ReconShape::Kind("replacement");
-static SHAPE_420: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_419]);
-static SHAPE_421: ReconShape = ReconShape::Optional(&SHAPE_420);
-static SHAPE_422: ReconShape = ReconShape::Kind("x_tier_prefix");
-static SHAPE_423: ReconShape = ReconShape::Kind("xphoint_tier_prefix");
+static SHAPE_417: ReconShape = ReconShape::Seq(&[&SHAPE_408, &SHAPE_416]);
+static SHAPE_418: ReconShape =
+    ReconShape::Choice(&[&SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_412]);
+static SHAPE_419: ReconShape = ReconShape::Repeat(&SHAPE_418);
+static SHAPE_420: ReconShape = ReconShape::Seq(&[&SHAPE_418, &SHAPE_419, &SHAPE_408, &SHAPE_416]);
+static SHAPE_421: ReconShape = ReconShape::Choice(&[&SHAPE_417, &SHAPE_420]);
+static SHAPE_422: ReconShape = ReconShape::Kind("replacement");
+static SHAPE_423: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_422]);
+static SHAPE_424: ReconShape = ReconShape::Optional(&SHAPE_423);
+static SHAPE_425: ReconShape = ReconShape::Kind("x_tier_prefix");
+static SHAPE_426: ReconShape = ReconShape::Kind("xphoint_tier_prefix");
 static SHAPES_0: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_2, &SHAPE_3];
 static SHAPES_1: [&ReconShape; 2] = [&SHAPE_2, &SHAPE_3];
 static SHAPES_2: [&ReconShape; 1] = [&SHAPE_3];
@@ -5615,390 +5637,391 @@ static SHAPES_19: [&ReconShape; 4] = [&SHAPE_41, &SHAPE_42, &SHAPE_41, &SHAPE_43
 static SHAPES_20: [&ReconShape; 3] = [&SHAPE_42, &SHAPE_41, &SHAPE_43];
 static SHAPES_21: [&ReconShape; 2] = [&SHAPE_41, &SHAPE_43];
 static SHAPES_22: [&ReconShape; 1] = [&SHAPE_43];
-static SHAPES_23: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_49, &SHAPE_3];
-static SHAPES_24: [&ReconShape; 2] = [&SHAPE_49, &SHAPE_3];
-static SHAPES_25: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_48, &SHAPE_3];
-static SHAPES_26: [&ReconShape; 2] = [&SHAPE_48, &SHAPE_3];
-static SHAPES_27: [&ReconShape; 7] = [
-    &SHAPE_52, &SHAPE_53, &SHAPE_54, &SHAPE_55, &SHAPE_56, &SHAPE_57, &SHAPE_58,
+static SHAPES_23: [&ReconShape; 2] = [&SHAPE_49, &SHAPE_11];
+static SHAPES_24: [&ReconShape; 2] = [&SHAPE_47, &SHAPE_11];
+static SHAPES_25: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_54, &SHAPE_3];
+static SHAPES_26: [&ReconShape; 2] = [&SHAPE_54, &SHAPE_3];
+static SHAPES_27: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_53, &SHAPE_3];
+static SHAPES_28: [&ReconShape; 2] = [&SHAPE_53, &SHAPE_3];
+static SHAPES_29: [&ReconShape; 7] = [
+    &SHAPE_57, &SHAPE_58, &SHAPE_59, &SHAPE_60, &SHAPE_61, &SHAPE_62, &SHAPE_63,
 ];
-static SHAPES_28: [&ReconShape; 1] = [&SHAPE_64];
-static SHAPES_29: [&ReconShape; 4] = [&SHAPE_14, &SHAPE_60, &SHAPE_61, &SHAPE_62];
-static SHAPES_30: [&ReconShape; 2] = [&SHAPE_65, &SHAPE_66];
-static SHAPES_31: [&ReconShape; 1] = [&SHAPE_74];
-static SHAPES_32: [&ReconShape; 1] = [&SHAPE_81];
-static SHAPES_33: [&ReconShape; 2] = [&SHAPE_79, &SHAPE_81];
-static SHAPES_34: [&ReconShape; 1] = [&SHAPE_87];
-static SHAPES_35: [&ReconShape; 2] = [&SHAPE_84, &SHAPE_85];
-static SHAPES_36: [&ReconShape; 4] = [&SHAPE_89, &SHAPE_90, &SHAPE_92, &SHAPE_93];
-static SHAPES_37: [&ReconShape; 3] = [&SHAPE_90, &SHAPE_92, &SHAPE_93];
-static SHAPES_38: [&ReconShape; 2] = [&SHAPE_92, &SHAPE_93];
-static SHAPES_39: [&ReconShape; 1] = [&SHAPE_93];
-static SHAPES_40: [&ReconShape; 1] = [&SHAPE_100];
-static SHAPES_41: [&ReconShape; 2] = [&SHAPE_98, &SHAPE_100];
-static SHAPES_42: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_101, &SHAPE_3];
-static SHAPES_43: [&ReconShape; 2] = [&SHAPE_101, &SHAPE_3];
-static SHAPES_44: [&ReconShape; 4] = [&SHAPE_103, &SHAPE_104, &SHAPE_103, &SHAPE_105];
-static SHAPES_45: [&ReconShape; 3] = [&SHAPE_104, &SHAPE_103, &SHAPE_105];
-static SHAPES_46: [&ReconShape; 2] = [&SHAPE_103, &SHAPE_105];
-static SHAPES_47: [&ReconShape; 1] = [&SHAPE_105];
-static SHAPES_48: [&ReconShape; 3] = [&SHAPE_107, &SHAPE_108, &SHAPE_109];
-static SHAPES_49: [&ReconShape; 2] = [&SHAPE_108, &SHAPE_109];
-static SHAPES_50: [&ReconShape; 1] = [&SHAPE_109];
-static SHAPES_51: [&ReconShape; 1] = [&SHAPE_113];
-static SHAPES_52: [&ReconShape; 2] = [&SHAPE_9, &SHAPE_111];
-static SHAPES_53: [&ReconShape; 2] = [&SHAPE_111, &SHAPE_115];
-static SHAPES_54: [&ReconShape; 1] = [&SHAPE_115];
-static SHAPES_55: [&ReconShape; 2] = [&SHAPE_117, &SHAPE_118];
-static SHAPES_56: [&ReconShape; 33] = [
-    &SHAPE_103, &SHAPE_120, &SHAPE_122, &SHAPE_120, &SHAPE_103, &SHAPE_123, &SHAPE_103, &SHAPE_120,
-    &SHAPE_125, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132,
-    &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120,
-    &SHAPE_103,
+static SHAPES_30: [&ReconShape; 1] = [&SHAPE_69];
+static SHAPES_31: [&ReconShape; 4] = [&SHAPE_14, &SHAPE_65, &SHAPE_66, &SHAPE_67];
+static SHAPES_32: [&ReconShape; 2] = [&SHAPE_70, &SHAPE_71];
+static SHAPES_33: [&ReconShape; 1] = [&SHAPE_79];
+static SHAPES_34: [&ReconShape; 1] = [&SHAPE_86];
+static SHAPES_35: [&ReconShape; 2] = [&SHAPE_84, &SHAPE_86];
+static SHAPES_36: [&ReconShape; 1] = [&SHAPE_92];
+static SHAPES_37: [&ReconShape; 2] = [&SHAPE_89, &SHAPE_90];
+static SHAPES_38: [&ReconShape; 4] = [&SHAPE_94, &SHAPE_95, &SHAPE_97, &SHAPE_98];
+static SHAPES_39: [&ReconShape; 3] = [&SHAPE_95, &SHAPE_97, &SHAPE_98];
+static SHAPES_40: [&ReconShape; 2] = [&SHAPE_97, &SHAPE_98];
+static SHAPES_41: [&ReconShape; 1] = [&SHAPE_98];
+static SHAPES_42: [&ReconShape; 1] = [&SHAPE_105];
+static SHAPES_43: [&ReconShape; 2] = [&SHAPE_103, &SHAPE_105];
+static SHAPES_44: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_106, &SHAPE_3];
+static SHAPES_45: [&ReconShape; 2] = [&SHAPE_106, &SHAPE_3];
+static SHAPES_46: [&ReconShape; 4] = [&SHAPE_108, &SHAPE_109, &SHAPE_108, &SHAPE_110];
+static SHAPES_47: [&ReconShape; 3] = [&SHAPE_109, &SHAPE_108, &SHAPE_110];
+static SHAPES_48: [&ReconShape; 2] = [&SHAPE_108, &SHAPE_110];
+static SHAPES_49: [&ReconShape; 1] = [&SHAPE_110];
+static SHAPES_50: [&ReconShape; 3] = [&SHAPE_112, &SHAPE_113, &SHAPE_114];
+static SHAPES_51: [&ReconShape; 2] = [&SHAPE_113, &SHAPE_114];
+static SHAPES_52: [&ReconShape; 1] = [&SHAPE_114];
+static SHAPES_53: [&ReconShape; 1] = [&SHAPE_118];
+static SHAPES_54: [&ReconShape; 2] = [&SHAPE_9, &SHAPE_116];
+static SHAPES_55: [&ReconShape; 2] = [&SHAPE_116, &SHAPE_120];
+static SHAPES_56: [&ReconShape; 1] = [&SHAPE_120];
+static SHAPES_57: [&ReconShape; 2] = [&SHAPE_121, &SHAPE_122];
+static SHAPES_58: [&ReconShape; 33] = [
+    &SHAPE_108, &SHAPE_124, &SHAPE_126, &SHAPE_124, &SHAPE_108, &SHAPE_127, &SHAPE_108, &SHAPE_124,
+    &SHAPE_129, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136,
+    &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124,
+    &SHAPE_108,
 ];
-static SHAPES_57: [&ReconShape; 32] = [
-    &SHAPE_120, &SHAPE_122, &SHAPE_120, &SHAPE_103, &SHAPE_123, &SHAPE_103, &SHAPE_120, &SHAPE_125,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103,
-    &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_59: [&ReconShape; 32] = [
+    &SHAPE_124, &SHAPE_126, &SHAPE_124, &SHAPE_108, &SHAPE_127, &SHAPE_108, &SHAPE_124, &SHAPE_129,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108,
+    &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_58: [&ReconShape; 31] = [
-    &SHAPE_122, &SHAPE_120, &SHAPE_103, &SHAPE_123, &SHAPE_103, &SHAPE_120, &SHAPE_125, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120,
-    &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_60: [&ReconShape; 31] = [
+    &SHAPE_126, &SHAPE_124, &SHAPE_108, &SHAPE_127, &SHAPE_108, &SHAPE_124, &SHAPE_129, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124,
+    &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_59: [&ReconShape; 30] = [
-    &SHAPE_120, &SHAPE_103, &SHAPE_123, &SHAPE_103, &SHAPE_120, &SHAPE_125, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_61: [&ReconShape; 30] = [
+    &SHAPE_124, &SHAPE_108, &SHAPE_127, &SHAPE_108, &SHAPE_124, &SHAPE_129, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_60: [&ReconShape; 29] = [
-    &SHAPE_103, &SHAPE_123, &SHAPE_103, &SHAPE_120, &SHAPE_125, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_62: [&ReconShape; 29] = [
+    &SHAPE_108, &SHAPE_127, &SHAPE_108, &SHAPE_124, &SHAPE_129, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_61: [&ReconShape; 28] = [
-    &SHAPE_123, &SHAPE_103, &SHAPE_120, &SHAPE_125, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131,
-    &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_63: [&ReconShape; 28] = [
+    &SHAPE_127, &SHAPE_108, &SHAPE_124, &SHAPE_129, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135,
+    &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_62: [&ReconShape; 27] = [
-    &SHAPE_103, &SHAPE_120, &SHAPE_125, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120,
-    &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_64: [&ReconShape; 27] = [
+    &SHAPE_108, &SHAPE_124, &SHAPE_129, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124,
+    &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_63: [&ReconShape; 26] = [
-    &SHAPE_120, &SHAPE_125, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103,
-    &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136,
-    &SHAPE_120, &SHAPE_103,
+static SHAPES_65: [&ReconShape; 26] = [
+    &SHAPE_124, &SHAPE_129, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108,
+    &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140,
+    &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_64: [&ReconShape; 25] = [
-    &SHAPE_125, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132,
-    &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120,
-    &SHAPE_103,
+static SHAPES_66: [&ReconShape; 25] = [
+    &SHAPE_129, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136,
+    &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124,
+    &SHAPE_108,
 ];
-static SHAPES_65: [&ReconShape; 24] = [
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103,
-    &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_67: [&ReconShape; 24] = [
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108,
+    &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_66: [&ReconShape; 23] = [
-    &SHAPE_103, &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120,
-    &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_68: [&ReconShape; 23] = [
+    &SHAPE_108, &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124,
+    &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_67: [&ReconShape; 22] = [
-    &SHAPE_120, &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_69: [&ReconShape; 22] = [
+    &SHAPE_124, &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_68: [&ReconShape; 21] = [
-    &SHAPE_127, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_70: [&ReconShape; 21] = [
+    &SHAPE_131, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_69: [&ReconShape; 20] = [
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131,
-    &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_71: [&ReconShape; 20] = [
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135,
+    &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_70: [&ReconShape; 19] = [
-    &SHAPE_103, &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120,
-    &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_72: [&ReconShape; 19] = [
+    &SHAPE_108, &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124,
+    &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_71: [&ReconShape; 18] = [
-    &SHAPE_120, &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103,
-    &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136,
-    &SHAPE_120, &SHAPE_103,
+static SHAPES_73: [&ReconShape; 18] = [
+    &SHAPE_124, &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108,
+    &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140,
+    &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_72: [&ReconShape; 17] = [
-    &SHAPE_129, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132,
-    &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120,
-    &SHAPE_103,
+static SHAPES_74: [&ReconShape; 17] = [
+    &SHAPE_133, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136,
+    &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124,
+    &SHAPE_108,
 ];
-static SHAPES_73: [&ReconShape; 16] = [
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103,
-    &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_75: [&ReconShape; 16] = [
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108,
+    &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_74: [&ReconShape; 15] = [
-    &SHAPE_103, &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120,
-    &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_76: [&ReconShape; 15] = [
+    &SHAPE_108, &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124,
+    &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_75: [&ReconShape; 14] = [
-    &SHAPE_120, &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134,
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_77: [&ReconShape; 14] = [
+    &SHAPE_124, &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138,
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_76: [&ReconShape; 13] = [
-    &SHAPE_131, &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120,
-    &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_78: [&ReconShape; 13] = [
+    &SHAPE_135, &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124,
+    &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_77: [&ReconShape; 12] = [
-    &SHAPE_120, &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103,
-    &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_79: [&ReconShape; 12] = [
+    &SHAPE_124, &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108,
+    &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_78: [&ReconShape; 11] = [
-    &SHAPE_103, &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120,
-    &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_80: [&ReconShape; 11] = [
+    &SHAPE_108, &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124,
+    &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_79: [&ReconShape; 10] = [
-    &SHAPE_132, &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136,
-    &SHAPE_120, &SHAPE_103,
+static SHAPES_81: [&ReconShape; 10] = [
+    &SHAPE_136, &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140,
+    &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_80: [&ReconShape; 9] = [
-    &SHAPE_103, &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120,
-    &SHAPE_103,
+static SHAPES_82: [&ReconShape; 9] = [
+    &SHAPE_108, &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124,
+    &SHAPE_108,
 ];
-static SHAPES_81: [&ReconShape; 8] = [
-    &SHAPE_120, &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_83: [&ReconShape; 8] = [
+    &SHAPE_124, &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_82: [&ReconShape; 7] = [
-    &SHAPE_134, &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_84: [&ReconShape; 7] = [
+    &SHAPE_138, &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_83: [&ReconShape; 6] = [
-    &SHAPE_120, &SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103,
+static SHAPES_85: [&ReconShape; 6] = [
+    &SHAPE_124, &SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108,
 ];
-static SHAPES_84: [&ReconShape; 5] = [&SHAPE_103, &SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103];
-static SHAPES_85: [&ReconShape; 4] = [&SHAPE_120, &SHAPE_136, &SHAPE_120, &SHAPE_103];
-static SHAPES_86: [&ReconShape; 3] = [&SHAPE_136, &SHAPE_120, &SHAPE_103];
-static SHAPES_87: [&ReconShape; 2] = [&SHAPE_120, &SHAPE_103];
-static SHAPES_88: [&ReconShape; 1] = [&SHAPE_103];
-static SHAPES_89: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_138, &SHAPE_3];
-static SHAPES_90: [&ReconShape; 2] = [&SHAPE_138, &SHAPE_3];
-static SHAPES_91: [&ReconShape; 2] = [&SHAPE_140, &SHAPE_118];
-static SHAPES_92: [&ReconShape; 4] = [&SHAPE_142, &SHAPE_143, &SHAPE_144, &SHAPE_145];
-static SHAPES_93: [&ReconShape; 3] = [&SHAPE_147, &SHAPE_148, &SHAPE_149];
-static SHAPES_94: [&ReconShape; 5] = [&SHAPE_35, &SHAPE_36, &SHAPE_5, &SHAPE_152, &SHAPE_3];
-static SHAPES_95: [&ReconShape; 4] = [&SHAPE_36, &SHAPE_5, &SHAPE_152, &SHAPE_3];
-static SHAPES_96: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_152, &SHAPE_3];
-static SHAPES_97: [&ReconShape; 2] = [&SHAPE_152, &SHAPE_3];
-static SHAPES_98: [&ReconShape; 3] = [&SHAPE_9, &SHAPE_152, &SHAPE_11];
-static SHAPES_99: [&ReconShape; 2] = [&SHAPE_152, &SHAPE_11];
-static SHAPES_100: [&ReconShape; 1] = [&SHAPE_157];
-static SHAPES_101: [&ReconShape; 4] = [&SHAPE_155, &SHAPE_14, &SHAPE_152, &SHAPE_157];
-static SHAPES_102: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_152, &SHAPE_157];
-static SHAPES_103: [&ReconShape; 2] = [&SHAPE_152, &SHAPE_157];
-static SHAPES_104: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_140, &SHAPE_3];
-static SHAPES_105: [&ReconShape; 2] = [&SHAPE_140, &SHAPE_3];
-static SHAPES_106: [&ReconShape; 4] = [&SHAPE_159, &SHAPE_160, &SHAPE_161, &SHAPE_162];
-static SHAPES_107: [&ReconShape; 1] = [&SHAPE_165];
-static SHAPES_108: [&ReconShape; 2] = [&SHAPE_14, &SHAPE_165];
-static SHAPES_109: [&ReconShape; 2] = [&SHAPE_167, &SHAPE_168];
+static SHAPES_86: [&ReconShape; 5] = [&SHAPE_108, &SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108];
+static SHAPES_87: [&ReconShape; 4] = [&SHAPE_124, &SHAPE_140, &SHAPE_124, &SHAPE_108];
+static SHAPES_88: [&ReconShape; 3] = [&SHAPE_140, &SHAPE_124, &SHAPE_108];
+static SHAPES_89: [&ReconShape; 2] = [&SHAPE_124, &SHAPE_108];
+static SHAPES_90: [&ReconShape; 1] = [&SHAPE_108];
+static SHAPES_91: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_142, &SHAPE_3];
+static SHAPES_92: [&ReconShape; 2] = [&SHAPE_142, &SHAPE_3];
+static SHAPES_93: [&ReconShape; 2] = [&SHAPE_144, &SHAPE_122];
+static SHAPES_94: [&ReconShape; 4] = [&SHAPE_146, &SHAPE_147, &SHAPE_148, &SHAPE_149];
+static SHAPES_95: [&ReconShape; 3] = [&SHAPE_151, &SHAPE_152, &SHAPE_153];
+static SHAPES_96: [&ReconShape; 5] = [&SHAPE_35, &SHAPE_36, &SHAPE_5, &SHAPE_47, &SHAPE_3];
+static SHAPES_97: [&ReconShape; 4] = [&SHAPE_36, &SHAPE_5, &SHAPE_47, &SHAPE_3];
+static SHAPES_98: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_47, &SHAPE_3];
+static SHAPES_99: [&ReconShape; 2] = [&SHAPE_47, &SHAPE_3];
+static SHAPES_100: [&ReconShape; 3] = [&SHAPE_9, &SHAPE_47, &SHAPE_11];
+static SHAPES_101: [&ReconShape; 1] = [&SHAPE_160];
+static SHAPES_102: [&ReconShape; 4] = [&SHAPE_158, &SHAPE_14, &SHAPE_47, &SHAPE_160];
+static SHAPES_103: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_47, &SHAPE_160];
+static SHAPES_104: [&ReconShape; 2] = [&SHAPE_47, &SHAPE_160];
+static SHAPES_105: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_144, &SHAPE_3];
+static SHAPES_106: [&ReconShape; 2] = [&SHAPE_144, &SHAPE_3];
+static SHAPES_107: [&ReconShape; 4] = [&SHAPE_162, &SHAPE_163, &SHAPE_164, &SHAPE_165];
+static SHAPES_108: [&ReconShape; 1] = [&SHAPE_168];
+static SHAPES_109: [&ReconShape; 2] = [&SHAPE_14, &SHAPE_168];
 static SHAPES_110: [&ReconShape; 2] = [&SHAPE_170, &SHAPE_171];
-static SHAPES_111: [&ReconShape; 1] = [&SHAPE_171];
-static SHAPES_112: [&ReconShape; 2] = [&SHAPE_173, &SHAPE_171];
-static SHAPES_113: [&ReconShape; 2] = [&SHAPE_107, &SHAPE_174];
-static SHAPES_114: [&ReconShape; 1] = [&SHAPE_174];
-static SHAPES_115: [&ReconShape; 2] = [&SHAPE_107, &SHAPE_176];
-static SHAPES_116: [&ReconShape; 1] = [&SHAPE_176];
-static SHAPES_117: [&ReconShape; 5] = [&SHAPE_36, &SHAPE_116, &SHAPE_111, &SHAPE_115, &SHAPE_178];
-static SHAPES_118: [&ReconShape; 4] = [&SHAPE_116, &SHAPE_111, &SHAPE_115, &SHAPE_178];
-static SHAPES_119: [&ReconShape; 3] = [&SHAPE_111, &SHAPE_115, &SHAPE_178];
-static SHAPES_120: [&ReconShape; 2] = [&SHAPE_115, &SHAPE_178];
-static SHAPES_121: [&ReconShape; 1] = [&SHAPE_178];
-static SHAPES_122: [&ReconShape; 5] = [&SHAPE_120, &SHAPE_155, &SHAPE_14, &SHAPE_180, &SHAPE_183];
-static SHAPES_123: [&ReconShape; 4] = [&SHAPE_155, &SHAPE_14, &SHAPE_180, &SHAPE_183];
-static SHAPES_124: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_180, &SHAPE_183];
-static SHAPES_125: [&ReconShape; 2] = [&SHAPE_180, &SHAPE_183];
-static SHAPES_126: [&ReconShape; 1] = [&SHAPE_183];
-static SHAPES_127: [&ReconShape; 2] = [&SHAPE_14, &SHAPE_181];
-static SHAPES_128: [&ReconShape; 1] = [&SHAPE_181];
-static SHAPES_129: [&ReconShape; 2] = [&SHAPE_118, &SHAPE_185];
-static SHAPES_130: [&ReconShape; 2] = [&SHAPE_186, &SHAPE_118];
-static SHAPES_131: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_188, &SHAPE_3];
-static SHAPES_132: [&ReconShape; 2] = [&SHAPE_188, &SHAPE_3];
-static SHAPES_133: [&ReconShape; 4] = [&SHAPE_190, &SHAPE_191, &SHAPE_192, &SHAPE_193];
-static SHAPES_134: [&ReconShape; 4] = [&SHAPE_195, &SHAPE_196, &SHAPE_190, &SHAPE_197];
-static SHAPES_135: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_199, &SHAPE_3];
-static SHAPES_136: [&ReconShape; 2] = [&SHAPE_199, &SHAPE_3];
-static SHAPES_137: [&ReconShape; 1] = [&SHAPE_203];
-static SHAPES_138: [&ReconShape; 1] = [&SHAPE_120];
-static SHAPES_139: [&ReconShape; 3] = [&SHAPE_207, &SHAPE_210, &SHAPE_120];
-static SHAPES_140: [&ReconShape; 2] = [&SHAPE_210, &SHAPE_120];
-static SHAPES_141: [&ReconShape; 4] = [&SHAPE_205, &SHAPE_207, &SHAPE_210, &SHAPE_120];
-static SHAPES_142: [&ReconShape; 2] = [&SHAPE_208, &SHAPE_120];
-static SHAPES_143: [&ReconShape; 2] = [&SHAPE_211, &SHAPE_208];
-static SHAPES_144: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_213, &SHAPE_3];
-static SHAPES_145: [&ReconShape; 2] = [&SHAPE_213, &SHAPE_3];
-static SHAPES_146: [&ReconShape; 1] = [&SHAPE_215];
-static SHAPES_147: [&ReconShape; 1] = [&SHAPE_204];
-static SHAPES_148: [&ReconShape; 3] = [&SHAPE_103, &SHAPE_218, &SHAPE_220];
-static SHAPES_149: [&ReconShape; 2] = [&SHAPE_218, &SHAPE_220];
-static SHAPES_150: [&ReconShape; 1] = [&SHAPE_220];
-static SHAPES_151: [&ReconShape; 14] = [
-    &SHAPE_155, &SHAPE_223, &SHAPE_224, &SHAPE_225, &SHAPE_226, &SHAPE_227, &SHAPE_228, &SHAPE_229,
-    &SHAPE_230, &SHAPE_231, &SHAPE_232, &SHAPE_233, &SHAPE_234, &SHAPE_235,
+static SHAPES_111: [&ReconShape; 2] = [&SHAPE_173, &SHAPE_174];
+static SHAPES_112: [&ReconShape; 1] = [&SHAPE_174];
+static SHAPES_113: [&ReconShape; 2] = [&SHAPE_176, &SHAPE_174];
+static SHAPES_114: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_177];
+static SHAPES_115: [&ReconShape; 1] = [&SHAPE_177];
+static SHAPES_116: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_179];
+static SHAPES_117: [&ReconShape; 1] = [&SHAPE_179];
+static SHAPES_118: [&ReconShape; 5] = [&SHAPE_36, &SHAPE_46, &SHAPE_116, &SHAPE_120, &SHAPE_181];
+static SHAPES_119: [&ReconShape; 4] = [&SHAPE_46, &SHAPE_116, &SHAPE_120, &SHAPE_181];
+static SHAPES_120: [&ReconShape; 3] = [&SHAPE_116, &SHAPE_120, &SHAPE_181];
+static SHAPES_121: [&ReconShape; 2] = [&SHAPE_120, &SHAPE_181];
+static SHAPES_122: [&ReconShape; 1] = [&SHAPE_181];
+static SHAPES_123: [&ReconShape; 5] = [&SHAPE_124, &SHAPE_158, &SHAPE_14, &SHAPE_183, &SHAPE_186];
+static SHAPES_124: [&ReconShape; 4] = [&SHAPE_158, &SHAPE_14, &SHAPE_183, &SHAPE_186];
+static SHAPES_125: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_183, &SHAPE_186];
+static SHAPES_126: [&ReconShape; 2] = [&SHAPE_183, &SHAPE_186];
+static SHAPES_127: [&ReconShape; 1] = [&SHAPE_186];
+static SHAPES_128: [&ReconShape; 2] = [&SHAPE_14, &SHAPE_184];
+static SHAPES_129: [&ReconShape; 1] = [&SHAPE_184];
+static SHAPES_130: [&ReconShape; 2] = [&SHAPE_122, &SHAPE_188];
+static SHAPES_131: [&ReconShape; 2] = [&SHAPE_189, &SHAPE_122];
+static SHAPES_132: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_191, &SHAPE_3];
+static SHAPES_133: [&ReconShape; 2] = [&SHAPE_191, &SHAPE_3];
+static SHAPES_134: [&ReconShape; 4] = [&SHAPE_193, &SHAPE_194, &SHAPE_195, &SHAPE_196];
+static SHAPES_135: [&ReconShape; 4] = [&SHAPE_198, &SHAPE_199, &SHAPE_193, &SHAPE_200];
+static SHAPES_136: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_202, &SHAPE_3];
+static SHAPES_137: [&ReconShape; 2] = [&SHAPE_202, &SHAPE_3];
+static SHAPES_138: [&ReconShape; 1] = [&SHAPE_206];
+static SHAPES_139: [&ReconShape; 1] = [&SHAPE_124];
+static SHAPES_140: [&ReconShape; 3] = [&SHAPE_210, &SHAPE_213, &SHAPE_124];
+static SHAPES_141: [&ReconShape; 2] = [&SHAPE_213, &SHAPE_124];
+static SHAPES_142: [&ReconShape; 4] = [&SHAPE_208, &SHAPE_210, &SHAPE_213, &SHAPE_124];
+static SHAPES_143: [&ReconShape; 2] = [&SHAPE_211, &SHAPE_124];
+static SHAPES_144: [&ReconShape; 2] = [&SHAPE_214, &SHAPE_211];
+static SHAPES_145: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_216, &SHAPE_3];
+static SHAPES_146: [&ReconShape; 2] = [&SHAPE_216, &SHAPE_3];
+static SHAPES_147: [&ReconShape; 1] = [&SHAPE_218];
+static SHAPES_148: [&ReconShape; 1] = [&SHAPE_207];
+static SHAPES_149: [&ReconShape; 3] = [&SHAPE_108, &SHAPE_221, &SHAPE_223];
+static SHAPES_150: [&ReconShape; 2] = [&SHAPE_221, &SHAPE_223];
+static SHAPES_151: [&ReconShape; 1] = [&SHAPE_223];
+static SHAPES_152: [&ReconShape; 14] = [
+    &SHAPE_158, &SHAPE_226, &SHAPE_227, &SHAPE_228, &SHAPE_229, &SHAPE_230, &SHAPE_231, &SHAPE_232,
+    &SHAPE_233, &SHAPE_234, &SHAPE_235, &SHAPE_236, &SHAPE_237, &SHAPE_238,
 ];
-static SHAPES_152: [&ReconShape; 3] = [&SHAPE_237, &SHAPE_238, &SHAPE_239];
-static SHAPES_153: [&ReconShape; 2] = [&SHAPE_241, &SHAPE_171];
-static SHAPES_154: [&ReconShape; 2] = [&SHAPE_242, &SHAPE_171];
-static SHAPES_155: [&ReconShape; 3] = [&SHAPE_241, &SHAPE_171, &SHAPE_243];
-static SHAPES_156: [&ReconShape; 2] = [&SHAPE_171, &SHAPE_243];
-static SHAPES_157: [&ReconShape; 1] = [&SHAPE_243];
-static SHAPES_158: [&ReconShape; 2] = [&SHAPE_244, &SHAPE_245];
-static SHAPES_159: [&ReconShape; 1] = [&SHAPE_247];
-static SHAPES_160: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_249, &SHAPE_3];
-static SHAPES_161: [&ReconShape; 2] = [&SHAPE_249, &SHAPE_3];
-static SHAPES_162: [&ReconShape; 8] = [
-    &SHAPE_251, &SHAPE_252, &SHAPE_253, &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258,
+static SHAPES_153: [&ReconShape; 3] = [&SHAPE_240, &SHAPE_241, &SHAPE_242];
+static SHAPES_154: [&ReconShape; 2] = [&SHAPE_244, &SHAPE_174];
+static SHAPES_155: [&ReconShape; 2] = [&SHAPE_245, &SHAPE_174];
+static SHAPES_156: [&ReconShape; 3] = [&SHAPE_244, &SHAPE_174, &SHAPE_246];
+static SHAPES_157: [&ReconShape; 2] = [&SHAPE_174, &SHAPE_246];
+static SHAPES_158: [&ReconShape; 1] = [&SHAPE_246];
+static SHAPES_159: [&ReconShape; 2] = [&SHAPE_247, &SHAPE_248];
+static SHAPES_160: [&ReconShape; 1] = [&SHAPE_250];
+static SHAPES_161: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_252, &SHAPE_3];
+static SHAPES_162: [&ReconShape; 2] = [&SHAPE_252, &SHAPE_3];
+static SHAPES_163: [&ReconShape; 8] = [
+    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_259, &SHAPE_260, &SHAPE_261,
 ];
-static SHAPES_163: [&ReconShape; 3] = [&SHAPE_260, &SHAPE_261, &SHAPE_262];
-static SHAPES_164: [&ReconShape; 1] = [&SHAPE_266];
-static SHAPES_165: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_264, &SHAPE_266];
-static SHAPES_166: [&ReconShape; 2] = [&SHAPE_264, &SHAPE_266];
-static SHAPES_167: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_267, &SHAPE_3];
-static SHAPES_168: [&ReconShape; 2] = [&SHAPE_267, &SHAPE_3];
-static SHAPES_169: [&ReconShape; 4] = [&SHAPE_179, &SHAPE_36, &SHAPE_116, &SHAPE_270];
-static SHAPES_170: [&ReconShape; 3] = [&SHAPE_36, &SHAPE_116, &SHAPE_270];
-static SHAPES_171: [&ReconShape; 2] = [&SHAPE_116, &SHAPE_270];
-static SHAPES_172: [&ReconShape; 1] = [&SHAPE_270];
-static SHAPES_173: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_271, &SHAPE_3];
-static SHAPES_174: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_3];
-static SHAPES_175: [&ReconShape; 2] = [&SHAPE_277, &SHAPE_120];
-static SHAPES_176: [&ReconShape; 3] = [&SHAPE_275, &SHAPE_277, &SHAPE_120];
-static SHAPES_177: [&ReconShape; 1] = [&SHAPE_280];
-static SHAPES_178: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_278, &SHAPE_280];
-static SHAPES_179: [&ReconShape; 2] = [&SHAPE_278, &SHAPE_280];
-static SHAPES_180: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_281, &SHAPE_3];
-static SHAPES_181: [&ReconShape; 2] = [&SHAPE_281, &SHAPE_3];
-static SHAPES_182: [&ReconShape; 2] = [&SHAPE_286, &SHAPE_174];
-static SHAPES_183: [&ReconShape; 2] = [&SHAPE_285, &SHAPE_287];
-static SHAPES_184: [&ReconShape; 1] = [&SHAPE_290];
-static SHAPES_185: [&ReconShape; 2] = [&SHAPE_285, &SHAPE_290];
-static SHAPES_186: [&ReconShape; 1] = [&SHAPE_293];
-static SHAPES_187: [&ReconShape; 2] = [&SHAPE_291, &SHAPE_293];
-static SHAPES_188: [&ReconShape; 1] = [&SHAPE_297];
-static SHAPES_189: [&ReconShape; 2] = [&SHAPE_295, &SHAPE_297];
-static SHAPES_190: [&ReconShape; 2] = [&SHAPE_107, &SHAPE_302];
-static SHAPES_191: [&ReconShape; 1] = [&SHAPE_302];
-static SHAPES_192: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_304, &SHAPE_3];
-static SHAPES_193: [&ReconShape; 2] = [&SHAPE_304, &SHAPE_3];
-static SHAPES_194: [&ReconShape; 6] = [
-    &SHAPE_251, &SHAPE_252, &SHAPE_253, &SHAPE_254, &SHAPE_255, &SHAPE_306,
+static SHAPES_164: [&ReconShape; 3] = [&SHAPE_263, &SHAPE_264, &SHAPE_265];
+static SHAPES_165: [&ReconShape; 1] = [&SHAPE_269];
+static SHAPES_166: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_267, &SHAPE_269];
+static SHAPES_167: [&ReconShape; 2] = [&SHAPE_267, &SHAPE_269];
+static SHAPES_168: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_270, &SHAPE_3];
+static SHAPES_169: [&ReconShape; 2] = [&SHAPE_270, &SHAPE_3];
+static SHAPES_170: [&ReconShape; 4] = [&SHAPE_182, &SHAPE_36, &SHAPE_46, &SHAPE_273];
+static SHAPES_171: [&ReconShape; 3] = [&SHAPE_36, &SHAPE_46, &SHAPE_273];
+static SHAPES_172: [&ReconShape; 2] = [&SHAPE_46, &SHAPE_273];
+static SHAPES_173: [&ReconShape; 1] = [&SHAPE_273];
+static SHAPES_174: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_274, &SHAPE_3];
+static SHAPES_175: [&ReconShape; 2] = [&SHAPE_274, &SHAPE_3];
+static SHAPES_176: [&ReconShape; 2] = [&SHAPE_280, &SHAPE_124];
+static SHAPES_177: [&ReconShape; 3] = [&SHAPE_278, &SHAPE_280, &SHAPE_124];
+static SHAPES_178: [&ReconShape; 1] = [&SHAPE_283];
+static SHAPES_179: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_281, &SHAPE_283];
+static SHAPES_180: [&ReconShape; 2] = [&SHAPE_281, &SHAPE_283];
+static SHAPES_181: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_284, &SHAPE_3];
+static SHAPES_182: [&ReconShape; 2] = [&SHAPE_284, &SHAPE_3];
+static SHAPES_183: [&ReconShape; 2] = [&SHAPE_289, &SHAPE_177];
+static SHAPES_184: [&ReconShape; 2] = [&SHAPE_288, &SHAPE_290];
+static SHAPES_185: [&ReconShape; 1] = [&SHAPE_293];
+static SHAPES_186: [&ReconShape; 2] = [&SHAPE_288, &SHAPE_293];
+static SHAPES_187: [&ReconShape; 1] = [&SHAPE_296];
+static SHAPES_188: [&ReconShape; 2] = [&SHAPE_294, &SHAPE_296];
+static SHAPES_189: [&ReconShape; 1] = [&SHAPE_300];
+static SHAPES_190: [&ReconShape; 2] = [&SHAPE_298, &SHAPE_300];
+static SHAPES_191: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_305];
+static SHAPES_192: [&ReconShape; 1] = [&SHAPE_305];
+static SHAPES_193: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_307, &SHAPE_3];
+static SHAPES_194: [&ReconShape; 2] = [&SHAPE_307, &SHAPE_3];
+static SHAPES_195: [&ReconShape; 6] = [
+    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_309,
 ];
-static SHAPES_195: [&ReconShape; 4] = [&SHAPE_116, &SHAPE_308, &SHAPE_309, &SHAPE_11];
-static SHAPES_196: [&ReconShape; 3] = [&SHAPE_308, &SHAPE_309, &SHAPE_11];
-static SHAPES_197: [&ReconShape; 2] = [&SHAPE_309, &SHAPE_11];
-static SHAPES_198: [&ReconShape; 3] = [&SHAPE_270, &SHAPE_309, &SHAPE_11];
-static SHAPES_199: [&ReconShape; 2] = [&SHAPE_312, &SHAPE_116];
-static SHAPES_200: [&ReconShape; 2] = [&SHAPE_314, &SHAPE_315];
-static SHAPES_201: [&ReconShape; 1] = [&SHAPE_315];
-static SHAPES_202: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_317, &SHAPE_3];
-static SHAPES_203: [&ReconShape; 2] = [&SHAPE_317, &SHAPE_3];
-static SHAPES_204: [&ReconShape; 2] = [&SHAPE_320, &SHAPE_176];
-static SHAPES_205: [&ReconShape; 2] = [&SHAPE_319, &SHAPE_321];
-static SHAPES_206: [&ReconShape; 1] = [&SHAPE_324];
-static SHAPES_207: [&ReconShape; 2] = [&SHAPE_319, &SHAPE_324];
-static SHAPES_208: [&ReconShape; 1] = [&SHAPE_327];
-static SHAPES_209: [&ReconShape; 2] = [&SHAPE_325, &SHAPE_327];
-static SHAPES_210: [&ReconShape; 2] = [&SHAPE_245, &SHAPE_118];
-static SHAPES_211: [&ReconShape; 7] = [
-    &SHAPE_331, &SHAPE_160, &SHAPE_332, &SHAPE_333, &SHAPE_159, &SHAPE_88, &SHAPE_270,
+static SHAPES_196: [&ReconShape; 4] = [&SHAPE_46, &SHAPE_311, &SHAPE_312, &SHAPE_11];
+static SHAPES_197: [&ReconShape; 3] = [&SHAPE_311, &SHAPE_312, &SHAPE_11];
+static SHAPES_198: [&ReconShape; 2] = [&SHAPE_312, &SHAPE_11];
+static SHAPES_199: [&ReconShape; 3] = [&SHAPE_273, &SHAPE_312, &SHAPE_11];
+static SHAPES_200: [&ReconShape; 2] = [&SHAPE_315, &SHAPE_46];
+static SHAPES_201: [&ReconShape; 2] = [&SHAPE_317, &SHAPE_318];
+static SHAPES_202: [&ReconShape; 1] = [&SHAPE_318];
+static SHAPES_203: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_320, &SHAPE_3];
+static SHAPES_204: [&ReconShape; 2] = [&SHAPE_320, &SHAPE_3];
+static SHAPES_205: [&ReconShape; 2] = [&SHAPE_323, &SHAPE_179];
+static SHAPES_206: [&ReconShape; 2] = [&SHAPE_322, &SHAPE_324];
+static SHAPES_207: [&ReconShape; 1] = [&SHAPE_327];
+static SHAPES_208: [&ReconShape; 2] = [&SHAPE_322, &SHAPE_327];
+static SHAPES_209: [&ReconShape; 1] = [&SHAPE_330];
+static SHAPES_210: [&ReconShape; 2] = [&SHAPE_328, &SHAPE_330];
+static SHAPES_211: [&ReconShape; 2] = [&SHAPE_248, &SHAPE_122];
+static SHAPES_212: [&ReconShape; 7] = [
+    &SHAPE_334, &SHAPE_163, &SHAPE_335, &SHAPE_336, &SHAPE_162, &SHAPE_93, &SHAPE_273,
 ];
-static SHAPES_212: [&ReconShape; 4] = [&SHAPE_336, &SHAPE_338, &SHAPE_340, &SHAPE_342];
-static SHAPES_213: [&ReconShape; 2] = [&SHAPE_343, &SHAPE_245];
-static SHAPES_214: [&ReconShape; 3] = [&SHAPE_338, &SHAPE_340, &SHAPE_342];
-static SHAPES_215: [&ReconShape; 2] = [&SHAPE_340, &SHAPE_342];
-static SHAPES_216: [&ReconShape; 1] = [&SHAPE_342];
-static SHAPES_217: [&ReconShape; 1] = [&SHAPE_351];
-static SHAPES_218: [&ReconShape; 2] = [&SHAPE_348, &SHAPE_351];
-static SHAPES_219: [&ReconShape; 3] = [&SHAPE_347, &SHAPE_349, &SHAPE_85];
-static SHAPES_220: [&ReconShape; 1] = [&SHAPE_355];
-static SHAPES_221: [&ReconShape; 2] = [&SHAPE_348, &SHAPE_355];
-static SHAPES_222: [&ReconShape; 4] = [&SHAPE_347, &SHAPE_349, &SHAPE_353, &SHAPE_85];
-static SHAPES_223: [&ReconShape; 3] = [&SHAPE_359, &SHAPE_107, &SHAPE_360];
-static SHAPES_224: [&ReconShape; 2] = [&SHAPE_107, &SHAPE_360];
-static SHAPES_225: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_107, &SHAPE_360];
-static SHAPES_226: [&ReconShape; 1] = [&SHAPE_360];
-static SHAPES_227: [&ReconShape; 2] = [&SHAPE_363, &SHAPE_364];
-static SHAPES_228: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_366, &SHAPE_3];
-static SHAPES_229: [&ReconShape; 2] = [&SHAPE_366, &SHAPE_3];
-static SHAPES_230: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_370, &SHAPE_3];
-static SHAPES_231: [&ReconShape; 2] = [&SHAPE_370, &SHAPE_3];
-static SHAPES_232: [&ReconShape; 8] = [
-    &SHAPE_372, &SHAPE_373, &SHAPE_374, &SHAPE_375, &SHAPE_376, &SHAPE_377, &SHAPE_378, &SHAPE_379,
+static SHAPES_213: [&ReconShape; 4] = [&SHAPE_339, &SHAPE_341, &SHAPE_343, &SHAPE_345];
+static SHAPES_214: [&ReconShape; 2] = [&SHAPE_346, &SHAPE_248];
+static SHAPES_215: [&ReconShape; 3] = [&SHAPE_341, &SHAPE_343, &SHAPE_345];
+static SHAPES_216: [&ReconShape; 2] = [&SHAPE_343, &SHAPE_345];
+static SHAPES_217: [&ReconShape; 1] = [&SHAPE_345];
+static SHAPES_218: [&ReconShape; 1] = [&SHAPE_354];
+static SHAPES_219: [&ReconShape; 2] = [&SHAPE_351, &SHAPE_354];
+static SHAPES_220: [&ReconShape; 3] = [&SHAPE_350, &SHAPE_352, &SHAPE_90];
+static SHAPES_221: [&ReconShape; 1] = [&SHAPE_358];
+static SHAPES_222: [&ReconShape; 2] = [&SHAPE_351, &SHAPE_358];
+static SHAPES_223: [&ReconShape; 4] = [&SHAPE_350, &SHAPE_352, &SHAPE_356, &SHAPE_90];
+static SHAPES_224: [&ReconShape; 3] = [&SHAPE_362, &SHAPE_112, &SHAPE_363];
+static SHAPES_225: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_363];
+static SHAPES_226: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_112, &SHAPE_363];
+static SHAPES_227: [&ReconShape; 1] = [&SHAPE_363];
+static SHAPES_228: [&ReconShape; 2] = [&SHAPE_366, &SHAPE_367];
+static SHAPES_229: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_369, &SHAPE_3];
+static SHAPES_230: [&ReconShape; 2] = [&SHAPE_369, &SHAPE_3];
+static SHAPES_231: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_373, &SHAPE_3];
+static SHAPES_232: [&ReconShape; 2] = [&SHAPE_373, &SHAPE_3];
+static SHAPES_233: [&ReconShape; 8] = [
+    &SHAPE_375, &SHAPE_376, &SHAPE_377, &SHAPE_378, &SHAPE_379, &SHAPE_380, &SHAPE_381, &SHAPE_382,
 ];
-static SHAPES_233: [&ReconShape; 11] = [
-    &SHAPE_5, &SHAPE_381, &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_382, &SHAPE_120, &SHAPE_155,
-    &SHAPE_120, &SHAPE_383, &SHAPE_3,
+static SHAPES_234: [&ReconShape; 11] = [
+    &SHAPE_5, &SHAPE_384, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158,
+    &SHAPE_124, &SHAPE_386, &SHAPE_3,
 ];
-static SHAPES_234: [&ReconShape; 10] = [
-    &SHAPE_381, &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_382, &SHAPE_120, &SHAPE_155, &SHAPE_120,
-    &SHAPE_383, &SHAPE_3,
+static SHAPES_235: [&ReconShape; 10] = [
+    &SHAPE_384, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124,
+    &SHAPE_386, &SHAPE_3,
 ];
-static SHAPES_235: [&ReconShape; 9] = [
-    &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_382, &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_383,
+static SHAPES_236: [&ReconShape; 9] = [
+    &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386,
     &SHAPE_3,
 ];
-static SHAPES_236: [&ReconShape; 8] = [
-    &SHAPE_155, &SHAPE_120, &SHAPE_382, &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_383, &SHAPE_3,
+static SHAPES_237: [&ReconShape; 8] = [
+    &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3,
 ];
-static SHAPES_237: [&ReconShape; 7] = [
-    &SHAPE_120, &SHAPE_382, &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_383, &SHAPE_3,
+static SHAPES_238: [&ReconShape; 7] = [
+    &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3,
 ];
-static SHAPES_238: [&ReconShape; 6] = [
-    &SHAPE_382, &SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_383, &SHAPE_3,
+static SHAPES_239: [&ReconShape; 6] = [
+    &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3,
 ];
-static SHAPES_239: [&ReconShape; 5] = [&SHAPE_120, &SHAPE_155, &SHAPE_120, &SHAPE_383, &SHAPE_3];
-static SHAPES_240: [&ReconShape; 4] = [&SHAPE_155, &SHAPE_120, &SHAPE_383, &SHAPE_3];
-static SHAPES_241: [&ReconShape; 3] = [&SHAPE_120, &SHAPE_383, &SHAPE_3];
-static SHAPES_242: [&ReconShape; 2] = [&SHAPE_383, &SHAPE_3];
-static SHAPES_243: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_118, &SHAPE_3];
-static SHAPES_244: [&ReconShape; 2] = [&SHAPE_118, &SHAPE_3];
-static SHAPES_245: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_84, &SHAPE_3];
-static SHAPES_246: [&ReconShape; 2] = [&SHAPE_84, &SHAPE_3];
-static SHAPES_247: [&ReconShape; 1] = [&SHAPE_388];
-static SHAPES_248: [&ReconShape; 4] = [&SHAPE_390, &SHAPE_392, &SHAPE_120, &SHAPE_3];
-static SHAPES_249: [&ReconShape; 3] = [&SHAPE_392, &SHAPE_120, &SHAPE_3];
-static SHAPES_250: [&ReconShape; 2] = [&SHAPE_120, &SHAPE_3];
-static SHAPES_251: [&ReconShape; 3] = [&SHAPE_27, &SHAPE_120, &SHAPE_3];
-static SHAPES_252: [&ReconShape; 2] = [&SHAPE_0, &SHAPE_396];
-static SHAPES_253: [&ReconShape; 1] = [&SHAPE_396];
-static SHAPES_254: [&ReconShape; 3] = [&SHAPE_401, &SHAPE_402, &SHAPE_3];
-static SHAPES_255: [&ReconShape; 4] = [&SHAPE_14, &SHAPE_401, &SHAPE_402, &SHAPE_3];
-static SHAPES_256: [&ReconShape; 2] = [&SHAPE_402, &SHAPE_3];
-static SHAPES_257: [&ReconShape; 5] = [&SHAPE_398, &SHAPE_27, &SHAPE_155, &SHAPE_224, &SHAPE_225];
-static SHAPES_258: [&ReconShape; 1] = [&SHAPE_413];
-static SHAPES_259: [&ReconShape; 3] = [&SHAPE_314, &SHAPE_403, &SHAPE_404];
-static SHAPES_260: [&ReconShape; 9] = [
-    &SHAPE_406, &SHAPE_62, &SHAPE_407, &SHAPE_408, &SHAPE_18, &SHAPE_19, &SHAPE_409, &SHAPE_217,
-    &SHAPE_410,
+static SHAPES_240: [&ReconShape; 5] = [&SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3];
+static SHAPES_241: [&ReconShape; 4] = [&SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3];
+static SHAPES_242: [&ReconShape; 3] = [&SHAPE_124, &SHAPE_386, &SHAPE_3];
+static SHAPES_243: [&ReconShape; 2] = [&SHAPE_386, &SHAPE_3];
+static SHAPES_244: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_122, &SHAPE_3];
+static SHAPES_245: [&ReconShape; 2] = [&SHAPE_122, &SHAPE_3];
+static SHAPES_246: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_89, &SHAPE_3];
+static SHAPES_247: [&ReconShape; 2] = [&SHAPE_89, &SHAPE_3];
+static SHAPES_248: [&ReconShape; 1] = [&SHAPE_391];
+static SHAPES_249: [&ReconShape; 4] = [&SHAPE_393, &SHAPE_395, &SHAPE_124, &SHAPE_3];
+static SHAPES_250: [&ReconShape; 3] = [&SHAPE_395, &SHAPE_124, &SHAPE_3];
+static SHAPES_251: [&ReconShape; 2] = [&SHAPE_124, &SHAPE_3];
+static SHAPES_252: [&ReconShape; 3] = [&SHAPE_27, &SHAPE_124, &SHAPE_3];
+static SHAPES_253: [&ReconShape; 2] = [&SHAPE_0, &SHAPE_399];
+static SHAPES_254: [&ReconShape; 1] = [&SHAPE_399];
+static SHAPES_255: [&ReconShape; 3] = [&SHAPE_404, &SHAPE_405, &SHAPE_3];
+static SHAPES_256: [&ReconShape; 4] = [&SHAPE_14, &SHAPE_404, &SHAPE_405, &SHAPE_3];
+static SHAPES_257: [&ReconShape; 2] = [&SHAPE_405, &SHAPE_3];
+static SHAPES_258: [&ReconShape; 5] = [&SHAPE_401, &SHAPE_27, &SHAPE_158, &SHAPE_227, &SHAPE_228];
+static SHAPES_259: [&ReconShape; 1] = [&SHAPE_416];
+static SHAPES_260: [&ReconShape; 3] = [&SHAPE_317, &SHAPE_406, &SHAPE_407];
+static SHAPES_261: [&ReconShape; 9] = [
+    &SHAPE_409, &SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_19, &SHAPE_412, &SHAPE_220,
+    &SHAPE_413,
 ];
-static SHAPES_261: [&ReconShape; 4] = [&SHAPE_314, &SHAPE_403, &SHAPE_404, &SHAPE_411];
-static SHAPES_262: [&ReconShape; 3] = [&SHAPE_416, &SHAPE_405, &SHAPE_413];
-static SHAPES_263: [&ReconShape; 5] = [&SHAPE_62, &SHAPE_407, &SHAPE_408, &SHAPE_18, &SHAPE_409];
-static SHAPES_264: [&ReconShape; 2] = [&SHAPE_405, &SHAPE_413];
-static SHAPES_265: [&ReconShape; 2] = [&SHAPE_414, &SHAPE_417];
-static SHAPES_266: [&ReconShape; 2] = [&SHAPE_421, &SHAPE_247];
-static SHAPES_267: [&ReconShape; 2] = [&SHAPE_419, &SHAPE_247];
+static SHAPES_262: [&ReconShape; 4] = [&SHAPE_317, &SHAPE_406, &SHAPE_407, &SHAPE_414];
+static SHAPES_263: [&ReconShape; 3] = [&SHAPE_419, &SHAPE_408, &SHAPE_416];
+static SHAPES_264: [&ReconShape; 5] = [&SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_412];
+static SHAPES_265: [&ReconShape; 2] = [&SHAPE_408, &SHAPE_416];
+static SHAPES_266: [&ReconShape; 2] = [&SHAPE_417, &SHAPE_420];
+static SHAPES_267: [&ReconShape; 2] = [&SHAPE_424, &SHAPE_250];
+static SHAPES_268: [&ReconShape; 2] = [&SHAPE_422, &SHAPE_250];
 
 // Task 7 extract contract: pub fn extract_act_dependent_tier<'tree>(node: ActDependentTierNode<'tree>) -> ActDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -6743,6 +6766,8 @@ pub fn extract_alt_dependent_tier<'tree>(
 pub enum BaseAnnotationChoice<'tree> {
     /// Subtype `alt_annotation`.
     AltAnnotation(AltAnnotationNode<'tree>),
+    /// Subtype `code_switch_annotation`.
+    CodeSwitchAnnotation(CodeSwitchAnnotationNode<'tree>),
     /// Subtype `error_marker_annotation`.
     ErrorMarkerAnnotation(ErrorMarkerAnnotationNode<'tree>),
     /// Subtype `exclude_marker`.
@@ -6776,6 +6801,7 @@ impl<'tree> AsRawNode<'tree> for BaseAnnotationChoice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
             BaseAnnotationChoice::AltAnnotation(inner) => inner.raw_node(),
+            BaseAnnotationChoice::CodeSwitchAnnotation(inner) => inner.raw_node(),
             BaseAnnotationChoice::ErrorMarkerAnnotation(inner) => inner.raw_node(),
             BaseAnnotationChoice::ExcludeMarker(inner) => inner.raw_node(),
             BaseAnnotationChoice::ExplanationAnnotation(inner) => inner.raw_node(),
@@ -6818,6 +6844,9 @@ pub fn extract_base_annotation<'tree>(
             "alt_annotation" => {
                 NodeSlot::Present(BaseAnnotationChoice::AltAnnotation(AltAnnotationNode(node)))
             }
+            "code_switch_annotation" => NodeSlot::Present(
+                BaseAnnotationChoice::CodeSwitchAnnotation(CodeSwitchAnnotationNode(node)),
+            ),
             "error_marker_annotation" => NodeSlot::Present(
                 BaseAnnotationChoice::ErrorMarkerAnnotation(ErrorMarkerAnnotationNode(node)),
             ),
@@ -6877,6 +6906,8 @@ pub fn extract_base_annotation<'tree>(
 pub enum BaseAnnotationsChild0Child1Choice<'tree> {
     /// Subtype `alt_annotation`.
     AltAnnotation(AltAnnotationNode<'tree>),
+    /// Subtype `code_switch_annotation`.
+    CodeSwitchAnnotation(CodeSwitchAnnotationNode<'tree>),
     /// Subtype `error_marker_annotation`.
     ErrorMarkerAnnotation(ErrorMarkerAnnotationNode<'tree>),
     /// Subtype `exclude_marker`.
@@ -6910,6 +6941,7 @@ impl<'tree> AsRawNode<'tree> for BaseAnnotationsChild0Child1Choice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
             BaseAnnotationsChild0Child1Choice::AltAnnotation(inner) => inner.raw_node(),
+            BaseAnnotationsChild0Child1Choice::CodeSwitchAnnotation(inner) => inner.raw_node(),
             BaseAnnotationsChild0Child1Choice::ErrorMarkerAnnotation(inner) => inner.raw_node(),
             BaseAnnotationsChild0Child1Choice::ExcludeMarker(inner) => inner.raw_node(),
             BaseAnnotationsChild0Child1Choice::ExplanationAnnotation(inner) => inner.raw_node(),
@@ -6946,6 +6978,8 @@ impl<'tree> BaseAnnotationsChild0Children<'tree> {}
 pub enum BaseAnnotationsChild1Child1Choice<'tree> {
     /// Subtype `alt_annotation`.
     AltAnnotation(AltAnnotationNode<'tree>),
+    /// Subtype `code_switch_annotation`.
+    CodeSwitchAnnotation(CodeSwitchAnnotationNode<'tree>),
     /// Subtype `error_marker_annotation`.
     ErrorMarkerAnnotation(ErrorMarkerAnnotationNode<'tree>),
     /// Subtype `exclude_marker`.
@@ -6979,6 +7013,7 @@ impl<'tree> AsRawNode<'tree> for BaseAnnotationsChild1Child1Choice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
             BaseAnnotationsChild1Child1Choice::AltAnnotation(inner) => inner.raw_node(),
+            BaseAnnotationsChild1Child1Choice::CodeSwitchAnnotation(inner) => inner.raw_node(),
             BaseAnnotationsChild1Child1Choice::ErrorMarkerAnnotation(inner) => inner.raw_node(),
             BaseAnnotationsChild1Child1Choice::ExcludeMarker(inner) => inner.raw_node(),
             BaseAnnotationsChild1Child1Choice::ExplanationAnnotation(inner) => inner.raw_node(),
@@ -7102,6 +7137,18 @@ pub fn extract_base_annotations<'tree>(
                                                             NodeSlot::Present(
                                                                 BaseAnnotationsChild0Child1Choice::AltAnnotation(
                                                                     AltAnnotationNode(__c),
+                                                                ),
+                                                            )
+                                                        }
+                                                    }
+                                                    "code_switch_annotation" => {
+                                                        __at.advance();
+                                                        if __c.is_missing() {
+                                                            NodeSlot::Missing(__c)
+                                                        } else {
+                                                            NodeSlot::Present(
+                                                                BaseAnnotationsChild0Child1Choice::CodeSwitchAnnotation(
+                                                                    CodeSwitchAnnotationNode(__c),
                                                                 ),
                                                             )
                                                         }
@@ -7383,6 +7430,18 @@ pub fn extract_base_annotations<'tree>(
                                                                         NodeSlot::Present(
                                                                             BaseAnnotationsChild1Child1Choice::AltAnnotation(
                                                                                 AltAnnotationNode(__c),
+                                                                            ),
+                                                                        )
+                                                                    }
+                                                                }
+                                                                "code_switch_annotation" => {
+                                                                    __at.advance();
+                                                                    if __c.is_missing() {
+                                                                        NodeSlot::Missing(__c)
+                                                                    } else {
+                                                                        NodeSlot::Present(
+                                                                            BaseAnnotationsChild1Child1Choice::CodeSwitchAnnotation(
+                                                                                CodeSwitchAnnotationNode(__c),
                                                                             ),
                                                                         )
                                                                     }
@@ -9135,6 +9194,222 @@ pub fn extract_cod_dependent_tier<'tree>(
     }
 }
 
+// Task 7 extract contract: pub fn extract_code_switch_annotation<'tree>(node: CodeSwitchAnnotationNode<'tree>) -> CodeSwitchAnnotationChildren<'tree>
+#[derive(Debug, Clone)]
+pub struct CodeSwitchAnnotationChild1Children<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    /// Positional member 1.
+    pub code: Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> CodeSwitchAnnotationChild1Children<'tree> {
+    /// The `code` grammar field (accessor method `code`).
+    #[must_use]
+    pub fn code(&self) -> &Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>> {
+        &self.code
+    }
+}
+#[derive(Debug, Clone)]
+pub struct CodeSwitchAnnotationChildren<'tree> {
+    /// Positional member 0.
+    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackAtSNode<'tree>>>,
+    /// Positional member 1.
+    pub child_1:
+        Positioned<'tree, Option<NodeSlot<'tree, CodeSwitchAnnotationChild1Children<'tree>>>>,
+    /// Positional member 2.
+    pub child_2: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> CodeSwitchAnnotationChildren<'tree> {}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_code_switch_annotation<'tree>(
+    node: CodeSwitchAnnotationNode<'tree>,
+) -> CodeSwitchAnnotationChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children);
+    {
+        let child_0 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_50, &cont_of(&SHAPES_23));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "[@s" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(LBrackAtSNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_1 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = match optional_split_inner(
+                &SHAPE_48,
+                &cont_of(&SHAPES_8),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_48, &cont_of(&SHAPES_8));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if shape_match_inner(
+                            &SHAPE_48,
+                            &cont_of(&SHAPES_8),
+                            __at.all(),
+                            __at.index(),
+                            __at.memo(),
+                        )
+                        .is_some()
+                        {
+                            NodeSlot::Present({
+                                let __cur = __at.descend();
+                                {
+                                    let child_0 = {
+                                        let (leading_extras, __at) =
+                                            __cur.take_leading_extras::<FixedArity>();
+                                        let slot = {
+                                            let mut __at = __at.skip_displaced_errors(
+                                                &SHAPE_46,
+                                                &cont_of(&SHAPES_24),
+                                            );
+                                            if let Some(__c) = __at.peek() {
+                                                if __c.is_error() {
+                                                    __at.advance();
+                                                    NodeSlot::Error(__c)
+                                                } else if __c.kind() == "colon" {
+                                                    __at.advance();
+                                                    if __c.is_missing() {
+                                                        NodeSlot::Missing(__c)
+                                                    } else {
+                                                        NodeSlot::Present(ColonNode(__c))
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        };
+                                        Positioned::new(leading_extras, slot)
+                                    };
+                                    let code = {
+                                        let (leading_extras, __at) =
+                                            __cur.take_leading_extras::<FixedArity>();
+                                        let slot = {
+                                            let mut __at = __at.skip_displaced_errors(
+                                                &SHAPE_47,
+                                                &cont_of(&SHAPES_8),
+                                            );
+                                            if let Some(__c) = __at.peek() {
+                                                if __c.is_error() {
+                                                    __at.advance();
+                                                    NodeSlot::Error(__c)
+                                                } else if __c.kind() == "language_code" {
+                                                    __at.advance();
+                                                    if __c.is_missing() {
+                                                        NodeSlot::Missing(__c)
+                                                    } else {
+                                                        NodeSlot::Present(LanguageCodeNode(__c))
+                                                    }
+                                                } else {
+                                                    NodeSlot::Absent
+                                                }
+                                            } else {
+                                                NodeSlot::Absent
+                                            }
+                                        };
+                                        Positioned::new(leading_extras, slot)
+                                    };
+                                    let trailing_extras: Vec<Extra<'tree>> = Vec::new();
+                                    let unexpected: Vec<tree_sitter::Node<'tree>> = Vec::new();
+                                    CodeSwitchAnnotationChild1Children {
+                                        child_0,
+                                        code,
+                                        trailing_extras,
+                                        unexpected,
+                                    }
+                                }
+                            })
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_2 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_11, &cont_of(&SHAPES_3));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "right_bracket" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(RightBracketNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let Leftovers {
+            trailing_extras,
+            unexpected,
+        } = __cur.finish();
+        CodeSwitchAnnotationChildren {
+            child_0,
+            child_1,
+            child_2,
+            trailing_extras,
+            unexpected,
+        }
+    }
+}
+
 // Task 7 extract contract: pub fn extract_coh_dependent_tier<'tree>(node: CohDependentTierNode<'tree>) -> CohDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
 pub struct CohDependentTierChildren<'tree> {
@@ -9165,7 +9440,7 @@ pub fn extract_coh_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_46, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_51, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9317,7 +9592,7 @@ pub fn extract_color_words_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_47, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_52, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9455,7 +9730,7 @@ pub fn extract_com_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_50, &cont_of(&SHAPES_23));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_55, &cont_of(&SHAPES_25));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9479,7 +9754,7 @@ pub fn extract_com_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_24));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_26));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9503,7 +9778,7 @@ pub fn extract_com_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_48,
+                &SHAPE_53,
                 &cont_of(&SHAPES_2),
                 __at.all(),
                 __at.index(),
@@ -9512,7 +9787,7 @@ pub fn extract_com_dependent_tier<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_48, &cont_of(&SHAPES_2));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_53, &cont_of(&SHAPES_2));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -9607,7 +9882,7 @@ pub fn extract_comment_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_51, &cont_of(&SHAPES_25));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_56, &cont_of(&SHAPES_27));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9631,7 +9906,7 @@ pub fn extract_comment_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_26));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_28));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9655,7 +9930,7 @@ pub fn extract_comment_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_48, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_53, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -9796,7 +10071,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_59, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_64, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -9808,7 +10083,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_27,
+                        &SHAPES_29,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -10049,7 +10324,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_63, &cont_of(&SHAPES_28));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_68, &cont_of(&SHAPES_30));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -10061,8 +10336,8 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_29,
-                            &cont_of(&SHAPES_28),
+                            &SHAPES_31,
+                            &cont_of(&SHAPES_30),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -10132,7 +10407,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_63,
+                &SHAPE_68,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -10157,8 +10432,8 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                             }
                             _ => {
                                 match choice_split_inner(
-                                    &SHAPES_29,
-                                    &cont_of(&SHAPES_28),
+                                    &SHAPES_31,
+                                    &cont_of(&SHAPES_30),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -10284,7 +10559,7 @@ pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateConten
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_67, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_72, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -10296,7 +10571,7 @@ pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateConten
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_30,
+                        &SHAPES_32,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -10375,7 +10650,7 @@ pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_68, &cont_of(&SHAPES_15));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_73, &cont_of(&SHAPES_15));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -10513,7 +10788,7 @@ pub fn extract_def_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_69, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_74, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -10908,7 +11183,7 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_70, &cont_of(&SHAPES_12));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_75, &cont_of(&SHAPES_12));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11100,7 +11375,7 @@ pub fn extract_end_header<'tree>(node: EndHeaderNode<'tree>) -> EndHeaderChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_71, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_76, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11188,7 +11463,7 @@ pub fn extract_eng_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_72, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_77, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11340,7 +11615,7 @@ pub fn extract_err_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_73, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_78, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11492,7 +11767,7 @@ pub fn extract_event<'tree>(node: EventNode<'tree>) -> EventChildren<'tree> {
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_75, &cont_of(&SHAPES_31));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_80, &cont_of(&SHAPES_33));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11516,7 +11791,7 @@ pub fn extract_event<'tree>(node: EventNode<'tree>) -> EventChildren<'tree> {
         let description = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_74, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_79, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11580,7 +11855,7 @@ pub fn extract_exp_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_76, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_81, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11738,7 +12013,7 @@ pub fn extract_explanation_annotation<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_77, &cont_of(&SHAPES_6));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_82, &cont_of(&SHAPES_6));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -11876,7 +12151,7 @@ pub fn extract_fac_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_78, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_83, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -12049,14 +12324,14 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_80, &cont_of(&SHAPES_32));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_85, &cont_of(&SHAPES_34));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
                         NodeSlot::Error(__c)
                     } else if shape_match_inner(
-                        &SHAPE_80,
-                        &cont_of(&SHAPES_32),
+                        &SHAPE_85,
+                        &cont_of(&SHAPES_34),
                         __at.all(),
                         __at.index(),
                         __at.memo(),
@@ -12071,7 +12346,7 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                         __cur.take_leading_extras::<FixedArity>();
                                     let slot = {
                                         let mut __at = __at
-                                            .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_33));
+                                            .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_35));
                                         if let Some(__c) = __at.peek() {
                                             if __c.is_error() {
                                                 __at.advance();
@@ -12097,7 +12372,7 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                         __cur.take_leading_extras::<FixedArity>();
                                     let slot = {
                                         let mut __at = __at
-                                            .skip_displaced_errors(&SHAPE_79, &cont_of(&SHAPES_32));
+                                            .skip_displaced_errors(&SHAPE_84, &cont_of(&SHAPES_34));
                                         if let Some(__c) = __at.peek() {
                                             if __c.is_error() {
                                                 __at.advance();
@@ -12140,7 +12415,7 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_80,
+                &SHAPE_85,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -12159,8 +12434,8 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_80,
-                                &cont_of(&SHAPES_32),
+                                &SHAPE_85,
+                                &cont_of(&SHAPES_34),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -12176,7 +12451,7 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_33),
+                                                    &cont_of(&SHAPES_35),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -12203,8 +12478,8 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_79,
-                                                    &cont_of(&SHAPES_32),
+                                                    &SHAPE_84,
+                                                    &cont_of(&SHAPES_34),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -12291,7 +12566,7 @@ pub fn extract_flo_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_82, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_87, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -12441,7 +12716,7 @@ pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_83, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_88, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -12604,7 +12879,7 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_86, &cont_of(&SHAPES_34));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_91, &cont_of(&SHAPES_36));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -12616,8 +12891,8 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_35,
-                            &cont_of(&SHAPES_34),
+                            &SHAPES_37,
+                            &cont_of(&SHAPES_36),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -12660,7 +12935,7 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_86,
+                &SHAPE_91,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -12685,8 +12960,8 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                             }
                             _ => {
                                 match choice_split_inner(
-                                    &SHAPES_35,
-                                    &cont_of(&SHAPES_34),
+                                    &SHAPES_37,
+                                    &cont_of(&SHAPES_36),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -12796,7 +13071,7 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_94, &cont_of(&SHAPES_36));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_99, &cont_of(&SHAPES_38));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -12820,8 +13095,8 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_88,
-                &cont_of(&SHAPES_37),
+                &SHAPE_93,
+                &cont_of(&SHAPES_39),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -12899,7 +13174,7 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_90, &cont_of(&SHAPES_38));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_95, &cont_of(&SHAPES_40));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -12923,8 +13198,8 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_91,
-                &cont_of(&SHAPES_39),
+                &SHAPE_96,
+                &cont_of(&SHAPES_41),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -12963,7 +13238,7 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_93, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_98, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13028,7 +13303,7 @@ pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_95, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_100, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13166,7 +13441,7 @@ pub fn extract_gls_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_96, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_101, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13318,7 +13593,7 @@ pub fn extract_gpx_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_97, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_102, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13480,7 +13755,7 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_98, &cont_of(&SHAPES_40));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_42));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13504,7 +13779,7 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_99,
+                &SHAPE_104,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -13523,8 +13798,8 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_99,
-                                &cont_of(&SHAPES_40),
+                                &SHAPE_104,
+                                &cont_of(&SHAPES_42),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -13540,7 +13815,7 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_41),
+                                                    &cont_of(&SHAPES_43),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -13567,8 +13842,8 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_98,
-                                                    &cont_of(&SHAPES_40),
+                                                    &SHAPE_103,
+                                                    &cont_of(&SHAPES_42),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -13655,7 +13930,7 @@ pub fn extract_gra_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_102, &cont_of(&SHAPES_42));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_107, &cont_of(&SHAPES_44));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13679,7 +13954,7 @@ pub fn extract_gra_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_43));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_45));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13703,7 +13978,7 @@ pub fn extract_gra_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_101, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_106, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13809,7 +14084,7 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
         let index = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_106, &cont_of(&SHAPES_44));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_111, &cont_of(&SHAPES_46));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13833,7 +14108,7 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_45));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_47));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13857,7 +14132,7 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
         let head = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_104, &cont_of(&SHAPES_46));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_109, &cont_of(&SHAPES_48));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13881,7 +14156,7 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_47));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_49));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13905,7 +14180,7 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
         let relation = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_105, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_110, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -13983,7 +14258,7 @@ pub fn extract_group_with_annotations<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_110, &cont_of(&SHAPES_48));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_115, &cont_of(&SHAPES_50));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14007,7 +14282,7 @@ pub fn extract_group_with_annotations<'tree>(
         let content_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_107, &cont_of(&SHAPES_49));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_51));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14031,7 +14306,7 @@ pub fn extract_group_with_annotations<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_50));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_113, &cont_of(&SHAPES_52));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14055,7 +14330,7 @@ pub fn extract_group_with_annotations<'tree>(
         let annotations = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_109, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14366,7 +14641,7 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_51));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_117, &cont_of(&SHAPES_53));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -14378,8 +14653,8 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_52,
-                            &cont_of(&SHAPES_51),
+                            &SHAPES_54,
+                            &cont_of(&SHAPES_53),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -14418,7 +14693,7 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_112,
+                &SHAPE_117,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -14443,8 +14718,8 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                             }
                             _ => {
                                 match choice_split_inner(
-                                    &SHAPES_52,
-                                    &cont_of(&SHAPES_51),
+                                    &SHAPES_54,
+                                    &cont_of(&SHAPES_53),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -14523,7 +14798,7 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_53));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_46, &cont_of(&SHAPES_55));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14547,7 +14822,7 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_111, &cont_of(&SHAPES_54));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_56));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14571,7 +14846,7 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_114,
+                &SHAPE_119,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -14580,7 +14855,7 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_119, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -14648,7 +14923,7 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_119, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_123, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -14660,7 +14935,7 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_55,
+                        &SHAPES_57,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -14796,7 +15071,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_137, &cont_of(&SHAPES_56));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_141, &cont_of(&SHAPES_58));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14820,7 +15095,7 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_57));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_59));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -14842,82 +15117,6 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             Positioned::new(leading_extras, slot)
         };
         let child_2 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_14,
-                &cont_of(&SHAPES_58),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_58));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "whitespaces" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(WhitespacesNode(__c))
-                            }
-                        } else {
-                            NodeSlot::Absent
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_3 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_121,
-                &cont_of(&SHAPES_59),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_121, &cont_of(&SHAPES_59));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_corpus" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdCorpusNode(__c))
-                            }
-                        } else {
-                            NodeSlot::Absent
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -14955,83 +15154,11 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_5 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_61));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(PipeNode(__c))
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_6 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_123, &cont_of(&SHAPES_62));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "id_speaker" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(IdSpeakerNode(__c))
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_7 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_63));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(PipeNode(__c))
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_8 = {
+        let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_14,
-                &cont_of(&SHAPES_64),
+                &SHAPE_125,
+                &cont_of(&SHAPES_61),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -15039,7 +15166,45 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_64));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_125, &cont_of(&SHAPES_61));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_corpus" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdCorpusNode(__c))
+                            }
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_4 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = match optional_split_inner(
+                &SHAPE_14,
+                &cont_of(&SHAPES_62),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_62));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -15065,45 +15230,79 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_9 = {
+        let child_5 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_124,
-                &cont_of(&SHAPES_65),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_124, &cont_of(&SHAPES_65));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_age" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdAgeNode(__c))
-                            }
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_63));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
+                } else {
+                    NodeSlot::Absent
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_10 = {
+        let child_6 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_127, &cont_of(&SHAPES_64));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "id_speaker" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(IdSpeakerNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_7 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_65));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(PipeNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_8 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15141,31 +15340,45 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_11 = {
+        let child_9 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_67));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
+            let slot = match optional_split_inner(
+                &SHAPE_128,
+                &cont_of(&SHAPES_67),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_128, &cont_of(&SHAPES_67));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_age" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdAgeNode(__c))
+                            }
                         } else {
-                            NodeSlot::Present(PipeNode(__c))
+                            NodeSlot::Absent
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                } else {
-                    NodeSlot::Absent
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_12 = {
+        let child_10 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15203,45 +15416,31 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_13 = {
+        let child_11 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_126,
-                &cont_of(&SHAPES_69),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_126, &cont_of(&SHAPES_69));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_sex" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdSexNode(__c))
-                            }
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_69));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
+                } else {
+                    NodeSlot::Absent
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_14 = {
+        let child_12 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15279,31 +15478,45 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_15 = {
+        let child_13 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_71));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
+            let slot = match optional_split_inner(
+                &SHAPE_130,
+                &cont_of(&SHAPES_71),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_130, &cont_of(&SHAPES_71));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_sex" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdSexNode(__c))
+                            }
                         } else {
-                            NodeSlot::Present(PipeNode(__c))
+                            NodeSlot::Absent
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                } else {
-                    NodeSlot::Absent
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_16 = {
+        let child_14 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15341,45 +15554,31 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_17 = {
+        let child_15 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_128,
-                &cont_of(&SHAPES_73),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_128, &cont_of(&SHAPES_73));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_group" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdGroupNode(__c))
-                            }
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_73));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
+                } else {
+                    NodeSlot::Absent
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_18 = {
+        let child_16 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15417,31 +15616,45 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_19 = {
+        let child_17 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_75));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
+            let slot = match optional_split_inner(
+                &SHAPE_132,
+                &cont_of(&SHAPES_75),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_132, &cont_of(&SHAPES_75));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_group" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdGroupNode(__c))
+                            }
                         } else {
-                            NodeSlot::Present(PipeNode(__c))
+                            NodeSlot::Absent
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                } else {
-                    NodeSlot::Absent
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_20 = {
+        let child_18 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15479,45 +15692,31 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_21 = {
+        let child_19 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_130,
-                &cont_of(&SHAPES_77),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_130, &cont_of(&SHAPES_77));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_ses" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdSesNode(__c))
-                            }
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_77));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
+                } else {
+                    NodeSlot::Absent
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_22 = {
+        let child_20 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15555,83 +15754,11 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_23 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_79));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(PipeNode(__c))
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_24 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_132, &cont_of(&SHAPES_80));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "id_role" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(IdRoleNode(__c))
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_25 = {
-            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_81));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
-                        } else {
-                            NodeSlot::Present(PipeNode(__c))
-                        }
-                    } else {
-                        NodeSlot::Absent
-                    }
-                } else {
-                    NodeSlot::Absent
-                }
-            };
-            Positioned::new(leading_extras, slot)
-        };
-        let child_26 = {
+        let child_21 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_14,
-                &cont_of(&SHAPES_82),
+                &SHAPE_134,
+                &cont_of(&SHAPES_79),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -15639,7 +15766,45 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_82));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_134, &cont_of(&SHAPES_79));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_ses" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdSesNode(__c))
+                            }
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_22 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = match optional_split_inner(
+                &SHAPE_14,
+                &cont_of(&SHAPES_80),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_80));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -15665,45 +15830,79 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_27 = {
+        let child_23 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_133,
-                &cont_of(&SHAPES_83),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_133, &cont_of(&SHAPES_83));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_education" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdEducationNode(__c))
-                            }
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_81));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
+                } else {
+                    NodeSlot::Absent
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_28 = {
+        let child_24 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_136, &cont_of(&SHAPES_82));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "id_role" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(IdRoleNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_25 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_83));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(PipeNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_26 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15741,31 +15940,45 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_29 = {
+        let child_27 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_85));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "pipe" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
+            let slot = match optional_split_inner(
+                &SHAPE_137,
+                &cont_of(&SHAPES_85),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_137, &cont_of(&SHAPES_85));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_education" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdEducationNode(__c))
+                            }
                         } else {
-                            NodeSlot::Present(PipeNode(__c))
+                            NodeSlot::Absent
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                } else {
-                    NodeSlot::Absent
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_30 = {
+        let child_28 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15803,45 +16016,31 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_31 = {
+        let child_29 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = match optional_split_inner(
-                &SHAPE_135,
-                &cont_of(&SHAPES_87),
-                __at.all(),
-                __at.index(),
-                __at.memo(),
-            )
-            .presence
-            {
-                Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_135, &cont_of(&SHAPES_87));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
-                            __at.advance();
-                            NodeSlot::Error(__c)
-                        } else if __c.kind() == "id_custom_field" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(IdCustomFieldNode(__c))
-                            }
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_87));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "pipe" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                }),
-                Presence::Empty => {
-                    __at.release();
-                    None
+                } else {
+                    NodeSlot::Absent
                 }
             };
             Positioned::new(leading_extras, slot)
         };
-        let child_32 = {
+        let child_30 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
@@ -15879,10 +16078,86 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
             };
             Positioned::new(leading_extras, slot)
         };
+        let child_31 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = match optional_split_inner(
+                &SHAPE_139,
+                &cont_of(&SHAPES_89),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_139, &cont_of(&SHAPES_89));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "id_custom_field" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(IdCustomFieldNode(__c))
+                            }
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let child_32 = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = match optional_split_inner(
+                &SHAPE_14,
+                &cont_of(&SHAPES_90),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_90));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "whitespaces" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(WhitespacesNode(__c))
+                            }
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
         let child_33 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -15976,7 +16251,7 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_139, &cont_of(&SHAPES_89));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_143, &cont_of(&SHAPES_91));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16000,7 +16275,7 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_90));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_92));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16024,7 +16299,7 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_138, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_142, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16112,7 +16387,7 @@ pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesC
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_141, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_145, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -16124,7 +16399,7 @@ pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesC
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_91,
+                        &SHAPES_93,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -16217,7 +16492,7 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_146, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_150, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -16229,7 +16504,7 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_92,
+                        &SHAPES_94,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -16348,7 +16623,7 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_150, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_154, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -16360,7 +16635,7 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_93,
+                        &SHAPES_95,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -16454,7 +16729,7 @@ pub fn extract_int_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_151, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_155, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16608,7 +16883,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_153, &cont_of(&SHAPES_94));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_156, &cont_of(&SHAPES_96));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16633,7 +16908,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_34,
-                &cont_of(&SHAPES_95),
+                &cont_of(&SHAPES_97),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -16641,7 +16916,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_34, &cont_of(&SHAPES_95));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_34, &cont_of(&SHAPES_97));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -16670,7 +16945,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_96));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_98));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16694,7 +16969,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_97));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_99));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16718,7 +16993,7 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_152, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_47, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16814,7 +17089,7 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_154, &cont_of(&SHAPES_98));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_157, &cont_of(&SHAPES_100));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16838,7 +17113,7 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_9, &cont_of(&SHAPES_99));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_9, &cont_of(&SHAPES_24));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16862,7 +17137,7 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
         let code = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_152, &cont_of(&SHAPES_8));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_47, &cont_of(&SHAPES_8));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16968,7 +17243,7 @@ pub fn extract_languages_contents<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_152, &cont_of(&SHAPES_100));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_47, &cont_of(&SHAPES_101));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -16992,7 +17267,7 @@ pub fn extract_languages_contents<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_156,
+                &SHAPE_159,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -17011,8 +17286,8 @@ pub fn extract_languages_contents<'tree>(
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_156,
-                                &cont_of(&SHAPES_100),
+                                &SHAPE_159,
+                                &cont_of(&SHAPES_101),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -17027,7 +17302,7 @@ pub fn extract_languages_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = match optional_split_inner(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_101),
+                                                &cont_of(&SHAPES_102),
                                                 __at.all(),
                                                 __at.index(),
                                                 __at.memo(),
@@ -17037,7 +17312,7 @@ pub fn extract_languages_contents<'tree>(
                                                 Presence::Taken => Some({
                                                     let mut __at = __at.skip_displaced_errors(
                                                         &SHAPE_14,
-                                                        &cont_of(&SHAPES_101),
+                                                        &cont_of(&SHAPES_102),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -17071,8 +17346,8 @@ pub fn extract_languages_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_155,
-                                                    &cont_of(&SHAPES_102),
+                                                    &SHAPE_158,
+                                                    &cont_of(&SHAPES_103),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -17100,7 +17375,7 @@ pub fn extract_languages_contents<'tree>(
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_103),
+                                                    &cont_of(&SHAPES_104),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -17127,8 +17402,8 @@ pub fn extract_languages_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_152,
-                                                    &cont_of(&SHAPES_100),
+                                                    &SHAPE_47,
+                                                    &cont_of(&SHAPES_101),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -17217,7 +17492,7 @@ pub fn extract_languages_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_104));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_161, &cont_of(&SHAPES_105));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -17241,7 +17516,7 @@ pub fn extract_languages_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_105));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_106));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -17265,7 +17540,7 @@ pub fn extract_languages_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_140, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_144, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -17478,7 +17753,7 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_163, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_166, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -17490,7 +17765,7 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_106,
+                        &SHAPES_107,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -17934,14 +18209,14 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_164, &cont_of(&SHAPES_107));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_167, &cont_of(&SHAPES_108));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
                         NodeSlot::Error(__c)
                     } else if shape_match_inner(
-                        &SHAPE_164,
-                        &cont_of(&SHAPES_107),
+                        &SHAPE_167,
+                        &cont_of(&SHAPES_108),
                         __at.all(),
                         __at.index(),
                         __at.memo(),
@@ -17956,8 +18231,8 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                         __cur.take_leading_extras::<FixedArity>();
                                     let slot = {
                                         let mut __at = __at.skip_displaced_errors(
-                                            &SHAPE_58,
-                                            &cont_of(&SHAPES_108),
+                                            &SHAPE_63,
+                                            &cont_of(&SHAPES_109),
                                         );
                                         if let Some(__c) = __at.peek() {
                                             if __c.is_error() {
@@ -18064,7 +18339,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                     let slot = {
                                         let mut __at = __at.skip_displaced_errors(
                                             &SHAPE_14,
-                                            &cont_of(&SHAPES_107),
+                                            &cont_of(&SHAPES_108),
                                         );
                                         if let Some(__c) = __at.peek() {
                                             if __c.is_error() {
@@ -18108,7 +18383,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_164,
+                &SHAPE_167,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -18129,8 +18404,8 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                     __at.advance();
                                     NodeSlot::Error(__c)
                                 } else if shape_match_inner(
-                                        &SHAPE_164,
-                                        &cont_of(&SHAPES_107),
+                                        &SHAPE_167,
+                                        &cont_of(&SHAPES_108),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -18145,7 +18420,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                                     .take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at
-                                                        .skip_displaced_errors(&SHAPE_58, &cont_of(&SHAPES_108));
+                                                        .skip_displaced_errors(&SHAPE_63, &cont_of(&SHAPES_109));
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
                                                             __at.advance();
@@ -18250,7 +18525,7 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                                     .take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at
-                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_107));
+                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_108));
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
                                                             __at.advance();
@@ -18336,7 +18611,7 @@ pub fn extract_location_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_166, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_169, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18480,7 +18755,7 @@ pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureC
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_169, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -18492,7 +18767,7 @@ pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureC
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_109,
+                        &SHAPES_110,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -18574,7 +18849,7 @@ pub fn extract_long_feature_begin<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_110));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_111));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18598,7 +18873,7 @@ pub fn extract_long_feature_begin<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_170, &cont_of(&SHAPES_111));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_173, &cont_of(&SHAPES_112));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18622,7 +18897,7 @@ pub fn extract_long_feature_begin<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_171, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_174, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18685,7 +18960,7 @@ pub fn extract_long_feature_end<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_112));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_113));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18709,7 +18984,7 @@ pub fn extract_long_feature_end<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_173, &cont_of(&SHAPES_111));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_176, &cont_of(&SHAPES_112));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18733,7 +19008,7 @@ pub fn extract_long_feature_end<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_171, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_174, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18794,7 +19069,7 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_113));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_178, &cont_of(&SHAPES_114));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18818,7 +19093,7 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_107, &cont_of(&SHAPES_114));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_115));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18842,7 +19117,7 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_174, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_177, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18903,7 +19178,7 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_177, &cont_of(&SHAPES_115));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_180, &cont_of(&SHAPES_116));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18927,7 +19202,7 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_107, &cont_of(&SHAPES_116));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_117));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -18951,7 +19226,7 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_176, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_179, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19024,7 +19299,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_179, &cont_of(&SHAPES_117));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_182, &cont_of(&SHAPES_118));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19048,7 +19323,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         let speaker = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_118));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_119));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19072,7 +19347,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_119));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_46, &cont_of(&SHAPES_120));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19096,7 +19371,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_111, &cont_of(&SHAPES_120));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_121));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19120,8 +19395,8 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_114,
-                &cont_of(&SHAPES_121),
+                &SHAPE_119,
+                &cont_of(&SHAPES_122),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -19129,7 +19404,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_121));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_119, &cont_of(&SHAPES_122));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -19158,7 +19433,7 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
         let child_5 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_178, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_181, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19245,7 +19520,7 @@ pub fn extract_media_contents<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_184, &cont_of(&SHAPES_122));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_187, &cont_of(&SHAPES_123));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19270,7 +19545,7 @@ pub fn extract_media_contents<'tree>(
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_123),
+                &cont_of(&SHAPES_124),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -19278,7 +19553,7 @@ pub fn extract_media_contents<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_123));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_124));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -19307,7 +19582,7 @@ pub fn extract_media_contents<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_155, &cont_of(&SHAPES_124));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_125));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19331,7 +19606,7 @@ pub fn extract_media_contents<'tree>(
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_125));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_126));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19355,7 +19630,7 @@ pub fn extract_media_contents<'tree>(
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_180, &cont_of(&SHAPES_126));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_183, &cont_of(&SHAPES_127));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19379,7 +19654,7 @@ pub fn extract_media_contents<'tree>(
         let child_5 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_182,
+                &SHAPE_185,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -19388,13 +19663,13 @@ pub fn extract_media_contents<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_182, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_185, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_182,
+                            &SHAPE_185,
                             &cont_of(&SHAPES_3),
                             __at.all(),
                             __at.index(),
@@ -19410,8 +19685,8 @@ pub fn extract_media_contents<'tree>(
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_155,
-                                                &cont_of(&SHAPES_127),
+                                                &SHAPE_158,
+                                                &cont_of(&SHAPES_128),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -19439,7 +19714,7 @@ pub fn extract_media_contents<'tree>(
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_128),
+                                                &cont_of(&SHAPES_129),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -19466,7 +19741,7 @@ pub fn extract_media_contents<'tree>(
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_181,
+                                                &SHAPE_184,
                                                 &cont_of(&SHAPES_3),
                                             );
                                             if let Some(__c) = __at.peek() {
@@ -19576,7 +19851,7 @@ pub fn extract_media_filename<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_187, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_190, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -19588,7 +19863,7 @@ pub fn extract_media_filename<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_130,
+                        &SHAPES_131,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -19599,7 +19874,7 @@ pub fn extract_media_filename<'tree>(
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_186,
+                                &SHAPE_189,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -19615,8 +19890,8 @@ pub fn extract_media_filename<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_185,
-                                                    &cont_of(&SHAPES_129),
+                                                    &SHAPE_188,
+                                                    &cont_of(&SHAPES_130),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -19644,7 +19919,7 @@ pub fn extract_media_filename<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_185,
+                                                    &SHAPE_188,
                                                     &cont_of(&SHAPES_3),
                                                 );
                                                 if let Some(__c) = __at.peek() {
@@ -19746,7 +20021,7 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_189, &cont_of(&SHAPES_131));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_192, &cont_of(&SHAPES_132));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19770,7 +20045,7 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_132));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_133));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19794,7 +20069,7 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_188, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_191, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -19896,7 +20171,7 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_194, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_197, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -19908,7 +20183,7 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_133,
+                        &SHAPES_134,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -20031,7 +20306,7 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_198, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_201, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -20043,7 +20318,7 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_134,
+                        &SHAPES_135,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -20152,7 +20427,7 @@ pub fn extract_mod_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_200, &cont_of(&SHAPES_135));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_203, &cont_of(&SHAPES_136));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -20176,7 +20451,7 @@ pub fn extract_mod_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_136));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_137));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -20200,7 +20475,7 @@ pub fn extract_mod_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_199, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_202, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -20290,7 +20565,7 @@ pub fn extract_modsyl_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_201, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_204, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -20450,7 +20725,7 @@ pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChil
         let main = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_204, &cont_of(&SHAPES_137));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_207, &cont_of(&SHAPES_138));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -20474,7 +20749,7 @@ pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChil
         let post_clitics = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_202,
+                &SHAPE_205,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -20715,7 +20990,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_212, &cont_of(&SHAPES_138));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_215, &cont_of(&SHAPES_139));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -20727,8 +21002,8 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_143,
-                            &cont_of(&SHAPES_138),
+                            &SHAPES_144,
+                            &cont_of(&SHAPES_139),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -20738,8 +21013,8 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_211,
-                                    &cont_of(&SHAPES_138),
+                                    &SHAPE_214,
+                                    &cont_of(&SHAPES_139),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -20754,8 +21029,8 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
-                                                        &SHAPE_205,
-                                                        &cont_of(&SHAPES_139),
+                                                        &SHAPE_208,
+                                                        &cont_of(&SHAPES_140),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -20783,8 +21058,8 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                 let (leading_extras, __at) =
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
-                                                    &SHAPE_206,
-                                                    &cont_of(&SHAPES_140),
+                                                    &SHAPE_209,
+                                                    &cont_of(&SHAPES_141),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -20804,8 +21079,8 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                         __at.advance();
                                                                         NodeSlot::Error(__c)
                                                                     } else if shape_match_inner(
-                                                                            &SHAPE_206,
-                                                                            &cont_of(&SHAPES_139),
+                                                                            &SHAPE_209,
+                                                                            &cont_of(&SHAPES_140),
                                                                             __at.all(),
                                                                             __at.index(),
                                                                             __at.memo(),
@@ -20820,7 +21095,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                         .take_leading_extras::<FixedArity>();
                                                                                     let slot = {
                                                                                         let mut __at = __at
-                                                                                            .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_141));
+                                                                                            .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_142));
                                                                                         if let Some(__c) = __at.peek() {
                                                                                             if __c.is_error() {
                                                                                                 __at.advance();
@@ -20846,7 +21121,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                         .take_leading_extras::<FixedArity>();
                                                                                     let slot = {
                                                                                         let mut __at = __at
-                                                                                            .skip_displaced_errors(&SHAPE_205, &cont_of(&SHAPES_139));
+                                                                                            .skip_displaced_errors(&SHAPE_208, &cont_of(&SHAPES_140));
                                                                                         if let Some(__c) = __at.peek() {
                                                                                             if __c.is_error() {
                                                                                                 __at.advance();
@@ -20893,8 +21168,8 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                 let (leading_extras, __at) =
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let slot = match optional_split_inner(
-                                                    &SHAPE_209,
-                                                    &cont_of(&SHAPES_138),
+                                                    &SHAPE_212,
+                                                    &cont_of(&SHAPES_139),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -20905,16 +21180,16 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                         Some({
                                                             let mut __at = __at
                                                                 .skip_displaced_errors(
-                                                                    &SHAPE_209,
-                                                                    &cont_of(&SHAPES_138),
+                                                                    &SHAPE_212,
+                                                                    &cont_of(&SHAPES_139),
                                                                 );
                                                             if let Some(__c) = __at.peek() {
                                                                 if __c.is_error() {
                                                                     __at.advance();
                                                                     NodeSlot::Error(__c)
                                                                 } else if shape_match_inner(
-                                                                    &SHAPE_209,
-                                                                    &cont_of(&SHAPES_138),
+                                                                    &SHAPE_212,
+                                                                    &cont_of(&SHAPES_139),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -20929,7 +21204,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                     .take_leading_extras::<FixedArity>();
                                                                                 let slot = {
                                                                                     let mut __at = __at
-                                                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_142));
+                                                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_143));
                                                                                     if let Some(
                                                                                         __c,
                                                                                     ) =
@@ -20962,7 +21237,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                     .take_leading_extras::<FixedArity>();
                                                                                 let slot = {
                                                                                     let mut __at = __at
-                                                                                        .skip_displaced_errors(&SHAPE_208, &cont_of(&SHAPES_138));
+                                                                                        .skip_displaced_errors(&SHAPE_211, &cont_of(&SHAPES_139));
                                                                                     if let Some(
                                                                                         __c,
                                                                                     ) =
@@ -21389,7 +21664,7 @@ pub fn extract_mor_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_214, &cont_of(&SHAPES_144));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_217, &cont_of(&SHAPES_145));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21413,7 +21688,7 @@ pub fn extract_mor_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_145));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_146));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21437,7 +21712,7 @@ pub fn extract_mor_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_213, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_216, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21521,7 +21796,7 @@ pub fn extract_mor_feature<'tree>(node: MorFeatureNode<'tree>) -> MorFeatureChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_216, &cont_of(&SHAPES_146));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_219, &cont_of(&SHAPES_147));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21545,7 +21820,7 @@ pub fn extract_mor_feature<'tree>(node: MorFeatureNode<'tree>) -> MorFeatureChil
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_215, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_218, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21605,7 +21880,7 @@ pub fn extract_mor_post_clitic<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_217, &cont_of(&SHAPES_147));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_220, &cont_of(&SHAPES_148));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21629,7 +21904,7 @@ pub fn extract_mor_post_clitic<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_204, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_207, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21691,7 +21966,7 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_221, &cont_of(&SHAPES_148));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_224, &cont_of(&SHAPES_149));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21715,7 +21990,7 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_103, &cont_of(&SHAPES_149));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_108, &cont_of(&SHAPES_150));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21739,7 +22014,7 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_218, &cont_of(&SHAPES_150));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_221, &cont_of(&SHAPES_151));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21763,7 +22038,7 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_219,
+                &SHAPE_222,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -21841,7 +22116,7 @@ pub fn extract_new_episode_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_222, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_225, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -21973,7 +22248,7 @@ pub fn extract_non_colon_separator<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_236, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_239, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -21985,7 +22260,7 @@ pub fn extract_non_colon_separator<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_151,
+                        &SHAPES_152,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -22239,7 +22514,7 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_240, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_243, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -22251,7 +22526,7 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_152,
+                        &SHAPES_153,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -22345,7 +22620,7 @@ pub fn extract_nonvocal_begin<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_153));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_154));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22369,7 +22644,7 @@ pub fn extract_nonvocal_begin<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_241, &cont_of(&SHAPES_111));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_244, &cont_of(&SHAPES_112));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22393,7 +22668,7 @@ pub fn extract_nonvocal_begin<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_171, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_174, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22454,7 +22729,7 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_154));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_155));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22478,7 +22753,7 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_242, &cont_of(&SHAPES_111));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_245, &cont_of(&SHAPES_112));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22502,7 +22777,7 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_171, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_174, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22567,7 +22842,7 @@ pub fn extract_nonvocal_simple<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_155));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_156));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22591,7 +22866,7 @@ pub fn extract_nonvocal_simple<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_241, &cont_of(&SHAPES_156));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_244, &cont_of(&SHAPES_157));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22615,7 +22890,7 @@ pub fn extract_nonvocal_simple<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_171, &cont_of(&SHAPES_157));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_174, &cont_of(&SHAPES_158));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22639,7 +22914,7 @@ pub fn extract_nonvocal_simple<'tree>(
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_243, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_246, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22711,7 +22986,7 @@ pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_246, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_249, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -22723,7 +22998,7 @@ pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_158,
+                        &SHAPES_159,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -22810,7 +23085,7 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
         let nonword = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_248, &cont_of(&SHAPES_159));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_251, &cont_of(&SHAPES_160));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22834,7 +23109,7 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
         let annotations = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_109,
+                &SHAPE_114,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -22843,7 +23118,7 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_109, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -22910,7 +23185,7 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_250, &cont_of(&SHAPES_160));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_253, &cont_of(&SHAPES_161));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22934,7 +23209,7 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_161));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_162));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -22958,7 +23233,7 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_249, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_252, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23072,7 +23347,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_259, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_262, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -23084,7 +23359,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_162,
+                        &SHAPES_163,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -23245,7 +23520,7 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_263, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_266, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -23257,7 +23532,7 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_163,
+                        &SHAPES_164,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -23364,7 +23639,7 @@ pub fn extract_options_contents<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_264, &cont_of(&SHAPES_164));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_267, &cont_of(&SHAPES_165));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23388,7 +23663,7 @@ pub fn extract_options_contents<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_265,
+                &SHAPE_268,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -23407,8 +23682,8 @@ pub fn extract_options_contents<'tree>(
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_265,
-                                &cont_of(&SHAPES_164),
+                                &SHAPE_268,
+                                &cont_of(&SHAPES_165),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -23423,8 +23698,8 @@ pub fn extract_options_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_155,
-                                                    &cont_of(&SHAPES_165),
+                                                    &SHAPE_158,
+                                                    &cont_of(&SHAPES_166),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -23452,7 +23727,7 @@ pub fn extract_options_contents<'tree>(
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_166),
+                                                    &cont_of(&SHAPES_167),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -23479,8 +23754,8 @@ pub fn extract_options_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_264,
-                                                    &cont_of(&SHAPES_164),
+                                                    &SHAPE_267,
+                                                    &cont_of(&SHAPES_165),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -23568,7 +23843,7 @@ pub fn extract_options_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_268, &cont_of(&SHAPES_167));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_271, &cont_of(&SHAPES_168));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23592,7 +23867,7 @@ pub fn extract_options_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_168));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_169));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23616,7 +23891,7 @@ pub fn extract_options_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_267, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_270, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23706,7 +23981,7 @@ pub fn extract_ort_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_269, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_272, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23860,7 +24135,7 @@ pub fn extract_other_spoken_event<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_172, &cont_of(&SHAPES_169));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_175, &cont_of(&SHAPES_170));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23884,7 +24159,7 @@ pub fn extract_other_spoken_event<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_179, &cont_of(&SHAPES_170));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_182, &cont_of(&SHAPES_171));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23908,7 +24183,7 @@ pub fn extract_other_spoken_event<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_171));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_172));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23932,7 +24207,7 @@ pub fn extract_other_spoken_event<'tree>(
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_172));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_46, &cont_of(&SHAPES_173));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -23956,7 +24231,7 @@ pub fn extract_other_spoken_event<'tree>(
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_270, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_273, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24021,7 +24296,7 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_272, &cont_of(&SHAPES_173));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_275, &cont_of(&SHAPES_174));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24045,7 +24320,7 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_174));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_175));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24069,7 +24344,7 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_271, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_274, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24159,7 +24434,7 @@ pub fn extract_par_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_273, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_276, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24317,7 +24592,7 @@ pub fn extract_para_annotation<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_274, &cont_of(&SHAPES_6));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_277, &cont_of(&SHAPES_6));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24473,7 +24748,7 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
         let code = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_175));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_36, &cont_of(&SHAPES_176));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24497,8 +24772,8 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_276,
-                &cont_of(&SHAPES_138),
+                &SHAPE_279,
+                &cont_of(&SHAPES_139),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -24516,8 +24791,8 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_276,
-                                &cont_of(&SHAPES_175),
+                                &SHAPE_279,
+                                &cont_of(&SHAPES_176),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -24533,7 +24808,7 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_176),
+                                                    &cont_of(&SHAPES_177),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -24560,8 +24835,8 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_275,
-                                                    &cont_of(&SHAPES_175),
+                                                    &SHAPE_278,
+                                                    &cont_of(&SHAPES_176),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -24703,7 +24978,7 @@ pub fn extract_participants_contents<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_278, &cont_of(&SHAPES_177));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_281, &cont_of(&SHAPES_178));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24727,7 +25002,7 @@ pub fn extract_participants_contents<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_279,
+                &SHAPE_282,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -24746,8 +25021,8 @@ pub fn extract_participants_contents<'tree>(
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_279,
-                                &cont_of(&SHAPES_177),
+                                &SHAPE_282,
+                                &cont_of(&SHAPES_178),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -24762,8 +25037,8 @@ pub fn extract_participants_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_155,
-                                                    &cont_of(&SHAPES_178),
+                                                    &SHAPE_158,
+                                                    &cont_of(&SHAPES_179),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -24791,7 +25066,7 @@ pub fn extract_participants_contents<'tree>(
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_179),
+                                                    &cont_of(&SHAPES_180),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -24818,8 +25093,8 @@ pub fn extract_participants_contents<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_278,
-                                                    &cont_of(&SHAPES_177),
+                                                    &SHAPE_281,
+                                                    &cont_of(&SHAPES_178),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -24907,7 +25182,7 @@ pub fn extract_participants_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_282, &cont_of(&SHAPES_180));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_285, &cont_of(&SHAPES_181));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24931,7 +25206,7 @@ pub fn extract_participants_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_181));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_182));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -24955,7 +25230,7 @@ pub fn extract_participants_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_281, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_284, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25051,7 +25326,7 @@ pub fn extract_percent_annotation<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_283, &cont_of(&SHAPES_6));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_286, &cont_of(&SHAPES_6));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25189,7 +25464,7 @@ pub fn extract_pho_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_284, &cont_of(&SHAPES_135));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_287, &cont_of(&SHAPES_136));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25213,7 +25488,7 @@ pub fn extract_pho_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_136));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_137));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25237,7 +25512,7 @@ pub fn extract_pho_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_199, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_202, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25340,7 +25615,7 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_288, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_291, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -25352,7 +25627,7 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_183,
+                        &SHAPES_184,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -25375,7 +25650,7 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_287,
+                                &SHAPE_290,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -25391,8 +25666,8 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_175,
-                                                    &cont_of(&SHAPES_182),
+                                                    &SHAPE_178,
+                                                    &cont_of(&SHAPES_183),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -25421,8 +25696,8 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_286,
-                                                    &cont_of(&SHAPES_114),
+                                                    &SHAPE_289,
+                                                    &cont_of(&SHAPES_115),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -25451,7 +25726,7 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_174,
+                                                    &SHAPE_177,
                                                     &cont_of(&SHAPES_3),
                                                 );
                                                 if let Some(__c) = __at.peek() {
@@ -25555,7 +25830,7 @@ pub fn extract_pho_grouped_content<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_285, &cont_of(&SHAPES_184));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_288, &cont_of(&SHAPES_185));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25579,7 +25854,7 @@ pub fn extract_pho_grouped_content<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_289,
+                &SHAPE_292,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -25598,8 +25873,8 @@ pub fn extract_pho_grouped_content<'tree>(
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_289,
-                                &cont_of(&SHAPES_184),
+                                &SHAPE_292,
+                                &cont_of(&SHAPES_185),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -25615,7 +25890,7 @@ pub fn extract_pho_grouped_content<'tree>(
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_185),
+                                                    &cont_of(&SHAPES_186),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -25642,8 +25917,8 @@ pub fn extract_pho_grouped_content<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_285,
-                                                    &cont_of(&SHAPES_184),
+                                                    &SHAPE_288,
+                                                    &cont_of(&SHAPES_185),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -25738,7 +26013,7 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_291, &cont_of(&SHAPES_186));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_294, &cont_of(&SHAPES_187));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25762,7 +26037,7 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_292,
+                &SHAPE_295,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -25781,8 +26056,8 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_292,
-                                &cont_of(&SHAPES_186),
+                                &SHAPE_295,
+                                &cont_of(&SHAPES_187),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -25798,7 +26073,7 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_187),
+                                                    &cont_of(&SHAPES_188),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -25825,8 +26100,8 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_291,
-                                                    &cont_of(&SHAPES_186),
+                                                    &SHAPE_294,
+                                                    &cont_of(&SHAPES_187),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -25921,7 +26196,7 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_295, &cont_of(&SHAPES_188));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_298, &cont_of(&SHAPES_189));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -25945,7 +26220,7 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_296,
+                &SHAPE_299,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -25964,8 +26239,8 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_296,
-                                &cont_of(&SHAPES_188),
+                                &SHAPE_299,
+                                &cont_of(&SHAPES_189),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -25980,8 +26255,8 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_294,
-                                                    &cont_of(&SHAPES_189),
+                                                    &SHAPE_297,
+                                                    &cont_of(&SHAPES_190),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -26008,8 +26283,8 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_295,
-                                                    &cont_of(&SHAPES_188),
+                                                    &SHAPE_298,
+                                                    &cont_of(&SHAPES_189),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -26096,7 +26371,7 @@ pub fn extract_phoaln_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_298, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_301, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26248,7 +26523,7 @@ pub fn extract_phosyl_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_299, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_302, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26398,7 +26673,7 @@ pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_300, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_303, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26540,7 +26815,7 @@ pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'t
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_301, &cont_of(&SHAPES_6));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_304, &cont_of(&SHAPES_6));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26738,7 +27013,7 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_303, &cont_of(&SHAPES_190));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_306, &cont_of(&SHAPES_191));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26762,7 +27037,7 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_107, &cont_of(&SHAPES_191));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_192));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26786,7 +27061,7 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_302, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_305, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26851,7 +27126,7 @@ pub fn extract_recording_quality_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_305, &cont_of(&SHAPES_192));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_308, &cont_of(&SHAPES_193));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26875,7 +27150,7 @@ pub fn extract_recording_quality_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_193));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_194));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -26899,7 +27174,7 @@ pub fn extract_recording_quality_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_304, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_307, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27009,7 +27284,7 @@ pub fn extract_recording_quality_option<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_307, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_310, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -27021,7 +27296,7 @@ pub fn extract_recording_quality_option<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_194,
+                        &SHAPES_195,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -27181,7 +27456,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_310, &cont_of(&SHAPES_195));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_313, &cont_of(&SHAPES_196));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27205,7 +27480,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_196));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_46, &cont_of(&SHAPES_197));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27229,14 +27504,14 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_308, &cont_of(&SHAPES_197));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_311, &cont_of(&SHAPES_198));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
                         NodeSlot::Error(__c)
                     } else if shape_match_inner(
-                        &SHAPE_308,
-                        &cont_of(&SHAPES_197),
+                        &SHAPE_311,
+                        &cont_of(&SHAPES_198),
                         __at.all(),
                         __at.index(),
                         __at.memo(),
@@ -27251,7 +27526,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                         __cur.take_leading_extras::<FixedArity>();
                                     let slot = match optional_split_inner(
                                         &SHAPE_14,
-                                        &cont_of(&SHAPES_198),
+                                        &cont_of(&SHAPES_199),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -27261,7 +27536,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                         Presence::Taken => Some({
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_198),
+                                                &cont_of(&SHAPES_199),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -27293,8 +27568,8 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                         __cur.take_leading_extras::<FixedArity>();
                                     let slot = {
                                         let mut __at = __at.skip_displaced_errors(
-                                            &SHAPE_270,
-                                            &cont_of(&SHAPES_197),
+                                            &SHAPE_273,
+                                            &cont_of(&SHAPES_198),
                                         );
                                         if let Some(__c) = __at.peek() {
                                             if __c.is_error() {
@@ -27338,7 +27613,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_308,
+                &SHAPE_311,
                 &cont_of(&SHAPES_8),
                 __at.all(),
                 __at.index(),
@@ -27357,8 +27632,8 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_308,
-                                &cont_of(&SHAPES_197),
+                                &SHAPE_311,
+                                &cont_of(&SHAPES_198),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -27373,7 +27648,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = match optional_split_inner(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_198),
+                                                &cont_of(&SHAPES_199),
                                                 __at.all(),
                                                 __at.index(),
                                                 __at.memo(),
@@ -27383,7 +27658,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                 Presence::Taken => Some({
                                                     let mut __at = __at.skip_displaced_errors(
                                                         &SHAPE_14,
-                                                        &cont_of(&SHAPES_198),
+                                                        &cont_of(&SHAPES_199),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -27417,8 +27692,8 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_270,
-                                                    &cont_of(&SHAPES_197),
+                                                    &SHAPE_273,
+                                                    &cont_of(&SHAPES_198),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -27534,7 +27809,7 @@ pub fn extract_room_layout_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_311, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_314, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27678,7 +27953,7 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_313, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_316, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -27690,7 +27965,7 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_199,
+                        &SHAPES_200,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -27767,7 +28042,7 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_316, &cont_of(&SHAPES_200));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_319, &cont_of(&SHAPES_201));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27791,7 +28066,7 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_314, &cont_of(&SHAPES_201));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_317, &cont_of(&SHAPES_202));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27815,7 +28090,7 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_315, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_318, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27880,7 +28155,7 @@ pub fn extract_sin_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_318, &cont_of(&SHAPES_202));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_321, &cont_of(&SHAPES_203));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27904,7 +28179,7 @@ pub fn extract_sin_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_203));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_204));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27928,7 +28203,7 @@ pub fn extract_sin_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_317, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_320, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28031,7 +28306,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_322, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_325, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -28043,7 +28318,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_205,
+                        &SHAPES_206,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -28066,7 +28341,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_321,
+                                &SHAPE_324,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -28082,8 +28357,8 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_177,
-                                                    &cont_of(&SHAPES_204),
+                                                    &SHAPE_180,
+                                                    &cont_of(&SHAPES_205),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -28112,8 +28387,8 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_320,
-                                                    &cont_of(&SHAPES_116),
+                                                    &SHAPE_323,
+                                                    &cont_of(&SHAPES_117),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -28142,7 +28417,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_176,
+                                                    &SHAPE_179,
                                                     &cont_of(&SHAPES_3),
                                                 );
                                                 if let Some(__c) = __at.peek() {
@@ -28246,7 +28521,7 @@ pub fn extract_sin_grouped_content<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_319, &cont_of(&SHAPES_206));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_322, &cont_of(&SHAPES_207));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28270,7 +28545,7 @@ pub fn extract_sin_grouped_content<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_323,
+                &SHAPE_326,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -28289,8 +28564,8 @@ pub fn extract_sin_grouped_content<'tree>(
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_323,
-                                &cont_of(&SHAPES_206),
+                                &SHAPE_326,
+                                &cont_of(&SHAPES_207),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -28306,7 +28581,7 @@ pub fn extract_sin_grouped_content<'tree>(
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_207),
+                                                    &cont_of(&SHAPES_208),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -28333,8 +28608,8 @@ pub fn extract_sin_grouped_content<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_319,
-                                                    &cont_of(&SHAPES_206),
+                                                    &SHAPE_322,
+                                                    &cont_of(&SHAPES_207),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -28429,7 +28704,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_325, &cont_of(&SHAPES_208));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_328, &cont_of(&SHAPES_209));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28453,7 +28728,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_326,
+                &SHAPE_329,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -28472,8 +28747,8 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_326,
-                                &cont_of(&SHAPES_208),
+                                &SHAPE_329,
+                                &cont_of(&SHAPES_209),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -28489,7 +28764,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_209),
+                                                    &cont_of(&SHAPES_210),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -28516,8 +28791,8 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_325,
-                                                    &cont_of(&SHAPES_208),
+                                                    &SHAPE_328,
+                                                    &cont_of(&SHAPES_209),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -28602,7 +28877,7 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_328, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_331, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -28614,7 +28889,7 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_210,
+                        &SHAPES_211,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -28692,7 +28967,7 @@ pub fn extract_sit_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_329, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_332, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28844,7 +29119,7 @@ pub fn extract_situation_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_330, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_333, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -29240,7 +29515,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_334, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_337, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -29252,7 +29527,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_211,
+                        &SHAPES_212,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -29780,7 +30055,7 @@ pub fn extract_spa_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_335, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_338, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -29949,8 +30224,8 @@ pub fn extract_standalone_word<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_344,
-                &cont_of(&SHAPES_212),
+                &SHAPE_347,
+                &cont_of(&SHAPES_213),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -29958,7 +30233,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_344, &cont_of(&SHAPES_212));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_347, &cont_of(&SHAPES_213));
                     match __at.peek() {
                         Some(__c) if __c.is_error() => {
                             __at.advance();
@@ -29970,8 +30245,8 @@ pub fn extract_standalone_word<'tree>(
                         }
                         _ => {
                             match choice_split_inner(
-                                &SHAPES_213,
-                                &cont_of(&SHAPES_212),
+                                &SHAPES_214,
+                                &cont_of(&SHAPES_213),
                                 __at.all(),
                                 __at.index(),
                                 __at.memo(),
@@ -30019,7 +30294,7 @@ pub fn extract_standalone_word<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_336, &cont_of(&SHAPES_214));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_339, &cont_of(&SHAPES_215));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30043,8 +30318,8 @@ pub fn extract_standalone_word<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_337,
-                &cont_of(&SHAPES_215),
+                &SHAPE_340,
+                &cont_of(&SHAPES_216),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -30052,7 +30327,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_337, &cont_of(&SHAPES_215));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_340, &cont_of(&SHAPES_216));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -30081,8 +30356,8 @@ pub fn extract_standalone_word<'tree>(
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_339,
-                &cont_of(&SHAPES_216),
+                &SHAPE_342,
+                &cont_of(&SHAPES_217),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -30090,7 +30365,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_339, &cont_of(&SHAPES_216));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_342, &cont_of(&SHAPES_217));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -30119,7 +30394,7 @@ pub fn extract_standalone_word<'tree>(
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_341,
+                &SHAPE_344,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -30128,7 +30403,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_341, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_344, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -30198,7 +30473,7 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_345, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_348, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30336,7 +30611,7 @@ pub fn extract_tape_location_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_346, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_349, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30631,7 +30906,7 @@ pub fn extract_text_with_bullets<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_350, &cont_of(&SHAPES_217));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_353, &cont_of(&SHAPES_218));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -30643,8 +30918,8 @@ pub fn extract_text_with_bullets<'tree>(
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_219,
-                            &cont_of(&SHAPES_217),
+                            &SHAPES_220,
+                            &cont_of(&SHAPES_218),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -30668,8 +30943,8 @@ pub fn extract_text_with_bullets<'tree>(
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_349,
-                                    &cont_of(&SHAPES_217),
+                                    &SHAPE_352,
+                                    &cont_of(&SHAPES_218),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -30685,7 +30960,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
                                                         &SHAPE_27,
-                                                        &cont_of(&SHAPES_218),
+                                                        &cont_of(&SHAPES_219),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -30712,7 +30987,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
                                                     &SHAPE_9,
-                                                    &cont_of(&SHAPES_217),
+                                                    &cont_of(&SHAPES_218),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -30797,7 +31072,7 @@ pub fn extract_text_with_bullets<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_350,
+                &SHAPE_353,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -30824,8 +31099,8 @@ pub fn extract_text_with_bullets<'tree>(
                                 }
                                 _ => {
                                     match choice_split_inner(
-                                        &SHAPES_219,
-                                        &cont_of(&SHAPES_217),
+                                        &SHAPES_220,
+                                        &cont_of(&SHAPES_218),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -30846,8 +31121,8 @@ pub fn extract_text_with_bullets<'tree>(
                                         }
                                         Some(ChoiceSelection { alternative: 1, end }) => {
                                             if let Some(__v) = if shape_match_inner(
-                                                    &SHAPE_349,
-                                                    &cont_of(&SHAPES_217),
+                                                    &SHAPE_352,
+                                                    &cont_of(&SHAPES_218),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -30862,7 +31137,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let slot = {
                                                                 let mut __at = __at
-                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_218));
+                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_219));
                                                                 if let Some(__c) = __at.peek() {
                                                                     if __c.is_error() {
                                                                         __at.advance();
@@ -30888,7 +31163,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let __count = repeat_split_inner(
                                                                     &SHAPE_9,
-                                                                    &cont_of(&SHAPES_217),
+                                                                    &cont_of(&SHAPES_218),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -31086,7 +31361,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_354, &cont_of(&SHAPES_220));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_357, &cont_of(&SHAPES_221));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -31098,8 +31373,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_222,
-                            &cont_of(&SHAPES_220),
+                            &SHAPES_223,
+                            &cont_of(&SHAPES_221),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -31125,8 +31400,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_349,
-                                    &cont_of(&SHAPES_220),
+                                    &SHAPE_352,
+                                    &cont_of(&SHAPES_221),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -31142,7 +31417,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
                                                         &SHAPE_27,
-                                                        &cont_of(&SHAPES_221),
+                                                        &cont_of(&SHAPES_222),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -31169,7 +31444,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
                                                     &SHAPE_9,
-                                                    &cont_of(&SHAPES_220),
+                                                    &cont_of(&SHAPES_221),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31235,8 +31510,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_353,
-                                    &cont_of(&SHAPES_220),
+                                    &SHAPE_356,
+                                    &cont_of(&SHAPES_221),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -31251,8 +31526,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
-                                                        &SHAPE_352,
-                                                        &cont_of(&SHAPES_221),
+                                                        &SHAPE_355,
+                                                        &cont_of(&SHAPES_222),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -31281,7 +31556,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
                                                     &SHAPE_9,
-                                                    &cont_of(&SHAPES_220),
+                                                    &cont_of(&SHAPES_221),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31368,7 +31643,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_354,
+                &SHAPE_357,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -31395,8 +31670,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 }
                                 _ => {
                                     match choice_split_inner(
-                                        &SHAPES_222,
-                                        &cont_of(&SHAPES_220),
+                                        &SHAPES_223,
+                                        &cont_of(&SHAPES_221),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -31417,8 +31692,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                         }
                                         Some(ChoiceSelection { alternative: 1, end }) => {
                                             if let Some(__v) = if shape_match_inner(
-                                                    &SHAPE_349,
-                                                    &cont_of(&SHAPES_220),
+                                                    &SHAPE_352,
+                                                    &cont_of(&SHAPES_221),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31433,7 +31708,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let slot = {
                                                                 let mut __at = __at
-                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_221));
+                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_222));
                                                                 if let Some(__c) = __at.peek() {
                                                                     if __c.is_error() {
                                                                         __at.advance();
@@ -31459,7 +31734,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let __count = repeat_split_inner(
                                                                     &SHAPE_9,
-                                                                    &cont_of(&SHAPES_220),
+                                                                    &cont_of(&SHAPES_221),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -31521,8 +31796,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                         }
                                         Some(ChoiceSelection { alternative: 2, end }) => {
                                             if let Some(__v) = if shape_match_inner(
-                                                    &SHAPE_353,
-                                                    &cont_of(&SHAPES_220),
+                                                    &SHAPE_356,
+                                                    &cont_of(&SHAPES_221),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31537,7 +31812,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let slot = {
                                                                 let mut __at = __at
-                                                                    .skip_displaced_errors(&SHAPE_352, &cont_of(&SHAPES_221));
+                                                                    .skip_displaced_errors(&SHAPE_355, &cont_of(&SHAPES_222));
                                                                 if let Some(__c) = __at.peek() {
                                                                     if __c.is_error() {
                                                                         __at.advance();
@@ -31563,7 +31838,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let __count = repeat_split_inner(
                                                                     &SHAPE_9,
-                                                                    &cont_of(&SHAPES_220),
+                                                                    &cont_of(&SHAPES_221),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -31690,7 +31965,7 @@ pub fn extract_thumbnail_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_356, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_359, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -31863,8 +32138,8 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let linkers = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_361,
-                &cont_of(&SHAPES_223),
+                &SHAPE_364,
+                &cont_of(&SHAPES_224),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -31872,7 +32147,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_361, &cont_of(&SHAPES_223));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_364, &cont_of(&SHAPES_224));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -31901,8 +32176,8 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let language_code = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_358,
-                &cont_of(&SHAPES_224),
+                &SHAPE_361,
+                &cont_of(&SHAPES_225),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -31910,14 +32185,14 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_358, &cont_of(&SHAPES_224));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_361, &cont_of(&SHAPES_225));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_358,
-                            &cont_of(&SHAPES_224),
+                            &SHAPE_361,
+                            &cont_of(&SHAPES_225),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -31932,8 +32207,8 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_357,
-                                                &cont_of(&SHAPES_225),
+                                                &SHAPE_360,
+                                                &cont_of(&SHAPES_226),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -31961,7 +32236,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_224),
+                                                &cont_of(&SHAPES_225),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -32010,7 +32285,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let content_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_107, &cont_of(&SHAPES_226));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_227));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32034,7 +32309,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let ending = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_360, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_363, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32096,7 +32371,7 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_53));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_46, &cont_of(&SHAPES_55));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32120,7 +32395,7 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_111, &cont_of(&SHAPES_54));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_116, &cont_of(&SHAPES_56));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32144,7 +32419,7 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_114,
+                &SHAPE_119,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -32153,7 +32428,7 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_119, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -32223,7 +32498,7 @@ pub fn extract_tim_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_362, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_365, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32383,7 +32658,7 @@ pub fn extract_time_duration_contents<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_365, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_368, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -32395,7 +32670,7 @@ pub fn extract_time_duration_contents<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_227,
+                        &SHAPES_228,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -32476,7 +32751,7 @@ pub fn extract_time_duration_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_367, &cont_of(&SHAPES_228));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_370, &cont_of(&SHAPES_229));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32500,7 +32775,7 @@ pub fn extract_time_duration_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_229));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_230));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32524,7 +32799,7 @@ pub fn extract_time_duration_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_366, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_369, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32614,7 +32889,7 @@ pub fn extract_time_start_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_368, &cont_of(&SHAPES_228));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_371, &cont_of(&SHAPES_229));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32638,7 +32913,7 @@ pub fn extract_time_start_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_229));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_230));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32662,7 +32937,7 @@ pub fn extract_time_start_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_366, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_369, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32752,7 +33027,7 @@ pub fn extract_transcriber_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_369, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_372, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32890,7 +33165,7 @@ pub fn extract_transcription_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_371, &cont_of(&SHAPES_230));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_374, &cont_of(&SHAPES_231));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32914,7 +33189,7 @@ pub fn extract_transcription_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_231));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_232));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32938,7 +33213,7 @@ pub fn extract_transcription_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_370, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_373, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33054,7 +33329,7 @@ pub fn extract_transcription_option<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_380, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_383, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -33066,7 +33341,7 @@ pub fn extract_transcription_option<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_232,
+                        &SHAPES_233,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -33236,7 +33511,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_384, &cont_of(&SHAPES_233));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_387, &cont_of(&SHAPES_234));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33260,7 +33535,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_234));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_235));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33284,7 +33559,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_381, &cont_of(&SHAPES_235));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_384, &cont_of(&SHAPES_236));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33309,7 +33584,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_236),
+                &cont_of(&SHAPES_237),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33317,7 +33592,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_236));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_237));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33346,7 +33621,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_155, &cont_of(&SHAPES_237));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_238));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33371,7 +33646,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_238),
+                &cont_of(&SHAPES_239),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33379,7 +33654,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_238));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_239));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33408,7 +33683,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_6 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_382, &cont_of(&SHAPES_239));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_385, &cont_of(&SHAPES_240));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33433,7 +33708,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_240),
+                &cont_of(&SHAPES_241),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33441,7 +33716,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_240));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_241));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33470,7 +33745,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_8 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_155, &cont_of(&SHAPES_241));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_242));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33495,7 +33770,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_242),
+                &cont_of(&SHAPES_243),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33503,7 +33778,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_242));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_243));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33532,7 +33807,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_10 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_383, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_386, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33630,7 +33905,7 @@ pub fn extract_unsupported_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_385, &cont_of(&SHAPES_243));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_388, &cont_of(&SHAPES_244));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33654,7 +33929,7 @@ pub fn extract_unsupported_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_244));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_245));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33745,7 +34020,7 @@ pub fn extract_unsupported_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_386, &cont_of(&SHAPES_245));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_389, &cont_of(&SHAPES_246));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33769,7 +34044,7 @@ pub fn extract_unsupported_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_246));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_247));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33793,7 +34068,7 @@ pub fn extract_unsupported_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_84, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_89, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33938,7 +34213,7 @@ pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_387, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_390, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -34126,7 +34401,7 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_332, &cont_of(&SHAPES_247));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_335, &cont_of(&SHAPES_248));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -34150,7 +34425,7 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_333,
+                &SHAPE_336,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -34670,8 +34945,8 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_208,
-                &cont_of(&SHAPES_248),
+                &SHAPE_211,
+                &cont_of(&SHAPES_249),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -34679,7 +34954,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_208, &cont_of(&SHAPES_248));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_211, &cont_of(&SHAPES_249));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -34843,8 +35118,8 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_389,
-                &cont_of(&SHAPES_249),
+                &SHAPE_392,
+                &cont_of(&SHAPES_250),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -34852,7 +35127,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_389, &cont_of(&SHAPES_249));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_392, &cont_of(&SHAPES_250));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -34881,8 +35156,8 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_391,
-                &cont_of(&SHAPES_250),
+                &SHAPE_394,
+                &cont_of(&SHAPES_251),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -34890,14 +35165,14 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_391, &cont_of(&SHAPES_250));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_394, &cont_of(&SHAPES_251));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_391,
-                            &cont_of(&SHAPES_250),
+                            &SHAPE_394,
+                            &cont_of(&SHAPES_251),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -34912,7 +35187,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = match optional_split_inner(
                                             &SHAPE_14,
-                                            &cont_of(&SHAPES_251),
+                                            &cont_of(&SHAPES_252),
                                             __at.all(),
                                             __at.index(),
                                             __at.memo(),
@@ -34922,7 +35197,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                             Presence::Taken => Some({
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_251),
+                                                    &cont_of(&SHAPES_252),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -34955,7 +35230,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_27,
-                                                &cont_of(&SHAPES_250),
+                                                &cont_of(&SHAPES_251),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -35107,7 +35382,7 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_393, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_396, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35245,7 +35520,7 @@ pub fn extract_warning_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_394, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_397, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35381,7 +35656,7 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_395, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_398, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35517,7 +35792,7 @@ pub fn extract_wor_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_397, &cont_of(&SHAPES_252));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_400, &cont_of(&SHAPES_253));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35541,7 +35816,7 @@ pub fn extract_wor_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_253));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_254));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35565,7 +35840,7 @@ pub fn extract_wor_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_396, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_399, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35738,8 +36013,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         let language_code = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_358,
-                &cont_of(&SHAPES_254),
+                &SHAPE_361,
+                &cont_of(&SHAPES_255),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -35747,14 +36022,14 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_358, &cont_of(&SHAPES_254));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_361, &cont_of(&SHAPES_255));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_358,
-                            &cont_of(&SHAPES_254),
+                            &SHAPE_361,
+                            &cont_of(&SHAPES_255),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -35769,8 +36044,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_357,
-                                                &cont_of(&SHAPES_255),
+                                                &SHAPE_360,
+                                                &cont_of(&SHAPES_256),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -35798,7 +36073,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_254),
+                                                &cont_of(&SHAPES_255),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -35847,8 +36122,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_400,
-                &cont_of(&SHAPES_256),
+                &SHAPE_403,
+                &cont_of(&SHAPES_257),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -35868,8 +36143,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                     __at.advance();
                                     NodeSlot::Error(__c)
                                 } else if shape_match_inner(
-                                        &SHAPE_400,
-                                        &cont_of(&SHAPES_254),
+                                        &SHAPE_403,
+                                        &cont_of(&SHAPES_255),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -35884,7 +36159,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                     .take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at
-                                                        .skip_displaced_errors(&SHAPE_399, &cont_of(&SHAPES_255));
+                                                        .skip_displaced_errors(&SHAPE_402, &cont_of(&SHAPES_256));
                                                     match __at.peek() {
                                                         Some(__c) if __c.is_error() => {
                                                             __at.advance();
@@ -35896,8 +36171,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                         }
                                                         _ => {
                                                             match choice_split_inner(
-                                                                &SHAPES_257,
-                                                                &cont_of(&SHAPES_255),
+                                                                &SHAPES_258,
+                                                                &cont_of(&SHAPES_256),
                                                                 __at.all(),
                                                                 __at.index(),
                                                                 __at.memo(),
@@ -35980,7 +36255,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                     .take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at
-                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_254));
+                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_255));
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
                                                             __at.advance();
@@ -36026,7 +36301,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_208,
+                &SHAPE_211,
                 &cont_of(&SHAPES_2),
                 __at.all(),
                 __at.index(),
@@ -36035,7 +36310,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_208, &cont_of(&SHAPES_2));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_211, &cont_of(&SHAPES_2));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -36256,7 +36531,7 @@ pub fn extract_wor_word_item<'tree>(node: WorWordItemNode<'tree>) -> WorWordItem
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_270, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_273, &cont_of(&SHAPES_3));
             if let Some(__c) = __at.peek() {
                 if __c.is_error() {
                     __at.advance();
@@ -36553,7 +36828,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_418, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_421, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -36565,7 +36840,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_265,
+                        &SHAPES_266,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -36576,7 +36851,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_414,
+                                &SHAPE_417,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -36592,8 +36867,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_405,
-                                                    &cont_of(&SHAPES_258),
+                                                    &SHAPE_408,
+                                                    &cont_of(&SHAPES_259),
                                                 );
                                                 match __at.peek() {
                                                     Some(__c) if __c.is_error() => {
@@ -36606,8 +36881,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     }
                                                     _ => {
                                                         match choice_split_inner(
-                                                            &SHAPES_259,
-                                                            &cont_of(&SHAPES_258),
+                                                            &SHAPES_260,
+                                                            &cont_of(&SHAPES_259),
                                                             __at.all(),
                                                             __at.index(),
                                                             __at.memo(),
@@ -36680,7 +36955,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             let (leading_extras, __at) =
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let __count = repeat_split_inner(
-                                                &SHAPE_412,
+                                                &SHAPE_415,
                                                 &cont_of(&SHAPES_3),
                                                 __at.all(),
                                                 __at.index(),
@@ -36707,8 +36982,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 }
                                                                 _ => {
                                                                     match choice_split_inner(
-                                                                        &SHAPES_261,
-                                                                        &cont_of(&SHAPES_258),
+                                                                        &SHAPES_262,
+                                                                        &cont_of(&SHAPES_259),
                                                                         __at.all(),
                                                                         __at.index(),
                                                                         __at.memo(),
@@ -36757,8 +37032,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
                                                                             if let Some(__v) = match choice_split_inner(
-                                                                                &SHAPES_260,
-                                                                                &cont_of(&SHAPES_258),
+                                                                                &SHAPES_261,
+                                                                                &cont_of(&SHAPES_259),
                                                                                 __at.all(),
                                                                                 __at.index(),
                                                                                 __at.memo(),
@@ -36918,7 +37193,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_417,
+                                &SHAPE_420,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -36934,8 +37209,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_415,
-                                                    &cont_of(&SHAPES_262),
+                                                    &SHAPE_418,
+                                                    &cont_of(&SHAPES_263),
                                                 );
                                                 match __at.peek() {
                                                     Some(__c) if __c.is_error() => {
@@ -36948,8 +37223,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     }
                                                     _ => {
                                                         match choice_split_inner(
-                                                            &SHAPES_263,
-                                                            &cont_of(&SHAPES_262),
+                                                            &SHAPES_264,
+                                                            &cont_of(&SHAPES_263),
                                                             __at.all(),
                                                             __at.index(),
                                                             __at.memo(),
@@ -37060,8 +37335,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             let (leading_extras, __at) =
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let __count = repeat_split_inner(
-                                                &SHAPE_415,
-                                                &cont_of(&SHAPES_264),
+                                                &SHAPE_418,
+                                                &cont_of(&SHAPES_265),
                                                 __at.all(),
                                                 __at.index(),
                                                 __at.memo(),
@@ -37087,8 +37362,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 }
                                                                 _ => {
                                                                     match choice_split_inner(
-                                                                        &SHAPES_263,
-                                                                        &cont_of(&SHAPES_262),
+                                                                        &SHAPES_264,
+                                                                        &cont_of(&SHAPES_263),
                                                                         __at.all(),
                                                                         __at.index(),
                                                                         __at.memo(),
@@ -37178,8 +37453,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_405,
-                                                    &cont_of(&SHAPES_258),
+                                                    &SHAPE_408,
+                                                    &cont_of(&SHAPES_259),
                                                 );
                                                 match __at.peek() {
                                                     Some(__c) if __c.is_error() => {
@@ -37192,8 +37467,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     }
                                                     _ => {
                                                         match choice_split_inner(
-                                                            &SHAPES_259,
-                                                            &cont_of(&SHAPES_258),
+                                                            &SHAPES_260,
+                                                            &cont_of(&SHAPES_259),
                                                             __at.all(),
                                                             __at.index(),
                                                             __at.memo(),
@@ -37266,7 +37541,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             let (leading_extras, __at) =
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let __count = repeat_split_inner(
-                                                &SHAPE_412,
+                                                &SHAPE_415,
                                                 &cont_of(&SHAPES_3),
                                                 __at.all(),
                                                 __at.index(),
@@ -37293,8 +37568,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 }
                                                                 _ => {
                                                                     match choice_split_inner(
-                                                                        &SHAPES_261,
-                                                                        &cont_of(&SHAPES_258),
+                                                                        &SHAPES_262,
+                                                                        &cont_of(&SHAPES_259),
                                                                         __at.all(),
                                                                         __at.index(),
                                                                         __at.memo(),
@@ -37343,8 +37618,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
                                                                             if let Some(__v) = match choice_split_inner(
-                                                                                &SHAPES_260,
-                                                                                &cont_of(&SHAPES_258),
+                                                                                &SHAPES_261,
+                                                                                &cont_of(&SHAPES_259),
                                                                                 __at.all(),
                                                                                 __at.index(),
                                                                                 __at.memo(),
@@ -37588,7 +37863,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
         let word = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_270, &cont_of(&SHAPES_266));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_273, &cont_of(&SHAPES_267));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -37612,8 +37887,8 @@ pub fn extract_word_with_optional_annotations<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_420,
-                &cont_of(&SHAPES_159),
+                &SHAPE_423,
+                &cont_of(&SHAPES_160),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -37621,14 +37896,14 @@ pub fn extract_word_with_optional_annotations<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_420, &cont_of(&SHAPES_159));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_423, &cont_of(&SHAPES_160));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_420,
-                            &cont_of(&SHAPES_159),
+                            &SHAPE_423,
+                            &cont_of(&SHAPES_160),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -37644,7 +37919,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_267),
+                                                &cont_of(&SHAPES_268),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -37671,8 +37946,8 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_419,
-                                                &cont_of(&SHAPES_159),
+                                                &SHAPE_422,
+                                                &cont_of(&SHAPES_160),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -37721,7 +37996,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
         let annotations = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_109,
+                &SHAPE_114,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -37730,7 +38005,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_109, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -37800,7 +38075,7 @@ pub fn extract_x_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_422, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_425, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -37952,7 +38227,7 @@ pub fn extract_xphoint_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_423, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_426, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();

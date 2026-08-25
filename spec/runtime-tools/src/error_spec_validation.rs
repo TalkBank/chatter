@@ -478,7 +478,7 @@ pub fn emit_for(parser: &TreeSitterParser, example: &ErrorExample) -> StagedDiag
     let name = example
         .source_stem()
         .map_or(TranscriptName::Anonymous, |stem| {
-            TranscriptName::Named(FileStem::from_str(stem))
+            TranscriptName::Named(FileStem::from_stem(stem))
         });
     let validation_sink = ErrorCollector::new();
     chat_file.validate_with_alignment(&validation_sink, name);

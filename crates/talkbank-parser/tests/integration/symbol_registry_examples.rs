@@ -45,7 +45,7 @@ fn file_around(main_tier: &str) -> String {
 fn assert_example_is_valid_chat(gloss: &str, symbol: &str, example: &str) {
     let diagnostics = crate::common::parse_validate_and_collect_diagnostics(
         &file_around(example),
-        TranscriptName::Named(FileStem::from_str("symbol_registry_example")),
+        TranscriptName::Named(FileStem::from_stem("symbol_registry_example")),
     );
     assert!(
         diagnostics.is_empty(),

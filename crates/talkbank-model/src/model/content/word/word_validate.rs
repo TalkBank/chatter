@@ -50,8 +50,9 @@ impl crate::validation::Validate for WordContents {
 impl crate::validation::Validate for Word {
     /// Validates structural, language, and mode-specific invariants for one parsed word token.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
+        use crate::validation::word::language::GoverningMarker;
         use crate::validation::word::language::LanguageResolutionOutcome;
-        use crate::validation::word::{language, prefix_marker, resolve_word_language, structure};
+        use crate::validation::word::{language, prefix_marker, structure};
 
         // E243: Check for illegal characters (whitespace, bullets, control chars)
         // This must run FIRST to catch parser bugs
@@ -110,12 +111,33 @@ impl crate::validation::Validate for Word {
             .as_ref()
             .or(context.shared.default_language.as_ref());
 
-        // Only run language-gated checks if we have real language context
-        if tier_language.is_some() {
+        // An enclosing `<...> [@s]` span governs a word that carries no marker of
+        // its own. Resolving against the TIER language here while the
+        // utterance's metadata resolved against the SPAN would gate E220/E763 on
+        // a language the word is not in: a Hindi span inside an English tier
+        // would have its words digit-checked as English. `GoverningMarker` is
+        // the single precedence decision both paths use, so they cannot drift.
+        //
+        // The gate is the RESOLUTION, not the header. It used to be
+        // `if tier_language.is_some()`, which decided a different question:
+        // whether the FILE declares a language. That is one cell of a
+        // two-fact product, and the missing cell is real: an explicit
+        // `<...> [@s:eng]` names the word's language with no `@Languages`
+        // header present, so the language is known and nothing checked it.
+        // `Unresolved` is the honest "we do not know". E763 already skipped
+        // itself on it; E220 did NOT, and treated an empty candidate set as
+        // "no language permits digits", which this change made reachable and
+        // `test_e220_no_language_context` caught within the hour. Both skip
+        // now, which is what the E763 spec always claimed of the pair.
+        {
             let LanguageResolutionOutcome {
                 resolution,
                 diagnostics,
-            } = resolve_word_language(self, tier_language, &context.shared.declared_languages);
+            } = GoverningMarker::of(self, context.enclosing_code_switch.as_ref()).resolve(
+                self,
+                tier_language,
+                &context.shared.declared_languages,
+            );
             errors.report_all(diagnostics);
 
             language::check_word_digits_multi(self, &resolution, errors);

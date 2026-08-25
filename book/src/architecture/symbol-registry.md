@@ -1,7 +1,7 @@
 # Symbol Registry Architecture
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:42 EDT
+**Last modified:** 2026-08-25 14:14 EDT
 
 ## Purpose
 

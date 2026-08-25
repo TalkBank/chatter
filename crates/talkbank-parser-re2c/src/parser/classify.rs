@@ -184,6 +184,8 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
         Token::ScopedContrastiveStressing(_) => ParsedAnnotation::ContrastiveStressing,
         Token::ScopedUncertain(_) => ParsedAnnotation::Uncertain,
         Token::ExcludeMarker(_) => ParsedAnnotation::Exclude,
+        Token::CodeSwitchShortcut(_) => ParsedAnnotation::CodeSwitchShortcut,
+        Token::CodeSwitchExplicit(s) => ParsedAnnotation::CodeSwitchExplicit(s),
         Token::ErrorMarkerAnnotation(s) => ParsedAnnotation::Error(s),
         Token::OverlapPrecedes(s) => ParsedAnnotation::OverlapPrecedes(s),
         Token::OverlapFollows(s) => ParsedAnnotation::OverlapFollows(s),

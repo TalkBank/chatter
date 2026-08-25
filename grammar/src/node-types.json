@@ -8,6 +8,10 @@
         "named": true
       },
       {
+        "type": "code_switch_annotation",
+        "named": true
+      },
+      {
         "type": "error_marker_annotation",
         "named": true
       },
@@ -908,6 +912,36 @@
         },
         {
           "type": "tier_sep",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "code_switch_annotation",
+    "named": true,
+    "fields": {
+      "code": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "language_code",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "colon",
+          "named": true
+        },
+        {
+          "type": "right_bracket",
           "named": true
         }
       ]
@@ -4933,6 +4967,10 @@
   },
   {
     "type": "[=?",
+    "named": false
+  },
+  {
+    "type": "[@s",
     "named": false
   },
   {

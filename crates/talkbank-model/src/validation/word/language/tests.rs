@@ -3,7 +3,22 @@
 //! The cases cover fallback semantics, shortcut edge conditions, and explicit
 //! marker behavior so language-resolution policy stays stable over refactors.
 
-use super::{LanguageResolution, LanguageResolutionOutcome, resolve_word_language};
+use super::{GoverningMarker, LanguageResolution, LanguageResolutionOutcome};
+
+/// Resolve with NO enclosing span, spelled out once for the tests below.
+///
+/// These cases are all about a word's OWN marker, so `None` is the honest
+/// scope. It is written here rather than hidden behind a re-added
+/// `resolve_word_language`, because the whole point of deleting that function
+/// is that every caller states the scope it is asking under; a test helper that
+/// hides the question would put the hole straight back.
+fn resolve_unscoped(
+    word: &crate::model::Word,
+    tier_language: Option<&crate::model::LanguageCode>,
+    declared_languages: &[crate::model::LanguageCode],
+) -> LanguageResolutionOutcome {
+    GoverningMarker::of(word, None).resolve(word, tier_language, declared_languages)
+}
 use crate::model::{LanguageCode, ValidationTag, ValidationTagged, Word, WordLanguageMarker};
 
 /// Builds `LanguageCode` values for test fixtures.
@@ -32,14 +47,14 @@ fn test_resolve_word_language_default() {
     let LanguageResolutionOutcome {
         resolution: lang1,
         diagnostics: errors1,
-    } = resolve_word_language(&word1, tier_language, &declared_languages);
+    } = resolve_unscoped(&word1, tier_language, &declared_languages);
     assert_eq!(lang1, LanguageResolution::Single(lc("zho")));
     assert_eq!(errors1.len(), 0);
 
     let LanguageResolutionOutcome {
         resolution: lang2,
         diagnostics: errors2,
-    } = resolve_word_language(&word2, tier_language, &declared_languages);
+    } = resolve_unscoped(&word2, tier_language, &declared_languages);
     assert_eq!(lang2, LanguageResolution::Single(lc("zho")));
     assert_eq!(errors2.len(), 0);
 }
@@ -58,14 +73,14 @@ fn test_resolve_word_language_tier_scoped() {
     let LanguageResolutionOutcome {
         resolution: lang1,
         diagnostics: errors1,
-    } = resolve_word_language(&word1, tier_language, &declared_languages);
+    } = resolve_unscoped(&word1, tier_language, &declared_languages);
     assert_eq!(lang1, LanguageResolution::Single(lc("eng")));
     assert_eq!(errors1.len(), 0);
 
     let LanguageResolutionOutcome {
         resolution: lang2,
         diagnostics: errors2,
-    } = resolve_word_language(&word2, tier_language, &declared_languages);
+    } = resolve_unscoped(&word2, tier_language, &declared_languages);
     assert_eq!(lang2, LanguageResolution::Single(lc("eng")));
     assert_eq!(errors2.len(), 0);
 }
@@ -84,7 +99,7 @@ fn dona_at_s_with_undeclared_tier_language_must_be_unresolved_not_eng_sentinel()
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, Some(&wrong_tier), &declared);
+    } = resolve_unscoped(&word, Some(&wrong_tier), &declared);
 
     assert_eq!(
         lang,
@@ -115,7 +130,7 @@ fn dona_at_s_in_cat_spa_doc_resolves_to_spa_not_eng() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared);
+    } = resolve_unscoped(&word, tier_language, &declared);
 
     assert_eq!(
         lang,
@@ -142,14 +157,14 @@ fn test_resolve_word_language_word_shortcut() {
     let LanguageResolutionOutcome {
         resolution: lang1,
         diagnostics: errors1,
-    } = resolve_word_language(&word1, tier_language, &declared_languages);
+    } = resolve_unscoped(&word1, tier_language, &declared_languages);
     assert_eq!(lang1, LanguageResolution::Single(lc("zho")));
     assert_eq!(errors1.len(), 0);
 
     let LanguageResolutionOutcome {
         resolution: lang2,
         diagnostics: errors2,
-    } = resolve_word_language(&word2, tier_language, &declared_languages);
+    } = resolve_unscoped(&word2, tier_language, &declared_languages);
     assert_eq!(lang2, LanguageResolution::Single(lc("zho")));
     assert_eq!(errors2.len(), 0);
 }
@@ -171,14 +186,14 @@ fn test_resolve_word_language_word_explicit() {
     let LanguageResolutionOutcome {
         resolution: lang1,
         diagnostics: errors1,
-    } = resolve_word_language(&word1, tier_language, &declared_languages);
+    } = resolve_unscoped(&word1, tier_language, &declared_languages);
     assert_eq!(lang1, LanguageResolution::Single(lc("zho")));
     assert_eq!(errors1.len(), 0);
 
     let LanguageResolutionOutcome {
         resolution: lang2,
         diagnostics: errors2,
-    } = resolve_word_language(&word2, tier_language, &declared_languages);
+    } = resolve_unscoped(&word2, tier_language, &declared_languages);
     assert_eq!(lang2, LanguageResolution::Single(lc("zho")));
     assert_eq!(errors2.len(), 0);
 }
@@ -200,7 +215,7 @@ fn test_resolve_word_language_no_secondary() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Unresolved);
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].code.as_str(), "E249");
@@ -222,7 +237,7 @@ fn test_resolve_word_language_tertiary() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Unresolved);
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].code.as_str(), "E248");
@@ -246,7 +261,7 @@ fn test_resolve_word_language_undeclared_explicit_code() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Single(lc("ita")));
     assert!(
         errors.is_empty(),
@@ -269,7 +284,7 @@ fn test_resolve_word_language_declared_explicit_code() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Single(lc("eng")));
     assert_eq!(errors.len(), 0); // No error - code is declared
 }
@@ -290,7 +305,7 @@ fn test_resolve_word_language_explicit_with_no_declared_languages() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Single(lc("eng")));
     assert_eq!(errors.len(), 0);
 }
@@ -309,7 +324,7 @@ fn test_resolve_word_language_shortcut_without_context_is_unresolved() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Unresolved);
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].code.as_str(), "E249");
@@ -327,7 +342,7 @@ fn test_resolve_word_language_no_marker_without_context_is_unresolved() {
     let LanguageResolutionOutcome {
         resolution: lang,
         diagnostics: errors,
-    } = resolve_word_language(&word, tier_language, &declared_languages);
+    } = resolve_unscoped(&word, tier_language, &declared_languages);
     assert_eq!(lang, LanguageResolution::Unresolved);
     assert_eq!(errors.len(), 0);
 }

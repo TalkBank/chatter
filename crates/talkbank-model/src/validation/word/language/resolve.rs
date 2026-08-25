@@ -134,31 +134,68 @@ fn report_word_code_issues(code: &LanguageCode, word: &Word, diagnostics: &mut V
     }));
 }
 
-/// Resolve the effective language set for one word token.
+// Resolve the effective language set for one word token.
+//
+// Returns a [`LanguageResolutionOutcome`] carrying the resolved
+// language (or `Unresolved`) and any surface-syntax diagnostics.
+//
+// # Semantics
+// - **Explicit language**: Returns that language as Single
+// - **Shortcut @s**: Resolves to the "other" language in a dual-language context
+// - **Multiple languages @s:eng+fra**: Returns all listed languages as Multiple
+// - **Ambiguous languages @s:eng&spa**: Returns all listed languages as Ambiguous
+// - **No marker**: Returns tier language or `Unresolved` if no language context available
+//
+// # Rule 6d
+//
+// When `@s` cannot resolve (tertiary tier, missing secondary, no
+// context), the result is `LanguageResolution::Unresolved` together
+// with a populated `diagnostics` vec, not a fabricated `Single(tier)`.
+// DELETED, deliberately, and this note is here so it is not re-added.
+//
+// `resolve_word_language(word, tier, declared)` asked a word's language
+// WITHOUT saying what scope it was asking under, and silently assumed the
+// word's own marker was the whole story. Once `<...> [@s]` spans existed that
+// assumption was false, and the function had no place to put the span.
+//
+// It corrupted data. `chatter debug fix-s` used it to decide that
+// `<how@s:fra to@s:fra> [@s:eng] .` was a whole-utterance French switch,
+// wrote `[- fra]`, stripped both `@s:fra` suffixes, and left the words inside
+// a `[@s:eng]` span that then governed them. Every word it touched changed
+// from French to English and the command reported success.
+//
+// The cure is typestate, not care: [`GoverningMarker`] is now the ONLY route
+// to a word's language, and its constructor takes the enclosing span. A caller
+// that does not know the scope must write `None`, which is a claim a reviewer
+// can see, rather than a default nobody notices. `resolve_word_language_with_
+// marker` is private for the same reason: a public primitive beside a typed
+// operation is an invitation to re-derive the operation badly.
+//
+// [`GoverningMarker`]: super::GoverningMarker
+
+/// Resolve a word's language under the marker that GOVERNS it, which is not
+/// always its own.
 ///
-/// Returns a [`LanguageResolutionOutcome`] carrying the resolved
-/// language (or `Unresolved`) and any surface-syntax diagnostics.
+/// A word inside `<...> [@s]` is governed by the span exactly as if it carried
+/// the suffix itself, so the span passes the marker it implies and the rules
+/// below are applied once, in one place. Splitting the span onto its own copy
+/// of this logic is how the shortcut, tertiary-language and
+/// missing-secondary diagnostics would start disagreeing between the two
+/// spellings of the same fact.
 ///
-/// # Semantics
-/// - **Explicit language**: Returns that language as Single
-/// - **Shortcut @s**: Resolves to the "other" language in a dual-language context
-/// - **Multiple languages @s:eng+fra**: Returns all listed languages as Multiple
-/// - **Ambiguous languages @s:eng&spa**: Returns all listed languages as Ambiguous
-/// - **No marker**: Returns tier language or `Unresolved` if no language context available
-///
-/// # Rule 6d
-///
-/// When `@s` cannot resolve (tertiary tier, missing secondary, no
-/// context), the result is `LanguageResolution::Unresolved` together
-/// with a populated `diagnostics` vec, not a fabricated `Single(tier)`.
-pub fn resolve_word_language(
+/// A word's OWN marker wins over an enclosing span. The combination is
+/// redundant, and NOTHING reports it yet: a rule for it is proposed but
+/// unimplemented. Resolution still has to answer, and the more specific mark is
+/// the only defensible answer.
+pub(crate) fn resolve_word_language_with_marker(
     word: &Word,
+    marker: Option<&WordLanguageMarker>,
     tier_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
 ) -> LanguageResolutionOutcome {
     let mut diagnostics = Vec::new();
 
-    let resolution = match word.lang.as_ref() {
+    let resolution = match marker {
         Some(WordLanguageMarker::Shortcut) => {
             if let Some(current_lang) = tier_language {
                 if is_tertiary_language(current_lang, declared_languages) {

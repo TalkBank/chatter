@@ -286,7 +286,12 @@ gate-fast:
     just wasm-check
     just deps-check
     just book
-    @printf '%s\n' "$(git status --porcelain | shasum | cut -d' ' -f1)" > .git/gate-fast-passed
+    # `git rev-parse --git-dir`, never a literal `.git`: in a WORKTREE `.git` is
+    # a FILE pointing at the real gitdir, so the literal path failed with
+    # "Not a directory" AFTER every check had passed. That made the gate
+    # unrunnable in a worktree, which is this project's sanctioned way to work
+    # on two branches at once.
+    @printf '%s\n' "$(git status --porcelain | shasum | cut -d' ' -f1)" > "$(git rev-parse --git-dir)/gate-fast-passed"
 
 # THE SLOW HALF: compilation, tests, lints, the book. 12-15 minutes.
 #
@@ -296,7 +301,7 @@ gate-slow:
     just test-all
     just clippy
     just clippy-spec
-    @printf '%s\n' "$(git status --porcelain | shasum | cut -d' ' -f1)" > .git/gate-slow-passed
+    @printf '%s\n' "$(git status --porcelain | shasum | cut -d' ' -f1)" > "$(git rev-parse --git-dir)/gate-slow-passed"
 
 # THE PRE-PUSH GATE: both halves, which is everything CI runs that one machine
 # can run.

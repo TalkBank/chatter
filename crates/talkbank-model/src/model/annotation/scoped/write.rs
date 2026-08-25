@@ -8,7 +8,7 @@
 //! rendered consistently in validation diagnostics, caret reconstruction, and
 //! downstream serialization.
 
-use super::ContentAnnotation;
+use super::{CodeSwitchSpan, ContentAnnotation};
 
 impl ContentAnnotation {
     /// Serializes one scoped annotation in canonical CHAT bracket syntax.
@@ -66,6 +66,14 @@ impl ContentAnnotation {
                 w.write_char(']')
             }
             ContentAnnotation::Exclude => w.write_str("[e]"),
+            ContentAnnotation::CodeSwitch(span) => match span {
+                CodeSwitchSpan::Shortcut => w.write_str("[@s]"),
+                CodeSwitchSpan::Explicit(code) => {
+                    w.write_str("[@s:")?;
+                    w.write_str(code.as_str())?;
+                    w.write_char(']')
+                }
+            },
             ContentAnnotation::Unknown(unknown) => {
                 w.write_char('[')?;
                 w.write_str(&unknown.marker)?;

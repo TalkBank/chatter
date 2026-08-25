@@ -9,6 +9,7 @@
 //! isolated in focused submodules.
 
 mod digits;
+mod governing;
 mod helpers;
 mod resolve;
 
@@ -16,5 +17,7 @@ mod resolve;
 mod tests;
 
 pub(crate) use digits::check_word_digits_multi;
+pub use governing::GoverningMarker;
 pub(crate) use helpers::mixed_language_allows_prefix_marker;
-pub use resolve::{LanguageResolution, LanguageResolutionOutcome, resolve_word_language};
+pub(crate) use resolve::resolve_word_language_with_marker;
+pub use resolve::{LanguageResolution, LanguageResolutionOutcome};
