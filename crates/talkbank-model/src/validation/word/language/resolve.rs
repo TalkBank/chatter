@@ -6,8 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous>
 
-use crate::model::{LanguageCode, Word, WordLanguageMarker};
-use crate::{ErrorCode, ParseError, Severity, SourceLocation};
+use crate::model::{LanguageCode, WordLanguageMarker};
+use crate::{ErrorCode, ParseError, Severity, SourceLocation, Span};
 use talkbank_derive::ValidationTagged;
 
 use super::helpers::{get_other_language, is_tertiary_language};
@@ -125,11 +125,11 @@ pub struct LanguageResolutionOutcome {
 /// codes are held to the SAME standard by one implementation; only the
 /// diagnostic anchor differs (the shared rule anchors at offset 0, so each
 /// collected diagnostic is remapped onto the word before being surfaced).
-fn report_word_code_issues(code: &LanguageCode, word: &Word, diagnostics: &mut Vec<ParseError>) {
+fn report_word_code_issues(code: &LanguageCode, span: Span, diagnostics: &mut Vec<ParseError>) {
     let collector = crate::ErrorCollector::new();
     code.report_code_issues(&collector);
     diagnostics.extend(collector.into_vec().into_iter().map(|mut error| {
-        error.location = SourceLocation::new(word.span);
+        error.location = SourceLocation::new(span);
         error
     }));
 }
@@ -187,9 +187,16 @@ fn report_word_code_issues(code: &LanguageCode, word: &Word, diagnostics: &mut V
 /// redundant, and NOTHING reports it yet: a rule for it is proposed but
 /// unimplemented. Resolution still has to answer, and the more specific mark is
 /// the only defensible answer.
-pub(crate) fn resolve_word_language_with_marker(
-    word: &Word,
+/// Resolve a language from the governing MARKER and a span, with no `Word`.
+///
+/// The `Word` was only ever used for `word.span`, to place diagnostics. Taking
+/// the span directly is what lets a caller holding an already-extracted word
+/// resolve WITHOUT fabricating a `Word::new_unchecked` to satisfy the
+/// signature. Batchalign was doing exactly that, and a fabricated value built
+/// to reach an accessor is a shape this project bans by name.
+pub(crate) fn resolve_marker_at(
     marker: Option<&WordLanguageMarker>,
+    span: Span,
     tier_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
 ) -> LanguageResolutionOutcome {
@@ -203,7 +210,7 @@ pub(crate) fn resolve_word_language_with_marker(
                         ParseError::new(
                             ErrorCode::TertiaryLanguageNeedsExplicitCode,
                             Severity::Error,
-                            SourceLocation::new(word.span),
+                            SourceLocation::new(span),
                             None,
                             format!(
                                 "Language '{}' is tertiary, so @s shortcut needs explicit language code (e.g., @s:eng)",
@@ -220,7 +227,7 @@ pub(crate) fn resolve_word_language_with_marker(
                                 ParseError::new(
                                     ErrorCode::MissingLanguageContext,
                                     Severity::Error,
-                                    SourceLocation::new(word.span),
+                                    SourceLocation::new(span),
                                     None,
                                     "No secondary language available for @s shortcut",
                                 )
@@ -234,7 +241,7 @@ pub(crate) fn resolve_word_language_with_marker(
                 diagnostics.push(ParseError::new(
                     ErrorCode::MissingLanguageContext,
                     Severity::Error,
-                    SourceLocation::new(word.span),
+                    SourceLocation::new(span),
                     None,
                     "Cannot use @s shortcut: no language context available",
                 ));
@@ -252,7 +259,7 @@ pub(crate) fn resolve_word_language_with_marker(
             // `[- CODE]` precode, which IS required to be declared (E755).
             // The code must still be a REAL language (part 2 of the ruling):
             // registry validation is what catches typo'd codes.
-            report_word_code_issues(code, word, &mut diagnostics);
+            report_word_code_issues(code, span, &mut diagnostics);
             LanguageResolution::Single(code.clone())
         }
         Some(WordLanguageMarker::Multiple(codes)) => {
@@ -260,7 +267,7 @@ pub(crate) fn resolve_word_language_with_marker(
             // Content must be valid in ALL component languages, and every
             // component must be a real ISO 639-3 code (ruling part 2).
             for code in codes {
-                report_word_code_issues(code, word, &mut diagnostics);
+                report_word_code_issues(code, span, &mut diagnostics);
             }
             LanguageResolution::Multiple(codes.clone())
         }

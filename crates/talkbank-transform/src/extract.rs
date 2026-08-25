@@ -4,11 +4,82 @@
 //! "alignable" for a given domain (Mor, Wor, Pho, Sin).
 
 use talkbank_model::alignment::helpers::{
-    TierDomain, WordItem, annotations_have_alignment_ignore, counts_for_tier,
-    is_tag_marker_separator, should_align_replaced_word_in_pho_sin, walk_words,
+    LanguageScope, TierDomain, WordItem, annotations_have_alignment_ignore, counts_for_tier,
+    is_tag_marker_separator, should_align_replaced_word_in_pho_sin, walk_words_scoped,
 };
-use talkbank_model::model::{ChatFile, Line, ReplacedWord, UtteranceContent, Word};
-use talkbank_model::{ChatCleanedText, ChatRawText, SpeakerCode, UtteranceIdx, WordIdx};
+use talkbank_model::model::{
+    ChatFile, CodeSwitchSpan, LanguageCode, Line, ReplacedWord, UtteranceContent, Word,
+    WordLanguageMarker,
+};
+use talkbank_model::validation::{GoverningMarker, LanguageResolutionOutcome};
+use talkbank_model::{ChatCleanedText, ChatRawText, Span, SpeakerCode, UtteranceIdx, WordIdx};
+
+/// Which mark governs an extracted word's language.
+///
+/// The owned counterpart of [`GoverningMarker`], which borrows from the AST and
+/// therefore cannot survive extraction.
+///
+/// **This replaced a bare `Option<WordLanguageMarker>` carrying only a word's
+/// OWN `@s`, and the difference is a bug.** The extractor WALKS the tree, so it
+/// knows whether a `<...> [@s:hin]` span encloses a word; dropping that on the
+/// way out left every consumer unable to recover it. Batchalign's morphotag
+/// read `lang` alone, so every unmarked word inside a Hindi span looked
+/// unlanguaged, fell out of L2 dispatch, and was tagged against the tier
+/// language. A total function that silently discards what it computed is the
+/// shape; returning the information is the cure.
+///
+/// `Utterance` is a real answer, not a missing one, which is why this is not an
+/// `Option`: the utterance's own language governs, and a consumer that treats
+/// "no mark" as "no language" is making the mistake this type exists to stop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExtractedLanguage {
+    /// No mark on the word and no span around it: the utterance governs.
+    Utterance,
+    /// The word carries its own `@s` / `@s:code`.
+    Own(WordLanguageMarker),
+    /// An enclosing `<...> [@s]` / `[@s:code]` span governs it.
+    Span(CodeSwitchSpan),
+}
+
+impl ExtractedLanguage {
+    /// The mark as a borrowed [`GoverningMarker`], so ONE precedence rule serves
+    /// both the AST-walking and the post-extraction paths.
+    fn governing(&self) -> GoverningMarker<'_> {
+        match self {
+            Self::Utterance => GoverningMarker::Utterance,
+            Self::Own(marker) => GoverningMarker::Own(marker),
+            Self::Span(span) => GoverningMarker::Span(span),
+        }
+    }
+
+    /// Resolve this word's language.
+    ///
+    /// Takes the word's span rather than a `Word`, so a consumer holding an
+    /// [`ExtractedWord`] no longer fabricates a `Word::new_unchecked` to reach
+    /// the resolver. Diagnostics land on the real word.
+    #[must_use]
+    pub fn resolve(
+        &self,
+        span: Span,
+        tier_language: Option<&LanguageCode>,
+        declared_languages: &[LanguageCode],
+    ) -> LanguageResolutionOutcome {
+        self.governing()
+            .resolve_at(span, tier_language, declared_languages)
+    }
+
+    /// Build from a word's own marker and the scope the walk reports.
+    ///
+    /// Precedence lives in [`GoverningMarker::of`]; this mirrors its answer into
+    /// owned form rather than deciding again.
+    fn of(word: &Word, scope: LanguageScope<'_>) -> Self {
+        match GoverningMarker::of(word, scope.span()) {
+            GoverningMarker::Own(marker) => Self::Own(marker.clone()),
+            GoverningMarker::Span(span) => Self::Span(span.clone()),
+            GoverningMarker::Utterance => Self::Utterance,
+        }
+    }
+}
 
 /// A word extracted from the CHAT AST for NLP processing.
 #[derive(Debug, Clone)]
@@ -21,8 +92,12 @@ pub struct ExtractedWord {
     pub utterance_word_index: WordIdx,
     /// Special form marker if the word has @c, @b, @s, etc.
     pub form_type: Option<talkbank_model::model::FormType>,
-    /// Language marker (e.g., @s, @s:eng, @s:eng+fra).
-    pub lang: Option<talkbank_model::model::WordLanguageMarker>,
+    /// The mark that GOVERNS this word's language: its own `@s`, an enclosing
+    /// `<...> [@s]` span, or the utterance. See [`ExtractedLanguage`].
+    pub language: ExtractedLanguage,
+    /// Source span of the word, so a consumer can resolve its language and
+    /// place diagnostics without rebuilding a `Word`.
+    pub span: Span,
 }
 
 /// Per-utterance extraction result.
@@ -82,12 +157,15 @@ pub fn collect_utterance_content(
     domain: TierDomain,
     out: &mut Vec<ExtractedWord>,
 ) {
-    walk_words(content, Some(domain), &mut |leaf| match leaf {
+    // The SCOPED walk. `walk_words` discards the enclosing `<...> [@s]` span,
+    // and this function's whole output is what downstream NLP sees, so
+    // discarding it here is where the information was actually lost.
+    walk_words_scoped(content, Some(domain), &mut |leaf, scope| match leaf {
         WordItem::Word(word) => {
-            collect_alignable_word(word, &[], domain, out);
+            collect_alignable_word(word, &[], domain, scope, out);
         }
         WordItem::ReplacedWord(replaced) => {
-            collect_replaced_word(replaced, domain, out);
+            collect_replaced_word(replaced, domain, scope, out);
         }
         WordItem::Separator(sep) => {
             if domain == TierDomain::Mor && is_tag_marker_separator(sep) {
@@ -96,7 +174,10 @@ pub fn collect_utterance_content(
                     raw_text: ChatRawText::from_separator(sep),
                     utterance_word_index: WordIdx::new(out.len()),
                     form_type: None,
-                    lang: None,
+                    // A tag separator is not a word: it carries no language of
+                    // its own and takes the utterance's, span included.
+                    language: ExtractedLanguage::Utterance,
+                    span: sep.span(),
                 });
             }
         }
@@ -107,6 +188,7 @@ fn collect_alignable_word(
     word: &Word,
     annotations: &[talkbank_model::model::ContentAnnotation],
     domain: TierDomain,
+    scope: LanguageScope<'_>,
     out: &mut Vec<ExtractedWord>,
 ) {
     if domain == TierDomain::Mor && annotations_have_alignment_ignore(annotations) {
@@ -122,11 +204,17 @@ fn collect_alignable_word(
         raw_text: ChatRawText::from_word_raw(word),
         utterance_word_index: WordIdx::new(out.len()),
         form_type: word.form_type.clone(),
-        lang: word.lang.clone(),
+        language: ExtractedLanguage::of(word, scope),
+        span: word.span,
     });
 }
 
-fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec<ExtractedWord>) {
+fn collect_replaced_word(
+    entry: &ReplacedWord,
+    domain: TierDomain,
+    scope: LanguageScope<'_>,
+    out: &mut Vec<ExtractedWord>,
+) {
     if domain == TierDomain::Mor && annotations_have_alignment_ignore(&entry.scoped_annotations) {
         return;
     }
@@ -141,7 +229,8 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                             raw_text: ChatRawText::from_word_raw(word),
                             utterance_word_index: WordIdx::new(out.len()),
                             form_type: word.form_type.clone(),
-                            lang: word.lang.clone(),
+                            language: ExtractedLanguage::of(word, scope),
+                            span: word.span,
                         });
                     }
                 }
@@ -151,7 +240,8 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                     raw_text: ChatRawText::from_word_raw(&entry.word),
                     utterance_word_index: WordIdx::new(out.len()),
                     form_type: entry.word.form_type.clone(),
-                    lang: entry.word.lang.clone(),
+                    language: ExtractedLanguage::of(&entry.word, scope),
+                    span: entry.word.span,
                 });
             }
         }
@@ -172,7 +262,8 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                     raw_text: ChatRawText::from_word_raw(&entry.word),
                     utterance_word_index: WordIdx::new(out.len()),
                     form_type: entry.word.form_type.clone(),
-                    lang: entry.word.lang.clone(),
+                    language: ExtractedLanguage::of(&entry.word, scope),
+                    span: entry.word.span,
                 });
             }
         }
@@ -183,7 +274,8 @@ fn collect_replaced_word(entry: &ReplacedWord, domain: TierDomain, out: &mut Vec
                     raw_text: ChatRawText::from_word_raw(&entry.word),
                     utterance_word_index: WordIdx::new(out.len()),
                     form_type: entry.word.form_type.clone(),
-                    lang: entry.word.lang.clone(),
+                    language: ExtractedLanguage::of(&entry.word, scope),
+                    span: entry.word.span,
                 });
             }
         }
@@ -471,5 +563,59 @@ mod tests {
         // "0" is a special CHAT symbol; whether it produces a word depends on
         // counts_for_tier(). We just verify no crash and at most 1 word.
         assert_eq!(result.len(), 1, "still produces 1 utterance");
+    }
+
+    /// A span-governed word reports the SPAN's mark, not "no language".
+    ///
+    /// This is the behaviour the type was introduced for. Before it, the
+    /// extractor carried only a word's own `@s`, so every unmarked word inside
+    /// `<...> [@s:hin]` came out indistinguishable from an unmarked word in a
+    /// plain English utterance, and downstream morphotag tagged it English.
+    ///
+    /// A test rather than a type because it pins the WALK: nothing in the
+    /// signature can say that the traversal actually reached the span.
+    #[test]
+    fn a_span_governs_the_language_of_the_words_it_encloses() {
+        let file = parse_chat(&one_utterance("I said <kyaa hotaa hai> [@s:hin] ."));
+        let utterances = extract_words(&file, TierDomain::Mor);
+        let words = &utterances[0].words;
+
+        let hin = talkbank_model::model::LanguageCode::new("hin").expect("valid code");
+        let inside: Vec<&ExtractedWord> = words
+            .iter()
+            .filter(|w| matches!(&w.language, ExtractedLanguage::Span(_)))
+            .collect();
+        assert_eq!(inside.len(), 3, "all three span words are span-governed");
+        for word in inside {
+            assert_eq!(
+                word.language,
+                ExtractedLanguage::Span(CodeSwitchSpan::Explicit(hin.clone())),
+            );
+        }
+
+        let outside: Vec<&ExtractedWord> = words
+            .iter()
+            .filter(|w| w.language == ExtractedLanguage::Utterance)
+            .collect();
+        assert_eq!(outside.len(), 2, "`I` and `said` take the utterance");
+    }
+
+    /// A word's own marker still wins inside a span, and says so.
+    #[test]
+    fn a_words_own_marker_survives_extraction_inside_a_span() {
+        let file = parse_chat(&one_utterance("<rocket@s:eng jaise hai> [@s:hin] ."));
+        let utterances = extract_words(&file, TierDomain::Mor);
+        let words = &utterances[0].words;
+
+        let eng = talkbank_model::model::LanguageCode::new("eng").expect("valid code");
+        assert_eq!(
+            words[0].language,
+            ExtractedLanguage::Own(WordLanguageMarker::Explicit(eng)),
+            "the loanword keeps its own mark"
+        );
+        assert!(
+            matches!(&words[1].language, ExtractedLanguage::Span(_)),
+            "its neighbours take the span"
+        );
     }
 }

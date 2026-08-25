@@ -7,9 +7,7 @@
 use std::borrow::Cow;
 
 use crate::model::{CodeSwitchSpan, Word};
-use crate::validation::word::language::{
-    LanguageResolutionOutcome, resolve_word_language_with_marker,
-};
+use crate::validation::word::language::{LanguageResolutionOutcome, resolve_marker_at};
 use crate::{LanguageCode, LanguageSource, UtteranceLanguage, WordLanguageMarker};
 
 /// Which mark governs a word's language, decided ONCE.
@@ -81,13 +79,24 @@ impl<'a> GoverningMarker<'a> {
         tier_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
     ) -> LanguageResolutionOutcome {
+        self.resolve_at(word.span, tier_language, declared_languages)
+    }
+
+    /// Resolve at a SPAN rather than from a `Word`.
+    ///
+    /// The word was only ever needed to place diagnostics. A caller holding an
+    /// already-extracted word (Batchalign's `ExtractedWord`) has a span and no
+    /// `Word`, and used to fabricate one with `Word::new_unchecked` purely to
+    /// satisfy the signature. This is the honest entry point for it, and it is
+    /// what lets that fabrication be deleted.
+    pub fn resolve_at(
+        &self,
+        span: crate::Span,
+        tier_language: Option<&LanguageCode>,
+        declared_languages: &[LanguageCode],
+    ) -> LanguageResolutionOutcome {
         let marker = self.marker();
-        resolve_word_language_with_marker(
-            word,
-            marker.as_deref(),
-            tier_language,
-            declared_languages,
-        )
+        resolve_marker_at(marker.as_deref(), span, tier_language, declared_languages)
     }
 
     /// The marker the resolver should apply.

@@ -9,6 +9,32 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-25
+
+### Changed
+
+- **`ExtractedWord.lang` becomes `ExtractedWord.language: ExtractedLanguage`,
+  and the word gains a `span`.** The old field carried only a word's OWN `@s`
+  marker, so a word inside a `<...> [@s:hin]` span came out of extraction
+  indistinguishable from an unmarked word in a plain English utterance. The
+  extractor WALKS the tree and therefore knew about the span; it discarded what
+  it had computed, and every NLP consumer downstream was left unable to recover
+  it. Batchalign's morphotag read the old field, so span-governed words fell out
+  of second-language dispatch and were tagged against the tier language.
+
+  `ExtractedLanguage` is `Utterance | Own(marker) | Span(span)`. It is not an
+  `Option`, because "the utterance governs" is a real answer rather than a
+  missing one, and treating no-mark as no-language is the mistake the type
+  exists to prevent. `ExtractedLanguage::resolve(span, tier, declared)` gives
+  the resolved language directly.
+
+- **`GoverningMarker::resolve_at(span, ..)` resolves without a `Word`.** The
+  resolver only ever used the word for `word.span`, to place diagnostics, so a
+  consumer holding an already-extracted word had to fabricate a
+  `Word::new_unchecked` purely to satisfy the signature. Batchalign was doing
+  exactly that. `resolve_word_language_with_marker` is deleted; one span-based
+  core serves both paths.
+
 ## [0.14.0] - 2026-08-25
 
 ### Removed
@@ -1682,7 +1708,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/TalkBank/chatter/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/TalkBank/chatter/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/TalkBank/chatter/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/TalkBank/chatter/compare/v0.11.0...v0.12.0

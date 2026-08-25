@@ -19,5 +19,5 @@ mod tests;
 pub(crate) use digits::check_word_digits_multi;
 pub use governing::GoverningMarker;
 pub(crate) use helpers::mixed_language_allows_prefix_marker;
-pub(crate) use resolve::resolve_word_language_with_marker;
+pub(crate) use resolve::resolve_marker_at;
 pub use resolve::{LanguageResolution, LanguageResolutionOutcome};
