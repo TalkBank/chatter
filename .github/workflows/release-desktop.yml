@@ -374,18 +374,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/chatter-desktop/package-lock.json
 
-      # Same dependency list as ci.yml's Tauri Linux deps.
       - name: Install Tauri Linux system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev \
-            pkg-config
+        uses: ./.github/actions/tauri-linux-deps
 
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1

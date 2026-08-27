@@ -1,0 +1,38 @@
+name: Install Tauri Linux system dependencies
+description: >-
+  Install the system libraries the chatter-desktop Tauri crate links against on
+  Linux. THE one owner of this list.
+
+# Why this is an action and not a `run:` step copied into each workflow.
+#
+# The list lived in four workflows, and three of them carried a comment saying
+# "same dependency list as ci.yml", which is prose asserting an invariant
+# nothing enforced. On 2026-08-27 a fifth Linux workflow, `release-lint.yml`,
+# was added WITHOUT it: its own header said "Action pins are the same as
+# ci.yml", so it had copied the pins and not the provisioning. It failed on the
+# v0.16.0 release tag with `The system library glib-2.0 required by crate
+# glib-sys was not found`, and no local gate could catch it, because CI is
+# Linux and development is not.
+#
+# `scripts/check_ci_gate_sync.py` now fails if any workflow names these
+# libraries inline, so there cannot be a second copy. What that check does NOT
+# do is notice a Linux job that needs them and calls nothing at all; the honest
+# root fix for that is to stop having the desktop crate in the default
+# workspace build, which ci.yml's own comment has proposed since before this
+# happened.
+
+runs:
+  using: composite
+  steps:
+    - name: apt-get install
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.1-dev \
+          libgtk-3-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev \
+          libsoup-3.0-dev \
+          libjavascriptcoregtk-4.1-dev \
+          pkg-config

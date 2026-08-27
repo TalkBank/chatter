@@ -26,6 +26,11 @@ jobs:
         uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
+      # THE FIX for the v0.16.0 tag failure. `just release-lint` clippies the
+      # whole default workspace, chatter-desktop included, so this Linux job
+      # needs the same system libraries every other Linux job does.
+      - name: Install Tauri Linux system dependencies
+        uses: ./.github/actions/tauri-linux-deps
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
       - name: release-lint

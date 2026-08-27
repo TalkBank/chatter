@@ -60,18 +60,8 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      # Same Tauri Linux dependencies as ci.yml's rust job.
       - name: Install Tauri Linux system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev \
-            pkg-config
+        uses: ./.github/actions/tauri-linux-deps
 
       # Distinct cache key from ci.yml's job so the pinned-CI cache
       # isn't invalidated by rolling-stable runs and vice versa.

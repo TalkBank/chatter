@@ -67,6 +67,27 @@ GATED_WORKFLOWS = ("ci.yml", "book.yml", "crates-io-foundation.yml", "cross-plat
 #: matching and is reported as stale.
 BASELINE = REPO_ROOT / "scripts" / "ci-gate-baseline.txt"
 
+#: The composite action that owns the Tauri Linux system-library list, and the
+#: marker proving a workflow is naming those libraries itself instead.
+#:
+#: Provisioning is exempt from the raw-command ratchet above, since installing a
+#: tool is not a check. That exemption left the PROVISIONING half of CI entirely
+#: ungoverned, and it bit on 2026-08-27: the list sat inline in four workflows,
+#: three of them carrying a comment saying "same list as ci.yml", and a fifth
+#: Linux workflow (`release-lint.yml`) was written without it. It failed on the
+#: v0.16.0 release tag, and no local gate could have caught it, because CI is
+#: Linux and development is macOS.
+#:
+#: What this checks, exactly: the libraries are named in ONE place. What it does
+#: NOT check, stated so nobody trusts it for more: whether a Linux job that
+#: NEEDS them remembered to call the action at all. That one is not expressible
+#: as a list without becoming the hand-maintained mirror this file exists to
+#: argue against, because six Linux jobs run `just` and legitimately do not need
+#: them. The root fix is ci.yml's own standing proposal: take chatter-desktop
+#: out of the default workspace build.
+TAURI_DEPS_ACTION = ".github/actions/tauri-linux-deps"
+TAURI_DEPS_MARKER = "libwebkit2gtk"
+
 #: Recipes CI runs that `gate` deliberately does not, each with its reason.
 EXEMPT_FROM_GATE: dict[str, str] = {
     # Empty on purpose. Nothing has yet earned an exemption: every command CI
@@ -212,6 +233,24 @@ def main() -> int:
             first = stripped.splitlines()[0].strip()
             raw.add(f"{name}:{first}")
             raw_detail[f"{name}:{first}"] = line
+
+    # The Tauri system libraries are named in exactly one place. Every
+    # workflow, not just the gated ones: the workflow that broke was
+    # `release-lint.yml`, which GATED_WORKFLOWS does not list.
+    owner = REPO_ROOT / TAURI_DEPS_ACTION / "action.yml"
+    if not owner.exists():
+        failures.append(
+            f"{TAURI_DEPS_ACTION}/action.yml is missing; it is the one owner "
+            f"of the Tauri Linux system-library list."
+        )
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        if TAURI_DEPS_MARKER not in path.read_text(encoding="utf-8"):
+            continue
+        failures.append(
+            f"{path.name}: names the Tauri system libraries inline. There is "
+            f"one owner:\n"
+            f"      uses: ./{TAURI_DEPS_ACTION}"
+        )
 
     # A job that calls `just` must install it. GitHub's runners do not ship
     # `just`, so converting a step to `just <recipe>` without adding the install
