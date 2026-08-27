@@ -2314,7 +2314,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "quotation"
+          "name": "quotation_with_optional_annotations"
         },
         {
           "type": "SYMBOL",
@@ -3089,8 +3089,17 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "SYMBOL",
-                "name": "form_marker"
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "form_marker"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "repeated_form_marker"
+                  }
+                ]
               },
               {
                 "type": "BLANK"
@@ -3411,6 +3420,13 @@
       "content": {
         "type": "PATTERN",
         "value": "@(?:s[a-zA-Z][-a-zA-Z]*|[a-rt-zA-RT-Z][-a-zA-Z]*)(?::[a-zA-Z0-9_]+)?"
+      }
+    },
+    "repeated_form_marker": {
+      "type": "IMMEDIATE_TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "@[a-zA-Z0-9:_-]*(?:@[a-zA-Z0-9:_-]*)+"
       }
     },
     "word_lang_suffix": {
@@ -4734,6 +4750,35 @@
         {
           "type": "SYMBOL",
           "name": "newline"
+        }
+      ]
+    },
+    "quotation_with_optional_annotations": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "quotation",
+          "content": {
+            "type": "SYMBOL",
+            "name": "quotation"
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "annotations",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "base_annotations"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          }
         }
       ]
     },
@@ -6896,6 +6941,9 @@
     ],
     [
       "nonword_with_optional_annotations"
+    ],
+    [
+      "quotation_with_optional_annotations"
     ],
     [
       "base_annotations"

@@ -1,7 +1,7 @@
 # talkbank-parser
 
 **Status:** Current
-**Last modified:** 2026-05-30 20:01 EDT
+**Last modified:** 2026-08-27 01:00 EDT
 
 Parsing implementations for CHAT format using tree-sitter.
 
@@ -30,6 +30,9 @@ Key features:
 use talkbank_parser::TreeSitterParser;
 
 let parser = TreeSitterParser::new().expect("parser init");
+
+let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
+    @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
 
 // Parse a complete CHAT file. `parse_chat_file` returns a `ParseProduct`,
 // not a bare `Result`: a document that builds a model always hands the

@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last modified:** 2026-07-24 23:27 EDT
+**Last updated:** 2026-08-27 17:23 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -83,9 +83,45 @@ Used by the LSP, the default CLI, and all production validation.
 - **Technology:** [re2c](https://re2c.org/) DFA lexer + [chumsky](https://docs.rs/chumsky/1.0.0-alpha.8) parser combinators
 - **Grammar:** Translated from `grammar.js` rules → re2c conditions + chumsky combinators
 - **Strengths:** 4-8x faster, `Send + Sync`, zero constructor cost, specification oracle
-- **Weaknesses:** No incremental reparsing, `Box::leak` memory strategy
+- **Weaknesses:** No incremental reparsing, `Box::leak` memory strategy, and
+  **it is not ready to judge CHAT validity** (see below)
 
-Used for batch validation, parser parity testing, and performance benchmarking.
+Used for parser parity testing and performance benchmarking.
+
+### NOT READY as a validity authority (as of 0.16.0)
+
+**A clean `--parser re2c` run is not evidence that a file is valid.** This
+backend ACCEPTS constructs the default backend refuses, so it must not be used
+to decide whether a transcript is good. Measured 2026-08-27:
+
+| Input | Default backend | `--parser re2c` |
+|---|---|---|
+| `“hello” [qq] .` | E316 | **accepted** |
+| `hello (.) [qq] .` | E316 | **accepted** |
+| `[x 2] hey .` | E375 | **accepted** |
+
+The cause is information lost before validation can see it, not a missing
+rule. Both parsers build the same `talkbank_model` types and share one
+validator, but each has its own intermediate parse tree, and re2c's does not
+carry annotations for every construct:
+
+```rust
+// crates/talkbank-parser-re2c/src/ast.rs
+pub struct Group     { contents: ..., annotations: Vec<ParsedAnnotation> }
+pub struct Quotation { contents: ... }   // no annotations field
+```
+
+Six lines apart. A quotation's annotations are discarded at parse time, so no
+validator can report them. The same shape covers the pause and the
+utterance-initial position.
+
+Also outstanding on this backend: many diagnostics are reported at byte 0
+rather than at the construct, and E307 is reported twice where the default
+backend reports it once.
+
+Closing these is queued work. Until then, use re2c to COMPARE two
+implementations, which is what a specification oracle is for, and use the
+default backend to decide validity.
 
 ## CLI Usage
 
@@ -105,6 +141,10 @@ are parser-specific, switching parsers does not invalidate the other's cache.
 
 ## Parity Status
 
+**The figures in this section were measured against an older tree and have not
+been re-measured since; the table below is known to be wrong in at least one
+row.** Treat them as historical until someone re-runs them.
+
 Both parsers produce `SemanticEq`-identical output on the 87-file reference
 corpus (100% match). On the ~100k-file wild corpus, parity is ~98.7%.
 
@@ -116,10 +156,13 @@ corpus (100% match). On the ~100k-file wild corpus, parity is ~98.7%.
 | Both detect error | 140/140 (100%) |
 | Same error code | 79/140 (56.4%) |
 | Different code, both detect | 61/140 (43.6%) |
-| Re2c silent (misses error) | 0 |
+| Re2c silent (misses error) | **0 is FALSE.** See "NOT READY" above: three constructs measured silent on 2026-08-27 |
 
-The 61 code mismatches come from architectural differences, not bugs. Both
-parsers report actionable diagnostics for all 140 testable error specs.
+The 61 code mismatches come from architectural differences. The claim that
+both parsers report actionable diagnostics for ALL 140 specs no longer holds:
+the spec corpus contains no annotation-on-a-container case, which is why this
+table did not see the silences named above. A spec example for each is part of
+closing them.
 
 ### Performance
 
@@ -137,8 +180,8 @@ Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 | Use Case | Recommended Parser | Why |
 |----------|-------------------|-----|
 | LSP / editor integration | tree-sitter | Incremental reparsing |
-| Batch validation (>100 files) | re2c | 4-8x faster |
-| CI validation | Either | Both correct; re2c saves CI time |
+| Batch validation (>100 files) | tree-sitter | re2c is faster but is not a validity authority |
+| CI validation | tree-sitter | "both correct" was the claim; it is not currently true |
 | Error diagnostics (user-facing) | tree-sitter | More specific E3xx codes |
 | Parser parity testing | Both | Re2c is the specification oracle |
 | Profiling / benchmarking | re2c | DFA lexer gives a performance floor |

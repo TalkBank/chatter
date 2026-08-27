@@ -1,7 +1,7 @@
 # Source-spacing validation on ground truth: removing the E758 constant-offset proxy
 
 **Status:** Draft (main-tier phase implemented; header/dependent-tier phase awaiting a design nod)
-**Last modified:** 2026-07-18 18:14 EDT
+**Last modified:** 2026-08-27 00:33 EDT
 
 ## Summary
 
@@ -17,7 +17,7 @@ opt-out hack, makes E758 exact, retires the constructed-offset proxy
 (and a bespoke leading-whitespace field considered as an alternative),
 and lets E758 extend uniformly to `@headers` and `%`-tiers (ruling
 H.1). No release is pending; this is done deliberately, gated by the
-corpus differential.
+reference-corpus and observation-snapshot gates.
 
 ## Problem
 
@@ -232,13 +232,13 @@ flowchart TD
    `label_end + delimiter` over main, header, and dependent tiers;
    delete the linker/precode opt-out and the `COLON_AND_TAB`-style
    constant assumption.
-4. **Regression.** `parser_equivalence` and
+4. **Regression.** `reference_corpus_parses` and
    `roundtrip_reference_corpus` stay green; the new spans are
    `#[serde(skip)]`, so no schema change. Confirm no `match` on the old
    `Linker` enum was left unported.
-5. **Corpus differential.** Run
-   `scripts/release/chatter_corpus_differential.sh` against the fleet's
-   archived binary. The exact check will now fire on non-CA
+5. **Regression gates.** `just test` carries the reference-corpus parse
+   and roundtrip gates and the observation snapshot; adjudicate every
+   snapshot diff. The exact check will now fire on non-CA
    linker/precode + leading-space cases the proxy skipped; per the
    2026-07-18 scan (zero non-CA leading-space `@header`/`%`-tier files)
    the expected new-hit count is zero, but any new instance is

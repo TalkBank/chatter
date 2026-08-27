@@ -1,8 +1,6 @@
 +++
 code = 'E202'
 name = 'Missing form type after @'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'
@@ -32,6 +30,30 @@ chat = '''
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	dog@j .
+@End
+'''
+
+[[example]]
+level = 'word'
+title = 'a doubled @ is ONE defect, named by E203'
+claim = { subsumed_by = 'E203' }
+notes = '''
+`word@@` ends with `@` AND carries a repeated `@` run, so it satisfies both
+this file's dangling-marker rule and E203's at-most-one-suffix rule. The parser
+names the repeated run as E203 with the run in hand, which is the specific
+answer; adding E202 for the same word reports one defect twice, the generic
+diagnostic buried under the specific one.
+
+The suppression that stops the double already existed for E203-against-E203
+and was never applied to the E202 branch four lines above it.
+'''
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	word@@ .
 @End
 '''
 +++

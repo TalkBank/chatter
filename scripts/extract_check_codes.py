@@ -61,7 +61,7 @@ def select_unix_build(text: str) -> str:
     The generator answers "what does the COMPILED UNIX build do", and comments
     are only one of the ways source text is not compiled. `check.cpp` has 18
     `UNX`-conditioned regions, and unix CLAN builds with `-DUNX` (see the CFLAGS
-    in the operator's refresh script), so an `#ifndef UNX` block is GUI-only
+    in the unix build's CFLAGS), so an `#ifndef UNX` block is GUI-only
     code that no unix binary contains. Counting a `check_err` inside one is the
     same error as counting a commented-out call site, arriving one stage later.
 

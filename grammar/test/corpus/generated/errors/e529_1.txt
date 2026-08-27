@@ -1,0 +1,19 @@
+================================================================================
+e529_1 - Nested background with identical label
+================================================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+@Bg:test
+@Comment:	This is inside the first @Bg:test scope
+@Bg:test
+@Comment:	ERROR: This second @Bg:test should be invalid (nested @Bg with same label)
+@Eg:test
+@Eg:test
+@End
+
+--------------------------------------------------------------------------------
+
+(source_file (full_document (utf8_header (newline)) (begin_header (newline)) (line (languages_header (languages_prefix) (header_sep (colon) (tab)) (languages_contents (language_code)) (newline))) (line (participants_header (participants_prefix) (header_sep (colon) (tab)) (participants_contents (participant code: (speaker) (whitespaces) (participant_word))) (newline))) (line (id_header (id_prefix) (header_sep (colon) (tab)) (id_contents (id_languages (languages_contents (language_code))) (pipe) (id_corpus) (pipe) (id_speaker) (pipe) (id_age (age_format)) (pipe) (id_sex (male_value)) (pipe) (pipe) (pipe) (id_role) (pipe) (pipe) (pipe)) (newline))) (line (bg_header (bg_prefix) (ERROR (colon)) (newline))) (line (comment_header (comment_prefix) (header_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline))) (line (bg_header (bg_prefix) (ERROR (colon)) (newline))) (line (comment_header (comment_prefix) (header_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline))) (line (eg_header (eg_prefix) (ERROR (colon)) (newline))) (line (eg_header (eg_prefix) (ERROR (colon)) (newline))) (end_header (newline))))

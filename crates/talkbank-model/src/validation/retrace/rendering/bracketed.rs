@@ -59,6 +59,14 @@ pub fn render_bracketed_item(
         BracketedItem::OtherSpokenEvent(event) => {
             event.write_chat(rendered).ok();
         }
+        BracketedItem::Group(group) => {
+            rendered.push('<');
+            render_bracketed_content(&group.content, rendered, retrace_spans);
+            if let Some(space) = &group.trailing_space {
+                rendered.push_str(space);
+            }
+            rendered.push('>');
+        }
         BracketedItem::AnnotatedGroup(ann) => {
             rendered.push('<');
             render_bracketed_content(&ann.inner.content, rendered, retrace_spans);
@@ -82,6 +90,12 @@ pub fn render_bracketed_item(
             rendered.push(crate::chars::LEFT_DOUBLE_QUOTE);
             render_bracketed_content(&quot.content, rendered, retrace_spans);
             rendered.push(crate::chars::RIGHT_DOUBLE_QUOTE);
+        }
+        BracketedItem::AnnotatedQuotation(quot) => {
+            rendered.push(crate::chars::LEFT_DOUBLE_QUOTE);
+            render_bracketed_content(&quot.inner.content, rendered, retrace_spans);
+            rendered.push(crate::chars::RIGHT_DOUBLE_QUOTE);
+            render_scoped_annotations(quot.scoped_annotations.iter(), rendered);
         }
         BracketedItem::Separator(sep) => {
             sep.write_chat(rendered).ok();

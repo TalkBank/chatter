@@ -78,7 +78,7 @@ use crate::model::{
 /// `Vec<ContentAnnotation>` in two different newtypes
 /// (`AnnotatedContentAnnotations`, `ReplacedWordAnnotations`); that duplication
 /// is why the two were never connected in the first place.
-pub trait ScopedAnnotated {
+pub(crate) trait ScopedAnnotated {
     /// The annotations scoped to this node, empty when it carries none.
     fn scoped_annotations(&self) -> &[ContentAnnotation];
 }
@@ -148,11 +148,127 @@ impl<'a> RetraceRef<'a> {
     }
 
     /// The retrace node itself, in either spelling.
+    ///
+    /// Use [`Self::span`] rather than `inner().span` to LOCATE the construct:
+    /// the annotated spelling's own span covers its annotations and the inner
+    /// one does not.
     #[inline]
     pub fn inner(self) -> &'a Retrace {
         match self {
             Self::Bare(retrace) => retrace,
             Self::Annotated(annotated) => &annotated.inner,
+        }
+    }
+
+    /// Where this retrace is, INCLUDING its annotations when it has them.
+    #[inline]
+    #[must_use]
+    pub fn span(self) -> crate::Span {
+        match self {
+            Self::Bare(retrace) => retrace.span,
+            Self::Annotated(annotated) => annotated.span,
+        }
+    }
+}
+
+/// The two spellings of a quotation, each keeping its payload.
+///
+/// Mirrors [`RetraceRef`], and for a reason paid for in a shipped bug. Until
+/// 2026-08-27 these were two SIBLING variants of [`GroupRef`], `Quotation` and
+/// `AnnotatedQuotation`, so "is this a quotation" was a two-arm question that
+/// every caller had to spell out and that nothing forced anyone to spell in
+/// full. `matches!(group, GroupRef::Quotation(_))` compiles and silently
+/// answers "no" for half the quotations that exist.
+///
+/// Two callers wrote that list. `alignment::helpers::descent` named both
+/// spellings; `validation::main_tier::has_nested_quotation` named one. The
+/// annotated spelling was introduced by the same release that added scoped
+/// annotations to quotations, and the nesting rule was never taught about it,
+/// so E372 stopped firing the moment either quotation carried an annotation:
+///
+/// ```text
+/// *CHI:    “a “b” c” .              reported E372
+/// *CHI:    “a “b” c” [//] hello .    reported NOTHING
+/// *CHI:    “a “b” [% note] c” .      reported NOTHING
+/// ```
+///
+/// A STRUCT, not an enum, for the reason [`LeafRef`] below spells out: an enum
+/// would name IDENTITY while encoding ANNOTATION STATE, so
+/// `matches!(q, QuotationRef::Bare(_))` would be the same half-answer one
+/// level down, and a consumer would silently miss the annotated spelling
+/// exactly as `GroupRef` did. Both facts are fields, so neither can be read as
+/// the other, and there is no arm to forget.
+#[derive(Debug, Clone, Copy)]
+pub struct QuotationRef<'a> {
+    /// The quotation itself, whichever spelling carried it.
+    pub quotation: &'a Quotation,
+    /// The annotations scoped to it, empty when it carries none.
+    pub annotations: &'a [ContentAnnotation],
+    /// Where the construct is, INCLUDING its annotations when it has them.
+    ///
+    /// Not `quotation.span`, and the difference is load-bearing: the annotated
+    /// spelling's own span covers the annotations and the inner one does not.
+    /// `GroupRef::span` drew that distinction by hand before this type existed,
+    /// so folding the spellings without carrying it would have narrowed every
+    /// annotated quotation's reported location, silently.
+    pub span: crate::Span,
+}
+
+impl<'a> QuotationRef<'a> {
+    /// A quotation carrying no annotations.
+    #[inline]
+    fn bare(quotation: &'a Quotation) -> Self {
+        Self {
+            quotation,
+            annotations: &[],
+            span: quotation.span,
+        }
+    }
+
+    /// A quotation carrying its own scoped annotations.
+    #[inline]
+    fn annotated(annotated: &'a Annotated<Quotation>) -> Self {
+        Self {
+            quotation: &annotated.inner,
+            annotations: annotated.scoped_annotations(),
+            span: annotated.span,
+        }
+    }
+}
+
+/// The two spellings of an angle group, in the shape [`QuotationRef`] explains.
+///
+/// A STRUCT for the same reason: sibling variants would name IDENTITY while
+/// encoding ANNOTATION STATE, and `matches!(g, AngleRef::Bare(_))` would be the
+/// half-answer one level down.
+#[derive(Debug, Clone, Copy)]
+pub struct AngleRef<'a> {
+    /// The group itself, whichever spelling carried it.
+    pub group: &'a Group,
+    /// The annotations scoped to it, empty when it carries none.
+    pub annotations: &'a [ContentAnnotation],
+    /// Where the construct is, INCLUDING its annotations when it has them.
+    pub span: crate::Span,
+}
+
+impl<'a> AngleRef<'a> {
+    /// A group carrying no annotations.
+    #[inline]
+    fn bare(group: &'a Group) -> Self {
+        Self {
+            group,
+            annotations: &[],
+            span: group.span,
+        }
+    }
+
+    /// A group carrying its own scoped annotations.
+    #[inline]
+    fn annotated(annotated: &'a Annotated<Group>) -> Self {
+        Self {
+            group: &annotated.inner,
+            annotations: annotated.scoped_annotations(),
+            span: annotated.span,
         }
     }
 }
@@ -224,6 +340,25 @@ pub enum WordRef<'a> {
     Replaced(&'a ReplacedWord),
 }
 
+impl WordRef<'_> {
+    /// Where this word is.
+    ///
+    /// Infallible: all three spellings carry a span. Added 2026-08-26 because
+    /// the LSP was answering this question by matching all 28 `UtteranceContent`
+    /// variants itself, in five byte-identical copies, which meant a new
+    /// variant was classified once here and once there and the two could
+    /// disagree where nothing would notice.
+    #[inline]
+    #[must_use]
+    pub fn span(self) -> crate::Span {
+        match self {
+            Self::Bare(word) => word.span,
+            Self::Annotated(annotated) => annotated.span,
+            Self::Replaced(replaced) => replaced.span,
+        }
+    }
+}
+
 impl<'a> WordRef<'a> {
     /// Every `Word` this item contributes, produced form first.
     ///
@@ -255,18 +390,24 @@ impl<'a> WordRef<'a> {
 ///   annotations to decide whether it is retrace-like. Eight copies of the
 ///   container set live there waiting on this.
 ///
-/// `Angle` and `AnnotatedAngle` stay separate for the same reason `WordRef`
-/// keeps `Annotated`: a caller that must read the annotations cannot get them
-/// from a flattened `&BracketedContent`. Note that `BracketedItem` has no bare
-/// group variant, so `Angle` arises only from main-tier content.
+/// `Angle` and `Quotation` each carry BOTH spellings, bare and annotated, as a
+/// struct rather than as sibling variants. The reason once recorded here for
+/// keeping them apart was "a caller that must read the annotations cannot get
+/// them from a flattened `&BracketedContent`", which argued against FLATTENING
+/// and never applied: neither was flattened, and [`AngleRef`] and
+/// [`QuotationRef`] hand the annotations over as a field. Two sibling variants
+/// made `matches!(group, GroupRef::Angle(_))` silently answer "no" for
+/// `<a b> [xyz]`, which is the bug [`QuotationRef`] documents.
+///
+/// Note that `BracketedItem` has no bare group variant, so a bare `Angle`
+/// arises only from main-tier content.
 #[derive(Debug, Clone, Copy)]
 pub enum GroupRef<'a> {
-    /// `<...>` with no scoped annotations.
-    Angle(&'a Group),
-    /// `<...> [...]`
-    AnnotatedAngle(&'a Annotated<Group>),
-    /// `"..."`
-    Quotation(&'a Quotation),
+    /// `<...>`, with or without scoped annotations.
+    Angle(AngleRef<'a>),
+    /// A quotation, in either spelling. ONE variant on purpose; see
+    /// [`QuotationRef`] for the bug that two of them shipped.
+    Quotation(QuotationRef<'a>),
     /// A phonological group.
     Pho(&'a PhoGroup),
     /// A sign or gesture group.
@@ -278,8 +419,9 @@ impl<'a> GroupRef<'a> {
     #[inline]
     pub fn scoped_annotations(self) -> &'a [ContentAnnotation] {
         match self {
-            Self::AnnotatedAngle(annotated) => annotated.scoped_annotations(),
-            Self::Angle(_) | Self::Quotation(_) | Self::Pho(_) | Self::Sin(_) => &[],
+            Self::Angle(group) => group.annotations,
+            Self::Quotation(quotation) => quotation.annotations,
+            Self::Pho(_) | Self::Sin(_) => &[],
         }
     }
 
@@ -287,9 +429,8 @@ impl<'a> GroupRef<'a> {
     #[inline]
     pub fn content(self) -> &'a BracketedContent {
         match self {
-            Self::Angle(group) => &group.content,
-            Self::AnnotatedAngle(annotated) => &annotated.inner.content,
-            Self::Quotation(quotation) => &quotation.content,
+            Self::Angle(group) => &group.group.content,
+            Self::Quotation(quotation) => &quotation.quotation.content,
             Self::Pho(group) => &group.content,
             Self::Sin(group) => &group.content,
         }
@@ -311,7 +452,87 @@ impl<'a> ContentStructure<'a> {
     }
 }
 
+/// What a visitor wants to happen BENEATH the item it was just handed.
+///
+/// The third state is why this exists as an enum rather than a `bool`.
+/// `validation::retrace::visit` removed a `ControlFlow` in August 2026 saying
+/// "reinstate it when a caller genuinely needs it, not before"; the nested
+/// quotation rule is that caller, and it needs the middle one. It must not
+/// descend past a quotation, because the predicate it runs there already
+/// answers for the whole subtree, and walking on would report the same nesting
+/// once per level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Descend {
+    /// Walk what this item encloses.
+    Into,
+    /// Leave this item's contents alone; carry on with its siblings.
+    Skip,
+    /// Stop the traversal entirely.
+    Stop,
+}
+
 impl<'a> ContentStructure<'a> {
+    /// Visit this item, then whatever it encloses, outermost first.
+    ///
+    /// # Why descent has ONE owner
+    ///
+    /// This module already owns which variants contain content
+    /// ([`Self::enclosed`]); the walk over them was written out four times
+    /// anyway, in `any_word`, in `validation::retrace::visit::visit_structure`,
+    /// and twice in the nested-quotation rule. Every one of them was the same
+    /// `enclosed()` loop with a different action at the node, and every one is
+    /// a place the next container variant would be a silent omission.
+    ///
+    /// Recursive and closure-driven rather than an `Iterator`, deliberately: an
+    /// iterator over a tree needs an explicit stack, and this runs per utterance
+    /// of every file in a six-figure corpus. This allocates nothing.
+    /// Returns `()`, not a `ControlFlow`. [`Descend::Stop`] ends the traversal,
+    /// and a caller that wants to know whether it fired learns that from the
+    /// same captured state that decided to stop: every real caller here already
+    /// holds one. Returning the flow as well made three of four call sites
+    /// discard a `#[must_use]`, which is noise standing where a decision looks
+    /// like it should be.
+    pub fn walk(self, visit: &mut impl FnMut(Self) -> Descend) {
+        // The flow is consumed HERE, at the one place that knows it carries no
+        // information a caller could act on: a `Break` means the visitor asked
+        // to stop and already recorded why.
+        let (core::ops::ControlFlow::Continue(()) | core::ops::ControlFlow::Break(())) =
+            self.walk_inner(visit);
+    }
+
+    /// The recursion, which DOES need the flow to unwind a `Stop` through every
+    /// enclosing level.
+    fn walk_inner(self, visit: &mut impl FnMut(Self) -> Descend) -> core::ops::ControlFlow<()> {
+        match visit(self) {
+            Descend::Stop => return core::ops::ControlFlow::Break(()),
+            Descend::Skip => return core::ops::ControlFlow::Continue(()),
+            Descend::Into => {}
+        }
+        if let Some(content) = self.enclosed() {
+            for item in content.content.iter() {
+                item.structure().walk_inner(visit)?;
+            }
+        }
+        core::ops::ControlFlow::Continue(())
+    }
+
+    /// Where this item is, when it carries a span of its own.
+    ///
+    /// `None` only for a leaf: events, pauses, actions, CA markers, bullets and
+    /// the delimiters record no span of their own, so a caller wanting to
+    /// report about one falls back to the tier's span and should say so.
+    /// Every other ref type answers infallibly.
+    #[inline]
+    #[must_use]
+    pub fn span(self) -> Option<crate::Span> {
+        match self {
+            Self::Word(word) => Some(word.span()),
+            Self::Retrace(retrace) => Some(retrace.span()),
+            Self::Group(group) => group.span(),
+            Self::Leaf(_) => None,
+        }
+    }
+
     /// Whether any word beneath this item satisfies `predicate`.
     ///
     /// # Why this is here and not written out at each caller
@@ -332,16 +553,17 @@ impl<'a> ContentStructure<'a> {
     /// would need a second predicate parameter that two of the three callers
     /// would pass as "always false".
     pub fn any_word(self, predicate: &impl Fn(&Word) -> bool) -> bool {
-        match self {
-            Self::Word(word) => word.words().any(predicate),
-            Self::Retrace(_) | Self::Group(_) => self.enclosed().is_some_and(|content| {
-                content
-                    .content
-                    .iter()
-                    .any(|item| item.structure().any_word(predicate))
-            }),
-            Self::Leaf(_) => false,
-        }
+        let mut found = false;
+        self.walk(&mut |structure| match structure {
+            Self::Word(word) if word.words().any(predicate) => {
+                found = true;
+                Descend::Stop
+            }
+            // A word encloses nothing, so there is nothing below it to skip;
+            // `Into` and `Skip` are the same answer here and `Into` says less.
+            Self::Word(_) | Self::Retrace(_) | Self::Group(_) | Self::Leaf(_) => Descend::Into,
+        });
+        found
     }
 }
 
@@ -370,7 +592,7 @@ impl<'a> ContentStructure<'a> {
 impl<'a> WordRef<'a> {
     /// The annotations scoped to this word.
     ///
-    /// Delegates to [`ScopedAnnotated`] for both carriers. `Bare` is the only
+    /// Delegates to `ScopedAnnotated` for both carriers. `Bare` is the only
     /// spelling with no impl to call, and `Word` has no annotations field, so
     /// the empty slice there is a fact about the struct rather than a decision
     /// made here. The predecessor decided all three by hand and answered wrong
@@ -405,15 +627,21 @@ impl UtteranceContent {
                 content: LeafContent::Spoken,
                 annotations: annotated.scoped_annotations(),
             }),
+            Self::Action(_) => ContentStructure::Leaf(LeafRef::bare(LeafContent::Notation)),
             Self::AnnotatedAction(annotated) => ContentStructure::Leaf(LeafRef {
                 content: LeafContent::Notation,
                 annotations: annotated.scoped_annotations(),
             }),
-            Self::Group(group) => ContentStructure::Group(GroupRef::Angle(group)),
+            Self::Group(group) => ContentStructure::Group(GroupRef::Angle(AngleRef::bare(group))),
             Self::AnnotatedGroup(annotated) => {
-                ContentStructure::Group(GroupRef::AnnotatedAngle(annotated))
+                ContentStructure::Group(GroupRef::Angle(AngleRef::annotated(annotated)))
             }
-            Self::Quotation(quotation) => ContentStructure::Group(GroupRef::Quotation(quotation)),
+            Self::AnnotatedQuotation(annotated) => {
+                ContentStructure::Group(GroupRef::Quotation(QuotationRef::annotated(annotated)))
+            }
+            Self::Quotation(quotation) => {
+                ContentStructure::Group(GroupRef::Quotation(QuotationRef::bare(quotation)))
+            }
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
             // Listed rather than caught by `_`: a catch-all here would route a
@@ -447,14 +675,20 @@ impl BracketedItem {
             Self::Word(word) => ContentStructure::Word(WordRef::Bare(word)),
             Self::AnnotatedWord(annotated) => ContentStructure::Word(WordRef::Annotated(annotated)),
             Self::ReplacedWord(replaced) => ContentStructure::Word(WordRef::Replaced(replaced)),
+            Self::Group(group) => ContentStructure::Group(GroupRef::Angle(AngleRef::bare(group))),
             Self::Retrace(retrace) => ContentStructure::Retrace(RetraceRef::Bare(retrace)),
             Self::AnnotatedRetrace(annotated) => {
                 ContentStructure::Retrace(RetraceRef::Annotated(annotated))
             }
             Self::AnnotatedGroup(annotated) => {
-                ContentStructure::Group(GroupRef::AnnotatedAngle(annotated))
+                ContentStructure::Group(GroupRef::Angle(AngleRef::annotated(annotated)))
             }
-            Self::Quotation(quotation) => ContentStructure::Group(GroupRef::Quotation(quotation)),
+            Self::AnnotatedQuotation(annotated) => {
+                ContentStructure::Group(GroupRef::Quotation(QuotationRef::annotated(annotated)))
+            }
+            Self::Quotation(quotation) => {
+                ContentStructure::Group(GroupRef::Quotation(QuotationRef::bare(quotation)))
+            }
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
             Self::AnnotatedEvent(annotated) => ContentStructure::Leaf(LeafRef {
@@ -484,5 +718,304 @@ impl BracketedItem {
                 ContentStructure::Leaf(LeafRef::bare(LeafContent::Notation))
             }
         }
+    }
+}
+
+/// Which kind of container a group is, independent of how it is borrowed.
+///
+/// [`GroupRef`] encodes this in its variants, which is right for a `Copy` view
+/// whose callers want the payload. A walker that only needs to DECIDE (does
+/// this tier domain descend into a phonological group?) wants the kind alone,
+/// and [`GroupMut`] cannot spell it as variants without repeating the payload
+/// split six times.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupKind {
+    /// `<...>`, annotated or not.
+    Angle,
+    /// A quotation, annotated or not.
+    Quotation,
+    /// A phonological group.
+    Pho,
+    /// A sign or gesture group.
+    Sin,
+}
+
+impl GroupRef<'_> {
+    /// Where this group is, or `None` when the model records no span for it.
+    ///
+    /// `None` is a FACT here, not a policy: `PhoGroup` and `SinGroup` carry
+    /// only their content and are the only content containers with no span
+    /// field, while `Group` and `Quotation` next door have theirs. A caller
+    /// that wants to exclude a kind it COULD locate is making a different
+    /// decision and should say so on `kind()`.
+    #[inline]
+    #[must_use]
+    pub fn span(self) -> Option<crate::Span> {
+        match self {
+            Self::Angle(group) => Some(group.span),
+            Self::Quotation(quotation) => Some(quotation.span),
+            Self::Pho(_) | Self::Sin(_) => None,
+        }
+    }
+}
+
+impl GroupRef<'_> {
+    /// Which kind of container this is.
+    #[inline]
+    #[must_use]
+    pub fn kind(self) -> GroupKind {
+        match self {
+            Self::Angle(_) => GroupKind::Angle,
+            Self::Quotation(_) => GroupKind::Quotation,
+            Self::Pho(_) => GroupKind::Pho,
+            Self::Sin(_) => GroupKind::Sin,
+        }
+    }
+}
+
+/// A container reached through `&mut`: its kind, its annotations, and the
+/// content it encloses.
+///
+/// # Why this is not `ContentStructure` with `&mut` substituted
+///
+/// [`ContentStructure`] is `Copy` and its accessors take `self`, which a
+/// unique borrow cannot do twice. A walker needs BOTH the annotations that
+/// gate the descent and the content to descend into, so this hands over all
+/// three facts at once ([`Self::into_parts`]) rather than offering three
+/// accessors of which only the first is callable.
+///
+/// That is also the property worth having: the content cannot be obtained
+/// while forgetting the annotations and the kind that decide whether to use
+/// it. The four `_mut` walkers each wrote a container arm PER VARIANT applying
+/// different gate rules, and the arms drifted: `walk/bracketed.rs` shipped
+/// four ungated `AnnotatedQuotation` arms on 2026-08-26 while `count.rs` gated
+/// the same variant, so the two disagreed about one node.
+///
+/// # It supplies FACTS, not policy
+///
+/// Deliberately no `should_descend(domain)` method. `TierDomain` is an
+/// alignment concept and this module answers "what shape is this", exactly as
+/// [`ContentStructure`]'s own header says. The gates stay with the walkers
+/// that own them; what changes is that they are written once per walker
+/// instead of once per container variant.
+#[derive(Debug)]
+pub struct GroupMut<'a> {
+    kind: GroupKind,
+    scoped_annotations: &'a [ContentAnnotation],
+    content: &'a mut BracketedContent,
+}
+
+impl<'a> GroupMut<'a> {
+    /// The kind, the annotations scoped to this group, and its content.
+    ///
+    /// The annotations are empty for the unannotated spellings, matching
+    /// [`GroupRef::scoped_annotations`]. The two references borrow DISJOINT
+    /// fields, which is what makes handing out a shared and a unique borrow
+    /// together sound.
+    #[inline]
+    #[must_use]
+    pub fn into_parts(self) -> (GroupKind, &'a [ContentAnnotation], &'a mut BracketedContent) {
+        (self.kind, self.scoped_annotations, self.content)
+    }
+}
+
+/// A content item that encloses further content, reached through `&mut`.
+///
+/// Retraces are separate from groups for the same reason [`ContentStructure`]
+/// separates them: their descent is gated by the tier domain alone, never by
+/// annotations, and a walker that conflated the two would apply the wrong
+/// rule.
+#[derive(Debug)]
+pub enum ContainerMut<'a> {
+    /// A group, quotation, or phonological/sign group.
+    Group(GroupMut<'a>),
+    /// A retrace; the material it retraces is its content.
+    Retrace(&'a mut BracketedContent),
+}
+
+impl UtteranceContent {
+    /// The content this item encloses, reached mutably, or `None` for a leaf.
+    ///
+    /// The mutable counterpart of [`ContentStructure::enclosed`], except that
+    /// it keeps the kind and annotations `enclosed` discards, because those
+    /// are what every caller's descent gate reads.
+    #[inline]
+    pub fn container_mut(&mut self) -> Option<ContainerMut<'_>> {
+        match self {
+            Self::Group(group) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Angle,
+                scoped_annotations: &[],
+                content: &mut group.content,
+            })),
+            Self::AnnotatedGroup(annotated) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Angle,
+                scoped_annotations: &annotated.scoped_annotations,
+                content: &mut annotated.inner.content,
+            })),
+            Self::Quotation(quotation) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Quotation,
+                scoped_annotations: &[],
+                content: &mut quotation.content,
+            })),
+            Self::AnnotatedQuotation(annotated) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Quotation,
+                scoped_annotations: &annotated.scoped_annotations,
+                content: &mut annotated.inner.content,
+            })),
+            Self::PhoGroup(group) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Pho,
+                scoped_annotations: &[],
+                content: &mut group.content,
+            })),
+            Self::SinGroup(group) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Sin,
+                scoped_annotations: &[],
+                content: &mut group.content,
+            })),
+            Self::Retrace(retrace) => Some(ContainerMut::Retrace(&mut retrace.content)),
+            Self::AnnotatedRetrace(annotated) => {
+                Some(ContainerMut::Retrace(&mut annotated.inner.content))
+            }
+            // Leaves. Listed rather than `_ =>` so a new container variant is a
+            // compile error here, which is the whole reason this module exists.
+            Self::Word(_)
+            | Self::AnnotatedWord(_)
+            | Self::ReplacedWord(_)
+            | Self::Event(_)
+            | Self::AnnotatedEvent(_)
+            | Self::Action(_)
+            | Self::AnnotatedAction(_)
+            | Self::Pause(_)
+            | Self::Freecode(_)
+            | Self::Separator(_)
+            | Self::OverlapPoint(_)
+            | Self::InternalBullet(_)
+            | Self::LongFeatureBegin(_)
+            | Self::LongFeatureEnd(_)
+            | Self::UnderlineBegin(_)
+            | Self::UnderlineEnd(_)
+            | Self::NonvocalBegin(_)
+            | Self::NonvocalEnd(_)
+            | Self::NonvocalSimple(_)
+            | Self::OtherSpokenEvent(_) => None,
+        }
+    }
+}
+
+impl BracketedItem {
+    /// The content this item encloses, reached mutably, or `None` for a leaf.
+    ///
+    /// The bracketed counterpart of [`UtteranceContent::container_mut`]. Note
+    /// `BracketedItem` has no bare `Group` variant (a bare `<...>` cannot
+    /// appear inside brackets), which is why `GroupKind::Angle` arises here
+    /// only from the annotated spelling.
+    #[inline]
+    pub fn container_mut(&mut self) -> Option<ContainerMut<'_>> {
+        match self {
+            Self::Group(group) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Angle,
+                scoped_annotations: &[],
+                content: &mut group.content,
+            })),
+            Self::AnnotatedGroup(annotated) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Angle,
+                scoped_annotations: &annotated.scoped_annotations,
+                content: &mut annotated.inner.content,
+            })),
+            Self::Quotation(quotation) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Quotation,
+                scoped_annotations: &[],
+                content: &mut quotation.content,
+            })),
+            Self::AnnotatedQuotation(annotated) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Quotation,
+                scoped_annotations: &annotated.scoped_annotations,
+                content: &mut annotated.inner.content,
+            })),
+            Self::PhoGroup(group) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Pho,
+                scoped_annotations: &[],
+                content: &mut group.content,
+            })),
+            Self::SinGroup(group) => Some(ContainerMut::Group(GroupMut {
+                kind: GroupKind::Sin,
+                scoped_annotations: &[],
+                content: &mut group.content,
+            })),
+            Self::Retrace(retrace) => Some(ContainerMut::Retrace(&mut retrace.content)),
+            Self::AnnotatedRetrace(annotated) => {
+                Some(ContainerMut::Retrace(&mut annotated.inner.content))
+            }
+            // Leaves, listed rather than `_ =>` for the reason above.
+            Self::Word(_)
+            | Self::AnnotatedWord(_)
+            | Self::ReplacedWord(_)
+            | Self::Event(_)
+            | Self::AnnotatedEvent(_)
+            | Self::Pause(_)
+            | Self::Action(_)
+            | Self::AnnotatedAction(_)
+            | Self::OverlapPoint(_)
+            | Self::Separator(_)
+            | Self::InternalBullet(_)
+            | Self::Freecode(_)
+            | Self::LongFeatureBegin(_)
+            | Self::LongFeatureEnd(_)
+            | Self::UnderlineBegin(_)
+            | Self::UnderlineEnd(_)
+            | Self::NonvocalBegin(_)
+            | Self::NonvocalEnd(_)
+            | Self::NonvocalSimple(_)
+            | Self::OtherSpokenEvent(_) => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod container_mut_tests {
+    use super::*;
+    use crate::model::{BracketedContent, Group, Quotation};
+
+    /// The unannotated spellings report NO annotations, which is what makes the
+    /// four `_mut` walkers' collapse behaviour-preserving.
+    ///
+    /// SURVIVES a type: the walkers replaced their per-variant container arms with one gate
+    /// per RULE, and the bare `Group` / `Quotation` arms previously had NO gate
+    /// at all. They now route through `descent::descends_into_group`, whose
+    /// annotation arm reduces to `domain == Mor && annotations.iter().any(..)`.
+    /// That is `false` for an empty slice, so the collapse preserves the
+    /// unconditional descent, and
+    /// this pins the empty-slice half of that argument at the source. A type
+    /// cannot state it: `&'a [ContentAnnotation]` admits both empty and not.
+    #[test]
+    fn unannotated_containers_carry_no_annotations() {
+        let mut bare_group = UtteranceContent::Group(Group::new(BracketedContent::new(Vec::new())));
+        let Some(ContainerMut::Group(group)) = bare_group.container_mut() else {
+            panic!("a bare group is a container");
+        };
+        let (kind, annotations, _) = group.into_parts();
+        assert_eq!(kind, GroupKind::Angle);
+        assert!(annotations.is_empty(), "a bare group gates on nothing");
+
+        let mut bare_quotation =
+            UtteranceContent::Quotation(Quotation::new(BracketedContent::new(Vec::new())));
+        let Some(ContainerMut::Group(group)) = bare_quotation.container_mut() else {
+            panic!("a bare quotation is a container");
+        };
+        let (kind, annotations, _) = group.into_parts();
+        assert_eq!(
+            kind,
+            GroupKind::Quotation,
+            "a quotation is not an angle group"
+        );
+        assert!(annotations.is_empty(), "a bare quotation gates on nothing");
+    }
+
+    /// A leaf is not a container, so a walker cannot descend into one.
+    #[test]
+    fn a_leaf_has_no_container() {
+        let mut pause =
+            UtteranceContent::Pause(crate::model::Pause::new(crate::model::PauseDuration::Short));
+        assert!(pause.container_mut().is_none());
     }
 }

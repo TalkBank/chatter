@@ -1,7 +1,7 @@
 # Adjudication Workflow
 
 **Status:** Draft
-**Last updated:** 2026-07-07 21:17 EDT
+**Last updated:** 2026-08-27 13:44 EDT
 
 This page specifies how human-in-the-loop adjudication fits into
 the merge pipeline. Several pipeline stages have decision points
@@ -56,7 +56,7 @@ better:
 - Batches are research-scale (hundreds of sessions per donor).
   Forcing operator presence during the batch run = forcing hours
   of babysitting.
-- Overnight and fleet runs are routine; interactive doesn't work
+- Overnight and batch runs are routine; interactive doesn't work
   for those.
 - Focused operator review of all refusals together is more
   efficient than scattered per-batch decisions (less

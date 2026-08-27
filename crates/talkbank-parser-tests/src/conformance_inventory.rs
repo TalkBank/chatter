@@ -22,7 +22,7 @@
 //! typed traversal with `syn`:
 //!
 //! 1. **Leaf list**: one `impl_inspect_leaf!(...)` listing every
-//!    `pub struct XxxNode<'tree>(pub tree_sitter::Node<'tree>);` tuple wrapper.
+//!    `pub struct XxxNode<'tree>(tree_sitter::Node<'tree>);` tuple wrapper.
 //! 2. **Choice impls**: one `impl_inspect_choice!(XxxChoice { .. });` per
 //!    `pub enum XxxChoice<'tree>`, variants in declaration order.
 //! 3. **Struct impls**: one `impl_inspect_struct!(XxxChildren { .. });` per
@@ -32,7 +32,7 @@
 //! 4. **Dispatch fn**: one match arm per `extract_<snake>` free function whose
 //!    `<snake>` is a `"named": true` node kind, keyed on the node kind. The arm
 //!    form follows the function's first parameter type: a typed wrapper
-//!    (`extract_x(XxxNode(node))`) or a bare `tree_sitter::Node`
+//!    (`extract_x(classify::<XxxNode>(node))`) or a bare `tree_sitter::Node`
 //!    (`extract_x(node)`).
 //!
 //! The assembled source is then normalized through `rustfmt --edition 2024`
@@ -109,6 +109,7 @@ const PRELUDE: &str = r#"//! MECHANICAL conformance inventory -- DO NOT HAND-EDI
 
 #![allow(clippy::too_many_lines)]
 
+use talkbank_parser_tests::classify;
 use talkbank_parser_tests::generated_traversal::*;
 
 use super::{Inspect, InspectField, RawViolation};
@@ -180,7 +181,7 @@ enum ExtractArg {
     /// First parameter is a bare `tree_sitter::Node`; the arm passes `node`.
     BareNode,
     /// First parameter is a typed wrapper `XxxNode`; the arm passes
-    /// `XxxNode(node)`. Holds the wrapper type name.
+    /// `classify::<XxxNode>(node)`. Holds the wrapper type name.
     TypedWrapper(String),
 }
 
@@ -237,7 +238,7 @@ pub fn generate_inventory_source(
             Item::Struct(item_struct) => {
                 let name = item_struct.ident.to_string();
                 match &item_struct.fields {
-                    // Leaf node wrapper: `pub struct XxxNode<'tree>(pub tree_sitter::Node<'tree>);`
+                    // Leaf node wrapper: `pub struct XxxNode<'tree>(tree_sitter::Node<'tree>);`
                     Fields::Unnamed(unnamed)
                         if unnamed.unnamed.len() == 1
                             && is_tree_sitter_node(&unnamed.unnamed[0].ty) =>
@@ -447,11 +448,15 @@ fn render_source(
                 out.push_str("(node)");
             }
             ExtractArg::TypedWrapper(wrapper) => {
+                // CLASSIFY, do not assert: the wrapper's field is private, so
+                // `from_node` compares the node against the kind literal the
+                // generator emitted rather than trusting the arm key. The panic
+                // lives once, in `classify`, instead of 160 times here.
                 out.push_str("extract_");
                 out.push_str(&extract.snake);
-                out.push('(');
+                out.push_str("(classify::<");
                 out.push_str(wrapper);
-                out.push_str("(node))");
+                out.push_str(">(node))");
             }
         }
         out.push_str(".inspect(\"");

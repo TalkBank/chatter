@@ -44,8 +44,10 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
     // parse-stage examples away from it. Measured before the change: zero
     // implemented examples fail the runner's union check, and five examples'
     // codes are SPLIT across stages, which no per-stage harness can assert.
-    let specs: Vec<ErrorSpec> = ErrorSpec::load_all(crate::artifacts::error_dir(repo_root))
-        .map_err(|e| anyhow::anyhow!("Failed to load error corpus specs: {}", e))?;
+    let registry = talkbank_spec_vocabulary::registry::CodeRegistry::load(repo_root)?;
+    let specs: Vec<ErrorSpec> =
+        ErrorSpec::load_all(crate::artifacts::error_dir(repo_root), &registry)
+            .map_err(|e| anyhow::anyhow!("Failed to load error corpus specs: {}", e))?;
 
     let planned = plan_fixtures(&specs, repo_root);
 
@@ -88,7 +90,7 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
                 std::collections::BTreeMap::new();
             for spec in &specs {
                 let standing = per_code.entry(&spec.error.code).or_default();
-                standing.implemented |= spec.metadata.status == Status::Implemented;
+                standing.implemented |= spec.status() == Status::Implemented;
                 standing.has_example |= !matches!(spec.demonstration(), Demonstration::NoExamples);
             }
             per_code
@@ -103,7 +105,7 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
         unreachable_specs_with_examples: specs
             .iter()
             .filter(|spec| {
-                spec.metadata.status == Status::UnreachableFromChat
+                spec.status() == Status::UnreachableFromChat
                     && !matches!(spec.demonstration(), Demonstration::NoExamples)
             })
             .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
@@ -129,7 +131,7 @@ fn plan_fixtures(specs: &[ErrorSpec], repo_root: &std::path::Path) -> Vec<Planne
     for spec in specs {
         // Computed once per spec; every example of the spec shares them.
         let source_spec = RepoRelativePath::new(repo_root, &spec.source_path_display());
-        let status = spec.metadata.status;
+        let status = spec.status();
         for (index, example) in spec.error.examples.iter().enumerate() {
             planned.push(PlannedFixture {
                 input: example.input.clone(),
@@ -178,9 +180,7 @@ mod tests {
             "E999_multi.md",
             "+++\n\
              code = 'E999'\n\
-             name = 'Multi'\n\
-             kind = 'Invalidity'\n\
-             status = 'implemented'\n\n\
+             name = 'Multi'\n\n\
              [[example]]\n\
              level = 'utterance'\n\
              claim = { subsumed_by = 'E316' }\n\
@@ -191,7 +191,11 @@ mod tests {
              chat = \"@UTF8\\n@Begin\\ntwo\\n@End\"\n\
              +++\n\n## Description\n\nDemo.\n",
         );
-        let specs = ErrorSpec::load_all(dir.path()).expect("load specs");
+        // A registry declaring the fixture's own code. The claim TARGETS
+        // (E316, E600) are not resolved: a claim names codes, it does not
+        // document them.
+        let registry = crate::test_registry::declaring(&[("E999", Status::Implemented)]);
+        let specs = ErrorSpec::load_all(dir.path(), &registry).expect("load specs");
         let planned = plan_fixtures(&specs, dir.path());
 
         assert_eq!(planned.len(), 2, "one fixture per example");
@@ -233,14 +237,16 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let dir = root.path().join("spec/errors");
         fs::create_dir_all(&dir).expect("spec/errors");
+        // A temp checkout is a checkout: it needs the registry, because a spec
+        // cannot be loaded without resolving the code it names. Written at
+        // `REGISTRY_PATH`, not at a hand-spelled copy of it.
+        crate::test_registry::write_into(root.path(), &[("E999", Status::Implemented)]);
         write_spec(
             &dir,
             "E999_one.md",
             "+++\n\
              code = 'E999'\n\
-             name = 'One'\n\
-             kind = 'Invalidity'\n\
-             status = 'implemented'\n\n\
+             name = 'One'\n\n\
              [[example]]\n\
              level = 'utterance'\n\
              claim = 'violates'\n\

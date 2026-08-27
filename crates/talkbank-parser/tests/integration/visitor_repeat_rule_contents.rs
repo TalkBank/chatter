@@ -37,6 +37,7 @@ use talkbank_parser::generated_traversal::{
     LineChoice, MainTierNode, NodeSlot, TierBodyNode, extract_contents, extract_full_document,
     extract_line, extract_main_tier, extract_tier_body, extract_utterance,
 };
+use talkbank_parser_tests::classify;
 
 /// Parse `source` into a tree-sitter tree using the CHAT grammar.
 fn parse_chat(source: &str) -> tree_sitter::Tree {
@@ -96,7 +97,7 @@ fn extract_contents_enumerates_main_tier_items() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(FullDocumentNode(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     let mut present_items = 0usize;
     let mut content_item_variants = 0usize;
@@ -120,9 +121,9 @@ fn extract_contents_enumerates_main_tier_items() {
         // (child_4 is the optional `sep_trailing_space` E758 provenance slot.)
         let utt = extract_utterance(*utterance_node);
         let main_tier_node = present_raw(utt.child_0.slot(), "utterance.main_tier");
-        let main_tier = extract_main_tier(MainTierNode(main_tier_node));
+        let main_tier = extract_main_tier(classify::<MainTierNode>(main_tier_node));
         let tier_body_node = present_raw(main_tier.child_5.slot(), "main_tier.tier_body");
-        let tier_body = extract_tier_body(TierBodyNode(tier_body_node));
+        let tier_body = extract_tier_body(classify::<TierBodyNode>(tier_body_node));
         let contents_node = present_raw(tier_body.content_2.slot(), "tier_body.contents");
         assert_eq!(
             contents_node.kind(),
@@ -138,7 +139,7 @@ fn extract_contents_enumerates_main_tier_items() {
         // (`whitespaces` / `content_item` / `separator` / `overlap_point`) the
         // generator mangles into two separately-named types because `contents =
         // repeat1(..)` splits into a required-first-plus-repeated-tail shape.
-        let contents_children = extract_contents(ContentsNode(contents_node));
+        let contents_children = extract_contents(classify::<ContentsNode>(contents_node));
         match contents_children.child_0.slot() {
             NodeSlot::Present(choice) => {
                 present_items += 1;

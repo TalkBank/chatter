@@ -1,7 +1,7 @@
 # CLAUDE.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-08-03 15:24 EDT
+**Last updated:** 2026-08-27 13:44 EDT
 
 ## Overview
 
@@ -249,8 +249,9 @@ capability):
 1. **On launch** (`checkOnLaunch`), once on mount.
 2. **Periodically in the background** every 6 hours (`SIX_HOURS_MS`), silent,
    reusing `checkOnLaunch`. This closes the gap where a launch-only check let a
-   rarely-relaunched or long-running install fall weeks behind (a real fleet
-   incident: a host sat on an old version because its user never relaunched).
+   rarely-relaunched or long-running install fall weeks behind (a real
+   incident: an install sat on an old version because its user never
+   relaunched).
 3. **On demand** from the native app menu item **"Check for Updates..."**
    (`checkNow`). Unlike the launch flow, a manual check gives visible feedback:
    if the app is already current it shows an "up to date" dialog, and a failed

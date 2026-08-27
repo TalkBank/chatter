@@ -149,7 +149,7 @@ impl WordCategory {
 /// `Word::compute_untranscribed` exempts nothing, so `&+xxx` still reads as
 /// untranscribed material. Converting them changes validation output in BOTH
 /// directions (E220 would start judging `0dog2` and stop judging `&+3`) and owes
-/// a corpus differential. Until that runs this type is deliberately not
+/// a comparison over real corpora. Until that runs this type is deliberately not
 /// universal, and saying so is cheaper than letting a reader infer from its
 /// existence that the question is settled.
 ///

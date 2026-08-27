@@ -26,7 +26,10 @@ mod add;
 mod com;
 mod exp;
 mod gpx;
-mod helpers;
+// `pub(super)` because the helper is no longer text-tier-private: `%act` and
+// `%cod` are bullet-capable free-text bodies with the same five-state policy,
+// and they used to hold private copies of it rather than reach for this one.
+pub(super) mod helpers;
 mod int;
 mod sit;
 mod spa;

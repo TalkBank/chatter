@@ -85,8 +85,8 @@ fn expected_for(
 ///
 /// Only `NotImplemented` is skipped here. `spec/runtime-tools` also skips
 /// `Deprecated` and `UnreachableFromChat`, so three specs are measured here
-/// that it skips (`E210_auto.md`, `E213_auto.md`,
-/// `E768_media_filename_not_representable.md`). Checked before leaving the
+/// that it skips (`E210.md`, `E213.md`,
+/// `E768.md`). Checked before leaving the
 /// difference in place: none of the three diverges, so none is in the baseline
 /// and none adds ratchet noise.
 fn measurable(status: Status) -> Measure {
@@ -107,8 +107,8 @@ enum Measure {
 
 /// Load every spec case, in filename order so a run is reproducible.
 pub(super) fn load_spec_corpus() -> Result<SpecCorpus, String> {
-    let spec_dir = talkbank_parser_tests::repo_paths::workspace_root().join("spec/errors");
-    let specs = error_specs::load(&spec_dir)?;
+    let repo_root = talkbank_parser_tests::repo_paths::workspace_root();
+    let specs = error_specs::load(repo_root)?;
 
     let mut corpus = SpecCorpus {
         files_scanned: specs.len(),
@@ -147,7 +147,10 @@ pub(super) fn load_spec_corpus() -> Result<SpecCorpus, String> {
     match corpus.cases.first() {
         // An empty suite is a broken measurement, not a suite with nothing in
         // it, and the two read identically in every downstream count.
-        None => Err(format!("no spec cases found under {}", spec_dir.display())),
+        None => Err(format!(
+            "no spec cases found under {}",
+            error_specs::spec_dir(repo_root).display()
+        )),
         Some(_) => Ok(corpus),
     }
 }

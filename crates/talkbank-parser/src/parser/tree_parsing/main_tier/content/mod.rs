@@ -31,7 +31,6 @@ mod nonword;
 mod pho_group;
 mod quotation;
 mod sin_group;
-mod visitor_lowering;
 mod word;
 
 // Re-export helper functions
@@ -47,5 +46,5 @@ pub(crate) use base::parse_overlap_point;
 pub(crate) use base::parse_base_content;
 pub(crate) use group::parse_group_content;
 pub(crate) use pho_group::parse_pho_group_content;
-pub(crate) use quotation::parse_quotation_content;
+pub(crate) use quotation::parse_quotation_with_annotations_content;
 pub(crate) use sin_group::parse_sin_group_content;

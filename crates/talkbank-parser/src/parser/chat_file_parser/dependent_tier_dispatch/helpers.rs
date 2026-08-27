@@ -63,10 +63,12 @@ where
 {
     surface_unexpected(unexpected, source, errors);
 
-    match body {
-        NodeSlot::Present(text) => decode_body_text(tier_node, text.raw_node(), source, errors),
-        NodeSlot::Missing(raw) => decode_body_text(tier_node, *raw, source, errors),
-        NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+    match body.node_or_placeholder() {
+        // Decodes to empty text for a placeholder, exactly as the removed
+        // kind-scan did: a MISSING node satisfied a kind filter and its text
+        // was read.
+        Some(text) => decode_body_text(tier_node, text, source, errors),
+        None => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,

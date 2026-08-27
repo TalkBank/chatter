@@ -81,16 +81,17 @@ fn unknown_header_from_node(
 
 /// `@Comment` -> `Header::Comment`. All bullet content is accepted.
 pub(super) fn comment(
-    header_actual: Node,
+    typed: CommentHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // LEVEL 2: read the bullet content child through the typed positional slot
     // (extract_comment_header child_2). `present_or_recover().ok()` keeps only a
     // Present content node; the pre-migration find_child_by_kind reported NO
     // diagnostic for a missing content child (it silently fell through to
     // Header::Unknown), so the non-Present (else) path is likewise SILENT.
-    let children = extract_comment_header(CommentHeaderNode(header_actual));
+    let children = extract_comment_header(typed);
     let outcome = match present(children.child_2.slot()) {
         Some(content) => ParseOutcome::parsed(Header::Comment {
             content: parse_bullet_content(content.raw_node(), input, errors),
@@ -108,11 +109,12 @@ pub(super) fn comment(
 
 /// `@Number` -> `Header::Number`. All values accepted; validator flags unsupported.
 pub(super) fn number(
-    header_actual: Node,
+    typed: NumberHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_number_header(NumberHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_number_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -138,11 +140,12 @@ pub(super) fn number(
 
 /// `@Recording Quality` -> `Header::RecordingQuality`.
 pub(super) fn recording_quality(
-    header_actual: Node,
+    typed: RecordingQualityHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_recording_quality_header(RecordingQualityHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_recording_quality_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -168,11 +171,12 @@ pub(super) fn recording_quality(
 
 /// `@Transcription` -> `Header::Transcription`.
 pub(super) fn transcription(
-    header_actual: Node,
+    typed: TranscriptionHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_transcription_header(TranscriptionHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_transcription_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -198,15 +202,16 @@ pub(super) fn transcription(
 
 /// `@Birth of` -> `Header::Birth`.
 pub(super) fn birth_of(
-    header_actual: Node,
+    typed: BirthOfHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // Two content children: speaker (child_2) read FIRST, then date_contents
     // (child_4). The speaker read must run (and report) before the date read, and
     // a missing speaker returns early WITHOUT reading the date slot, exactly as
     // the pre-migration two-step `get_required_content_by_kind` chain did.
-    let children = extract_birth_of_header(BirthOfHeaderNode(header_actual));
+    let children = extract_birth_of_header(typed);
     let participant = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -256,11 +261,12 @@ pub(super) fn birth_of(
 
 /// `@Birthplace of` -> `Header::Birthplace`.
 pub(super) fn birthplace_of(
-    header_actual: Node,
+    typed: BirthplaceOfHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_birthplace_of_header(BirthplaceOfHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_birthplace_of_header(typed);
     let participant = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -310,11 +316,12 @@ pub(super) fn birthplace_of(
 
 /// `@L1 of` -> `Header::L1Of`.
 pub(super) fn l1_of(
-    header_actual: Node,
+    typed: L1OfHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_l1_of_header(L1OfHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_l1_of_header(typed);
     let participant = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -378,7 +385,7 @@ pub(super) fn l1_of(
 
 /// `@Options` -> `Header::Options`.
 pub(super) fn options(
-    header_actual: Node,
+    typed: OptionsHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
@@ -389,7 +396,7 @@ pub(super) fn options(
     // has no children (-> also empty), so every non-Present state yields an empty
     // list. Validation reports E533 on the resulting empty @Options list
     // downstream.
-    let children = extract_options_header(OptionsHeaderNode(header_actual));
+    let children = extract_options_header(typed);
     let flags = match present(children.child_2.slot()) {
         Some(contents) => option_flags(contents.raw_node(), input),
         None => Vec::new(),

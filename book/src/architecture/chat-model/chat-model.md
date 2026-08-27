@@ -93,7 +93,7 @@ What you iterate when walking `utterance.main.content.content.0`:
 | Groups | `Group`, `AnnotatedGroup`, `PhoGroup`, `SinGroup`, `Quotation` |
 | CA markers | `OverlapPoint`, `Separator` |
 | Events | `Event`, `AnnotatedEvent`, `OtherSpokenEvent` |
-| Actions | `AnnotatedAction` |
+| Actions | `Action`, `AnnotatedAction` |
 | Timing | `InternalBullet` |
 | Scope markers | `LongFeatureBegin/End`, `NonvocalBegin/End/Simple`, `UnderlineBegin/End` |
 | Other | `Freecode`, `Pause` |
@@ -147,15 +147,24 @@ annotatable inner type:
 ```rust,ignore
 pub struct Annotated<T> {
     pub inner: T,
-    pub annotations: Vec<ContentAnnotation>,
+    pub scoped_annotations: AnnotatedContentAnnotations, // NEVER empty
     pub span: Span,
 }
 ```
 
+**The annotations are never empty**, and that is enforced by the type rather
+than checked afterwards: `AnnotatedContentAnnotations::new` returns `None` for
+an empty list, so an annotated wrapper cannot be built without an annotation.
+A construct carrying none is the BARE variant instead, and that `Option` IS the
+bare-versus-annotated decision at every construction site.
+
 At Level 1: `AnnotatedWord(Box<Annotated<Word>>)`,
 `AnnotatedGroup(Annotated<Group>)`,
 `AnnotatedEvent(Annotated<Event>)`,
-`AnnotatedAction(Annotated<Action>)`. Same variants exist at Level 2.
+`AnnotatedAction(Annotated<Action>)`. The same variants exist at Level 2, and
+since 2026-08-26 so does every bare counterpart: see
+[Annotations](../../chat-format/annotations.md) for the full pairing and for
+what the asymmetry used to cost.
 
 ### `ReplacedWord`
 

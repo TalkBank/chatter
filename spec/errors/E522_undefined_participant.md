@@ -1,8 +1,6 @@
 +++
 code = 'E522'
 name = 'Undefined Participant in Utterance'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'utterance'

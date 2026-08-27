@@ -1,17 +1,17 @@
 # Adjudication: an annotation that opens an utterance
 
 **Status:** Current
-**Last modified:** 2026-08-12 18:40 EDT
+**Last modified:** 2026-08-27 13:44 EDT
 
 An adjudication of how the two parsers read `[: ...]` at the start of an
 utterance, grounded against real CLAN CHECK. It found one defect in each parser.
 
 BOTH ARE FIXED. Both change what chatter reports on a class of inputs, so the
-corpus differential applies before any push.
+observation snapshot and the reference-corpus gates apply before any push.
 
 ## How this surfaced
 
-`E311_auto.md` was marked `Status: not_implemented` on the strength of a note
+`E311.md` was marked `Status: not_implemented` on the strength of a note
 saying E311 was unreachable because tree-sitter recovery wrapped the malformed
 utterance in an ERROR node and E316 fired first. The parser had since outgrown
 that. When the spec was corrected to `implemented`, the re2c parity harness
@@ -121,7 +121,7 @@ to phrase the diagnosis. Validated over the wild corpus by the ignored
 | `[: closed] .` | ts `E759, E305, E342, E306, E253` | ts **`E759, E342`** |
 | `word [: a [* b] .` | re2c **silent** | re2c **`E321`** |
 
-`E311_auto.md` remains in `KNOWN_DIVERGENCES` because the codes still differ.
+`E311.md` remains in `KNOWN_DIVERGENCES` because the codes still differ.
 That is now a difference of precision, not of correctness.
 
 ## The root cause is upstream, in the traversal generator

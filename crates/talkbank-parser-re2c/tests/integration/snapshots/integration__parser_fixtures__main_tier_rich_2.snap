@@ -17,7 +17,9 @@ tier_body:
         pos_tag: ~
         annotations: []
         raw_text: well
-    - Separator: Comma
+    - Separator:
+        kind: Comma
+        text: ","
     - Word:
         category: ~
         body:

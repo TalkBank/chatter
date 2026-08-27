@@ -243,11 +243,13 @@ impl CommandFamilyService for UtilityCommandService {
                 turns,
                 output,
                 summary_json,
+                contested_at,
             } => crate::commands::rediarize::run_rediarize(
                 &input,
                 &turns,
                 output.as_ref(),
                 summary_json.as_deref(),
+                contested_at,
             ),
             Commands::Batch {
                 donor_dir,
@@ -462,6 +464,9 @@ impl CommandFamilyService for DebugCommandService {
 fn run_debug(command: crate::cli::DebugCommands) {
     use crate::cli::DebugCommands;
     match command {
+        DebugCommands::RetagLanguage { from, to, path } => {
+            super::debug::run_retag_language(&path, &from, &to);
+        }
         DebugCommands::FixS { path } => {
             super::debug::run_fix_s(&path);
         }

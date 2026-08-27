@@ -15,6 +15,13 @@
 @Comment:	(2) so the right body production is `w_body` (the same one
 @Comment:	standalone_word uses), which stops at terminators but admits
 @Comment:	lengthening colons and CA word-internal markers.
+@Comment:	3. word carrying a @ form marker (anda@i, a:nda@i): the payload is a
+@Comment:	whole standalone_word, so it takes a form marker after the body, and
+@Comment:	`w_body` alone is one production short. Flagged by the same parity
+@Comment:	oracle on 2026-08-26, from rhd-data Spanish PerLA, where re2c failed
+@Comment:	the whole utterance with E253 "Word content cannot be empty"
+@Comment:	pointing at byte 0 of the file: a code and a position that both
+@Comment:	described something other than the input.
 *PAR:	easy &-you_know &*INV:oh_hm.
 *PAR:	yeah sure &*INV:ah.
 *PAR:	correct &*INV:yeah_mhm.
@@ -23,4 +30,6 @@
 *PAR:	what &*INV:ah: I see .
 *PAR:	the &*INV:a:h yeah .
 *PAR:	right &*INV:hm: indeed .
+*PAR:	so she said &*INV:anda@i .
+*PAR:	and then &*INV:a:nda@i quietly .
 @End

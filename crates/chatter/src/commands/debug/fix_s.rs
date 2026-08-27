@@ -2,8 +2,6 @@
 
 use std::path::PathBuf;
 
-use talkbank_model::WriteChat;
-
 use super::*;
 
 /// Rewrite whole-utterance `@s` runs into utterance precodes in place.
@@ -13,8 +11,9 @@ use super::*;
 /// explicit `@s:LANG` codes are appended to `@Languages`. Files with no
 /// qualifying rewrites or language-header repairs are left untouched.
 ///
-/// A file that fails to parse is reported and skipped; it does not stop the
-/// run from processing the remaining paths (see [`parse_or_report`]).
+/// A file that cannot be opened for in-place editing is reported and
+/// skipped, so one bad file does not kill a multi-file run; see
+/// [`InPlace::open`] for what that covers.
 pub fn run_fix_s(paths: &[PathBuf]) {
     let files = collect_cha_files(paths);
     if files.is_empty() {
@@ -28,27 +27,22 @@ pub fn run_fix_s(paths: &[PathBuf]) {
     let mut appended_language_codes = 0usize;
 
     for path in files {
-        let source = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", path.display())));
-        let Some(mut parsed) = parse_or_report(&parser, &path, &source) else {
+        let Some(mut open) = InPlace::open(&parser, path) else {
             continue;
         };
         let stats =
-            talkbank_transform::fix_s::rewrite_whole_utterance_language_switches(&mut parsed);
+            talkbank_transform::fix_s::rewrite_whole_utterance_language_switches(open.model_mut());
         if stats.is_empty() {
             continue;
         }
-
-        let rewritten = parsed.to_chat_string();
-        if rewritten == source {
-            continue;
+        // Counted from what COMMIT did, not from what the edit asked for: an
+        // edit whose result equals the source writes nothing, and reporting it
+        // as a rewritten file would be a count of intentions.
+        if let Committed::Wrote = open.commit(Commit::Write) {
+            rewritten_files += 1;
+            rewritten_utterances += stats.rewritten_utterances;
+            appended_language_codes += stats.appended_language_codes;
         }
-
-        std::fs::write(&path, &rewritten)
-            .unwrap_or_else(|e| die(&format!("cannot write {}: {e}", path.display())));
-        rewritten_files += 1;
-        rewritten_utterances += stats.rewritten_utterances;
-        appended_language_codes += stats.appended_language_codes;
     }
 
     if rewritten_files == 0 {

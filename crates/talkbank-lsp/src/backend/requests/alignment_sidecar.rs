@@ -4,6 +4,7 @@
 //! (main-tier words, `%mor`/`%gra` links, timing) for the VS Code extension's
 //! alignment visualization panel.
 
+use crate::editor_target::editor_target_span;
 use serde::Serialize;
 use talkbank_model::Span;
 use talkbank_model::model::{ChatFile, UtteranceContent};
@@ -94,7 +95,7 @@ pub(crate) fn build_alignment_sidecar(
                     main_units.push(AlignmentSidecarMainUnit {
                         alignment_index: idx,
                         text: format_content_item(content),
-                        range: content_span(content)
+                        range: editor_target_span(content)
                             .and_then(|span| span_to_range(span, text, &index)),
                         word_id,
                         inline_timing,
@@ -235,21 +236,6 @@ fn content_word_metadata(content: &UtteranceContent) -> (Option<String>, Option<
             replaced.word.inline_bullet.as_ref().map(bullet_to_timing),
         ),
         _ => (None, None),
-    }
-}
-
-/// Return the source span for a main-tier content item.
-fn content_span(content: &UtteranceContent) -> Option<Span> {
-    match content {
-        UtteranceContent::Word(word) => Some(word.span),
-        UtteranceContent::AnnotatedWord(annotated) => Some(annotated.span),
-        UtteranceContent::ReplacedWord(replaced) => Some(replaced.span),
-        UtteranceContent::Group(group) => Some(group.span),
-        UtteranceContent::AnnotatedGroup(annotated) => Some(annotated.span),
-        UtteranceContent::PhoGroup(_) => None,
-        UtteranceContent::SinGroup(_) => None,
-        UtteranceContent::Quotation(_) => None,
-        _ => None,
     }
 }
 

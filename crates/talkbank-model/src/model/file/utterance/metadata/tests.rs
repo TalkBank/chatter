@@ -538,7 +538,7 @@ fn alignment_units_count_annotated_action_for_sin_domain() {
     let main = MainTier::new(
         "CHI",
         vec![
-            UtteranceContent::AnnotatedAction(Annotated::new(Action::new())),
+            UtteranceContent::Action(Action::new()),
             UtteranceContent::Word(Box::new(Word::new_unchecked("word", "word"))),
         ],
         Terminator::Period { span: Span::DUMMY },
@@ -692,13 +692,13 @@ fn span_words_resolve_to_the_span_language() -> Result<(), String> {
     let inside_first = Word::new_unchecked("how", "how");
     let inside_second = Word::new_unchecked("to", "to");
 
-    let group = Annotated::new(Group::new(BracketedContent::new(vec![
-        BracketedItem::Word(Box::new(inside_first)),
-        BracketedItem::Word(Box::new(inside_second)),
-    ])))
-    .with_scoped_annotations(vec![ContentAnnotation::CodeSwitch(
-        CodeSwitchSpan::Shortcut,
-    )]);
+    let group = Annotated::with_one(
+        Group::new(BracketedContent::new(vec![
+            BracketedItem::Word(Box::new(inside_first)),
+            BracketedItem::Word(Box::new(inside_second)),
+        ])),
+        ContentAnnotation::CodeSwitch(CodeSwitchSpan::Shortcut),
+    );
 
     let main_tier = MainTier::new(
         "CHI",
@@ -746,12 +746,12 @@ fn span_words_resolve_to_the_span_language() -> Result<(), String> {
 /// An explicit `<...> [@s:code]` names the language directly, and says so.
 #[test]
 fn explicit_span_words_resolve_to_the_named_language() -> Result<(), String> {
-    let group = Annotated::new(Group::new(BracketedContent::new(vec![
-        BracketedItem::Word(Box::new(Word::new_unchecked("hola", "hola"))),
-    ])))
-    .with_scoped_annotations(vec![ContentAnnotation::CodeSwitch(
-        CodeSwitchSpan::Explicit(lc("spa")),
-    )]);
+    let group = Annotated::with_one(
+        Group::new(BracketedContent::new(vec![BracketedItem::Word(Box::new(
+            Word::new_unchecked("hola", "hola"),
+        ))])),
+        ContentAnnotation::CodeSwitch(CodeSwitchSpan::Explicit(lc("spa"))),
+    );
 
     let main_tier = MainTier::new(
         "CHI",
@@ -791,12 +791,12 @@ fn a_words_own_marker_wins_over_an_enclosing_span() -> Result<(), String> {
     let mut marked = Word::new_unchecked("ciao@s:ita", "ciao");
     marked.lang = Some(WordLanguageMarker::explicit(lc("ita")));
 
-    let group = Annotated::new(Group::new(BracketedContent::new(vec![
-        BracketedItem::Word(Box::new(marked)),
-    ])))
-    .with_scoped_annotations(vec![ContentAnnotation::CodeSwitch(
-        CodeSwitchSpan::Explicit(lc("spa")),
-    )]);
+    let group = Annotated::with_one(
+        Group::new(BracketedContent::new(vec![BracketedItem::Word(Box::new(
+            marked,
+        ))])),
+        ContentAnnotation::CodeSwitch(CodeSwitchSpan::Explicit(lc("spa"))),
+    );
 
     let main_tier = MainTier::new(
         "CHI",
@@ -841,10 +841,10 @@ fn a_words_own_marker_wins_over_an_enclosing_span() -> Result<(), String> {
 #[test]
 fn a_code_switch_annotation_on_one_word_governs_that_word() -> Result<(), String> {
     let plain = Word::new_unchecked("ik", "ik");
-    let annotated =
-        Annotated::new(Word::new_unchecked("hallo", "hallo")).with_scoped_annotations(vec![
-            ContentAnnotation::CodeSwitch(CodeSwitchSpan::Shortcut),
-        ]);
+    let annotated = Annotated::with_one(
+        Word::new_unchecked("hallo", "hallo"),
+        ContentAnnotation::CodeSwitch(CodeSwitchSpan::Shortcut),
+    );
 
     let main_tier = MainTier::new(
         "CHI",

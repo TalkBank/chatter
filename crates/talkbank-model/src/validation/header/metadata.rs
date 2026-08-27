@@ -210,8 +210,8 @@ mod time_format_tests {
     // `TimeDurationValue::violates_depfile_pattern` /
     // `TimeStartValue::violates_depfile_pattern` model methods,
     // and end-to-end coverage flows through the spec-driven harness
-    // at `spec/errors/E540_invalid_time_duration.md` and
-    // `spec/errors/E541_invalid_time_start.md`.
+    // at `spec/errors/E540.md` and
+    // `spec/errors/E541.md`.
     use super::*;
     use crate::ErrorCollector;
 

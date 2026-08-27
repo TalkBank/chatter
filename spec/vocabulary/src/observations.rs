@@ -9,7 +9,7 @@
 //! structural copy that drifts.
 //!
 //! What the snapshot IS, why every example is covered whatever its status, and
-//! why a diff in it is adjudicated like a corpus differential, is documented
+//! why a diff in it is adjudicated rather than regenerated blindly, is documented
 //! on the BUILDER (`spec-runtime-tools::observations`), which is where a
 //! reader tracing a diff will land.
 
@@ -109,7 +109,33 @@ impl<'a> ExampleId<'a> {
     }
 }
 
-/// What one example actually triggered, by stage.
+/// Whether serializing the parsed example reproduces its text.
+///
+/// A SUM TYPE rather than a bool, so a reader of the snapshot sees a word
+/// that says what was measured. `Diverged` is information, not failure:
+/// error-recovery examples legitimately lose recovered text, and the snapshot
+/// records which ones do TODAY, so that a parser change flipping any of them
+/// is a diff to adjudicate rather than a silent loss.
+///
+/// # Why this field exists
+///
+/// `chatter normalize` once wrote `the bebe here .` for
+/// `the bebe@k@s:spa here .` and exited 0, because a new grammar node had no
+/// lowering arm. Nothing in the repository could see it: this snapshot
+/// recorded codes only. With this field every spec example is also a
+/// roundtrip test, in `just test`, and a change that flips any example from
+/// `ByteExact` to `Diverged` is a diff to adjudicate before it lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Roundtrip {
+    /// `write_chat(parse(text)) == text`, byte for byte.
+    ByteExact,
+    /// The serialized form differs from the input.
+    Diverged,
+}
+
+/// What one example actually triggered, by stage, and whether it survived a
+/// parse-and-serialize round trip.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExampleObservation {
     /// The spec file's basename, e.g. `E256.md`.
@@ -120,6 +146,8 @@ pub struct ExampleObservation {
     pub parse: Vec<String>,
     /// Codes VALIDATION emitted, sorted and deduplicated.
     pub validation: Vec<String>,
+    /// Whether the parsed model serializes back to the input text.
+    pub roundtrip: Roundtrip,
 }
 
 impl ObservationSnapshot {

@@ -5,8 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Codes>
 
 use crate::generated_traversal::{
-    AsRawNode, LanguagesContentsNode, LanguagesHeaderNode, NodeSlot, extract_languages_contents,
-    extract_languages_header,
+    AsRawNode, LanguagesHeaderNode, NodeSlot, extract_languages_contents, extract_languages_header,
 };
 use crate::node_types::LANGUAGES_HEADER;
 use tree_sitter::Node;
@@ -118,24 +117,13 @@ fn push_language_code(
 /// `@Languages:\t\n` (an entirely empty `languages_contents`, which
 /// tree-sitter fills with a zero-width MISSING `language_code` at `child_0`);
 /// see `tests/header_internals_migration.rs`'s `LANGUAGES_EMPTY_CONTENTS`.
-pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink) -> Header {
+pub fn parse_languages_header(
+    typed: LanguagesHeaderNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Header {
+    let node = typed.raw_node();
     let mut codes = Vec::new();
-
-    // Verify this is a languages_header node
-    if node.kind() != LANGUAGES_HEADER {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!("Expected languages_header node, got: {}", node.kind()),
-        ));
-        return unknown_languages_header(
-            node,
-            source,
-            "Languages header CST node had unexpected kind",
-        );
-    }
 
     // The language-list parsing below only descends into `languages_contents`;
     // the shared header scan reports any structural ERROR/MISSING node
@@ -152,7 +140,7 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
     // `present_or_recover().ok()` keeps only a Present node and funnels every
     // non-Present recovery state to the same "Missing languages_contents"
     // diagnostic.
-    let children = extract_languages_header(LanguagesHeaderNode(node));
+    let children = extract_languages_header(typed);
     let Some(contents_node) = present(children.child_2.slot()) else {
         errors.report(ParseError::new(
             ErrorCode::EmptyLanguagesHeader,
@@ -172,13 +160,12 @@ pub fn parse_languages_header(node: Node, source: &str, errors: &impl ErrorSink)
             "Missing languages_contents in @Languages header",
         );
     };
-    let contents = contents_node.raw_node();
     surface_unexpected(&children.unexpected, source, errors);
 
     // Decompose `languages_contents` into its typed child slots: `child_0` is
     // the required first `language_code`; `child_1` is the typed repeat of
     // `(optional(whitespaces), comma, whitespaces, language_code)` groups.
-    let contents_children = extract_languages_contents(LanguagesContentsNode(contents));
+    let contents_children = extract_languages_contents(*contents_node);
 
     // First language code (required, typed child_0). This is the exact
     // position the pre-existing panic bug lived at: a MISSING placeholder here

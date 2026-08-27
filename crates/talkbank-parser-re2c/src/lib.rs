@@ -55,6 +55,7 @@ pub mod convert;
 pub mod error;
 #[doc(hidden)]
 pub mod parser;
+pub mod source_text;
 #[doc(hidden)]
 pub mod token;
 

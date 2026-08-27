@@ -1,7 +1,7 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:12 EDT
+**Last modified:** 2026-08-27 13:44 EDT
 
 ## Read the book first
 
@@ -22,14 +22,22 @@ Specs are the **single source of truth** for all CHAT grammar tests, parser
 tests, and error documentation. You never hand-edit generated test files.
 
 ```
-spec/constructs/*.md  ─┐
-                      ├──► spec/tools generators ──► grammar/test/corpus/generated/*.txt (membership from the snapshot)
-spec/errors/*.md      ─┤                            ──► crates/.../integration/generated/*.rs (construct tests only)
-                      │                            ──► crates/.../error_corpus/validation_errors/ + manifest.json (EVERY example, claim-judged)
-                      │                            ──► docs/errors/*.md
-spec/tools/templates/ ─┘
+spec/codes/error-codes.toml ─┐   one entry per CODE: variant, rustdoc, kind, status
+spec/constructs/*.md         ├──► spec/tools generators
+spec/errors/*.md             ┤        ──► crates/talkbank-model/.../generated_error_code.rs (the ErrorCode enum)
+spec/tools/templates/        ┘        ──► crates/talkbank-model/.../generated_diagnostic_kind.rs
+                                      ──► grammar/test/corpus/generated/*.txt (membership from the snapshot)
+                                      ──► crates/.../integration/generated/*.rs (construct tests only)
+                                      ──► crates/.../error_corpus/validation_errors/ + manifest.json (EVERY example, claim-judged)
+                                      ──► docs/errors/*.md
 spec/observations/    ◄── spec-runtime-tools (regenerated FIRST; what each example emits, by stage)
 ```
+
+**A spec file DOCUMENTS a code; `spec/codes/error-codes.toml` DEFINES one.**
+Several spec files may describe one code (eleven do), so nothing about the code
+itself, its `ErrorCode` variant, its rustdoc, its `kind` or whether the
+validator enforces it, may live in a spec file. Writing `kind` or `status` in
+frontmatter is a load error naming the key.
 
 Regenerate with `just spec-gen`, and ask `just spec-check` whether the
 committed artifacts are current. One command covers every artifact; the
@@ -73,7 +81,7 @@ hand-maintained tests in `manual/`.
 | → `crates/talkbank-parser-tests/tests/integration/generated/` | Generated Rust parser tests |
 | → `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | Validation fixtures + `manifest.json` (data-driven runner) |
 | → `docs/errors/` | Published error-reference pages; a registry artifact, gated |
-| → `spec/observations/` | Generated observation snapshot: what each example actually emits, by stage; a diff is adjudicated like a corpus differential |
+| → `spec/observations/` | Generated observation snapshot: what each example actually emits, by stage; a diff is adjudicated as intended or unintended, never regenerated blindly |
 
 ## Adding a Test
 
@@ -127,8 +135,6 @@ Declared data in `+++` TOML frontmatter, prose in the body:
 +++
 code = 'E999'
 name = 'Description of the condition'
-kind = 'Invalidity'     # Invalidity | Unmodeled | Deprecation | Style
-status = 'implemented'  # implemented | not_implemented | deprecated | unreachable_from_chat
 
 [[example]]
 level = 'word'          # word | utterance | tier | header | file; a fact about THIS example

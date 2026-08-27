@@ -15,7 +15,6 @@ use crate::generated_traversal::{
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{PhoItem, PhoWord};
-use tree_sitter::Node;
 
 use super::cst::{build_group_from_words, fallback_group_as_text};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -60,11 +59,12 @@ use crate::parser::tree_parsing::parser_helpers::{
 ///
 /// Returns a vector of PhoItems (usually just one).
 pub(super) fn extract_pho_group_items(
-    node: Node,
+    typed: PhoGroupNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<PhoItem> {
-    let children = extract_pho_group(PhoGroupNode(node));
+    let node = typed.raw_node();
+    let children = extract_pho_group(typed);
     surface_unexpected(&children.unexpected, source, errors);
     match children.content.slot() {
         NodeSlot::Present(PhoGroupChoice::PhoWords(pho_words)) => {
@@ -84,11 +84,7 @@ pub(super) fn extract_pho_group_items(
             surface_unexpected(&seq.unexpected, source, errors);
             match seq.child_1.slot() {
                 NodeSlot::Present(grouped_content) => {
-                    let words = extract_pho_grouped_content_words(
-                        grouped_content.raw_node(),
-                        source,
-                        errors,
-                    );
+                    let words = extract_pho_grouped_content_words(*grouped_content, source, errors);
                     build_group_from_words(words)
                 }
                 NodeSlot::Missing(_)
@@ -123,11 +119,11 @@ pub(super) fn extract_pho_group_items(
 /// repeat element (`child_1` holds the `pho_words`); that position is purely
 /// structural and handled by [`push_pho_separator`].
 pub(super) fn extract_pho_grouped_content_words<'a>(
-    node: Node<'a>,
+    typed: PhoGroupedContentNode<'a>,
     source: &'a str,
     errors: &impl ErrorSink,
 ) -> Vec<&'a str> {
-    let contents = extract_pho_grouped_content(PhoGroupedContentNode(node));
+    let contents = extract_pho_grouped_content(typed);
     let mut words: Vec<&'a str> = Vec::with_capacity(contents.child_1.slot().len() + 1);
 
     push_pho_word(contents.child_0.slot(), source, errors, &mut words);

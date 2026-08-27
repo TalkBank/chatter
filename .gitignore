@@ -47,3 +47,7 @@
 
 # Python bytecode cache
 __pycache__/
+
+# cargo-mutants run output (contains local toolchain paths)
+mutants.out/
+mutants.out.old/

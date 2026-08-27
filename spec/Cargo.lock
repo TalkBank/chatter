@@ -1485,7 +1485,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-derive"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1494,7 +1494,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-model"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "dashmap",
  "indexmap",
@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "smallvec",

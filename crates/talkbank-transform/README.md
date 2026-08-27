@@ -1,7 +1,7 @@
 # talkbank-transform
 
 **Status:** Current
-**Last modified:** 2026-05-30 07:15 EDT
+**Last modified:** 2026-08-27 01:00 EDT
 
 Transformation pipelines for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html) (CHAT to JSON, normalization, validation).
 
@@ -28,7 +28,9 @@ Key capabilities:
 ## Usage
 
 ```rust,no_run
-use talkbank_transform::{parse_and_validate, PipelineError, ParseValidateOptions};
+// `ParseValidateOptions` comes from `talkbank_model`.
+use talkbank_model::ParseValidateOptions;
+use talkbank_transform::{PipelineError, parse_and_validate};
 
 let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
     @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";

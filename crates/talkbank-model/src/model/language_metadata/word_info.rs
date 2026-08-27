@@ -59,7 +59,8 @@ impl WordLanguages {
 ///
 /// Stores the resolved language(s) and source for one word of the main tier.
 ///
-/// Position is the record's position in [`LanguageMetadata::word_languages`],
+/// Position is the record's position in
+/// [`LanguageMetadata::word_languages`](super::LanguageMetadata::word_languages),
 /// which serializes as a JSON array, so a consumer reads it with `enumerate()`.
 /// There is deliberately no stored index. One existed, documented as "the same
 /// indexing used for tier alignment", and that could not be true: Mor excludes

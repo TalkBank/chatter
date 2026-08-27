@@ -1,4 +1,4 @@
-# main_tier_rich — 200 diverse samples with brackets, groups, markers, annotations
+# main_tier_rich: 200 diverse samples with brackets, groups, markers, annotations
 # Extracted from childes-eng-na, ca, aphasia, childes-other, biling, dementia, samtale
 # Each entry is separated by a blank line.
 

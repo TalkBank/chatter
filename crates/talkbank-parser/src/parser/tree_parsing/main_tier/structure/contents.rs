@@ -80,7 +80,7 @@ impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
 /// such as `⌈2`), we attempt to glue them to the preceding word token so the resulting
 /// `UtteranceContent` still matches the manual’s lookahead expectations.
 pub fn parse_main_tier_contents(
-    node: Node,
+    typed: ContentsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<UtteranceContent> {
@@ -91,7 +91,7 @@ pub fn parse_main_tier_contents(
     // than a guaranteed 2x over-allocation and leave no wasted capacity.
     let mut content = Vec::new();
 
-    let contents = extract_contents(ContentsNode(node));
+    let contents = extract_contents(typed);
     process_contents_slot(contents.child_0.slot(), source, errors, &mut content);
     for element in contents.child_1.slot() {
         process_contents_slot(element.slot(), source, errors, &mut content);
@@ -319,12 +319,12 @@ fn parse_content_item(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     use super::super::content::{
-        parse_base_content, parse_group_content, parse_pho_group_content, parse_quotation_content,
-        parse_sin_group_content,
+        parse_base_content, parse_group_content, parse_pho_group_content,
+        parse_quotation_with_annotations_content, parse_sin_group_content,
     };
     use crate::node_types::{
         BASE_CONTENT_ITEM, GROUP_WITH_ANNOTATIONS, ILLEGAL_CURLY_QUOTE, MAIN_PHO_GROUP,
-        MAIN_SIN_GROUP, QUOTATION,
+        MAIN_SIN_GROUP, QUOTATION_WITH_OPTIONAL_ANNOTATIONS,
     };
     use crate::parser::tree_parsing::parser_helpers::is_linker;
 
@@ -366,7 +366,9 @@ fn parse_content_item(
         GROUP_WITH_ANNOTATIONS => return parse_group_content(node, source, errors),
         MAIN_PHO_GROUP => return parse_pho_group_content(node, source, errors),
         MAIN_SIN_GROUP => return parse_sin_group_content(node, source, errors),
-        QUOTATION => return parse_quotation_content(node, source, errors),
+        QUOTATION_WITH_OPTIONAL_ANNOTATIONS => {
+            return parse_quotation_with_annotations_content(node, source, errors);
+        }
         ILLEGAL_CURLY_QUOTE => {
             // Recognized illegal curly single quote: report E256 and reject
             // (no model element). The surrounding words are separate content
@@ -409,7 +411,9 @@ fn parse_content_item(
             GROUP_WITH_ANNOTATIONS => return parse_group_content(child, source, errors),
             MAIN_PHO_GROUP => return parse_pho_group_content(child, source, errors),
             MAIN_SIN_GROUP => return parse_sin_group_content(child, source, errors),
-            QUOTATION => return parse_quotation_content(child, source, errors),
+            QUOTATION_WITH_OPTIONAL_ANNOTATIONS => {
+                return parse_quotation_with_annotations_content(child, source, errors);
+            }
             ILLEGAL_CURLY_QUOTE => {
                 // Recognized illegal curly single quote inside a content_item
                 // wrapper: report E256 and reject (no model element).

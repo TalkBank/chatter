@@ -86,46 +86,42 @@ fn dispatch_header_choice(
         HeaderChoice::BlankHeader(_) => ParseOutcome::parsed(Header::Blank),
 
         // Structured headers (dedicated sub-parsers in tree_parsing/header/).
-        HeaderChoice::LanguagesHeader(n) => structured::languages(n.raw_node(), input, errors),
-        HeaderChoice::ParticipantsHeader(n) => {
-            structured::participants(n.raw_node(), input, errors)
-        }
-        HeaderChoice::IdHeader(n) => structured::id(n.raw_node(), input, errors),
-        HeaderChoice::MediaHeader(n) => structured::media(n.raw_node(), input, errors),
-        HeaderChoice::SituationHeader(n) => structured::situation(n.raw_node(), input, errors),
-        HeaderChoice::TypesHeader(n) => structured::types(n.raw_node(), input, errors),
+        HeaderChoice::LanguagesHeader(n) => structured::languages(n, input, errors),
+        HeaderChoice::ParticipantsHeader(n) => structured::participants(n, input, errors),
+        HeaderChoice::IdHeader(n) => structured::id(n, input, errors),
+        HeaderChoice::MediaHeader(n) => structured::media(n, input, errors),
+        HeaderChoice::SituationHeader(n) => structured::situation(n, input, errors),
+        HeaderChoice::TypesHeader(n) => structured::types(n, input, errors),
 
         // Special (mixed-shape) headers.
-        HeaderChoice::CommentHeader(n) => special::comment(n.raw_node(), input, errors),
-        HeaderChoice::NumberHeader(n) => special::number(n.raw_node(), input, errors),
-        HeaderChoice::RecordingQualityHeader(n) => {
-            special::recording_quality(n.raw_node(), input, errors)
-        }
-        HeaderChoice::TranscriptionHeader(n) => special::transcription(n.raw_node(), input, errors),
-        HeaderChoice::BirthOfHeader(n) => special::birth_of(n.raw_node(), input, errors),
-        HeaderChoice::BirthplaceOfHeader(n) => special::birthplace_of(n.raw_node(), input, errors),
-        HeaderChoice::L1OfHeader(n) => special::l1_of(n.raw_node(), input, errors),
-        HeaderChoice::OptionsHeader(n) => special::options(n.raw_node(), input, errors),
+        HeaderChoice::CommentHeader(n) => special::comment(n, input, errors),
+        HeaderChoice::NumberHeader(n) => special::number(n, input, errors),
+        HeaderChoice::RecordingQualityHeader(n) => special::recording_quality(n, input, errors),
+        HeaderChoice::TranscriptionHeader(n) => special::transcription(n, input, errors),
+        HeaderChoice::BirthOfHeader(n) => special::birth_of(n, input, errors),
+        HeaderChoice::BirthplaceOfHeader(n) => special::birthplace_of(n, input, errors),
+        HeaderChoice::L1OfHeader(n) => special::l1_of(n, input, errors),
+        HeaderChoice::OptionsHeader(n) => special::options(n, input, errors),
 
         // GEM headers.
-        HeaderChoice::BgHeader(n) => gem::bg(n.raw_node(), input, errors),
-        HeaderChoice::EgHeader(n) => gem::eg(n.raw_node(), input, errors),
-        HeaderChoice::GHeader(n) => gem::g(n.raw_node(), input, errors),
+        HeaderChoice::BgHeader(n) => gem::bg(n, input, errors),
+        HeaderChoice::EgHeader(n) => gem::eg(n, input, errors),
+        HeaderChoice::GHeader(n) => gem::g(n, input, errors),
 
         // Simple scalar headers.
-        HeaderChoice::DateHeader(n) => simple::date(n.raw_node(), input, errors),
-        HeaderChoice::TapeLocationHeader(n) => simple::tape_location(n.raw_node(), input, errors),
-        HeaderChoice::TimeDurationHeader(n) => simple::time_duration(n.raw_node(), input, errors),
-        HeaderChoice::TimeStartHeader(n) => simple::time_start(n.raw_node(), input, errors),
-        HeaderChoice::LocationHeader(n) => simple::location(n.raw_node(), input, errors),
-        HeaderChoice::RoomLayoutHeader(n) => simple::room_layout(n.raw_node(), input, errors),
-        HeaderChoice::TranscriberHeader(n) => simple::transcriber(n.raw_node(), input, errors),
-        HeaderChoice::WarningHeader(n) => simple::warning(n.raw_node(), input, errors),
-        HeaderChoice::ActivitiesHeader(n) => simple::activities(n.raw_node(), input, errors),
-        HeaderChoice::BckHeader(n) => simple::bck(n.raw_node(), input, errors),
-        HeaderChoice::PageHeader(n) => simple::page(n.raw_node(), input, errors),
-        HeaderChoice::VideosHeader(n) => simple::videos(n.raw_node(), input, errors),
-        HeaderChoice::THeader(n) => simple::t(n.raw_node(), input, errors),
+        HeaderChoice::DateHeader(n) => simple::date(n, input, errors),
+        HeaderChoice::TapeLocationHeader(n) => simple::tape_location(n, input, errors),
+        HeaderChoice::TimeDurationHeader(n) => simple::time_duration(n, input, errors),
+        HeaderChoice::TimeStartHeader(n) => simple::time_start(n, input, errors),
+        HeaderChoice::LocationHeader(n) => simple::location(n, input, errors),
+        HeaderChoice::RoomLayoutHeader(n) => simple::room_layout(n, input, errors),
+        HeaderChoice::TranscriberHeader(n) => simple::transcriber(n, input, errors),
+        HeaderChoice::WarningHeader(n) => simple::warning(n, input, errors),
+        HeaderChoice::ActivitiesHeader(n) => simple::activities(n, input, errors),
+        HeaderChoice::BckHeader(n) => simple::bck(n, input, errors),
+        HeaderChoice::PageHeader(n) => simple::page(n, input, errors),
+        HeaderChoice::VideosHeader(n) => simple::videos(n, input, errors),
+        HeaderChoice::THeader(n) => simple::t(n, input, errors),
         HeaderChoice::UnsupportedHeader(n) => simple::unsupported(n.raw_node(), input, errors),
 
         // Gap: `thumbnail_header` is the one `header` subtype with no model

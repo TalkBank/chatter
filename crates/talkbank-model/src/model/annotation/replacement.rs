@@ -271,45 +271,22 @@ impl IntoIterator for ReplacedWordAnnotations {
     }
 }
 
-impl crate::validation::Validate for ReplacedWordAnnotations {
-    /// Flags unknown scoped-annotation markers while preserving lenient parsing.
-    fn validate(
-        &self,
-        context: &crate::validation::ValidationContext,
-        errors: &impl crate::ErrorSink,
-    ) {
-        let span = match context.field_span {
-            Some(span) => span,
-            None => crate::Span::DUMMY,
-        };
-        // DEFAULT: Absent field text is reported as empty for error context.
-        let text = context.field_text.as_deref().unwrap_or_default();
-        // DEFAULT: Missing label falls back to "annotation" for error messaging.
-        let label = context.field_label.unwrap_or("annotation");
-
-        for annotation in &self.0 {
-            if let ContentAnnotation::Unknown(unknown) = annotation {
-                let marker = &unknown.marker;
-                let message = format!(
-                    "\"{}\" is not a known scoped annotation type: known types are *, =, +, <, >, //, ///",
-                    marker
-                );
-                errors.report(
-                    crate::ParseError::new(
-                        crate::ErrorCode::UnknownAnnotation,
-                        crate::Severity::Error,
-                        crate::SourceLocation::new(span),
-                        crate::ErrorContext::new(text, span, label),
-                        message,
-                    )
-                    .with_suggestion(
-                        "Use one of the known scoped annotation types: [*], [= text], [+ text], [<], [>], [//], [///]",
-                    ),
-                );
-            }
-        }
-    }
-}
+// `impl Validate for ReplacedWordAnnotations` stood here and is DELETED.
+//
+// It was the second of three emitters of E207. On 2026-08-27 the unknown
+// annotation check moved out of `Annotated<T>`'s `Validate` impl and onto a
+// traversal over the tier, because a trait bound was standing in for a policy.
+// That traversal reaches a replaced word through `WordRef::Replaced`, so this
+// impl became a duplicate, and the two carried DIFFERENT spans (this one used
+// `context.field_span`, the traversal uses `replaced.span`), so nothing
+// downstream collapsed them: `dog [: cat] [@ xyz] .` reported E207 TWICE under
+// `--parser re2c` where v0.15.0 reported one diagnostic.
+//
+// Deleting it also removed three fabricated values this file was carrying: a
+// `None => Span::DUMMY`, an `unwrap_or_default()` for the error text, and an
+// `unwrap_or("annotation")` for the label. A sentinel span equal to a real
+// position at offset 0 is the exact shape the workspace bans, and it existed
+// only because this emitter had no span of its own to report.
 
 /// Replacement specification indicating the intended word(s).
 ///
@@ -595,14 +572,6 @@ impl crate::validation::Validate for ReplacedWord {
             .with_field_text(self.word.cleaned_text().to_string())
             .with_field_label("replacement");
         self.replacement.validate(&replacement_context, errors);
-
-        let annotation_context = context
-            .clone()
-            .with_field_span(self.word.span)
-            .with_field_text(self.word.cleaned_text().to_string())
-            .with_field_label("annotation");
-        self.scoped_annotations
-            .validate(&annotation_context, errors);
     }
 }
 

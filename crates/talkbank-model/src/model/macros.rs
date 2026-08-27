@@ -10,7 +10,8 @@
 /// The READ and RENDER surface shared by every `SmolStr`-backed string
 /// newtype: `as_str`, `WriteChat`, `Display`, `Deref<Target = str>`, `AsRef<str>`.
 ///
-/// Separated from [`string_newtype!`] so a newtype WITH an invariant can share
+/// Separated from [`string_newtype!`](crate::string_newtype) so a newtype
+/// WITH an invariant can share
 /// it. Such a type must not have the infallible `new` / `From<String>` /
 /// `From<&str>` that `string_newtype!` also emits, since an invariant with an
 /// infallible constructor beside it is a suggestion rather than an invariant;

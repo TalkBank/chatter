@@ -487,7 +487,7 @@ impl MarkdownCategory {
 /// that counted parens per LINE overran, and the committed spec ended
 /// `(newline))))))` followed by two lines of paste debris (`_header`,
 /// `ewline))))`). EVERY gate passed: `tree-sitter test`, `spec-check`,
-/// `spec-gen`, the corpus differential. They passed because the generated
+/// `spec-gen`. They passed because the generated
 /// corpus test is re-derived from an actual parse and never compared against
 /// this block, so the block is read only by humans, and no human read it.
 ///

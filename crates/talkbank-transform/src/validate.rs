@@ -217,18 +217,19 @@ pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<Validat
 
 /// Post-validation for morphotag: %mor word count must match main tier.
 fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
-    use talkbank_model::alignment::helpers::TierDomain;
+    use talkbank_model::alignment::helpers::{TierDomain, count_tier_positions};
 
     for line in &file.lines {
         if let Line::Utterance(utt) = line {
-            // Count alignable words
-            let mut extracted = Vec::new();
-            crate::extract::collect_utterance_content(
-                &utt.main.content.content,
-                TierDomain::Mor,
-                &mut extracted,
-            );
-            let word_count = extracted.len();
+            // `count_tier_positions`, not `collect_utterance_content(..).len()`.
+            // This wanted a NUMBER and was building a `Vec` of `ExtractedWord`
+            // to get it, and every one of those costs two heap allocations
+            // (`ChatCleanedText` and `ChatRawText` both own a `String`), so a
+            // count of N words allocated 2N strings and threw them away. The
+            // counter already exists and is the same rule; extraction's own
+            // docs name `count_tier_positions(..) == collect_tier_items(..)
+            // .len()` as the invariant tying the two together.
+            let word_count = count_tier_positions(&utt.main.content.content, TierDomain::Mor);
 
             // Count %mor items
             for entry in &utt.dependent_tiers {

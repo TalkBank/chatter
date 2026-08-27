@@ -225,6 +225,104 @@ expression: snapshot
       "line_type": "header"
     },
     {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "3. word carrying a @ form marker (anda@i, a:nda@i): the payload is a",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "whole standalone_word, so it takes a form marker after the body, and",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "`w_body` alone is one production short. Flagged by the same parity",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "oracle on 2026-08-26, from rhd-data Spanish PerLA, where re2c failed",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "the whole utterance with E253 \"Word content cannot be empty\"",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "pointing at byte 0 of the file: a code and a position that both",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "described something other than the input.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
       "line_type": "utterance",
       "main": {
         "content": {
@@ -513,6 +611,108 @@ expression: snapshot
                 }
               ],
               "raw_text": "indeed",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "so",
+              "content": [
+                {
+                  "content": "so",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "so",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "she",
+              "content": [
+                {
+                  "content": "she",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "she",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "said",
+              "content": [
+                {
+                  "content": "said",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "said",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "anda@i",
+              "type": "other_spoken_event"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "PAR"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "and",
+              "content": [
+                {
+                  "content": "and",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "and",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "then",
+              "content": [
+                {
+                  "content": "then",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "then",
+              "type": "word"
+            },
+            {
+              "speaker": "INV",
+              "text": "a:nda@i",
+              "type": "other_spoken_event"
+            },
+            {
+              "cleaned_text": "quietly",
+              "content": [
+                {
+                  "content": "quietly",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "quietly",
               "type": "word"
             }
           ],

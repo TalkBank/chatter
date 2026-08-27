@@ -27,17 +27,21 @@ themselves.
 
 ## Spec Format
 
-Each error specification is `+++` TOML frontmatter, then markdown prose:
+Each error specification is `+++` TOML frontmatter, then markdown prose.
+
+A spec DOCUMENTS a code; it does not define one. Everything true of the code
+itself (its `ErrorCode` variant, its rustdoc, its `kind`, and whether the
+validator enforces it) lives in `spec/codes/error-codes.toml`, one entry per
+code, and this file reaches it through `code`. Writing `kind` or `status` here
+is a load error naming the key.
 
 ````markdown
 +++
-code = 'E###'
-name = 'Error title'
-kind = 'Invalidity'     # Invalidity | Unmodeled | Deprecation | Style
-status = 'implemented'  # implemented | not_implemented | deprecated | unreachable_from_chat
-level = 'word'          # word | utterance | tier | header | file
+code = 'E###'          # must be registered in spec/codes/error-codes.toml
+name = 'Error title'   # THIS FILE's name; several files may document one code
 
 [[example]]
+level = 'word'         # word | utterance | tier | header | file; per EXAMPLE
 claim = 'violates'
 chat = '''
 ... example CHAT that triggers the error ...
@@ -161,7 +165,7 @@ After generating tests:
 
 5. Verify no regressions on reference corpus:
    ```bash
-   cargo test -p talkbank-parser-tests parser_equivalence
+   cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus
    cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
    ```
 

@@ -41,9 +41,10 @@ use std::path::{Path, PathBuf};
 use talkbank_model::model::FileStem;
 use talkbank_model::model::TranscriptName;
 
-use talkbank_model::{ErrorCollector, ParseOutcome, RuleSelection};
+use talkbank_model::{ErrorCode, ErrorCollector, ParseOutcome, RuleSelection};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
+use talkbank_spec_vocabulary::observations::ExampleId;
 
 /// The validation corpus dir this crate's fixtures live under (shared with
 /// `validation_error_corpus.rs`).
@@ -87,43 +88,71 @@ fn codes_through_config_path(
     Ok(codes)
 }
 
-/// Load a committed spec-generated fixture by name (no extension) and run it
-/// through `codes_through_config_path`, asserting `expected_code` appears.
+/// Assert that `code` fires through the config path, using the committed
+/// fixture the spec for that code generated as its `example`th (0-based)
+/// example.
+///
+/// # Why this takes an `ErrorCode` rather than two strings
+///
+/// It used to take a hand-typed fixture stem beside a hand-typed expected
+/// code: `("E544_media_linkage_without_timing_1", "E544")`. That states the
+/// code twice and mirrors a filename the generator owns, and both mirrors
+/// broke at once on 2026-08-26 when the error specs were renamed to the bare
+/// `E###.md` convention and the generator's fixture names moved with them.
+/// Four tests went red over a rename, in a file whose subject (does the config
+/// path run the whole check sequence?) had not changed at all.
+///
+/// # Where the naming rule actually lives, which is NOT here
+///
+/// `<stem>_<1-based position>.cha` is owned by
+/// [`ExampleId::fixture_name`](talkbank_spec_vocabulary::observations::ExampleId::fixture_name),
+/// whose own docstring records that three generators and the snapshot key each
+/// derived it independently before it had an owner. This asks that type rather
+/// than becoming the fourth, so the 1-based convention in particular is
+/// applied in exactly one place.
+///
+/// What this function DOES decide is the spec file's name, and it assumes the
+/// bare `E###.md` convention. That holds for every code with a single spec
+/// file, which is all four used here; a code claimed by more than one spec
+/// cannot be addressed this way at all, and would need the fixture looked up
+/// through `manifest.json` instead.
 fn assert_fixture_code_fires_through_config_path(
-    fixture_stem: &str,
-    expected_code: &str,
+    code: ErrorCode,
+    example: usize,
 ) -> Result<(), TestError> {
-    let dir = corpus_dir();
-    let path = dir.join(format!("{fixture_stem}.cha"));
+    let spec_file = format!("{}.md", code.as_str());
+    let fixture = ExampleId::from_enumerate(&spec_file, example).fixture_name();
+    let path = corpus_dir().join(&fixture);
     let content = std::fs::read_to_string(&path)
         .map_err(|err| TestError::Failure(format!("failed to read {}: {err}", path.display())))?;
-    let codes =
-        codes_through_config_path(&content, TranscriptName::for_path(Path::new(fixture_stem)))?;
+    let stem = Path::new(&fixture).with_extension("");
+    let codes = codes_through_config_path(&content, TranscriptName::for_path(&stem))?;
     assert!(
-        codes.iter().any(|c| c == expected_code),
-        "{fixture_stem}: expected {expected_code} through validate_with_config, got {codes:?}"
+        codes.iter().any(|c| c == code.as_str()),
+        "{fixture}: expected {} through validate_with_config, got {codes:?}",
+        code.as_str()
     );
     Ok(())
 }
 
 #[test]
 fn e544_media_linkage_without_timing_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path("E544_media_linkage_without_timing_1", "E544")
+    assert_fixture_code_fires_through_config_path(ErrorCode::MediaLinkageWithoutTiming, 0)
 }
 
 #[test]
 fn e552_media_unlinked_with_timing_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path("E552_media_unlinked_with_timing_1", "E552")
+    assert_fixture_code_fires_through_config_path(ErrorCode::MediaUnlinkedWithTiming, 0)
 }
 
 #[test]
 fn e752_timing_without_media_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path("E752_timing_without_media_1", "E752")
+    assert_fixture_code_fires_through_config_path(ErrorCode::TimingWithoutMedia, 0)
 }
 
 #[test]
 fn e755_undeclared_utterance_language_fires_through_config_path() -> Result<(), TestError> {
-    assert_fixture_code_fires_through_config_path("E755_undeclared_utterance_language_1", "E755")
+    assert_fixture_code_fires_through_config_path(ErrorCode::UndeclaredUtteranceLanguage, 0)
 }
 
 /// CHECK 122: `@ID`'s language field names a real ISO 639-3 code (`fra`,

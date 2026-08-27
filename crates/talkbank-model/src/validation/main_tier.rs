@@ -18,7 +18,9 @@ mod word_recursion;
 
 pub(crate) use word_recursion::validate_words_at_every_depth;
 
-use crate::model::{BracketedItem, ContentStructure, GroupRef, MainTier, UtteranceContent};
+use crate::model::{
+    AnnotatedContentAnnotations, ContentStructure, Descend, GroupRef, MainTier, UtteranceContent,
+};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 /// Reject pauses that occur inside phonological groups (`‹...›`).
@@ -61,6 +63,43 @@ pub(crate) fn check_no_pauses_in_pho_groups(main_tier: &MainTier, errors: &impl 
     }
 }
 
+/// Report every UNRECOGNISED scoped annotation, on any construct, at any depth.
+///
+/// # Why a traversal and not a trait impl
+///
+/// It was `impl<T: Validate> Validate for Annotated<T>`, which reached a
+/// construct's annotations only when its PAYLOAD implemented `Validate`.
+/// `Word` does; `Group`, `Event`, `Action` and `Quotation` do not. So whether
+/// an unrecognised annotation was reported depended on a property of something
+/// else entirely, which is a policy nobody chose and nothing stated.
+///
+/// It went unseen because the default backend refuses those inputs at parse
+/// time and never builds the node. Under `--parser=re2c`, which does build it,
+/// 0.16.0's unrecognised-annotation fix reached the word and turned the other
+/// five hosts SILENT: `<hello world> [qq] .`, `&=laughs [qq] .`, `0 [qq] .`,
+/// `“hello” [qq] .` and `hello (.) [qq] .` all validated clean where v0.15.0
+/// reported E321. A backend that answers "valid" on input the authority
+/// refuses is useless as the specification oracle it exists to be.
+///
+/// [`ContentStructure::scoped_annotations`] answers for every variant already,
+/// so asking the owner removes the coupling rather than adding four `Validate`
+/// impls with nothing else to say.
+pub(crate) fn report_unknown_annotations(main_tier: &MainTier, errors: &impl ErrorSink) {
+    for content_item in main_tier.content.content.iter() {
+        content_item.structure().walk(&mut |item| {
+            let annotations = item.scoped_annotations();
+            if !annotations.is_empty() {
+                // A leaf records no span of its own, so its annotations are
+                // reported against the tier. Saying so beats inventing a
+                // position for them.
+                let span = item.span().unwrap_or(main_tier.span);
+                AnnotatedContentAnnotations::report_unknown_markers(annotations, span, errors);
+            }
+            Descend::Into
+        });
+    }
+}
+
 /// Reject nested quotations inside a quotation span.
 ///
 /// Quotations (`"..."`) should not contain other quotations. This checks both
@@ -73,11 +112,42 @@ pub(crate) fn check_no_pauses_in_pho_groups(main_tier: &MainTier, errors: &impl 
 /// - `"I said hello there"` - OK: no nesting
 /// - `he said "hello" and "goodbye"` - OK: separate quotations, not nested
 pub(crate) fn check_no_nested_quotations(main_tier: &MainTier, errors: &impl ErrorSink) {
-    // Check all main tier content for quotations
     for content_item in main_tier.content.content.iter() {
-        if let UtteranceContent::Quotation(quotation) = content_item {
-            // Check if this quotation contains any nested quotations
-            if has_nested_quotation(&quotation.content.content) {
+        report_nested_quotations(content_item.structure(), main_tier, errors);
+    }
+}
+
+/// Report every quotation, at ANY depth, that encloses a further quotation.
+///
+/// # Why this descends instead of matching one variant
+///
+/// It was `if let UtteranceContent::Quotation(q) = content_item`, at the top
+/// level only. That is the same defect [`has_nested_quotation`] documents one
+/// level down, in the OTHER half of the same relation, and it outlived that
+/// fix.
+///
+/// A quotation carrying a retrace marker does not lower to
+/// `UtteranceContent::Quotation`; it lowers to a RETRACE wrapping the
+/// quotation. So the `if let` never matched and the rule silently stopped
+/// applying, on the default backend only:
+///
+/// ```text
+/// *CHI:	“a “b” c” .              reported E372
+/// *CHI:	“a “b” c” [//] hello .    reported NOTHING, and re2c reported E372
+/// ```
+///
+/// The rule holds between two quotations, so it has to descend on BOTH sides:
+/// to the one that encloses and to the one enclosed. Both halves classify
+/// through [`ContentStructure`] now, so neither can be hidden by a wrapper
+/// again. Spec examples 4 and 5 of `E372.md` are the two directions.
+fn report_nested_quotations(
+    structure: ContentStructure<'_>,
+    main_tier: &MainTier,
+    errors: &impl ErrorSink,
+) {
+    structure.walk(&mut |item| match item {
+        ContentStructure::Group(GroupRef::Quotation(_)) => {
+            if encloses_a_quotation(item) {
                 errors.report(
                     ParseError::new(
                         ErrorCode::NestedQuotation,
@@ -89,8 +159,17 @@ pub(crate) fn check_no_nested_quotations(main_tier: &MainTier, errors: &impl Err
                     .with_suggestion("Use separate quotations or reformulate without nesting"),
                 );
             }
+            // SKIP, not `Into`, and this is the whole reason `walk` carries a
+            // three-state answer: the predicate above already covers every
+            // depth beneath this quotation, so descending as well would report
+            // the same nesting once per level of it.
+            Descend::Skip
         }
-    }
+        ContentStructure::Word(_)
+        | ContentStructure::Retrace(_)
+        | ContentStructure::Group(_)
+        | ContentStructure::Leaf(_) => Descend::Into,
+    });
 }
 
 /// Recursively detect whether any nested item is a quotation, at ANY depth.
@@ -111,20 +190,27 @@ pub(crate) fn check_no_nested_quotations(main_tier: &MainTier, errors: &impl Err
 /// means the predicate descends wherever the rest of the crate descends, and
 /// `GroupRef` is what lets it still tell a QUOTATION from any other container,
 /// which a bare `&BracketedContent` could not.
-fn has_nested_quotation(items: &[BracketedItem]) -> bool {
-    items.iter().any(|item| {
-        // Bound once. Calling `structure()` again inside the arm re-derives
-        // what the match just destructured, and leaves two calls that a reader
-        // must keep in agreement.
-        let structure = item.structure();
-        match structure {
-            ContentStructure::Group(GroupRef::Quotation(_)) => true,
-            ContentStructure::Retrace(_) | ContentStructure::Group(_) => structure
-                .enclosed()
-                .is_some_and(|content| has_nested_quotation(&content.content)),
-            ContentStructure::Word(_) | ContentStructure::Leaf(_) => false,
+fn encloses_a_quotation(container: ContentStructure<'_>) -> bool {
+    let Some(content) = container.enclosed() else {
+        return false;
+    };
+    let mut found = false;
+    for item in content.content.iter() {
+        item.structure().walk(&mut |item| match item {
+            ContentStructure::Group(GroupRef::Quotation(_)) => {
+                found = true;
+                Descend::Stop
+            }
+            ContentStructure::Word(_)
+            | ContentStructure::Retrace(_)
+            | ContentStructure::Group(_)
+            | ContentStructure::Leaf(_) => Descend::Into,
+        });
+        if found {
+            break;
         }
-    })
+    }
+    found
 }
 
 /// Regression tests for main-tier structural checks in this module.

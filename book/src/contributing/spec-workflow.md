@@ -1,7 +1,7 @@
 # Spec Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:12 EDT
+**Last updated:** 2026-08-27 18:09 EDT
 
 How to change `spec/` and leave the repository consistent. For what the fields
 MEAN, read [Spec System](../architecture/spec-system.md) first; this page is
@@ -77,8 +77,6 @@ declared goes in `+++` TOML frontmatter; the prose goes in the body.
 +++
 code = 'E301'
 name = 'Empty speaker code'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 source = 'E3xx_main_tier_errors/E301_empty_speaker.cha'
@@ -116,11 +114,17 @@ get wrong. They are covered in full in
   the per-stage record lives in the observation snapshot. (The field existed
   until R4, and deciding it wrongly produced tests that could never see their
   own code.)
-- **`status = 'not_implemented'` DEFERS the example** and `#[ignore]`s its
-  generated tests. `status` is REQUIRED: a spec that omits it does not load.
-  (This bullet said omitting it "defaults to `implemented`" until 2026-08-21;
-  that default was removed on 2026-08-11, because an invented answer to
-  "is this rule live" is the kind of wrong value nothing notices.)
+- **`status` and `kind` are NOT yours to declare.** They are facts about the
+  CODE, and they live in `spec/codes/error-codes.toml`, one entry per code
+  (R1, 2026-08-26). A spec naming a code that file does not declare does not
+  load, and `status = 'not_implemented'` THERE still defers every example of
+  that code and `#[ignore]`s its generated tests. Writing either key in a spec
+  file is a load error naming the key.
+  (This bullet described `status` as a required spec field until R1, and
+  before 2026-08-21 said omitting it "defaults to `implemented`". Both are
+  gone: an invented answer to "is this rule live" is the kind of wrong value
+  nothing notices, and a per-file copy of a per-code fact is the kind that
+  eleven files could disagree about.)
 - **`source`'s stem names the transcript**, which is what rules about the
   file's own name (E531) compare against.
 

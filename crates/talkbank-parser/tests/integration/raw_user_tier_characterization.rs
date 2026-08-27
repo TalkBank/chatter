@@ -44,7 +44,7 @@
 //! The migration is BEHAVIOUR-PRESERVING: the parsed tier model and the recovery
 //! diagnostics must not change. Coverage split:
 //! - `%eng` (raw) and `%xtra` (`%x*`) are also exercised across the reference
-//!   corpus (`corpus/reference/tiers/`), so the `parser_equivalence` + roundtrip
+//!   corpus (`corpus/reference/tiers/`), so the `reference_corpus_parses` + roundtrip
 //!   gate is their exhaustive guard; these are valid CHAT.
 //! - `%custom` (unknown tier) is INVALID CHAT that the parse-don't-validate
 //!   grammar structurally captures as `Unsupported`. The reference corpus contains

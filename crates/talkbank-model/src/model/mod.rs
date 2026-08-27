@@ -205,6 +205,7 @@ pub use content::{
     TierContentItems,
     TierSeparator,
     UnderlineMarker,
+    UnspannedSwitchTarget,
     UtteranceContent,
     // Word types
     Word,
@@ -225,13 +226,22 @@ pub use content::{
     WordUnderlineBegin,
     WordUnderlineEnd,
 };
-pub use content::{ContentStructure, GroupRef, LeafContent, LeafRef, RetraceRef, WordRef};
+pub use content::{
+    AngleRef, ContainerMut, ContentStructure, Descend, GroupKind, GroupMut, GroupRef, LeafContent,
+    LeafRef, QuotationRef, RetraceRef, WordRef,
+};
 
 // Re-export annotation types
+// `AnnotatedContentAnnotations` rides with `Annotated` deliberately: it is the
+// argument type of the public `Annotated::new`, so a caller who can name the
+// wrapper must be able to name the proof its constructor demands. It was
+// omitted when the non-empty invariant landed, which left the only route to a
+// legal `Annotated` running through a module path nothing else here uses.
 pub use annotation::{
-    Annotated, CodeSwitchSpan, ContentAnnotation, OverlapMarkerIndex, ReplacedWord, Replacement,
-    ScopedAlternative, ScopedError, ScopedExplanation, ScopedOverlapBegin, ScopedOverlapEnd,
-    ScopedParalinguistic, ScopedPercentComment, ScopedUnknown,
+    Annotated, AnnotatedContentAnnotations, CodeSwitchSpan, ContentAnnotation, NoScopedAnnotations,
+    OverlapMarkerIndex, ReplacedWord, Replacement, ScopedAlternative, ScopedError,
+    ScopedExplanation, ScopedOverlapBegin, ScopedOverlapEnd, ScopedParalinguistic,
+    ScopedPercentComment, ScopedUnknown,
 };
 
 // Re-export dependent tier types

@@ -7,9 +7,8 @@
 
 use talkbank_model::ErrorSink;
 use talkbank_model::model::IntTier;
-use tree_sitter::Node;
 
-use crate::generated_traversal::{IntDependentTierNode, extract_int_dependent_tier};
+use crate::generated_traversal::{AsRawNode, IntDependentTierNode, extract_int_dependent_tier};
 
 use super::helpers::{parse_optional_text_tier_content, span_of};
 
@@ -24,17 +23,20 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 /// body as `child_2.slot`, matched exhaustively by the shared
 /// [`parse_optional_text_tier_content`], which also surfaces the carrier's `unexpected`
 /// sink (R2).
-pub fn parse_int_tier(node: Node, source: &str, errors: &impl ErrorSink) -> IntTier {
+pub fn parse_int_tier(
+    typed: IntDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> IntTier {
+    let node = typed.raw_node();
     let span = span_of(node);
-    let children = extract_int_dependent_tier(IntDependentTierNode(node));
+    let children = extract_int_dependent_tier(typed);
     let content = parse_optional_text_tier_content(
-        node,
+        typed,
         children.child_2.slot(),
         &children.unexpected,
         source,
         errors,
-        "int_dependent_tier",
-        "Missing content in %int tier",
     );
     IntTier::new(content).with_span(span)
 }

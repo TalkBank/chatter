@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-08-21 12:45 EDT
+**Last modified:** 2026-08-27 00:33 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -79,7 +79,8 @@ change earns the same scrutiny as one that looks worse.
 
 | Gate | Command | What it protects |
 |---|---|---|
-| Parser equivalence | `cargo test -p talkbank-parser-tests --tests parser_equivalence` | The re2c oracle and the tree-sitter parser agree on every reference file. A divergence means one parser is wrong, or a construct spec is missing. |
+| Parser parity oracle | `cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus` | The re2c oracle and the tree-sitter parser agree on every reference file, compared with `SemanticEq`. A divergence means one parser is wrong, or a construct spec is missing. |
+| Reference corpus parses | `cargo test -p talkbank-parser-tests --tests reference_corpus_parses` | Every reference file parses cleanly with the tree-sitter parser. Compares nothing; this row claimed to be the parity oracle until 2026-08-26, and that crate cannot be one, since it does not depend on the re2c parser. |
 | Roundtrip idempotency, and reference coverage | `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for EVERY reference file. One test carries both guarantees: it iterates the whole corpus (coverage) and checks semantic equality on each (idempotency). |
 | Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses cleanly. (Error specs no longer feed this: R4 deleted the string-based error tests as strictly weaker than the fixture corpus plus the observation snapshot.) |
 | Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every ERROR-spec example (both stages, since R4) still satisfies its CLAIM against its generated `.cha` fixture, absences included. |

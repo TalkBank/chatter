@@ -1,8 +1,6 @@
 +++
 code = 'E342'
 name = 'Angle-bracket group with no following annotation is invalid'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'utterance'

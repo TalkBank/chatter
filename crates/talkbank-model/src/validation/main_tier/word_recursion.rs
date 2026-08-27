@@ -15,15 +15,23 @@
 //!
 //! # Why the obvious fix is wrong
 //!
-//! The shared `walk_words` walker recurses correctly, but it unwraps an
-//! `AnnotatedWord` and yields only the inner `Word`. `Annotated<T>::validate`
-//! deliberately does two things: it validates the inner payload AND the
-//! scoped-annotation constraints (for example `E-EmptyAnnotatedContentAnnotations`).
-//! Routing word validation through `walk_words` would therefore have traded
-//! one silent gap for another, dropping annotation validation everywhere.
+//! The shared `walk_words` walker recurses correctly, but it yields only
+//! `Word` values, and the word-like items are not all words: a
+//! `ReplacedWord::validate` carries E387, E388 and E389, and `entering()`
+//! builds a language scope per item. Routing word validation through
+//! `walk_words` would drop those.
 //!
 //! So this module recurses itself and hands each item to its OWN `Validate`
-//! implementation, which is what preserves both halves.
+//! implementation.
+//!
+//! The reason recorded here until 2026-08-27 was a DIFFERENT one and is no
+//! longer true: it said `Annotated<T>::validate` "deliberately does two
+//! things", validating the payload AND the scoped annotations, so routing
+//! through `walk_words` would drop annotation validation everywhere.
+//! Annotations left that impl that day, for
+//! `validation::main_tier::report_unknown_annotations`, and the impl is gone.
+//! The justification had to be restated from what is still true rather than
+//! left pointing at a mechanism that no longer exists.
 //!
 //! # Exhaustiveness is the point
 //!
@@ -69,39 +77,36 @@ pub(crate) fn validate_words_at_every_depth(
         let scoped = entering(context, item.structure().scoped_annotations());
         let context = &*scoped;
         match item {
-            // Word-like leaves: each validates itself. `AnnotatedWord` must go
-            // through its own impl, not through its inner word, so that scoped
-            // annotations stay validated.
+            // Word-like leaves: each validates itself. An annotated word hands
+            // over its INNER word, because its annotations are not this walk's
+            // business: `report_unknown_annotations` owns them for every
+            // construct, not only the ones whose payload implements `Validate`.
             UtteranceContent::Word(word) => word.validate(context, errors),
-            UtteranceContent::AnnotatedWord(annotated) => annotated.validate(context, errors),
+            UtteranceContent::AnnotatedWord(annotated) => {
+                annotated.inner.validate(context, errors);
+            }
             UtteranceContent::ReplacedWord(replaced) => replaced.validate(context, errors),
 
             // Containers: recurse. These are precisely the variants the old
             // `_ => {}` discarded. `Quotation` belongs here and is easy to
             // miss: it carries `BracketedContent` like any other group.
-            UtteranceContent::Group(group) => {
-                validate_bracketed(&group.content.content, context, errors)
-            }
-            UtteranceContent::AnnotatedGroup(annotated) => {
-                validate_bracketed(&annotated.inner.content.content, context, errors)
-            }
-            UtteranceContent::Retrace(retrace) => {
-                validate_bracketed(&retrace.content.content, context, errors)
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same handling as the bare form: the wrapper carries only
-                // the annotations written after the marker, and the retraced
-                // content is unchanged.
-                validate_bracketed(&annotated.inner.content.content, context, errors)
-            }
-            UtteranceContent::PhoGroup(group) => {
-                validate_bracketed(&group.content.content, context, errors)
-            }
-            UtteranceContent::SinGroup(group) => {
-                validate_bracketed(&group.content.content, context, errors)
-            }
-            UtteranceContent::Quotation(quotation) => {
-                validate_bracketed(&quotation.content.content, context, errors)
+            // Containers: ONE arm. Every one of these recursed unconditionally
+            // into its enclosed content, which is what `ContentStructure::enclosed`
+            // is for; its own docstring names the walkers under `validation/` and
+            // `alignment/` as the callers that had not adopted it. The annotations
+            // sit on the wrapper and are not part of the enclosed content, which is
+            // what each of the separate arms already did.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_) => {
+                if let Some(content) = item.structure().enclosed() {
+                    validate_bracketed(&content.content, context, errors);
+                }
             }
 
             // Genuine non-word leaves: events, pauses, actions, markers, and
@@ -111,6 +116,7 @@ pub(crate) fn validate_words_at_every_depth(
             UtteranceContent::Event(_)
             | UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Pause(_)
+            | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::Separator(_)
@@ -143,33 +149,30 @@ fn validate_bracketed(
         let context = &*scoped;
         match item {
             BracketedItem::Word(word) => word.validate(context, errors),
-            BracketedItem::AnnotatedWord(annotated) => annotated.validate(context, errors),
+            BracketedItem::AnnotatedWord(annotated) => {
+                annotated.inner.validate(context, errors);
+            }
             BracketedItem::ReplacedWord(replaced) => replaced.validate(context, errors),
 
             // Nested containers: groups inside groups are ordinary in CA
             // transcription, so recursion here is not a theoretical case.
-            BracketedItem::AnnotatedGroup(annotated) => {
-                // Nested spans: the innermost wins, which falls out of the
-                // per-item derivation above running at every depth.
-                validate_bracketed(&annotated.inner.content.content, context, errors)
-            }
-            BracketedItem::Retrace(retrace) => {
-                validate_bracketed(&retrace.content.content, context, errors)
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same handling as the bare form: the wrapper carries only
-                // the annotations written after the marker, and the retraced
-                // content is unchanged.
-                validate_bracketed(&annotated.inner.content.content, context, errors)
-            }
-            BracketedItem::PhoGroup(group) => {
-                validate_bracketed(&group.content.content, context, errors)
-            }
-            BracketedItem::SinGroup(group) => {
-                validate_bracketed(&group.content.content, context, errors)
-            }
-            BracketedItem::Quotation(quotation) => {
-                validate_bracketed(&quotation.content.content, context, errors)
+            // Containers: ONE arm. Every one of these recursed unconditionally
+            // into its enclosed content, which is what `ContentStructure::enclosed`
+            // is for; its own docstring names the walkers under `validation/` and
+            // `alignment/` as the callers that had not adopted it. The annotations
+            // sit on the wrapper and are not part of the enclosed content, which is
+            // what each of the separate arms already did.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_) => {
+                if let Some(content) = item.structure().enclosed() {
+                    validate_bracketed(&content.content, context, errors);
+                }
             }
 
             BracketedItem::Event(_)

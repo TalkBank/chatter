@@ -83,6 +83,17 @@ pub enum UtteranceContent {
     /// Regular group <...> WITH scoped annotations (non-retrace only)
     #[serde(rename = "annotated_group")]
     AnnotatedGroup(Annotated<Group>),
+    /// Quotation “...” WITH scoped annotations.
+    ///
+    /// Exactly parallel to `Group` / `AnnotatedGroup`, and added 2026-08-26
+    /// for the same reason that pair exists: a quotation may be retraced or
+    /// commented, and the annotations belong to the quotation rather than to
+    /// the utterance around it. Until then `content_item` offered only a bare
+    /// `quotation`, so `“plant” [//]` did not parse at all while
+    /// `<“plant”> [//]` did. Real CLAN CHECK accepts both, so this is
+    /// CHECK parity; 53 files under the data repos use the unbracketed form.
+    #[serde(rename = "annotated_quotation")]
+    AnnotatedQuotation(Annotated<Quotation>),
     /// Retraced content, words the speaker said then corrected.
     ///
     /// First-class variant ensures every `match` handles retraces explicitly.
@@ -110,7 +121,19 @@ pub enum UtteranceContent {
     SinGroup(SinGroup),
     /// Quotation "..." (cannot have annotations)
     Quotation(Quotation),
-    /// Action WITH scoped annotations (bare Action is an error - actions defined by brackets)
+    /// Action with NO annotations, `0` on its own.
+    ///
+    /// The sibling of [`Self::Event`], and it was missing until 2026-08-26.
+    /// Its absence is why the parser wrapped every bare `0` in an
+    /// `Annotated<Action>` carrying an empty list: it had nowhere else to put
+    /// one. That was 20,184,072 values across the corpus, counted as recorded
+    /// on [`AnnotatedContentAnnotations`](crate::model::AnnotatedContentAnnotations),
+    /// which carries the method beside the number. The variant's
+    /// own doc comment used to assert the opposite of the data, saying "bare
+    /// Action is an error - actions defined by brackets". It is not an error;
+    /// `*CHI:\t0 .` is ordinary CHAT and the validator has always accepted it.
+    Action(Action),
+    /// Action WITH scoped annotations, e.g. `0 [= ! whining]`.
     #[serde(rename = "annotated_action")]
     AnnotatedAction(Annotated<Action>),
     /// Freecode - free-form inline annotation (e.g., "[^ comment]")

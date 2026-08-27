@@ -29,43 +29,34 @@
 //! design (see the note in `alignment::helpers::walk`, whose `ContentItem` has
 //! no container variants for exactly this reason).
 //!
-//! # Why there is no early exit
+//! # Why the descent is not written here any more
 //!
-//! An earlier version threaded `ControlFlow` through three signatures so that a
-//! caller wanting only "is there ANY retrace" could stop at the first one. No
-//! such caller was ever written: `check_retraces` needs every retrace anyway,
-//! for the two per-node rules, and answers the existence question with a flag
-//! set inside the same walk. The apparatus was justified by a docstring rather
-//! than by a caller, which is the thing this module's own history warns about,
-//! so it is gone. Reinstate it when a caller genuinely needs it, not before.
+//! It was, twice over: a `visit_structure` that tested for a retrace and then
+//! re-derived the `enclosed()` loop that `ContentStructure` already owns the
+//! definition of. Three other copies of that loop existed elsewhere. Descent
+//! is `ContentStructure::walk` now, and this module supplies only the part
+//! that is about retraces.
+//!
+//! An earlier version of that walk threaded `ControlFlow` for a caller that
+//! did not exist, and was rightly deleted. The nested-quotation rule became
+//! that caller in August 2026, which is why `walk` carries [`Descend`]: this
+//! module wants every node and answers `Into` every time.
 
 // Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
 // a content enum means a future variant compiles clean and answers wrong.
 // Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
 #![deny(clippy::wildcard_enum_match_arm)]
-use crate::model::{ContentStructure, MainTier, Retrace};
+use crate::model::{ContentStructure, Descend, MainTier, Retrace};
 
 /// Visit every retrace on the tier, outermost first, including retraces nested
 /// inside another retrace's content.
 pub(super) fn visit_every_retrace(main_tier: &MainTier, visit: &mut impl FnMut(&Retrace)) {
     for item in main_tier.content.content.iter() {
-        visit_structure(item.structure(), visit);
-    }
-}
-
-/// Report this item if it is a retrace, then descend into whatever it encloses.
-///
-/// Both content enums classify into the same [`ContentStructure`], which is why
-/// the main-tier and bracketed levels share this one function instead of the
-/// near-identical pair they used to be. That pair is how `PhoGroup` came to be
-/// a container in one copy and a leaf in the other.
-fn visit_structure(structure: ContentStructure<'_>, visit: &mut impl FnMut(&Retrace)) {
-    if let ContentStructure::Retrace(retrace) = structure {
-        visit(retrace.inner());
-    }
-    if let Some(content) = structure.enclosed() {
-        for item in content.content.iter() {
-            visit_structure(item.structure(), visit);
-        }
+        item.structure().walk(&mut |structure| {
+            if let ContentStructure::Retrace(retrace) = structure {
+                visit(retrace.inner());
+            }
+            Descend::Into
+        });
     }
 }

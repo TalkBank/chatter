@@ -44,6 +44,7 @@ use talkbank_parser::generated_traversal::{
     FullDocumentNode, IdContentsNode, LineActivitiesHeaderChoice, LineChoice, NodeSlot,
     extract_full_document, extract_id_contents, extract_id_header, extract_line,
 };
+use talkbank_parser_tests::classify;
 
 /// Parse `source` into a tree-sitter tree using the CHAT grammar.
 fn parse_chat(source: &str) -> tree_sitter::Tree {
@@ -92,7 +93,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(FullDocumentNode(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // Find the first @ID line and extract its id_contents node.
     let mut id_contents_seen = 0usize;
@@ -124,7 +125,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
             .expect("an @ID header must have an id_contents node");
 
         // The Task-0e target call: walk the inlined flat field positions.
-        let id_contents = extract_id_contents(IdContentsNode(id_contents_node));
+        let id_contents = extract_id_contents(classify::<IdContentsNode>(id_contents_node));
         id_contents_seen += 1;
 
         // child_0 (id_languages) and child_1 (first pipe) are REQUIRED slots.

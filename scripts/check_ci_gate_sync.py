@@ -130,10 +130,11 @@ def workflow_jobs(path: Path) -> list[tuple[str, list[str]]]:
 def gate_recipes() -> set[str]:
     """Every recipe `gate` runs, following dependencies transitively.
 
-    `gate` is `gate: gate-fast gate-slow` with no body of its own, so reading
-    only its body finds nothing. An earlier cut did exactly that and reported
-    "justfile has no `gate` recipe" -- which failed closed, correctly, but for
-    the wrong reason. A recipe's work is its body PLUS its dependencies.
+    `gate` was once `gate: gate-fast gate-slow` with no body of its own, so
+    reading only its body found nothing, and an earlier cut reported
+    "justfile has no `gate` recipe": failed closed, correctly, for the wrong
+    reason. A recipe's work is its body PLUS its dependencies, and this walks
+    both, so `gate` may be a single recipe or a tree of them.
     """
     text = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
     bodies: dict[str, tuple[list[str], str]] = {}

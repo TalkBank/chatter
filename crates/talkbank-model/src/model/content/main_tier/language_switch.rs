@@ -11,7 +11,69 @@ use crate::model::CodeSwitchSpan;
 use crate::model::LanguageCode;
 use crate::model::content::UtteranceContent;
 use crate::model::content::word::Word;
-use crate::validation::word::language::GoverningMarker;
+use crate::validation::word::language::{GoverningMarker, LanguageResolution};
+
+/// A whole-utterance language switch, and the PROOF that no word in the
+/// utterance is governed by a `<...> [@s]` span.
+///
+/// Its only constructor is [`MainTier::whole_utterance_language_switch_target`],
+/// which refuses any span-governed word before returning one.
+///
+/// It exists because the guarantee used to travel as a comment. `fix_s` clears
+/// each word's own `@s` after writing the `[- LANG]` precode, and for a word
+/// inside a span the span would then govern it and silently change its
+/// language; the code that clears markers therefore resolves with NO enclosing
+/// scope, which is only sound because the predicate already refused those
+/// utterances. That soundness argument sat in a five-line comment one crate
+/// away from the check it depended on. Requiring this value to call the
+/// clearing code moves the argument into the signature: a caller who has not
+/// been through the predicate has nothing to pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnspannedSwitchTarget(LanguageCode);
+
+impl UnspannedSwitchTarget {
+    /// The language every word of the utterance resolved to.
+    #[must_use]
+    pub fn language(&self) -> &LanguageCode {
+        &self.0
+    }
+
+    /// Does `word`'s OWN marker resolve to this target's language?
+    ///
+    /// THE OPERATION THE PROOF EXISTS FOR, which is why it lives here rather
+    /// than at the caller. Answering it means resolving `word` with NO
+    /// enclosing scope, and an unscoped resolution is the exact move that
+    /// corrupted data before this type existed: for a word inside a
+    /// `<...> [@s:eng]` span it reports the word's own language while the span
+    /// is what actually governs it, so clearing the marker on that answer hands
+    /// the word to the span and changes its language.
+    ///
+    /// It is sound here for one reason: this type cannot be obtained without
+    /// passing [`MainTier::whole_utterance_language_switch_target`], which
+    /// REFUSES any utterance containing a span-governed word. Holding a
+    /// `&self` IS that refusal. Written as a free `GoverningMark::of(word,
+    /// None)` at the call site, the same reasoning was a seven-line comment in
+    /// another crate, and the value it depended on was passed alongside as a
+    /// parameter that any `&LanguageCode` could have satisfied.
+    ///
+    /// KNOWN LIMIT, stated rather than implied: `self` proves that SOME
+    /// utterance had no span-governed word, not that `word` came from that
+    /// utterance. Pairing them in the type would mean this value borrowing the
+    /// tier, which cannot coexist with the `&mut` walk that does the clearing.
+    /// The remaining discipline is that a caller passes words from the tier it
+    /// derived the target from.
+    #[must_use]
+    pub fn governs(
+        &self,
+        word: &Word,
+        tier_language: Option<&LanguageCode>,
+        declared_languages: &[LanguageCode],
+    ) -> bool {
+        let outcome = crate::validation::word::language::GoverningMark::of(word, None)
+            .resolve(tier_language, declared_languages);
+        outcome.resolution == LanguageResolution::Single(self.0.clone())
+    }
+}
 
 impl MainTier {
     /// Return the utterance-level language that would replace whole-tier
@@ -25,7 +87,7 @@ impl MainTier {
         &self,
         default_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
-    ) -> Option<LanguageCode> {
+    ) -> Option<UnspannedSwitchTarget> {
         let tier_language = self.content.language_code.as_ref().or(default_language);
 
         // Collect ALL word-bearing items (including fillers `&~`, `&-`,
@@ -95,7 +157,7 @@ impl MainTier {
             }
         }
 
-        target_lang
+        target_lang.map(UnspannedSwitchTarget)
     }
 }
 

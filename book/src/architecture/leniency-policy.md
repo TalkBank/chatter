@@ -1,7 +1,7 @@
 # Parser Leniency Policy
 
 **Status:** Current
-**Last updated:** 2026-08-03 14:02 EDT
+**Last updated:** 2026-08-27 18:09 EDT
 
 This document is the single source of truth for how the tree-sitter grammar,
 Rust validation layer, and CLI tooling divide responsibility for enforcing the
@@ -87,17 +87,26 @@ after they produced false positives against the reference corpus. These
 decisions are documented in the permissiveness regression log (archived). Each is
 summarised here with its rationale.
 
-### Decision 1: `[*]` bare annotation, E214 disabled
+### Decision 1: `[*]` bare annotation, E214 disabled, then RETIRED
 
 - **Previous behaviour**: `E214` emitted when `[*]` appeared without an explicit
   error code (empty `ContentAnnotation::Error`).
 - **Current behaviour**: Bare `[*]` is accepted without error.
-- **Implementation**: Removed validation branch in
-  `talkbank-model/src/model/annotation/annotated.rs`.
 - **Rationale**: Reference files (`errormarkers.cha`, `compound.cha`) use bare
   `[*]` as valid CHAT.
-- **Revisit**: If coded error annotations become required, do it behind an
-  explicit strict profile.
+- **What happened next, and it is why this entry is worth reading twice.** The
+  number outlived the decision. After the branch above was removed, `E214` was
+  reused in the same file for a DIFFERENT rule, "the scoped-annotation LIST is
+  empty", and its spec file went on documenting the original `[*]` rule. So one
+  code carried a retired rule in its documentation and an unreachable one in
+  its implementation, and its own spec example produced no diagnostic at all.
+  Nothing detected the drift because neither rule could fire.
+- **Retired 2026-08-26.** `AnnotatedContentAnnotations` is non-empty by
+  construction, so the second rule is now unrepresentable rather than merely
+  unimplemented, and the first stays retired on this decision's own reasoning.
+- **Revisit**: If coded error annotations become required, that is a NEW code
+  against the `ContentAnnotation::Error` payload, behind an explicit strict
+  profile. Do not revive `E214`: it has meant two things already.
 
 ### Decision 2: `@t` without `@s:<lang>`, E248 disabled
 
@@ -338,7 +347,7 @@ From the permissiveness regression log:
 | Profile | Purpose | Behaviour |
 |---------|---------|-----------|
 | `reference-compatible` | Current permissive baseline | Default, matches current validation behaviour |
-| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E214, E248, etc.; E254 was retired 2026-07-15 with the @s ruling) |
+| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E248, etc.; E254 was retired 2026-07-15 with the @s ruling, E214 on 2026-08-26 with the non-empty annotation type) |
 
 The roundtrip gate should be pinned to an agreed profile to prevent future
 ambiguity about what "pass" means.

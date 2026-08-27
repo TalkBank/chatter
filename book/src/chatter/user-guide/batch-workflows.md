@@ -97,7 +97,7 @@ This repository includes a reference corpus at
 handle every file in this corpus at 100%:
 
 ```bash
-cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-tests reference_corpus_parses
 ```
 
 This runs the parser equivalence test; each `.cha` file is its own test, so reports individual failures.

@@ -8,7 +8,7 @@
 //! node scripts/generate-node-types.js > crates/talkbank-parser/src/node_types.rs
 //! ```
 //!
-//! All 372 named node types from the tree-sitter CHAT grammar
+//! All 382 named node types from the tree-sitter CHAT grammar
 //! are available as compile-time `&str` constants.
 //!
 //! # Example
@@ -130,8 +130,6 @@ pub const MEDIA_PREFIX: &str = "media_prefix";
 pub const MEDIA_STATUS: &str = "media_status";
 /// Media type (audio or video).
 pub const MEDIA_TYPE: &str = "media_type";
-/// Media URL in `@Media` header.
-pub const MEDIA_URL: &str = "media_url";
 /// Missing or unspecified value placeholder.
 pub const MISSING_VALUE: &str = "missing_value";
 /// No-transcription value for media status.
@@ -347,6 +345,8 @@ pub const WINDOW_PREFIX: &str = "window_prefix";
 pub const WORD_PREFIX: &str = "word_prefix";
 /// `%x` tier prefix marker.
 pub const X_TIER_PREFIX: &str = "x_tier_prefix";
+/// CST node type: `xphoint_tier_prefix`.
+pub const XPHOINT_TIER_PREFIX: &str = "xphoint_tier_prefix";
 
 // === Main Tier ===
 
@@ -468,12 +468,8 @@ pub const QUOTATION: &str = "quotation";
 
 /// Alternative transcription annotation `[=? text]`.
 pub const ALT_ANNOTATION: &str = "alt_annotation";
-/// Duration annotation on a content item.
-pub const DURATION_ANNOTATION: &str = "duration_annotation";
 /// Error marker annotation `[*]`.
 pub const ERROR_MARKER_ANNOTATION: &str = "error_marker_annotation";
-/// Code-switch span annotation `[@s]` / `[@s:lang]`.
-pub const CODE_SWITCH_ANNOTATION: &str = "code_switch_annotation";
 /// Exclude marker for omitting content from analysis.
 pub const EXCLUDE_MARKER: &str = "exclude_marker";
 /// Explanation annotation `[= text]`.
@@ -508,10 +504,6 @@ pub const RETRACE_MULTIPLE: &str = "retrace_multiple";
 pub const RETRACE_PARTIAL: &str = "retrace_partial";
 /// Reformulation retrace marker.
 pub const RETRACE_REFORMULATION: &str = "retrace_reformulation";
-/// Uncertain retrace marker.
-pub const RETRACE_UNCERTAIN: &str = "retrace_uncertain";
-/// Scoped best-guess marker `[?]`.
-pub const SCOPED_BEST_GUESS: &str = "scoped_best_guess";
 /// Scoped contrastive stressing marker.
 pub const SCOPED_CONTRASTIVE_STRESSING: &str = "scoped_contrastive_stressing";
 /// Scoped stressing marker.
@@ -555,6 +547,10 @@ pub const RISING_TO_MID: &str = "rising_to_mid";
 
 /// Conversation analysis continuation marker.
 pub const CA_CONTINUATION_MARKER: &str = "ca_continuation_marker";
+/// CST node type: `ca_delimiter`.
+pub const CA_DELIMITER: &str = "ca_delimiter";
+/// CST node type: `ca_element`.
+pub const CA_ELEMENT: &str = "ca_element";
 /// Conversation analysis no-break marker.
 pub const CA_NO_BREAK: &str = "ca_no_break";
 /// Conversation analysis no-break linker.
@@ -622,8 +618,6 @@ pub const PHO_TIER_PREFIX: &str = "pho_tier_prefix";
 pub const PHOALN_DEPENDENT_TIER: &str = "phoaln_dependent_tier";
 /// CST node type: `phosyl_dependent_tier`.
 pub const PHOSYL_DEPENDENT_TIER: &str = "phosyl_dependent_tier";
-/// CST node type: `xphoint_dependent_tier` (per-phone time intervals, Phon).
-pub const XPHOINT_DEPENDENT_TIER: &str = "xphoint_dependent_tier";
 /// `%sin` dependent tier.
 pub const SIN_DEPENDENT_TIER: &str = "sin_dependent_tier";
 /// `%sin` tier prefix marker.
@@ -642,6 +636,8 @@ pub const WOR_DEPENDENT_TIER: &str = "wor_dependent_tier";
 pub const WOR_TIER_PREFIX: &str = "wor_tier_prefix";
 /// `%x` extension dependent tier.
 pub const X_DEPENDENT_TIER: &str = "x_dependent_tier";
+/// CST node type: `xphoint_dependent_tier`.
+pub const XPHOINT_DEPENDENT_TIER: &str = "xphoint_dependent_tier";
 
 // === %mor Morphology Tier ===
 
@@ -718,13 +714,6 @@ pub const WOR_WORD_ITEM: &str = "wor_word_item";
 
 // === Media and Timing ===
 
-/// Timing bullet for media alignment (unified structured rule).
-/// Used in utterance_end, base_content_item, text_with_bullets, wor_tier_body.
-pub const BULLET: &str = "bullet";
-/// Timestamp child inside a `bullet` node.
-pub const BULLET_TIMESTAMP: &str = "bullet_timestamp";
-/// Legacy alias (grammar renamed inline_bullet → bullet).
-pub const INLINE_BULLET: &str = "inline_bullet";
 /// Inline picture reference.
 pub const INLINE_PIC: &str = "inline_pic";
 /// Text content with timing bullets.
@@ -748,10 +737,6 @@ pub const DOUBLE_QUOTE: &str = "double_quote";
 pub const GREATER_THAN: &str = "greater_than";
 /// Hyphen symbol `-`.
 pub const HYPHEN: &str = "hyphen";
-/// Illegal curly single quotation mark (U+2018/U+2019) used as a word
-/// character. Recognized as a distinct node so the parser can emit E256
-/// rather than silently absorbing it; CHAT requires the ASCII apostrophe.
-pub const ILLEGAL_CURLY_QUOTE: &str = "illegal_curly_quote";
 /// Left square bracket `[`.
 pub const LEFT_BRACKET: &str = "left_bracket";
 /// Left double quotation mark.
@@ -800,6 +785,20 @@ pub const WHITESPACES: &str = "whitespaces";
 
 // === Other ===
 
+/// CST node type: `annotation_content`.
+pub const ANNOTATION_CONTENT: &str = "annotation_content";
+/// CST node type: `blank_line`.
+pub const BLANK_LINE: &str = "blank_line";
+/// CST node type: `bullet`.
+pub const BULLET: &str = "bullet";
+/// CST node type: `bullet_end`.
+pub const BULLET_END: &str = "bullet_end";
+/// CST node type: `bullet_start`.
+pub const BULLET_START: &str = "bullet_start";
+/// CST node type: `bullet_timestamp`.
+pub const BULLET_TIMESTAMP: &str = "bullet_timestamp";
+/// CST node type: `code_switch_annotation`.
+pub const CODE_SWITCH_ANNOTATION: &str = "code_switch_annotation";
 /// CST node type: `ethnicity_value`.
 pub const ETHNICITY_VALUE: &str = "ethnicity_value";
 /// CST node type: `form_marker`.
@@ -828,12 +827,20 @@ pub const GENERIC_RECORDING_QUALITY: &str = "generic_recording_quality";
 pub const GENERIC_TIME: &str = "generic_time";
 /// CST node type: `generic_transcription`.
 pub const GENERIC_TRANSCRIPTION: &str = "generic_transcription";
+/// CST node type: `illegal_curly_quote`.
+pub const ILLEGAL_CURLY_QUOTE: &str = "illegal_curly_quote";
 /// CST node type: `lengthening`.
 pub const LENGTHENING: &str = "lengthening";
 /// Page number value.
 pub const PAGE_NUMBER: &str = "page_number";
 /// CST node type: `pos_tag`.
 pub const POS_TAG: &str = "pos_tag";
+/// CST node type: `quotation_with_optional_annotations`.
+pub const QUOTATION_WITH_OPTIONAL_ANNOTATIONS: &str = "quotation_with_optional_annotations";
+/// CST node type: `repeated_form_marker`.
+pub const REPEATED_FORM_MARKER: &str = "repeated_form_marker";
+/// CST node type: `sep_trailing_space`.
+pub const SEP_TRAILING_SPACE: &str = "sep_trailing_space";
 /// CST node type: `ses_code_value`.
 pub const SES_CODE_VALUE: &str = "ses_code_value";
 /// CST node type: `ses_combined`.
@@ -848,17 +855,15 @@ pub const STRESS_MARKER: &str = "stress_marker";
 pub const STRICT_DATE: &str = "strict_date";
 /// CST node type: `strict_time`.
 pub const STRICT_TIME: &str = "strict_time";
+/// CST node type: `syllable_pause`.
+pub const SYLLABLE_PAUSE: &str = "syllable_pause";
 /// Unrecognized line in document.
 pub const UNSUPPORTED_LINE: &str = "unsupported_line";
-/// CST node type: `blank_line` (a line break with no content; invalid CHAT, CLAN 91).
-pub const BLANK_LINE: &str = "blank_line";
 /// CST node type: `word_body`.
 pub const WORD_BODY: &str = "word_body";
-/// CST node type: `word_lang_codes`.
-pub const WORD_LANG_CODES: &str = "word_lang_codes";
 /// CST node type: `word_lang_suffix`.
 pub const WORD_LANG_SUFFIX: &str = "word_lang_suffix";
 /// CST node type: `word_segment`.
 pub const WORD_SEGMENT: &str = "word_segment";
 
-// Total node types: 372
+// Total node types: 382

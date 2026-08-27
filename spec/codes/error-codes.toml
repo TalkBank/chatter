@@ -1,0 +1,1687 @@
+# Every error code chatter knows, and every number it must never reuse.
+#
+# THE SOURCE OF TRUTH for the per-CODE facts: the `ErrorCode` variant,
+# its rustdoc, its DiagnosticKind and whether the validator enforces it.
+# `crates/talkbank-model/src/errors/codes/generated_error_code.rs` is
+# GENERATED from this file; regenerate with `just spec-gen` and ask
+# `just spec-check` whether the committed copy is current.
+#
+# A spec file under `spec/errors/` DOCUMENTS a code: its own name, its
+# description and its examples. Several may document one code. None of
+# them owns anything in this file.
+#
+# The schema, with a reason per field, is
+# `talkbank_spec_vocabulary::registry`. An unrecognised key is a load
+# error, a code or identifier claimed twice is a load error, and a
+# retired number brought back is a load error naming its retirement.
+
+# ---------------------------------------------------------------------
+# Retired: used once, never reused. Recorded so the rule is enforced
+# rather than remembered.
+# ---------------------------------------------------------------------
+
+[[retired]]
+code = "W210"
+reason = "Missing whitespace before content (a glued terminator `hello.`). Retired 2026-07-16 by maintainer ruling: no production code ever emitted it, and real CLAN CHECK accepts the construct."
+
+[[retired]]
+code = "W211"
+reason = "Missing whitespace after an overlap marker. Retired 2026-07-16 by maintainer ruling: never emitted, and overlap markers hug their content by design, so the shape is valid CA notation."
+
+[[retired]]
+code = "W601"
+reason = "Empty user-defined tier. RENUMBERED to E756 on 2026-07-16: it always fired as a hard error, so the warning prefix was the bug."
+
+[[retired]]
+code = "W602"
+reason = "Deprecated %xLABEL. Deleted 2026-07-16: the Phon %x-tier fold routes every known label to a typed tier parser, so the check was dead code."
+
+[[retired]]
+code = "W999"
+reason = "Generic legacy warning. Retired 2026-07-31: its only reference anywhere was the generated DiagnosticKind arm itself; no emit site ever constructed it."
+
+[[retired]]
+code = "E254"
+reason = "UndeclaredExplicitWordLanguage. Retired 2026-07-15: an explicit word-level `@s:CODE` deliberately carries no requirement to be declared in `@Languages` (docs/design/2026-07-15-at-s-language-declaration-decision.md part 1)."
+
+[[retired]]
+code = "E366"
+reason = "Long feature begin/end label mismatch. Retired 2026-07-31 in the spec/ErrorCode divergence closure: its only reference anywhere was the generated DiagnosticKind arm itself; no emit site ever constructed it."
+
+[[retired]]
+code = "E369"
+reason = "Nonvocal begin/end label mismatch. Retired 2026-07-31, same closure and same reason as E366: no emit site ever constructed it."
+
+[[retired]]
+code = "E700"
+reason = "Unexpected node in tier content. Retired 2026-07-31 in the spec/ErrorCode divergence closure: no emit site ever constructed it."
+
+[[retired]]
+code = "E703"
+reason = "Unexpected node in morphology tier. Retired 2026-07-31, same closure and same reason as E700. Distinct from temporal.rs's separate note that E702/E703 are reserved for a strict timeline mode: that never-built feature would need its own new variant, not this number."
+
+[[retired]]
+code = "E754"
+reason = "LetterFormMultipleLetters. Retired 2026-08-11: it required an `@l` letter form to carry exactly one letter of stem but counted CHARACTERS, and a digraph is one letter written with two (Welsh `ll`, Dutch `ij`, Hungarian `sz`), so it reported a spurious error on valid CHAT and could not do better, never seeing the word's language. CLAN reached the same conclusion four days earlier, retiring its error 76."
+
+[[retired]]
+code = "E214"
+reason = "Empty scoped annotation content. Retired 2026-08-26, and it had drifted into TWO rules under one number, neither of which could fire. It began as \"bare [*] carries no error code\" and was deliberately DISABLED as leniency Decision 1, because reference files use bare [*] as valid CHAT; its spec file still documented that rule. The code was then reused for \"the scoped-annotation LIST is empty\", which no input reaches: an empty bracket is E316, and the only empty list in the model was the parser wrapping every bare 0, never validated because Action does not implement Validate. AnnotatedContentAnnotations is non-empty by construction now, so the second rule is unrepresentable and the first stays retired. The registry already recorded status = not_implemented."
+
+# ---------------------------------------------------------------------
+# Generic/Internal Errors (E0xx, E1xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E001"
+variant = "InternalError"
+summary = "Internal error (unexpected condition in parser or validator)."
+kind = "Invalidity"
+status = "unreachable_from_chat"
+
+[[code]]
+code = "E002"
+variant = "TestError"
+summary = "Test-only error code used in unit tests."
+kind = "Invalidity"
+status = "unreachable_from_chat"
+
+[[code]]
+code = "E003"
+variant = "EmptyString"
+summary = "Input string is empty."
+kind = "Invalidity"
+status = "not_implemented"
+
+# ---------------------------------------------------------------------
+# Structural/File Errors (E1xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E101"
+variant = "InvalidLineFormat"
+summary = "Invalid line format in the CHAT file."
+kind = "Invalidity"
+status = "not_implemented"
+
+# ---------------------------------------------------------------------
+# Word Errors (E2xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E202"
+variant = "MissingFormType"
+summary = "Missing form type on special word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E203"
+variant = "InvalidFormType"
+summary = "Invalid form type value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E207"
+variant = "UnknownAnnotation"
+summary = "Unknown annotation type in word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E208"
+variant = "EmptyReplacement"
+summary = "Replacement annotation is empty."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E209"
+variant = "EmptySpokenContent"
+summary = "Spoken content portion of word is empty."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E210"
+variant = "IllegalReplacementForFragment"
+summary = "Illegal replacement for fragment (deprecated: use E387)."
+kind = "Invalidity"
+status = "deprecated"
+
+[[code]]
+code = "E212"
+variant = "InvalidWordFormat"
+summary = "Invalid word format."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E213"
+variant = "UntranscribedInReplacement"
+summary = "Untranscribed marker in replacement (deprecated: use E391)."
+kind = "Invalidity"
+status = "deprecated"
+
+[[code]]
+code = "E220"
+variant = "IllegalDigits"
+summary = "Illegal digits in word content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E230"
+variant = "UnbalancedCADelimiter"
+summary = "Unbalanced CA (Conversation Analysis) delimiter."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E231"
+variant = "UnbalancedShortening"
+summary = "Unbalanced shortening markers."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E232"
+variant = "InvalidCompoundMarkerPosition"
+summary = "Invalid compound marker position."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E233"
+variant = "EmptyCompoundPart"
+summary = "Empty part in compound word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E241"
+variant = "IllegalUntranscribed"
+summary = "Illegal use of untranscribed marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E242"
+variant = "UnbalancedQuotation"
+summary = "Unbalanced quotation marks within a word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E243"
+variant = "IllegalCharactersInWord"
+summary = "Illegal characters in word content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E244"
+variant = "ConsecutiveStressMarkers"
+summary = "Consecutive stress markers in word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E245"
+variant = "StressNotBeforeSpokenMaterial"
+summary = "Stress marker not placed before spoken material."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E246"
+variant = "LengtheningNotAfterSpokenMaterial"
+summary = "Lengthening marker not placed after spoken material."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E247"
+variant = "MultiplePrimaryStress"
+summary = "Multiple primary stress markers in one word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E248"
+variant = "TertiaryLanguageNeedsExplicitCode"
+summary = "Tertiary language needs an explicit language code."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E249"
+variant = "MissingLanguageContext"
+summary = "Missing language context for language-tagged word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E250"
+variant = "SecondaryStressWithoutPrimary"
+summary = "Secondary stress marker without primary stress."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E251"
+variant = "EmptyWordContentText"
+summary = "Word content text is empty."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E252"
+variant = "SyllablePauseNotBetweenSpokenMaterial"
+summary = "Syllable pause not between spoken material."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E253"
+variant = "EmptyWordContent"
+summary = "Word content is empty."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E255"
+variant = "WholeUtteranceLanguageSwitchShouldUsePrecode"
+summary = "Whole-utterance language switch should use `[- LANG]` instead of tagging every word with `@s`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E256"
+variant = "IllegalCurlyQuote"
+summary = "Curly single quotation mark (U+2018 or U+2019) used as a word\ncharacter; CHAT requires the ASCII apostrophe. CLAN CHECK 138/139."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E258"
+variant = "ConsecutiveCommas"
+summary = "Consecutive commas (`,,`), should use single comma or `‚` (CLAN CHECK 107)"
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E259"
+variant = "CommaAfterNonSpokenContent"
+summary = "Comma after non-spoken content (paralinguistic event, filler, nonword, placeholder, omitted word)"
+kind = "Invalidity"
+status = "implemented"
+
+# ---------------------------------------------------------------------
+# Parser Errors (E3xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E301"
+variant = "MissingMainTier"
+summary = "Missing main tier (speaker line) in utterance."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E302"
+variant = "MissingNode"
+summary = "Expected tree-sitter node is missing."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E303"
+variant = "SyntaxError"
+summary = "General syntax error in CHAT input."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E304"
+variant = "MissingSpeaker"
+summary = "Missing speaker code on main tier line."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E305"
+variant = "MissingTerminator"
+summary = "Missing utterance terminator (`.`, `?`, `!`, etc.)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E306"
+variant = "EmptyUtterance"
+summary = "Utterance contains no words or content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E307"
+variant = "InvalidSpeaker"
+summary = "Speaker code is syntactically invalid."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E308"
+variant = "UndeclaredSpeaker"
+summary = "Speaker code is not declared in `@Participants`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E309"
+variant = "UnexpectedSyntax"
+summary = "Unexpected syntax encountered during parsing."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E310"
+variant = "ParseFailed"
+summary = "Parser failed to produce a valid parse tree."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E311"
+variant = "UnexpectedNode"
+summary = "Unexpected node type in the parse tree.\n\nNo longer planned as of 2026-08-11: an unclosed replacement bracket\n(`*CHI:\\t[: unclosed [* error] .`) reaches it and reports \"Unclosed\nreplacement bracket\". Its spec had stayed `not_implemented` on the\nstrength of a note saying tree-sitter recovery made it unreachable\nbecause E316 fired first, which the parser had since outgrown."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E312"
+variant = "UnclosedBracket"
+summary = "Unclosed bracket in annotation or word content."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E313"
+variant = "UnclosedParenthesis"
+summary = "Unclosed parenthesis in annotation or word content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E314"
+variant = "IncompleteAnnotation"
+summary = "Annotation is syntactically incomplete."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E315"
+variant = "InvalidControlCharacter"
+summary = "Invalid control character in input."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E316"
+variant = "UnparsableContent"
+summary = "Content could not be parsed."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E319"
+variant = "UnparsableLine"
+summary = "Line could not be parsed."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E320"
+variant = "UnparsableHeader"
+summary = "Header line could not be parsed."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E321"
+variant = "UnparsableUtterance"
+summary = "Utterance could not be parsed."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E322"
+variant = "EmptyColon"
+summary = "Empty colon with no content following it."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E323"
+variant = "MissingColonAfterSpeaker"
+summary = "Missing colon after speaker code."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E324"
+variant = "UnrecognizedUtteranceError"
+summary = "Unrecognized error in utterance content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E325"
+variant = "UnexpectedUtteranceChild"
+summary = "Unexpected child node in utterance."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E326"
+variant = "UnexpectedLineType"
+summary = "Unexpected line type in CHAT file."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E330"
+variant = "TreeParsingError"
+summary = "Error during tree-sitter CST traversal."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E331"
+variant = "UnexpectedNodeInContext"
+summary = "Unexpected node encountered in a specific parsing context."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E340"
+variant = "UnknownBaseContent"
+summary = "Unknown base content type in word."
+kind = "Invalidity"
+status = "unreachable_from_chat"
+
+[[code]]
+code = "E341"
+variant = "UnbalancedQuotationCrossUtterance"
+summary = "Unbalanced quotation marks spanning across utterances."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E342"
+variant = "MissingRequiredElement"
+summary = "Tree-sitter inserted a MISSING placeholder for a required element."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E344"
+variant = "InvalidContentAnnotationNesting"
+summary = "Invalid nesting of scoped annotations."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E346"
+variant = "UnmatchedContentAnnotationEnd"
+summary = "Unmatched scoped annotation end marker."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E347"
+variant = "UnbalancedOverlap"
+summary = "Unbalanced overlap markers."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E348"
+variant = "MissingOverlapEnd"
+summary = "Missing overlap end marker."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E351"
+variant = "MissingQuoteBegin"
+summary = "Missing opening quotation mark."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E352"
+variant = "MissingQuoteEnd"
+summary = "Missing closing quotation mark."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E353"
+variant = "MissingOtherCompletionContext"
+summary = "Missing context for other-completion annotation."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E354"
+variant = "MissingTrailingOffTerminator"
+summary = "Missing trailing-off terminator."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E355"
+variant = "InterleavedContentAnnotations"
+summary = "Interleaved scoped annotations (overlapping scopes)."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E356"
+variant = "UnmatchedUnderlineBegin"
+summary = "Unmatched underline begin marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E357"
+variant = "UnmatchedUnderlineEnd"
+summary = "Unmatched underline end marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E358"
+variant = "UnmatchedLongFeatureBegin"
+summary = "Unmatched long feature begin marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E359"
+variant = "UnmatchedLongFeatureEnd"
+summary = "Unmatched long feature end marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E360"
+variant = "InvalidMediaBullet"
+summary = "Invalid media bullet format."
+kind = "Invalidity"
+status = "not_implemented"
+
+# Marked `implemented` until 2026-08-27, and nothing could produce it.
+# Four independent checks agree: no source path emits the variant or the
+# string, adversarial bullets give E316 (non-numeric) or E360 (overflow),
+# a reversed pair gives E362, and this code's own spec example demonstrates
+# E316. `is_enforced()` reads this field, so the enforced set overstated
+# what the validator does. Whether the rule should EXIST is a separate
+# question for whoever owns it: E360 and E362 may already cover the ground,
+# in which case this follows E214 into retirement rather than into code.
+[[code]]
+code = "E361"
+variant = "InvalidTimestamp"
+summary = "Invalid timestamp value in media bullet."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E362"
+variant = "TimestampBackwards"
+summary = "Timestamp end is before start (backwards range)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E363"
+variant = "InvalidPostcode"
+summary = "Invalid postcode format."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E364"
+variant = "MalformedWordContent"
+summary = "Malformed word content."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E365"
+variant = "MalformedTierContent"
+summary = "Malformed tier content."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E367"
+variant = "UnmatchedNonvocalBegin"
+summary = "Unmatched nonvocal begin marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E368"
+variant = "UnmatchedNonvocalEnd"
+summary = "Unmatched nonvocal end marker."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E370"
+variant = "StructuralOrderError"
+summary = "Structural ordering error in utterance elements."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E371"
+variant = "PauseInPhoGroup"
+summary = "Pause marker inside a phonological group."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E372"
+variant = "NestedQuotation"
+summary = "Nested quotation (quotation inside quotation)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E373"
+variant = "InvalidOverlapIndex"
+summary = "Invalid overlap index value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E375"
+variant = "ContentAnnotationParseError"
+summary = "Failed to parse scoped annotation content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E376"
+variant = "ReplacementParseError"
+summary = "Failed to parse replacement annotation content."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E377"
+variant = "RetraceWithNoMaterial"
+summary = "A retracing marker whose only content is another retracing marker.\n\nA marker retraces the material immediately to its left, and a marker is\nnot material. Ruled an error by the CHAT maintainer, 2026-08-07.\n\nNamed for the SHAPE, not a spelling. The lowering folds a marker run\ninto a left-associative chain, so the unbracketed `на [//] [/] на` and\nthe bracketed `<<a> [/]> [//]` produce the same tree and one rule\ncatches both; an `AdjacentRetraceMarkers` name described only the first\nand read as a different, narrower rule than the one that ships."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E378"
+variant = "RetraceWithoutWords"
+summary = "A retracing marker applied to material containing no words at all.\n\nA marker retraces the WORDS to its left, and a laugh is not a word.\nRuled by the CHAT maintainer, 2026-08-07: \"No, not legal. You can't\nretrace a laugh.\"\n\nDisjoint from `RetraceWithNoMaterial` despite the neighbouring names.\nThat one is a marker over a lone marker, whose inner retrace still holds\nwords; this one is material with no word anywhere beneath it. The\nrepairs differ too: drop a marker there, retrace the words here."
+kind = "Invalidity"
+status = "implemented"
+
+# Marked `implemented` until 2026-08-27, and nothing could produce it. A
+# `%mor` tier with no pipe gives E316 and E702, one that is all separators
+# gives E758 and E760, and this code's own spec example demonstrates E316
+# and E760. Same question as E361: implement it or retire it, but the field
+# must not claim a check the binary does not run.
+[[code]]
+code = "E382"
+variant = "MorParseError"
+summary = "Failed to parse `%mor` tier content."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E387"
+variant = "ReplacementOnFragment"
+summary = "Replacement `[: text]` on fragment or phonological fragment (`&+`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E388"
+variant = "ReplacementOnNonword"
+summary = "Replacement `[: text]` on nonword (`&~`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E389"
+variant = "ReplacementOnFiller"
+summary = "Replacement `[: text]` on filler (`&-`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E390"
+variant = "ReplacementContainsOmission"
+summary = "Replacement text contains an omission (`0word`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E391"
+variant = "ReplacementContainsUntranscribed"
+summary = "Replacement text contains untranscribed marker (`xxx`/`yyy`/`www`)."
+kind = "Invalidity"
+status = "implemented"
+
+# ---------------------------------------------------------------------
+# Dependent Tier Structural Errors (E4xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E401"
+variant = "DuplicateDependentTier"
+summary = "Duplicate dependent tier on same utterance."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E404"
+variant = "OrphanedDependentTier"
+summary = "Dependent tier without a preceding main tier."
+kind = "Invalidity"
+status = "implemented"
+
+# ---------------------------------------------------------------------
+# Header Errors (E5xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E501"
+variant = "DuplicateHeader"
+summary = "Duplicate header line."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E502"
+variant = "MissingEndHeader"
+summary = "Missing `@End` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E503"
+variant = "MissingUTF8Header"
+summary = "Missing `@UTF8` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E504"
+variant = "MissingRequiredHeader"
+summary = "Missing required header (e.g., `@Participants`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E505"
+variant = "InvalidIDFormat"
+summary = "Invalid `@ID` header format."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E506"
+variant = "EmptyParticipantsHeader"
+summary = "Empty `@Participants` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E507"
+variant = "EmptyLanguagesHeader"
+summary = "Empty `@Languages` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E508"
+variant = "EmptyDateHeader"
+summary = "Empty `@Date` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E509"
+variant = "EmptyMediaHeader"
+summary = "Empty `@Media` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E510"
+variant = "EmptyIDLanguage"
+summary = "Empty language field in `@ID` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E511"
+variant = "EmptyIDSpeaker"
+summary = "Empty speaker field in `@ID` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E512"
+variant = "EmptyParticipantCode"
+summary = "Empty participant code in `@Participants`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E513"
+variant = "EmptyParticipantRole"
+summary = "Empty participant role in `@Participants`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E514"
+variant = "EmptyIDCorpus"
+summary = "Empty corpus field (2nd field) in `@ID` header. The corpus name is\nrequired: `@ID:` is `lang|corpus|code|...`, and a blank corpus is\ninvalid. Corresponds to CLAN CHECK error 63 (\"Missing Corpus name\")."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E515"
+variant = "EmptyIDRole"
+summary = "Empty role field in `@ID` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E516"
+variant = "EmptyDate"
+summary = "Empty date value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E517"
+variant = "InvalidAgeFormat"
+summary = "Invalid age format in `@ID` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E518"
+variant = "InvalidDateFormat"
+summary = "Invalid date format."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E519"
+variant = "InvalidLanguageCode"
+summary = "Invalid ISO 639 language code."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E522"
+variant = "SpeakerNotDefined"
+summary = "Speaker code not defined in `@Participants`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E523"
+variant = "OrphanIDHeader"
+summary = "`@ID` header references an undeclared participant."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E524"
+variant = "BirthUnknownParticipant"
+summary = "`@Birth` header references an unknown participant."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E525"
+variant = "UnknownHeader"
+summary = "Unknown or unrecognized header type."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E526"
+variant = "UnmatchedBeginGem"
+summary = "Unmatched `@Bg` (begin gem) without corresponding `@Eg`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E527"
+variant = "UnmatchedEndGem"
+summary = "Unmatched `@Eg` (end gem) without corresponding `@Bg`."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E528"
+variant = "GemLabelMismatch"
+summary = "Gem begin/end labels do not match."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E529"
+variant = "NestedBeginGem"
+summary = "Nested `@Bg` (begin gem inside existing gem scope)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E530"
+variant = "LazyGemInsideScope"
+summary = "Lazy gem (`@G`) used inside an explicit gem scope."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E531"
+variant = "MediaFilenameMismatch"
+summary = "`@Media` filename does not match the file being parsed."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E532"
+variant = "InvalidParticipantRole"
+summary = "Invalid participant role value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E533"
+variant = "EmptyOptionsHeader"
+summary = "Empty `@Options` header."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E534"
+variant = "UnsupportedOption"
+summary = "Unsupported `@Options` value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E535"
+variant = "UnsupportedMediaType"
+summary = "Unsupported `@Media` type (not `audio`, `video`, or `missing`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E536"
+variant = "UnsupportedMediaStatus"
+summary = "Unsupported `@Media` status value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E537"
+variant = "UnsupportedNumber"
+summary = "Unsupported `@Number` value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E538"
+variant = "UnsupportedRecordingQuality"
+summary = "Unsupported `@Recording Quality` value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E539"
+variant = "UnsupportedTranscription"
+summary = "Unsupported `@Transcription` value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E540"
+variant = "InvalidTimeDuration"
+summary = "Invalid `@Time Duration` format."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E541"
+variant = "InvalidTimeStart"
+summary = "Invalid `@Time Start` format."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E542"
+variant = "UnsupportedSex"
+summary = "Unsupported `@ID` sex value (not `male` or `female`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E543"
+variant = "HeaderOutOfOrder"
+summary = "Header out of canonical order (e.g., `@Options` before `@Participants`)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E544"
+variant = "MediaLinkageWithoutTiming"
+summary = "`@Media` header declares linkage (no `unlinked` / `missing` /\n`notrans` status) but the transcript carries no timing evidence\n(no bullets on any utterance, no `%wor` bullets, no `@Bg`/`@Eg`\ntime range). Reinstates the legacy CHAT validation check."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E545"
+variant = "InvalidBirthDateFormat"
+summary = "Invalid `@Birth of` date format, must match `DD-MMM-YYYY`\nper CLAN `depfile.cut`'s `@d<dd-lll-yyyy>` template."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E546"
+variant = "UnsupportedSesValue"
+summary = "Unsupported `@ID` SES value."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E547"
+variant = "ConstantHeaderOutOfOrder"
+summary = "A constant participant-specific header (`@Birth of`, `@Birthplace of`,\nor `@L1 of`) does not immediately follow the `@ID` block: a changeable\nheader (e.g. `@Comment`, `@Date`) appears between the `@ID` headers and\nthe constant header. Per the CHAT manual these constant headers must\ndirectly follow `@ID`. Corresponds to CLAN CHECK error 127."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E548"
+variant = "IdHeaderOutOfOrder"
+summary = "An `@ID` header does not immediately follow the `@Participants` /\n`@Options` headers (or another `@ID`): a changeable header such as\n`@Comment` appears between `@Participants`/`@Options` and the `@ID`\nblock. Per the CHAT manual the `@ID` block directly follows\n`@Participants` (and the optional `@Options`). Corresponds to CLAN\nCHECK error 126."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E549"
+variant = "DuplicateSpeakerDeclaration"
+summary = "The same speaker code is declared more than once in the `@Participants`\nheader. Each participant must be declared exactly once. Corresponds to\nCLAN CHECK error 13."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E550"
+variant = "TrailingCommaInParticipants"
+summary = "The `@Participants` header ends with a trailing comma (a stray comma\nafter the last participant, with no participant following it). The\nparticipant list is comma-separated, so a trailing comma is a dangling\nseparator rather than an empty header. Corresponds to CLAN CHECK error\n100 (\"Commas at the end of PARTICIPANTS tier are not allowed\")."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E551"
+variant = "OptionsHeaderOutOfOrder"
+summary = "The `@Options` header does not immediately follow the `@Participants`\nheader. Per the CHAT spec the optional `@Options` line, when present,\nmust sit directly after `@Participants`, before the `@ID` block or any\nother header. An `@Options` whose immediately-preceding header is\nsomething else (e.g. an `@ID` or `@Comment`), once `@Participants` has\nbeen seen, is an ordering violation. Corresponds to CLAN CHECK error 125\n(\"\\\"@Options\\\" header must immediately follow \\\"@Participants:\\\" header\")."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E552"
+variant = "MediaUnlinkedWithTiming"
+summary = "The `@Media` header declares `unlinked` status, yet the transcript\ncontains timing bullets. `unlinked` means the media file exists but its\nutterances have not been aligned to timestamps; the presence of timing\nbullets contradicts that, so the `unlinked` qualifier must be removed\n(the media is in fact linked). This is the inverse of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming) (E544) and\ncorresponds to CLAN CHECK error 124 (\"remove \\\"unlinked\\\" from @Media\nheader\")."
+kind = "Invalidity"
+status = "implemented"
+
+# ---------------------------------------------------------------------
+# Tier Errors (E6xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E600"
+variant = "TierValidationError"
+summary = "Generic tier validation error."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E601"
+variant = "InvalidDependentTier"
+summary = "Invalid dependent tier name or format."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E602"
+variant = "MalformedTierHeader"
+summary = "Malformed tier header line."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E603"
+variant = "InvalidTimTierFormat"
+summary = "Invalid `%tim` tier format."
+kind = "Unmodeled"
+status = "implemented"
+
+[[code]]
+code = "E604"
+variant = "GraWithoutMor"
+summary = "`%gra` tier present without corresponding `%mor` tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E605"
+variant = "UnsupportedDependentTier"
+summary = "Unsupported dependent tier (not a standard `%` tier or `%x` user-defined tier)."
+kind = "Invalidity"
+status = "implemented"
+
+# ---------------------------------------------------------------------
+# Temporal/Media Bullet Errors (E7xx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E701"
+variant = "TierBeginTimeNotMonotonic"
+summary = "Tier begin time is not monotonically increasing (CLAN Error 83)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E702"
+variant = "InvalidMorphologyFormat"
+summary = "Invalid morphology format on `%mor` tier."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E704"
+variant = "SpeakerSelfOverlap"
+summary = "Speaker overlaps with themselves (CLAN Error 133)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E705"
+variant = "MorCountMismatchTooFew"
+summary = "`%mor` tier has fewer words than main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E706"
+variant = "MorCountMismatchTooMany"
+summary = "`%mor` tier has more words than main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E707"
+variant = "MorTerminatorPresenceMismatch"
+summary = "`%mor` tier terminator presence does not match main tier."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E708"
+variant = "MalformedGrammarRelation"
+summary = "Malformed grammar relation on `%gra` tier."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E709"
+variant = "InvalidGrammarIndex"
+summary = "Invalid index in grammar relation."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E710"
+variant = "UnexpectedGrammarNode"
+summary = "Unexpected node in `%gra` tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E711"
+variant = "MorEmptyContent"
+summary = "`%mor` word has empty stem, POS category, prefix, or suffix."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E712"
+variant = "GraInvalidWordIndex"
+summary = "`%gra` word index is out of range."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E713"
+variant = "GraInvalidHeadIndex"
+summary = "`%gra` head index is out of range."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E714"
+variant = "PhoCountMismatchTooFew"
+summary = "`%pho`, `%mod`, or `%wor` tier has fewer alignable words than main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E715"
+variant = "PhoCountMismatchTooMany"
+summary = "`%pho`, `%mod`, or `%wor` tier has more alignable words than main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E716"
+variant = "MorTerminatorValueMismatch"
+summary = "`%mor` tier terminator value does not match main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E718"
+variant = "SinCountMismatchTooFew"
+summary = "`%sin` tier has fewer words than main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E719"
+variant = "SinCountMismatchTooMany"
+summary = "`%sin` tier has more words than main tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E720"
+variant = "MorGraCountMismatch"
+summary = "`%mor` and `%gra` tier word counts do not match."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E721"
+variant = "GraNonSequentialIndex"
+summary = "`%gra` indices are not sequential."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E722"
+variant = "GraNoRoot"
+summary = "`%gra` tier has no ROOT relation."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E723"
+variant = "GraMultipleRoots"
+summary = "`%gra` tier has multiple ROOT relations."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E724"
+variant = "GraCircularDependency"
+summary = "`%gra` tier contains a circular dependency."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E725"
+variant = "ModsylModCountMismatch"
+summary = "`%modsyl` tier word count does not match `%mod` tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E726"
+variant = "PhosylPhoCountMismatch"
+summary = "`%phosyl` tier word count does not match `%pho` tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E727"
+variant = "PhoalnModCountMismatch"
+summary = "`%phoaln` tier word count does not match `%mod` tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E728"
+variant = "PhoalnPhoCountMismatch"
+summary = "`%phoaln` tier word count does not match `%pho` tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E729"
+variant = "BulletOverlap"
+summary = "Bullet start time overlaps with previous tier's end time (CLAN Error 84).\n\nCurrent tier's BEG is less than the previous tier's END, indicating\noverlapping timing. Unlike speaker self-overlap (E704), this applies\nacross different speakers."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E730"
+variant = "BulletGap"
+summary = "Bullet timing gap exceeds threshold (CLAN Error 85).\n\nGap between current tier's BEG and previous tier's END exceeds the\nacceptable discontinuity threshold. Only reported in bullet consistency\nmode (`+c0`)."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E731"
+variant = "SpeakerBulletSelfOverlap"
+summary = "Speaker's bullet start time is before their own previous bullet end time\n(CLAN Error 133).\n\nSupplements the overlap-marker-based E704 with actual bullet timing\ncheck for same-speaker self-overlap."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E732"
+variant = "MissingBullet"
+summary = "Missing bullet on tier when bullet consistency mode is active (CLAN Error 110).\n\nWhen `+c0` or `+c1` is specified, every main tier must have timing."
+kind = "Invalidity"
+status = "not_implemented"
+
+[[code]]
+code = "E733"
+variant = "ModCountMismatchTooFew"
+summary = "`%mod` tier has fewer words than main tier.\n\nThe model-phonology tier (`%mod`) has fewer alignable tokens than the\nmain-tier words. Each main-tier word must have a corresponding `%mod`\ntoken. This code is separate from E714 (`%pho`) because the two tiers\nrepresent distinct phonological layers."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E734"
+variant = "ModCountMismatchTooMany"
+summary = "`%mod` tier has more words than main tier.\n\nThe model-phonology tier (`%mod`) has more alignable tokens than the\nmain-tier words. Remove the extra `%mod` tokens so counts match.\nThis code is separate from E715 (`%pho`) for the same reason as E733."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E735"
+variant = "SylUnitMalformed"
+summary = "A `%xmodsyl` / `%xphosyl` syllabification unit is not a `phone:CODE` pair.\n\nA unit must be one IPA phone, an ASCII `:`, then a single constituent\ncode. A unit with no `:`, an empty phone, or an empty code is invalid."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E736"
+variant = "SylIllegalConstituentCode"
+summary = "A `%xmodsyl` / `%xphosyl` constituent code is not one of `O N C L R E A D U`.\n\n`U` (unknown) is legal: Phon emits it when a phone has no concrete\nsyllable constituent. Boundary (`B`), stress (`S`), word (`W`) and tone\n(`T`) are never emitted on the syllabification tiers."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E737"
+variant = "ModsylReconstructionMismatch"
+summary = "`%xmodsyl` does not reproduce its `%mod` word.\n\nStripping the `:CODE` from every unit and concatenating the phones must\nequal the corresponding `%mod` word exactly."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E738"
+variant = "PhosylReconstructionMismatch"
+summary = "`%xphosyl` does not reproduce its `%pho` word.\n\nStripping the `:CODE` from every unit and concatenating the phones must\nequal the corresponding `%pho` word exactly."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E739"
+variant = "PhoalnPairMalformed"
+summary = "A `%xphoaln` alignment pair is malformed.\n\nEvery pair must contain exactly one `↔` with a non-empty side on each\nside (use `∅` for a null); a pair of `∅↔∅` is invalid."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E740"
+variant = "PhoalnModReconstructionMismatch"
+summary = "`%xphoaln` model sides do not reproduce the `%mod` word.\n\nConcatenating the left element of each pair, skipping `∅`, must equal the\ncorresponding `%mod` word exactly."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E741"
+variant = "PhoalnPhoReconstructionMismatch"
+summary = "`%xphoaln` actual sides do not reproduce the `%pho` word.\n\nConcatenating the right element of each pair, skipping `∅`, must equal the\ncorresponding `%pho` word exactly."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E742"
+variant = "XphointBulletInvalid"
+summary = "A `%xphoint` time bullet has `start >= end`.\n\nEach phone interval's start offset must be strictly less than its end."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E743"
+variant = "XphointIntervalNotMonotonic"
+summary = "`%xphoint` interval start times are not non-decreasing.\n\nEach interval's start must be greater than or equal to the previous\ninterval's start across the whole tier."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E744"
+variant = "XphointMediaBoundsViolation"
+summary = "`%xphoint` intervals fall outside the record's media interval.\n\nThe first interval's start and last interval's end must lie within the\n`*SPK:` line's media bullet (subject to 1 ms rounding tolerance)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E745"
+variant = "XphointPhoneReconstructionMismatch"
+summary = "`%xphoint` group phones do not reproduce the `%pho` word.\n\nConcatenating a group's phones, in order, must equal the corresponding\n`%pho` word exactly."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E746"
+variant = "XphointGroupCountMismatch"
+summary = "`%xphoint` group count does not match the `%pho` word count.\n\nThere must be exactly one ` / `-separated group per `%pho` word."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E747"
+variant = "BlankLineNotAllowed"
+summary = "A blank line in the transcript.\n\nCHAT does not allow blank lines anywhere in the transcript (CLAN CHECK\n91). The grammar represents a blank line as a structural `blank_line`\nnode (the single-break `newline` token no longer fuses consecutive\nnewlines), so the parser emits this from the tree, not by scanning the\nsource text."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E748"
+variant = "LeadingZeroBulletTime"
+summary = "A media bullet timestamp written with a leading zero before another\ndigit (e.g. `\\u{15}012_200\\u{15}`).\n\nBullet times are plain millisecond integers; CLAN CHECK rejects a\ncomponent matching `0[0-9]` as an \"Illegal time representation inside\na bullet.\" (CHECK 90). A bare `0` component is legal. Detected at\nparse time because the leading zero exists only in the source text\n(the model stores `u64` milliseconds); the bullet's numeric value\nstill parses, so the AST keeps the bullet while the diagnostic makes\nthe file invalid."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E749"
+variant = "CommaGluedToNextWord"
+summary = "A comma glued to the word that follows it (`hey ,you`).\n\nA comma on a speaker tier must be followed by a space or\nend-of-line (CLAN CHECK 92). Detected by span adjacency over the\nin-order content walk: the rule fires only when the next item is\na word starting at the byte immediately after the comma, so\nexempt constructs that put any other character there (group `<`,\noverlap and CA marks) are naturally not flagged."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E750"
+variant = "SpaceInsideAngleGroup"
+summary = "A space directly after the opening `<` or directly before the\nclosing `>` of an angle-bracket group (`< dog>` / `<dog >`).\n\nGroup delimiters hug their content (CLAN CHECK 160). The grammar\ntolerates the whitespace as an explicit optional `whitespaces`\nCST node so the parse recovers; this diagnostic marks the file\ninvalid instead of silently dropping the space (which also\nsilently rewrote the text on normalize)."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E751"
+variant = "PauseGluedToWord"
+summary = "A pause marker glued to the end of the preceding word\n(`hello(.)`).\n\nPauses are free-standing, space-delimited items (CLAN CHECK 57).\nDetected by span adjacency over the in-order content walk: the\npause's span starts at the byte where the previous word's span\nends."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E752"
+variant = "TimingWithoutMedia"
+summary = "Transcript carries timing evidence (main-tier bullets or a\npositional `%wor` timing sidecar) but no `@Media` header declares\nthe media timeline the timestamps index. Inverse direction of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)\n(E544); corresponds to CLAN CHECK error 112."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E753"
+variant = "WordOnlyRepetitionSegments"
+summary = "Word consists only of a repetition segment: every material part\nsits inside `↫...↫` (U+21AB) segment-repetition delimiters with no\nstem outside. The notation marks a repeated segment OF a word, so\na fully wrapped word asserts a repetition of nothing. Adopted from\nGUI CLAN CHECK error 151 as a chatter-authority rule; a\nword-category prefix marker (`&-` filler etc.) counts as a stem."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E755"
+variant = "UndeclaredUtteranceLanguage"
+summary = "A `[- CODE]` utterance-level language is not declared in\n`@Languages`. Utterance-level presence is substantial, unlike a\nword-level `@s:CODE` insertion, which deliberately carries no\ndeclaration requirement (2026-07-15 ruling). Matches CLAN CHECK\nerror 152."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E756"
+variant = "EmptyDependentTier"
+summary = "User-defined `%x` tier has empty or whitespace-only content: the\nline declares an annotation that is not there. Formerly W601 (which\nfired as a hard error despite the warning prefix); renumbered\n2026-07-16, rejection unchanged."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E757"
+variant = "CodeGluedToFollowingContent"
+summary = "Bracketed code's closing `]` glued to the following content with\nno space (`hello [/]x`). Style rule; the parse is unambiguous but\ncodes are free-standing space-delimited items. Matches CLAN CHECK\nerror 19."
+kind = "Style"
+status = "implemented"
+
+[[code]]
+code = "E758"
+variant = "LeadingSpaceOnMainTier"
+summary = "Space between the tier's tab delimiter and the first content item\nin a file WITHOUT `@Options: CA` (`*CHI:<tab><space>dog .`). CA\ntranscripts legitimately column-align with spaces after the tab\n(all 457 wild occurrences are CA files, 2026-07-16 scan), so the\nCA option exempts the rule. Matches CLAN CHECK error 123."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E759"
+variant = "AnnotationAtUtteranceStart"
+summary = "Utterance content begins with a postfix annotation (retrace,\noverlap marker, replacement, or quotation code): the code scopes\nover PRECEDING material, and there is none, so the parse is\ngenuinely broken and the error analysis names it instead of\nfalling through to the E316 catch-all. Matches CLAN CHECK\nerror 52 (\"Item '%s' must be preceded by text.\")."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E760"
+variant = "MorItemEmptyPos"
+summary = "`%mor` item beginning with the `|` separator (`|we`): the\npart-of-speech field is empty, which is never meaningful %mor\ncontent. Modern reading of CLAN CHECK error 11 (\"Symbol is not\ndeclared in the depfile.\"): the invariant is a non-empty symbol\nbefore the pipe, not the legacy depfile mechanism."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E761"
+variant = "GraRelationHeadNotUniversal"
+summary = "`%gra` relation label whose HEAD is not one of Universal\nDependencies' 37 universal relations (`13|3|PUNCTT`, `4|2|IOB`).\n\nA label is `HEAD` or `HEAD-SUBTYPE`. UD fixes the head set and\ndeliberately leaves subtypes open and language-specific, so the\nhead is the only part of a label checkable against a closed\nvocabulary; subtypes are never checked.\n\nNothing validated relation labels before, in chatter or in CLAN\nCHECK, so a corrupted label rode silently into every downstream\nanalysis. Grounding for the closed set (full-corpus survey,\n2026-07-26, 106,158 files, 138,565,864 relation instances): all\n37 universal heads are attested, 150 distinct labels occur, and\nexactly three heads fall outside the set, `IOB` (146, a\ntruncation of `IOBJ`), `PAD` (5), and `PUNCTT` (1). Every\nlanguage-specific subtype passes untouched."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E762"
+variant = "PrefixMarkerIllegalPosition"
+summary = "The prefix marker `#` stands alone as a main-tier word, or opens\none (`# dog`, `#dog`).\n\nThe marker attaches to the END of the prefix it marks (`ha# kelev`),\nso neither position can be that construct, and `#` is not a word.\nLanguage-independent: no language writes either shape. Zero\nattestations corpus-wide (typed survey, 2026-07-26, over every\n`#`-bearing file), so nothing legitimate is affected."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E763"
+variant = "PrefixMarkerLanguageNotAllowed"
+summary = "Legally-positioned prefix marker `#` on a word whose RESOLVED\nlanguage does not use the marker (`sun#`, `sun#shine` in an\nEnglish utterance).\n\nWhat is gated is the marker's PRESENCE in the word, not its\nposition, exactly as the digits rule (`E220`) gates the presence\nof a digit. Position is [`PrefixMarkerIllegalPosition`]'s\nconcern, and a word rejected there is not reported here too.\n\nGated on the word's own computed language, again like `E220`,\nnever on the file's `@Languages` header: a language-marked word\ncarries its own language. Grounding (typed survey, 2026-07-26):\n70,654 of 70,668 attestations are Hebrew or Arabic; the\nremaining 14 are strays in seven other languages.\n\n[`PrefixMarkerIllegalPosition`]: Self::PrefixMarkerIllegalPosition"
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E764"
+variant = "PrefixedFormGluedToPrecedingWord"
+summary = "A `&`-prefixed form runs directly into the preceding word\n(`dog&-um`, `dog&~gaga`, `dog&+fr`).\n\n`&` cannot continue a word, so the shape parses as TWO words: the\nmissing space silently manufactures a word boundary that the\ntranscriber did not write and no other diagnostic reports. Style\nrule in the [`PauseGluedToWord`] / [`CodeGluedToFollowingContent`]\nfamily: the parse is unambiguous, which is exactly why the source\nmust be canonically spaced.\n\nGlued omission (`dog0is`) is a different shape and is not this\ncode: `0` is ordinary word text, so it yields ONE malformed word,\nalready rejected by `E220`.\n\nJuxtaposition-matrix cell 6, ruled REJECT 2026-07-18. Zero\nmain-tier attestations in the kept corpus at adoption.\n\n[`PauseGluedToWord`]: Self::PauseGluedToWord\n[`CodeGluedToFollowingContent`]: Self::CodeGluedToFollowingContent"
+kind = "Style"
+status = "implemented"
+
+[[code]]
+code = "E765"
+variant = "SeparatorGluedToFollowingContent"
+summary = "A separator, pause, or overlap marker runs directly into the item\nafter it (`:and`, `;;`, `(.)dog`, `⌈⌉`).\n\nEach is a free-standing main-tier item, so the next item takes a\nspace. Only this direction is invalid: trailing glue ONTO a word\n(`word↘`, `dog,`) is documented CHAT convention, and a word glued\nto a colon (`dog:`) is not two items at all (the colon fuses as\nprosodic lengthening).\n\nComma shapes keep their own codes and are not reported here too:\n`,dog` is `E749`, `,,` is `E258`.\n\nJuxtaposition-matrix cell 7, ruled REJECT 2026-07-18. The\nfollowing-side-only scope comes from the per-variant probe\n(2026-07-29): every `Separator` variant accepted glue on both\nsides beforehand, and all the ruled exceptions are trailing, so a\nclass-level rule would have rejected 30,790 attested CA arrow\nusages."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E766"
+variant = "LinkerNotUtteranceInitial"
+summary = "A linker (`+\"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) placed after\nutterance content. Linkers are utterance-initial by definition\n(they connect this utterance to the PREVIOUS one), so a linker in\ncontent position is meaningless.\n\nThe grammar deliberately parses the misplaced linker into the CST\n(same strict+catch-all pattern as [`IllegalCurlyQuote`]) so this\nnamed rule can locate it precisely; before that, the construct\nfell into ERROR-node recovery and surfaced as a generic `E316`\nthat gave the transcriber nothing to act on (IISRP residue\nfinding 5, 2026-07-30).\n\n[`IllegalCurlyQuote`]: Self::IllegalCurlyQuote"
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E767"
+variant = "MediaWhitespaceBeforeComma"
+summary = "Whitespace between the `@Media` filename and the comma after it.\n\nThe comma separates the filename from the media type, so the filename\nends where the comma begins. Real CLAN rejects the space too (CHECK\n148), and an unambiguous style violation still follows CHECK as an\nerror.\n\nThe construct parses deliberately, so this rule can name it and point at\nthe space. Before 2026-08-05 the header simply failed to match and the\nfailure surfaced as [`UnknownHeader`] plus a \"Missing media_type node\"\ncomplaint about a line that visibly ended in `, audio`: fallout rather\nthan a judgment, and misleading twice over.\n\n[`UnknownHeader`]: Self::UnknownHeader"
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E768"
+variant = "MediaFilenameNotRepresentable"
+summary = "`@Media` filename cannot be written to a header and read back\nunchanged.\n\nThe problems are enumerated once, by `MediaFilenameProblem`; naming a\nsubset here is how this comment went stale on its first commit.\nUnreachable through either parser, which stop the filename at the\ncomma; the reachable path is a `ChatFile` deserialized from JSON."
+kind = "Invalidity"
+status = "unreachable_from_chat"
+
+# ---------------------------------------------------------------------
+# Generic/Unknown. The macro REQUIRES a variant named `UnknownError` and
+# refuses to expand without one; it no longer generates a fallback arm,
+# so nothing resolves a code string to it. Position is NOT irrelevant:
+# every row here must ascend by (letter prefix, number), and the macro
+# rejects a descending adjacency.
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "E999"
+variant = "UnknownError"
+summary = "Unknown or unrecognized error code (fallback)."
+kind = "Invalidity"
+status = "not_implemented"
+
+# ---------------------------------------------------------------------
+# Warnings (Wxxx)
+# ---------------------------------------------------------------------
+
+[[code]]
+code = "W108"
+variant = "SpeakerNotFoundInParticipants"
+summary = "Speaker code not found in `@Participants` (non-fatal)."
+kind = "Invalidity"
+status = "implemented"

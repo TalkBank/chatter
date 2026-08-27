@@ -8,11 +8,10 @@ use crate::generated_traversal::{
     AsRawNode, ModDependentTierNode, NodeSlot, PhoDependentTierNode, PhoGroupNode, PhoGroupsNode,
     extract_mod_dependent_tier, extract_pho_dependent_tier, extract_pho_groups,
 };
+use crate::parser::node_span::span_of;
 use talkbank_model::model::dependent_tier::PhoGroupWords;
 use talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};
-use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use tree_sitter::Node;
 
 use super::groups::{extract_pho_group_items, push_pho_separator};
@@ -33,8 +32,12 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_une
 /// 4. tab (position 3)
 /// 5. pho_groups (position 4)
 /// 6. newline (position 5)
-pub fn parse_pho_tier(node: Node, source: &str, errors: &impl ErrorSink) -> PhoTier {
-    parse_pho_tier_inner(node, source, PhoTierType::Pho, errors)
+pub fn parse_pho_tier(
+    node: PhoDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> PhoTier {
+    parse_pho_tier_inner(PhoBodyTier::Pho(node), source, errors)
 }
 
 /// Parse a `%mod` tier from a tree-sitter node.
@@ -51,8 +54,31 @@ pub fn parse_pho_tier(node: Node, source: &str, errors: &impl ErrorSink) -> PhoT
 /// 4. tab (position 3)
 /// 5. pho_groups (position 4)
 /// 6. newline (position 5)
-pub fn parse_mod_tier(node: Node, source: &str, errors: &impl ErrorSink) -> PhoTier {
-    parse_pho_tier_inner(node, source, PhoTierType::Mod, errors)
+pub fn parse_mod_tier(
+    node: ModDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> PhoTier {
+    parse_pho_tier_inner(PhoBodyTier::Mod(node), source, errors)
+}
+
+/// The two tiers whose body is a `pho_groups` node, each carrying its OWN node.
+///
+/// `parse_pho_tier_inner` used to take `(node: Node, tier_type: PhoTierType)`,
+/// two parameters that had to AGREE and that nothing held together:
+/// `parse_pho_tier_inner(a_mod_node, PhoTierType::Pho)` type-checked and would
+/// have run the `%pho` extractor over a `%mod` carrier. The enum makes the tier
+/// type and the node ONE value, so both the `extract_*` to call and the
+/// [`PhoTierType`] to stamp are DERIVED from it and cannot disagree.
+///
+/// Concretely deleted: the `tier_type` parameter, and the comment that had to
+/// explain that the extractor is chosen "for the tier type (never on
+/// `node.kind()`)". There is nothing left to choose wrongly.
+enum PhoBodyTier<'tree> {
+    /// A `%pho` tier.
+    Pho(PhoDependentTierNode<'tree>),
+    /// A `%mod` tier.
+    Mod(ModDependentTierNode<'tree>),
 }
 
 // Note: %xpho is a user-defined tier type and should be stored as unparsed.
@@ -73,54 +99,64 @@ pub fn parse_mod_tier(node: Node, source: &str, errors: &impl ErrorSink) -> PhoT
 ///   both a real body and a MISSING body were found (the old `Some(pho_groups)`
 ///   branch) and drive group iteration. A MISSING/empty `pho_groups` yields zero
 ///   items with no diagnostic, identical to the old loop iterating an empty node.
-///   The two arms can no longer share one `|`-pattern binding: the NEW backend's
-///   `NodeSlot::Missing` carries the raw `tree_sitter::Node` directly, not the
-///   typed `PhoGroupsNode` wrapper OLD carried, so `Present` calls
-///   [`AsRawNode::raw_node`] while `Missing` passes its raw node straight through;
-///   the observable parse is unchanged.
+///   Both are reached through `NodeSlot::node_or_placeholder`, which answers for
+///   exactly the two states where the position identifies itself. (This
+///   paragraph used to explain why the two had to be written as separate arms.
+///   That was true of the backend at the time and is no longer: the generator
+///   now owns the question.)
 /// - `Absent` / `Error` / `Unexpected`: no child of kind `pho_groups` was found
 ///   (the old `None` branch): an ERROR node or an unexpected-kind node does not
 ///   match `pho_groups`, and an absent child is not there at all. Return the EMPTY
 ///   tier SILENTLY (no diagnostic). This silent-partial is PRESERVED behavior; it
 ///   is unreachable from the boundary (`parse_pho_tier_inner` is only invoked when
 ///   the tier node has no tree-sitter error) but is reproduced for exhaustiveness.
-fn parse_pho_tier_inner(
-    node: Node,
-    source: &str,
-    tier_type: PhoTierType,
-    errors: &impl ErrorSink,
-) -> PhoTier {
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-
-    // Both dependent-tier carriers expose the body at `child_2` and their own
-    // top-level `unexpected` sink; extract the matching one for the tier type
-    // (never on `node.kind()`) and carry both out. `child_2.slot`'s type is the
-    // same `NodeSlot<PhoGroupsNode>` for `%pho` and `%mod`.
-    let (body_slot, unexpected): (NodeSlot<PhoGroupsNode>, Vec<tree_sitter::Node>) = match tier_type
-    {
-        PhoTierType::Pho => {
-            let children = extract_pho_dependent_tier(PhoDependentTierNode(node));
-            (children.child_2.slot().clone(), children.unexpected)
+fn parse_pho_tier_inner(tier: PhoBodyTier<'_>, source: &str, errors: &impl ErrorSink) -> PhoTier {
+    // ONE match. Both carriers expose the body at `child_2` and their own
+    // top-level `unexpected` sink, and `child_2.slot`'s type is the same
+    // `NodeSlot<PhoGroupsNode>` for `%pho` and `%mod`, so the only thing that
+    // varies is which `extract_*` reads it and which model tag it carries. Those
+    // were three separate matches on the same two-variant enum, which is three
+    // chances for the arms to disagree about what `Pho` means.
+    let (tier_type, node, body_slot, unexpected): (
+        PhoTierType,
+        tree_sitter::Node<'_>,
+        NodeSlot<PhoGroupsNode>,
+        Vec<tree_sitter::Node>,
+    ) = match tier {
+        PhoBodyTier::Pho(n) => {
+            let raw = n.raw_node();
+            let children = extract_pho_dependent_tier(n);
+            (
+                PhoTierType::Pho,
+                raw,
+                children.child_2.slot().clone(),
+                children.unexpected,
+            )
         }
-        PhoTierType::Mod => {
-            let children = extract_mod_dependent_tier(ModDependentTierNode(node));
-            (children.child_2.slot().clone(), children.unexpected)
+        PhoBodyTier::Mod(n) => {
+            let raw = n.raw_node();
+            let children = extract_mod_dependent_tier(n);
+            (
+                PhoTierType::Mod,
+                raw,
+                children.child_2.slot().clone(),
+                children.unexpected,
+            )
         }
     };
+    let span = span_of(node);
     surface_unexpected(&unexpected, source, errors);
 
-    match body_slot {
-        NodeSlot::Present(groups) => {
-            let items = parse_pho_groups(groups.raw_node(), source, errors);
+    // The two-state reading: every way of NOT having a `pho_groups` node yields
+    // the empty tier, so naming the four separately was four arms saying one
+    // thing. `present_or_placeholder` discards WHICH state occurred, which is
+    // sound only because nothing here branches on it.
+    match body_slot.typed_or_placeholder().present_or_placeholder() {
+        Some(groups) => {
+            let items = parse_pho_groups(groups, source, errors);
             PhoTier::new(tier_type, items).with_span(span)
         }
-        NodeSlot::Missing(raw) => {
-            let items = parse_pho_groups(raw, source, errors);
-            PhoTier::new(tier_type, items).with_span(span)
-        }
-        NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
-            PhoTier::new(tier_type, Vec::new()).with_span(span)
-        }
+        None => PhoTier::new(tier_type, Vec::new()).with_span(span),
     }
 }
 
@@ -136,8 +172,12 @@ fn parse_pho_tier_inner(
 /// `child_0` position inside each repeat element (`child_1` holds the
 /// `pho_group`); that position is purely structural and handled by
 /// [`push_pho_separator`].
-fn parse_pho_groups(pho_groups: Node, source: &str, errors: &impl ErrorSink) -> Vec<PhoItem> {
-    let groups = extract_pho_groups(PhoGroupsNode(pho_groups));
+fn parse_pho_groups(
+    typed: PhoGroupsNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Vec<PhoItem> {
+    let groups = extract_pho_groups(typed);
     let mut items: Vec<PhoItem> = Vec::with_capacity(groups.child_1.slot().len() + 1);
 
     push_pho_group(groups.child_0.slot(), source, errors, &mut items);
@@ -191,11 +231,7 @@ fn push_pho_group<'tree>(
 ) {
     match slot {
         NodeSlot::Present(group_node) => {
-            items.extend(extract_pho_group_items(
-                group_node.raw_node(),
-                source,
-                errors,
-            ));
+            items.extend(extract_pho_group_items(*group_node, source, errors));
         }
         NodeSlot::Missing(raw) => {
             check_not_missing(*raw, source, errors, "pho_groups");

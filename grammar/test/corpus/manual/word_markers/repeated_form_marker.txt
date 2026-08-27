@@ -1,0 +1,394 @@
+; Tokenization of a word carrying MORE THAN ONE `@` suffix.
+;
+; These pin SHAPE, never validity: every word below is INVALID CHAT, because a
+; word may carry at most one `@` suffix (ruled 2026-08-27, spec/errors/E203.md).
+; What is pinned is that the whole run becomes ONE `repeated_form_marker` and
+; the word still FORMS, with no ERROR node, so the model can name the defect
+; and the word round-trips instead of being silently rewritten.
+;
+; WHY A HAND-WRITTEN CASE. An E203 example cannot reach the generated corpus:
+; membership there is derived from producing ERROR nodes, and this defect is
+; lowering-caught precisely because the word parses cleanly. The construct
+; corpus is the other half and is for VALID shapes. Without these, the node
+; the whole rule rests on had zero `tree-sitter test` coverage.
+;
+; WHY IT IS WORTH PINNING HERE. This tokenization was wrong twice in one day
+; on 2026-08-27: a general pattern swallowed a following language suffix and
+; `chatter normalize` deleted it while exiting 0, and the narrowed replacement
+; then dropped `word@k@st` to a generic E316. Both were CST mistakes that the
+; layers above report only indirectly.
+
+============================================================
+word_markers: two @ suffixes, form marker then language suffix (the ruled case)
+============================================================
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	the gumma@c@s:spa fell .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code)
+          (comma)
+          (whitespaces)
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            code: (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          speaker: (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            content: (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    word: (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    word: (standalone_word
+                      (word_body
+                        (word_segment))
+                      (repeated_form_marker)))))
+              (whitespaces)
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    word: (standalone_word
+                      (word_body
+                        (word_segment))))))
+              (whitespaces))
+            ending: (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: two @ suffixes, both form markers
+============================================================
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	dog@b@c .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code)
+          (comma)
+          (whitespaces)
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            code: (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          speaker: (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            content: (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    word: (standalone_word
+                      (word_body
+                        (word_segment))
+                      (repeated_form_marker)))))
+              (whitespaces))
+            ending: (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: doubled @ sigil, empty first run
+============================================================
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	hello@@c .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code)
+          (comma)
+          (whitespaces)
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            code: (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          speaker: (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            content: (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    word: (standalone_word
+                      (word_body
+                        (word_segment))
+                      (repeated_form_marker)))))
+              (whitespaces))
+            ending: (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+
+============================================================
+word_markers: two @ suffixes, second not a language suffix
+============================================================
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	PAR Participant
+@ID:	eng|test|PAR|||||Participant|||
+*PAR:	bebe@k@st .
+@End
+
+---
+
+(source_file
+  (full_document
+    (utf8_header
+      (newline))
+    (begin_header
+      (newline))
+    (line
+      (languages_header
+        (languages_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (languages_contents
+          (language_code)
+          (comma)
+          (whitespaces)
+          (language_code))
+        (newline)))
+    (line
+      (participants_header
+        (participants_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (participants_contents
+          (participant
+            code: (speaker)
+            (whitespaces)
+            (participant_word)))
+        (newline)))
+    (line
+      (id_header
+        (id_prefix)
+        (header_sep
+          (colon)
+          (tab))
+        (id_contents
+          (id_languages
+            (languages_contents
+              (language_code)))
+          (pipe)
+          (id_corpus)
+          (pipe)
+          (id_speaker)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (pipe)
+          (id_role)
+          (pipe)
+          (pipe)
+          (pipe))
+        (newline)))
+    (line
+      (utterance
+        (main_tier
+          (star)
+          speaker: (speaker)
+          (colon)
+          (tab)
+          (tier_body
+            content: (contents
+              (content_item
+                (base_content_item
+                  (word_with_optional_annotations
+                    word: (standalone_word
+                      (word_body
+                        (word_segment))
+                      (repeated_form_marker)))))
+              (whitespaces))
+            ending: (utterance_end
+              (period)
+              (newline))))))
+    (end_header
+      (newline))))
+

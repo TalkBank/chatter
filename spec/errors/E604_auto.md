@@ -1,8 +1,6 @@
 +++
 code = 'E604'
 name = 'Empty GRA relation'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'tier'

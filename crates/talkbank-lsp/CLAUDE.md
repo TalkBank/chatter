@@ -1,7 +1,7 @@
 # `talkbank-lsp`, Language Server
 
 **Status:** Current
-**Last updated:** 2026-07-25 22:19 EDT
+**Last updated:** 2026-08-27 00:33 EDT
 
 Guidance for Claude Code when working inside `crates/talkbank-lsp/`. Read the
 workspace-level `CLAUDE.md` (at the chatter repo root) first; this file layers
@@ -82,9 +82,20 @@ here. Do not grow a second walker in this crate.
 
 ## Three distinct index spaces (do not conflate)
 
-`%mor` and `%gra` involve three index spaces whose confusion is the
-single most common source of alignment bugs. Name them explicitly in
-variable names, even when their types are still raw `usize`:
+`%mor` and `%gra` involve FIVE index spaces whose confusion is the single
+most common source of alignment bugs. **The model already gives all five a
+type**, in `talkbank-model/src/alignment/indices.rs`: `MainWordIndex`,
+`MorItemIndex`, `MorChunkIndex`, `SemanticWordIndex1` and `GraIndex`, plus
+`GraHeadRef`, because `head == 0` is ROOT and is not an index at all.
+
+**USE THEM. This crate does not, and that is a defect, not a style gap.**
+Measured 2026-08-26: the model uses those five 29, 21, 17, 30 and 8 times;
+this crate uses them 1, 1, 1, ZERO and 4 times, and carries 20 bare `usize`
+index bindings through the alignment path instead. Every NEW index binding
+here takes the model's type, and every bare `usize` one you touch becomes one.
+
+The table below is a summary of `indices.rs`, never a second source; when the
+two disagree, that module wins, because it is where the invariants live.
 
 | Space | 0- or 1-indexed | Over what | Example source |
 |-------|-----------------|-----------|----------------|
@@ -101,8 +112,12 @@ Rules of thumb:
 - If you need to go from a chunk index to a `%mor` *item* (e.g. to reach
   through the main↔mor alignment), use `chunk.host_item()`, do not do
   index arithmetic.
-- Until typed indices catch the confusion at compile time, be
-  deliberate when handling these three spaces.
+This section used to end "until typed indices catch the confusion at compile
+time, be deliberate when handling these three spaces". That sentence outlived
+its own condition: the typed indices were built, this crate went on using
+`usize`, and the prose kept asking for care that a type was already offering
+for free. Prose is what you write when no type can hold a rule. It is the
+wrong tool when one already does.
 
 ## Other LSP-specific rules
 
@@ -176,7 +191,7 @@ cargo test -p talkbank-lsp gra_word_label_with_post_clitic
 
 # Regression gates after any alignment-touching change (mandatory):
 cargo test -p talkbank-model
-cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus
 cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
 ```
 

@@ -9,6 +9,456 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-27
+
+### Removed
+
+- **`E214` is retired**, and the reason is worth more than the code was. It
+  began as "a bare `[*]` carries no error code" and was deliberately DISABLED
+  as leniency Decision 1, because reference files use bare `[*]` as valid CHAT.
+  Its number was then reused in the same file for a DIFFERENT rule, "the
+  scoped-annotation list is empty", while its spec file went on documenting the
+  original. So one code carried a retired rule in its documentation and an
+  unreachable one in its implementation, and its own spec example produced no
+  diagnostic at all. Nothing detected the drift because neither rule could
+  fire. `ErrorCode::EmptyAnnotatedContentAnnotations` is gone; code matching on
+  it will not compile.
+
+- **`rules::should_skip_group`** is absorbed into the descent module that was
+  its only remaining caller.
+
+### Changed
+
+- **Scoped annotations are NON-EMPTY by construction.**
+  `AnnotatedContentAnnotations::new` returns `Option<Self>`, `TryFrom<Vec<_>>`
+  replaces an infallible `From` that skipped the check, `Deserialize` rejects
+  an empty list rather than accepting one off the wire, and there is no
+  `Default`. `Annotated::new(inner, annotations)` takes the annotations instead
+  of starting empty; `Annotated::with_one(inner, annotation)` is the
+  single-annotation path, and `with_scoped_annotations` takes the newtype.
+
+  The `Option` IS the bare-versus-annotated decision, so seven
+  `if scoped.is_empty()` branches in the two parsers collapsed into it.
+
+- **`UtteranceContent` gains `Action`, and `BracketedItem` gains `Group`.** Both
+  enums had a gap where their sibling had a bare variant, and the parser filled
+  it by wrapping the construct in an `Annotated` carrying nothing. That was
+  20,184,072 values across a 106,000-file corpus, 99.3% of all
+  `annotated_action` nodes, almost all of them a bare `0` marking silence in
+  daylong audio. The two content enums are symmetric now: every annotatable
+  construct has a bare and an annotated form on both sides. **Exhaustive
+  matches over either enum will not compile until they handle the new
+  variant**, which is the intended outcome.
+
+- **`ErrorCode` is GENERATED from `spec/codes/error-codes.toml`**, a new
+  per-code registry that is the single owner of a code's variant name, its
+  rustdoc, its `kind` and its `status`, plus the retired numbers. `kind` and
+  `status` are removed from all 236 files under `spec/errors/`; a spec's `code`
+  is a foreign key resolved at load, so a loaded spec proves its code exists.
+  **Anything reading `kind` or `status` out of a spec file must read the
+  registry instead.** Exhaustiveness moved from a generator check to the
+  compiler: a wrong match arm fails the build rather than a lint.
+
+- **`GoverningMarker` is now `pub(crate)`; the public face is `GoverningMark`.**
+  Its variants were public, so a caller could construct one directly and
+  resolve a word's language without ever saying what enclosed the word, which
+  is the question the type exists to force. `GoverningMark` is opaque, with two
+  constructors: `of(word, enclosing)` and `without_own_marker(span, enclosing)`.
+  **This supersedes the 0.15.0 migration note below**, which tells callers to
+  use `GoverningMarker::of(word, enclosing_span)`. That path is no longer
+  public; use `GoverningMark::of` with the same arguments.
+
+- **`talkbank_lsp::content_span` is removed**, and with it the free function
+  `content_span(&UtteranceContent)`. Deciding WHERE an item is now belongs to
+  the model (`WordRef::span`, `GroupRef::span`), and deciding WHETHER the editor
+  targets it belongs to `talkbank_lsp::editor_target`, which dispatches on
+  `ContentStructure` rather than on 28 `UtteranceContent` variants. A new
+  variant is therefore classified once, in the model, instead of once there and
+  once in the LSP where the two could disagree.
+
+- **Parser entry points take the generated typed node wrappers**, not a node
+  plus a kind string. Every route from a loose node into a typed one is
+  `FromNodeKind::from_node`, and the 411 sites that ASSERTED a node's kind
+  rather than testing it are gone. Callers passing `(KIND_CONSTANT, raw_node)`
+  pairs pass the wrapper instead, so the proof is required where the value is
+  born.
+
+- **JSON output changes, with no compatibility shim.** An `annotated_action` or
+  `annotated_group` carrying no annotations is now `action` or `group`.
+  Previously-emitted JSON containing the empty annotated form will not
+  deserialize. Regenerate rather than reading cached `to-json` output. CHAT text
+  is byte-identical either way, so no file changes validity.
+
+### Known limitations
+
+- **`--parser re2c` is NOT READY to judge CHAT validity, and this release says
+  so in the tool.** A clean `--parser re2c` run is not evidence that a file is
+  valid: the backend ACCEPTS constructs the default backend refuses. Measured
+  2026-08-27: an unrecognised scoped annotation on a quotation
+  (`“hello” [qq] .`), on a pause (`hello (.) [qq] .`), and in utterance-initial
+  position (`[x 2] hey .`) are all accepted, where the default backend reports
+  E316 or E375.
+
+  The cause is information lost before validation runs, not a missing rule.
+  Both parsers build the same `talkbank_model` types and share one validator,
+  but each has its own intermediate parse tree, and re2c's does not carry
+  annotations for every construct: `ast::Group` has an `annotations` field and
+  `ast::Quotation`, six lines below it, does not. Three of the five hosts that
+  regressed here ARE fixed in this release, because their annotations do reach
+  the model; these three do not reach it.
+
+  `--parser` help and `book/src/architecture/parser-backends.md` now say this
+  at the point of use. That page also carried three claims this contradicts,
+  including a parity table row reading "Re2c silent (misses error): 0", and a
+  recommendation to prefer re2c for batch and CI validation. All corrected;
+  the parity figures are marked as not re-measured.
+
+  Use re2c to COMPARE two implementations, which is what a specification
+  oracle is for. Use the default backend to decide validity. The default
+  backend is unaffected by any of this, and is what `chatter validate`,
+  `normalize`, `to-json` and the LSP use unless you ask otherwise.
+
+### Fixed
+
+- **`word@@` reported one defect twice**, the specific diagnostic buried under
+  the generic one. The parser names a repeated `@` run as E203 with the run in
+  hand ("a word may carry only one '@' suffix, found '@@'"); `check_inline_at_
+  markers` then added its own E202 ("dangling '@' marker") for the same word,
+  because the suppression that stops a double already existed for the
+  E203-against-E203 case and was never applied to the E202 branch four lines
+  above it. `word@c@` was the same. Both now report E203 alone.
+
+  A bare trailing `@` (`hello@`) still reports E202: it carries no form type,
+  so nothing else has named it, which is the case that branch exists for.
+
+  Found by the release review; fixed by writing the spec example first, where
+  the backend-parity gate stated it exactly: `tree-sitter [E202, E203] ... spec
+  expects [E203]`.
+
+
+- **`chatter rediarize` assigned an utterance to the track of its single
+  LONGEST TURN, not the track holding the most of it.** `best_track` took the
+  greatest `overlap_ms` over the turn list with no per-track accumulator, so
+  three short turns of one track lost to one longer turn of another even when
+  the first held twice as much of the utterance. Its own docstring and the CLI
+  help both said "the track with the greatest overlap", which is what it now
+  computes.
+
+  This is the shape a diarizer actually produces: pyannote emits short turns
+  with gaps inside a single speaker's run. A track appearing in several turns
+  is accumulated now, and ties break on the track code rather than on turn
+  order, so the winner is a function of the input rather than of how the
+  diarizer sorted its file.
+
+  **`best_track` is replaced by `TrackOwnership`, which keeps the whole
+  distribution** (`winner()`, `shares()`, `total_ms()`, `runner_up_share()`)
+  rather than computing it and returning one name. Returning only the winner
+  is why the defect was invisible: nothing downstream could tell a track that
+  held 95% of an utterance from one that held 34% of a three-way split.
+
+  **Breaking:** `rediarize` and `rediarize_content` take a further argument
+  (below), and `RediarizeOutcome` gains a field.
+
+### Added
+
+- **`chatter rediarize --contested-at SHARE`** reports utterances whose time is
+  meaningfully split between tracks, in the stderr summary and in
+  `--summary-json` under a new `contested` list. Each entry carries the
+  utterance index, the track it was assigned to, and the full ownership
+  distribution: every overlapping track with its summed milliseconds,
+  descending, plus the total. The WHOLE distribution rather than a winner and a
+  runner-up, because that narrower shape cannot tell a 55/45 split from
+  55/23/22.
+
+  Contested utterances are still reattributed to their winner, so they are
+  reported separately from `flagged`, which keeps its narrower meaning of
+  "declined to reattribute". Placement is byte-identical with and without the
+  flag; this is a reporting change.
+
+  **There is deliberately no default.** Omit the flag and nothing is reported.
+  What share makes an utterance genuinely mixed has not been measured against
+  human listening, and a default would hand every user a constant wearing this
+  tool's authority. A value outside `0.0` to `1.0`, or `NaN`, fails the command
+  before any file is read, rather than silently meaning "nothing is ever
+  contested".
+
+  Known limitation, stated in the book page: summed milliseconds per track
+  cannot distinguish a speaker change INSIDE an utterance from crosstalk across
+  the whole of it, and those want opposite remedies.
+
+- **`TimeSpanMs::start_ms()` and `end_ms()`.** The fields are private so that
+  `new()` is the only route in and an inverted span cannot be built, which is
+  right, but it left the type WRITE-ONLY through the public API:
+  `DiarizationTurn::span` is a public field of a type a caller could hold and
+  could not read, so a downstream consumer of `parse_turns_json` had to
+  re-declare the same concept to get the numbers back out. Reading cannot
+  invert anything.
+
+
+- **THREE COMMANDS COULD DELETE A TRANSCRIPT AND REPORT SUCCESS.** The worst
+  class in this release, found by review rather than by any gate, and every
+  case exited 0 with a green line.
+
+  `chatter normalize notes.cha -o notes.cha`, the documented in-place idiom, on
+  a file of ordinary prose left a ZERO-BYTE FILE and printed `✓ Normalized`.
+  v0.15.0 refused it, so this was a regression. On a transcript missing its
+  `@End` it deleted the LAST UTTERANCE, which is exactly the shape a file
+  truncated mid-transfer has. On a malformed `%gra` tier it emptied the tier,
+  producing a file it then refused to read again. Those two are unchanged from
+  v0.15.0 and were shipping in both.
+
+  `chatter debug retag-language` and `debug fix-s` wrote back a model that had
+  DISCARDED an unparsable region: `hello [[[[ test ]]]] world .` became
+  `world .`, in place, recursing over whole directories, with no `--dry-run`
+  and no backup. `debug join-retrace` had the same shape and was found while
+  fixing the other two.
+
+  All four rewriters were the same three steps: parse, `to_chat_string()`,
+  write. The return type was `String`, which cannot carry the one fact the
+  caller needed, so no caller had it. `chatter to-json` refused all three
+  `normalize` inputs, because it happened to route through a stricter path, and
+  the two commands disagreeing about the same model is what made this findable.
+
+  **Two different proofs, because the commands promise different things.**
+  `normalize` reshapes and must lose nothing, so `talkbank_transform::Rewrite`
+  refuses when a source line has no counterpart in the output, compared with
+  whitespace removed so the canonicalisation it exists for still passes. The
+  three EDITING commands change content on purpose, so that test would refuse
+  every legitimate edit they make; they require instead that the model
+  reproduce the source BYTE FOR BYTE **before** the edit, which is the only
+  point where faithfulness is a clean question for them. A refused file is left
+  untouched and the message names the line, or tells the operator to run
+  `chatter normalize` first.
+
+  Six CLI subprocess tests pin all of it, including the case that must NOT
+  refuse: the six reference-corpus files `normalize` legitimately rewrites.
+
+- **`chatter debug retag-language` is new**, and was missing from this section
+  entirely. It retags a language code across all three notations it can reach
+  (`@Languages`, the `[- code]` utterance precode, and `word@s:code`) and
+  REFUSES a file naming the code in a `<a b> [@s:code]` span, which it cannot
+  rewrite. `--to` deduplicates in `@Languages`. It is a tool and not a
+  find-and-replace because a language code is also ordinary transcript content:
+  its first use retagged `sun` to `fin` across a corpus where `sun` is also
+  colloquial Finnish for "your" and appears 27 times as real speech.
+
+- **A nested quotation stopped being detected as soon as either quotation
+  carried an annotation**, on the default backend only, so `“a “b” c” [//]
+  hello .` validated CLEAN while `“a “b” c” .` reported E372, and the two
+  backends disagreed about a validity rule on identical bytes. `[/]`, `[*]` and
+  `[% note]` leaked the same way, and so did an annotation on the INNER
+  quotation.
+
+  A quotation has TWO spellings in the model, with and without its own scoped
+  annotations, and each half of the rule named only the first. `descent.rs`
+  named both; `main_tier.rs` named one. The annotated spelling was introduced
+  by the same release that gave quotations scoped annotations, and the nesting
+  rule was never taught about it.
+
+  Fixed as a type rather than as two more match arms: `GroupRef::Quotation` and
+  `GroupRef::AnnotatedQuotation` are folded into one `Quotation(QuotationRef)`
+  variant, mirroring the `RetraceRef` beside it, so "is this a quotation" is a
+  single arm that cannot be half-written. **This is a breaking change to
+  `GroupRef`**; a caller matching `AnnotatedQuotation` will not compile, and
+  the two spellings remain distinguishable one level down through
+  `QuotationRef`. `QuotationRef::span` preserves the distinction that
+  `GroupRef::span` drew between the two, which folding them could have lost
+  silently. The outer scan that looked for a quotation to test now descends
+  through `ContentStructure` as well, so a wrapper cannot hide either side of
+  the relation again. Spec examples 4 and 5 of `E372.md` are the two
+  directions.
+
+
+- **`@Location` and 14 other headers were REJECTED by the public fragment
+  parser.** `parse_header_fragment`, and the `ChatParser::parse_header` trait
+  method behind it, dispatched through 19 hand-written arms plus a catch-all,
+  while the grammar's `header` supertype has 34 subtypes. `@Activities`,
+  `@Bck`, `@G`, `@Location`, `@Number`, `@Options`, `@Page`,
+  `@Recording Quality`, `@Room Layout`, `@Time Duration`, `@Time Start`,
+  `@Transcriber`, `@Transcription`, `@Thumbnail` and `@Unsupported` all reached
+  it and came back as errors rather than as `Header::Unknown`. The same headers
+  parsed correctly inside a whole document, because that path matches the
+  generated `HeaderChoice` exhaustively: two dispatchers for one job, one of
+  them a drifted subset, and the tests covered only the arms that existed.
+
+- **Five call sites silently discarded a group and every word inside it.**
+  `convert_to_group_content` returned `Result<BracketedItem, Group>` where
+  neither outcome is a failure, and the shape invited `if let Ok(item)`, which
+  five call sites duly wrote. It is a TOTAL function returning `BracketedItem`
+  now, so there is no second case to ignore and those sites preserve the
+  content. An intermediate two-variant enum was tried first and reverted: it
+  moved the decision without closing it.
+
+- **The container descent rule had two implementations that had already
+  drifted.** The eight walkers and `count.rs`'s four traversals each carried
+  their own container arms, about thirty per side; `walk/bracketed.rs` shipped
+  four ungated `AnnotatedQuotation` arms while `count.rs` gated the same
+  variant, so one node was walked by one and skipped by the other. One
+  `helpers::descent` module owns it for every traversal now.
+
+- **A quotation could not carry a scoped annotation**, which CLAN CHECK accepts.
+  The grammar takes `quotation_with_optional_annotations`.
+
+- **An `@ID` age with a component too large for its field parsed as ZERO.**
+  `AgeValue::from_text` parsed each component with `.parse::<u8>()` behind an
+  all-ASCII-digits guard, which leaves exactly one way to fail (a value above
+  255) and answered it with `0`. `2;300.` became `Valid { years: 2, months:
+  Some(0) }`: two years and no months, presented as a successful parse, in the
+  field that is the primary variable of most CHILDES research.
+
+  **Bounded honestly: no validation verdict changes.** A component of three or
+  more digits also fails the two-digit depfile pattern, so such a file was
+  always reported invalid. What was wrong is what the typed model then SAID
+  about it, which reaches library callers and anything reading the parsed age,
+  not `chatter validate`'s answer. `age_component` returns `Result<Option<u8>,
+  Unrepresentable>` now, so an ABSENT component (`1;` has no months) stays
+  distinct from an unrepresentable one, and an unrepresentable one sinks the
+  whole age to `Unsupported`, which preserves the original text byte for byte.
+
+- **`ErrorCode`'s string constructor with a silent fallback is REMOVED.** It
+  mapped any unrecognised string to `UnknownError` through a catch-all, so
+  `ErrorCode::new("E7O5")` with a letter O compiled and would have shipped E999
+  with nothing to catch it. Three of the `%mor` alignment checks built their
+  codes that way (E705, E706 and E716; the count mismatch among them is CLAN
+  CHECK 140), which also meant nothing reasoning over the enum could see those
+  three checks at all. **The codes they emitted were correct**, so no
+  diagnostic changes; what changes is the API. All three return typed variants,
+  and `ErrorCode::parse_exact` returns `Option<Self>` and is now the only route
+  from a string. Callers of the old constructor must handle the `None`.
+
+- **A word carrying two `@` suffixes was reported wrongly, and one such word
+  was DELETED on the way out.** Two distinct symptoms, which an earlier draft of
+  this entry ran together:
+
+  `hello@@c` and `hello@c@d` never formed a word at all, so the utterance fell
+  to error recovery and reported the generic E316, "content could not be
+  parsed", while the model's own rule for the shape could never fire.
+
+  `word@k@s:spa` DID form a word and DID report E203 in v0.15.0. What was wrong
+  there was the message, and what was dangerous was `chatter normalize`, which
+  exited 0 and wrote the word back split in two: `word@k@st` became
+  `word@k@s t`, silently, at exit 0. That is the deletion, and it is the reason
+  this entry exists.
+
+  Both shapes now parse, are refused as E203 with a message naming the actual
+  defect (`A word may carry only one '@' suffix, found '@c@s:spa'`), and
+  serialize back verbatim, so `normalize` REFUSES the file instead of rewriting
+  it. `hello@c`, `dog@j` and `hola@s:spa` are unchanged from v0.15.0.
+
+  **A word may carry at most ONE `@` suffix.** Ruled 2026-08-27, asked because
+  CLAN CHECK accepts multiple suffixes and chatter does not: "Multiple suffixes
+  might make logical sense, but it is computationally messy. So, let's disallow
+  that." `word@k@s:spa` is therefore invalid even though the form marker `@k`
+  and the language suffix `@s:spa` are each fine alone. **A documented
+  divergence from CHECK**, which passes these files; main-tier words with two
+  `@` runs number zero across the ~106,000 kept files.
+
+  A bare trailing `@` (`hello@`) deliberately keeps its existing E202: `@` is
+  the header sigil, and admitting a single one in word position moved the
+  diagnostic for a doubled `@End`.
+
+  **`--parser=re2c` REFUSES all of these too, and agrees on the code for some
+  of them.** Measured: `gumma@c@s:spa` and `bebe@k@st` report E203 on both
+  backends, because that lexer takes the two suffixes as separate tokens and
+  the model's own rule counts them. Not full agreement: on the `@s:`-bearing
+  case the default backend now reports E203 alone where re2c reports E203 plus
+  E255, because the word carries an undeclared form type and its `@s:spa` no
+  longer registers as a language marker. Both refuse the file. `dog@b@c` (E209 plus E253) and `hello@@c`
+  (E321) it refuses for other reasons, since its lexer cannot form those words
+  at all. The named message above is the default backend's. The divergence is
+  recorded in the parser-parity baseline as a Conflicting row for `E203.md`.
+
+- **E207's message asserted that a KNOWN annotation marker was unknown.** It
+  read `"x" is not a known scoped annotation type`. An annotation reaches the
+  unknown path whenever no specific rule matched it WHOLE, which happens both
+  when the marker really is unknown (`[qq]`, `[@ xyz]`) and when a known marker
+  carries content the rule refuses. Under `--parser=re2c`, whose rule set is
+  narrower, `[x 0]` and `[:]` both land there, and the message then told the
+  reader that `x` and `:` are not known scoped annotation types, when the
+  marker is not the thing at fault. `[: replacement]` is ordinary valid CHAT on
+  both backends, so the old message was plainly false there. **The message now
+  names the annotation as written**, `could not read [x 0] as a scoped
+  annotation`, which is true in every case and shows more than the marker
+  alone.
+
+  **Scoped honestly: this reaches the `--parser=re2c` path only.** On the
+  default backend the diagnostic is issued by the parser rather than the model,
+  and its message is byte-identical to 0.15.0's. An earlier draft of this entry
+  said "affects both backends"; measured, it does not.
+
+  And `[x 3]` is NOT an example of a valid construct: `hello [x 3] .` is
+  refused by both backends. Only the group and utterance-initial spellings
+  parse, and only under re2c, which is its own divergence.
+
+- **Under `--parser=re2c`, an annotation on a top-level word reported E207 at
+  byte 0**, on line 1, pointing at `@UTF8`. `Annotated::new` starts at the
+  dummy span and the tree-sitter parser follows it with `.with_span(..)`; this
+  converter never did. That path now takes the annotated construct's span
+  widened to cover every annotation whose text can be placed, and REFUSES
+  rather than answering with the sentinel when nothing can be, so a span is
+  either real or absent.
+
+  **SCOPED HONESTLY: this is one of eleven `Annotated::new` sites.** An
+  annotation on a bracketed word, a group, an event, an action or a retrace
+  still reports at byte 0 under this backend. Those need the same AST work as
+  the retrace spans, which is the queued change that carries the lexer's own
+  token ranges through the parser instead of re-deriving them.
+
+- **`validate --list-checks` advertised two checks that cannot fire.** E361
+  ("invalid timestamp value in media bullet") and E382 ("failed to parse `%mor`
+  tier content") were marked `implemented` in the code registry, and nothing
+  can produce either. Both now list as `Planned`: `--list-checks` goes from
+  `224 checks (184 Active, 40 Planned)` to `223 checks (182 Active, 41
+  Planned)`, the one retired check being `E214` above. The checks themselves
+  are unchanged; the advertisement was wrong.
+
+- **Under `--parser=re2c`, every rule keyed on a span was silently
+  unreachable.** Separators and words both reached the model at `Span::DUMMY`,
+  which is `{0, 0}` and therefore also a real position, and validation FILTERS
+  on that value: a dummy span makes the model answer "there is no comma here",
+  so E258 (consecutive commas) and every other span-keyed rule never fired on
+  that backend. **Words and separators on the main tier now report the same
+  spans on both backends**, which is what was fixed and what was measured: 61
+  of 64 word and separator span sets match tree-sitter exactly.
+
+  **The backends are NOT span-identical in general, and this entry does not
+  claim they are.** Across the repository's own `.cha` files, 434 (file, code)
+  pairs are reported by both backends and 338 of them still differ, 329 because
+  re2c answers at byte 0. Untouched here: the pause-glue mirror in
+  `parser/file.rs`, every terminator, and every dependent-tier diagnostic. E370
+  is worse than byte 0, reporting an offset that is not a file position at all;
+  that is unchanged from 0.15.0 and is not fixed here.
+
+  This affects only the opt-in oracle parser; the default backend was never
+  wrong.
+
+- **Under `--parser=re2c`, three diagnostics were reported TWICE.** Giving
+  words and separators real spans made three model rules reachable while the
+  hand-written mirrors that existed BECAUSE they were unreachable were still in
+  place, so E749, E764 and E765 arrived doubled. The parity gate stores codes
+  in a `BTreeSet`, so multiplicity is structurally invisible to it and STILL
+  is: a new six-utterance test (`re2c_reports_no_diagnostic_twice`) covers the
+  mirrors it knows about instead. One doubled diagnostic survives that test's
+  case list, E307 on a bad speaker ID, unchanged from 0.15.0.
+
+- **Under `--parser=re2c`, an interposed word lost its form marker.** `&*SPK:`
+  took a bare word body where the grammar defines the payload as a whole
+  standalone word, so a form marker, an `@s` language suffix or a `$` POS tag
+  on an interposed word was dropped. Found on real Spanish transcripts, where
+  the two parsers had disagreed for as long as the rule existed.
+
+- **Under `--parser=re2c`, an unrecognised annotation killed the utterance.**
+  `[@ xyz]` reported E321 ("unparsable utterance") rather than E207 ("unknown
+  annotation"): every specific bracket form had a lexer rule and anything else
+  fell to a bare `[` no parser rule could use. E321 is a statement about the
+  parser where E207 is a statement about the file.
+
+- **Under `--parser=re2c`, `un++do` reported a misplaced linker.** The word
+  body consumed `+` only when an atom followed, so the word ended at `un` and
+  `++` matched the linker rule: E766, "a linker placed after utterance
+  content", on a construct containing no linker. It reports E233, "empty part
+  in compound word", as the specification says it should.
+
 ## [0.15.0] - 2026-08-25
 
 ### Changed
@@ -170,7 +620,7 @@ version and are listed under "Changed" / "Removed".
   regenerated `parser.c` (which is in fact byte-identical here) and without any
   fixture in the suites noticing, because they all parse. The corpus
   differential is what can see it: over 2,147 files at stride 50, stratified per
-  repo, against the v0.13.0 fleet build, there were no new error codes, no
+  repo, against the v0.13.0 released build, there were no new error codes, no
   per-code count increases, no newly failing roundtrips and no new cross-backend
   disagreements. That is a statement about the sample, not about the whole
   corpus; at this stride a defect in a few dozen of ~106,000 files could still
@@ -631,7 +1081,7 @@ project did not previously have.
 **Validation verdicts: CHANGED, in the permissive direction.** Files that
 earlier versions wrongly REJECTED now parse: an unquoted `@Media` filename may
 contain dots, parentheses, interior spaces and non-ASCII characters. Nothing
-that used to pass now fails. The corpus differential over a 2,136-file
+that used to pass now fails. A comparison over a 2,136-file
 stratified sample of the reference corpora reports no new error code and no
 count increase on any code, and no newly-failing roundtrip file.
 
@@ -1053,7 +1503,7 @@ on a fixed rule set.
   are documented convention and `dog:` fuses into the word.
 
   Juxtaposition-matrix cell 7 was ruled REJECT for the whole separator class,
-  against an estimate of roughly six affected files. The corpus differential
+  against an estimate of roughly six affected files. A real-corpus comparison
   measured that reading at 270 new instances on a 2%, 2,134-file sample (about
   13,500 corpus-wide), every inspected one legitimate CA notation rather than a
   missing space: `≡` is latching and is written glued on both sides, and the
@@ -1709,6 +2159,7 @@ First public release.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
 [Unreleased]: https://github.com/TalkBank/chatter/compare/v0.15.0...HEAD
+[0.16.0]: https://github.com/TalkBank/chatter/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/TalkBank/chatter/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/TalkBank/chatter/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/TalkBank/chatter/compare/v0.12.0...v0.13.0

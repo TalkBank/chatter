@@ -85,8 +85,14 @@
 //!
 //! ```no_run
 //! use generators::ErrorSpec;
+//! use talkbank_spec_vocabulary::registry::CodeRegistry;
 //!
-//! let specs = ErrorSpec::load_all("../../spec/errors")
+//! // The registry first: a spec resolves the code it names, so there is no
+//! // way to load one without it, and no consumer downstream holding an
+//! // `Option<Status>`.
+//! let registry = CodeRegistry::load("../..".as_ref())
+//!     .expect("failed to load the code registry");
+//! let specs = ErrorSpec::load_all("../../spec/errors", &registry)
 //!     .expect("failed to load error specs");
 //!
 //! for spec in &specs {
@@ -94,8 +100,8 @@
 //!         "{} ({}) -- {:?} [{}]",
 //!         spec.error.code,
 //!         spec.error.name,
-//!         spec.metadata.kind,
-//!         spec.metadata.status,
+//!         spec.kind(),
+//!         spec.status(),
 //!     );
 //! }
 //! ```
@@ -120,5 +126,58 @@ pub mod templates;
 // Re-exports
 pub use spec::{
     construct::{ConstructExample, ConstructMetadata, ConstructSpec},
-    error::{ErrorExample, ErrorMetadata, ErrorSpec},
+    error::{ErrorExample, ErrorSpec},
 };
+
+/// Registry fixtures for this crate's tests.
+///
+/// Four modules were hand-writing near-identical registry TOML with
+/// backslash-continuation escaping, three of them byte-identical apart from
+/// `status`. `CodeRegistry::parse` is still the only route in, so this does
+/// not weaken the type's proof; the doctrine's "every route in" rule
+/// explicitly sanctions a `#[cfg(test)]` path.
+#[cfg(test)]
+pub(crate) mod test_registry {
+    use talkbank_spec_vocabulary::Status;
+    use talkbank_spec_vocabulary::registry::CodeRegistry;
+
+    /// A registry declaring exactly the given codes.
+    ///
+    /// Each code doubles as its own variant name: `E999` is a legal
+    /// `UpperCamelCase` ASCII identifier, so a fixture needs no second
+    /// vocabulary of its own.
+    pub(crate) fn declaring(codes: &[(&str, Status)]) -> CodeRegistry {
+        let toml: String = codes
+            .iter()
+            .map(|(code, status)| {
+                format!(
+                    "[[code]]\ncode = '{code}'\nvariant = '{code}'\n\
+                     summary = 'A test code.'\nkind = 'Invalidity'\n\
+                     status = '{}'\n",
+                    status.as_str()
+                )
+            })
+            .collect();
+        CodeRegistry::parse(&toml).expect("a well-formed fixture registry")
+    }
+
+    /// Write a fixture registry into a temporary checkout root, at the one
+    /// path `CodeRegistry::load` reads.
+    pub(crate) fn write_into(root: &std::path::Path, codes: &[(&str, Status)]) {
+        let path = root.join(talkbank_spec_vocabulary::registry::REGISTRY_PATH);
+        std::fs::create_dir_all(path.parent().expect("the registry has a parent"))
+            .expect("create spec/codes");
+        let toml: String = codes
+            .iter()
+            .map(|(code, status)| {
+                format!(
+                    "[[code]]\ncode = '{code}'\nvariant = '{code}'\n\
+                     summary = 'A test code.'\nkind = 'Invalidity'\n\
+                     status = '{}'\n",
+                    status.as_str()
+                )
+            })
+            .collect();
+        std::fs::write(&path, toml).expect("write the fixture registry");
+    }
+}

@@ -230,7 +230,7 @@ impl FormType {
     /// from a `to_lowercase()` and the second from a literal `"z:"` prefix
     /// test in each caller. Neither is defensible and the corpus authority
     /// writes every marker lowercase, but changing what chatter accepts is not
-    /// a de-duplication and needs the corpus differential, so the incoherence
+    /// a de-duplication and needs a comparison over real corpora, so the incoherence
     /// is preserved here, in one place where it can be seen, instead of in
     /// three where it could not.
     ///

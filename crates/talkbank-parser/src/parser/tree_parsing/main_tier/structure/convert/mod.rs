@@ -18,8 +18,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, MainTierChildren, MainTierNode, NodeSlot, TierBodyNode, extract_main_tier,
-    extract_tier_body,
+    AsRawNode, FromNodeKind, MainTierChildren, MainTierNode, NodeSlot, SlotValue, TierBodyNode,
+    extract_main_tier, extract_tier_body,
 };
 use crate::model::{
     Bullet, LanguageCode, Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent,
@@ -27,66 +27,188 @@ use crate::model::{
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-use super::super::content::{MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink};
+use super::super::content::{MainTierRegion, classify_main_tier_recovery};
+use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 
 mod body;
 mod ending;
 mod linkers;
 mod prefix;
 
-/// Parse a `tier_body` the traversal displaced into its sink, or report the
-/// terminator genuinely missing when there is none.
+/// Report the terminator genuinely missing, when the tier has no body anywhere.
 ///
-/// Shared by every non-`Present` slot state, because any of them can occur with
-/// the real body sitting in the sink. Claiming a missing terminator without
-/// asking is how chatter told users an utterance had none on a line ending in
-/// " .".
-fn parse_displaced_or_report_missing<'tree>(
-    displaced: Option<tree_sitter::Node<'tree>>,
-    node: tree_sitter::Node<'tree>,
-    source: &str,
+/// Reached only once [`TierBodyLocation`] has looked in BOTH places, the slot and
+/// the sink. Claiming a missing terminator without asking the sink is how
+/// chatter told users an utterance had none on a line ending in " .".
+///
+/// This was `parse_displaced_or_report_missing`, which took the displaced body
+/// as a parameter and branched on it. The branch moved to the caller when the
+/// location became a value, so what is left is the one arm that reports.
+fn report_missing_tier_body(
+    node: tree_sitter::Node<'_>,
     original_input: &str,
     errors: &impl ErrorSink,
 ) -> TierBodyData {
-    match displaced {
-        Some(raw) => {
-            let tier_body_children = extract_tier_body(TierBodyNode(raw));
-            body::parse_tier_body(
-                &tier_body_children,
-                raw.byte_range(),
-                source,
-                original_input,
-                errors,
-            )
+    report_missing_child(
+        node.byte_range(),
+        original_input,
+        errors,
+        ErrorCode::MissingTerminator,
+        "Missing terminator in main tier",
+    );
+    TierBodyData::empty()
+}
+
+/// Where a main tier's `tier_body` actually is, and what its `unexpected` sink
+/// holds once that body is taken out.
+///
+/// # Possession of `leftover` IS the proof the sink entry was removed
+///
+/// An ERROR at the `tier_body` slot position CAN displace the body rather than
+/// replacing it: the traversal puts the real node in the carrier's `unexpected`
+/// sink, which spec Section 7 guarantees never drops a child. The body must then
+/// be parsed from the sink AND must not also be surfaced as an unexplained
+/// leftover. (Measured unreached today; see [`TierBodyLocation::locate`].)
+///
+/// That used to be three separate steps holding one invariant by convention:
+/// `main.child_5.slot()` was matched once to decide whether to search the sink
+/// and again to decide the diagnostic (two matches that had to partition
+/// identically, with nothing saying so), and the sink was filtered afterwards by
+/// comparing tree-sitter node IDs:
+///
+/// ```text
+/// .filter(|candidate| Some(candidate.id()) != consumed_tier_body.map(|n| n.raw_node().id()))
+/// ```
+///
+/// Identity arithmetic under a comment asserting the relation is the tell for a
+/// missing type. Here there is no way to obtain the body without also obtaining
+/// the remainder, so "parsed the displaced body and also reported it as
+/// unexplained" is not a state a caller can construct.
+struct TierBodyLocation<'tree> {
+    /// The body, wherever it was found, or nothing if this tier has none.
+    body: Option<TierBodyNode<'tree>>,
+    /// The `unexpected` sink with the displaced body, if there was one, removed.
+    leftover: Vec<tree_sitter::Node<'tree>>,
+}
+
+impl<'tree> TierBodyLocation<'tree> {
+    /// Locate the body: its own slot first, then the sink.
+    ///
+    /// Reports NOTHING. What to say about the slot state is a separate question
+    /// with its own match at the call site, and keeping it separate is what lets
+    /// the two stop having to agree.
+    ///
+    /// # The sink half is UNREACHED today, and that was measured, not assumed
+    ///
+    /// Instrumenting this branch and running it over 2,136 sampled corpus files,
+    /// all 363 error-corpus fixtures, all 107 reference-corpus files and eight
+    /// hand-built adversarial main tiers fired it ZERO times (2026-08-26). The
+    /// reconstruction's tail-aware splitting now places `tier_body` at its own
+    /// slot even when an ERROR precedes it, so nothing is displaced into the
+    /// sink; `*CHI:\t[: closed] .`, the input the displacement bug was found on,
+    /// parses to `main_tier(star speaker colon tab ERROR sep_trailing_space
+    /// tier_body)` with the body exactly where it belongs.
+    ///
+    /// KEPT ANYWAY, and deliberately. "Does not fire on everything I have" is
+    /// not "cannot fire": this is recovery code, its absence once told users an
+    /// utterance had no terminator on a line ending in " .", and the generator
+    /// change that made it unnecessary is the same class of change that made it
+    /// necessary. What is NOT justified is reading the paragraph below as a
+    /// description of current behaviour, which is why this says so.
+    ///
+    /// The sink search reads the traversal's own `unexpected`, deliberately a
+    /// `Vec<tree_sitter::Node>` of children that filled no grammar position.
+    /// `find_map(from_node)` rather than `find(|c| c.kind() == "tier_body")`:
+    /// the same test, against the kind literal the grammar generated instead of
+    /// one written here, and it hands back the wrapper it just proved. This is
+    /// the ONLY way to use the sink at all, and it is not the banned hand-walk,
+    /// which is driving the parse by scanning `node.kind()` instead of the
+    /// generated traversal.
+    fn locate(main: &MainTierChildren<'tree>) -> Self {
+        // The question is not "which slot state is it?" but "is the content
+        // actually here?", which is the only one whose answer is a fact about
+        // the user's file rather than about our recovery. A stray ERROR shifts
+        // every later position, so REQUIRED positions can report `Absent` while
+        // their content sits, correctly typed, in the sink.
+        if let SlotValue::Present(body) | SlotValue::Placeholder(body) =
+            main.child_5.slot().typed_or_placeholder()
+        {
+            return Self {
+                body: Some(body),
+                leftover: main.unexpected.clone(),
+            };
         }
-        None => {
-            report_missing_child(
-                node.byte_range(),
-                original_input,
-                errors,
-                ErrorCode::MissingTerminator,
-                "Missing terminator in main tier",
-            );
-            TierBodyData::empty()
+
+        let mut leftover = Vec::with_capacity(main.unexpected.len());
+        let mut body = None;
+        for candidate in main.unexpected.iter().copied() {
+            match (body, TierBodyNode::from_node(candidate)) {
+                // The first `tier_body` in the sink is the displaced one; it
+                // leaves the sink by not being pushed, which is why no later
+                // filter can forget to remove it.
+                (None, Some(displaced)) => body = Some(displaced),
+                (Some(_), _) | (None, None) => leftover.push(candidate),
+            }
         }
+        Self { body, leftover }
     }
 }
 
-/// The `tier_body` an ERROR displaced from its positional slot, if there is one.
+/// Every recovery node under one `main_tier`, reportable AT MOST ONCE each.
 ///
-/// Reads the traversal's own `unexpected` sink, which is deliberately a
-/// `Vec<tree_sitter::Node>` of children that filled no grammar position. Routing
-/// one back into its typed wrapper needs its kind, and this is the ONLY way to
-/// use the sink at all; it is not the banned hand-walk, which is driving the
-/// parse by scanning `node.kind()` instead of the generated traversal, or
-/// classifying the text of an ERROR node.
-fn displaced_tier_body<'tree>(
-    unexpected: &[tree_sitter::Node<'tree>],
-) -> Option<tree_sitter::Node<'tree>> {
-    unexpected
-        .iter()
-        .copied()
-        .find(|candidate| candidate.kind() == "tier_body")
+/// # "Already reported" was arithmetic in three places, and they disagreed
+///
+/// Three walks report these nodes: the direct-children walk below, the
+/// `tier_body` slot's own `Error` arm, and the `unexpected` sink. Each carried
+/// its own bookkeeping for what the others had done. The direct-children walk
+/// compared SPANS against the `tier_body` slot's error
+/// (`Some((child.start_byte(), child.end_byte())) != tier_body_error_span`); the
+/// sink was filtered by node ID; and the whole-tree backstop one layer up dedups
+/// by span OVERLAP. None knew about all the others, so on
+/// `*CHI:\t[: closed] .` one ERROR, which is BOTH a direct child and a sink
+/// entry, was reported twice at the identical span.
+///
+/// Here a node is TAKEN to be reported, and taking removes it, so a second
+/// report is not something a caller can express. The three walks keep their
+/// distinct regions and diagnostics; what they no longer keep is a private
+/// theory of what the others did.
+struct MainTierRecovery<'tree> {
+    /// Recovery nodes not yet reported, in document order.
+    unreported: Vec<tree_sitter::Node<'tree>>,
+}
+
+impl<'tree> MainTierRecovery<'tree> {
+    /// Every ERROR directly under the main tier, plus every ERROR the traversal
+    /// swept into its `unexpected` sink. A node in BOTH appears once, which is
+    /// the duplicate this type exists to make unwritable.
+    fn collect(node: tree_sitter::Node<'tree>, sink: &[tree_sitter::Node<'tree>]) -> Self {
+        let mut unreported: Vec<tree_sitter::Node<'tree>> = Vec::new();
+        let mut cursor = node.walk();
+        let direct = node
+            .children(&mut cursor)
+            .filter(tree_sitter::Node::is_error);
+        for candidate in direct.chain(sink.iter().copied().filter(tree_sitter::Node::is_error)) {
+            if !unreported.iter().any(|seen| seen.id() == candidate.id()) {
+                unreported.push(candidate);
+            }
+        }
+        Self { unreported }
+    }
+
+    /// Take `node` for reporting, or `None` if it is not ours to report: either
+    /// something already took it, or it is not a recovery node under this tier.
+    fn take(&mut self, node: tree_sitter::Node<'tree>) -> Option<tree_sitter::Node<'tree>> {
+        let at = self
+            .unreported
+            .iter()
+            .position(|held| held.id() == node.id())?;
+        Some(self.unreported.remove(at))
+    }
+
+    /// Take everything still unreported, in document order.
+    fn take_rest(&mut self) -> Vec<tree_sitter::Node<'tree>> {
+        std::mem::take(&mut self.unreported)
+    }
 }
 
 /// Positional label for the `tier_body` slot, used by the unreachable
@@ -105,16 +227,17 @@ const TIER_BODY_POSITION: usize = 5;
 /// Shared by the production utterance path and the single-main-tier parser API,
 /// so migrating this one function drives both off the generated visitor.
 pub fn convert_main_tier_node(
-    node: Node,
+    typed: MainTierNode<'_>,
     source: &str,
     original_input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<MainTier> {
+    let node = typed.raw_node();
     // Speaker prefix slots (`star`, `speaker`, `colon`, `tab`), the optional
     // `sep_trailing_space` (E758 provenance), and the `tier_body` slot, read
     // from the generated typed visitor. Every field is `Positioned<..>`: read
     // `.slot`.
-    let main = extract_main_tier(MainTierNode(node));
+    let main = extract_main_tier(typed);
 
     // Speaker prefix (`* speaker : tab`).
     let prefix = prefix::parse_prefix(&main, node.byte_range(), source, original_input, errors);
@@ -143,20 +266,19 @@ pub fn convert_main_tier_node(
     // tier here, skipping the one the `tier_body` (child_5) Error arm below
     // classifies itself, to avoid a duplicate. The whole-tree backstop still
     // emits E316 for coverage; the richer specific code coexists with it.
-    let tier_body_error_span = match main.child_5.slot() {
-        NodeSlot::Error(error_node) => Some((error_node.start_byte(), error_node.end_byte())),
-        _ => None,
-    };
-    let mut error_cursor = node.walk();
-    for child in node.children(&mut error_cursor) {
-        if child.is_error() && Some((child.start_byte(), child.end_byte())) != tier_body_error_span
-        {
-            errors.report(classify_main_tier_recovery(
-                child,
-                source,
-                MainTierRegion::OutsideBody,
-            ));
-        }
+    let mut recovery = MainTierRecovery::collect(node, &main.unexpected);
+    // The `tier_body` slot's own ERROR is classified by its arm below with the
+    // richer Body region, so take it out of this walk's reach FIRST rather than
+    // comparing spans against it afterwards.
+    if let SlotValue::Error(in_slot) = main.child_5.slot().typed_or_placeholder() {
+        recovery.take(in_slot);
+    }
+    for child in recovery.take_rest() {
+        errors.report(classify_main_tier_recovery(
+            child,
+            source,
+            MainTierRegion::OutsideBody,
+        ));
     }
 
     // tier_body (linkers / langcode / contents / utterance_end). `Present`
@@ -178,16 +300,36 @@ pub fn convert_main_tier_node(
     // So the question this asks is not "which slot state is it?" but "is the
     // content actually here?", which is the only question whose answer is a
     // fact about the user's file rather than about our recovery.
-    let consumed_tier_body = match main.child_5.slot() {
-        NodeSlot::Present(_) | NodeSlot::Missing(_) => None,
-        NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
-            displaced_tier_body(&main.unexpected)
+    let located = TierBodyLocation::locate(&main);
+
+    // What to SAY about the slot state, which is a different question from where
+    // the body is. An ERROR here displaces the body rather than replacing it, so
+    // reporting the ERROR and still parsing the body are both correct; without
+    // that, an utterance opening with an annotation (`*CHI:\t[: closed] .`) was
+    // told its terminator was missing while the terminator sat in the tree, in
+    // the very `tier_body` the arm had thrown away.
+    match main.child_5.slot().typed_or_placeholder() {
+        // Nothing to report: the body is where the grammar puts it. A MISSING
+        // placeholder is childless, so it walks to an empty body, same as
+        // `Present`.
+        SlotValue::Present(_) | SlotValue::Placeholder(_) => {}
+        SlotValue::Error(error_node) => errors.report(classify_main_tier_recovery(
+            error_node,
+            source,
+            MainTierRegion::Body,
+        )),
+        // A MISSING placeholder of a kind `tier_body` does not name is treated
+        // as an unexpected child: there is no `tier_body` to walk either way.
+        SlotValue::Unexpected(other) | SlotValue::UnclassifiedPlaceholder(other) => {
+            report_unexpected_child(other, source, errors, "tier_body", TIER_BODY_POSITION);
         }
-    };
-    let tier = match main.child_5.slot() {
-        NodeSlot::Present(tier_body) => {
+        SlotValue::Absent => {}
+    }
+
+    let tier = match located.body {
+        Some(tier_body) => {
             let raw = tier_body.raw_node();
-            let tier_body_children = extract_tier_body(TierBodyNode(raw));
+            let tier_body_children = extract_tier_body(tier_body);
             body::parse_tier_body(
                 &tier_body_children,
                 raw.byte_range(),
@@ -196,65 +338,7 @@ pub fn convert_main_tier_node(
                 errors,
             )
         }
-        NodeSlot::Missing(tier_body_node) => {
-            let tier_body_children = extract_tier_body(TierBodyNode(*tier_body_node));
-            body::parse_tier_body(
-                &tier_body_children,
-                tier_body_node.byte_range(),
-                source,
-                original_input,
-                errors,
-            )
-        }
-        NodeSlot::Error(error_node) => {
-            errors.report(classify_main_tier_recovery(
-                *error_node,
-                source,
-                MainTierRegion::Body,
-            ));
-            // An ERROR in this slot DISPLACES `tier_body` rather than replacing
-            // it: the traversal puts the displaced node in its `unexpected`
-            // sink, which spec Section 7 guarantees never drops a child. Parse
-            // it from there.
-            //
-            // Without this, an utterance opening with an annotation
-            // (`*CHI:\t[: closed] .`) was told its terminator was missing while
-            // the terminator sat in the tree, in the very `tier_body` this arm
-            // had thrown away: the lowering discarded the node holding the
-            // answer and then reported the absence as a fact about the user's
-            // file. Real CLAN CHECK reports one thing for that input, and so
-            // should chatter.
-            parse_displaced_or_report_missing(
-                consumed_tier_body,
-                node,
-                source,
-                original_input,
-                errors,
-            )
-        }
-        NodeSlot::Unexpected(unexpected_node) => {
-            report_unexpected_child(
-                *unexpected_node,
-                source,
-                errors,
-                "tier_body",
-                TIER_BODY_POSITION,
-            );
-            parse_displaced_or_report_missing(
-                consumed_tier_body,
-                node,
-                source,
-                original_input,
-                errors,
-            )
-        }
-        NodeSlot::Absent => parse_displaced_or_report_missing(
-            consumed_tier_body,
-            node,
-            source,
-            original_input,
-            errors,
-        ),
+        None => report_missing_tier_body(node, original_input, errors),
     };
 
     // Surface the carrier's own `unexpected` sink (R2), classified by region.
@@ -267,15 +351,21 @@ pub fn convert_main_tier_node(
     // was read as the latter for months.
     // Placed BEFORE the speaker-check early return below, preserving the prior
     // "diagnostics emitted before reject" ordering the doc comment states.
-    // The displaced `tier_body`, if this tier had one, was CONSUMED above and
-    // must not also be surfaced here as an unexplained leftover.
-    let leftover: Vec<tree_sitter::Node<'_>> = main
-        .unexpected
+    // `located.leftover` is the sink with the displaced body already out of it;
+    // there is no way to hold it without that having happened.
+    // The sink splits by OWNER, not by bookkeeping. Its ERROR nodes are
+    // `MainTierRecovery`'s and were classified above with their region; what is
+    // left is content that filled no grammar position, which is
+    // `surface_unexpected`'s. Partitioning on `is_error`, a property of the
+    // node, is not the identity arithmetic this refactor removed: nothing here
+    // has to know what another walk did.
+    let unexpected_content: Vec<tree_sitter::Node<'_>> = located
+        .leftover
         .iter()
         .copied()
-        .filter(|candidate| Some(candidate.id()) != consumed_tier_body.map(|n| n.id()))
+        .filter(|candidate| !candidate.is_error())
         .collect();
-    surface_main_tier_sink(&leftover, MainTierRegion::OutsideBody, source, errors);
+    surface_unexpected(&unexpected_content, source, errors);
 
     // No fabricated speaker fallback: if speaker could not be parsed, skip
     // main-tier construction. (All diagnostics above are still emitted first,

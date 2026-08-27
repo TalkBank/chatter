@@ -142,30 +142,28 @@ fn collect_ca_delimiters_from_content(
                 collect_ca_delimiters_from_word(word, delimiters);
             }
         }
-        UtteranceContent::Group(group) => {
-            collect_ca_delimiters_from_bracketed(&group.content, delimiters);
-        }
-        UtteranceContent::AnnotatedGroup(group) => {
-            collect_ca_delimiters_from_bracketed(&group.inner.content, delimiters);
-        }
-        UtteranceContent::PhoGroup(group) => {
-            collect_ca_delimiters_from_bracketed(&group.content, delimiters);
-        }
-        UtteranceContent::SinGroup(group) => {
-            collect_ca_delimiters_from_bracketed(&group.content, delimiters);
-        }
-        UtteranceContent::Quotation(quote) => {
-            collect_ca_delimiters_from_bracketed(&quote.content, delimiters);
-        }
-        UtteranceContent::Retrace(retrace) => {
-            collect_ca_delimiters_from_bracketed(&retrace.content, delimiters);
-        }
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            collect_ca_delimiters_from_bracketed(&annotated.inner.content, delimiters);
+        // Containers: ONE arm. Every one of these recursed unconditionally
+        // into its enclosed content, which is what `ContentStructure::enclosed`
+        // is for; its own docstring names the walkers under `validation/` and
+        // `alignment/` as the callers that had not adopted it. The annotations
+        // sit on the wrapper and are not part of the enclosed content, which is
+        // what each of the separate arms already did.
+        UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_) => {
+            if let Some(content) = item.structure().enclosed() {
+                collect_ca_delimiters_from_bracketed(content, delimiters);
+            }
         }
         UtteranceContent::AnnotatedEvent(_)
         | UtteranceContent::Event(_)
         | UtteranceContent::Pause(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::Separator(_)
@@ -211,23 +209,23 @@ fn collect_ca_delimiters_from_bracketed_item(
                 collect_ca_delimiters_from_word(word, delimiters);
             }
         }
-        BracketedItem::AnnotatedGroup(group) => {
-            collect_ca_delimiters_from_bracketed(&group.inner.content, delimiters);
-        }
-        BracketedItem::PhoGroup(group) => {
-            collect_ca_delimiters_from_bracketed(&group.content, delimiters);
-        }
-        BracketedItem::SinGroup(group) => {
-            collect_ca_delimiters_from_bracketed(&group.content, delimiters);
-        }
-        BracketedItem::Quotation(quote) => {
-            collect_ca_delimiters_from_bracketed(&quote.content, delimiters);
-        }
-        BracketedItem::Retrace(retrace) => {
-            collect_ca_delimiters_from_bracketed(&retrace.content, delimiters);
-        }
-        BracketedItem::AnnotatedRetrace(annotated) => {
-            collect_ca_delimiters_from_bracketed(&annotated.inner.content, delimiters);
+        // Containers: ONE arm. Every one of these recursed unconditionally
+        // into its enclosed content, which is what `ContentStructure::enclosed`
+        // is for; its own docstring names the walkers under `validation/` and
+        // `alignment/` as the callers that had not adopted it. The annotations
+        // sit on the wrapper and are not part of the enclosed content, which is
+        // what each of the separate arms already did.
+        BracketedItem::Group(_)
+        | BracketedItem::AnnotatedGroup(_)
+        | BracketedItem::PhoGroup(_)
+        | BracketedItem::SinGroup(_)
+        | BracketedItem::Quotation(_)
+        | BracketedItem::AnnotatedQuotation(_)
+        | BracketedItem::Retrace(_)
+        | BracketedItem::AnnotatedRetrace(_) => {
+            if let Some(content) = item.structure().enclosed() {
+                collect_ca_delimiters_from_bracketed(content, delimiters);
+            }
         }
         BracketedItem::Event(_)
         | BracketedItem::AnnotatedEvent(_)

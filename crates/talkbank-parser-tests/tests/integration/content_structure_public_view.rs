@@ -47,9 +47,25 @@ fn classify(fragment: &str) -> Result<Vec<(&'static str, usize)>, TestError> {
                 ContentStructure::Word(WordRef::Replaced(_)) => "replaced-word",
                 ContentStructure::Retrace(RetraceRef::Bare(_)) => "retrace",
                 ContentStructure::Retrace(RetraceRef::Annotated(_)) => "annotated-retrace",
-                ContentStructure::Group(GroupRef::Angle(_)) => "group",
-                ContentStructure::Group(GroupRef::AnnotatedAngle(_)) => "annotated-group",
-                ContentStructure::Group(GroupRef::Quotation(_)) => "quotation",
+                ContentStructure::Group(GroupRef::Angle(group)) => {
+                    if group.annotations.is_empty() {
+                        "group"
+                    } else {
+                        "annotated-group"
+                    }
+                }
+                // The two spellings stay DISTINGUISHABLE, as a FIELD rather
+                // than a variant. That is the point of the struct shape: a
+                // caller that wants the difference asks for it, and a caller
+                // asking only "is this a quotation" cannot write half the
+                // answer, because there is no second arm to omit.
+                ContentStructure::Group(GroupRef::Quotation(quotation)) => {
+                    if quotation.annotations.is_empty() {
+                        "quotation"
+                    } else {
+                        "annotated-quotation"
+                    }
+                }
                 ContentStructure::Group(GroupRef::Pho(_)) => "pho",
                 ContentStructure::Group(GroupRef::Sin(_)) => "sin",
                 ContentStructure::Leaf(leaf) => match leaf.content {

@@ -19,7 +19,8 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
 };
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, UtteranceChild1Choice, UtteranceNode, extract_utterance,
+    AsRawNode, MainTierNode, NodeSlot, SlotValue, UtteranceChild1Choice, UtteranceNode,
+    extract_utterance,
 };
 use crate::model::{ParseHealth, ParseHealthTier, Utterance};
 use crate::parser::TreeSitterParser;
@@ -33,7 +34,7 @@ impl TreeSitterParser {
     /// Parse a CST utterance node into a model Utterance, streaming errors.
     pub fn parse_utterance_cst(
         &self,
-        utt_node: tree_sitter::Node,
+        utt_node: UtteranceNode<'_>,
         input: &str,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Utterance> {
@@ -47,11 +48,11 @@ impl TreeSitterParser {
 /// `errors`, and records taint on `ParseHealth` so downstream alignment logic can
 /// treat this utterance conservatively.
 pub fn parse_utterance_node(
-    utt_node: tree_sitter::Node,
+    typed: UtteranceNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Utterance> {
-    let mut utterance_builder: Option<Utterance> = None;
+    let mut utterance_builder: Option<UtteranceUnderConstruction> = None;
     let mut parse_health = ParseHealth::untainted();
 
     // Drive dispatch through the generated, exhaustive typed visitor instead of a
@@ -61,7 +62,7 @@ pub fn parse_utterance_node(
     // supertype already expanded to the concrete tier kinds, one `<Rule>Choice`
     // variant per tier). Every slot variant is handled explicitly so a recovery
     // node can never be silently dropped.
-    let children = extract_utterance(UtteranceNode(utt_node));
+    let children = extract_utterance(typed);
 
     // child_0: the main tier. It is processed FIRST so it is built before any
     // dependent tier is attached (the dependent-tier branch consumes the built
@@ -70,34 +71,25 @@ pub fn parse_utterance_node(
     // `Present`, a bare `Node` for `Missing` under the NEW closed `NodeSlot`),
     // matching the pre-migration `kind() == MAIN_TIER` branch, which did not
     // distinguish a MISSING placeholder.
-    match children.child_0.slot() {
-        NodeSlot::Present(main_tier) => {
-            build_main_tier_from_node(
-                main_tier.raw_node(),
-                input,
-                errors,
-                &mut utterance_builder,
-                &mut parse_health,
-            );
+    match children.child_0.slot().typed_or_placeholder() {
+        // `Present` and `Placeholder` were two arms calling the same function on
+        // two spellings of the same `main_tier`-kinded node, which is what the
+        // comment above had to say in prose.
+        SlotValue::Present(main_tier) | SlotValue::Placeholder(main_tier) => {
+            utterance_builder =
+                build_main_tier_from_node(main_tier, input, errors, &mut parse_health);
         }
-        NodeSlot::Missing(main_tier_node) => {
-            build_main_tier_from_node(
-                *main_tier_node,
-                input,
-                errors,
-                &mut utterance_builder,
-                &mut parse_health,
-            );
-        }
-        NodeSlot::Error(error_node) => {
+        SlotValue::Error(error_node) => {
             // An ERROR at the main-tier position routes to the same recovery
             // analysis the old hand-walk ran for any ERROR utterance child.
-            handle_utterance_error_node(*error_node, input, errors, &mut parse_health);
+            handle_utterance_error_node(error_node, input, errors, &mut parse_health);
         }
-        NodeSlot::Unexpected(node) => {
-            report_unexpected_utterance_child(*node, input, errors, &mut parse_health);
+        // A MISSING placeholder of a kind `main_tier` does not name is reported
+        // as an unexpected child: there is no main tier to build either way.
+        SlotValue::Unexpected(node) | SlotValue::UnclassifiedPlaceholder(node) => {
+            report_unexpected_utterance_child(node, input, errors, &mut parse_health);
         }
-        NodeSlot::Absent => {
+        SlotValue::Absent => {
             // No main-tier child at all: nothing to build. The utterance is
             // rejected below, matching the old loop which left
             // `utterance_builder == None` when no `main_tier` child appeared.
@@ -114,11 +106,13 @@ pub fn parse_utterance_node(
     for element in children.child_1.slot() {
         match element.slot() {
             NodeSlot::Present(tier_choice) => {
-                attach_dependent_tier_child(
+                // By value, in and out: there is no window in which the
+                // utterance exists only inside this call.
+                utterance_builder = attach_dependent_tier_child(
+                    utterance_builder,
                     tier_choice.clone(),
                     input,
                     errors,
-                    &mut utterance_builder,
                     &mut parse_health,
                 );
             }
@@ -152,43 +146,69 @@ pub fn parse_utterance_node(
     // once the whole-tree backstop is deleted (Task D).
     surface_unexpected(&children.unexpected, input, errors);
 
-    if let Some(mut utterance) = utterance_builder {
-        utterance.parse_health = parse_health.into_state();
-        ParseOutcome::parsed(utterance)
-    } else {
-        ParseOutcome::rejected()
+    // The phase ends here: the construction wrapper is unwrapped exactly once,
+    // where the finished utterance leaves this function.
+    match utterance_builder {
+        Some(UtteranceUnderConstruction(mut utterance)) => {
+            utterance.parse_health = parse_health.into_state();
+            ParseOutcome::parsed(utterance)
+        }
+        None => ParseOutcome::rejected(),
     }
 }
 
-/// Build the main tier from its CST node and seed `utterance_builder`.
+/// Build the main tier from its CST node, and with it the only thing a
+/// dependent tier can attach to.
 ///
 /// This is the body of the pre-migration `kind() == MAIN_TIER` branch, unchanged:
-/// it converts the node with [`convert_main_tier_node`], reports any errors,
-/// taints `Main` when conversion failed or produced errors, and seeds the
-/// utterance. The internals of `convert_main_tier_node` are migrated separately
-/// (Task 3b).
+/// it converts the node with [`convert_main_tier_node`], reports any errors, and
+/// taints `Main` when conversion failed or produced errors. The internals of
+/// `convert_main_tier_node` are migrated separately (Task 3b).
+///
+/// It RETURNS the utterance rather than seeding an out-parameter, so it is the
+/// sole producer of [`UtteranceUnderConstruction`] and the build order is a
+/// consequence of the signatures rather than of the order of two blocks.
 fn build_main_tier_from_node(
-    main_tier_node: tree_sitter::Node,
+    typed: MainTierNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
-    utterance_builder: &mut Option<Utterance>,
     parse_health: &mut ParseHealth,
-) {
+) -> Option<UtteranceUnderConstruction> {
+    let main_tier_node = typed.raw_node();
     let line = &input[main_tier_node.start_byte()..main_tier_node.end_byte()];
     let main_tier_errors = ErrorCollector::new();
-    let main_tier =
-        convert_main_tier_node(main_tier_node, input, line, &main_tier_errors).into_option();
+    let main_tier = convert_main_tier_node(typed, input, line, &main_tier_errors).into_option();
     let main_tier_error_vec = main_tier_errors.into_vec();
     if has_actual_errors(&main_tier_error_vec) {
         parse_health.taint(ParseHealthTier::Main);
     }
     errors.report_all(main_tier_error_vec);
-    if let Some(main_tier) = main_tier {
-        *utterance_builder = Some(Utterance::new(main_tier));
-    } else {
-        parse_health.taint(ParseHealthTier::Main);
+    match main_tier {
+        Some(main_tier) => Some(UtteranceUnderConstruction(Utterance::new(main_tier))),
+        None => {
+            parse_health.taint(ParseHealthTier::Main);
+            None
+        }
     }
 }
+
+/// An utterance whose MAIN TIER has been built.
+///
+/// Only [`build_main_tier_from_node`] produces one, and it is the only thing a
+/// dependent tier can attach to, so "attach a dependent tier before the main
+/// tier exists" has no signature to travel through. That ordering used to be
+/// stated in two prose paragraphs ("processed FIRST so it is built before any
+/// dependent tier is attached", "only once a main tier has been built") and
+/// pinned by a characterization test.
+///
+/// It is also why [`attach_dependent_tier_child`] takes the utterance BY VALUE
+/// and returns it. The previous `&mut Option<Utterance>` was `take()`n and put
+/// back around the attach, so `Option` carried two meanings at once, "no main
+/// tier" and "currently borrowed out", and any early return added inside that
+/// window would have dropped the utterance and rejected the whole line with no
+/// diagnostic saying so.
+#[derive(Debug)]
+struct UtteranceUnderConstruction(Utterance);
 
 /// Attach one dependent-tier to the in-progress utterance from its typed
 /// [`UtteranceChild1Choice`] (the `dependent_tier` supertype already classified
@@ -202,12 +222,12 @@ fn build_main_tier_from_node(
 /// domain when the tier had parse errors. Behavior is byte-identical to the
 /// pre-migration hand-walk.
 fn attach_dependent_tier_child(
+    utterance: Option<UtteranceUnderConstruction>,
     choice: UtteranceChild1Choice,
     input: &str,
     errors: &impl ErrorSink,
-    utterance_builder: &mut Option<Utterance>,
     parse_health: &mut ParseHealth,
-) {
+) -> Option<UtteranceUnderConstruction> {
     let tier_node = choice.raw_node();
     let mut tier_had_parse_errors = false;
     let dependent_tier = parse_health_tier_for(&choice, input);
@@ -228,16 +248,18 @@ fn attach_dependent_tier_child(
         }
     }
 
-    if let Some(mut utt) = utterance_builder.take() {
+    // The tier-child error walk above runs whether or not there is an utterance,
+    // which is why it is not gated on one. The ATTACH is.
+    let utterance = utterance.map(|UtteranceUnderConstruction(utt)| {
         let tier_errors = ErrorCollector::new();
-        utt = parse_and_attach_dependent_tier(utt, choice, input, &tier_errors);
+        let utt = parse_and_attach_dependent_tier(utt, choice, input, &tier_errors);
         let tier_error_vec = tier_errors.into_vec();
         if has_actual_errors(&tier_error_vec) {
             tier_had_parse_errors = true;
         }
         errors.report_all(tier_error_vec);
-        *utterance_builder = Some(utt);
-    }
+        UtteranceUnderConstruction(utt)
+    });
 
     if tier_had_parse_errors {
         match dependent_tier {
@@ -245,6 +267,8 @@ fn attach_dependent_tier_child(
             None => parse_health.taint_all_alignment_dependents(),
         }
     }
+
+    utterance
 }
 
 /// Run the recovery analysis for an `ERROR` utterance child.

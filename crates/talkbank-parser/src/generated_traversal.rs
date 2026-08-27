@@ -1,5 +1,5 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 44a596f848b8
-//! Source grammar digest (sha256): grammar.json=28ada41e6cba5f70150b8034c79b69d2bb4628fdcf17b90bf7b7158e3d196aa3 node-types.json=36a6aec7065785440f02ab5a08d57ad3e1c4a8f9c2c9629f668e6c4434b19073
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source bb3be408f04e
+//! Source grammar digest (sha256): grammar.json=ba8c3587b2332bab57b4d7e53e412992f595b27627bf55f915ff37081937d6f8 node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -18,6 +18,30 @@
 //! the reconstruction (spec Section 7): `node` is the rule's `Node<Rule>` wrapper
 //! (or a raw node for a supertype, which classifies itself). Each rule's exact
 //! contract is stated in a `//` comment above its generated item(s).
+//!
+//! # Reconstructing from a recovery node
+//!
+//! `extract_r_from_error_recovery(node) -> Option<RChildren>` runs the SAME
+//! reconstruction over the ERROR node tree-sitter produced IN PLACE of an `r`.
+//!
+//! When a rule fails to complete, tree-sitter does not discard what it read: it
+//! emits an ERROR node carrying the rule's recovered children, in the order the
+//! rule expects. That is precisely the input the recovery-aware reconstruction
+//! consumes, so matching them against the rule's shape recovers the content, and
+//! the members that really are absent land in `Absent` slots where a consumer can
+//! see them. Skipping the subtree instead throws away everything the parser DID
+//! manage to read.
+//!
+//! At every INNER position `NodeSlot::Error` already says this, so the caller can
+//! act on it. A node a caller reached ITSELF has no enclosing slot, the tree root
+//! above all, and this is how that caller says the same thing: a root rule that
+//! fails to complete still leaves everything it matched under the ERROR, so the
+//! members that really are absent are reported by the layer that owns that rule
+//! rather than the whole tree being written off.
+//!
+//! It is NOT a way to obtain a `Node<Rule>` wrapper. The node's kind is `ERROR`,
+//! the wrapper claims otherwise, and returning one would make the claim false.
+//! It returns the CHILDREN, which is what the caller wanted.
 //!
 //! Reconstruction policy (spec Sections 7, 8, 10):
 //!
@@ -142,6 +166,116 @@ impl<'tree, T: AsRawNode<'tree>> NodeSlot<'tree, T> {
             Self::Absent => None,
         }
     }
+    /// The node at this position when a MISSING placeholder counts as
+    /// the node, and nothing otherwise.
+    ///
+    /// A tree-sitter MISSING node is zero-width but it is NOT
+    /// anonymous: it carries the kind the parser expected, so what the
+    /// node IS is known even though what it CONTAINS is not. A consumer
+    /// that needs only the position's identity (which rule matched,
+    /// where it sits) can therefore treat `Missing` exactly like
+    /// `Present`, and one that needs real content cannot.
+    ///
+    /// This is the difference from [`Self::raw_node`], which answers for
+    /// `Error` and `Unexpected` as well. Those two states say the parser
+    /// does not know what is here; a MISSING placeholder says it knows
+    /// and it is absent. Collapsing the two costs a real distinction:
+    /// consumers that reject on `Missing` and consumers that accept it
+    /// produce DIFFERENT diagnostics for the same input.
+    ///
+    /// Recovery is not silently discarded by accepting a placeholder.
+    /// Which slot state occurred is still on the `NodeSlot` for any
+    /// caller that matches it, and a whole-tree recovery pass, if the
+    /// consumer runs one, still sees the node; this method decides only
+    /// what THIS position parses as.
+    ///
+    /// Returns `None` for `Error`, `Unexpected` and `Absent`: the states
+    /// where nothing at this position identifies itself.
+    ///
+    /// It hands back a BARE NODE, so what a caller then does with it,
+    /// reading its empty text for instance, is unconstrained. Where `T`
+    /// can classify a node, [`Self::typed_or_placeholder`] answers the
+    /// same question and keeps the type.
+    #[must_use]
+    pub fn node_or_placeholder(&self) -> Option<tree_sitter::Node<'tree>> {
+        match self {
+            Self::Present(value) => Some(value.raw_node()),
+            Self::Missing(node) => Some(*node),
+            Self::Error(_) | Self::Unexpected(_) | Self::Absent => None,
+        }
+    }
+}
+impl<'tree, T: FromNodeKind<'tree> + Clone> NodeSlot<'tree, T> {
+    /// [`Self::node_or_placeholder`] without discarding the type.
+    ///
+    /// The bound is the point. `T: FromNodeKind` says this position can
+    /// be identified from a node alone, so a MISSING placeholder here
+    /// can be CLASSIFIED rather than handed back raw, and a caller who
+    /// needs a `T` gets one instead of re-asserting it.
+    ///
+    /// # Why this returns a six-state enum and not `Option<T>`
+    ///
+    /// An earlier typed projection returned `Option<T>` and was removed
+    /// unused: `None` cannot say WHICH state produced it, so a consumer
+    /// that wants `Error`, `Unexpected` and `Absent` to reach different
+    /// diagnostics had to re-match the slot underneath and gained nothing.
+    /// [`SlotValue`] keeps every state [`NodeSlot`] distinguishes, and
+    /// splits the placeholder in two: tree-sitter can insert a MISSING node
+    /// of a kind `T` does not describe, and inventing a `T` for it is
+    /// exactly the fabrication this whole API exists to prevent.
+    ///
+    /// Consumers that genuinely do NOT branch on those states are not
+    /// forced to spell them out: [`SlotValue::present_or_placeholder`]
+    /// takes the two-state reading. An earlier version of this paragraph
+    /// claimed EVERY consumer wanted them apart, which stopped being true
+    /// as soon as the projection had consumers.
+    #[must_use]
+    pub fn typed_or_placeholder(&self) -> SlotValue<'tree, T> {
+        match self {
+            Self::Present(value) => SlotValue::Present(value.clone()),
+            Self::Missing(node) => match T::from_node(*node) {
+                Some(value) => SlotValue::Placeholder(value),
+                None => SlotValue::UnclassifiedPlaceholder(*node),
+            },
+            Self::Error(node) => SlotValue::Error(*node),
+            Self::Unexpected(node) => SlotValue::Unexpected(*node),
+            Self::Absent => SlotValue::Absent,
+        }
+    }
+}
+/// What a [`NodeSlot`] holds, with the placeholder classified.
+///
+/// Produced by [`NodeSlot::typed_or_placeholder`], and shaped so that
+/// nothing [`NodeSlot`] knows is lost on the way through: the two states
+/// where the position identifies itself carry a `T`, and the states
+/// where it does not stay separate so they can reach separate
+/// diagnostics.
+#[derive(Debug, Clone)]
+pub enum SlotValue<'tree, T> {
+    /// A well-formed node of the expected type.
+    Present(T),
+    /// A tree-sitter MISSING placeholder whose kind `T` describes.
+    ///
+    /// Zero-width, so it has no content, but it is not anonymous: the
+    /// kind the parser EXPECTED is on the node, which is what `T`
+    /// classified. A consumer needing only the position's identity can
+    /// treat this exactly like [`Self::Present`]; one needing real
+    /// content cannot.
+    Placeholder(T),
+    /// A MISSING placeholder of a kind `T` does NOT describe.
+    ///
+    /// Reachable: at a position whose expected type is a CHOICE, the
+    /// placeholder tree-sitter inserts may be for one particular
+    /// alternative while `T` names the choice, or for a kind the choice
+    /// does not list at all. There is no `T` to give, and a guessed one
+    /// would be indistinguishable from a real classification.
+    UnclassifiedPlaceholder(tree_sitter::Node<'tree>),
+    /// See [`NodeSlot::Error`].
+    Error(tree_sitter::Node<'tree>),
+    /// See [`NodeSlot::Unexpected`].
+    Unexpected(tree_sitter::Node<'tree>),
+    /// See [`NodeSlot::Absent`].
+    Absent,
 }
 /// Why a [`NodeSlot`] did not hold a present value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -154,6 +288,28 @@ pub enum Recovery<'tree> {
     Unexpected(tree_sitter::Node<'tree>),
     /// See [`NodeSlot::Absent`].
     Absent,
+}
+impl<'tree, T> SlotValue<'tree, T> {
+    /// The value where the position IDENTIFIES ITSELF, and nothing
+    /// otherwise: the two-state reading of the six.
+    ///
+    /// For a consumer that treats every non-identifying state the same
+    /// way, which is a real and common case (an empty tier, an empty
+    /// list), the six-arm match is four arms of ceremony. This is the
+    /// typed counterpart of [`NodeSlot::node_or_placeholder`], and it
+    /// DISCARDS which state occurred, so reach for it only when the
+    /// answer genuinely does not depend on that; the full match is
+    /// there when it does.
+    #[must_use]
+    pub fn present_or_placeholder(self) -> Option<T> {
+        match self {
+            Self::Present(value) | Self::Placeholder(value) => Some(value),
+            Self::UnclassifiedPlaceholder(_)
+            | Self::Error(_)
+            | Self::Unexpected(_)
+            | Self::Absent => None,
+        }
+    }
 }
 /// A skippable node (comment or other grammar `extra`) preceding a slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -221,6 +377,44 @@ impl<'tree, S> Positioned<'tree, S> {
 pub trait AsRawNode<'tree> {
     /// The underlying tree-sitter node.
     fn raw_node(&self) -> tree_sitter::Node<'tree>;
+}
+/// Classify a raw node into a typed value, by its KIND.
+///
+/// Implemented for every wrapper (whose kind is its own), and for every
+/// choice and supertype enum whose alternatives are each a single named
+/// kind. It is deliberately NOT implemented for a choice told apart by
+/// SHAPE: no kind selects a sequence, so there is no answer to give and
+/// a guessed one would be believed.
+///
+/// That absence is the point. It makes "this position can be identified
+/// from a node alone" a BOUND a caller can write (`T: FromNodeKind`) rather
+/// than a property they have to know, so a generic helper over slots
+/// simply does not compile for the positions where it would have to
+/// invent something.
+/// The single node kind a wrapper names.
+///
+/// Implemented for WRAPPERS ONLY, which is the whole distinction from
+/// [`FromNodeKind`]. A wrapper answers for exactly one kind, so it can
+/// name it as a constant; a choice or supertype enum answers for several,
+/// so there is no single answer and `T: NamedKind` refuses it at compile
+/// time rather than picking one.
+///
+/// It exists because a consumer that holds a typed value and needs that
+/// value's kind as a STRING otherwise writes the string out by hand. That
+/// is the same fact in two places with nothing holding them equal, and it
+/// is what diagnostic context arguments, error-message interpolation and
+/// per-kind dispatch tables were all doing. `T::KIND` is the literal this
+/// module's own `from_node` compares against, so there is one owner.
+pub trait NamedKind {
+    /// The node kind, exactly as tree-sitter reports it.
+    const KIND: &'static str;
+}
+pub trait FromNodeKind<'tree>: Sized {
+    /// The typed value for `node`, or `None` if `node` is not one.
+    ///
+    /// `None` is a refusal, not a failure: the caller holds a node this
+    /// type does not describe, and saying so is the only true answer.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self>;
 }
 /// Collect a node's flat child list (named, anonymous, extra, error, and
 /// missing children alike) in document order: the sequence the
@@ -1409,3640 +1603,7312 @@ fn choice_split_inner(
     None
 }
 
-/// Typed wrapper for `(` nodes (kind verified at construction).
+/// Typed wrapper for `(` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LParenNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LParenNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LParenNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `)` nodes (kind verified at construction).
+impl NamedKind for LParenNode<'_> {
+    const KIND: &'static str = "(";
+}
+impl<'tree> FromNodeKind<'tree> for LParenNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `(`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `)` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RParenNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RParenNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RParenNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `+` nodes (kind verified at construction).
+impl NamedKind for RParenNode<'_> {
+    const KIND: &'static str = ")";
+}
+impl<'tree> FromNodeKind<'tree> for RParenNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `)`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `+` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PlusNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PlusNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PlusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `1` nodes (kind verified at construction).
+impl NamedKind for PlusNode<'_> {
+    const KIND: &'static str = "+";
+}
+impl<'tree> FromNodeKind<'tree> for PlusNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `+`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `1` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct K1Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct K1Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for K1Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `2` nodes (kind verified at construction).
+impl NamedKind for K1Node<'_> {
+    const KIND: &'static str = "1";
+}
+impl<'tree> FromNodeKind<'tree> for K1Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `1`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `2` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct K2Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct K2Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for K2Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `3` nodes (kind verified at construction).
+impl NamedKind for K2Node<'_> {
+    const KIND: &'static str = "2";
+}
+impl<'tree> FromNodeKind<'tree> for K2Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `2`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `3` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct K3Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct K3Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for K3Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `4` nodes (kind verified at construction).
+impl NamedKind for K3Node<'_> {
+    const KIND: &'static str = "3";
+}
+impl<'tree> FromNodeKind<'tree> for K3Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `3`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `4` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct K4Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct K4Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for K4Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `5` nodes (kind verified at construction).
+impl NamedKind for K4Node<'_> {
+    const KIND: &'static str = "4";
+}
+impl<'tree> FromNodeKind<'tree> for K4Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `4`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `5` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct K5Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct K5Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for K5Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `@Begin` nodes (kind verified at construction).
+impl NamedKind for K5Node<'_> {
+    const KIND: &'static str = "5";
+}
+impl<'tree> FromNodeKind<'tree> for K5Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `5`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `@Begin` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AtBeginNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AtBeginNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AtBeginNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `@End` nodes (kind verified at construction).
+impl NamedKind for AtBeginNode<'_> {
+    const KIND: &'static str = "@Begin";
+}
+impl<'tree> FromNodeKind<'tree> for AtBeginNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `@Begin`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `@End` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AtEndNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AtEndNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AtEndNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `@UTF8` nodes (kind verified at construction).
+impl NamedKind for AtEndNode<'_> {
+    const KIND: &'static str = "@End";
+}
+impl<'tree> FromNodeKind<'tree> for AtEndNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `@End`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `@UTF8` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AtUTF8Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AtUTF8Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AtUTF8Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `CA` nodes (kind verified at construction).
+impl NamedKind for AtUTF8Node<'_> {
+    const KIND: &'static str = "@UTF8";
+}
+impl<'tree> FromNodeKind<'tree> for AtUTF8Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `@UTF8`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `CA` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CANode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CANode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CANode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `NoAlign` nodes (kind verified at construction).
+impl NamedKind for CANode<'_> {
+    const KIND: &'static str = "CA";
+}
+impl<'tree> FromNodeKind<'tree> for CANode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `CA`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `NoAlign` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NoAlignNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NoAlignNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NoAlignNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[%` nodes (kind verified at construction).
+impl NamedKind for NoAlignNode<'_> {
+    const KIND: &'static str = "NoAlign";
+}
+impl<'tree> FromNodeKind<'tree> for NoAlignNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `NoAlign`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[%` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackPercentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackPercentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackPercentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[+` nodes (kind verified at construction).
+impl NamedKind for LBrackPercentNode<'_> {
+    const KIND: &'static str = "[%";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackPercentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[%`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[+` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackPlusNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackPlusNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackPlusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[-` nodes (kind verified at construction).
+impl NamedKind for LBrackPlusNode<'_> {
+    const KIND: &'static str = "[+";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackPlusNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[+`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[-` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[=` nodes (kind verified at construction).
+impl NamedKind for LBrackNode<'_> {
+    const KIND: &'static str = "[-";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[-`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[=` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackEqNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackEqNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackEqNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[=!` nodes (kind verified at construction).
+impl NamedKind for LBrackEqNode<'_> {
+    const KIND: &'static str = "[=";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackEqNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[=`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[=!` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackEqBangNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackEqBangNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackEqBangNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[=?` nodes (kind verified at construction).
+impl NamedKind for LBrackEqBangNode<'_> {
+    const KIND: &'static str = "[=!";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackEqBangNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[=!`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[=?` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackEqQuestionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackEqQuestionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackEqQuestionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `[@s` nodes (kind verified at construction).
+impl NamedKind for LBrackEqQuestionNode<'_> {
+    const KIND: &'static str = "[=?";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackEqQuestionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[=?`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `[@s` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LBrackAtSNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LBrackAtSNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LBrackAtSNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `_` nodes (kind verified at construction).
+impl NamedKind for LBrackAtSNode<'_> {
+    const KIND: &'static str = "[@s";
+}
+impl<'tree> FromNodeKind<'tree> for LBrackAtSNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `[@s`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `_` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AnonNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AnonNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AnonNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `act_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for AnonNode<'_> {
+    const KIND: &'static str = "_";
+}
+impl<'tree> FromNodeKind<'tree> for AnonNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `_`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `act_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ActDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ActDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ActDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `act_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ActDependentTierNode<'_> {
+    const KIND: &'static str = "act_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ActDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `act_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `act_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ActTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ActTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ActTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `activities_header` nodes (kind verified at construction).
+impl NamedKind for ActTierPrefixNode<'_> {
+    const KIND: &'static str = "act_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ActTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `act_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `activities_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ActivitiesHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ActivitiesHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ActivitiesHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `activities_prefix` nodes (kind verified at construction).
+impl NamedKind for ActivitiesHeaderNode<'_> {
+    const KIND: &'static str = "activities_header";
+}
+impl<'tree> FromNodeKind<'tree> for ActivitiesHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `activities_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `activities_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ActivitiesPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ActivitiesPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ActivitiesPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `add_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for ActivitiesPrefixNode<'_> {
+    const KIND: &'static str = "activities_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ActivitiesPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `activities_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `add_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AddDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AddDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AddDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `add_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for AddDependentTierNode<'_> {
+    const KIND: &'static str = "add_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for AddDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `add_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `add_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AddTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AddTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AddTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `age_format` nodes (kind verified at construction).
+impl NamedKind for AddTierPrefixNode<'_> {
+    const KIND: &'static str = "add_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for AddTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `add_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `age_format` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AgeFormatNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AgeFormatNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AgeFormatNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `alt_annotation` nodes (kind verified at construction).
+impl NamedKind for AgeFormatNode<'_> {
+    const KIND: &'static str = "age_format";
+}
+impl<'tree> FromNodeKind<'tree> for AgeFormatNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `age_format`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `alt_annotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AltAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AltAnnotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AltAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `alt_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for AltAnnotationNode<'_> {
+    const KIND: &'static str = "alt_annotation";
+}
+impl<'tree> FromNodeKind<'tree> for AltAnnotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `alt_annotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `alt_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AltDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AltDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AltDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `alt_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for AltDependentTierNode<'_> {
+    const KIND: &'static str = "alt_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for AltDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `alt_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `alt_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AltTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AltTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AltTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ampersand` nodes (kind verified at construction).
+impl NamedKind for AltTierPrefixNode<'_> {
+    const KIND: &'static str = "alt_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for AltTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `alt_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ampersand` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AmpersandNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AmpersandNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AmpersandNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `annotation_content` nodes (kind verified at construction).
+impl NamedKind for AmpersandNode<'_> {
+    const KIND: &'static str = "ampersand";
+}
+impl<'tree> FromNodeKind<'tree> for AmpersandNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ampersand`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `annotation_content` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AnnotationContentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AnnotationContentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AnnotationContentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `anonymized` nodes (kind verified at construction).
+impl NamedKind for AnnotationContentNode<'_> {
+    const KIND: &'static str = "annotation_content";
+}
+impl<'tree> FromNodeKind<'tree> for AnnotationContentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `annotation_content`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `anonymized` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AnonymizedNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AnonymizedNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AnonymizedNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `audience` nodes (kind verified at construction).
+impl NamedKind for AnonymizedNode<'_> {
+    const KIND: &'static str = "anonymized";
+}
+impl<'tree> FromNodeKind<'tree> for AnonymizedNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `anonymized`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `audience` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AudienceNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AudienceNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AudienceNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `audio_value` nodes (kind verified at construction).
+impl NamedKind for AudienceNode<'_> {
+    const KIND: &'static str = "audience";
+}
+impl<'tree> FromNodeKind<'tree> for AudienceNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `audience`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `audio_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct AudioValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct AudioValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for AudioValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `base_annotations` nodes (kind verified at construction).
+impl NamedKind for AudioValueNode<'_> {
+    const KIND: &'static str = "audio_value";
+}
+impl<'tree> FromNodeKind<'tree> for AudioValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `audio_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `base_annotations` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BaseAnnotationsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BaseAnnotationsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BaseAnnotationsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `base_content_item` nodes (kind verified at construction).
+impl NamedKind for BaseAnnotationsNode<'_> {
+    const KIND: &'static str = "base_annotations";
+}
+impl<'tree> FromNodeKind<'tree> for BaseAnnotationsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `base_annotations`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `base_content_item` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BaseContentItemNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BaseContentItemNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BaseContentItemNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bck_header` nodes (kind verified at construction).
+impl NamedKind for BaseContentItemNode<'_> {
+    const KIND: &'static str = "base_content_item";
+}
+impl<'tree> FromNodeKind<'tree> for BaseContentItemNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `base_content_item`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bck_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BckHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BckHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BckHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bck_prefix` nodes (kind verified at construction).
+impl NamedKind for BckHeaderNode<'_> {
+    const KIND: &'static str = "bck_header";
+}
+impl<'tree> FromNodeKind<'tree> for BckHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bck_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bck_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BckPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BckPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BckPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `begin_header` nodes (kind verified at construction).
+impl NamedKind for BckPrefixNode<'_> {
+    const KIND: &'static str = "bck_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for BckPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bck_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `begin_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BeginHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BeginHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BeginHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bg_header` nodes (kind verified at construction).
+impl NamedKind for BeginHeaderNode<'_> {
+    const KIND: &'static str = "begin_header";
+}
+impl<'tree> FromNodeKind<'tree> for BeginHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `begin_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bg_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BgHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BgHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BgHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bg_prefix` nodes (kind verified at construction).
+impl NamedKind for BgHeaderNode<'_> {
+    const KIND: &'static str = "bg_header";
+}
+impl<'tree> FromNodeKind<'tree> for BgHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bg_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bg_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BgPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BgPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BgPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `birth_of_header` nodes (kind verified at construction).
+impl NamedKind for BgPrefixNode<'_> {
+    const KIND: &'static str = "bg_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for BgPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bg_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `birth_of_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BirthOfHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BirthOfHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BirthOfHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `birth_of_prefix` nodes (kind verified at construction).
+impl NamedKind for BirthOfHeaderNode<'_> {
+    const KIND: &'static str = "birth_of_header";
+}
+impl<'tree> FromNodeKind<'tree> for BirthOfHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `birth_of_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `birth_of_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BirthOfPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BirthOfPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BirthOfPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `birthplace_of_header` nodes (kind verified at construction).
+impl NamedKind for BirthOfPrefixNode<'_> {
+    const KIND: &'static str = "birth_of_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for BirthOfPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `birth_of_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `birthplace_of_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BirthplaceOfHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BirthplaceOfHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BirthplaceOfHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `birthplace_of_prefix` nodes (kind verified at construction).
+impl NamedKind for BirthplaceOfHeaderNode<'_> {
+    const KIND: &'static str = "birthplace_of_header";
+}
+impl<'tree> FromNodeKind<'tree> for BirthplaceOfHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `birthplace_of_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `birthplace_of_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BirthplaceOfPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BirthplaceOfPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BirthplaceOfPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `blank_header` nodes (kind verified at construction).
+impl NamedKind for BirthplaceOfPrefixNode<'_> {
+    const KIND: &'static str = "birthplace_of_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for BirthplaceOfPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `birthplace_of_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `blank_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BlankHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BlankHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BlankHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `blank_line` nodes (kind verified at construction).
+impl NamedKind for BlankHeaderNode<'_> {
+    const KIND: &'static str = "blank_header";
+}
+impl<'tree> FromNodeKind<'tree> for BlankHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `blank_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `blank_line` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BlankLineNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BlankLineNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BlankLineNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `blank_prefix` nodes (kind verified at construction).
+impl NamedKind for BlankLineNode<'_> {
+    const KIND: &'static str = "blank_line";
+}
+impl<'tree> FromNodeKind<'tree> for BlankLineNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `blank_line`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `blank_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BlankPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BlankPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BlankPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `break_for_coding` nodes (kind verified at construction).
+impl NamedKind for BlankPrefixNode<'_> {
+    const KIND: &'static str = "blank_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for BlankPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `blank_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `break_for_coding` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BreakForCodingNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BreakForCodingNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BreakForCodingNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `broken_question` nodes (kind verified at construction).
+impl NamedKind for BreakForCodingNode<'_> {
+    const KIND: &'static str = "break_for_coding";
+}
+impl<'tree> FromNodeKind<'tree> for BreakForCodingNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `break_for_coding`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `broken_question` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BrokenQuestionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BrokenQuestionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BrokenQuestionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bullet` nodes (kind verified at construction).
+impl NamedKind for BrokenQuestionNode<'_> {
+    const KIND: &'static str = "broken_question";
+}
+impl<'tree> FromNodeKind<'tree> for BrokenQuestionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `broken_question`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bullet` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BulletNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BulletNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BulletNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bullet_end` nodes (kind verified at construction).
+impl NamedKind for BulletNode<'_> {
+    const KIND: &'static str = "bullet";
+}
+impl<'tree> FromNodeKind<'tree> for BulletNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bullet`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bullet_end` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BulletEndNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BulletEndNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BulletEndNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bullet_start` nodes (kind verified at construction).
+impl NamedKind for BulletEndNode<'_> {
+    const KIND: &'static str = "bullet_end";
+}
+impl<'tree> FromNodeKind<'tree> for BulletEndNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bullet_end`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bullet_start` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BulletStartNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BulletStartNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BulletStartNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `bullet_timestamp` nodes (kind verified at construction).
+impl NamedKind for BulletStartNode<'_> {
+    const KIND: &'static str = "bullet_start";
+}
+impl<'tree> FromNodeKind<'tree> for BulletStartNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bullet_start`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `bullet_timestamp` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BulletTimestampNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct BulletTimestampNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for BulletTimestampNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_continuation_marker` nodes (kind verified at construction).
+impl NamedKind for BulletTimestampNode<'_> {
+    const KIND: &'static str = "bullet_timestamp";
+}
+impl<'tree> FromNodeKind<'tree> for BulletTimestampNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `bullet_timestamp`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_continuation_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaContinuationMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaContinuationMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaContinuationMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_delimiter` nodes (kind verified at construction).
+impl NamedKind for CaContinuationMarkerNode<'_> {
+    const KIND: &'static str = "ca_continuation_marker";
+}
+impl<'tree> FromNodeKind<'tree> for CaContinuationMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_continuation_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_delimiter` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaDelimiterNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaDelimiterNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaDelimiterNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_element` nodes (kind verified at construction).
+impl NamedKind for CaDelimiterNode<'_> {
+    const KIND: &'static str = "ca_delimiter";
+}
+impl<'tree> FromNodeKind<'tree> for CaDelimiterNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_delimiter`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_element` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaElementNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaElementNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaElementNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_no_break` nodes (kind verified at construction).
+impl NamedKind for CaElementNode<'_> {
+    const KIND: &'static str = "ca_element";
+}
+impl<'tree> FromNodeKind<'tree> for CaElementNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_element`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_no_break` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaNoBreakNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaNoBreakNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaNoBreakNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_no_break_linker` nodes (kind verified at construction).
+impl NamedKind for CaNoBreakNode<'_> {
+    const KIND: &'static str = "ca_no_break";
+}
+impl<'tree> FromNodeKind<'tree> for CaNoBreakNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_no_break`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_no_break_linker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaNoBreakLinkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaNoBreakLinkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaNoBreakLinkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_technical_break` nodes (kind verified at construction).
+impl NamedKind for CaNoBreakLinkerNode<'_> {
+    const KIND: &'static str = "ca_no_break_linker";
+}
+impl<'tree> FromNodeKind<'tree> for CaNoBreakLinkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_no_break_linker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_technical_break` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaTechnicalBreakNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaTechnicalBreakNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaTechnicalBreakNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ca_technical_break_linker` nodes (kind verified at construction).
+impl NamedKind for CaTechnicalBreakNode<'_> {
+    const KIND: &'static str = "ca_technical_break";
+}
+impl<'tree> FromNodeKind<'tree> for CaTechnicalBreakNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_technical_break`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ca_technical_break_linker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CaTechnicalBreakLinkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CaTechnicalBreakLinkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CaTechnicalBreakLinkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `checked` nodes (kind verified at construction).
+impl NamedKind for CaTechnicalBreakLinkerNode<'_> {
+    const KIND: &'static str = "ca_technical_break_linker";
+}
+impl<'tree> FromNodeKind<'tree> for CaTechnicalBreakLinkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ca_technical_break_linker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `checked` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CheckedNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CheckedNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CheckedNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `coarse` nodes (kind verified at construction).
+impl NamedKind for CheckedNode<'_> {
+    const KIND: &'static str = "checked";
+}
+impl<'tree> FromNodeKind<'tree> for CheckedNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `checked`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `coarse` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CoarseNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CoarseNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CoarseNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `cod_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for CoarseNode<'_> {
+    const KIND: &'static str = "coarse";
+}
+impl<'tree> FromNodeKind<'tree> for CoarseNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `coarse`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `cod_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CodDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CodDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CodDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `cod_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for CodDependentTierNode<'_> {
+    const KIND: &'static str = "cod_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for CodDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `cod_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `cod_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CodTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CodTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CodTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `code_switch_annotation` nodes (kind verified at construction).
+impl NamedKind for CodTierPrefixNode<'_> {
+    const KIND: &'static str = "cod_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for CodTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `cod_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `code_switch_annotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CodeSwitchAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CodeSwitchAnnotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CodeSwitchAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `coh_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for CodeSwitchAnnotationNode<'_> {
+    const KIND: &'static str = "code_switch_annotation";
+}
+impl<'tree> FromNodeKind<'tree> for CodeSwitchAnnotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `code_switch_annotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `coh_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CohDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CohDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CohDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `coh_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for CohDependentTierNode<'_> {
+    const KIND: &'static str = "coh_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for CohDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `coh_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `coh_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CohTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CohTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CohTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `colon` nodes (kind verified at construction).
+impl NamedKind for CohTierPrefixNode<'_> {
+    const KIND: &'static str = "coh_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for CohTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `coh_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `colon` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ColonNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ColonNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ColonNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `color_words_header` nodes (kind verified at construction).
+impl NamedKind for ColonNode<'_> {
+    const KIND: &'static str = "colon";
+}
+impl<'tree> FromNodeKind<'tree> for ColonNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `colon`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `color_words_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ColorWordsHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ColorWordsHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ColorWordsHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `color_words_prefix` nodes (kind verified at construction).
+impl NamedKind for ColorWordsHeaderNode<'_> {
+    const KIND: &'static str = "color_words_header";
+}
+impl<'tree> FromNodeKind<'tree> for ColorWordsHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `color_words_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `color_words_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ColorWordsPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ColorWordsPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ColorWordsPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `com_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for ColorWordsPrefixNode<'_> {
+    const KIND: &'static str = "color_words_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ColorWordsPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `color_words_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `com_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ComDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ComDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ComDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `com_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ComDependentTierNode<'_> {
+    const KIND: &'static str = "com_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ComDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `com_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `com_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ComTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ComTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ComTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `comma` nodes (kind verified at construction).
+impl NamedKind for ComTierPrefixNode<'_> {
+    const KIND: &'static str = "com_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ComTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `com_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `comma` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CommaNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CommaNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CommaNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `comment_header` nodes (kind verified at construction).
+impl NamedKind for CommaNode<'_> {
+    const KIND: &'static str = "comma";
+}
+impl<'tree> FromNodeKind<'tree> for CommaNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `comma`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `comment_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CommentHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CommentHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CommentHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `comment_prefix` nodes (kind verified at construction).
+impl NamedKind for CommentHeaderNode<'_> {
+    const KIND: &'static str = "comment_header";
+}
+impl<'tree> FromNodeKind<'tree> for CommentHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `comment_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `comment_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct CommentPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct CommentPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for CommentPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `content_item` nodes (kind verified at construction).
+impl NamedKind for CommentPrefixNode<'_> {
+    const KIND: &'static str = "comment_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for CommentPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `comment_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `content_item` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ContentItemNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ContentItemNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ContentItemNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `contents` nodes (kind verified at construction).
+impl NamedKind for ContentItemNode<'_> {
+    const KIND: &'static str = "content_item";
+}
+impl<'tree> FromNodeKind<'tree> for ContentItemNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `content_item`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `continuation` nodes (kind verified at construction).
+impl NamedKind for ContentsNode<'_> {
+    const KIND: &'static str = "contents";
+}
+impl<'tree> FromNodeKind<'tree> for ContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `continuation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ContinuationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ContinuationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ContinuationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `date_contents` nodes (kind verified at construction).
+impl NamedKind for ContinuationNode<'_> {
+    const KIND: &'static str = "continuation";
+}
+impl<'tree> FromNodeKind<'tree> for ContinuationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `continuation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `date_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DateContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DateContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DateContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `date_header` nodes (kind verified at construction).
+impl NamedKind for DateContentsNode<'_> {
+    const KIND: &'static str = "date_contents";
+}
+impl<'tree> FromNodeKind<'tree> for DateContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `date_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `date_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DateHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DateHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DateHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `date_prefix` nodes (kind verified at construction).
+impl NamedKind for DateHeaderNode<'_> {
+    const KIND: &'static str = "date_header";
+}
+impl<'tree> FromNodeKind<'tree> for DateHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `date_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `date_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DatePrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DatePrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DatePrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `def_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for DatePrefixNode<'_> {
+    const KIND: &'static str = "date_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for DatePrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `date_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `def_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DefDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DefDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DefDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `def_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for DefDependentTierNode<'_> {
+    const KIND: &'static str = "def_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for DefDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `def_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `def_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DefTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DefTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DefTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `detailed` nodes (kind verified at construction).
+impl NamedKind for DefTierPrefixNode<'_> {
+    const KIND: &'static str = "def_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for DefTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `def_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `detailed` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DetailedNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DetailedNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DetailedNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `double_quote` nodes (kind verified at construction).
+impl NamedKind for DetailedNode<'_> {
+    const KIND: &'static str = "detailed";
+}
+impl<'tree> FromNodeKind<'tree> for DetailedNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `detailed`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `double_quote` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DoubleQuoteNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct DoubleQuoteNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for DoubleQuoteNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `eg_header` nodes (kind verified at construction).
+impl NamedKind for DoubleQuoteNode<'_> {
+    const KIND: &'static str = "double_quote";
+}
+impl<'tree> FromNodeKind<'tree> for DoubleQuoteNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `double_quote`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `eg_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EgHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EgHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EgHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `eg_prefix` nodes (kind verified at construction).
+impl NamedKind for EgHeaderNode<'_> {
+    const KIND: &'static str = "eg_header";
+}
+impl<'tree> FromNodeKind<'tree> for EgHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `eg_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `eg_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EgPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EgPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EgPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `end_header` nodes (kind verified at construction).
+impl NamedKind for EgPrefixNode<'_> {
+    const KIND: &'static str = "eg_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for EgPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `eg_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `end_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EndHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EndHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EndHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `eng_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for EndHeaderNode<'_> {
+    const KIND: &'static str = "end_header";
+}
+impl<'tree> FromNodeKind<'tree> for EndHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `end_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `eng_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EngDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EngDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EngDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `eng_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for EngDependentTierNode<'_> {
+    const KIND: &'static str = "eng_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for EngDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `eng_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `eng_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EngTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EngTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EngTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `err_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for EngTierPrefixNode<'_> {
+    const KIND: &'static str = "eng_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for EngTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `eng_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `err_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ErrDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ErrDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ErrDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `err_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ErrDependentTierNode<'_> {
+    const KIND: &'static str = "err_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ErrDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `err_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `err_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ErrTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ErrTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ErrTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `error_marker_annotation` nodes (kind verified at construction).
+impl NamedKind for ErrTierPrefixNode<'_> {
+    const KIND: &'static str = "err_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ErrTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `err_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `error_marker_annotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ErrorMarkerAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ErrorMarkerAnnotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ErrorMarkerAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ethnicity_value` nodes (kind verified at construction).
+impl NamedKind for ErrorMarkerAnnotationNode<'_> {
+    const KIND: &'static str = "error_marker_annotation";
+}
+impl<'tree> FromNodeKind<'tree> for ErrorMarkerAnnotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `error_marker_annotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ethnicity_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EthnicityValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EthnicityValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EthnicityValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `event` nodes (kind verified at construction).
+impl NamedKind for EthnicityValueNode<'_> {
+    const KIND: &'static str = "ethnicity_value";
+}
+impl<'tree> FromNodeKind<'tree> for EthnicityValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ethnicity_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `event` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EventNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EventNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EventNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `event_marker` nodes (kind verified at construction).
+impl NamedKind for EventNode<'_> {
+    const KIND: &'static str = "event";
+}
+impl<'tree> FromNodeKind<'tree> for EventNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `event`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `event_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EventMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EventMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EventMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `event_segment` nodes (kind verified at construction).
+impl NamedKind for EventMarkerNode<'_> {
+    const KIND: &'static str = "event_marker";
+}
+impl<'tree> FromNodeKind<'tree> for EventMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `event_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `event_segment` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EventSegmentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EventSegmentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EventSegmentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `exclamation` nodes (kind verified at construction).
+impl NamedKind for EventSegmentNode<'_> {
+    const KIND: &'static str = "event_segment";
+}
+impl<'tree> FromNodeKind<'tree> for EventSegmentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `event_segment`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `exclamation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ExclamationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ExclamationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ExclamationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `exclude_marker` nodes (kind verified at construction).
+impl NamedKind for ExclamationNode<'_> {
+    const KIND: &'static str = "exclamation";
+}
+impl<'tree> FromNodeKind<'tree> for ExclamationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `exclamation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `exclude_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ExcludeMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ExcludeMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ExcludeMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `exp_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for ExcludeMarkerNode<'_> {
+    const KIND: &'static str = "exclude_marker";
+}
+impl<'tree> FromNodeKind<'tree> for ExcludeMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `exclude_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `exp_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ExpDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ExpDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ExpDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `exp_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ExpDependentTierNode<'_> {
+    const KIND: &'static str = "exp_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ExpDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `exp_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `exp_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ExpTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ExpTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ExpTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `explanation_annotation` nodes (kind verified at construction).
+impl NamedKind for ExpTierPrefixNode<'_> {
+    const KIND: &'static str = "exp_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ExpTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `exp_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `explanation_annotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ExplanationAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ExplanationAnnotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ExplanationAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `eye_dialect` nodes (kind verified at construction).
+impl NamedKind for ExplanationAnnotationNode<'_> {
+    const KIND: &'static str = "explanation_annotation";
+}
+impl<'tree> FromNodeKind<'tree> for ExplanationAnnotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `explanation_annotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `eye_dialect` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EyeDialectNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct EyeDialectNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for EyeDialectNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `fac_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for EyeDialectNode<'_> {
+    const KIND: &'static str = "eye_dialect";
+}
+impl<'tree> FromNodeKind<'tree> for EyeDialectNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `eye_dialect`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `fac_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FacDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FacDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FacDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `fac_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for FacDependentTierNode<'_> {
+    const KIND: &'static str = "fac_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for FacDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `fac_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `fac_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FacTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FacTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FacTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `falling_to_low` nodes (kind verified at construction).
+impl NamedKind for FacTierPrefixNode<'_> {
+    const KIND: &'static str = "fac_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for FacTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `fac_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `falling_to_low` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FallingToLowNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FallingToLowNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FallingToLowNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `falling_to_mid` nodes (kind verified at construction).
+impl NamedKind for FallingToLowNode<'_> {
+    const KIND: &'static str = "falling_to_low";
+}
+impl<'tree> FromNodeKind<'tree> for FallingToLowNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `falling_to_low`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `falling_to_mid` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FallingToMidNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FallingToMidNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FallingToMidNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `female_value` nodes (kind verified at construction).
+impl NamedKind for FallingToMidNode<'_> {
+    const KIND: &'static str = "falling_to_mid";
+}
+impl<'tree> FromNodeKind<'tree> for FallingToMidNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `falling_to_mid`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `female_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FemaleValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FemaleValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FemaleValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `final_codes` nodes (kind verified at construction).
+impl NamedKind for FemaleValueNode<'_> {
+    const KIND: &'static str = "female_value";
+}
+impl<'tree> FromNodeKind<'tree> for FemaleValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `female_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `final_codes` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FinalCodesNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FinalCodesNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FinalCodesNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `flo_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for FinalCodesNode<'_> {
+    const KIND: &'static str = "final_codes";
+}
+impl<'tree> FromNodeKind<'tree> for FinalCodesNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `final_codes`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `flo_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FloDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FloDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FloDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `flo_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for FloDependentTierNode<'_> {
+    const KIND: &'static str = "flo_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for FloDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `flo_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `flo_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FloTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FloTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FloTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `font_header` nodes (kind verified at construction).
+impl NamedKind for FloTierPrefixNode<'_> {
+    const KIND: &'static str = "flo_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for FloTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `flo_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `font_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FontHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FontHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FontHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `font_prefix` nodes (kind verified at construction).
+impl NamedKind for FontHeaderNode<'_> {
+    const KIND: &'static str = "font_header";
+}
+impl<'tree> FromNodeKind<'tree> for FontHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `font_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `font_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FontPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FontPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FontPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `form_marker` nodes (kind verified at construction).
+impl NamedKind for FontPrefixNode<'_> {
+    const KIND: &'static str = "font_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for FontPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `font_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `form_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FormMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FormMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FormMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `free_text` nodes (kind verified at construction).
+impl NamedKind for FormMarkerNode<'_> {
+    const KIND: &'static str = "form_marker";
+}
+impl<'tree> FromNodeKind<'tree> for FormMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `form_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `free_text` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FreeTextNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FreeTextNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FreeTextNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `freecode` nodes (kind verified at construction).
+impl NamedKind for FreeTextNode<'_> {
+    const KIND: &'static str = "free_text";
+}
+impl<'tree> FromNodeKind<'tree> for FreeTextNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `free_text`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `freecode` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FreecodeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FreecodeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FreecodeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `full` nodes (kind verified at construction).
+impl NamedKind for FreecodeNode<'_> {
+    const KIND: &'static str = "freecode";
+}
+impl<'tree> FromNodeKind<'tree> for FreecodeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `freecode`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `full` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FullNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FullNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FullNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `full_document` nodes (kind verified at construction).
+impl NamedKind for FullNode<'_> {
+    const KIND: &'static str = "full";
+}
+impl<'tree> FromNodeKind<'tree> for FullNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `full`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `full_document` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct FullDocumentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct FullDocumentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for FullDocumentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `g_header` nodes (kind verified at construction).
+impl NamedKind for FullDocumentNode<'_> {
+    const KIND: &'static str = "full_document";
+}
+impl<'tree> FromNodeKind<'tree> for FullDocumentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `full_document`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `g_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `g_prefix` nodes (kind verified at construction).
+impl NamedKind for GHeaderNode<'_> {
+    const KIND: &'static str = "g_header";
+}
+impl<'tree> FromNodeKind<'tree> for GHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `g_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `g_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_date` nodes (kind verified at construction).
+impl NamedKind for GPrefixNode<'_> {
+    const KIND: &'static str = "g_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for GPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `g_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_date` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericDateNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericDateNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericDateNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_id_ses` nodes (kind verified at construction).
+impl NamedKind for GenericDateNode<'_> {
+    const KIND: &'static str = "generic_date";
+}
+impl<'tree> FromNodeKind<'tree> for GenericDateNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_date`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_id_ses` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericIdSesNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericIdSesNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericIdSesNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_id_sex` nodes (kind verified at construction).
+impl NamedKind for GenericIdSesNode<'_> {
+    const KIND: &'static str = "generic_id_ses";
+}
+impl<'tree> FromNodeKind<'tree> for GenericIdSesNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_id_ses`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_id_sex` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericIdSexNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericIdSexNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericIdSexNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_media_status` nodes (kind verified at construction).
+impl NamedKind for GenericIdSexNode<'_> {
+    const KIND: &'static str = "generic_id_sex";
+}
+impl<'tree> FromNodeKind<'tree> for GenericIdSexNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_id_sex`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_media_status` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericMediaStatusNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericMediaStatusNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericMediaStatusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_media_type` nodes (kind verified at construction).
+impl NamedKind for GenericMediaStatusNode<'_> {
+    const KIND: &'static str = "generic_media_status";
+}
+impl<'tree> FromNodeKind<'tree> for GenericMediaStatusNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_media_status`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_media_type` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericMediaTypeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericMediaTypeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericMediaTypeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_number` nodes (kind verified at construction).
+impl NamedKind for GenericMediaTypeNode<'_> {
+    const KIND: &'static str = "generic_media_type";
+}
+impl<'tree> FromNodeKind<'tree> for GenericMediaTypeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_media_type`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_number` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericNumberNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericNumberNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericNumberNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_option_name` nodes (kind verified at construction).
+impl NamedKind for GenericNumberNode<'_> {
+    const KIND: &'static str = "generic_number";
+}
+impl<'tree> FromNodeKind<'tree> for GenericNumberNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_number`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_option_name` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericOptionNameNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericOptionNameNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericOptionNameNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_recording_quality` nodes (kind verified at construction).
+impl NamedKind for GenericOptionNameNode<'_> {
+    const KIND: &'static str = "generic_option_name";
+}
+impl<'tree> FromNodeKind<'tree> for GenericOptionNameNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_option_name`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_recording_quality` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericRecordingQualityNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericRecordingQualityNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericRecordingQualityNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_time` nodes (kind verified at construction).
+impl NamedKind for GenericRecordingQualityNode<'_> {
+    const KIND: &'static str = "generic_recording_quality";
+}
+impl<'tree> FromNodeKind<'tree> for GenericRecordingQualityNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_recording_quality`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_time` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericTimeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericTimeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericTimeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `generic_transcription` nodes (kind verified at construction).
+impl NamedKind for GenericTimeNode<'_> {
+    const KIND: &'static str = "generic_time";
+}
+impl<'tree> FromNodeKind<'tree> for GenericTimeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_time`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `generic_transcription` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GenericTranscriptionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GenericTranscriptionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GenericTranscriptionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gls_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for GenericTranscriptionNode<'_> {
+    const KIND: &'static str = "generic_transcription";
+}
+impl<'tree> FromNodeKind<'tree> for GenericTranscriptionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `generic_transcription`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gls_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GlsDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GlsDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GlsDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gls_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for GlsDependentTierNode<'_> {
+    const KIND: &'static str = "gls_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for GlsDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gls_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gls_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GlsTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GlsTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GlsTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gpx_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for GlsTierPrefixNode<'_> {
+    const KIND: &'static str = "gls_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for GlsTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gls_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gpx_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GpxDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GpxDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GpxDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gpx_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for GpxDependentTierNode<'_> {
+    const KIND: &'static str = "gpx_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for GpxDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gpx_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gpx_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GpxTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GpxTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GpxTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_contents` nodes (kind verified at construction).
+impl NamedKind for GpxTierPrefixNode<'_> {
+    const KIND: &'static str = "gpx_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for GpxTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gpx_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for GraContentsNode<'_> {
+    const KIND: &'static str = "gra_contents";
+}
+impl<'tree> FromNodeKind<'tree> for GraContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_head` nodes (kind verified at construction).
+impl NamedKind for GraDependentTierNode<'_> {
+    const KIND: &'static str = "gra_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for GraDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_head` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraHeadNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraHeadNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraHeadNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_index` nodes (kind verified at construction).
+impl NamedKind for GraHeadNode<'_> {
+    const KIND: &'static str = "gra_head";
+}
+impl<'tree> FromNodeKind<'tree> for GraHeadNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_head`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_index` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraIndexNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraIndexNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraIndexNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_relation` nodes (kind verified at construction).
+impl NamedKind for GraIndexNode<'_> {
+    const KIND: &'static str = "gra_index";
+}
+impl<'tree> FromNodeKind<'tree> for GraIndexNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_index`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_relation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraRelationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraRelationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraRelationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_relation_name` nodes (kind verified at construction).
+impl NamedKind for GraRelationNode<'_> {
+    const KIND: &'static str = "gra_relation";
+}
+impl<'tree> FromNodeKind<'tree> for GraRelationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_relation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_relation_name` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraRelationNameNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraRelationNameNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraRelationNameNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `gra_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for GraRelationNameNode<'_> {
+    const KIND: &'static str = "gra_relation_name";
+}
+impl<'tree> FromNodeKind<'tree> for GraRelationNameNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_relation_name`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `gra_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GraTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GraTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GraTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `greater_than` nodes (kind verified at construction).
+impl NamedKind for GraTierPrefixNode<'_> {
+    const KIND: &'static str = "gra_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for GraTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `gra_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `greater_than` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GreaterThanNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GreaterThanNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GreaterThanNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `group_with_annotations` nodes (kind verified at construction).
+impl NamedKind for GreaterThanNode<'_> {
+    const KIND: &'static str = "greater_than";
+}
+impl<'tree> FromNodeKind<'tree> for GreaterThanNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `greater_than`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `group_with_annotations` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct GroupWithAnnotationsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct GroupWithAnnotationsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for GroupWithAnnotationsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `header_gap` nodes (kind verified at construction).
+impl NamedKind for GroupWithAnnotationsNode<'_> {
+    const KIND: &'static str = "group_with_annotations";
+}
+impl<'tree> FromNodeKind<'tree> for GroupWithAnnotationsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `group_with_annotations`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `header_gap` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct HeaderGapNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct HeaderGapNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for HeaderGapNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `header_sep` nodes (kind verified at construction).
+impl NamedKind for HeaderGapNode<'_> {
+    const KIND: &'static str = "header_gap";
+}
+impl<'tree> FromNodeKind<'tree> for HeaderGapNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `header_gap`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `header_sep` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct HeaderSepNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct HeaderSepNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for HeaderSepNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `hyphen` nodes (kind verified at construction).
+impl NamedKind for HeaderSepNode<'_> {
+    const KIND: &'static str = "header_sep";
+}
+impl<'tree> FromNodeKind<'tree> for HeaderSepNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `header_sep`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `hyphen` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct HyphenNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct HyphenNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for HyphenNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_age` nodes (kind verified at construction).
+impl NamedKind for HyphenNode<'_> {
+    const KIND: &'static str = "hyphen";
+}
+impl<'tree> FromNodeKind<'tree> for HyphenNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `hyphen`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_age` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdAgeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdAgeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdAgeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_contents` nodes (kind verified at construction).
+impl NamedKind for IdAgeNode<'_> {
+    const KIND: &'static str = "id_age";
+}
+impl<'tree> FromNodeKind<'tree> for IdAgeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_age`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_corpus` nodes (kind verified at construction).
+impl NamedKind for IdContentsNode<'_> {
+    const KIND: &'static str = "id_contents";
+}
+impl<'tree> FromNodeKind<'tree> for IdContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_corpus` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdCorpusNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdCorpusNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdCorpusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_custom_field` nodes (kind verified at construction).
+impl NamedKind for IdCorpusNode<'_> {
+    const KIND: &'static str = "id_corpus";
+}
+impl<'tree> FromNodeKind<'tree> for IdCorpusNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_corpus`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_custom_field` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdCustomFieldNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdCustomFieldNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdCustomFieldNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_education` nodes (kind verified at construction).
+impl NamedKind for IdCustomFieldNode<'_> {
+    const KIND: &'static str = "id_custom_field";
+}
+impl<'tree> FromNodeKind<'tree> for IdCustomFieldNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_custom_field`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_education` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdEducationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdEducationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdEducationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_group` nodes (kind verified at construction).
+impl NamedKind for IdEducationNode<'_> {
+    const KIND: &'static str = "id_education";
+}
+impl<'tree> FromNodeKind<'tree> for IdEducationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_education`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_header` nodes (kind verified at construction).
+impl NamedKind for IdGroupNode<'_> {
+    const KIND: &'static str = "id_group";
+}
+impl<'tree> FromNodeKind<'tree> for IdGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_languages` nodes (kind verified at construction).
+impl NamedKind for IdHeaderNode<'_> {
+    const KIND: &'static str = "id_header";
+}
+impl<'tree> FromNodeKind<'tree> for IdHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_languages` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdLanguagesNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdLanguagesNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdLanguagesNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_prefix` nodes (kind verified at construction).
+impl NamedKind for IdLanguagesNode<'_> {
+    const KIND: &'static str = "id_languages";
+}
+impl<'tree> FromNodeKind<'tree> for IdLanguagesNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_languages`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_role` nodes (kind verified at construction).
+impl NamedKind for IdPrefixNode<'_> {
+    const KIND: &'static str = "id_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for IdPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_role` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdRoleNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdRoleNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdRoleNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_ses` nodes (kind verified at construction).
+impl NamedKind for IdRoleNode<'_> {
+    const KIND: &'static str = "id_role";
+}
+impl<'tree> FromNodeKind<'tree> for IdRoleNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_role`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_ses` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdSesNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdSesNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdSesNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_sex` nodes (kind verified at construction).
+impl NamedKind for IdSesNode<'_> {
+    const KIND: &'static str = "id_ses";
+}
+impl<'tree> FromNodeKind<'tree> for IdSesNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_ses`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_sex` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdSexNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdSexNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdSexNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `id_speaker` nodes (kind verified at construction).
+impl NamedKind for IdSexNode<'_> {
+    const KIND: &'static str = "id_sex";
+}
+impl<'tree> FromNodeKind<'tree> for IdSexNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_sex`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `id_speaker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IdSpeakerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IdSpeakerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IdSpeakerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `illegal_curly_quote` nodes (kind verified at construction).
+impl NamedKind for IdSpeakerNode<'_> {
+    const KIND: &'static str = "id_speaker";
+}
+impl<'tree> FromNodeKind<'tree> for IdSpeakerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `id_speaker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `illegal_curly_quote` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IllegalCurlyQuoteNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IllegalCurlyQuoteNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IllegalCurlyQuoteNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `indexed_overlap_follows` nodes (kind verified at construction).
+impl NamedKind for IllegalCurlyQuoteNode<'_> {
+    const KIND: &'static str = "illegal_curly_quote";
+}
+impl<'tree> FromNodeKind<'tree> for IllegalCurlyQuoteNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `illegal_curly_quote`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `indexed_overlap_follows` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IndexedOverlapFollowsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IndexedOverlapFollowsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IndexedOverlapFollowsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `indexed_overlap_precedes` nodes (kind verified at construction).
+impl NamedKind for IndexedOverlapFollowsNode<'_> {
+    const KIND: &'static str = "indexed_overlap_follows";
+}
+impl<'tree> FromNodeKind<'tree> for IndexedOverlapFollowsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `indexed_overlap_follows`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `indexed_overlap_precedes` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IndexedOverlapPrecedesNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IndexedOverlapPrecedesNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IndexedOverlapPrecedesNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `inline_pic` nodes (kind verified at construction).
+impl NamedKind for IndexedOverlapPrecedesNode<'_> {
+    const KIND: &'static str = "indexed_overlap_precedes";
+}
+impl<'tree> FromNodeKind<'tree> for IndexedOverlapPrecedesNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `indexed_overlap_precedes`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `inline_pic` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct InlinePicNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct InlinePicNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for InlinePicNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `int_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for InlinePicNode<'_> {
+    const KIND: &'static str = "inline_pic";
+}
+impl<'tree> FromNodeKind<'tree> for InlinePicNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `inline_pic`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `int_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IntDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IntDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IntDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `int_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for IntDependentTierNode<'_> {
+    const KIND: &'static str = "int_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for IntDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `int_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `int_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct IntTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct IntTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for IntTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `interrupted_question` nodes (kind verified at construction).
+impl NamedKind for IntTierPrefixNode<'_> {
+    const KIND: &'static str = "int_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for IntTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `int_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `interrupted_question` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct InterruptedQuestionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct InterruptedQuestionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for InterruptedQuestionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `interruption` nodes (kind verified at construction).
+impl NamedKind for InterruptedQuestionNode<'_> {
+    const KIND: &'static str = "interrupted_question";
+}
+impl<'tree> FromNodeKind<'tree> for InterruptedQuestionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `interrupted_question`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `interruption` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct InterruptionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct InterruptionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for InterruptionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `l1_of_header` nodes (kind verified at construction).
+impl NamedKind for InterruptionNode<'_> {
+    const KIND: &'static str = "interruption";
+}
+impl<'tree> FromNodeKind<'tree> for InterruptionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `interruption`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `l1_of_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct L1OfHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct L1OfHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for L1OfHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `l1_of_prefix` nodes (kind verified at construction).
+impl NamedKind for L1OfHeaderNode<'_> {
+    const KIND: &'static str = "l1_of_header";
+}
+impl<'tree> FromNodeKind<'tree> for L1OfHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `l1_of_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `l1_of_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct L1OfPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct L1OfPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for L1OfPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `langcode` nodes (kind verified at construction).
+impl NamedKind for L1OfPrefixNode<'_> {
+    const KIND: &'static str = "l1_of_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for L1OfPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `l1_of_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `langcode` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LangcodeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LangcodeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LangcodeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `language_code` nodes (kind verified at construction).
+impl NamedKind for LangcodeNode<'_> {
+    const KIND: &'static str = "langcode";
+}
+impl<'tree> FromNodeKind<'tree> for LangcodeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `langcode`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `language_code` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LanguageCodeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LanguageCodeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LanguageCodeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `languages_contents` nodes (kind verified at construction).
+impl NamedKind for LanguageCodeNode<'_> {
+    const KIND: &'static str = "language_code";
+}
+impl<'tree> FromNodeKind<'tree> for LanguageCodeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `language_code`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `languages_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LanguagesContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LanguagesContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LanguagesContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `languages_header` nodes (kind verified at construction).
+impl NamedKind for LanguagesContentsNode<'_> {
+    const KIND: &'static str = "languages_contents";
+}
+impl<'tree> FromNodeKind<'tree> for LanguagesContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `languages_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `languages_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LanguagesHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LanguagesHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LanguagesHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `languages_prefix` nodes (kind verified at construction).
+impl NamedKind for LanguagesHeaderNode<'_> {
+    const KIND: &'static str = "languages_header";
+}
+impl<'tree> FromNodeKind<'tree> for LanguagesHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `languages_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `languages_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LanguagesPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LanguagesPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LanguagesPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `left_bracket` nodes (kind verified at construction).
+impl NamedKind for LanguagesPrefixNode<'_> {
+    const KIND: &'static str = "languages_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for LanguagesPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `languages_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `left_bracket` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LeftBracketNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LeftBracketNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LeftBracketNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `left_double_quote` nodes (kind verified at construction).
+impl NamedKind for LeftBracketNode<'_> {
+    const KIND: &'static str = "left_bracket";
+}
+impl<'tree> FromNodeKind<'tree> for LeftBracketNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `left_bracket`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `left_double_quote` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LeftDoubleQuoteNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LeftDoubleQuoteNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LeftDoubleQuoteNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `lengthening` nodes (kind verified at construction).
+impl NamedKind for LeftDoubleQuoteNode<'_> {
+    const KIND: &'static str = "left_double_quote";
+}
+impl<'tree> FromNodeKind<'tree> for LeftDoubleQuoteNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `left_double_quote`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `lengthening` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LengtheningNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LengtheningNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LengtheningNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `less_than` nodes (kind verified at construction).
+impl NamedKind for LengtheningNode<'_> {
+    const KIND: &'static str = "lengthening";
+}
+impl<'tree> FromNodeKind<'tree> for LengtheningNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `lengthening`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `less_than` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LessThanNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LessThanNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LessThanNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `level_pitch` nodes (kind verified at construction).
+impl NamedKind for LessThanNode<'_> {
+    const KIND: &'static str = "less_than";
+}
+impl<'tree> FromNodeKind<'tree> for LessThanNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `less_than`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `level_pitch` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LevelPitchNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LevelPitchNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LevelPitchNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `line` nodes (kind verified at construction).
+impl NamedKind for LevelPitchNode<'_> {
+    const KIND: &'static str = "level_pitch";
+}
+impl<'tree> FromNodeKind<'tree> for LevelPitchNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `level_pitch`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `line` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LineNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LineNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LineNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `linker_lazy_overlap` nodes (kind verified at construction).
+impl NamedKind for LineNode<'_> {
+    const KIND: &'static str = "line";
+}
+impl<'tree> FromNodeKind<'tree> for LineNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `line`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `linker_lazy_overlap` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LinkerLazyOverlapNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LinkerLazyOverlapNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LinkerLazyOverlapNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `linker_quick_uptake` nodes (kind verified at construction).
+impl NamedKind for LinkerLazyOverlapNode<'_> {
+    const KIND: &'static str = "linker_lazy_overlap";
+}
+impl<'tree> FromNodeKind<'tree> for LinkerLazyOverlapNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `linker_lazy_overlap`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `linker_quick_uptake` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LinkerQuickUptakeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LinkerQuickUptakeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LinkerQuickUptakeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `linker_quick_uptake_overlap` nodes (kind verified at construction).
+impl NamedKind for LinkerQuickUptakeNode<'_> {
+    const KIND: &'static str = "linker_quick_uptake";
+}
+impl<'tree> FromNodeKind<'tree> for LinkerQuickUptakeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `linker_quick_uptake`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `linker_quick_uptake_overlap` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LinkerQuickUptakeOverlapNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LinkerQuickUptakeOverlapNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LinkerQuickUptakeOverlapNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `linker_quotation_follows` nodes (kind verified at construction).
+impl NamedKind for LinkerQuickUptakeOverlapNode<'_> {
+    const KIND: &'static str = "linker_quick_uptake_overlap";
+}
+impl<'tree> FromNodeKind<'tree> for LinkerQuickUptakeOverlapNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `linker_quick_uptake_overlap`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `linker_quotation_follows` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LinkerQuotationFollowsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LinkerQuotationFollowsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LinkerQuotationFollowsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `linker_self_completion` nodes (kind verified at construction).
+impl NamedKind for LinkerQuotationFollowsNode<'_> {
+    const KIND: &'static str = "linker_quotation_follows";
+}
+impl<'tree> FromNodeKind<'tree> for LinkerQuotationFollowsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `linker_quotation_follows`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `linker_self_completion` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LinkerSelfCompletionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LinkerSelfCompletionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LinkerSelfCompletionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `linkers` nodes (kind verified at construction).
+impl NamedKind for LinkerSelfCompletionNode<'_> {
+    const KIND: &'static str = "linker_self_completion";
+}
+impl<'tree> FromNodeKind<'tree> for LinkerSelfCompletionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `linker_self_completion`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `linkers` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LinkersNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LinkersNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LinkersNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `location_header` nodes (kind verified at construction).
+impl NamedKind for LinkersNode<'_> {
+    const KIND: &'static str = "linkers";
+}
+impl<'tree> FromNodeKind<'tree> for LinkersNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `linkers`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `location_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LocationHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LocationHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LocationHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `location_prefix` nodes (kind verified at construction).
+impl NamedKind for LocationHeaderNode<'_> {
+    const KIND: &'static str = "location_header";
+}
+impl<'tree> FromNodeKind<'tree> for LocationHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `location_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `location_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LocationPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LocationPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LocationPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `long_feature` nodes (kind verified at construction).
+impl NamedKind for LocationPrefixNode<'_> {
+    const KIND: &'static str = "location_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for LocationPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `location_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `long_feature` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LongFeatureNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LongFeatureNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LongFeatureNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `long_feature_begin` nodes (kind verified at construction).
+impl NamedKind for LongFeatureNode<'_> {
+    const KIND: &'static str = "long_feature";
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `long_feature`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `long_feature_begin` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LongFeatureBeginNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LongFeatureBeginNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LongFeatureBeginNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `long_feature_begin_marker` nodes (kind verified at construction).
+impl NamedKind for LongFeatureBeginNode<'_> {
+    const KIND: &'static str = "long_feature_begin";
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureBeginNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `long_feature_begin`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `long_feature_begin_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LongFeatureBeginMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LongFeatureBeginMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LongFeatureBeginMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `long_feature_end` nodes (kind verified at construction).
+impl NamedKind for LongFeatureBeginMarkerNode<'_> {
+    const KIND: &'static str = "long_feature_begin_marker";
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureBeginMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `long_feature_begin_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `long_feature_end` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LongFeatureEndNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LongFeatureEndNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LongFeatureEndNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `long_feature_end_marker` nodes (kind verified at construction).
+impl NamedKind for LongFeatureEndNode<'_> {
+    const KIND: &'static str = "long_feature_end";
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureEndNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `long_feature_end`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `long_feature_end_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LongFeatureEndMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LongFeatureEndMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LongFeatureEndMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `long_feature_label` nodes (kind verified at construction).
+impl NamedKind for LongFeatureEndMarkerNode<'_> {
+    const KIND: &'static str = "long_feature_end_marker";
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureEndMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `long_feature_end_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `long_feature_label` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct LongFeatureLabelNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct LongFeatureLabelNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for LongFeatureLabelNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `main_pho_group` nodes (kind verified at construction).
+impl NamedKind for LongFeatureLabelNode<'_> {
+    const KIND: &'static str = "long_feature_label";
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureLabelNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `long_feature_label`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `main_pho_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MainPhoGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MainPhoGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MainPhoGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `main_sin_group` nodes (kind verified at construction).
+impl NamedKind for MainPhoGroupNode<'_> {
+    const KIND: &'static str = "main_pho_group";
+}
+impl<'tree> FromNodeKind<'tree> for MainPhoGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `main_pho_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `main_sin_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MainSinGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MainSinGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MainSinGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `main_tier` nodes (kind verified at construction).
+impl NamedKind for MainSinGroupNode<'_> {
+    const KIND: &'static str = "main_sin_group";
+}
+impl<'tree> FromNodeKind<'tree> for MainSinGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `main_sin_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `main_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MainTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MainTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MainTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `male_value` nodes (kind verified at construction).
+impl NamedKind for MainTierNode<'_> {
+    const KIND: &'static str = "main_tier";
+}
+impl<'tree> FromNodeKind<'tree> for MainTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `main_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `male_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MaleValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MaleValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MaleValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `media_contents` nodes (kind verified at construction).
+impl NamedKind for MaleValueNode<'_> {
+    const KIND: &'static str = "male_value";
+}
+impl<'tree> FromNodeKind<'tree> for MaleValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `male_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `media_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MediaContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MediaContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MediaContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `media_filename` nodes (kind verified at construction).
+impl NamedKind for MediaContentsNode<'_> {
+    const KIND: &'static str = "media_contents";
+}
+impl<'tree> FromNodeKind<'tree> for MediaContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `media_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `media_filename` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MediaFilenameNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MediaFilenameNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MediaFilenameNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `media_header` nodes (kind verified at construction).
+impl NamedKind for MediaFilenameNode<'_> {
+    const KIND: &'static str = "media_filename";
+}
+impl<'tree> FromNodeKind<'tree> for MediaFilenameNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `media_filename`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `media_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MediaHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MediaHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MediaHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `media_prefix` nodes (kind verified at construction).
+impl NamedKind for MediaHeaderNode<'_> {
+    const KIND: &'static str = "media_header";
+}
+impl<'tree> FromNodeKind<'tree> for MediaHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `media_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `media_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MediaPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MediaPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MediaPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `media_status` nodes (kind verified at construction).
+impl NamedKind for MediaPrefixNode<'_> {
+    const KIND: &'static str = "media_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for MediaPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `media_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `media_status` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MediaStatusNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MediaStatusNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MediaStatusNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `media_type` nodes (kind verified at construction).
+impl NamedKind for MediaStatusNode<'_> {
+    const KIND: &'static str = "media_status";
+}
+impl<'tree> FromNodeKind<'tree> for MediaStatusNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `media_status`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `media_type` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MediaTypeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MediaTypeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MediaTypeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `missing_value` nodes (kind verified at construction).
+impl NamedKind for MediaTypeNode<'_> {
+    const KIND: &'static str = "media_type";
+}
+impl<'tree> FromNodeKind<'tree> for MediaTypeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `media_type`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `missing_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MissingValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MissingValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MissingValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mod_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for MissingValueNode<'_> {
+    const KIND: &'static str = "missing_value";
+}
+impl<'tree> FromNodeKind<'tree> for MissingValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `missing_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mod_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ModDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ModDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ModDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mod_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ModDependentTierNode<'_> {
+    const KIND: &'static str = "mod_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ModDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mod_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mod_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ModTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ModTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ModTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `modsyl_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for ModTierPrefixNode<'_> {
+    const KIND: &'static str = "mod_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ModTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mod_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `modsyl_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ModsylDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ModsylDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ModsylDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `modsyl_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ModsylDependentTierNode<'_> {
+    const KIND: &'static str = "modsyl_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ModsylDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `modsyl_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `modsyl_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ModsylTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ModsylTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ModsylTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_content` nodes (kind verified at construction).
+impl NamedKind for ModsylTierPrefixNode<'_> {
+    const KIND: &'static str = "modsyl_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ModsylTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `modsyl_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_content` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorContentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorContentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorContentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_contents` nodes (kind verified at construction).
+impl NamedKind for MorContentNode<'_> {
+    const KIND: &'static str = "mor_content";
+}
+impl<'tree> FromNodeKind<'tree> for MorContentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_content`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for MorContentsNode<'_> {
+    const KIND: &'static str = "mor_contents";
+}
+impl<'tree> FromNodeKind<'tree> for MorContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_feature` nodes (kind verified at construction).
+impl NamedKind for MorDependentTierNode<'_> {
+    const KIND: &'static str = "mor_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for MorDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_feature` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorFeatureNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorFeatureNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorFeatureNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_feature_value` nodes (kind verified at construction).
+impl NamedKind for MorFeatureNode<'_> {
+    const KIND: &'static str = "mor_feature";
+}
+impl<'tree> FromNodeKind<'tree> for MorFeatureNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_feature`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_feature_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorFeatureValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorFeatureValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorFeatureValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_lemma` nodes (kind verified at construction).
+impl NamedKind for MorFeatureValueNode<'_> {
+    const KIND: &'static str = "mor_feature_value";
+}
+impl<'tree> FromNodeKind<'tree> for MorFeatureValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_feature_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_lemma` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorLemmaNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorLemmaNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorLemmaNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_pos` nodes (kind verified at construction).
+impl NamedKind for MorLemmaNode<'_> {
+    const KIND: &'static str = "mor_lemma";
+}
+impl<'tree> FromNodeKind<'tree> for MorLemmaNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_lemma`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_pos` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorPosNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorPosNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorPosNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_post_clitic` nodes (kind verified at construction).
+impl NamedKind for MorPosNode<'_> {
+    const KIND: &'static str = "mor_pos";
+}
+impl<'tree> FromNodeKind<'tree> for MorPosNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_pos`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_post_clitic` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorPostCliticNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorPostCliticNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorPostCliticNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for MorPostCliticNode<'_> {
+    const KIND: &'static str = "mor_post_clitic";
+}
+impl<'tree> FromNodeKind<'tree> for MorPostCliticNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_post_clitic`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `mor_word` nodes (kind verified at construction).
+impl NamedKind for MorTierPrefixNode<'_> {
+    const KIND: &'static str = "mor_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for MorTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `mor_word` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MorWordNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MorWordNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MorWordNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `more` nodes (kind verified at construction).
+impl NamedKind for MorWordNode<'_> {
+    const KIND: &'static str = "mor_word";
+}
+impl<'tree> FromNodeKind<'tree> for MorWordNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `mor_word`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `more` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct MoreNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct MoreNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for MoreNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `new_episode_header` nodes (kind verified at construction).
+impl NamedKind for MoreNode<'_> {
+    const KIND: &'static str = "more";
+}
+impl<'tree> FromNodeKind<'tree> for MoreNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `more`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `new_episode_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NewEpisodeHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NewEpisodeHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NewEpisodeHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `new_episode_prefix` nodes (kind verified at construction).
+impl NamedKind for NewEpisodeHeaderNode<'_> {
+    const KIND: &'static str = "new_episode_header";
+}
+impl<'tree> FromNodeKind<'tree> for NewEpisodeHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `new_episode_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `new_episode_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NewEpisodePrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NewEpisodePrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NewEpisodePrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `newline` nodes (kind verified at construction).
+impl NamedKind for NewEpisodePrefixNode<'_> {
+    const KIND: &'static str = "new_episode_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for NewEpisodePrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `new_episode_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `newline` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NewlineNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NewlineNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NewlineNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `non_colon_separator` nodes (kind verified at construction).
+impl NamedKind for NewlineNode<'_> {
+    const KIND: &'static str = "newline";
+}
+impl<'tree> FromNodeKind<'tree> for NewlineNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `newline`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `non_colon_separator` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonColonSeparatorNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonColonSeparatorNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonColonSeparatorNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonvocal` nodes (kind verified at construction).
+impl NamedKind for NonColonSeparatorNode<'_> {
+    const KIND: &'static str = "non_colon_separator";
+}
+impl<'tree> FromNodeKind<'tree> for NonColonSeparatorNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `non_colon_separator`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonvocal` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonvocalNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonvocalNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonvocalNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonvocal_begin` nodes (kind verified at construction).
+impl NamedKind for NonvocalNode<'_> {
+    const KIND: &'static str = "nonvocal";
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonvocal`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonvocal_begin` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonvocalBeginNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonvocalBeginNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonvocalBeginNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonvocal_begin_marker` nodes (kind verified at construction).
+impl NamedKind for NonvocalBeginNode<'_> {
+    const KIND: &'static str = "nonvocal_begin";
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalBeginNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonvocal_begin`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonvocal_begin_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonvocalBeginMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonvocalBeginMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonvocalBeginMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonvocal_end` nodes (kind verified at construction).
+impl NamedKind for NonvocalBeginMarkerNode<'_> {
+    const KIND: &'static str = "nonvocal_begin_marker";
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalBeginMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonvocal_begin_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonvocal_end` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonvocalEndNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonvocalEndNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonvocalEndNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonvocal_end_marker` nodes (kind verified at construction).
+impl NamedKind for NonvocalEndNode<'_> {
+    const KIND: &'static str = "nonvocal_end";
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalEndNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonvocal_end`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonvocal_end_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonvocalEndMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonvocalEndMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonvocalEndMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonvocal_simple` nodes (kind verified at construction).
+impl NamedKind for NonvocalEndMarkerNode<'_> {
+    const KIND: &'static str = "nonvocal_end_marker";
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalEndMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonvocal_end_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonvocal_simple` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonvocalSimpleNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonvocalSimpleNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonvocalSimpleNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonword` nodes (kind verified at construction).
+impl NamedKind for NonvocalSimpleNode<'_> {
+    const KIND: &'static str = "nonvocal_simple";
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalSimpleNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonvocal_simple`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonword` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonwordNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonwordNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonwordNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `nonword_with_optional_annotations` nodes (kind verified at construction).
+impl NamedKind for NonwordNode<'_> {
+    const KIND: &'static str = "nonword";
+}
+impl<'tree> FromNodeKind<'tree> for NonwordNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonword`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `nonword_with_optional_annotations` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NonwordWithOptionalAnnotationsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NonwordWithOptionalAnnotationsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NonwordWithOptionalAnnotationsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `notrans_value` nodes (kind verified at construction).
+impl NamedKind for NonwordWithOptionalAnnotationsNode<'_> {
+    const KIND: &'static str = "nonword_with_optional_annotations";
+}
+impl<'tree> FromNodeKind<'tree> for NonwordWithOptionalAnnotationsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `nonword_with_optional_annotations`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `notrans_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NotransValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NotransValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NotransValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `number_header` nodes (kind verified at construction).
+impl NamedKind for NotransValueNode<'_> {
+    const KIND: &'static str = "notrans_value";
+}
+impl<'tree> FromNodeKind<'tree> for NotransValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `notrans_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `number_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NumberHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NumberHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NumberHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `number_option` nodes (kind verified at construction).
+impl NamedKind for NumberHeaderNode<'_> {
+    const KIND: &'static str = "number_header";
+}
+impl<'tree> FromNodeKind<'tree> for NumberHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `number_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `number_option` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NumberOptionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NumberOptionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NumberOptionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `number_prefix` nodes (kind verified at construction).
+impl NamedKind for NumberOptionNode<'_> {
+    const KIND: &'static str = "number_option";
+}
+impl<'tree> FromNodeKind<'tree> for NumberOptionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `number_option`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `number_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct NumberPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct NumberPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for NumberPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `option_name` nodes (kind verified at construction).
+impl NamedKind for NumberPrefixNode<'_> {
+    const KIND: &'static str = "number_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for NumberPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `number_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `option_name` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OptionNameNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OptionNameNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OptionNameNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `options_contents` nodes (kind verified at construction).
+impl NamedKind for OptionNameNode<'_> {
+    const KIND: &'static str = "option_name";
+}
+impl<'tree> FromNodeKind<'tree> for OptionNameNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `option_name`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `options_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OptionsContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OptionsContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OptionsContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `options_header` nodes (kind verified at construction).
+impl NamedKind for OptionsContentsNode<'_> {
+    const KIND: &'static str = "options_contents";
+}
+impl<'tree> FromNodeKind<'tree> for OptionsContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `options_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `options_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OptionsHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OptionsHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OptionsHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `options_prefix` nodes (kind verified at construction).
+impl NamedKind for OptionsHeaderNode<'_> {
+    const KIND: &'static str = "options_header";
+}
+impl<'tree> FromNodeKind<'tree> for OptionsHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `options_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `options_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OptionsPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OptionsPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OptionsPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ort_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for OptionsPrefixNode<'_> {
+    const KIND: &'static str = "options_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for OptionsPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `options_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ort_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OrtDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OrtDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OrtDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ort_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for OrtDependentTierNode<'_> {
+    const KIND: &'static str = "ort_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for OrtDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ort_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ort_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OrtTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OrtTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OrtTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `other_spoken_event` nodes (kind verified at construction).
+impl NamedKind for OrtTierPrefixNode<'_> {
+    const KIND: &'static str = "ort_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for OrtTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ort_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `other_spoken_event` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OtherSpokenEventNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OtherSpokenEventNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OtherSpokenEventNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `overlap_point` nodes (kind verified at construction).
+impl NamedKind for OtherSpokenEventNode<'_> {
+    const KIND: &'static str = "other_spoken_event";
+}
+impl<'tree> FromNodeKind<'tree> for OtherSpokenEventNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `other_spoken_event`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `overlap_point` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct OverlapPointNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct OverlapPointNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for OverlapPointNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `page_header` nodes (kind verified at construction).
+impl NamedKind for OverlapPointNode<'_> {
+    const KIND: &'static str = "overlap_point";
+}
+impl<'tree> FromNodeKind<'tree> for OverlapPointNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `overlap_point`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `page_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PageHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PageHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PageHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `page_number` nodes (kind verified at construction).
+impl NamedKind for PageHeaderNode<'_> {
+    const KIND: &'static str = "page_header";
+}
+impl<'tree> FromNodeKind<'tree> for PageHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `page_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `page_number` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PageNumberNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PageNumberNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PageNumberNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `page_prefix` nodes (kind verified at construction).
+impl NamedKind for PageNumberNode<'_> {
+    const KIND: &'static str = "page_number";
+}
+impl<'tree> FromNodeKind<'tree> for PageNumberNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `page_number`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `page_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PagePrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PagePrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PagePrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `par_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for PagePrefixNode<'_> {
+    const KIND: &'static str = "page_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for PagePrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `page_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `par_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `par_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for ParDependentTierNode<'_> {
+    const KIND: &'static str = "par_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for ParDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `par_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `par_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `para_annotation` nodes (kind verified at construction).
+impl NamedKind for ParTierPrefixNode<'_> {
+    const KIND: &'static str = "par_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ParTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `par_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `para_annotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParaAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParaAnnotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParaAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `partial` nodes (kind verified at construction).
+impl NamedKind for ParaAnnotationNode<'_> {
+    const KIND: &'static str = "para_annotation";
+}
+impl<'tree> FromNodeKind<'tree> for ParaAnnotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `para_annotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `partial` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PartialNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PartialNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PartialNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `participant` nodes (kind verified at construction).
+impl NamedKind for PartialNode<'_> {
+    const KIND: &'static str = "partial";
+}
+impl<'tree> FromNodeKind<'tree> for PartialNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `partial`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `participant` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParticipantNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParticipantNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParticipantNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `participant_word` nodes (kind verified at construction).
+impl NamedKind for ParticipantNode<'_> {
+    const KIND: &'static str = "participant";
+}
+impl<'tree> FromNodeKind<'tree> for ParticipantNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `participant`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `participant_word` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParticipantWordNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParticipantWordNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParticipantWordNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `participants_contents` nodes (kind verified at construction).
+impl NamedKind for ParticipantWordNode<'_> {
+    const KIND: &'static str = "participant_word";
+}
+impl<'tree> FromNodeKind<'tree> for ParticipantWordNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `participant_word`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `participants_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParticipantsContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParticipantsContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParticipantsContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `participants_header` nodes (kind verified at construction).
+impl NamedKind for ParticipantsContentsNode<'_> {
+    const KIND: &'static str = "participants_contents";
+}
+impl<'tree> FromNodeKind<'tree> for ParticipantsContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `participants_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `participants_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParticipantsHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParticipantsHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParticipantsHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `participants_prefix` nodes (kind verified at construction).
+impl NamedKind for ParticipantsHeaderNode<'_> {
+    const KIND: &'static str = "participants_header";
+}
+impl<'tree> FromNodeKind<'tree> for ParticipantsHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `participants_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `participants_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ParticipantsPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ParticipantsPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ParticipantsPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pause_token` nodes (kind verified at construction).
+impl NamedKind for ParticipantsPrefixNode<'_> {
+    const KIND: &'static str = "participants_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ParticipantsPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `participants_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pause_token` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PauseTokenNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PauseTokenNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PauseTokenNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `percent_annotation` nodes (kind verified at construction).
+impl NamedKind for PauseTokenNode<'_> {
+    const KIND: &'static str = "pause_token";
+}
+impl<'tree> FromNodeKind<'tree> for PauseTokenNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pause_token`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `percent_annotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PercentAnnotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PercentAnnotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PercentAnnotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `period` nodes (kind verified at construction).
+impl NamedKind for PercentAnnotationNode<'_> {
+    const KIND: &'static str = "percent_annotation";
+}
+impl<'tree> FromNodeKind<'tree> for PercentAnnotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `percent_annotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `period` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PeriodNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PeriodNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PeriodNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_begin_group` nodes (kind verified at construction).
+impl NamedKind for PeriodNode<'_> {
+    const KIND: &'static str = "period";
+}
+impl<'tree> FromNodeKind<'tree> for PeriodNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `period`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_begin_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoBeginGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoBeginGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoBeginGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for PhoBeginGroupNode<'_> {
+    const KIND: &'static str = "pho_begin_group";
+}
+impl<'tree> FromNodeKind<'tree> for PhoBeginGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_begin_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_end_group` nodes (kind verified at construction).
+impl NamedKind for PhoDependentTierNode<'_> {
+    const KIND: &'static str = "pho_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for PhoDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_end_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoEndGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoEndGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoEndGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_group` nodes (kind verified at construction).
+impl NamedKind for PhoEndGroupNode<'_> {
+    const KIND: &'static str = "pho_end_group";
+}
+impl<'tree> FromNodeKind<'tree> for PhoEndGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_end_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_grouped_content` nodes (kind verified at construction).
+impl NamedKind for PhoGroupNode<'_> {
+    const KIND: &'static str = "pho_group";
+}
+impl<'tree> FromNodeKind<'tree> for PhoGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_grouped_content` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoGroupedContentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoGroupedContentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoGroupedContentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_groups` nodes (kind verified at construction).
+impl NamedKind for PhoGroupedContentNode<'_> {
+    const KIND: &'static str = "pho_grouped_content";
+}
+impl<'tree> FromNodeKind<'tree> for PhoGroupedContentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_grouped_content`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_groups` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoGroupsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoGroupsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoGroupsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for PhoGroupsNode<'_> {
+    const KIND: &'static str = "pho_groups";
+}
+impl<'tree> FromNodeKind<'tree> for PhoGroupsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_groups`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_word` nodes (kind verified at construction).
+impl NamedKind for PhoTierPrefixNode<'_> {
+    const KIND: &'static str = "pho_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for PhoTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_word` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoWordNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoWordNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoWordNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pho_words` nodes (kind verified at construction).
+impl NamedKind for PhoWordNode<'_> {
+    const KIND: &'static str = "pho_word";
+}
+impl<'tree> FromNodeKind<'tree> for PhoWordNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_word`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pho_words` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoWordsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoWordsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoWordsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `phoaln_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for PhoWordsNode<'_> {
+    const KIND: &'static str = "pho_words";
+}
+impl<'tree> FromNodeKind<'tree> for PhoWordsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pho_words`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `phoaln_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoalnDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoalnDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoalnDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `phoaln_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for PhoalnDependentTierNode<'_> {
+    const KIND: &'static str = "phoaln_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for PhoalnDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `phoaln_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `phoaln_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhoalnTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhoalnTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhoalnTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `phosyl_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for PhoalnTierPrefixNode<'_> {
+    const KIND: &'static str = "phoaln_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for PhoalnTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `phoaln_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `phosyl_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhosylDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhosylDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhosylDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `phosyl_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for PhosylDependentTierNode<'_> {
+    const KIND: &'static str = "phosyl_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for PhosylDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `phosyl_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `phosyl_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhosylTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PhosylTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PhosylTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pid_header` nodes (kind verified at construction).
+impl NamedKind for PhosylTierPrefixNode<'_> {
+    const KIND: &'static str = "phosyl_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for PhosylTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `phosyl_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pid_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PidHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PidHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PidHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pid_prefix` nodes (kind verified at construction).
+impl NamedKind for PidHeaderNode<'_> {
+    const KIND: &'static str = "pid_header";
+}
+impl<'tree> FromNodeKind<'tree> for PidHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pid_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pid_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PidPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PidPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PidPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pipe` nodes (kind verified at construction).
+impl NamedKind for PidPrefixNode<'_> {
+    const KIND: &'static str = "pid_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for PidPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pid_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pipe` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PipeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PipeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PipeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `plus` nodes (kind verified at construction).
+impl NamedKind for PipeNode<'_> {
+    const KIND: &'static str = "pipe";
+}
+impl<'tree> FromNodeKind<'tree> for PipeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pipe`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `plus` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct Plus_2Node<'tree>(pub tree_sitter::Node<'tree>);
+pub struct Plus_2Node<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for Plus_2Node<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `pos_tag` nodes (kind verified at construction).
+impl NamedKind for Plus_2Node<'_> {
+    const KIND: &'static str = "plus";
+}
+impl<'tree> FromNodeKind<'tree> for Plus_2Node<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `plus`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `pos_tag` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PosTagNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PosTagNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PosTagNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `postcode` nodes (kind verified at construction).
+impl NamedKind for PosTagNode<'_> {
+    const KIND: &'static str = "pos_tag";
+}
+impl<'tree> FromNodeKind<'tree> for PosTagNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `pos_tag`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `postcode` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct PostcodeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct PostcodeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for PostcodeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `question` nodes (kind verified at construction).
+impl NamedKind for PostcodeNode<'_> {
+    const KIND: &'static str = "postcode";
+}
+impl<'tree> FromNodeKind<'tree> for PostcodeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `postcode`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `question` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct QuestionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct QuestionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for QuestionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `quotation` nodes (kind verified at construction).
+impl NamedKind for QuestionNode<'_> {
+    const KIND: &'static str = "question";
+}
+impl<'tree> FromNodeKind<'tree> for QuestionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `question`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `quotation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct QuotationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct QuotationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for QuotationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `quoted_new_line` nodes (kind verified at construction).
+impl NamedKind for QuotationNode<'_> {
+    const KIND: &'static str = "quotation";
+}
+impl<'tree> FromNodeKind<'tree> for QuotationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `quotation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `quotation_with_optional_annotations` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct QuotedNewLineNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct QuotationWithOptionalAnnotationsNode<'tree>(tree_sitter::Node<'tree>);
+impl<'tree> AsRawNode<'tree> for QuotationWithOptionalAnnotationsNode<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        self.0
+    }
+}
+impl NamedKind for QuotationWithOptionalAnnotationsNode<'_> {
+    const KIND: &'static str = "quotation_with_optional_annotations";
+}
+impl<'tree> FromNodeKind<'tree> for QuotationWithOptionalAnnotationsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `quotation_with_optional_annotations`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `quoted_new_line` nodes.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct QuotedNewLineNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for QuotedNewLineNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `quoted_period_simple` nodes (kind verified at construction).
+impl NamedKind for QuotedNewLineNode<'_> {
+    const KIND: &'static str = "quoted_new_line";
+}
+impl<'tree> FromNodeKind<'tree> for QuotedNewLineNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `quoted_new_line`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `quoted_period_simple` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct QuotedPeriodSimpleNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct QuotedPeriodSimpleNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for QuotedPeriodSimpleNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `recording_quality_header` nodes (kind verified at construction).
+impl NamedKind for QuotedPeriodSimpleNode<'_> {
+    const KIND: &'static str = "quoted_period_simple";
+}
+impl<'tree> FromNodeKind<'tree> for QuotedPeriodSimpleNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `quoted_period_simple`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `recording_quality_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RecordingQualityHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RecordingQualityHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RecordingQualityHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `recording_quality_option` nodes (kind verified at construction).
+impl NamedKind for RecordingQualityHeaderNode<'_> {
+    const KIND: &'static str = "recording_quality_header";
+}
+impl<'tree> FromNodeKind<'tree> for RecordingQualityHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `recording_quality_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `recording_quality_option` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RecordingQualityOptionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RecordingQualityOptionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RecordingQualityOptionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `recording_quality_prefix` nodes (kind verified at construction).
+impl NamedKind for RecordingQualityOptionNode<'_> {
+    const KIND: &'static str = "recording_quality_option";
+}
+impl<'tree> FromNodeKind<'tree> for RecordingQualityOptionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `recording_quality_option`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `recording_quality_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RecordingQualityPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RecordingQualityPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RecordingQualityPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `replacement` nodes (kind verified at construction).
+impl NamedKind for RecordingQualityPrefixNode<'_> {
+    const KIND: &'static str = "recording_quality_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for RecordingQualityPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `recording_quality_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `repeated_form_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ReplacementNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RepeatedFormMarkerNode<'tree>(tree_sitter::Node<'tree>);
+impl<'tree> AsRawNode<'tree> for RepeatedFormMarkerNode<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        self.0
+    }
+}
+impl NamedKind for RepeatedFormMarkerNode<'_> {
+    const KIND: &'static str = "repeated_form_marker";
+}
+impl<'tree> FromNodeKind<'tree> for RepeatedFormMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `repeated_form_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `replacement` nodes.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct ReplacementNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ReplacementNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `rest_of_line` nodes (kind verified at construction).
+impl NamedKind for ReplacementNode<'_> {
+    const KIND: &'static str = "replacement";
+}
+impl<'tree> FromNodeKind<'tree> for ReplacementNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `replacement`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `rest_of_line` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RestOfLineNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RestOfLineNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RestOfLineNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `retrace_complete` nodes (kind verified at construction).
+impl NamedKind for RestOfLineNode<'_> {
+    const KIND: &'static str = "rest_of_line";
+}
+impl<'tree> FromNodeKind<'tree> for RestOfLineNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `rest_of_line`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `retrace_complete` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RetraceCompleteNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RetraceCompleteNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RetraceCompleteNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `retrace_multiple` nodes (kind verified at construction).
+impl NamedKind for RetraceCompleteNode<'_> {
+    const KIND: &'static str = "retrace_complete";
+}
+impl<'tree> FromNodeKind<'tree> for RetraceCompleteNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `retrace_complete`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `retrace_multiple` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RetraceMultipleNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RetraceMultipleNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RetraceMultipleNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `retrace_partial` nodes (kind verified at construction).
+impl NamedKind for RetraceMultipleNode<'_> {
+    const KIND: &'static str = "retrace_multiple";
+}
+impl<'tree> FromNodeKind<'tree> for RetraceMultipleNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `retrace_multiple`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `retrace_partial` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RetracePartialNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RetracePartialNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RetracePartialNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `retrace_reformulation` nodes (kind verified at construction).
+impl NamedKind for RetracePartialNode<'_> {
+    const KIND: &'static str = "retrace_partial";
+}
+impl<'tree> FromNodeKind<'tree> for RetracePartialNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `retrace_partial`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `retrace_reformulation` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RetraceReformulationNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RetraceReformulationNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RetraceReformulationNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `right_brace` nodes (kind verified at construction).
+impl NamedKind for RetraceReformulationNode<'_> {
+    const KIND: &'static str = "retrace_reformulation";
+}
+impl<'tree> FromNodeKind<'tree> for RetraceReformulationNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `retrace_reformulation`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `right_brace` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RightBraceNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RightBraceNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RightBraceNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `right_bracket` nodes (kind verified at construction).
+impl NamedKind for RightBraceNode<'_> {
+    const KIND: &'static str = "right_brace";
+}
+impl<'tree> FromNodeKind<'tree> for RightBraceNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `right_brace`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `right_bracket` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RightBracketNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RightBracketNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RightBracketNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `right_double_quote` nodes (kind verified at construction).
+impl NamedKind for RightBracketNode<'_> {
+    const KIND: &'static str = "right_bracket";
+}
+impl<'tree> FromNodeKind<'tree> for RightBracketNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `right_bracket`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `right_double_quote` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RightDoubleQuoteNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RightDoubleQuoteNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RightDoubleQuoteNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `rising_to_high` nodes (kind verified at construction).
+impl NamedKind for RightDoubleQuoteNode<'_> {
+    const KIND: &'static str = "right_double_quote";
+}
+impl<'tree> FromNodeKind<'tree> for RightDoubleQuoteNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `right_double_quote`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `rising_to_high` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RisingToHighNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RisingToHighNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RisingToHighNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `rising_to_mid` nodes (kind verified at construction).
+impl NamedKind for RisingToHighNode<'_> {
+    const KIND: &'static str = "rising_to_high";
+}
+impl<'tree> FromNodeKind<'tree> for RisingToHighNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `rising_to_high`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `rising_to_mid` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RisingToMidNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RisingToMidNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RisingToMidNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `room_layout_header` nodes (kind verified at construction).
+impl NamedKind for RisingToMidNode<'_> {
+    const KIND: &'static str = "rising_to_mid";
+}
+impl<'tree> FromNodeKind<'tree> for RisingToMidNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `rising_to_mid`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `room_layout_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RoomLayoutHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RoomLayoutHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RoomLayoutHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `room_layout_prefix` nodes (kind verified at construction).
+impl NamedKind for RoomLayoutHeaderNode<'_> {
+    const KIND: &'static str = "room_layout_header";
+}
+impl<'tree> FromNodeKind<'tree> for RoomLayoutHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `room_layout_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `room_layout_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct RoomLayoutPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct RoomLayoutPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for RoomLayoutPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `scoped_contrastive_stressing` nodes (kind verified at construction).
+impl NamedKind for RoomLayoutPrefixNode<'_> {
+    const KIND: &'static str = "room_layout_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for RoomLayoutPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `room_layout_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `scoped_contrastive_stressing` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ScopedContrastiveStressingNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ScopedContrastiveStressingNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ScopedContrastiveStressingNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `scoped_stressing` nodes (kind verified at construction).
+impl NamedKind for ScopedContrastiveStressingNode<'_> {
+    const KIND: &'static str = "scoped_contrastive_stressing";
+}
+impl<'tree> FromNodeKind<'tree> for ScopedContrastiveStressingNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `scoped_contrastive_stressing`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `scoped_stressing` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ScopedStressingNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ScopedStressingNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ScopedStressingNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `scoped_uncertain` nodes (kind verified at construction).
+impl NamedKind for ScopedStressingNode<'_> {
+    const KIND: &'static str = "scoped_stressing";
+}
+impl<'tree> FromNodeKind<'tree> for ScopedStressingNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `scoped_stressing`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `scoped_uncertain` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ScopedUncertainNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ScopedUncertainNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ScopedUncertainNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `self_interrupted_question` nodes (kind verified at construction).
+impl NamedKind for ScopedUncertainNode<'_> {
+    const KIND: &'static str = "scoped_uncertain";
+}
+impl<'tree> FromNodeKind<'tree> for ScopedUncertainNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `scoped_uncertain`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `self_interrupted_question` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SelfInterruptedQuestionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SelfInterruptedQuestionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SelfInterruptedQuestionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `self_interruption` nodes (kind verified at construction).
+impl NamedKind for SelfInterruptedQuestionNode<'_> {
+    const KIND: &'static str = "self_interrupted_question";
+}
+impl<'tree> FromNodeKind<'tree> for SelfInterruptedQuestionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `self_interrupted_question`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `self_interruption` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SelfInterruptionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SelfInterruptionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SelfInterruptionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `semicolon` nodes (kind verified at construction).
+impl NamedKind for SelfInterruptionNode<'_> {
+    const KIND: &'static str = "self_interruption";
+}
+impl<'tree> FromNodeKind<'tree> for SelfInterruptionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `self_interruption`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `semicolon` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SemicolonNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SemicolonNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SemicolonNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sep_trailing_space` nodes (kind verified at construction).
+impl NamedKind for SemicolonNode<'_> {
+    const KIND: &'static str = "semicolon";
+}
+impl<'tree> FromNodeKind<'tree> for SemicolonNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `semicolon`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sep_trailing_space` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SepTrailingSpaceNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SepTrailingSpaceNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SepTrailingSpaceNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `separator` nodes (kind verified at construction).
+impl NamedKind for SepTrailingSpaceNode<'_> {
+    const KIND: &'static str = "sep_trailing_space";
+}
+impl<'tree> FromNodeKind<'tree> for SepTrailingSpaceNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sep_trailing_space`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `separator` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SeparatorNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SeparatorNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SeparatorNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ses_code_value` nodes (kind verified at construction).
+impl NamedKind for SeparatorNode<'_> {
+    const KIND: &'static str = "separator";
+}
+impl<'tree> FromNodeKind<'tree> for SeparatorNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `separator`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ses_code_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SesCodeValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SesCodeValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SesCodeValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `ses_combined` nodes (kind verified at construction).
+impl NamedKind for SesCodeValueNode<'_> {
+    const KIND: &'static str = "ses_code_value";
+}
+impl<'tree> FromNodeKind<'tree> for SesCodeValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ses_code_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `ses_combined` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SesCombinedNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SesCombinedNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SesCombinedNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `shortening` nodes (kind verified at construction).
+impl NamedKind for SesCombinedNode<'_> {
+    const KIND: &'static str = "ses_combined";
+}
+impl<'tree> FromNodeKind<'tree> for SesCombinedNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `ses_combined`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `shortening` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ShorteningNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ShorteningNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ShorteningNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_begin_group` nodes (kind verified at construction).
+impl NamedKind for ShorteningNode<'_> {
+    const KIND: &'static str = "shortening";
+}
+impl<'tree> FromNodeKind<'tree> for ShorteningNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `shortening`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_begin_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinBeginGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinBeginGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinBeginGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for SinBeginGroupNode<'_> {
+    const KIND: &'static str = "sin_begin_group";
+}
+impl<'tree> FromNodeKind<'tree> for SinBeginGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_begin_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_end_group` nodes (kind verified at construction).
+impl NamedKind for SinDependentTierNode<'_> {
+    const KIND: &'static str = "sin_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for SinDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_end_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinEndGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinEndGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinEndGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_group` nodes (kind verified at construction).
+impl NamedKind for SinEndGroupNode<'_> {
+    const KIND: &'static str = "sin_end_group";
+}
+impl<'tree> FromNodeKind<'tree> for SinEndGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_end_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_grouped_content` nodes (kind verified at construction).
+impl NamedKind for SinGroupNode<'_> {
+    const KIND: &'static str = "sin_group";
+}
+impl<'tree> FromNodeKind<'tree> for SinGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_grouped_content` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinGroupedContentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinGroupedContentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinGroupedContentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_groups` nodes (kind verified at construction).
+impl NamedKind for SinGroupedContentNode<'_> {
+    const KIND: &'static str = "sin_grouped_content";
+}
+impl<'tree> FromNodeKind<'tree> for SinGroupedContentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_grouped_content`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_groups` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinGroupsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinGroupsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinGroupsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for SinGroupsNode<'_> {
+    const KIND: &'static str = "sin_groups";
+}
+impl<'tree> FromNodeKind<'tree> for SinGroupsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_groups`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sin_word` nodes (kind verified at construction).
+impl NamedKind for SinTierPrefixNode<'_> {
+    const KIND: &'static str = "sin_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for SinTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sin_word` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SinWordNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SinWordNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SinWordNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sit_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for SinWordNode<'_> {
+    const KIND: &'static str = "sin_word";
+}
+impl<'tree> FromNodeKind<'tree> for SinWordNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sin_word`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sit_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SitDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SitDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SitDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `sit_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for SitDependentTierNode<'_> {
+    const KIND: &'static str = "sit_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for SitDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sit_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `sit_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SitTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SitTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SitTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `situation_header` nodes (kind verified at construction).
+impl NamedKind for SitTierPrefixNode<'_> {
+    const KIND: &'static str = "sit_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for SitTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `sit_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `situation_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SituationHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SituationHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SituationHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `situation_prefix` nodes (kind verified at construction).
+impl NamedKind for SituationHeaderNode<'_> {
+    const KIND: &'static str = "situation_header";
+}
+impl<'tree> FromNodeKind<'tree> for SituationHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `situation_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `situation_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SituationPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SituationPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SituationPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `source_file` nodes (kind verified at construction).
+impl NamedKind for SituationPrefixNode<'_> {
+    const KIND: &'static str = "situation_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for SituationPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `situation_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `source_file` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SourceFileNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SourceFileNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SourceFileNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `spa_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for SourceFileNode<'_> {
+    const KIND: &'static str = "source_file";
+}
+impl<'tree> FromNodeKind<'tree> for SourceFileNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `source_file`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `spa_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SpaDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SpaDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SpaDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `spa_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for SpaDependentTierNode<'_> {
+    const KIND: &'static str = "spa_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for SpaDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `spa_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `spa_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SpaTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SpaTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SpaTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `space` nodes (kind verified at construction).
+impl NamedKind for SpaTierPrefixNode<'_> {
+    const KIND: &'static str = "spa_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for SpaTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `spa_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `space` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SpaceNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SpaceNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SpaceNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `speaker` nodes (kind verified at construction).
+impl NamedKind for SpaceNode<'_> {
+    const KIND: &'static str = "space";
+}
+impl<'tree> FromNodeKind<'tree> for SpaceNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `space`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `speaker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SpeakerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SpeakerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SpeakerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `standalone_word` nodes (kind verified at construction).
+impl NamedKind for SpeakerNode<'_> {
+    const KIND: &'static str = "speaker";
+}
+impl<'tree> FromNodeKind<'tree> for SpeakerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `speaker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `standalone_word` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct StandaloneWordNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct StandaloneWordNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for StandaloneWordNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `star` nodes (kind verified at construction).
+impl NamedKind for StandaloneWordNode<'_> {
+    const KIND: &'static str = "standalone_word";
+}
+impl<'tree> FromNodeKind<'tree> for StandaloneWordNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `standalone_word`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `star` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct StarNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct StarNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for StarNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `stress_marker` nodes (kind verified at construction).
+impl NamedKind for StarNode<'_> {
+    const KIND: &'static str = "star";
+}
+impl<'tree> FromNodeKind<'tree> for StarNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `star`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `stress_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct StressMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct StressMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for StressMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `strict_date` nodes (kind verified at construction).
+impl NamedKind for StressMarkerNode<'_> {
+    const KIND: &'static str = "stress_marker";
+}
+impl<'tree> FromNodeKind<'tree> for StressMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `stress_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `strict_date` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct StrictDateNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct StrictDateNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for StrictDateNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `strict_time` nodes (kind verified at construction).
+impl NamedKind for StrictDateNode<'_> {
+    const KIND: &'static str = "strict_date";
+}
+impl<'tree> FromNodeKind<'tree> for StrictDateNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `strict_date`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `strict_time` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct StrictTimeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct StrictTimeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for StrictTimeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `syllable_pause` nodes (kind verified at construction).
+impl NamedKind for StrictTimeNode<'_> {
+    const KIND: &'static str = "strict_time";
+}
+impl<'tree> FromNodeKind<'tree> for StrictTimeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `strict_time`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `syllable_pause` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct SyllablePauseNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct SyllablePauseNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for SyllablePauseNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `t_header` nodes (kind verified at construction).
+impl NamedKind for SyllablePauseNode<'_> {
+    const KIND: &'static str = "syllable_pause";
+}
+impl<'tree> FromNodeKind<'tree> for SyllablePauseNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `syllable_pause`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `t_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct THeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct THeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for THeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `t_prefix` nodes (kind verified at construction).
+impl NamedKind for THeaderNode<'_> {
+    const KIND: &'static str = "t_header";
+}
+impl<'tree> FromNodeKind<'tree> for THeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `t_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `t_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tab` nodes (kind verified at construction).
+impl NamedKind for TPrefixNode<'_> {
+    const KIND: &'static str = "t_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `t_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tab` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TabNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TabNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TabNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tag_marker` nodes (kind verified at construction).
+impl NamedKind for TabNode<'_> {
+    const KIND: &'static str = "tab";
+}
+impl<'tree> FromNodeKind<'tree> for TabNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tab`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tag_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TagMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TagMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TagMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tape_location_header` nodes (kind verified at construction).
+impl NamedKind for TagMarkerNode<'_> {
+    const KIND: &'static str = "tag_marker";
+}
+impl<'tree> FromNodeKind<'tree> for TagMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tag_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tape_location_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TapeLocationHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TapeLocationHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TapeLocationHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tape_location_prefix` nodes (kind verified at construction).
+impl NamedKind for TapeLocationHeaderNode<'_> {
+    const KIND: &'static str = "tape_location_header";
+}
+impl<'tree> FromNodeKind<'tree> for TapeLocationHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tape_location_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tape_location_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TapeLocationPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TapeLocationPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TapeLocationPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `text_segment` nodes (kind verified at construction).
+impl NamedKind for TapeLocationPrefixNode<'_> {
+    const KIND: &'static str = "tape_location_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TapeLocationPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tape_location_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `text_segment` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TextSegmentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TextSegmentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TextSegmentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `text_with_bullets` nodes (kind verified at construction).
+impl NamedKind for TextSegmentNode<'_> {
+    const KIND: &'static str = "text_segment";
+}
+impl<'tree> FromNodeKind<'tree> for TextSegmentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `text_segment`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `text_with_bullets` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TextWithBulletsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TextWithBulletsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TextWithBulletsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `text_with_bullets_and_pics` nodes (kind verified at construction).
+impl NamedKind for TextWithBulletsNode<'_> {
+    const KIND: &'static str = "text_with_bullets";
+}
+impl<'tree> FromNodeKind<'tree> for TextWithBulletsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `text_with_bullets`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `text_with_bullets_and_pics` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TextWithBulletsAndPicsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TextWithBulletsAndPicsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TextWithBulletsAndPicsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `thumbnail_header` nodes (kind verified at construction).
+impl NamedKind for TextWithBulletsAndPicsNode<'_> {
+    const KIND: &'static str = "text_with_bullets_and_pics";
+}
+impl<'tree> FromNodeKind<'tree> for TextWithBulletsAndPicsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `text_with_bullets_and_pics`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `thumbnail_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ThumbnailHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ThumbnailHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ThumbnailHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `thumbnail_prefix` nodes (kind verified at construction).
+impl NamedKind for ThumbnailHeaderNode<'_> {
+    const KIND: &'static str = "thumbnail_header";
+}
+impl<'tree> FromNodeKind<'tree> for ThumbnailHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `thumbnail_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `thumbnail_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ThumbnailPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ThumbnailPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ThumbnailPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tier_body` nodes (kind verified at construction).
+impl NamedKind for ThumbnailPrefixNode<'_> {
+    const KIND: &'static str = "thumbnail_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for ThumbnailPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `thumbnail_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tier_body` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TierBodyNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TierBodyNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TierBodyNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tier_sep` nodes (kind verified at construction).
+impl NamedKind for TierBodyNode<'_> {
+    const KIND: &'static str = "tier_body";
+}
+impl<'tree> FromNodeKind<'tree> for TierBodyNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tier_body`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tier_sep` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TierSepNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TierSepNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TierSepNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tilde` nodes (kind verified at construction).
+impl NamedKind for TierSepNode<'_> {
+    const KIND: &'static str = "tier_sep";
+}
+impl<'tree> FromNodeKind<'tree> for TierSepNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tier_sep`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tilde` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TildeNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TildeNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TildeNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tim_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for TildeNode<'_> {
+    const KIND: &'static str = "tilde";
+}
+impl<'tree> FromNodeKind<'tree> for TildeNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tilde`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tim_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `tim_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for TimDependentTierNode<'_> {
+    const KIND: &'static str = "tim_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for TimDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tim_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `tim_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `time_duration_contents` nodes (kind verified at construction).
+impl NamedKind for TimTierPrefixNode<'_> {
+    const KIND: &'static str = "tim_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TimTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `tim_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `time_duration_contents` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimeDurationContentsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimeDurationContentsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimeDurationContentsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `time_duration_header` nodes (kind verified at construction).
+impl NamedKind for TimeDurationContentsNode<'_> {
+    const KIND: &'static str = "time_duration_contents";
+}
+impl<'tree> FromNodeKind<'tree> for TimeDurationContentsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `time_duration_contents`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `time_duration_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimeDurationHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimeDurationHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimeDurationHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `time_duration_prefix` nodes (kind verified at construction).
+impl NamedKind for TimeDurationHeaderNode<'_> {
+    const KIND: &'static str = "time_duration_header";
+}
+impl<'tree> FromNodeKind<'tree> for TimeDurationHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `time_duration_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `time_duration_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimeDurationPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimeDurationPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimeDurationPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `time_start_header` nodes (kind verified at construction).
+impl NamedKind for TimeDurationPrefixNode<'_> {
+    const KIND: &'static str = "time_duration_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TimeDurationPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `time_duration_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `time_start_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimeStartHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimeStartHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimeStartHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `time_start_prefix` nodes (kind verified at construction).
+impl NamedKind for TimeStartHeaderNode<'_> {
+    const KIND: &'static str = "time_start_header";
+}
+impl<'tree> FromNodeKind<'tree> for TimeStartHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `time_start_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `time_start_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TimeStartPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TimeStartPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TimeStartPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `trailing_off` nodes (kind verified at construction).
+impl NamedKind for TimeStartPrefixNode<'_> {
+    const KIND: &'static str = "time_start_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TimeStartPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `time_start_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `trailing_off` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TrailingOffNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TrailingOffNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TrailingOffNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `trailing_off_question` nodes (kind verified at construction).
+impl NamedKind for TrailingOffNode<'_> {
+    const KIND: &'static str = "trailing_off";
+}
+impl<'tree> FromNodeKind<'tree> for TrailingOffNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `trailing_off`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `trailing_off_question` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TrailingOffQuestionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TrailingOffQuestionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TrailingOffQuestionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `transcriber_header` nodes (kind verified at construction).
+impl NamedKind for TrailingOffQuestionNode<'_> {
+    const KIND: &'static str = "trailing_off_question";
+}
+impl<'tree> FromNodeKind<'tree> for TrailingOffQuestionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `trailing_off_question`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `transcriber_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TranscriberHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TranscriberHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TranscriberHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `transcriber_prefix` nodes (kind verified at construction).
+impl NamedKind for TranscriberHeaderNode<'_> {
+    const KIND: &'static str = "transcriber_header";
+}
+impl<'tree> FromNodeKind<'tree> for TranscriberHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `transcriber_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `transcriber_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TranscriberPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TranscriberPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TranscriberPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `transcription_header` nodes (kind verified at construction).
+impl NamedKind for TranscriberPrefixNode<'_> {
+    const KIND: &'static str = "transcriber_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TranscriberPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `transcriber_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `transcription_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TranscriptionHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TranscriptionHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TranscriptionHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `transcription_option` nodes (kind verified at construction).
+impl NamedKind for TranscriptionHeaderNode<'_> {
+    const KIND: &'static str = "transcription_header";
+}
+impl<'tree> FromNodeKind<'tree> for TranscriptionHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `transcription_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `transcription_option` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TranscriptionOptionNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TranscriptionOptionNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TranscriptionOptionNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `transcription_prefix` nodes (kind verified at construction).
+impl NamedKind for TranscriptionOptionNode<'_> {
+    const KIND: &'static str = "transcription_option";
+}
+impl<'tree> FromNodeKind<'tree> for TranscriptionOptionNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `transcription_option`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `transcription_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TranscriptionPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TranscriptionPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TranscriptionPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `types_activity` nodes (kind verified at construction).
+impl NamedKind for TranscriptionPrefixNode<'_> {
+    const KIND: &'static str = "transcription_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TranscriptionPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `transcription_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `types_activity` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TypesActivityNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TypesActivityNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TypesActivityNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `types_design` nodes (kind verified at construction).
+impl NamedKind for TypesActivityNode<'_> {
+    const KIND: &'static str = "types_activity";
+}
+impl<'tree> FromNodeKind<'tree> for TypesActivityNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `types_activity`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `types_design` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TypesDesignNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TypesDesignNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TypesDesignNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `types_group` nodes (kind verified at construction).
+impl NamedKind for TypesDesignNode<'_> {
+    const KIND: &'static str = "types_design";
+}
+impl<'tree> FromNodeKind<'tree> for TypesDesignNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `types_design`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `types_group` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TypesGroupNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TypesGroupNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TypesGroupNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `types_header` nodes (kind verified at construction).
+impl NamedKind for TypesGroupNode<'_> {
+    const KIND: &'static str = "types_group";
+}
+impl<'tree> FromNodeKind<'tree> for TypesGroupNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `types_group`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `types_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TypesHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TypesHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TypesHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `types_prefix` nodes (kind verified at construction).
+impl NamedKind for TypesHeaderNode<'_> {
+    const KIND: &'static str = "types_header";
+}
+impl<'tree> FromNodeKind<'tree> for TypesHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `types_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `types_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct TypesPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct TypesPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for TypesPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `underline_begin` nodes (kind verified at construction).
+impl NamedKind for TypesPrefixNode<'_> {
+    const KIND: &'static str = "types_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for TypesPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `types_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `underline_begin` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnderlineBeginNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnderlineBeginNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnderlineBeginNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `underline_end` nodes (kind verified at construction).
+impl NamedKind for UnderlineBeginNode<'_> {
+    const KIND: &'static str = "underline_begin";
+}
+impl<'tree> FromNodeKind<'tree> for UnderlineBeginNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `underline_begin`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `underline_end` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnderlineEndNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnderlineEndNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnderlineEndNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unlinked_value` nodes (kind verified at construction).
+impl NamedKind for UnderlineEndNode<'_> {
+    const KIND: &'static str = "underline_end";
+}
+impl<'tree> FromNodeKind<'tree> for UnderlineEndNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `underline_end`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unlinked_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnlinkedValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnlinkedValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnlinkedValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unmarked_ending` nodes (kind verified at construction).
+impl NamedKind for UnlinkedValueNode<'_> {
+    const KIND: &'static str = "unlinked_value";
+}
+impl<'tree> FromNodeKind<'tree> for UnlinkedValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unlinked_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unmarked_ending` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnmarkedEndingNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnmarkedEndingNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnmarkedEndingNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unsupported_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for UnmarkedEndingNode<'_> {
+    const KIND: &'static str = "unmarked_ending";
+}
+impl<'tree> FromNodeKind<'tree> for UnmarkedEndingNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unmarked_ending`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unsupported_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnsupportedDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnsupportedDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnsupportedDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unsupported_header` nodes (kind verified at construction).
+impl NamedKind for UnsupportedDependentTierNode<'_> {
+    const KIND: &'static str = "unsupported_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for UnsupportedDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unsupported_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unsupported_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnsupportedHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnsupportedHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnsupportedHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unsupported_header_prefix` nodes (kind verified at construction).
+impl NamedKind for UnsupportedHeaderNode<'_> {
+    const KIND: &'static str = "unsupported_header";
+}
+impl<'tree> FromNodeKind<'tree> for UnsupportedHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unsupported_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unsupported_header_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnsupportedHeaderPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnsupportedHeaderPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnsupportedHeaderPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unsupported_line` nodes (kind verified at construction).
+impl NamedKind for UnsupportedHeaderPrefixNode<'_> {
+    const KIND: &'static str = "unsupported_header_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for UnsupportedHeaderPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unsupported_header_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unsupported_line` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnsupportedLineNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnsupportedLineNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnsupportedLineNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `unsupported_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for UnsupportedLineNode<'_> {
+    const KIND: &'static str = "unsupported_line";
+}
+impl<'tree> FromNodeKind<'tree> for UnsupportedLineNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unsupported_line`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `unsupported_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UnsupportedTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UnsupportedTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UnsupportedTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `uptake_symbol` nodes (kind verified at construction).
+impl NamedKind for UnsupportedTierPrefixNode<'_> {
+    const KIND: &'static str = "unsupported_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for UnsupportedTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `unsupported_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `uptake_symbol` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UptakeSymbolNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UptakeSymbolNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UptakeSymbolNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `utf8_header` nodes (kind verified at construction).
+impl NamedKind for UptakeSymbolNode<'_> {
+    const KIND: &'static str = "uptake_symbol";
+}
+impl<'tree> FromNodeKind<'tree> for UptakeSymbolNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `uptake_symbol`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `utf8_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct Utf8HeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct Utf8HeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for Utf8HeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `utterance` nodes (kind verified at construction).
+impl NamedKind for Utf8HeaderNode<'_> {
+    const KIND: &'static str = "utf8_header";
+}
+impl<'tree> FromNodeKind<'tree> for Utf8HeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `utf8_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `utterance` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UtteranceNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UtteranceNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UtteranceNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `utterance_end` nodes (kind verified at construction).
+impl NamedKind for UtteranceNode<'_> {
+    const KIND: &'static str = "utterance";
+}
+impl<'tree> FromNodeKind<'tree> for UtteranceNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `utterance`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `utterance_end` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct UtteranceEndNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct UtteranceEndNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for UtteranceEndNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `video_value` nodes (kind verified at construction).
+impl NamedKind for UtteranceEndNode<'_> {
+    const KIND: &'static str = "utterance_end";
+}
+impl<'tree> FromNodeKind<'tree> for UtteranceEndNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `utterance_end`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `video_value` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct VideoValueNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct VideoValueNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for VideoValueNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `videos_header` nodes (kind verified at construction).
+impl NamedKind for VideoValueNode<'_> {
+    const KIND: &'static str = "video_value";
+}
+impl<'tree> FromNodeKind<'tree> for VideoValueNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `video_value`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `videos_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct VideosHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct VideosHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for VideosHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `videos_prefix` nodes (kind verified at construction).
+impl NamedKind for VideosHeaderNode<'_> {
+    const KIND: &'static str = "videos_header";
+}
+impl<'tree> FromNodeKind<'tree> for VideosHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `videos_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `videos_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct VideosPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct VideosPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for VideosPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `vocative_marker` nodes (kind verified at construction).
+impl NamedKind for VideosPrefixNode<'_> {
+    const KIND: &'static str = "videos_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for VideosPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `videos_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `vocative_marker` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct VocativeMarkerNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct VocativeMarkerNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for VocativeMarkerNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `warning_header` nodes (kind verified at construction).
+impl NamedKind for VocativeMarkerNode<'_> {
+    const KIND: &'static str = "vocative_marker";
+}
+impl<'tree> FromNodeKind<'tree> for VocativeMarkerNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `vocative_marker`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `warning_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WarningHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WarningHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WarningHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `warning_prefix` nodes (kind verified at construction).
+impl NamedKind for WarningHeaderNode<'_> {
+    const KIND: &'static str = "warning_header";
+}
+impl<'tree> FromNodeKind<'tree> for WarningHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `warning_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `warning_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WarningPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WarningPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WarningPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `whitespaces` nodes (kind verified at construction).
+impl NamedKind for WarningPrefixNode<'_> {
+    const KIND: &'static str = "warning_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for WarningPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `warning_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `whitespaces` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WhitespacesNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WhitespacesNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WhitespacesNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `window_header` nodes (kind verified at construction).
+impl NamedKind for WhitespacesNode<'_> {
+    const KIND: &'static str = "whitespaces";
+}
+impl<'tree> FromNodeKind<'tree> for WhitespacesNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `whitespaces`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `window_header` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WindowHeaderNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WindowHeaderNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WindowHeaderNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `window_prefix` nodes (kind verified at construction).
+impl NamedKind for WindowHeaderNode<'_> {
+    const KIND: &'static str = "window_header";
+}
+impl<'tree> FromNodeKind<'tree> for WindowHeaderNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `window_header`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `window_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WindowPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WindowPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WindowPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `wor_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for WindowPrefixNode<'_> {
+    const KIND: &'static str = "window_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for WindowPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `window_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `wor_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WorDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WorDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WorDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `wor_tier_body` nodes (kind verified at construction).
+impl NamedKind for WorDependentTierNode<'_> {
+    const KIND: &'static str = "wor_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for WorDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `wor_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `wor_tier_body` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WorTierBodyNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WorTierBodyNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WorTierBodyNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `wor_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for WorTierBodyNode<'_> {
+    const KIND: &'static str = "wor_tier_body";
+}
+impl<'tree> FromNodeKind<'tree> for WorTierBodyNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `wor_tier_body`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `wor_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WorTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WorTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WorTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `wor_word_item` nodes (kind verified at construction).
+impl NamedKind for WorTierPrefixNode<'_> {
+    const KIND: &'static str = "wor_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for WorTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `wor_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `wor_word_item` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WorWordItemNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WorWordItemNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WorWordItemNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `word_body` nodes (kind verified at construction).
+impl NamedKind for WorWordItemNode<'_> {
+    const KIND: &'static str = "wor_word_item";
+}
+impl<'tree> FromNodeKind<'tree> for WorWordItemNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `wor_word_item`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `word_body` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WordBodyNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WordBodyNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WordBodyNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `word_lang_suffix` nodes (kind verified at construction).
+impl NamedKind for WordBodyNode<'_> {
+    const KIND: &'static str = "word_body";
+}
+impl<'tree> FromNodeKind<'tree> for WordBodyNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `word_body`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `word_lang_suffix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WordLangSuffixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WordLangSuffixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WordLangSuffixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `word_prefix` nodes (kind verified at construction).
+impl NamedKind for WordLangSuffixNode<'_> {
+    const KIND: &'static str = "word_lang_suffix";
+}
+impl<'tree> FromNodeKind<'tree> for WordLangSuffixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `word_lang_suffix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `word_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WordPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WordPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WordPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `word_segment` nodes (kind verified at construction).
+impl NamedKind for WordPrefixNode<'_> {
+    const KIND: &'static str = "word_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for WordPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `word_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `word_segment` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WordSegmentNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WordSegmentNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WordSegmentNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `word_with_optional_annotations` nodes (kind verified at construction).
+impl NamedKind for WordSegmentNode<'_> {
+    const KIND: &'static str = "word_segment";
+}
+impl<'tree> FromNodeKind<'tree> for WordSegmentNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `word_segment`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `word_with_optional_annotations` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct WordWithOptionalAnnotationsNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct WordWithOptionalAnnotationsNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for WordWithOptionalAnnotationsNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `x_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for WordWithOptionalAnnotationsNode<'_> {
+    const KIND: &'static str = "word_with_optional_annotations";
+}
+impl<'tree> FromNodeKind<'tree> for WordWithOptionalAnnotationsNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `word_with_optional_annotations`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `x_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct XDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct XDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for XDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `x_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for XDependentTierNode<'_> {
+    const KIND: &'static str = "x_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for XDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `x_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `x_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct XTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct XTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for XTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `xphoint_dependent_tier` nodes (kind verified at construction).
+impl NamedKind for XTierPrefixNode<'_> {
+    const KIND: &'static str = "x_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for XTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `x_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `xphoint_dependent_tier` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct XphointDependentTierNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct XphointDependentTierNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for XphointDependentTierNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `xphoint_tier_prefix` nodes (kind verified at construction).
+impl NamedKind for XphointDependentTierNode<'_> {
+    const KIND: &'static str = "xphoint_dependent_tier";
+}
+impl<'tree> FromNodeKind<'tree> for XphointDependentTierNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `xphoint_dependent_tier`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `xphoint_tier_prefix` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct XphointTierPrefixNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct XphointTierPrefixNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for XphointTierPrefixNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
     }
 }
-/// Typed wrapper for `zero` nodes (kind verified at construction).
+impl NamedKind for XphointTierPrefixNode<'_> {
+    const KIND: &'static str = "xphoint_tier_prefix";
+}
+impl<'tree> FromNodeKind<'tree> for XphointTierPrefixNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `xphoint_tier_prefix`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
+    }
+}
+/// Typed wrapper for `zero` nodes.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ZeroNode<'tree>(pub tree_sitter::Node<'tree>);
+pub struct ZeroNode<'tree>(tree_sitter::Node<'tree>);
 impl<'tree> AsRawNode<'tree> for ZeroNode<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         self.0
+    }
+}
+impl NamedKind for ZeroNode<'_> {
+    const KIND: &'static str = "zero";
+}
+impl<'tree> FromNodeKind<'tree> for ZeroNode<'tree> {
+    /// The wrapper for `node`, or `None` if `node` is not a `zero`.
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        (node.kind() == <Self as NamedKind>::KIND).then_some(Self(node))
     }
 }
 
@@ -5125,7 +8991,7 @@ static SHAPE_55: ReconShape = ReconShape::Kind("com_tier_prefix");
 static SHAPE_56: ReconShape = ReconShape::Kind("comment_prefix");
 static SHAPE_57: ReconShape = ReconShape::Kind("base_content_item");
 static SHAPE_58: ReconShape = ReconShape::Kind("group_with_annotations");
-static SHAPE_59: ReconShape = ReconShape::Kind("quotation");
+static SHAPE_59: ReconShape = ReconShape::Kind("quotation_with_optional_annotations");
 static SHAPE_60: ReconShape = ReconShape::Kind("illegal_curly_quote");
 static SHAPE_61: ReconShape = ReconShape::Kind("main_pho_group");
 static SHAPE_62: ReconShape = ReconShape::Kind("main_sin_group");
@@ -5446,38 +9312,39 @@ static SHAPE_303: ReconShape = ReconShape::Kind("pid_prefix");
 static SHAPE_304: ReconShape = ReconShape::Kind("[+");
 static SHAPE_305: ReconShape = ReconShape::Kind("right_double_quote");
 static SHAPE_306: ReconShape = ReconShape::Kind("left_double_quote");
-static SHAPE_307: ReconShape = ReconShape::Kind("recording_quality_option");
-static SHAPE_308: ReconShape = ReconShape::Kind("recording_quality_prefix");
-static SHAPE_309: ReconShape = ReconShape::Kind("generic_recording_quality");
-static SHAPE_310: ReconShape = ReconShape::Choice(&[
-    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_309,
+static SHAPE_307: ReconShape = ReconShape::Kind("quotation");
+static SHAPE_308: ReconShape = ReconShape::Kind("recording_quality_option");
+static SHAPE_309: ReconShape = ReconShape::Kind("recording_quality_prefix");
+static SHAPE_310: ReconShape = ReconShape::Kind("generic_recording_quality");
+static SHAPE_311: ReconShape = ReconShape::Choice(&[
+    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_310,
 ]);
-static SHAPE_311: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_273]);
-static SHAPE_312: ReconShape = ReconShape::Repeat(&SHAPE_311);
-static SHAPE_313: ReconShape = ReconShape::Kind("left_bracket");
-static SHAPE_314: ReconShape = ReconShape::Kind("room_layout_prefix");
-static SHAPE_315: ReconShape = ReconShape::Kind("non_colon_separator");
-static SHAPE_316: ReconShape = ReconShape::Choice(&[&SHAPE_315, &SHAPE_46]);
-static SHAPE_317: ReconShape = ReconShape::Kind("word_segment");
-static SHAPE_318: ReconShape = ReconShape::Kind(")");
-static SHAPE_319: ReconShape = ReconShape::Kind("(");
-static SHAPE_320: ReconShape = ReconShape::Kind("sin_groups");
-static SHAPE_321: ReconShape = ReconShape::Kind("sin_tier_prefix");
-static SHAPE_322: ReconShape = ReconShape::Kind("sin_word");
-static SHAPE_323: ReconShape = ReconShape::Kind("sin_grouped_content");
-static SHAPE_324: ReconShape = ReconShape::Seq(&[&SHAPE_180, &SHAPE_323, &SHAPE_179]);
-static SHAPE_325: ReconShape = ReconShape::Choice(&[&SHAPE_322, &SHAPE_324]);
-static SHAPE_326: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_322]);
-static SHAPE_327: ReconShape = ReconShape::Repeat(&SHAPE_326);
-static SHAPE_328: ReconShape = ReconShape::Kind("sin_group");
-static SHAPE_329: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_328]);
-static SHAPE_330: ReconShape = ReconShape::Repeat(&SHAPE_329);
-static SHAPE_331: ReconShape = ReconShape::Choice(&[&SHAPE_248, &SHAPE_122]);
-static SHAPE_332: ReconShape = ReconShape::Kind("sit_tier_prefix");
-static SHAPE_333: ReconShape = ReconShape::Kind("situation_prefix");
-static SHAPE_334: ReconShape = ReconShape::Kind("full_document");
-static SHAPE_335: ReconShape = ReconShape::Kind("main_tier");
-static SHAPE_336: ReconShape = ReconShape::Supertype(&[
+static SHAPE_312: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_273]);
+static SHAPE_313: ReconShape = ReconShape::Repeat(&SHAPE_312);
+static SHAPE_314: ReconShape = ReconShape::Kind("left_bracket");
+static SHAPE_315: ReconShape = ReconShape::Kind("room_layout_prefix");
+static SHAPE_316: ReconShape = ReconShape::Kind("non_colon_separator");
+static SHAPE_317: ReconShape = ReconShape::Choice(&[&SHAPE_316, &SHAPE_46]);
+static SHAPE_318: ReconShape = ReconShape::Kind("word_segment");
+static SHAPE_319: ReconShape = ReconShape::Kind(")");
+static SHAPE_320: ReconShape = ReconShape::Kind("(");
+static SHAPE_321: ReconShape = ReconShape::Kind("sin_groups");
+static SHAPE_322: ReconShape = ReconShape::Kind("sin_tier_prefix");
+static SHAPE_323: ReconShape = ReconShape::Kind("sin_word");
+static SHAPE_324: ReconShape = ReconShape::Kind("sin_grouped_content");
+static SHAPE_325: ReconShape = ReconShape::Seq(&[&SHAPE_180, &SHAPE_324, &SHAPE_179]);
+static SHAPE_326: ReconShape = ReconShape::Choice(&[&SHAPE_323, &SHAPE_325]);
+static SHAPE_327: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_323]);
+static SHAPE_328: ReconShape = ReconShape::Repeat(&SHAPE_327);
+static SHAPE_329: ReconShape = ReconShape::Kind("sin_group");
+static SHAPE_330: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_329]);
+static SHAPE_331: ReconShape = ReconShape::Repeat(&SHAPE_330);
+static SHAPE_332: ReconShape = ReconShape::Choice(&[&SHAPE_248, &SHAPE_122]);
+static SHAPE_333: ReconShape = ReconShape::Kind("sit_tier_prefix");
+static SHAPE_334: ReconShape = ReconShape::Kind("situation_prefix");
+static SHAPE_335: ReconShape = ReconShape::Kind("full_document");
+static SHAPE_336: ReconShape = ReconShape::Kind("main_tier");
+static SHAPE_337: ReconShape = ReconShape::Supertype(&[
     "act_dependent_tier",
     "add_dependent_tier",
     "alt_dependent_tier",
@@ -5511,106 +9378,108 @@ static SHAPE_336: ReconShape = ReconShape::Supertype(&[
     "x_dependent_tier",
     "xphoint_dependent_tier",
 ]);
-static SHAPE_337: ReconShape = ReconShape::Choice(&[
-    &SHAPE_334, &SHAPE_163, &SHAPE_335, &SHAPE_336, &SHAPE_162, &SHAPE_93, &SHAPE_273,
+static SHAPE_338: ReconShape = ReconShape::Choice(&[
+    &SHAPE_335, &SHAPE_163, &SHAPE_336, &SHAPE_337, &SHAPE_162, &SHAPE_93, &SHAPE_273,
 ]);
-static SHAPE_338: ReconShape = ReconShape::Kind("spa_tier_prefix");
-static SHAPE_339: ReconShape = ReconShape::Kind("word_body");
-static SHAPE_340: ReconShape = ReconShape::Kind("form_marker");
-static SHAPE_341: ReconShape = ReconShape::Optional(&SHAPE_340);
-static SHAPE_342: ReconShape = ReconShape::Kind("word_lang_suffix");
-static SHAPE_343: ReconShape = ReconShape::Optional(&SHAPE_342);
-static SHAPE_344: ReconShape = ReconShape::Kind("pos_tag");
-static SHAPE_345: ReconShape = ReconShape::Optional(&SHAPE_344);
-static SHAPE_346: ReconShape = ReconShape::Kind("word_prefix");
-static SHAPE_347: ReconShape = ReconShape::Choice(&[&SHAPE_346, &SHAPE_248]);
-static SHAPE_348: ReconShape = ReconShape::Kind("t_prefix");
-static SHAPE_349: ReconShape = ReconShape::Kind("tape_location_prefix");
-static SHAPE_350: ReconShape = ReconShape::Kind("text_segment");
-static SHAPE_351: ReconShape = ReconShape::Repeat(&SHAPE_9);
-static SHAPE_352: ReconShape = ReconShape::Seq(&[&SHAPE_27, &SHAPE_351]);
-static SHAPE_353: ReconShape = ReconShape::Choice(&[&SHAPE_350, &SHAPE_352, &SHAPE_90]);
-static SHAPE_354: ReconShape = ReconShape::Repeat(&SHAPE_353);
-static SHAPE_355: ReconShape = ReconShape::Kind("inline_pic");
-static SHAPE_356: ReconShape = ReconShape::Seq(&[&SHAPE_355, &SHAPE_351]);
-static SHAPE_357: ReconShape = ReconShape::Choice(&[&SHAPE_350, &SHAPE_352, &SHAPE_356, &SHAPE_90]);
-static SHAPE_358: ReconShape = ReconShape::Repeat(&SHAPE_357);
-static SHAPE_359: ReconShape = ReconShape::Kind("thumbnail_prefix");
-static SHAPE_360: ReconShape = ReconShape::Kind("langcode");
-static SHAPE_361: ReconShape = ReconShape::Seq(&[&SHAPE_360, &SHAPE_14]);
-static SHAPE_362: ReconShape = ReconShape::Optional(&SHAPE_361);
-static SHAPE_363: ReconShape = ReconShape::Kind("utterance_end");
-static SHAPE_364: ReconShape = ReconShape::Kind("linkers");
-static SHAPE_365: ReconShape = ReconShape::Kind("tim_tier_prefix");
-static SHAPE_366: ReconShape = ReconShape::Kind("strict_time");
-static SHAPE_367: ReconShape = ReconShape::Kind("generic_time");
-static SHAPE_368: ReconShape = ReconShape::Choice(&[&SHAPE_366, &SHAPE_367]);
-static SHAPE_369: ReconShape = ReconShape::Kind("time_duration_contents");
-static SHAPE_370: ReconShape = ReconShape::Kind("time_duration_prefix");
-static SHAPE_371: ReconShape = ReconShape::Kind("time_start_prefix");
-static SHAPE_372: ReconShape = ReconShape::Kind("transcriber_prefix");
-static SHAPE_373: ReconShape = ReconShape::Kind("transcription_option");
-static SHAPE_374: ReconShape = ReconShape::Kind("transcription_prefix");
-static SHAPE_375: ReconShape = ReconShape::Kind("eye_dialect");
-static SHAPE_376: ReconShape = ReconShape::Kind("partial");
-static SHAPE_377: ReconShape = ReconShape::Kind("full");
-static SHAPE_378: ReconShape = ReconShape::Kind("detailed");
-static SHAPE_379: ReconShape = ReconShape::Kind("coarse");
-static SHAPE_380: ReconShape = ReconShape::Kind("checked");
-static SHAPE_381: ReconShape = ReconShape::Kind("anonymized");
-static SHAPE_382: ReconShape = ReconShape::Kind("generic_transcription");
-static SHAPE_383: ReconShape = ReconShape::Choice(&[
-    &SHAPE_375, &SHAPE_376, &SHAPE_377, &SHAPE_378, &SHAPE_379, &SHAPE_380, &SHAPE_381, &SHAPE_382,
+static SHAPE_339: ReconShape = ReconShape::Kind("spa_tier_prefix");
+static SHAPE_340: ReconShape = ReconShape::Kind("word_body");
+static SHAPE_341: ReconShape = ReconShape::Kind("form_marker");
+static SHAPE_342: ReconShape = ReconShape::Kind("repeated_form_marker");
+static SHAPE_343: ReconShape = ReconShape::Choice(&[&SHAPE_341, &SHAPE_342]);
+static SHAPE_344: ReconShape = ReconShape::Optional(&SHAPE_343);
+static SHAPE_345: ReconShape = ReconShape::Kind("word_lang_suffix");
+static SHAPE_346: ReconShape = ReconShape::Optional(&SHAPE_345);
+static SHAPE_347: ReconShape = ReconShape::Kind("pos_tag");
+static SHAPE_348: ReconShape = ReconShape::Optional(&SHAPE_347);
+static SHAPE_349: ReconShape = ReconShape::Kind("word_prefix");
+static SHAPE_350: ReconShape = ReconShape::Choice(&[&SHAPE_349, &SHAPE_248]);
+static SHAPE_351: ReconShape = ReconShape::Kind("t_prefix");
+static SHAPE_352: ReconShape = ReconShape::Kind("tape_location_prefix");
+static SHAPE_353: ReconShape = ReconShape::Kind("text_segment");
+static SHAPE_354: ReconShape = ReconShape::Repeat(&SHAPE_9);
+static SHAPE_355: ReconShape = ReconShape::Seq(&[&SHAPE_27, &SHAPE_354]);
+static SHAPE_356: ReconShape = ReconShape::Choice(&[&SHAPE_353, &SHAPE_355, &SHAPE_90]);
+static SHAPE_357: ReconShape = ReconShape::Repeat(&SHAPE_356);
+static SHAPE_358: ReconShape = ReconShape::Kind("inline_pic");
+static SHAPE_359: ReconShape = ReconShape::Seq(&[&SHAPE_358, &SHAPE_354]);
+static SHAPE_360: ReconShape = ReconShape::Choice(&[&SHAPE_353, &SHAPE_355, &SHAPE_359, &SHAPE_90]);
+static SHAPE_361: ReconShape = ReconShape::Repeat(&SHAPE_360);
+static SHAPE_362: ReconShape = ReconShape::Kind("thumbnail_prefix");
+static SHAPE_363: ReconShape = ReconShape::Kind("langcode");
+static SHAPE_364: ReconShape = ReconShape::Seq(&[&SHAPE_363, &SHAPE_14]);
+static SHAPE_365: ReconShape = ReconShape::Optional(&SHAPE_364);
+static SHAPE_366: ReconShape = ReconShape::Kind("utterance_end");
+static SHAPE_367: ReconShape = ReconShape::Kind("linkers");
+static SHAPE_368: ReconShape = ReconShape::Kind("tim_tier_prefix");
+static SHAPE_369: ReconShape = ReconShape::Kind("strict_time");
+static SHAPE_370: ReconShape = ReconShape::Kind("generic_time");
+static SHAPE_371: ReconShape = ReconShape::Choice(&[&SHAPE_369, &SHAPE_370]);
+static SHAPE_372: ReconShape = ReconShape::Kind("time_duration_contents");
+static SHAPE_373: ReconShape = ReconShape::Kind("time_duration_prefix");
+static SHAPE_374: ReconShape = ReconShape::Kind("time_start_prefix");
+static SHAPE_375: ReconShape = ReconShape::Kind("transcriber_prefix");
+static SHAPE_376: ReconShape = ReconShape::Kind("transcription_option");
+static SHAPE_377: ReconShape = ReconShape::Kind("transcription_prefix");
+static SHAPE_378: ReconShape = ReconShape::Kind("eye_dialect");
+static SHAPE_379: ReconShape = ReconShape::Kind("partial");
+static SHAPE_380: ReconShape = ReconShape::Kind("full");
+static SHAPE_381: ReconShape = ReconShape::Kind("detailed");
+static SHAPE_382: ReconShape = ReconShape::Kind("coarse");
+static SHAPE_383: ReconShape = ReconShape::Kind("checked");
+static SHAPE_384: ReconShape = ReconShape::Kind("anonymized");
+static SHAPE_385: ReconShape = ReconShape::Kind("generic_transcription");
+static SHAPE_386: ReconShape = ReconShape::Choice(&[
+    &SHAPE_378, &SHAPE_379, &SHAPE_380, &SHAPE_381, &SHAPE_382, &SHAPE_383, &SHAPE_384, &SHAPE_385,
 ]);
-static SHAPE_384: ReconShape = ReconShape::Kind("types_design");
-static SHAPE_385: ReconShape = ReconShape::Kind("types_activity");
-static SHAPE_386: ReconShape = ReconShape::Kind("types_group");
-static SHAPE_387: ReconShape = ReconShape::Kind("types_prefix");
-static SHAPE_388: ReconShape = ReconShape::Kind("unsupported_tier_prefix");
-static SHAPE_389: ReconShape = ReconShape::Kind("unsupported_header_prefix");
-static SHAPE_390: ReconShape = ReconShape::Kind("@UTF8");
-static SHAPE_391: ReconShape = ReconShape::Repeat(&SHAPE_336);
-static SHAPE_392: ReconShape = ReconShape::Kind("final_codes");
-static SHAPE_393: ReconShape = ReconShape::Optional(&SHAPE_392);
-static SHAPE_394: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_27]);
-static SHAPE_395: ReconShape = ReconShape::Optional(&SHAPE_394);
-static SHAPE_396: ReconShape = ReconShape::Kind("videos_prefix");
-static SHAPE_397: ReconShape = ReconShape::Kind("warning_prefix");
-static SHAPE_398: ReconShape = ReconShape::Kind("window_prefix");
-static SHAPE_399: ReconShape = ReconShape::Kind("wor_tier_body");
-static SHAPE_400: ReconShape = ReconShape::Kind("wor_tier_prefix");
-static SHAPE_401: ReconShape = ReconShape::Kind("wor_word_item");
-static SHAPE_402: ReconShape =
-    ReconShape::Choice(&[&SHAPE_401, &SHAPE_27, &SHAPE_158, &SHAPE_227, &SHAPE_228]);
-static SHAPE_403: ReconShape = ReconShape::Seq(&[&SHAPE_402, &SHAPE_14]);
-static SHAPE_404: ReconShape = ReconShape::Repeat(&SHAPE_403);
-static SHAPE_405: ReconShape = ReconShape::Optional(&SHAPE_211);
-static SHAPE_406: ReconShape = ReconShape::Kind("shortening");
-static SHAPE_407: ReconShape = ReconShape::Kind("stress_marker");
-static SHAPE_408: ReconShape = ReconShape::Choice(&[&SHAPE_317, &SHAPE_406, &SHAPE_407]);
-static SHAPE_409: ReconShape = ReconShape::Kind("lengthening");
-static SHAPE_410: ReconShape = ReconShape::Kind("ca_element");
-static SHAPE_411: ReconShape = ReconShape::Kind("ca_delimiter");
-static SHAPE_412: ReconShape = ReconShape::Kind("syllable_pause");
-static SHAPE_413: ReconShape = ReconShape::Kind("+");
-static SHAPE_414: ReconShape = ReconShape::Choice(&[
-    &SHAPE_409, &SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_19, &SHAPE_412, &SHAPE_220,
-    &SHAPE_413,
+static SHAPE_387: ReconShape = ReconShape::Kind("types_design");
+static SHAPE_388: ReconShape = ReconShape::Kind("types_activity");
+static SHAPE_389: ReconShape = ReconShape::Kind("types_group");
+static SHAPE_390: ReconShape = ReconShape::Kind("types_prefix");
+static SHAPE_391: ReconShape = ReconShape::Kind("unsupported_tier_prefix");
+static SHAPE_392: ReconShape = ReconShape::Kind("unsupported_header_prefix");
+static SHAPE_393: ReconShape = ReconShape::Kind("@UTF8");
+static SHAPE_394: ReconShape = ReconShape::Repeat(&SHAPE_337);
+static SHAPE_395: ReconShape = ReconShape::Kind("final_codes");
+static SHAPE_396: ReconShape = ReconShape::Optional(&SHAPE_395);
+static SHAPE_397: ReconShape = ReconShape::Seq(&[&SHAPE_124, &SHAPE_27]);
+static SHAPE_398: ReconShape = ReconShape::Optional(&SHAPE_397);
+static SHAPE_399: ReconShape = ReconShape::Kind("videos_prefix");
+static SHAPE_400: ReconShape = ReconShape::Kind("warning_prefix");
+static SHAPE_401: ReconShape = ReconShape::Kind("window_prefix");
+static SHAPE_402: ReconShape = ReconShape::Kind("wor_tier_body");
+static SHAPE_403: ReconShape = ReconShape::Kind("wor_tier_prefix");
+static SHAPE_404: ReconShape = ReconShape::Kind("wor_word_item");
+static SHAPE_405: ReconShape =
+    ReconShape::Choice(&[&SHAPE_404, &SHAPE_27, &SHAPE_158, &SHAPE_227, &SHAPE_228]);
+static SHAPE_406: ReconShape = ReconShape::Seq(&[&SHAPE_405, &SHAPE_14]);
+static SHAPE_407: ReconShape = ReconShape::Repeat(&SHAPE_406);
+static SHAPE_408: ReconShape = ReconShape::Optional(&SHAPE_211);
+static SHAPE_409: ReconShape = ReconShape::Kind("shortening");
+static SHAPE_410: ReconShape = ReconShape::Kind("stress_marker");
+static SHAPE_411: ReconShape = ReconShape::Choice(&[&SHAPE_318, &SHAPE_409, &SHAPE_410]);
+static SHAPE_412: ReconShape = ReconShape::Kind("lengthening");
+static SHAPE_413: ReconShape = ReconShape::Kind("ca_element");
+static SHAPE_414: ReconShape = ReconShape::Kind("ca_delimiter");
+static SHAPE_415: ReconShape = ReconShape::Kind("syllable_pause");
+static SHAPE_416: ReconShape = ReconShape::Kind("+");
+static SHAPE_417: ReconShape = ReconShape::Choice(&[
+    &SHAPE_412, &SHAPE_67, &SHAPE_413, &SHAPE_414, &SHAPE_18, &SHAPE_19, &SHAPE_415, &SHAPE_220,
+    &SHAPE_416,
 ]);
-static SHAPE_415: ReconShape =
-    ReconShape::Choice(&[&SHAPE_317, &SHAPE_406, &SHAPE_407, &SHAPE_414]);
-static SHAPE_416: ReconShape = ReconShape::Repeat(&SHAPE_415);
-static SHAPE_417: ReconShape = ReconShape::Seq(&[&SHAPE_408, &SHAPE_416]);
 static SHAPE_418: ReconShape =
-    ReconShape::Choice(&[&SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_412]);
+    ReconShape::Choice(&[&SHAPE_318, &SHAPE_409, &SHAPE_410, &SHAPE_417]);
 static SHAPE_419: ReconShape = ReconShape::Repeat(&SHAPE_418);
-static SHAPE_420: ReconShape = ReconShape::Seq(&[&SHAPE_418, &SHAPE_419, &SHAPE_408, &SHAPE_416]);
-static SHAPE_421: ReconShape = ReconShape::Choice(&[&SHAPE_417, &SHAPE_420]);
-static SHAPE_422: ReconShape = ReconShape::Kind("replacement");
-static SHAPE_423: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_422]);
-static SHAPE_424: ReconShape = ReconShape::Optional(&SHAPE_423);
-static SHAPE_425: ReconShape = ReconShape::Kind("x_tier_prefix");
-static SHAPE_426: ReconShape = ReconShape::Kind("xphoint_tier_prefix");
+static SHAPE_420: ReconShape = ReconShape::Seq(&[&SHAPE_411, &SHAPE_419]);
+static SHAPE_421: ReconShape =
+    ReconShape::Choice(&[&SHAPE_67, &SHAPE_413, &SHAPE_414, &SHAPE_18, &SHAPE_415]);
+static SHAPE_422: ReconShape = ReconShape::Repeat(&SHAPE_421);
+static SHAPE_423: ReconShape = ReconShape::Seq(&[&SHAPE_421, &SHAPE_422, &SHAPE_411, &SHAPE_419]);
+static SHAPE_424: ReconShape = ReconShape::Choice(&[&SHAPE_420, &SHAPE_423]);
+static SHAPE_425: ReconShape = ReconShape::Kind("replacement");
+static SHAPE_426: ReconShape = ReconShape::Seq(&[&SHAPE_14, &SHAPE_425]);
+static SHAPE_427: ReconShape = ReconShape::Optional(&SHAPE_426);
+static SHAPE_428: ReconShape = ReconShape::Kind("x_tier_prefix");
+static SHAPE_429: ReconShape = ReconShape::Kind("xphoint_tier_prefix");
 static SHAPES_0: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_2, &SHAPE_3];
 static SHAPES_1: [&ReconShape; 2] = [&SHAPE_2, &SHAPE_3];
 static SHAPES_2: [&ReconShape; 1] = [&SHAPE_3];
@@ -5922,106 +9791,107 @@ static SHAPES_189: [&ReconShape; 1] = [&SHAPE_300];
 static SHAPES_190: [&ReconShape; 2] = [&SHAPE_298, &SHAPE_300];
 static SHAPES_191: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_305];
 static SHAPES_192: [&ReconShape; 1] = [&SHAPE_305];
-static SHAPES_193: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_307, &SHAPE_3];
-static SHAPES_194: [&ReconShape; 2] = [&SHAPE_307, &SHAPE_3];
+static SHAPES_193: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_308, &SHAPE_3];
+static SHAPES_194: [&ReconShape; 2] = [&SHAPE_308, &SHAPE_3];
 static SHAPES_195: [&ReconShape; 6] = [
-    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_309,
+    &SHAPE_254, &SHAPE_255, &SHAPE_256, &SHAPE_257, &SHAPE_258, &SHAPE_310,
 ];
-static SHAPES_196: [&ReconShape; 4] = [&SHAPE_46, &SHAPE_311, &SHAPE_312, &SHAPE_11];
-static SHAPES_197: [&ReconShape; 3] = [&SHAPE_311, &SHAPE_312, &SHAPE_11];
-static SHAPES_198: [&ReconShape; 2] = [&SHAPE_312, &SHAPE_11];
-static SHAPES_199: [&ReconShape; 3] = [&SHAPE_273, &SHAPE_312, &SHAPE_11];
-static SHAPES_200: [&ReconShape; 2] = [&SHAPE_315, &SHAPE_46];
-static SHAPES_201: [&ReconShape; 2] = [&SHAPE_317, &SHAPE_318];
-static SHAPES_202: [&ReconShape; 1] = [&SHAPE_318];
-static SHAPES_203: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_320, &SHAPE_3];
-static SHAPES_204: [&ReconShape; 2] = [&SHAPE_320, &SHAPE_3];
-static SHAPES_205: [&ReconShape; 2] = [&SHAPE_323, &SHAPE_179];
-static SHAPES_206: [&ReconShape; 2] = [&SHAPE_322, &SHAPE_324];
-static SHAPES_207: [&ReconShape; 1] = [&SHAPE_327];
-static SHAPES_208: [&ReconShape; 2] = [&SHAPE_322, &SHAPE_327];
-static SHAPES_209: [&ReconShape; 1] = [&SHAPE_330];
-static SHAPES_210: [&ReconShape; 2] = [&SHAPE_328, &SHAPE_330];
+static SHAPES_196: [&ReconShape; 4] = [&SHAPE_46, &SHAPE_312, &SHAPE_313, &SHAPE_11];
+static SHAPES_197: [&ReconShape; 3] = [&SHAPE_312, &SHAPE_313, &SHAPE_11];
+static SHAPES_198: [&ReconShape; 2] = [&SHAPE_313, &SHAPE_11];
+static SHAPES_199: [&ReconShape; 3] = [&SHAPE_273, &SHAPE_313, &SHAPE_11];
+static SHAPES_200: [&ReconShape; 2] = [&SHAPE_316, &SHAPE_46];
+static SHAPES_201: [&ReconShape; 2] = [&SHAPE_318, &SHAPE_319];
+static SHAPES_202: [&ReconShape; 1] = [&SHAPE_319];
+static SHAPES_203: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_321, &SHAPE_3];
+static SHAPES_204: [&ReconShape; 2] = [&SHAPE_321, &SHAPE_3];
+static SHAPES_205: [&ReconShape; 2] = [&SHAPE_324, &SHAPE_179];
+static SHAPES_206: [&ReconShape; 2] = [&SHAPE_323, &SHAPE_325];
+static SHAPES_207: [&ReconShape; 1] = [&SHAPE_328];
+static SHAPES_208: [&ReconShape; 2] = [&SHAPE_323, &SHAPE_328];
+static SHAPES_209: [&ReconShape; 1] = [&SHAPE_331];
+static SHAPES_210: [&ReconShape; 2] = [&SHAPE_329, &SHAPE_331];
 static SHAPES_211: [&ReconShape; 2] = [&SHAPE_248, &SHAPE_122];
 static SHAPES_212: [&ReconShape; 7] = [
-    &SHAPE_334, &SHAPE_163, &SHAPE_335, &SHAPE_336, &SHAPE_162, &SHAPE_93, &SHAPE_273,
+    &SHAPE_335, &SHAPE_163, &SHAPE_336, &SHAPE_337, &SHAPE_162, &SHAPE_93, &SHAPE_273,
 ];
-static SHAPES_213: [&ReconShape; 4] = [&SHAPE_339, &SHAPE_341, &SHAPE_343, &SHAPE_345];
-static SHAPES_214: [&ReconShape; 2] = [&SHAPE_346, &SHAPE_248];
-static SHAPES_215: [&ReconShape; 3] = [&SHAPE_341, &SHAPE_343, &SHAPE_345];
-static SHAPES_216: [&ReconShape; 2] = [&SHAPE_343, &SHAPE_345];
-static SHAPES_217: [&ReconShape; 1] = [&SHAPE_345];
-static SHAPES_218: [&ReconShape; 1] = [&SHAPE_354];
-static SHAPES_219: [&ReconShape; 2] = [&SHAPE_351, &SHAPE_354];
-static SHAPES_220: [&ReconShape; 3] = [&SHAPE_350, &SHAPE_352, &SHAPE_90];
-static SHAPES_221: [&ReconShape; 1] = [&SHAPE_358];
-static SHAPES_222: [&ReconShape; 2] = [&SHAPE_351, &SHAPE_358];
-static SHAPES_223: [&ReconShape; 4] = [&SHAPE_350, &SHAPE_352, &SHAPE_356, &SHAPE_90];
-static SHAPES_224: [&ReconShape; 3] = [&SHAPE_362, &SHAPE_112, &SHAPE_363];
-static SHAPES_225: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_363];
-static SHAPES_226: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_112, &SHAPE_363];
-static SHAPES_227: [&ReconShape; 1] = [&SHAPE_363];
-static SHAPES_228: [&ReconShape; 2] = [&SHAPE_366, &SHAPE_367];
-static SHAPES_229: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_369, &SHAPE_3];
-static SHAPES_230: [&ReconShape; 2] = [&SHAPE_369, &SHAPE_3];
-static SHAPES_231: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_373, &SHAPE_3];
-static SHAPES_232: [&ReconShape; 2] = [&SHAPE_373, &SHAPE_3];
-static SHAPES_233: [&ReconShape; 8] = [
-    &SHAPE_375, &SHAPE_376, &SHAPE_377, &SHAPE_378, &SHAPE_379, &SHAPE_380, &SHAPE_381, &SHAPE_382,
+static SHAPES_213: [&ReconShape; 4] = [&SHAPE_340, &SHAPE_344, &SHAPE_346, &SHAPE_348];
+static SHAPES_214: [&ReconShape; 2] = [&SHAPE_349, &SHAPE_248];
+static SHAPES_215: [&ReconShape; 3] = [&SHAPE_344, &SHAPE_346, &SHAPE_348];
+static SHAPES_216: [&ReconShape; 2] = [&SHAPE_346, &SHAPE_348];
+static SHAPES_217: [&ReconShape; 2] = [&SHAPE_341, &SHAPE_342];
+static SHAPES_218: [&ReconShape; 1] = [&SHAPE_348];
+static SHAPES_219: [&ReconShape; 1] = [&SHAPE_357];
+static SHAPES_220: [&ReconShape; 2] = [&SHAPE_354, &SHAPE_357];
+static SHAPES_221: [&ReconShape; 3] = [&SHAPE_353, &SHAPE_355, &SHAPE_90];
+static SHAPES_222: [&ReconShape; 1] = [&SHAPE_361];
+static SHAPES_223: [&ReconShape; 2] = [&SHAPE_354, &SHAPE_361];
+static SHAPES_224: [&ReconShape; 4] = [&SHAPE_353, &SHAPE_355, &SHAPE_359, &SHAPE_90];
+static SHAPES_225: [&ReconShape; 3] = [&SHAPE_365, &SHAPE_112, &SHAPE_366];
+static SHAPES_226: [&ReconShape; 2] = [&SHAPE_112, &SHAPE_366];
+static SHAPES_227: [&ReconShape; 3] = [&SHAPE_14, &SHAPE_112, &SHAPE_366];
+static SHAPES_228: [&ReconShape; 1] = [&SHAPE_366];
+static SHAPES_229: [&ReconShape; 2] = [&SHAPE_369, &SHAPE_370];
+static SHAPES_230: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_372, &SHAPE_3];
+static SHAPES_231: [&ReconShape; 2] = [&SHAPE_372, &SHAPE_3];
+static SHAPES_232: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_376, &SHAPE_3];
+static SHAPES_233: [&ReconShape; 2] = [&SHAPE_376, &SHAPE_3];
+static SHAPES_234: [&ReconShape; 8] = [
+    &SHAPE_378, &SHAPE_379, &SHAPE_380, &SHAPE_381, &SHAPE_382, &SHAPE_383, &SHAPE_384, &SHAPE_385,
 ];
-static SHAPES_234: [&ReconShape; 11] = [
-    &SHAPE_5, &SHAPE_384, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158,
-    &SHAPE_124, &SHAPE_386, &SHAPE_3,
+static SHAPES_235: [&ReconShape; 11] = [
+    &SHAPE_5, &SHAPE_387, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_388, &SHAPE_124, &SHAPE_158,
+    &SHAPE_124, &SHAPE_389, &SHAPE_3,
 ];
-static SHAPES_235: [&ReconShape; 10] = [
-    &SHAPE_384, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124,
-    &SHAPE_386, &SHAPE_3,
+static SHAPES_236: [&ReconShape; 10] = [
+    &SHAPE_387, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_388, &SHAPE_124, &SHAPE_158, &SHAPE_124,
+    &SHAPE_389, &SHAPE_3,
 ];
-static SHAPES_236: [&ReconShape; 9] = [
-    &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386,
+static SHAPES_237: [&ReconShape; 9] = [
+    &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_388, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_389,
     &SHAPE_3,
 ];
-static SHAPES_237: [&ReconShape; 8] = [
-    &SHAPE_158, &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3,
+static SHAPES_238: [&ReconShape; 8] = [
+    &SHAPE_158, &SHAPE_124, &SHAPE_388, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_389, &SHAPE_3,
 ];
-static SHAPES_238: [&ReconShape; 7] = [
-    &SHAPE_124, &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3,
+static SHAPES_239: [&ReconShape; 7] = [
+    &SHAPE_124, &SHAPE_388, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_389, &SHAPE_3,
 ];
-static SHAPES_239: [&ReconShape; 6] = [
-    &SHAPE_385, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3,
+static SHAPES_240: [&ReconShape; 6] = [
+    &SHAPE_388, &SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_389, &SHAPE_3,
 ];
-static SHAPES_240: [&ReconShape; 5] = [&SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3];
-static SHAPES_241: [&ReconShape; 4] = [&SHAPE_158, &SHAPE_124, &SHAPE_386, &SHAPE_3];
-static SHAPES_242: [&ReconShape; 3] = [&SHAPE_124, &SHAPE_386, &SHAPE_3];
-static SHAPES_243: [&ReconShape; 2] = [&SHAPE_386, &SHAPE_3];
-static SHAPES_244: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_122, &SHAPE_3];
-static SHAPES_245: [&ReconShape; 2] = [&SHAPE_122, &SHAPE_3];
-static SHAPES_246: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_89, &SHAPE_3];
-static SHAPES_247: [&ReconShape; 2] = [&SHAPE_89, &SHAPE_3];
-static SHAPES_248: [&ReconShape; 1] = [&SHAPE_391];
-static SHAPES_249: [&ReconShape; 4] = [&SHAPE_393, &SHAPE_395, &SHAPE_124, &SHAPE_3];
-static SHAPES_250: [&ReconShape; 3] = [&SHAPE_395, &SHAPE_124, &SHAPE_3];
-static SHAPES_251: [&ReconShape; 2] = [&SHAPE_124, &SHAPE_3];
-static SHAPES_252: [&ReconShape; 3] = [&SHAPE_27, &SHAPE_124, &SHAPE_3];
-static SHAPES_253: [&ReconShape; 2] = [&SHAPE_0, &SHAPE_399];
-static SHAPES_254: [&ReconShape; 1] = [&SHAPE_399];
-static SHAPES_255: [&ReconShape; 3] = [&SHAPE_404, &SHAPE_405, &SHAPE_3];
-static SHAPES_256: [&ReconShape; 4] = [&SHAPE_14, &SHAPE_404, &SHAPE_405, &SHAPE_3];
-static SHAPES_257: [&ReconShape; 2] = [&SHAPE_405, &SHAPE_3];
-static SHAPES_258: [&ReconShape; 5] = [&SHAPE_401, &SHAPE_27, &SHAPE_158, &SHAPE_227, &SHAPE_228];
-static SHAPES_259: [&ReconShape; 1] = [&SHAPE_416];
-static SHAPES_260: [&ReconShape; 3] = [&SHAPE_317, &SHAPE_406, &SHAPE_407];
-static SHAPES_261: [&ReconShape; 9] = [
-    &SHAPE_409, &SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_19, &SHAPE_412, &SHAPE_220,
-    &SHAPE_413,
+static SHAPES_241: [&ReconShape; 5] = [&SHAPE_124, &SHAPE_158, &SHAPE_124, &SHAPE_389, &SHAPE_3];
+static SHAPES_242: [&ReconShape; 4] = [&SHAPE_158, &SHAPE_124, &SHAPE_389, &SHAPE_3];
+static SHAPES_243: [&ReconShape; 3] = [&SHAPE_124, &SHAPE_389, &SHAPE_3];
+static SHAPES_244: [&ReconShape; 2] = [&SHAPE_389, &SHAPE_3];
+static SHAPES_245: [&ReconShape; 3] = [&SHAPE_0, &SHAPE_122, &SHAPE_3];
+static SHAPES_246: [&ReconShape; 2] = [&SHAPE_122, &SHAPE_3];
+static SHAPES_247: [&ReconShape; 3] = [&SHAPE_5, &SHAPE_89, &SHAPE_3];
+static SHAPES_248: [&ReconShape; 2] = [&SHAPE_89, &SHAPE_3];
+static SHAPES_249: [&ReconShape; 1] = [&SHAPE_394];
+static SHAPES_250: [&ReconShape; 4] = [&SHAPE_396, &SHAPE_398, &SHAPE_124, &SHAPE_3];
+static SHAPES_251: [&ReconShape; 3] = [&SHAPE_398, &SHAPE_124, &SHAPE_3];
+static SHAPES_252: [&ReconShape; 2] = [&SHAPE_124, &SHAPE_3];
+static SHAPES_253: [&ReconShape; 3] = [&SHAPE_27, &SHAPE_124, &SHAPE_3];
+static SHAPES_254: [&ReconShape; 2] = [&SHAPE_0, &SHAPE_402];
+static SHAPES_255: [&ReconShape; 1] = [&SHAPE_402];
+static SHAPES_256: [&ReconShape; 3] = [&SHAPE_407, &SHAPE_408, &SHAPE_3];
+static SHAPES_257: [&ReconShape; 4] = [&SHAPE_14, &SHAPE_407, &SHAPE_408, &SHAPE_3];
+static SHAPES_258: [&ReconShape; 2] = [&SHAPE_408, &SHAPE_3];
+static SHAPES_259: [&ReconShape; 5] = [&SHAPE_404, &SHAPE_27, &SHAPE_158, &SHAPE_227, &SHAPE_228];
+static SHAPES_260: [&ReconShape; 1] = [&SHAPE_419];
+static SHAPES_261: [&ReconShape; 3] = [&SHAPE_318, &SHAPE_409, &SHAPE_410];
+static SHAPES_262: [&ReconShape; 9] = [
+    &SHAPE_412, &SHAPE_67, &SHAPE_413, &SHAPE_414, &SHAPE_18, &SHAPE_19, &SHAPE_415, &SHAPE_220,
+    &SHAPE_416,
 ];
-static SHAPES_262: [&ReconShape; 4] = [&SHAPE_317, &SHAPE_406, &SHAPE_407, &SHAPE_414];
-static SHAPES_263: [&ReconShape; 3] = [&SHAPE_419, &SHAPE_408, &SHAPE_416];
-static SHAPES_264: [&ReconShape; 5] = [&SHAPE_67, &SHAPE_410, &SHAPE_411, &SHAPE_18, &SHAPE_412];
-static SHAPES_265: [&ReconShape; 2] = [&SHAPE_408, &SHAPE_416];
-static SHAPES_266: [&ReconShape; 2] = [&SHAPE_417, &SHAPE_420];
-static SHAPES_267: [&ReconShape; 2] = [&SHAPE_424, &SHAPE_250];
-static SHAPES_268: [&ReconShape; 2] = [&SHAPE_422, &SHAPE_250];
+static SHAPES_263: [&ReconShape; 4] = [&SHAPE_318, &SHAPE_409, &SHAPE_410, &SHAPE_417];
+static SHAPES_264: [&ReconShape; 3] = [&SHAPE_422, &SHAPE_411, &SHAPE_419];
+static SHAPES_265: [&ReconShape; 5] = [&SHAPE_67, &SHAPE_413, &SHAPE_414, &SHAPE_18, &SHAPE_415];
+static SHAPES_266: [&ReconShape; 2] = [&SHAPE_411, &SHAPE_419];
+static SHAPES_267: [&ReconShape; 2] = [&SHAPE_420, &SHAPE_423];
+static SHAPES_268: [&ReconShape; 2] = [&SHAPE_427, &SHAPE_250];
+static SHAPES_269: [&ReconShape; 2] = [&SHAPE_425, &SHAPE_250];
 
 // Task 7 extract contract: pub fn extract_act_dependent_tier<'tree>(node: ActDependentTierNode<'tree>) -> ActDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -6174,6 +10044,14 @@ pub fn extract_act_dependent_tier<'tree>(
         }
     }
 }
+/// `act_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_act_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ActDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_act_dependent_tier(ActDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_activities_header<'tree>(node: ActivitiesHeaderNode<'tree>) -> ActivitiesHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -6311,6 +10189,14 @@ pub fn extract_activities_header<'tree>(
             unexpected,
         }
     }
+}
+/// `activities_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_activities_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ActivitiesHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_activities_header(ActivitiesHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_add_dependent_tier<'tree>(node: AddDependentTierNode<'tree>) -> AddDependentTierChildren<'tree>
@@ -6464,6 +10350,14 @@ pub fn extract_add_dependent_tier<'tree>(
         }
     }
 }
+/// `add_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_add_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<AddDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_add_dependent_tier(AddDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_alt_annotation<'tree>(node: AltAnnotationNode<'tree>) -> AltAnnotationChildren<'tree>
 #[derive(Debug, Clone)]
@@ -6607,6 +10501,14 @@ pub fn extract_alt_annotation<'tree>(
             unexpected,
         }
     }
+}
+/// `alt_annotation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_alt_annotation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<AltAnnotationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_alt_annotation(AltAnnotationNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_alt_dependent_tier<'tree>(node: AltDependentTierNode<'tree>) -> AltDependentTierChildren<'tree>
@@ -6760,6 +10662,14 @@ pub fn extract_alt_dependent_tier<'tree>(
         }
     }
 }
+/// `alt_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_alt_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<AltDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_alt_dependent_tier(AltDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_base_annotation<'tree>(node: tree_sitter::Node<'tree>) -> BaseAnnotationChildren<'tree>
 #[derive(Debug, Clone)]
@@ -6819,6 +10729,64 @@ impl<'tree> AsRawNode<'tree> for BaseAnnotationChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for BaseAnnotationChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "alt_annotation" => Some(BaseAnnotationChoice::AltAnnotation(AltAnnotationNode(node))),
+            "code_switch_annotation" => Some(BaseAnnotationChoice::CodeSwitchAnnotation(
+                CodeSwitchAnnotationNode(node),
+            )),
+            "error_marker_annotation" => Some(BaseAnnotationChoice::ErrorMarkerAnnotation(
+                ErrorMarkerAnnotationNode(node),
+            )),
+            "exclude_marker" => Some(BaseAnnotationChoice::ExcludeMarker(ExcludeMarkerNode(node))),
+            "explanation_annotation" => Some(BaseAnnotationChoice::ExplanationAnnotation(
+                ExplanationAnnotationNode(node),
+            )),
+            "indexed_overlap_follows" => Some(BaseAnnotationChoice::IndexedOverlapFollows(
+                IndexedOverlapFollowsNode(node),
+            )),
+            "indexed_overlap_precedes" => Some(BaseAnnotationChoice::IndexedOverlapPrecedes(
+                IndexedOverlapPrecedesNode(node),
+            )),
+            "para_annotation" => Some(BaseAnnotationChoice::ParaAnnotation(ParaAnnotationNode(
+                node,
+            ))),
+            "percent_annotation" => Some(BaseAnnotationChoice::PercentAnnotation(
+                PercentAnnotationNode(node),
+            )),
+            "retrace_complete" => Some(BaseAnnotationChoice::RetraceComplete(RetraceCompleteNode(
+                node,
+            ))),
+            "retrace_multiple" => Some(BaseAnnotationChoice::RetraceMultiple(RetraceMultipleNode(
+                node,
+            ))),
+            "retrace_partial" => Some(BaseAnnotationChoice::RetracePartial(RetracePartialNode(
+                node,
+            ))),
+            "retrace_reformulation" => Some(BaseAnnotationChoice::RetraceReformulation(
+                RetraceReformulationNode(node),
+            )),
+            "scoped_contrastive_stressing" => {
+                Some(BaseAnnotationChoice::ScopedContrastiveStressing(
+                    ScopedContrastiveStressingNode(node),
+                ))
+            }
+            "scoped_stressing" => Some(BaseAnnotationChoice::ScopedStressing(ScopedStressingNode(
+                node,
+            ))),
+            "scoped_uncertain" => Some(BaseAnnotationChoice::ScopedUncertain(ScopedUncertainNode(
+                node,
+            ))),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct BaseAnnotationChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -6840,58 +10808,9 @@ pub fn extract_base_annotation<'tree>(
     } else if node.is_missing() {
         NodeSlot::Missing(node)
     } else {
-        match node.kind() {
-            "alt_annotation" => {
-                NodeSlot::Present(BaseAnnotationChoice::AltAnnotation(AltAnnotationNode(node)))
-            }
-            "code_switch_annotation" => NodeSlot::Present(
-                BaseAnnotationChoice::CodeSwitchAnnotation(CodeSwitchAnnotationNode(node)),
-            ),
-            "error_marker_annotation" => NodeSlot::Present(
-                BaseAnnotationChoice::ErrorMarkerAnnotation(ErrorMarkerAnnotationNode(node)),
-            ),
-            "exclude_marker" => {
-                NodeSlot::Present(BaseAnnotationChoice::ExcludeMarker(ExcludeMarkerNode(node)))
-            }
-            "explanation_annotation" => NodeSlot::Present(
-                BaseAnnotationChoice::ExplanationAnnotation(ExplanationAnnotationNode(node)),
-            ),
-            "indexed_overlap_follows" => NodeSlot::Present(
-                BaseAnnotationChoice::IndexedOverlapFollows(IndexedOverlapFollowsNode(node)),
-            ),
-            "indexed_overlap_precedes" => NodeSlot::Present(
-                BaseAnnotationChoice::IndexedOverlapPrecedes(IndexedOverlapPrecedesNode(node)),
-            ),
-            "para_annotation" => NodeSlot::Present(BaseAnnotationChoice::ParaAnnotation(
-                ParaAnnotationNode(node),
-            )),
-            "percent_annotation" => NodeSlot::Present(BaseAnnotationChoice::PercentAnnotation(
-                PercentAnnotationNode(node),
-            )),
-            "retrace_complete" => NodeSlot::Present(BaseAnnotationChoice::RetraceComplete(
-                RetraceCompleteNode(node),
-            )),
-            "retrace_multiple" => NodeSlot::Present(BaseAnnotationChoice::RetraceMultiple(
-                RetraceMultipleNode(node),
-            )),
-            "retrace_partial" => NodeSlot::Present(BaseAnnotationChoice::RetracePartial(
-                RetracePartialNode(node),
-            )),
-            "retrace_reformulation" => NodeSlot::Present(
-                BaseAnnotationChoice::RetraceReformulation(RetraceReformulationNode(node)),
-            ),
-            "scoped_contrastive_stressing" => {
-                NodeSlot::Present(BaseAnnotationChoice::ScopedContrastiveStressing(
-                    ScopedContrastiveStressingNode(node),
-                ))
-            }
-            "scoped_stressing" => NodeSlot::Present(BaseAnnotationChoice::ScopedStressing(
-                ScopedStressingNode(node),
-            )),
-            "scoped_uncertain" => NodeSlot::Present(BaseAnnotationChoice::ScopedUncertain(
-                ScopedUncertainNode(node),
-            )),
-            _ => NodeSlot::Unexpected(node),
+        match BaseAnnotationChoice::from_node(node) {
+            Some(__classified) => NodeSlot::Present(__classified),
+            None => NodeSlot::Unexpected(node),
         }
     };
     BaseAnnotationChildren {
@@ -6958,6 +10877,80 @@ impl<'tree> AsRawNode<'tree> for BaseAnnotationsChild0Child1Choice<'tree> {
             }
             BaseAnnotationsChild0Child1Choice::ScopedStressing(inner) => inner.raw_node(),
             BaseAnnotationsChild0Child1Choice::ScopedUncertain(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for BaseAnnotationsChild0Child1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "alt_annotation" => Some(BaseAnnotationsChild0Child1Choice::AltAnnotation(
+                AltAnnotationNode(node),
+            )),
+            "code_switch_annotation" => {
+                Some(BaseAnnotationsChild0Child1Choice::CodeSwitchAnnotation(
+                    CodeSwitchAnnotationNode(node),
+                ))
+            }
+            "error_marker_annotation" => {
+                Some(BaseAnnotationsChild0Child1Choice::ErrorMarkerAnnotation(
+                    ErrorMarkerAnnotationNode(node),
+                ))
+            }
+            "exclude_marker" => Some(BaseAnnotationsChild0Child1Choice::ExcludeMarker(
+                ExcludeMarkerNode(node),
+            )),
+            "explanation_annotation" => {
+                Some(BaseAnnotationsChild0Child1Choice::ExplanationAnnotation(
+                    ExplanationAnnotationNode(node),
+                ))
+            }
+            "indexed_overlap_follows" => {
+                Some(BaseAnnotationsChild0Child1Choice::IndexedOverlapFollows(
+                    IndexedOverlapFollowsNode(node),
+                ))
+            }
+            "indexed_overlap_precedes" => {
+                Some(BaseAnnotationsChild0Child1Choice::IndexedOverlapPrecedes(
+                    IndexedOverlapPrecedesNode(node),
+                ))
+            }
+            "para_annotation" => Some(BaseAnnotationsChild0Child1Choice::ParaAnnotation(
+                ParaAnnotationNode(node),
+            )),
+            "percent_annotation" => Some(BaseAnnotationsChild0Child1Choice::PercentAnnotation(
+                PercentAnnotationNode(node),
+            )),
+            "retrace_complete" => Some(BaseAnnotationsChild0Child1Choice::RetraceComplete(
+                RetraceCompleteNode(node),
+            )),
+            "retrace_multiple" => Some(BaseAnnotationsChild0Child1Choice::RetraceMultiple(
+                RetraceMultipleNode(node),
+            )),
+            "retrace_partial" => Some(BaseAnnotationsChild0Child1Choice::RetracePartial(
+                RetracePartialNode(node),
+            )),
+            "retrace_reformulation" => {
+                Some(BaseAnnotationsChild0Child1Choice::RetraceReformulation(
+                    RetraceReformulationNode(node),
+                ))
+            }
+            "scoped_contrastive_stressing" => Some(
+                BaseAnnotationsChild0Child1Choice::ScopedContrastiveStressing(
+                    ScopedContrastiveStressingNode(node),
+                ),
+            ),
+            "scoped_stressing" => Some(BaseAnnotationsChild0Child1Choice::ScopedStressing(
+                ScopedStressingNode(node),
+            )),
+            "scoped_uncertain" => Some(BaseAnnotationsChild0Child1Choice::ScopedUncertain(
+                ScopedUncertainNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -7030,6 +11023,80 @@ impl<'tree> AsRawNode<'tree> for BaseAnnotationsChild1Child1Choice<'tree> {
             }
             BaseAnnotationsChild1Child1Choice::ScopedStressing(inner) => inner.raw_node(),
             BaseAnnotationsChild1Child1Choice::ScopedUncertain(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for BaseAnnotationsChild1Child1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "alt_annotation" => Some(BaseAnnotationsChild1Child1Choice::AltAnnotation(
+                AltAnnotationNode(node),
+            )),
+            "code_switch_annotation" => {
+                Some(BaseAnnotationsChild1Child1Choice::CodeSwitchAnnotation(
+                    CodeSwitchAnnotationNode(node),
+                ))
+            }
+            "error_marker_annotation" => {
+                Some(BaseAnnotationsChild1Child1Choice::ErrorMarkerAnnotation(
+                    ErrorMarkerAnnotationNode(node),
+                ))
+            }
+            "exclude_marker" => Some(BaseAnnotationsChild1Child1Choice::ExcludeMarker(
+                ExcludeMarkerNode(node),
+            )),
+            "explanation_annotation" => {
+                Some(BaseAnnotationsChild1Child1Choice::ExplanationAnnotation(
+                    ExplanationAnnotationNode(node),
+                ))
+            }
+            "indexed_overlap_follows" => {
+                Some(BaseAnnotationsChild1Child1Choice::IndexedOverlapFollows(
+                    IndexedOverlapFollowsNode(node),
+                ))
+            }
+            "indexed_overlap_precedes" => {
+                Some(BaseAnnotationsChild1Child1Choice::IndexedOverlapPrecedes(
+                    IndexedOverlapPrecedesNode(node),
+                ))
+            }
+            "para_annotation" => Some(BaseAnnotationsChild1Child1Choice::ParaAnnotation(
+                ParaAnnotationNode(node),
+            )),
+            "percent_annotation" => Some(BaseAnnotationsChild1Child1Choice::PercentAnnotation(
+                PercentAnnotationNode(node),
+            )),
+            "retrace_complete" => Some(BaseAnnotationsChild1Child1Choice::RetraceComplete(
+                RetraceCompleteNode(node),
+            )),
+            "retrace_multiple" => Some(BaseAnnotationsChild1Child1Choice::RetraceMultiple(
+                RetraceMultipleNode(node),
+            )),
+            "retrace_partial" => Some(BaseAnnotationsChild1Child1Choice::RetracePartial(
+                RetracePartialNode(node),
+            )),
+            "retrace_reformulation" => {
+                Some(BaseAnnotationsChild1Child1Choice::RetraceReformulation(
+                    RetraceReformulationNode(node),
+                ))
+            }
+            "scoped_contrastive_stressing" => Some(
+                BaseAnnotationsChild1Child1Choice::ScopedContrastiveStressing(
+                    ScopedContrastiveStressingNode(node),
+                ),
+            ),
+            "scoped_stressing" => Some(BaseAnnotationsChild1Child1Choice::ScopedStressing(
+                ScopedStressingNode(node),
+            )),
+            "scoped_uncertain" => Some(BaseAnnotationsChild1Child1Choice::ScopedUncertain(
+                ScopedUncertainNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -7657,6 +11724,14 @@ pub fn extract_base_annotations<'tree>(
         }
     }
 }
+/// `base_annotations`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_base_annotations_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BaseAnnotationsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_base_annotations(BaseAnnotationsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_base_content_item<'tree>(node: BaseContentItemNode<'tree>) -> BaseContentItemChildren<'tree>
 #[derive(Debug, Clone)]
@@ -7695,6 +11770,40 @@ impl<'tree> AsRawNode<'tree> for BaseContentItemChoice<'tree> {
             BaseContentItemChoice::Nonvocal(inner) => inner.raw_node(),
             BaseContentItemChoice::Freecode(inner) => inner.raw_node(),
             BaseContentItemChoice::Bullet(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for BaseContentItemChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "underline_begin" => Some(BaseContentItemChoice::UnderlineBegin(UnderlineBeginNode(
+                node,
+            ))),
+            "underline_end" => Some(BaseContentItemChoice::UnderlineEnd(UnderlineEndNode(node))),
+            "pause_token" => Some(BaseContentItemChoice::PauseToken(PauseTokenNode(node))),
+            "word_with_optional_annotations" => {
+                Some(BaseContentItemChoice::WordWithOptionalAnnotations(
+                    WordWithOptionalAnnotationsNode(node),
+                ))
+            }
+            "nonword_with_optional_annotations" => {
+                Some(BaseContentItemChoice::NonwordWithOptionalAnnotations(
+                    NonwordWithOptionalAnnotationsNode(node),
+                ))
+            }
+            "other_spoken_event" => Some(BaseContentItemChoice::OtherSpokenEvent(
+                OtherSpokenEventNode(node),
+            )),
+            "long_feature" => Some(BaseContentItemChoice::LongFeature(LongFeatureNode(node))),
+            "nonvocal" => Some(BaseContentItemChoice::Nonvocal(NonvocalNode(node))),
+            "freecode" => Some(BaseContentItemChoice::Freecode(FreecodeNode(node))),
+            "bullet" => Some(BaseContentItemChoice::Bullet(BulletNode(node))),
+            _ => None,
         }
     }
 }
@@ -7895,6 +12004,14 @@ pub fn extract_base_content_item<'tree>(
         unexpected,
     }
 }
+/// `base_content_item`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_base_content_item_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BaseContentItemChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_base_content_item(BaseContentItemNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_bck_header<'tree>(node: BckHeaderNode<'tree>) -> BckHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -8031,6 +12148,14 @@ pub fn extract_bck_header<'tree>(node: BckHeaderNode<'tree>) -> BckHeaderChildre
         }
     }
 }
+/// `bck_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_bck_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BckHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_bck_header(BckHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_begin_header<'tree>(node: BeginHeaderNode<'tree>) -> BeginHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -8112,6 +12237,14 @@ pub fn extract_begin_header<'tree>(node: BeginHeaderNode<'tree>) -> BeginHeaderC
             unexpected,
         }
     }
+}
+/// `begin_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_begin_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BeginHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_begin_header(BeginHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'tree>
@@ -8320,6 +12453,14 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
         }
     }
 }
+/// `bg_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_bg_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BgHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_bg_header(BgHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_birth_of_header<'tree>(node: BirthOfHeaderNode<'tree>) -> BirthOfHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -8525,6 +12666,14 @@ pub fn extract_birth_of_header<'tree>(
             unexpected,
         }
     }
+}
+/// `birth_of_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_birth_of_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BirthOfHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_birth_of_header(BirthOfHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_birthplace_of_header<'tree>(node: BirthplaceOfHeaderNode<'tree>) -> BirthplaceOfHeaderChildren<'tree>
@@ -8732,6 +12881,14 @@ pub fn extract_birthplace_of_header<'tree>(
         }
     }
 }
+/// `birthplace_of_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_birthplace_of_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BirthplaceOfHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_birthplace_of_header(BirthplaceOfHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_blank_header<'tree>(node: BlankHeaderNode<'tree>) -> BlankHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -8814,6 +12971,14 @@ pub fn extract_blank_header<'tree>(node: BlankHeaderNode<'tree>) -> BlankHeaderC
         }
     }
 }
+/// `blank_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_blank_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BlankHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_blank_header(BlankHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_blank_line<'tree>(node: BlankLineNode<'tree>) -> BlankLineChildren<'tree>
 #[derive(Debug, Clone)]
@@ -8866,6 +13031,14 @@ pub fn extract_blank_line<'tree>(node: BlankLineNode<'tree>) -> BlankLineChildre
         trailing_extras,
         unexpected,
     }
+}
+/// `blank_line`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_blank_line_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BlankLineChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_blank_line(BlankLineNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree>
@@ -9041,6 +13214,13 @@ pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree> {
         }
     }
 }
+/// `bullet`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_bullet_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<BulletChildren<'tree>> {
+    node.is_error().then(|| extract_bullet(BulletNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_cod_dependent_tier<'tree>(node: CodDependentTierNode<'tree>) -> CodDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -9192,6 +13372,14 @@ pub fn extract_cod_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `cod_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_cod_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<CodDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_cod_dependent_tier(CodDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_code_switch_annotation<'tree>(node: CodeSwitchAnnotationNode<'tree>) -> CodeSwitchAnnotationChildren<'tree>
@@ -9409,6 +13597,14 @@ pub fn extract_code_switch_annotation<'tree>(
         }
     }
 }
+/// `code_switch_annotation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_code_switch_annotation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<CodeSwitchAnnotationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_code_switch_annotation(CodeSwitchAnnotationNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_coh_dependent_tier<'tree>(node: CohDependentTierNode<'tree>) -> CohDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -9561,6 +13757,14 @@ pub fn extract_coh_dependent_tier<'tree>(
         }
     }
 }
+/// `coh_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_coh_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<CohDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_coh_dependent_tier(CohDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_color_words_header<'tree>(node: ColorWordsHeaderNode<'tree>) -> ColorWordsHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -9698,6 +13902,14 @@ pub fn extract_color_words_header<'tree>(
             unexpected,
         }
     }
+}
+/// `color_words_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_color_words_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ColorWordsHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_color_words_header(ColorWordsHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_com_dependent_tier<'tree>(node: ComDependentTierNode<'tree>) -> ComDependentTierChildren<'tree>
@@ -9851,6 +14063,14 @@ pub fn extract_com_dependent_tier<'tree>(
         }
     }
 }
+/// `com_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_com_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ComDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_com_dependent_tier(ComDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_comment_header<'tree>(node: CommentHeaderNode<'tree>) -> CommentHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -9989,6 +14209,14 @@ pub fn extract_comment_header<'tree>(
         }
     }
 }
+/// `comment_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_comment_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<CommentHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_comment_header(CommentHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemChildren<'tree>
 #[derive(Debug, Clone)]
@@ -10021,14 +14249,55 @@ impl<'tree> AsRawNode<'tree> for ContentItemCaNoBreakLinkerChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for ContentItemCaNoBreakLinkerChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "ca_no_break_linker" => Some(ContentItemCaNoBreakLinkerChoice::CaNoBreakLinker(
+                CaNoBreakLinkerNode(node),
+            )),
+            "ca_technical_break_linker" => {
+                Some(ContentItemCaNoBreakLinkerChoice::CaTechnicalBreakLinker(
+                    CaTechnicalBreakLinkerNode(node),
+                ))
+            }
+            "linker_lazy_overlap" => Some(ContentItemCaNoBreakLinkerChoice::LinkerLazyOverlap(
+                LinkerLazyOverlapNode(node),
+            )),
+            "linker_quick_uptake" => Some(ContentItemCaNoBreakLinkerChoice::LinkerQuickUptake(
+                LinkerQuickUptakeNode(node),
+            )),
+            "linker_quick_uptake_overlap" => {
+                Some(ContentItemCaNoBreakLinkerChoice::LinkerQuickUptakeOverlap(
+                    LinkerQuickUptakeOverlapNode(node),
+                ))
+            }
+            "linker_quotation_follows" => {
+                Some(ContentItemCaNoBreakLinkerChoice::LinkerQuotationFollows(
+                    LinkerQuotationFollowsNode(node),
+                ))
+            }
+            "linker_self_completion" => {
+                Some(ContentItemCaNoBreakLinkerChoice::LinkerSelfCompletion(
+                    LinkerSelfCompletionNode(node),
+                ))
+            }
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum ContentItemChoice<'tree> {
     /// Alternative `BaseContentItem`.
     BaseContentItem(BaseContentItemNode<'tree>),
     /// Alternative `GroupWithAnnotations`.
     GroupWithAnnotations(GroupWithAnnotationsNode<'tree>),
-    /// Alternative `Quotation`.
-    Quotation(QuotationNode<'tree>),
+    /// Alternative `QuotationWithOptionalAnnotations`.
+    QuotationWithOptionalAnnotations(QuotationWithOptionalAnnotationsNode<'tree>),
     /// Alternative `IllegalCurlyQuote`.
     IllegalCurlyQuote(IllegalCurlyQuoteNode<'tree>),
     /// Alternative `MainPhoGroup`.
@@ -10043,7 +14312,7 @@ impl<'tree> AsRawNode<'tree> for ContentItemChoice<'tree> {
         match self {
             ContentItemChoice::BaseContentItem(inner) => inner.raw_node(),
             ContentItemChoice::GroupWithAnnotations(inner) => inner.raw_node(),
-            ContentItemChoice::Quotation(inner) => inner.raw_node(),
+            ContentItemChoice::QuotationWithOptionalAnnotations(inner) => inner.raw_node(),
             ContentItemChoice::IllegalCurlyQuote(inner) => inner.raw_node(),
             ContentItemChoice::MainPhoGroup(inner) => inner.raw_node(),
             ContentItemChoice::MainSinGroup(inner) => inner.raw_node(),
@@ -10123,8 +14392,13 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             alternative: 2,
                             end,
                         }) => {
-                            if let Some(__v) = __at.take_if_kind("quotation").map(QuotationNode) {
-                                NodeSlot::Present(ContentItemChoice::Quotation(__v))
+                            if let Some(__v) = __at
+                                .take_if_kind("quotation_with_optional_annotations")
+                                .map(QuotationWithOptionalAnnotationsNode)
+                            {
+                                NodeSlot::Present(
+                                    ContentItemChoice::QuotationWithOptionalAnnotations(__v),
+                                )
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
@@ -10256,6 +14530,14 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
         unexpected,
     }
 }
+/// `content_item`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_content_item_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ContentItemChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_content_item(ContentItemNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -10279,6 +14561,22 @@ impl<'tree> AsRawNode<'tree> for ContentsChild0Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for ContentsChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "whitespaces" => Some(ContentsChild0Choice::Whitespaces(WhitespacesNode(node))),
+            "content_item" => Some(ContentsChild0Choice::ContentItem(ContentItemNode(node))),
+            "separator" => Some(ContentsChild0Choice::Separator(SeparatorNode(node))),
+            "overlap_point" => Some(ContentsChild0Choice::OverlapPoint(OverlapPointNode(node))),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum ContentsChild1Choice<'tree> {
     /// Alternative `Whitespaces`.
@@ -10297,6 +14595,22 @@ impl<'tree> AsRawNode<'tree> for ContentsChild1Choice<'tree> {
             ContentsChild1Choice::ContentItem(inner) => inner.raw_node(),
             ContentsChild1Choice::Separator(inner) => inner.raw_node(),
             ContentsChild1Choice::OverlapPoint(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for ContentsChild1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "whitespaces" => Some(ContentsChild1Choice::Whitespaces(WhitespacesNode(node))),
+            "content_item" => Some(ContentsChild1Choice::ContentItem(ContentItemNode(node))),
+            "separator" => Some(ContentsChild1Choice::Separator(SeparatorNode(node))),
+            "overlap_point" => Some(ContentsChild1Choice::OverlapPoint(OverlapPointNode(node))),
+            _ => None,
         }
     }
 }
@@ -10522,6 +14836,14 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
         }
     }
 }
+/// `contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_contents(ContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateContentsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -10536,6 +14858,20 @@ impl<'tree> AsRawNode<'tree> for DateContentsChoice<'tree> {
         match self {
             DateContentsChoice::StrictDate(inner) => inner.raw_node(),
             DateContentsChoice::GenericDate(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for DateContentsChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "strict_date" => Some(DateContentsChoice::StrictDate(StrictDateNode(node))),
+            "generic_date" => Some(DateContentsChoice::GenericDate(GenericDateNode(node))),
+            _ => None,
         }
     }
 }
@@ -10620,6 +14956,14 @@ pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateConten
         trailing_extras,
         unexpected,
     }
+}
+/// `date_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_date_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<DateContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_date_contents(DateContentsNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChildren<'tree>
@@ -10756,6 +15100,14 @@ pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChil
             unexpected,
         }
     }
+}
+/// `date_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_date_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<DateHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_date_header(DateHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_def_dependent_tier<'tree>(node: DefDependentTierNode<'tree>) -> DefDependentTierChildren<'tree>
@@ -10909,6 +15261,14 @@ pub fn extract_def_dependent_tier<'tree>(
         }
     }
 }
+/// `def_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_def_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<DefDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_def_dependent_tier(DefDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_dependent_tier<'tree>(node: tree_sitter::Node<'tree>) -> DependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -11016,6 +15376,114 @@ impl<'tree> AsRawNode<'tree> for DependentTierChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for DependentTierChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "act_dependent_tier" => Some(DependentTierChoice::ActDependentTier(
+                ActDependentTierNode(node),
+            )),
+            "add_dependent_tier" => Some(DependentTierChoice::AddDependentTier(
+                AddDependentTierNode(node),
+            )),
+            "alt_dependent_tier" => Some(DependentTierChoice::AltDependentTier(
+                AltDependentTierNode(node),
+            )),
+            "cod_dependent_tier" => Some(DependentTierChoice::CodDependentTier(
+                CodDependentTierNode(node),
+            )),
+            "coh_dependent_tier" => Some(DependentTierChoice::CohDependentTier(
+                CohDependentTierNode(node),
+            )),
+            "com_dependent_tier" => Some(DependentTierChoice::ComDependentTier(
+                ComDependentTierNode(node),
+            )),
+            "def_dependent_tier" => Some(DependentTierChoice::DefDependentTier(
+                DefDependentTierNode(node),
+            )),
+            "eng_dependent_tier" => Some(DependentTierChoice::EngDependentTier(
+                EngDependentTierNode(node),
+            )),
+            "err_dependent_tier" => Some(DependentTierChoice::ErrDependentTier(
+                ErrDependentTierNode(node),
+            )),
+            "exp_dependent_tier" => Some(DependentTierChoice::ExpDependentTier(
+                ExpDependentTierNode(node),
+            )),
+            "fac_dependent_tier" => Some(DependentTierChoice::FacDependentTier(
+                FacDependentTierNode(node),
+            )),
+            "flo_dependent_tier" => Some(DependentTierChoice::FloDependentTier(
+                FloDependentTierNode(node),
+            )),
+            "gls_dependent_tier" => Some(DependentTierChoice::GlsDependentTier(
+                GlsDependentTierNode(node),
+            )),
+            "gpx_dependent_tier" => Some(DependentTierChoice::GpxDependentTier(
+                GpxDependentTierNode(node),
+            )),
+            "gra_dependent_tier" => Some(DependentTierChoice::GraDependentTier(
+                GraDependentTierNode(node),
+            )),
+            "int_dependent_tier" => Some(DependentTierChoice::IntDependentTier(
+                IntDependentTierNode(node),
+            )),
+            "mod_dependent_tier" => Some(DependentTierChoice::ModDependentTier(
+                ModDependentTierNode(node),
+            )),
+            "modsyl_dependent_tier" => Some(DependentTierChoice::ModsylDependentTier(
+                ModsylDependentTierNode(node),
+            )),
+            "mor_dependent_tier" => Some(DependentTierChoice::MorDependentTier(
+                MorDependentTierNode(node),
+            )),
+            "ort_dependent_tier" => Some(DependentTierChoice::OrtDependentTier(
+                OrtDependentTierNode(node),
+            )),
+            "par_dependent_tier" => Some(DependentTierChoice::ParDependentTier(
+                ParDependentTierNode(node),
+            )),
+            "pho_dependent_tier" => Some(DependentTierChoice::PhoDependentTier(
+                PhoDependentTierNode(node),
+            )),
+            "phoaln_dependent_tier" => Some(DependentTierChoice::PhoalnDependentTier(
+                PhoalnDependentTierNode(node),
+            )),
+            "phosyl_dependent_tier" => Some(DependentTierChoice::PhosylDependentTier(
+                PhosylDependentTierNode(node),
+            )),
+            "sin_dependent_tier" => Some(DependentTierChoice::SinDependentTier(
+                SinDependentTierNode(node),
+            )),
+            "sit_dependent_tier" => Some(DependentTierChoice::SitDependentTier(
+                SitDependentTierNode(node),
+            )),
+            "spa_dependent_tier" => Some(DependentTierChoice::SpaDependentTier(
+                SpaDependentTierNode(node),
+            )),
+            "tim_dependent_tier" => Some(DependentTierChoice::TimDependentTier(
+                TimDependentTierNode(node),
+            )),
+            "unsupported_dependent_tier" => Some(DependentTierChoice::UnsupportedDependentTier(
+                UnsupportedDependentTierNode(node),
+            )),
+            "wor_dependent_tier" => Some(DependentTierChoice::WorDependentTier(
+                WorDependentTierNode(node),
+            )),
+            "x_dependent_tier" => Some(DependentTierChoice::XDependentTier(XDependentTierNode(
+                node,
+            ))),
+            "xphoint_dependent_tier" => Some(DependentTierChoice::XphointDependentTier(
+                XphointDependentTierNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct DependentTierChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -11037,104 +15505,9 @@ pub fn extract_dependent_tier<'tree>(
     } else if node.is_missing() {
         NodeSlot::Missing(node)
     } else {
-        match node.kind() {
-            "act_dependent_tier" => NodeSlot::Present(DependentTierChoice::ActDependentTier(
-                ActDependentTierNode(node),
-            )),
-            "add_dependent_tier" => NodeSlot::Present(DependentTierChoice::AddDependentTier(
-                AddDependentTierNode(node),
-            )),
-            "alt_dependent_tier" => NodeSlot::Present(DependentTierChoice::AltDependentTier(
-                AltDependentTierNode(node),
-            )),
-            "cod_dependent_tier" => NodeSlot::Present(DependentTierChoice::CodDependentTier(
-                CodDependentTierNode(node),
-            )),
-            "coh_dependent_tier" => NodeSlot::Present(DependentTierChoice::CohDependentTier(
-                CohDependentTierNode(node),
-            )),
-            "com_dependent_tier" => NodeSlot::Present(DependentTierChoice::ComDependentTier(
-                ComDependentTierNode(node),
-            )),
-            "def_dependent_tier" => NodeSlot::Present(DependentTierChoice::DefDependentTier(
-                DefDependentTierNode(node),
-            )),
-            "eng_dependent_tier" => NodeSlot::Present(DependentTierChoice::EngDependentTier(
-                EngDependentTierNode(node),
-            )),
-            "err_dependent_tier" => NodeSlot::Present(DependentTierChoice::ErrDependentTier(
-                ErrDependentTierNode(node),
-            )),
-            "exp_dependent_tier" => NodeSlot::Present(DependentTierChoice::ExpDependentTier(
-                ExpDependentTierNode(node),
-            )),
-            "fac_dependent_tier" => NodeSlot::Present(DependentTierChoice::FacDependentTier(
-                FacDependentTierNode(node),
-            )),
-            "flo_dependent_tier" => NodeSlot::Present(DependentTierChoice::FloDependentTier(
-                FloDependentTierNode(node),
-            )),
-            "gls_dependent_tier" => NodeSlot::Present(DependentTierChoice::GlsDependentTier(
-                GlsDependentTierNode(node),
-            )),
-            "gpx_dependent_tier" => NodeSlot::Present(DependentTierChoice::GpxDependentTier(
-                GpxDependentTierNode(node),
-            )),
-            "gra_dependent_tier" => NodeSlot::Present(DependentTierChoice::GraDependentTier(
-                GraDependentTierNode(node),
-            )),
-            "int_dependent_tier" => NodeSlot::Present(DependentTierChoice::IntDependentTier(
-                IntDependentTierNode(node),
-            )),
-            "mod_dependent_tier" => NodeSlot::Present(DependentTierChoice::ModDependentTier(
-                ModDependentTierNode(node),
-            )),
-            "modsyl_dependent_tier" => NodeSlot::Present(DependentTierChoice::ModsylDependentTier(
-                ModsylDependentTierNode(node),
-            )),
-            "mor_dependent_tier" => NodeSlot::Present(DependentTierChoice::MorDependentTier(
-                MorDependentTierNode(node),
-            )),
-            "ort_dependent_tier" => NodeSlot::Present(DependentTierChoice::OrtDependentTier(
-                OrtDependentTierNode(node),
-            )),
-            "par_dependent_tier" => NodeSlot::Present(DependentTierChoice::ParDependentTier(
-                ParDependentTierNode(node),
-            )),
-            "pho_dependent_tier" => NodeSlot::Present(DependentTierChoice::PhoDependentTier(
-                PhoDependentTierNode(node),
-            )),
-            "phoaln_dependent_tier" => NodeSlot::Present(DependentTierChoice::PhoalnDependentTier(
-                PhoalnDependentTierNode(node),
-            )),
-            "phosyl_dependent_tier" => NodeSlot::Present(DependentTierChoice::PhosylDependentTier(
-                PhosylDependentTierNode(node),
-            )),
-            "sin_dependent_tier" => NodeSlot::Present(DependentTierChoice::SinDependentTier(
-                SinDependentTierNode(node),
-            )),
-            "sit_dependent_tier" => NodeSlot::Present(DependentTierChoice::SitDependentTier(
-                SitDependentTierNode(node),
-            )),
-            "spa_dependent_tier" => NodeSlot::Present(DependentTierChoice::SpaDependentTier(
-                SpaDependentTierNode(node),
-            )),
-            "tim_dependent_tier" => NodeSlot::Present(DependentTierChoice::TimDependentTier(
-                TimDependentTierNode(node),
-            )),
-            "unsupported_dependent_tier" => NodeSlot::Present(
-                DependentTierChoice::UnsupportedDependentTier(UnsupportedDependentTierNode(node)),
-            ),
-            "wor_dependent_tier" => NodeSlot::Present(DependentTierChoice::WorDependentTier(
-                WorDependentTierNode(node),
-            )),
-            "x_dependent_tier" => NodeSlot::Present(DependentTierChoice::XDependentTier(
-                XDependentTierNode(node),
-            )),
-            "xphoint_dependent_tier" => NodeSlot::Present(
-                DependentTierChoice::XphointDependentTier(XphointDependentTierNode(node)),
-            ),
-            _ => NodeSlot::Unexpected(node),
+        match DependentTierChoice::from_node(node) {
+            Some(__classified) => NodeSlot::Present(__classified),
+            None => NodeSlot::Unexpected(node),
         }
     };
     DependentTierChildren {
@@ -11350,6 +15723,14 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
         }
     }
 }
+/// `eg_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_eg_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<EgHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_eg_header(EgHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_end_header<'tree>(node: EndHeaderNode<'tree>) -> EndHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -11431,6 +15812,14 @@ pub fn extract_end_header<'tree>(node: EndHeaderNode<'tree>) -> EndHeaderChildre
             unexpected,
         }
     }
+}
+/// `end_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_end_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<EndHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_end_header(EndHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_eng_dependent_tier<'tree>(node: EngDependentTierNode<'tree>) -> EngDependentTierChildren<'tree>
@@ -11584,6 +15973,14 @@ pub fn extract_eng_dependent_tier<'tree>(
         }
     }
 }
+/// `eng_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_eng_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<EngDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_eng_dependent_tier(EngDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_err_dependent_tier<'tree>(node: ErrDependentTierNode<'tree>) -> ErrDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -11736,6 +16133,14 @@ pub fn extract_err_dependent_tier<'tree>(
         }
     }
 }
+/// `err_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_err_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ErrDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_err_dependent_tier(ErrDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_event<'tree>(node: EventNode<'tree>) -> EventChildren<'tree>
 #[derive(Debug, Clone)]
@@ -11823,6 +16228,13 @@ pub fn extract_event<'tree>(node: EventNode<'tree>) -> EventChildren<'tree> {
             unexpected,
         }
     }
+}
+/// `event`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_event_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<EventChildren<'tree>> {
+    node.is_error().then(|| extract_event(EventNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_exp_dependent_tier<'tree>(node: ExpDependentTierNode<'tree>) -> ExpDependentTierChildren<'tree>
@@ -11976,6 +16388,14 @@ pub fn extract_exp_dependent_tier<'tree>(
         }
     }
 }
+/// `exp_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_exp_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ExpDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_exp_dependent_tier(ExpDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_explanation_annotation<'tree>(node: ExplanationAnnotationNode<'tree>) -> ExplanationAnnotationChildren<'tree>
 #[derive(Debug, Clone)]
@@ -12119,6 +16539,14 @@ pub fn extract_explanation_annotation<'tree>(
             unexpected,
         }
     }
+}
+/// `explanation_annotation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_explanation_annotation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ExplanationAnnotationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_explanation_annotation(ExplanationAnnotationNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_fac_dependent_tier<'tree>(node: FacDependentTierNode<'tree>) -> FacDependentTierChildren<'tree>
@@ -12271,6 +16699,14 @@ pub fn extract_fac_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `fac_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_fac_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<FacDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_fac_dependent_tier(FacDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChildren<'tree>
@@ -12535,6 +16971,14 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
         }
     }
 }
+/// `final_codes`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_final_codes_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<FinalCodesChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_final_codes(FinalCodesNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_flo_dependent_tier<'tree>(node: FloDependentTierNode<'tree>) -> FloDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -12687,6 +17131,14 @@ pub fn extract_flo_dependent_tier<'tree>(
         }
     }
 }
+/// `flo_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_flo_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<FloDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_flo_dependent_tier(FloDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -12823,6 +17275,14 @@ pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChil
         }
     }
 }
+/// `font_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_font_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<FontHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_font_header(FontHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'tree>
 #[derive(Debug, Clone)]
@@ -12840,6 +17300,20 @@ impl<'tree> AsRawNode<'tree> for FreeTextChild0Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for FreeTextChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "rest_of_line" => Some(FreeTextChild0Choice::RestOfLine(RestOfLineNode(node))),
+            "continuation" => Some(FreeTextChild0Choice::Continuation(ContinuationNode(node))),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum FreeTextChild1Choice<'tree> {
     /// Alternative `RestOfLine`.
@@ -12852,6 +17326,20 @@ impl<'tree> AsRawNode<'tree> for FreeTextChild1Choice<'tree> {
         match self {
             FreeTextChild1Choice::RestOfLine(inner) => inner.raw_node(),
             FreeTextChild1Choice::Continuation(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for FreeTextChild1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "rest_of_line" => Some(FreeTextChild1Choice::RestOfLine(RestOfLineNode(node))),
+            "continuation" => Some(FreeTextChild1Choice::Continuation(ContinuationNode(node))),
+            _ => None,
         }
     }
 }
@@ -13018,6 +17506,14 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
         }
     }
 }
+/// `free_text`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_free_text_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<FreeTextChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_free_text(FreeTextNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocumentChildren<'tree>
 #[derive(Debug, Clone)]
@@ -13038,6 +17534,26 @@ impl<'tree> AsRawNode<'tree> for FullDocumentChild1Choice<'tree> {
             FullDocumentChild1Choice::FontHeader(inner) => inner.raw_node(),
             FullDocumentChild1Choice::PidHeader(inner) => inner.raw_node(),
             FullDocumentChild1Choice::WindowHeader(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for FullDocumentChild1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "color_words_header" => Some(FullDocumentChild1Choice::ColorWordsHeader(
+                ColorWordsHeaderNode(node),
+            )),
+            "font_header" => Some(FullDocumentChild1Choice::FontHeader(FontHeaderNode(node))),
+            "pid_header" => Some(FullDocumentChild1Choice::PidHeader(PidHeaderNode(node))),
+            "window_header" => Some(FullDocumentChild1Choice::WindowHeader(WindowHeaderNode(
+                node,
+            ))),
+            _ => None,
         }
     }
 }
@@ -13274,6 +17790,14 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
         }
     }
 }
+/// `full_document`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_full_document_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<FullDocumentChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_full_document(FullDocumentNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -13409,6 +17933,13 @@ pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tre
             unexpected,
         }
     }
+}
+/// `g_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_g_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GHeaderChildren<'tree>> {
+    node.is_error().then(|| extract_g_header(GHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_gls_dependent_tier<'tree>(node: GlsDependentTierNode<'tree>) -> GlsDependentTierChildren<'tree>
@@ -13562,6 +18093,14 @@ pub fn extract_gls_dependent_tier<'tree>(
         }
     }
 }
+/// `gls_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gls_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GlsDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_gls_dependent_tier(GlsDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_gpx_dependent_tier<'tree>(node: GpxDependentTierNode<'tree>) -> GpxDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -13713,6 +18252,14 @@ pub fn extract_gpx_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `gpx_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gpx_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GpxDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_gpx_dependent_tier(GpxDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsChildren<'tree>
@@ -13899,6 +18446,14 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
         }
     }
 }
+/// `gra_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gra_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GraContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_gra_contents(GraContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_gra_dependent_tier<'tree>(node: GraDependentTierNode<'tree>) -> GraDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -14036,6 +18591,14 @@ pub fn extract_gra_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `gra_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gra_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GraDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_gra_dependent_tier(GraDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationChildren<'tree>
@@ -14216,6 +18779,14 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
         }
     }
 }
+/// `gra_relation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gra_relation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GraRelationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_gra_relation(GraRelationNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_group_with_annotations<'tree>(node: GroupWithAnnotationsNode<'tree>) -> GroupWithAnnotationsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -14365,6 +18936,14 @@ pub fn extract_group_with_annotations<'tree>(
         }
     }
 }
+/// `group_with_annotations`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_group_with_annotations_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GroupWithAnnotationsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_group_with_annotations(GroupWithAnnotationsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_header<'tree>(node: tree_sitter::Node<'tree>) -> HeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -14478,6 +19057,72 @@ impl<'tree> AsRawNode<'tree> for HeaderChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for HeaderChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "activities_header" => Some(HeaderChoice::ActivitiesHeader(ActivitiesHeaderNode(node))),
+            "bck_header" => Some(HeaderChoice::BckHeader(BckHeaderNode(node))),
+            "bg_header" => Some(HeaderChoice::BgHeader(BgHeaderNode(node))),
+            "birth_of_header" => Some(HeaderChoice::BirthOfHeader(BirthOfHeaderNode(node))),
+            "birthplace_of_header" => Some(HeaderChoice::BirthplaceOfHeader(
+                BirthplaceOfHeaderNode(node),
+            )),
+            "blank_header" => Some(HeaderChoice::BlankHeader(BlankHeaderNode(node))),
+            "comment_header" => Some(HeaderChoice::CommentHeader(CommentHeaderNode(node))),
+            "date_header" => Some(HeaderChoice::DateHeader(DateHeaderNode(node))),
+            "eg_header" => Some(HeaderChoice::EgHeader(EgHeaderNode(node))),
+            "g_header" => Some(HeaderChoice::GHeader(GHeaderNode(node))),
+            "id_header" => Some(HeaderChoice::IdHeader(IdHeaderNode(node))),
+            "l1_of_header" => Some(HeaderChoice::L1OfHeader(L1OfHeaderNode(node))),
+            "languages_header" => Some(HeaderChoice::LanguagesHeader(LanguagesHeaderNode(node))),
+            "location_header" => Some(HeaderChoice::LocationHeader(LocationHeaderNode(node))),
+            "media_header" => Some(HeaderChoice::MediaHeader(MediaHeaderNode(node))),
+            "new_episode_header" => {
+                Some(HeaderChoice::NewEpisodeHeader(NewEpisodeHeaderNode(node)))
+            }
+            "number_header" => Some(HeaderChoice::NumberHeader(NumberHeaderNode(node))),
+            "options_header" => Some(HeaderChoice::OptionsHeader(OptionsHeaderNode(node))),
+            "page_header" => Some(HeaderChoice::PageHeader(PageHeaderNode(node))),
+            "participants_header" => Some(HeaderChoice::ParticipantsHeader(
+                ParticipantsHeaderNode(node),
+            )),
+            "recording_quality_header" => Some(HeaderChoice::RecordingQualityHeader(
+                RecordingQualityHeaderNode(node),
+            )),
+            "room_layout_header" => {
+                Some(HeaderChoice::RoomLayoutHeader(RoomLayoutHeaderNode(node)))
+            }
+            "situation_header" => Some(HeaderChoice::SituationHeader(SituationHeaderNode(node))),
+            "t_header" => Some(HeaderChoice::THeader(THeaderNode(node))),
+            "tape_location_header" => Some(HeaderChoice::TapeLocationHeader(
+                TapeLocationHeaderNode(node),
+            )),
+            "thumbnail_header" => Some(HeaderChoice::ThumbnailHeader(ThumbnailHeaderNode(node))),
+            "time_duration_header" => Some(HeaderChoice::TimeDurationHeader(
+                TimeDurationHeaderNode(node),
+            )),
+            "time_start_header" => Some(HeaderChoice::TimeStartHeader(TimeStartHeaderNode(node))),
+            "transcriber_header" => {
+                Some(HeaderChoice::TranscriberHeader(TranscriberHeaderNode(node)))
+            }
+            "transcription_header" => Some(HeaderChoice::TranscriptionHeader(
+                TranscriptionHeaderNode(node),
+            )),
+            "types_header" => Some(HeaderChoice::TypesHeader(TypesHeaderNode(node))),
+            "unsupported_header" => {
+                Some(HeaderChoice::UnsupportedHeader(UnsupportedHeaderNode(node)))
+            }
+            "videos_header" => Some(HeaderChoice::VideosHeader(VideosHeaderNode(node))),
+            "warning_header" => Some(HeaderChoice::WarningHeader(WarningHeaderNode(node))),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct HeaderChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -14497,86 +19142,9 @@ pub fn extract_header<'tree>(node: tree_sitter::Node<'tree>) -> HeaderChildren<'
     } else if node.is_missing() {
         NodeSlot::Missing(node)
     } else {
-        match node.kind() {
-            "activities_header" => {
-                NodeSlot::Present(HeaderChoice::ActivitiesHeader(ActivitiesHeaderNode(node)))
-            }
-            "bck_header" => NodeSlot::Present(HeaderChoice::BckHeader(BckHeaderNode(node))),
-            "bg_header" => NodeSlot::Present(HeaderChoice::BgHeader(BgHeaderNode(node))),
-            "birth_of_header" => {
-                NodeSlot::Present(HeaderChoice::BirthOfHeader(BirthOfHeaderNode(node)))
-            }
-            "birthplace_of_header" => NodeSlot::Present(HeaderChoice::BirthplaceOfHeader(
-                BirthplaceOfHeaderNode(node),
-            )),
-            "blank_header" => NodeSlot::Present(HeaderChoice::BlankHeader(BlankHeaderNode(node))),
-            "comment_header" => {
-                NodeSlot::Present(HeaderChoice::CommentHeader(CommentHeaderNode(node)))
-            }
-            "date_header" => NodeSlot::Present(HeaderChoice::DateHeader(DateHeaderNode(node))),
-            "eg_header" => NodeSlot::Present(HeaderChoice::EgHeader(EgHeaderNode(node))),
-            "g_header" => NodeSlot::Present(HeaderChoice::GHeader(GHeaderNode(node))),
-            "id_header" => NodeSlot::Present(HeaderChoice::IdHeader(IdHeaderNode(node))),
-            "l1_of_header" => NodeSlot::Present(HeaderChoice::L1OfHeader(L1OfHeaderNode(node))),
-            "languages_header" => {
-                NodeSlot::Present(HeaderChoice::LanguagesHeader(LanguagesHeaderNode(node)))
-            }
-            "location_header" => {
-                NodeSlot::Present(HeaderChoice::LocationHeader(LocationHeaderNode(node)))
-            }
-            "media_header" => NodeSlot::Present(HeaderChoice::MediaHeader(MediaHeaderNode(node))),
-            "new_episode_header" => {
-                NodeSlot::Present(HeaderChoice::NewEpisodeHeader(NewEpisodeHeaderNode(node)))
-            }
-            "number_header" => {
-                NodeSlot::Present(HeaderChoice::NumberHeader(NumberHeaderNode(node)))
-            }
-            "options_header" => {
-                NodeSlot::Present(HeaderChoice::OptionsHeader(OptionsHeaderNode(node)))
-            }
-            "page_header" => NodeSlot::Present(HeaderChoice::PageHeader(PageHeaderNode(node))),
-            "participants_header" => NodeSlot::Present(HeaderChoice::ParticipantsHeader(
-                ParticipantsHeaderNode(node),
-            )),
-            "recording_quality_header" => NodeSlot::Present(HeaderChoice::RecordingQualityHeader(
-                RecordingQualityHeaderNode(node),
-            )),
-            "room_layout_header" => {
-                NodeSlot::Present(HeaderChoice::RoomLayoutHeader(RoomLayoutHeaderNode(node)))
-            }
-            "situation_header" => {
-                NodeSlot::Present(HeaderChoice::SituationHeader(SituationHeaderNode(node)))
-            }
-            "t_header" => NodeSlot::Present(HeaderChoice::THeader(THeaderNode(node))),
-            "tape_location_header" => NodeSlot::Present(HeaderChoice::TapeLocationHeader(
-                TapeLocationHeaderNode(node),
-            )),
-            "thumbnail_header" => {
-                NodeSlot::Present(HeaderChoice::ThumbnailHeader(ThumbnailHeaderNode(node)))
-            }
-            "time_duration_header" => NodeSlot::Present(HeaderChoice::TimeDurationHeader(
-                TimeDurationHeaderNode(node),
-            )),
-            "time_start_header" => {
-                NodeSlot::Present(HeaderChoice::TimeStartHeader(TimeStartHeaderNode(node)))
-            }
-            "transcriber_header" => {
-                NodeSlot::Present(HeaderChoice::TranscriberHeader(TranscriberHeaderNode(node)))
-            }
-            "transcription_header" => NodeSlot::Present(HeaderChoice::TranscriptionHeader(
-                TranscriptionHeaderNode(node),
-            )),
-            "types_header" => NodeSlot::Present(HeaderChoice::TypesHeader(TypesHeaderNode(node))),
-            "unsupported_header" => {
-                NodeSlot::Present(HeaderChoice::UnsupportedHeader(UnsupportedHeaderNode(node)))
-            }
-            "videos_header" => {
-                NodeSlot::Present(HeaderChoice::VideosHeader(VideosHeaderNode(node)))
-            }
-            "warning_header" => {
-                NodeSlot::Present(HeaderChoice::WarningHeader(WarningHeaderNode(node)))
-            }
-            _ => NodeSlot::Unexpected(node),
+        match HeaderChoice::from_node(node) {
+            Some(__classified) => NodeSlot::Present(__classified),
+            None => NodeSlot::Unexpected(node),
         }
     };
     HeaderChildren {
@@ -14602,6 +19170,20 @@ impl<'tree> AsRawNode<'tree> for HeaderGapChild0Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for HeaderGapChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "space" => Some(HeaderGapChild0Choice::Space(SpaceNode(node))),
+            "tab" => Some(HeaderGapChild0Choice::Tab(TabNode(node))),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum HeaderGapChild1Choice<'tree> {
     /// Alternative `Space`.
@@ -14614,6 +19196,20 @@ impl<'tree> AsRawNode<'tree> for HeaderGapChild1Choice<'tree> {
         match self {
             HeaderGapChild1Choice::Space(inner) => inner.raw_node(),
             HeaderGapChild1Choice::Tab(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for HeaderGapChild1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "space" => Some(HeaderGapChild1Choice::Space(SpaceNode(node))),
+            "tab" => Some(HeaderGapChild1Choice::Tab(TabNode(node))),
+            _ => None,
         }
     }
 }
@@ -14771,6 +19367,14 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
         }
     }
 }
+/// `header_gap`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_header_gap_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<HeaderGapChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_header_gap(HeaderGapNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildren<'tree>
 #[derive(Debug, Clone)]
@@ -14894,6 +19498,14 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
         }
     }
 }
+/// `header_sep`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_header_sep_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<HeaderSepChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_header_sep(HeaderSepNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree>
 #[derive(Debug, Clone)]
@@ -14981,6 +19593,13 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
         trailing_extras,
         unexpected,
     }
+}
+/// `id_age`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_age_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdAgeChildren<'tree>> {
+    node.is_error().then(|| extract_id_age(IdAgeNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChildren<'tree>
@@ -16222,6 +20841,14 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
         }
     }
 }
+/// `id_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_contents(IdContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -16358,6 +20985,14 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
         }
     }
 }
+/// `id_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_header(IdHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesChildren<'tree>
 #[derive(Debug, Clone)]
@@ -16449,6 +21084,14 @@ pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesC
         unexpected,
     }
 }
+/// `id_languages`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_languages_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdLanguagesChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_languages(IdLanguagesNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree>
 #[derive(Debug, Clone)]
@@ -16469,6 +21112,22 @@ impl<'tree> AsRawNode<'tree> for IdSesChoice<'tree> {
             IdSesChoice::SesCodeValue(inner) => inner.raw_node(),
             IdSesChoice::EthnicityValue(inner) => inner.raw_node(),
             IdSesChoice::GenericIdSes(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for IdSesChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "ses_combined" => Some(IdSesChoice::SesCombined(SesCombinedNode(node))),
+            "ses_code_value" => Some(IdSesChoice::SesCodeValue(SesCodeValueNode(node))),
+            "ethnicity_value" => Some(IdSesChoice::EthnicityValue(EthnicityValueNode(node))),
+            "generic_id_ses" => Some(IdSesChoice::GenericIdSes(GenericIdSesNode(node))),
+            _ => None,
         }
     }
 }
@@ -16583,6 +21242,13 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
         unexpected,
     }
 }
+/// `id_ses`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_ses_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdSesChildren<'tree>> {
+    node.is_error().then(|| extract_id_ses(IdSesNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree>
 #[derive(Debug, Clone)]
@@ -16600,6 +21266,21 @@ impl<'tree> AsRawNode<'tree> for IdSexChoice<'tree> {
             IdSexChoice::MaleValue(inner) => inner.raw_node(),
             IdSexChoice::FemaleValue(inner) => inner.raw_node(),
             IdSexChoice::GenericIdSex(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for IdSexChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "male_value" => Some(IdSexChoice::MaleValue(MaleValueNode(node))),
+            "female_value" => Some(IdSexChoice::FemaleValue(FemaleValueNode(node))),
+            "generic_id_sex" => Some(IdSexChoice::GenericIdSex(GenericIdSexNode(node))),
+            _ => None,
         }
     }
 }
@@ -16697,6 +21378,13 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
         trailing_extras,
         unexpected,
     }
+}
+/// `id_sex`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_sex_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdSexChildren<'tree>> {
+    node.is_error().then(|| extract_id_sex(IdSexNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_int_dependent_tier<'tree>(node: IntDependentTierNode<'tree>) -> IntDependentTierChildren<'tree>
@@ -16849,6 +21537,14 @@ pub fn extract_int_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `int_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_int_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IntDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_int_dependent_tier(IntDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChildren<'tree>
@@ -17054,6 +21750,14 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
         }
     }
 }
+/// `l1_of_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_l1_of_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<L1OfHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_l1_of_header(L1OfHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'tree>
 #[derive(Debug, Clone)]
@@ -17195,6 +21899,14 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
             unexpected,
         }
     }
+}
+/// `langcode`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_langcode_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LangcodeChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_langcode(LangcodeNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_languages_contents<'tree>(node: LanguagesContentsNode<'tree>) -> LanguagesContentsChildren<'tree>
@@ -17461,6 +22173,14 @@ pub fn extract_languages_contents<'tree>(
         }
     }
 }
+/// `languages_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_languages_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LanguagesContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_languages_contents(LanguagesContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_languages_header<'tree>(node: LanguagesHeaderNode<'tree>) -> LanguagesHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -17599,6 +22319,14 @@ pub fn extract_languages_header<'tree>(
         }
     }
 }
+/// `languages_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_languages_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LanguagesHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_languages_header(LanguagesHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree>
 #[derive(Debug, Clone)]
@@ -17709,6 +22437,102 @@ impl<'tree> AsRawNode<'tree> for LineActivitiesHeaderChoice<'tree> {
             LineActivitiesHeaderChoice::UnsupportedHeader(inner) => inner.raw_node(),
             LineActivitiesHeaderChoice::VideosHeader(inner) => inner.raw_node(),
             LineActivitiesHeaderChoice::WarningHeader(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for LineActivitiesHeaderChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "activities_header" => Some(LineActivitiesHeaderChoice::ActivitiesHeader(
+                ActivitiesHeaderNode(node),
+            )),
+            "bck_header" => Some(LineActivitiesHeaderChoice::BckHeader(BckHeaderNode(node))),
+            "bg_header" => Some(LineActivitiesHeaderChoice::BgHeader(BgHeaderNode(node))),
+            "birth_of_header" => Some(LineActivitiesHeaderChoice::BirthOfHeader(
+                BirthOfHeaderNode(node),
+            )),
+            "birthplace_of_header" => Some(LineActivitiesHeaderChoice::BirthplaceOfHeader(
+                BirthplaceOfHeaderNode(node),
+            )),
+            "blank_header" => Some(LineActivitiesHeaderChoice::BlankHeader(BlankHeaderNode(
+                node,
+            ))),
+            "comment_header" => Some(LineActivitiesHeaderChoice::CommentHeader(
+                CommentHeaderNode(node),
+            )),
+            "date_header" => Some(LineActivitiesHeaderChoice::DateHeader(DateHeaderNode(node))),
+            "eg_header" => Some(LineActivitiesHeaderChoice::EgHeader(EgHeaderNode(node))),
+            "g_header" => Some(LineActivitiesHeaderChoice::GHeader(GHeaderNode(node))),
+            "id_header" => Some(LineActivitiesHeaderChoice::IdHeader(IdHeaderNode(node))),
+            "l1_of_header" => Some(LineActivitiesHeaderChoice::L1OfHeader(L1OfHeaderNode(node))),
+            "languages_header" => Some(LineActivitiesHeaderChoice::LanguagesHeader(
+                LanguagesHeaderNode(node),
+            )),
+            "location_header" => Some(LineActivitiesHeaderChoice::LocationHeader(
+                LocationHeaderNode(node),
+            )),
+            "media_header" => Some(LineActivitiesHeaderChoice::MediaHeader(MediaHeaderNode(
+                node,
+            ))),
+            "new_episode_header" => Some(LineActivitiesHeaderChoice::NewEpisodeHeader(
+                NewEpisodeHeaderNode(node),
+            )),
+            "number_header" => Some(LineActivitiesHeaderChoice::NumberHeader(NumberHeaderNode(
+                node,
+            ))),
+            "options_header" => Some(LineActivitiesHeaderChoice::OptionsHeader(
+                OptionsHeaderNode(node),
+            )),
+            "page_header" => Some(LineActivitiesHeaderChoice::PageHeader(PageHeaderNode(node))),
+            "participants_header" => Some(LineActivitiesHeaderChoice::ParticipantsHeader(
+                ParticipantsHeaderNode(node),
+            )),
+            "recording_quality_header" => Some(LineActivitiesHeaderChoice::RecordingQualityHeader(
+                RecordingQualityHeaderNode(node),
+            )),
+            "room_layout_header" => Some(LineActivitiesHeaderChoice::RoomLayoutHeader(
+                RoomLayoutHeaderNode(node),
+            )),
+            "situation_header" => Some(LineActivitiesHeaderChoice::SituationHeader(
+                SituationHeaderNode(node),
+            )),
+            "t_header" => Some(LineActivitiesHeaderChoice::THeader(THeaderNode(node))),
+            "tape_location_header" => Some(LineActivitiesHeaderChoice::TapeLocationHeader(
+                TapeLocationHeaderNode(node),
+            )),
+            "thumbnail_header" => Some(LineActivitiesHeaderChoice::ThumbnailHeader(
+                ThumbnailHeaderNode(node),
+            )),
+            "time_duration_header" => Some(LineActivitiesHeaderChoice::TimeDurationHeader(
+                TimeDurationHeaderNode(node),
+            )),
+            "time_start_header" => Some(LineActivitiesHeaderChoice::TimeStartHeader(
+                TimeStartHeaderNode(node),
+            )),
+            "transcriber_header" => Some(LineActivitiesHeaderChoice::TranscriberHeader(
+                TranscriberHeaderNode(node),
+            )),
+            "transcription_header" => Some(LineActivitiesHeaderChoice::TranscriptionHeader(
+                TranscriptionHeaderNode(node),
+            )),
+            "types_header" => Some(LineActivitiesHeaderChoice::TypesHeader(TypesHeaderNode(
+                node,
+            ))),
+            "unsupported_header" => Some(LineActivitiesHeaderChoice::UnsupportedHeader(
+                UnsupportedHeaderNode(node),
+            )),
+            "videos_header" => Some(LineActivitiesHeaderChoice::VideosHeader(VideosHeaderNode(
+                node,
+            ))),
+            "warning_header" => Some(LineActivitiesHeaderChoice::WarningHeader(
+                WarningHeaderNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -18015,6 +22839,13 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
         unexpected,
     }
 }
+/// `line`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_line_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LineChildren<'tree>> {
+    node.is_error().then(|| extract_line(LineNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_linker<'tree>(node: tree_sitter::Node<'tree>) -> LinkerChildren<'tree>
 #[derive(Debug, Clone)]
@@ -18047,6 +22878,37 @@ impl<'tree> AsRawNode<'tree> for LinkerChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for LinkerChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "ca_no_break_linker" => Some(LinkerChoice::CaNoBreakLinker(CaNoBreakLinkerNode(node))),
+            "ca_technical_break_linker" => Some(LinkerChoice::CaTechnicalBreakLinker(
+                CaTechnicalBreakLinkerNode(node),
+            )),
+            "linker_lazy_overlap" => {
+                Some(LinkerChoice::LinkerLazyOverlap(LinkerLazyOverlapNode(node)))
+            }
+            "linker_quick_uptake" => {
+                Some(LinkerChoice::LinkerQuickUptake(LinkerQuickUptakeNode(node)))
+            }
+            "linker_quick_uptake_overlap" => Some(LinkerChoice::LinkerQuickUptakeOverlap(
+                LinkerQuickUptakeOverlapNode(node),
+            )),
+            "linker_quotation_follows" => Some(LinkerChoice::LinkerQuotationFollows(
+                LinkerQuotationFollowsNode(node),
+            )),
+            "linker_self_completion" => Some(LinkerChoice::LinkerSelfCompletion(
+                LinkerSelfCompletionNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct LinkerChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -18066,29 +22928,9 @@ pub fn extract_linker<'tree>(node: tree_sitter::Node<'tree>) -> LinkerChildren<'
     } else if node.is_missing() {
         NodeSlot::Missing(node)
     } else {
-        match node.kind() {
-            "ca_no_break_linker" => {
-                NodeSlot::Present(LinkerChoice::CaNoBreakLinker(CaNoBreakLinkerNode(node)))
-            }
-            "ca_technical_break_linker" => NodeSlot::Present(LinkerChoice::CaTechnicalBreakLinker(
-                CaTechnicalBreakLinkerNode(node),
-            )),
-            "linker_lazy_overlap" => {
-                NodeSlot::Present(LinkerChoice::LinkerLazyOverlap(LinkerLazyOverlapNode(node)))
-            }
-            "linker_quick_uptake" => {
-                NodeSlot::Present(LinkerChoice::LinkerQuickUptake(LinkerQuickUptakeNode(node)))
-            }
-            "linker_quick_uptake_overlap" => NodeSlot::Present(
-                LinkerChoice::LinkerQuickUptakeOverlap(LinkerQuickUptakeOverlapNode(node)),
-            ),
-            "linker_quotation_follows" => NodeSlot::Present(LinkerChoice::LinkerQuotationFollows(
-                LinkerQuotationFollowsNode(node),
-            )),
-            "linker_self_completion" => NodeSlot::Present(LinkerChoice::LinkerSelfCompletion(
-                LinkerSelfCompletionNode(node),
-            )),
-            _ => NodeSlot::Unexpected(node),
+        match LinkerChoice::from_node(node) {
+            Some(__classified) => NodeSlot::Present(__classified),
+            None => NodeSlot::Unexpected(node),
         }
     };
     LinkerChildren {
@@ -18126,6 +22968,41 @@ impl<'tree> AsRawNode<'tree> for LinkersChild0Child0Choice<'tree> {
             LinkersChild0Child0Choice::LinkerQuickUptakeOverlap(inner) => inner.raw_node(),
             LinkersChild0Child0Choice::LinkerQuotationFollows(inner) => inner.raw_node(),
             LinkersChild0Child0Choice::LinkerSelfCompletion(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for LinkersChild0Child0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "ca_no_break_linker" => Some(LinkersChild0Child0Choice::CaNoBreakLinker(
+                CaNoBreakLinkerNode(node),
+            )),
+            "ca_technical_break_linker" => Some(LinkersChild0Child0Choice::CaTechnicalBreakLinker(
+                CaTechnicalBreakLinkerNode(node),
+            )),
+            "linker_lazy_overlap" => Some(LinkersChild0Child0Choice::LinkerLazyOverlap(
+                LinkerLazyOverlapNode(node),
+            )),
+            "linker_quick_uptake" => Some(LinkersChild0Child0Choice::LinkerQuickUptake(
+                LinkerQuickUptakeNode(node),
+            )),
+            "linker_quick_uptake_overlap" => {
+                Some(LinkersChild0Child0Choice::LinkerQuickUptakeOverlap(
+                    LinkerQuickUptakeOverlapNode(node),
+                ))
+            }
+            "linker_quotation_follows" => Some(LinkersChild0Child0Choice::LinkerQuotationFollows(
+                LinkerQuotationFollowsNode(node),
+            )),
+            "linker_self_completion" => Some(LinkersChild0Child0Choice::LinkerSelfCompletion(
+                LinkerSelfCompletionNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -18169,6 +23046,41 @@ impl<'tree> AsRawNode<'tree> for LinkersChild1Child0Choice<'tree> {
             LinkersChild1Child0Choice::LinkerQuickUptakeOverlap(inner) => inner.raw_node(),
             LinkersChild1Child0Choice::LinkerQuotationFollows(inner) => inner.raw_node(),
             LinkersChild1Child0Choice::LinkerSelfCompletion(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for LinkersChild1Child0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "ca_no_break_linker" => Some(LinkersChild1Child0Choice::CaNoBreakLinker(
+                CaNoBreakLinkerNode(node),
+            )),
+            "ca_technical_break_linker" => Some(LinkersChild1Child0Choice::CaTechnicalBreakLinker(
+                CaTechnicalBreakLinkerNode(node),
+            )),
+            "linker_lazy_overlap" => Some(LinkersChild1Child0Choice::LinkerLazyOverlap(
+                LinkerLazyOverlapNode(node),
+            )),
+            "linker_quick_uptake" => Some(LinkersChild1Child0Choice::LinkerQuickUptake(
+                LinkerQuickUptakeNode(node),
+            )),
+            "linker_quick_uptake_overlap" => {
+                Some(LinkersChild1Child0Choice::LinkerQuickUptakeOverlap(
+                    LinkerQuickUptakeOverlapNode(node),
+                ))
+            }
+            "linker_quotation_follows" => Some(LinkersChild1Child0Choice::LinkerQuotationFollows(
+                LinkerQuotationFollowsNode(node),
+            )),
+            "linker_self_completion" => Some(LinkersChild1Child0Choice::LinkerSelfCompletion(
+                LinkerSelfCompletionNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -18580,6 +23492,13 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
         }
     }
 }
+/// `linkers`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_linkers_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LinkersChildren<'tree>> {
+    node.is_error().then(|| extract_linkers(LinkersNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_location_header<'tree>(node: LocationHeaderNode<'tree>) -> LocationHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -18718,6 +23637,14 @@ pub fn extract_location_header<'tree>(
         }
     }
 }
+/// `location_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_location_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LocationHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_location_header(LocationHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureChildren<'tree>
 #[derive(Debug, Clone)]
@@ -18732,6 +23659,22 @@ impl<'tree> AsRawNode<'tree> for LongFeatureChoice<'tree> {
         match self {
             LongFeatureChoice::LongFeatureBegin(inner) => inner.raw_node(),
             LongFeatureChoice::LongFeatureEnd(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for LongFeatureChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "long_feature_begin" => Some(LongFeatureChoice::LongFeatureBegin(
+                LongFeatureBeginNode(node),
+            )),
+            "long_feature_end" => Some(LongFeatureChoice::LongFeatureEnd(LongFeatureEndNode(node))),
+            _ => None,
         }
     }
 }
@@ -18819,6 +23762,14 @@ pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureC
         trailing_extras,
         unexpected,
     }
+}
+/// `long_feature`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_long_feature_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LongFeatureChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_long_feature(LongFeatureNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_long_feature_begin<'tree>(node: LongFeatureBeginNode<'tree>) -> LongFeatureBeginChildren<'tree>
@@ -18931,6 +23882,14 @@ pub fn extract_long_feature_begin<'tree>(
         }
     }
 }
+/// `long_feature_begin`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_long_feature_begin_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LongFeatureBeginChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_long_feature_begin(LongFeatureBeginNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_long_feature_end<'tree>(node: LongFeatureEndNode<'tree>) -> LongFeatureEndChildren<'tree>
 #[derive(Debug, Clone)]
@@ -19042,6 +24001,14 @@ pub fn extract_long_feature_end<'tree>(
         }
     }
 }
+/// `long_feature_end`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_long_feature_end_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<LongFeatureEndChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_long_feature_end(LongFeatureEndNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGroupChildren<'tree>
 #[derive(Debug, Clone)]
@@ -19151,6 +24118,14 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
         }
     }
 }
+/// `main_pho_group`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_main_pho_group_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MainPhoGroupChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_main_pho_group(MainPhoGroupNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGroupChildren<'tree>
 #[derive(Debug, Clone)]
@@ -19259,6 +24234,14 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
             unexpected,
         }
     }
+}
+/// `main_sin_group`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_main_sin_group_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MainSinGroupChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_main_sin_group(MainSinGroupNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'tree>
@@ -19469,6 +24452,14 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
             unexpected,
         }
     }
+}
+/// `main_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_main_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MainTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_main_tier(MainTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_media_contents<'tree>(node: MediaContentsNode<'tree>) -> MediaContentsChildren<'tree>
@@ -19805,6 +24796,14 @@ pub fn extract_media_contents<'tree>(
         }
     }
 }
+/// `media_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_media_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MediaContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_media_contents(MediaContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_media_filename<'tree>(node: MediaFilenameNode<'tree>) -> MediaFilenameChildren<'tree>
 #[derive(Debug, Clone)]
@@ -19992,6 +24991,14 @@ pub fn extract_media_filename<'tree>(
         unexpected,
     }
 }
+/// `media_filename`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_media_filename_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MediaFilenameChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_media_filename(MediaFilenameNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -20128,6 +25135,14 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
         }
     }
 }
+/// `media_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_media_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MediaHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_media_header(MediaHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusChildren<'tree>
 #[derive(Debug, Clone)]
@@ -20148,6 +25163,24 @@ impl<'tree> AsRawNode<'tree> for MediaStatusChoice<'tree> {
             MediaStatusChoice::UnlinkedValue(inner) => inner.raw_node(),
             MediaStatusChoice::NotransValue(inner) => inner.raw_node(),
             MediaStatusChoice::GenericMediaStatus(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for MediaStatusChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "missing_value" => Some(MediaStatusChoice::MissingValue(MissingValueNode(node))),
+            "unlinked_value" => Some(MediaStatusChoice::UnlinkedValue(UnlinkedValueNode(node))),
+            "notrans_value" => Some(MediaStatusChoice::NotransValue(NotransValueNode(node))),
+            "generic_media_status" => Some(MediaStatusChoice::GenericMediaStatus(
+                GenericMediaStatusNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -20263,6 +25296,14 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
         unexpected,
     }
 }
+/// `media_status`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_media_status_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MediaStatusChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_media_status(MediaStatusNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildren<'tree>
 #[derive(Debug, Clone)]
@@ -20283,6 +25324,24 @@ impl<'tree> AsRawNode<'tree> for MediaTypeChoice<'tree> {
             MediaTypeChoice::AudioValue(inner) => inner.raw_node(),
             MediaTypeChoice::MissingValue(inner) => inner.raw_node(),
             MediaTypeChoice::GenericMediaType(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for MediaTypeChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "video_value" => Some(MediaTypeChoice::VideoValue(VideoValueNode(node))),
+            "audio_value" => Some(MediaTypeChoice::AudioValue(AudioValueNode(node))),
+            "missing_value" => Some(MediaTypeChoice::MissingValue(MissingValueNode(node))),
+            "generic_media_type" => Some(MediaTypeChoice::GenericMediaType(GenericMediaTypeNode(
+                node,
+            ))),
+            _ => None,
         }
     }
 }
@@ -20395,6 +25454,14 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
         trailing_extras,
         unexpected,
     }
+}
+/// `media_type`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_media_type_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MediaTypeChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_media_type(MediaTypeNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_mod_dependent_tier<'tree>(node: ModDependentTierNode<'tree>) -> ModDependentTierChildren<'tree>
@@ -20533,6 +25600,14 @@ pub fn extract_mod_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `mod_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mod_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ModDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_mod_dependent_tier(ModDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_modsyl_dependent_tier<'tree>(node: ModsylDependentTierNode<'tree>) -> ModsylDependentTierChildren<'tree>
@@ -20686,6 +25761,14 @@ pub fn extract_modsyl_dependent_tier<'tree>(
         }
     }
 }
+/// `modsyl_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_modsyl_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ModsylDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_modsyl_dependent_tier(ModsylDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChildren<'tree>
 #[derive(Debug, Clone)]
@@ -20798,6 +25881,14 @@ pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChil
         }
     }
 }
+/// `mor_content`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mor_content_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MorContentChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_mor_content(MorContentNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -20872,6 +25963,73 @@ impl<'tree> AsRawNode<'tree> for MorContentsChild0MorContentChild2Child1Choice<'
             MorContentsChild0MorContentChild2Child1Choice::TrailingOffQuestion(inner) => {
                 inner.raw_node()
             }
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for MorContentsChild0MorContentChild2Child1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "break_for_coding" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::BreakForCoding(BreakForCodingNode(
+                    node,
+                )),
+            ),
+            "broken_question" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::BrokenQuestion(BrokenQuestionNode(
+                    node,
+                )),
+            ),
+            "exclamation" => Some(MorContentsChild0MorContentChild2Child1Choice::Exclamation(
+                ExclamationNode(node),
+            )),
+            "interrupted_question" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::InterruptedQuestion(
+                    InterruptedQuestionNode(node),
+                ),
+            ),
+            "interruption" => Some(MorContentsChild0MorContentChild2Child1Choice::Interruption(
+                InterruptionNode(node),
+            )),
+            "period" => Some(MorContentsChild0MorContentChild2Child1Choice::Period(
+                PeriodNode(node),
+            )),
+            "question" => Some(MorContentsChild0MorContentChild2Child1Choice::Question(
+                QuestionNode(node),
+            )),
+            "quoted_new_line" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::QuotedNewLine(QuotedNewLineNode(
+                    node,
+                )),
+            ),
+            "quoted_period_simple" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::QuotedPeriodSimple(
+                    QuotedPeriodSimpleNode(node),
+                ),
+            ),
+            "self_interrupted_question" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::SelfInterruptedQuestion(
+                    SelfInterruptedQuestionNode(node),
+                ),
+            ),
+            "self_interruption" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::SelfInterruption(
+                    SelfInterruptionNode(node),
+                ),
+            ),
+            "trailing_off" => Some(MorContentsChild0MorContentChild2Child1Choice::TrailingOff(
+                TrailingOffNode(node),
+            )),
+            "trailing_off_question" => Some(
+                MorContentsChild0MorContentChild2Child1Choice::TrailingOffQuestion(
+                    TrailingOffQuestionNode(node),
+                ),
+            ),
+            _ => None,
         }
     }
 }
@@ -20957,6 +26115,65 @@ impl<'tree> AsRawNode<'tree> for MorContentsChild0BreakForCodingChoice<'tree> {
             MorContentsChild0BreakForCodingChoice::SelfInterruption(inner) => inner.raw_node(),
             MorContentsChild0BreakForCodingChoice::TrailingOff(inner) => inner.raw_node(),
             MorContentsChild0BreakForCodingChoice::TrailingOffQuestion(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for MorContentsChild0BreakForCodingChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "break_for_coding" => Some(MorContentsChild0BreakForCodingChoice::BreakForCoding(
+                BreakForCodingNode(node),
+            )),
+            "broken_question" => Some(MorContentsChild0BreakForCodingChoice::BrokenQuestion(
+                BrokenQuestionNode(node),
+            )),
+            "exclamation" => Some(MorContentsChild0BreakForCodingChoice::Exclamation(
+                ExclamationNode(node),
+            )),
+            "interrupted_question" => {
+                Some(MorContentsChild0BreakForCodingChoice::InterruptedQuestion(
+                    InterruptedQuestionNode(node),
+                ))
+            }
+            "interruption" => Some(MorContentsChild0BreakForCodingChoice::Interruption(
+                InterruptionNode(node),
+            )),
+            "period" => Some(MorContentsChild0BreakForCodingChoice::Period(PeriodNode(
+                node,
+            ))),
+            "question" => Some(MorContentsChild0BreakForCodingChoice::Question(
+                QuestionNode(node),
+            )),
+            "quoted_new_line" => Some(MorContentsChild0BreakForCodingChoice::QuotedNewLine(
+                QuotedNewLineNode(node),
+            )),
+            "quoted_period_simple" => {
+                Some(MorContentsChild0BreakForCodingChoice::QuotedPeriodSimple(
+                    QuotedPeriodSimpleNode(node),
+                ))
+            }
+            "self_interrupted_question" => Some(
+                MorContentsChild0BreakForCodingChoice::SelfInterruptedQuestion(
+                    SelfInterruptedQuestionNode(node),
+                ),
+            ),
+            "self_interruption" => Some(MorContentsChild0BreakForCodingChoice::SelfInterruption(
+                SelfInterruptionNode(node),
+            )),
+            "trailing_off" => Some(MorContentsChild0BreakForCodingChoice::TrailingOff(
+                TrailingOffNode(node),
+            )),
+            "trailing_off_question" => {
+                Some(MorContentsChild0BreakForCodingChoice::TrailingOffQuestion(
+                    TrailingOffQuestionNode(node),
+                ))
+            }
+            _ => None,
         }
     }
 }
@@ -21633,6 +26850,14 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
         }
     }
 }
+/// `mor_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mor_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MorContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_mor_contents(MorContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_mor_dependent_tier<'tree>(node: MorDependentTierNode<'tree>) -> MorDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -21771,6 +26996,14 @@ pub fn extract_mor_dependent_tier<'tree>(
         }
     }
 }
+/// `mor_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mor_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MorDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_mor_dependent_tier(MorDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_mor_feature<'tree>(node: MorFeatureNode<'tree>) -> MorFeatureChildren<'tree>
 #[derive(Debug, Clone)]
@@ -21852,6 +27085,14 @@ pub fn extract_mor_feature<'tree>(node: MorFeatureNode<'tree>) -> MorFeatureChil
             unexpected,
         }
     }
+}
+/// `mor_feature`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mor_feature_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MorFeatureChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_mor_feature(MorFeatureNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_mor_post_clitic<'tree>(node: MorPostCliticNode<'tree>) -> MorPostCliticChildren<'tree>
@@ -21936,6 +27177,14 @@ pub fn extract_mor_post_clitic<'tree>(
             unexpected,
         }
     }
+}
+/// `mor_post_clitic`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mor_post_clitic_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MorPostCliticChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_mor_post_clitic(MorPostCliticNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tree>
@@ -22089,6 +27338,13 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
         }
     }
 }
+/// `mor_word`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_mor_word_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<MorWordChildren<'tree>> {
+    node.is_error().then(|| extract_mor_word(MorWordNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_new_episode_header<'tree>(node: NewEpisodeHeaderNode<'tree>) -> NewEpisodeHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -22173,6 +27429,14 @@ pub fn extract_new_episode_header<'tree>(
         }
     }
 }
+/// `new_episode_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_new_episode_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NewEpisodeHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_new_episode_header(NewEpisodeHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_non_colon_separator<'tree>(node: NonColonSeparatorNode<'tree>) -> NonColonSeparatorChildren<'tree>
 #[derive(Debug, Clone)]
@@ -22223,6 +27487,48 @@ impl<'tree> AsRawNode<'tree> for NonColonSeparatorChoice<'tree> {
             NonColonSeparatorChoice::LevelPitch(inner) => inner.raw_node(),
             NonColonSeparatorChoice::FallingToMid(inner) => inner.raw_node(),
             NonColonSeparatorChoice::FallingToLow(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for NonColonSeparatorChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "comma" => Some(NonColonSeparatorChoice::Comma(CommaNode(node))),
+            "semicolon" => Some(NonColonSeparatorChoice::Semicolon(SemicolonNode(node))),
+            "tag_marker" => Some(NonColonSeparatorChoice::TagMarker(TagMarkerNode(node))),
+            "vocative_marker" => Some(NonColonSeparatorChoice::VocativeMarker(VocativeMarkerNode(
+                node,
+            ))),
+            "ca_continuation_marker" => Some(NonColonSeparatorChoice::CaContinuationMarker(
+                CaContinuationMarkerNode(node),
+            )),
+            "unmarked_ending" => Some(NonColonSeparatorChoice::UnmarkedEnding(UnmarkedEndingNode(
+                node,
+            ))),
+            "uptake_symbol" => Some(NonColonSeparatorChoice::UptakeSymbol(UptakeSymbolNode(
+                node,
+            ))),
+            "ca_no_break" => Some(NonColonSeparatorChoice::CaNoBreak(CaNoBreakNode(node))),
+            "ca_technical_break" => Some(NonColonSeparatorChoice::CaTechnicalBreak(
+                CaTechnicalBreakNode(node),
+            )),
+            "rising_to_high" => Some(NonColonSeparatorChoice::RisingToHigh(RisingToHighNode(
+                node,
+            ))),
+            "rising_to_mid" => Some(NonColonSeparatorChoice::RisingToMid(RisingToMidNode(node))),
+            "level_pitch" => Some(NonColonSeparatorChoice::LevelPitch(LevelPitchNode(node))),
+            "falling_to_mid" => Some(NonColonSeparatorChoice::FallingToMid(FallingToMidNode(
+                node,
+            ))),
+            "falling_to_low" => Some(NonColonSeparatorChoice::FallingToLow(FallingToLowNode(
+                node,
+            ))),
+            _ => None,
         }
     }
 }
@@ -22474,6 +27780,14 @@ pub fn extract_non_colon_separator<'tree>(
         unexpected,
     }
 }
+/// `non_colon_separator`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_non_colon_separator_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonColonSeparatorChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_non_colon_separator(NonColonSeparatorNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'tree>
 #[derive(Debug, Clone)]
@@ -22491,6 +27805,21 @@ impl<'tree> AsRawNode<'tree> for NonvocalChoice<'tree> {
             NonvocalChoice::NonvocalBegin(inner) => inner.raw_node(),
             NonvocalChoice::NonvocalEnd(inner) => inner.raw_node(),
             NonvocalChoice::NonvocalSimple(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for NonvocalChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "nonvocal_begin" => Some(NonvocalChoice::NonvocalBegin(NonvocalBeginNode(node))),
+            "nonvocal_end" => Some(NonvocalChoice::NonvocalEnd(NonvocalEndNode(node))),
+            "nonvocal_simple" => Some(NonvocalChoice::NonvocalSimple(NonvocalSimpleNode(node))),
+            _ => None,
         }
     }
 }
@@ -22590,6 +27919,14 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
         trailing_extras,
         unexpected,
     }
+}
+/// `nonvocal`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_nonvocal_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonvocalChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_nonvocal(NonvocalNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_nonvocal_begin<'tree>(node: NonvocalBeginNode<'tree>) -> NonvocalBeginChildren<'tree>
@@ -22702,6 +28039,14 @@ pub fn extract_nonvocal_begin<'tree>(
         }
     }
 }
+/// `nonvocal_begin`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_nonvocal_begin_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonvocalBeginChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_nonvocal_begin(NonvocalBeginNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndChildren<'tree>
 #[derive(Debug, Clone)]
@@ -22810,6 +28155,14 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
             unexpected,
         }
     }
+}
+/// `nonvocal_end`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_nonvocal_end_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonvocalEndChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_nonvocal_end(NonvocalEndNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_nonvocal_simple<'tree>(node: NonvocalSimpleNode<'tree>) -> NonvocalSimpleChildren<'tree>
@@ -22949,6 +28302,14 @@ pub fn extract_nonvocal_simple<'tree>(
         }
     }
 }
+/// `nonvocal_simple`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_nonvocal_simple_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonvocalSimpleChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_nonvocal_simple(NonvocalSimpleNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree>
 #[derive(Debug, Clone)]
@@ -22963,6 +28324,20 @@ impl<'tree> AsRawNode<'tree> for NonwordChoice<'tree> {
         match self {
             NonwordChoice::Event(inner) => inner.raw_node(),
             NonwordChoice::Zero(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for NonwordChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "event" => Some(NonwordChoice::Event(EventNode(node))),
+            "zero" => Some(NonwordChoice::Zero(ZeroNode(node))),
+            _ => None,
         }
     }
 }
@@ -23044,6 +28419,13 @@ pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree
         trailing_extras,
         unexpected,
     }
+}
+/// `nonword`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_nonword_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonwordChildren<'tree>> {
+    node.is_error().then(|| extract_nonword(NonwordNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_nonword_with_optional_annotations<'tree>(node: NonwordWithOptionalAnnotationsNode<'tree>) -> NonwordWithOptionalAnnotationsChildren<'tree>
@@ -23155,6 +28537,15 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
             unexpected,
         }
     }
+}
+/// `nonword_with_optional_annotations`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_nonword_with_optional_annotations_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NonwordWithOptionalAnnotationsChildren<'tree>> {
+    node.is_error().then(|| {
+        extract_nonword_with_optional_annotations(NonwordWithOptionalAnnotationsNode(node))
+    })
 }
 
 // Task 7 extract contract: pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHeaderChildren<'tree>
@@ -23292,6 +28683,14 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
         }
     }
 }
+/// `number_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_number_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NumberHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_number_header(NumberHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOptionChildren<'tree>
 #[derive(Debug, Clone)]
@@ -23324,6 +28723,26 @@ impl<'tree> AsRawNode<'tree> for NumberOptionChoice<'tree> {
             NumberOptionChoice::More(inner) => inner.raw_node(),
             NumberOptionChoice::Audience(inner) => inner.raw_node(),
             NumberOptionChoice::GenericNumber(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for NumberOptionChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "1" => Some(NumberOptionChoice::_1(K1Node(node))),
+            "2" => Some(NumberOptionChoice::_2(K2Node(node))),
+            "3" => Some(NumberOptionChoice::_3(K3Node(node))),
+            "4" => Some(NumberOptionChoice::_4(K4Node(node))),
+            "5" => Some(NumberOptionChoice::_5(K5Node(node))),
+            "more" => Some(NumberOptionChoice::More(MoreNode(node))),
+            "audience" => Some(NumberOptionChoice::Audience(AudienceNode(node))),
+            "generic_number" => Some(NumberOptionChoice::GenericNumber(GenericNumberNode(node))),
+            _ => None,
         }
     }
 }
@@ -23480,6 +28899,14 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
         unexpected,
     }
 }
+/// `number_option`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_number_option_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<NumberOptionChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_number_option(NumberOptionNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChildren<'tree>
 #[derive(Debug, Clone)]
@@ -23497,6 +28924,23 @@ impl<'tree> AsRawNode<'tree> for OptionNameChoice<'tree> {
             OptionNameChoice::CA(inner) => inner.raw_node(),
             OptionNameChoice::NoAlign(inner) => inner.raw_node(),
             OptionNameChoice::GenericOptionName(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for OptionNameChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "CA" => Some(OptionNameChoice::CA(CANode(node))),
+            "NoAlign" => Some(OptionNameChoice::NoAlign(NoAlignNode(node))),
+            "generic_option_name" => Some(OptionNameChoice::GenericOptionName(
+                GenericOptionNameNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -23593,6 +29037,14 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
         trailing_extras,
         unexpected,
     }
+}
+/// `option_name`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_option_name_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<OptionNameChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_option_name(OptionNameNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_options_contents<'tree>(node: OptionsContentsNode<'tree>) -> OptionsContentsChildren<'tree>
@@ -23812,6 +29264,14 @@ pub fn extract_options_contents<'tree>(
         }
     }
 }
+/// `options_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_options_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<OptionsContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_options_contents(OptionsContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_options_header<'tree>(node: OptionsHeaderNode<'tree>) -> OptionsHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -23949,6 +29409,14 @@ pub fn extract_options_header<'tree>(
             unexpected,
         }
     }
+}
+/// `options_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_options_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<OptionsHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_options_header(OptionsHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_ort_dependent_tier<'tree>(node: OrtDependentTierNode<'tree>) -> OrtDependentTierChildren<'tree>
@@ -24101,6 +29569,14 @@ pub fn extract_ort_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `ort_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_ort_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<OrtDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_ort_dependent_tier(OrtDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_other_spoken_event<'tree>(node: OtherSpokenEventNode<'tree>) -> OtherSpokenEventChildren<'tree>
@@ -24267,6 +29743,14 @@ pub fn extract_other_spoken_event<'tree>(
         }
     }
 }
+/// `other_spoken_event`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_other_spoken_event_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<OtherSpokenEventChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_other_spoken_event(OtherSpokenEventNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -24402,6 +29886,14 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
             unexpected,
         }
     }
+}
+/// `page_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_page_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PageHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_page_header(PageHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_par_dependent_tier<'tree>(node: ParDependentTierNode<'tree>) -> ParDependentTierChildren<'tree>
@@ -24555,6 +30047,14 @@ pub fn extract_par_dependent_tier<'tree>(
         }
     }
 }
+/// `par_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_par_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ParDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_par_dependent_tier(ParDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_para_annotation<'tree>(node: ParaAnnotationNode<'tree>) -> ParaAnnotationChildren<'tree>
 #[derive(Debug, Clone)]
@@ -24698,6 +30198,14 @@ pub fn extract_para_annotation<'tree>(
             unexpected,
         }
     }
+}
+/// `para_annotation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_para_annotation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ParaAnnotationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_para_annotation(ParaAnnotationNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantChildren<'tree>
@@ -24933,6 +30441,14 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
         }
     }
 }
+/// `participant`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_participant_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ParticipantChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_participant(ParticipantNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_participants_contents<'tree>(node: ParticipantsContentsNode<'tree>) -> ParticipantsContentsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -25151,6 +30667,14 @@ pub fn extract_participants_contents<'tree>(
         }
     }
 }
+/// `participants_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_participants_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ParticipantsContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_participants_contents(ParticipantsContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_participants_header<'tree>(node: ParticipantsHeaderNode<'tree>) -> ParticipantsHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -25288,6 +30812,14 @@ pub fn extract_participants_header<'tree>(
             unexpected,
         }
     }
+}
+/// `participants_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_participants_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ParticipantsHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_participants_header(ParticipantsHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_percent_annotation<'tree>(node: PercentAnnotationNode<'tree>) -> PercentAnnotationChildren<'tree>
@@ -25433,6 +30965,14 @@ pub fn extract_percent_annotation<'tree>(
         }
     }
 }
+/// `percent_annotation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_percent_annotation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PercentAnnotationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_percent_annotation(PercentAnnotationNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_pho_dependent_tier<'tree>(node: PhoDependentTierNode<'tree>) -> PhoDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -25570,6 +31110,14 @@ pub fn extract_pho_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `pho_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_pho_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhoDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_pho_dependent_tier(PhoDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'tree>
@@ -25787,6 +31335,14 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
         unexpected,
     }
 }
+/// `pho_group`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_pho_group_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhoGroupChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_pho_group(PhoGroupNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_pho_grouped_content<'tree>(node: PhoGroupedContentNode<'tree>) -> PhoGroupedContentChildren<'tree>
 #[derive(Debug, Clone)]
@@ -25974,6 +31530,14 @@ pub fn extract_pho_grouped_content<'tree>(
         }
     }
 }
+/// `pho_grouped_content`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_pho_grouped_content_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhoGroupedContentChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_pho_grouped_content(PhoGroupedContentNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -26156,6 +31720,14 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
             unexpected,
         }
     }
+}
+/// `pho_groups`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_pho_groups_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhoGroupsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_pho_groups(PhoGroupsNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'tree>
@@ -26340,6 +31912,14 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
         }
     }
 }
+/// `pho_words`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_pho_words_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhoWordsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_pho_words(PhoWordsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_phoaln_dependent_tier<'tree>(node: PhoalnDependentTierNode<'tree>) -> PhoalnDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -26491,6 +32071,14 @@ pub fn extract_phoaln_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `phoaln_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_phoaln_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhoalnDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_phoaln_dependent_tier(PhoalnDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_phosyl_dependent_tier<'tree>(node: PhosylDependentTierNode<'tree>) -> PhosylDependentTierChildren<'tree>
@@ -26644,6 +32232,14 @@ pub fn extract_phosyl_dependent_tier<'tree>(
         }
     }
 }
+/// `phosyl_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_phosyl_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PhosylDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_phosyl_dependent_tier(PhosylDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -26779,6 +32375,14 @@ pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildre
             unexpected,
         }
     }
+}
+/// `pid_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_pid_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PidHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_pid_header(PidHeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'tree>
@@ -26922,6 +32526,14 @@ pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'t
         }
     }
 }
+/// `postcode`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_postcode_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PostcodeChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_postcode(PostcodeNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_pre_begin_header<'tree>(node: tree_sitter::Node<'tree>) -> PreBeginHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -26942,6 +32554,24 @@ impl<'tree> AsRawNode<'tree> for PreBeginHeaderChoice<'tree> {
             PreBeginHeaderChoice::FontHeader(inner) => inner.raw_node(),
             PreBeginHeaderChoice::PidHeader(inner) => inner.raw_node(),
             PreBeginHeaderChoice::WindowHeader(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for PreBeginHeaderChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "color_words_header" => Some(PreBeginHeaderChoice::ColorWordsHeader(
+                ColorWordsHeaderNode(node),
+            )),
+            "font_header" => Some(PreBeginHeaderChoice::FontHeader(FontHeaderNode(node))),
+            "pid_header" => Some(PreBeginHeaderChoice::PidHeader(PidHeaderNode(node))),
+            "window_header" => Some(PreBeginHeaderChoice::WindowHeader(WindowHeaderNode(node))),
+            _ => None,
         }
     }
 }
@@ -26966,18 +32596,9 @@ pub fn extract_pre_begin_header<'tree>(
     } else if node.is_missing() {
         NodeSlot::Missing(node)
     } else {
-        match node.kind() {
-            "color_words_header" => NodeSlot::Present(PreBeginHeaderChoice::ColorWordsHeader(
-                ColorWordsHeaderNode(node),
-            )),
-            "font_header" => {
-                NodeSlot::Present(PreBeginHeaderChoice::FontHeader(FontHeaderNode(node)))
-            }
-            "pid_header" => NodeSlot::Present(PreBeginHeaderChoice::PidHeader(PidHeaderNode(node))),
-            "window_header" => {
-                NodeSlot::Present(PreBeginHeaderChoice::WindowHeader(WindowHeaderNode(node)))
-            }
-            _ => NodeSlot::Unexpected(node),
+        match PreBeginHeaderChoice::from_node(node) {
+            Some(__classified) => NodeSlot::Present(__classified),
+            None => NodeSlot::Unexpected(node),
         }
     };
     PreBeginHeaderChildren {
@@ -27095,6 +32716,134 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
         }
     }
 }
+/// `quotation`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_quotation_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<QuotationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_quotation(QuotationNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_quotation_with_optional_annotations<'tree>(node: QuotationWithOptionalAnnotationsNode<'tree>) -> QuotationWithOptionalAnnotationsChildren<'tree>
+#[derive(Debug, Clone)]
+pub struct QuotationWithOptionalAnnotationsChildren<'tree> {
+    /// Positional member 0.
+    pub quotation: Positioned<'tree, NodeSlot<'tree, QuotationNode<'tree>>>,
+    /// Positional member 1.
+    pub annotations: Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>>,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<Extra<'tree>>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<tree_sitter::Node<'tree>>,
+}
+impl<'tree> QuotationWithOptionalAnnotationsChildren<'tree> {
+    /// The `annotations` grammar field (accessor method `annotations`).
+    #[must_use]
+    pub fn annotations(
+        &self,
+    ) -> &Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>> {
+        &self.annotations
+    }
+    /// The `quotation` grammar field (accessor method `quotation`).
+    #[must_use]
+    pub fn quotation(&self) -> &Positioned<'tree, NodeSlot<'tree, QuotationNode<'tree>>> {
+        &self.quotation
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_quotation_with_optional_annotations<'tree>(
+    node: QuotationWithOptionalAnnotationsNode<'tree>,
+) -> QuotationWithOptionalAnnotationsChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children);
+    {
+        let quotation = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = {
+                let mut __at = __at.skip_displaced_errors(&SHAPE_307, &cont_of(&SHAPES_160));
+                if let Some(__c) = __at.peek() {
+                    if __c.is_error() {
+                        __at.advance();
+                        NodeSlot::Error(__c)
+                    } else if __c.kind() == "quotation" {
+                        __at.advance();
+                        if __c.is_missing() {
+                            NodeSlot::Missing(__c)
+                        } else {
+                            NodeSlot::Present(QuotationNode(__c))
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                } else {
+                    NodeSlot::Absent
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let annotations = {
+            let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
+            let slot = match optional_split_inner(
+                &SHAPE_114,
+                &cont_of(&SHAPES_3),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_114, &cont_of(&SHAPES_3));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "base_annotations" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(BaseAnnotationsNode(__c))
+                            }
+                        } else {
+                            NodeSlot::Absent
+                        }
+                    } else {
+                        NodeSlot::Absent
+                    }
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
+                }
+            };
+            Positioned::new(leading_extras, slot)
+        };
+        let Leftovers {
+            trailing_extras,
+            unexpected,
+        } = __cur.finish();
+        QuotationWithOptionalAnnotationsChildren {
+            quotation,
+            annotations,
+            trailing_extras,
+            unexpected,
+        }
+    }
+}
+/// `quotation_with_optional_annotations`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_quotation_with_optional_annotations_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<QuotationWithOptionalAnnotationsChildren<'tree>> {
+    node.is_error().then(|| {
+        extract_quotation_with_optional_annotations(QuotationWithOptionalAnnotationsNode(node))
+    })
+}
 
 // Task 7 extract contract: pub fn extract_recording_quality_header<'tree>(node: RecordingQualityHeaderNode<'tree>) -> RecordingQualityHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -27126,7 +32875,7 @@ pub fn extract_recording_quality_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_308, &cont_of(&SHAPES_193));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_309, &cont_of(&SHAPES_193));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27174,7 +32923,7 @@ pub fn extract_recording_quality_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_307, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_308, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27233,6 +32982,14 @@ pub fn extract_recording_quality_header<'tree>(
         }
     }
 }
+/// `recording_quality_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_recording_quality_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<RecordingQualityHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_recording_quality_header(RecordingQualityHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_recording_quality_option<'tree>(node: RecordingQualityOptionNode<'tree>) -> RecordingQualityOptionChildren<'tree>
 #[derive(Debug, Clone)]
@@ -27262,6 +33019,28 @@ impl<'tree> AsRawNode<'tree> for RecordingQualityOptionChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for RecordingQualityOptionChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "1" => Some(RecordingQualityOptionChoice::_1(K1Node(node))),
+            "2" => Some(RecordingQualityOptionChoice::_2(K2Node(node))),
+            "3" => Some(RecordingQualityOptionChoice::_3(K3Node(node))),
+            "4" => Some(RecordingQualityOptionChoice::_4(K4Node(node))),
+            "5" => Some(RecordingQualityOptionChoice::_5(K5Node(node))),
+            "generic_recording_quality" => {
+                Some(RecordingQualityOptionChoice::GenericRecordingQuality(
+                    GenericRecordingQualityNode(node),
+                ))
+            }
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct RecordingQualityOptionChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -27284,7 +33063,7 @@ pub fn extract_recording_quality_option<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_310, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_311, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -27396,6 +33175,14 @@ pub fn extract_recording_quality_option<'tree>(
         unexpected,
     }
 }
+/// `recording_quality_option`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_recording_quality_option_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<RecordingQualityOptionChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_recording_quality_option(RecordingQualityOptionNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementChildren<'tree>
 #[derive(Debug, Clone)]
@@ -27456,7 +33243,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_313, &cont_of(&SHAPES_196));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_314, &cont_of(&SHAPES_196));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27504,13 +33291,13 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_311, &cont_of(&SHAPES_198));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_312, &cont_of(&SHAPES_198));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
                         NodeSlot::Error(__c)
                     } else if shape_match_inner(
-                        &SHAPE_311,
+                        &SHAPE_312,
                         &cont_of(&SHAPES_198),
                         __at.all(),
                         __at.index(),
@@ -27613,7 +33400,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_311,
+                &SHAPE_312,
                 &cont_of(&SHAPES_8),
                 __at.all(),
                 __at.index(),
@@ -27632,7 +33419,7 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_311,
+                                &SHAPE_312,
                                 &cont_of(&SHAPES_198),
                                 __at.all(),
                                 __at.index(),
@@ -27778,6 +33565,14 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
         }
     }
 }
+/// `replacement`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_replacement_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ReplacementChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_replacement(ReplacementNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_room_layout_header<'tree>(node: RoomLayoutHeaderNode<'tree>) -> RoomLayoutHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -27809,7 +33604,7 @@ pub fn extract_room_layout_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_314, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_315, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -27916,6 +33711,14 @@ pub fn extract_room_layout_header<'tree>(
         }
     }
 }
+/// `room_layout_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_room_layout_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<RoomLayoutHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_room_layout_header(RoomLayoutHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren<'tree>
 #[derive(Debug, Clone)]
@@ -27930,6 +33733,22 @@ impl<'tree> AsRawNode<'tree> for SeparatorChoice<'tree> {
         match self {
             SeparatorChoice::NonColonSeparator(inner) => inner.raw_node(),
             SeparatorChoice::Colon(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for SeparatorChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "non_colon_separator" => Some(SeparatorChoice::NonColonSeparator(
+                NonColonSeparatorNode(node),
+            )),
+            "colon" => Some(SeparatorChoice::Colon(ColonNode(node))),
+            _ => None,
         }
     }
 }
@@ -27953,7 +33772,7 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_316, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_317, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -28015,6 +33834,14 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
         unexpected,
     }
 }
+/// `separator`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_separator_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SeparatorChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_separator(SeparatorNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28042,7 +33869,7 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_319, &cont_of(&SHAPES_201));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_320, &cont_of(&SHAPES_201));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28066,7 +33893,7 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_317, &cont_of(&SHAPES_202));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_318, &cont_of(&SHAPES_202));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28090,7 +33917,7 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_318, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_319, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28124,6 +33951,14 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
         }
     }
 }
+/// `shortening`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_shortening_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ShorteningChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_shortening(ShorteningNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_sin_dependent_tier<'tree>(node: SinDependentTierNode<'tree>) -> SinDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28155,7 +33990,7 @@ pub fn extract_sin_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_321, &cont_of(&SHAPES_203));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_322, &cont_of(&SHAPES_203));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28203,7 +34038,7 @@ pub fn extract_sin_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_320, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_321, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28262,6 +34097,14 @@ pub fn extract_sin_dependent_tier<'tree>(
         }
     }
 }
+/// `sin_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_sin_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SinDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_sin_dependent_tier(SinDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28306,7 +34149,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_325, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_326, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -28341,7 +34184,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_324,
+                                &SHAPE_325,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -28387,7 +34230,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_323,
+                                                    &SHAPE_324,
                                                     &cont_of(&SHAPES_117),
                                                 );
                                                 if let Some(__c) = __at.peek() {
@@ -28478,6 +34321,14 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
         unexpected,
     }
 }
+/// `sin_group`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_sin_group_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SinGroupChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_sin_group(SinGroupNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_sin_grouped_content<'tree>(node: SinGroupedContentNode<'tree>) -> SinGroupedContentChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28521,7 +34372,7 @@ pub fn extract_sin_grouped_content<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_322, &cont_of(&SHAPES_207));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_323, &cont_of(&SHAPES_207));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28545,7 +34396,7 @@ pub fn extract_sin_grouped_content<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_326,
+                &SHAPE_327,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -28564,7 +34415,7 @@ pub fn extract_sin_grouped_content<'tree>(
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_326,
+                                &SHAPE_327,
                                 &cont_of(&SHAPES_207),
                                 __at.all(),
                                 __at.index(),
@@ -28608,7 +34459,7 @@ pub fn extract_sin_grouped_content<'tree>(
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_322,
+                                                    &SHAPE_323,
                                                     &cont_of(&SHAPES_207),
                                                 );
                                                 if let Some(__c) = __at.peek() {
@@ -28665,6 +34516,14 @@ pub fn extract_sin_grouped_content<'tree>(
         }
     }
 }
+/// `sin_grouped_content`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_sin_grouped_content_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SinGroupedContentChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_sin_grouped_content(SinGroupedContentNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28704,7 +34563,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_328, &cont_of(&SHAPES_209));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_329, &cont_of(&SHAPES_209));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -28728,7 +34587,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_329,
+                &SHAPE_330,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -28747,7 +34606,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                 __at.advance();
                                 NodeSlot::Error(__c)
                             } else if shape_match_inner(
-                                &SHAPE_329,
+                                &SHAPE_330,
                                 &cont_of(&SHAPES_209),
                                 __at.all(),
                                 __at.index(),
@@ -28791,7 +34650,7 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_328,
+                                                    &SHAPE_329,
                                                     &cont_of(&SHAPES_209),
                                                 );
                                                 if let Some(__c) = __at.peek() {
@@ -28848,6 +34707,14 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
         }
     }
 }
+/// `sin_groups`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_sin_groups_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SinGroupsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_sin_groups(SinGroupsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28877,7 +34744,7 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_331, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_332, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -28936,6 +34803,13 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
         unexpected,
     }
 }
+/// `sin_word`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_sin_word_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SinWordChildren<'tree>> {
+    node.is_error().then(|| extract_sin_word(SinWordNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_sit_dependent_tier<'tree>(node: SitDependentTierNode<'tree>) -> SitDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -28967,7 +34841,7 @@ pub fn extract_sit_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_332, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_333, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -29088,6 +34962,14 @@ pub fn extract_sit_dependent_tier<'tree>(
         }
     }
 }
+/// `sit_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_sit_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SitDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_sit_dependent_tier(SitDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_situation_header<'tree>(node: SituationHeaderNode<'tree>) -> SituationHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -29119,7 +35001,7 @@ pub fn extract_situation_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_333, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_334, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -29226,6 +35108,14 @@ pub fn extract_situation_header<'tree>(
         }
     }
 }
+/// `situation_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_situation_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SituationHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_situation_header(SituationHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChildren<'tree>
 #[derive(Debug, Clone)]
@@ -29330,6 +35220,118 @@ impl<'tree> AsRawNode<'tree> for SourceFileActDependentTierChoice<'tree> {
             SourceFileActDependentTierChoice::WorDependentTier(inner) => inner.raw_node(),
             SourceFileActDependentTierChoice::XDependentTier(inner) => inner.raw_node(),
             SourceFileActDependentTierChoice::XphointDependentTier(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for SourceFileActDependentTierChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "act_dependent_tier" => Some(SourceFileActDependentTierChoice::ActDependentTier(
+                ActDependentTierNode(node),
+            )),
+            "add_dependent_tier" => Some(SourceFileActDependentTierChoice::AddDependentTier(
+                AddDependentTierNode(node),
+            )),
+            "alt_dependent_tier" => Some(SourceFileActDependentTierChoice::AltDependentTier(
+                AltDependentTierNode(node),
+            )),
+            "cod_dependent_tier" => Some(SourceFileActDependentTierChoice::CodDependentTier(
+                CodDependentTierNode(node),
+            )),
+            "coh_dependent_tier" => Some(SourceFileActDependentTierChoice::CohDependentTier(
+                CohDependentTierNode(node),
+            )),
+            "com_dependent_tier" => Some(SourceFileActDependentTierChoice::ComDependentTier(
+                ComDependentTierNode(node),
+            )),
+            "def_dependent_tier" => Some(SourceFileActDependentTierChoice::DefDependentTier(
+                DefDependentTierNode(node),
+            )),
+            "eng_dependent_tier" => Some(SourceFileActDependentTierChoice::EngDependentTier(
+                EngDependentTierNode(node),
+            )),
+            "err_dependent_tier" => Some(SourceFileActDependentTierChoice::ErrDependentTier(
+                ErrDependentTierNode(node),
+            )),
+            "exp_dependent_tier" => Some(SourceFileActDependentTierChoice::ExpDependentTier(
+                ExpDependentTierNode(node),
+            )),
+            "fac_dependent_tier" => Some(SourceFileActDependentTierChoice::FacDependentTier(
+                FacDependentTierNode(node),
+            )),
+            "flo_dependent_tier" => Some(SourceFileActDependentTierChoice::FloDependentTier(
+                FloDependentTierNode(node),
+            )),
+            "gls_dependent_tier" => Some(SourceFileActDependentTierChoice::GlsDependentTier(
+                GlsDependentTierNode(node),
+            )),
+            "gpx_dependent_tier" => Some(SourceFileActDependentTierChoice::GpxDependentTier(
+                GpxDependentTierNode(node),
+            )),
+            "gra_dependent_tier" => Some(SourceFileActDependentTierChoice::GraDependentTier(
+                GraDependentTierNode(node),
+            )),
+            "int_dependent_tier" => Some(SourceFileActDependentTierChoice::IntDependentTier(
+                IntDependentTierNode(node),
+            )),
+            "mod_dependent_tier" => Some(SourceFileActDependentTierChoice::ModDependentTier(
+                ModDependentTierNode(node),
+            )),
+            "modsyl_dependent_tier" => Some(SourceFileActDependentTierChoice::ModsylDependentTier(
+                ModsylDependentTierNode(node),
+            )),
+            "mor_dependent_tier" => Some(SourceFileActDependentTierChoice::MorDependentTier(
+                MorDependentTierNode(node),
+            )),
+            "ort_dependent_tier" => Some(SourceFileActDependentTierChoice::OrtDependentTier(
+                OrtDependentTierNode(node),
+            )),
+            "par_dependent_tier" => Some(SourceFileActDependentTierChoice::ParDependentTier(
+                ParDependentTierNode(node),
+            )),
+            "pho_dependent_tier" => Some(SourceFileActDependentTierChoice::PhoDependentTier(
+                PhoDependentTierNode(node),
+            )),
+            "phoaln_dependent_tier" => Some(SourceFileActDependentTierChoice::PhoalnDependentTier(
+                PhoalnDependentTierNode(node),
+            )),
+            "phosyl_dependent_tier" => Some(SourceFileActDependentTierChoice::PhosylDependentTier(
+                PhosylDependentTierNode(node),
+            )),
+            "sin_dependent_tier" => Some(SourceFileActDependentTierChoice::SinDependentTier(
+                SinDependentTierNode(node),
+            )),
+            "sit_dependent_tier" => Some(SourceFileActDependentTierChoice::SitDependentTier(
+                SitDependentTierNode(node),
+            )),
+            "spa_dependent_tier" => Some(SourceFileActDependentTierChoice::SpaDependentTier(
+                SpaDependentTierNode(node),
+            )),
+            "tim_dependent_tier" => Some(SourceFileActDependentTierChoice::TimDependentTier(
+                TimDependentTierNode(node),
+            )),
+            "unsupported_dependent_tier" => {
+                Some(SourceFileActDependentTierChoice::UnsupportedDependentTier(
+                    UnsupportedDependentTierNode(node),
+                ))
+            }
+            "wor_dependent_tier" => Some(SourceFileActDependentTierChoice::WorDependentTier(
+                WorDependentTierNode(node),
+            )),
+            "x_dependent_tier" => Some(SourceFileActDependentTierChoice::XDependentTier(
+                XDependentTierNode(node),
+            )),
+            "xphoint_dependent_tier" => {
+                Some(SourceFileActDependentTierChoice::XphointDependentTier(
+                    XphointDependentTierNode(node),
+                ))
+            }
+            _ => None,
         }
     }
 }
@@ -29444,6 +35446,118 @@ impl<'tree> AsRawNode<'tree> for SourceFileActivitiesHeaderChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for SourceFileActivitiesHeaderChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "activities_header" => Some(SourceFileActivitiesHeaderChoice::ActivitiesHeader(
+                ActivitiesHeaderNode(node),
+            )),
+            "bck_header" => Some(SourceFileActivitiesHeaderChoice::BckHeader(BckHeaderNode(
+                node,
+            ))),
+            "bg_header" => Some(SourceFileActivitiesHeaderChoice::BgHeader(BgHeaderNode(
+                node,
+            ))),
+            "birth_of_header" => Some(SourceFileActivitiesHeaderChoice::BirthOfHeader(
+                BirthOfHeaderNode(node),
+            )),
+            "birthplace_of_header" => Some(SourceFileActivitiesHeaderChoice::BirthplaceOfHeader(
+                BirthplaceOfHeaderNode(node),
+            )),
+            "blank_header" => Some(SourceFileActivitiesHeaderChoice::BlankHeader(
+                BlankHeaderNode(node),
+            )),
+            "comment_header" => Some(SourceFileActivitiesHeaderChoice::CommentHeader(
+                CommentHeaderNode(node),
+            )),
+            "date_header" => Some(SourceFileActivitiesHeaderChoice::DateHeader(
+                DateHeaderNode(node),
+            )),
+            "eg_header" => Some(SourceFileActivitiesHeaderChoice::EgHeader(EgHeaderNode(
+                node,
+            ))),
+            "g_header" => Some(SourceFileActivitiesHeaderChoice::GHeader(GHeaderNode(node))),
+            "id_header" => Some(SourceFileActivitiesHeaderChoice::IdHeader(IdHeaderNode(
+                node,
+            ))),
+            "l1_of_header" => Some(SourceFileActivitiesHeaderChoice::L1OfHeader(
+                L1OfHeaderNode(node),
+            )),
+            "languages_header" => Some(SourceFileActivitiesHeaderChoice::LanguagesHeader(
+                LanguagesHeaderNode(node),
+            )),
+            "location_header" => Some(SourceFileActivitiesHeaderChoice::LocationHeader(
+                LocationHeaderNode(node),
+            )),
+            "media_header" => Some(SourceFileActivitiesHeaderChoice::MediaHeader(
+                MediaHeaderNode(node),
+            )),
+            "new_episode_header" => Some(SourceFileActivitiesHeaderChoice::NewEpisodeHeader(
+                NewEpisodeHeaderNode(node),
+            )),
+            "number_header" => Some(SourceFileActivitiesHeaderChoice::NumberHeader(
+                NumberHeaderNode(node),
+            )),
+            "options_header" => Some(SourceFileActivitiesHeaderChoice::OptionsHeader(
+                OptionsHeaderNode(node),
+            )),
+            "page_header" => Some(SourceFileActivitiesHeaderChoice::PageHeader(
+                PageHeaderNode(node),
+            )),
+            "participants_header" => Some(SourceFileActivitiesHeaderChoice::ParticipantsHeader(
+                ParticipantsHeaderNode(node),
+            )),
+            "recording_quality_header" => {
+                Some(SourceFileActivitiesHeaderChoice::RecordingQualityHeader(
+                    RecordingQualityHeaderNode(node),
+                ))
+            }
+            "room_layout_header" => Some(SourceFileActivitiesHeaderChoice::RoomLayoutHeader(
+                RoomLayoutHeaderNode(node),
+            )),
+            "situation_header" => Some(SourceFileActivitiesHeaderChoice::SituationHeader(
+                SituationHeaderNode(node),
+            )),
+            "t_header" => Some(SourceFileActivitiesHeaderChoice::THeader(THeaderNode(node))),
+            "tape_location_header" => Some(SourceFileActivitiesHeaderChoice::TapeLocationHeader(
+                TapeLocationHeaderNode(node),
+            )),
+            "thumbnail_header" => Some(SourceFileActivitiesHeaderChoice::ThumbnailHeader(
+                ThumbnailHeaderNode(node),
+            )),
+            "time_duration_header" => Some(SourceFileActivitiesHeaderChoice::TimeDurationHeader(
+                TimeDurationHeaderNode(node),
+            )),
+            "time_start_header" => Some(SourceFileActivitiesHeaderChoice::TimeStartHeader(
+                TimeStartHeaderNode(node),
+            )),
+            "transcriber_header" => Some(SourceFileActivitiesHeaderChoice::TranscriberHeader(
+                TranscriberHeaderNode(node),
+            )),
+            "transcription_header" => Some(SourceFileActivitiesHeaderChoice::TranscriptionHeader(
+                TranscriptionHeaderNode(node),
+            )),
+            "types_header" => Some(SourceFileActivitiesHeaderChoice::TypesHeader(
+                TypesHeaderNode(node),
+            )),
+            "unsupported_header" => Some(SourceFileActivitiesHeaderChoice::UnsupportedHeader(
+                UnsupportedHeaderNode(node),
+            )),
+            "videos_header" => Some(SourceFileActivitiesHeaderChoice::VideosHeader(
+                VideosHeaderNode(node),
+            )),
+            "warning_header" => Some(SourceFileActivitiesHeaderChoice::WarningHeader(
+                WarningHeaderNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum SourceFileColorWordsHeaderChoice<'tree> {
     /// Subtype `color_words_header`.
@@ -29462,6 +35576,30 @@ impl<'tree> AsRawNode<'tree> for SourceFileColorWordsHeaderChoice<'tree> {
             SourceFileColorWordsHeaderChoice::FontHeader(inner) => inner.raw_node(),
             SourceFileColorWordsHeaderChoice::PidHeader(inner) => inner.raw_node(),
             SourceFileColorWordsHeaderChoice::WindowHeader(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for SourceFileColorWordsHeaderChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "color_words_header" => Some(SourceFileColorWordsHeaderChoice::ColorWordsHeader(
+                ColorWordsHeaderNode(node),
+            )),
+            "font_header" => Some(SourceFileColorWordsHeaderChoice::FontHeader(
+                FontHeaderNode(node),
+            )),
+            "pid_header" => Some(SourceFileColorWordsHeaderChoice::PidHeader(PidHeaderNode(
+                node,
+            ))),
+            "window_header" => Some(SourceFileColorWordsHeaderChoice::WindowHeader(
+                WindowHeaderNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -29515,7 +35653,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_337, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_338, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -30024,6 +36162,14 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
         unexpected,
     }
 }
+/// `source_file`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_source_file_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SourceFileChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_source_file(SourceFileNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_spa_dependent_tier<'tree>(node: SpaDependentTierNode<'tree>) -> SpaDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -30055,7 +36201,7 @@ pub fn extract_spa_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_338, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_339, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30176,6 +36322,14 @@ pub fn extract_spa_dependent_tier<'tree>(
         }
     }
 }
+/// `spa_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_spa_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<SpaDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_spa_dependent_tier(SpaDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_standalone_word<'tree>(node: StandaloneWordNode<'tree>) -> StandaloneWordChildren<'tree>
 #[derive(Debug, Clone)]
@@ -30193,6 +36347,51 @@ impl<'tree> AsRawNode<'tree> for StandaloneWordChild0Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for StandaloneWordChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "word_prefix" => Some(StandaloneWordChild0Choice::WordPrefix(WordPrefixNode(node))),
+            "zero" => Some(StandaloneWordChild0Choice::Zero(ZeroNode(node))),
+            _ => None,
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub enum StandaloneWordChild2Choice<'tree> {
+    /// Alternative `FormMarker`.
+    FormMarker(FormMarkerNode<'tree>),
+    /// Alternative `RepeatedFormMarker`.
+    RepeatedFormMarker(RepeatedFormMarkerNode<'tree>),
+}
+impl<'tree> AsRawNode<'tree> for StandaloneWordChild2Choice<'tree> {
+    fn raw_node(&self) -> tree_sitter::Node<'tree> {
+        match self {
+            StandaloneWordChild2Choice::FormMarker(inner) => inner.raw_node(),
+            StandaloneWordChild2Choice::RepeatedFormMarker(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for StandaloneWordChild2Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "form_marker" => Some(StandaloneWordChild2Choice::FormMarker(FormMarkerNode(node))),
+            "repeated_form_marker" => Some(StandaloneWordChild2Choice::RepeatedFormMarker(
+                RepeatedFormMarkerNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct StandaloneWordChildren<'tree> {
     /// Positional member 0.
@@ -30200,7 +36399,7 @@ pub struct StandaloneWordChildren<'tree> {
     /// Positional member 1.
     pub child_1: Positioned<'tree, NodeSlot<'tree, WordBodyNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, FormMarkerNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, StandaloneWordChild2Choice<'tree>>>>,
     /// Positional member 3.
     pub child_3: Positioned<'tree, Option<NodeSlot<'tree, WordLangSuffixNode<'tree>>>>,
     /// Positional member 4.
@@ -30224,7 +36423,7 @@ pub fn extract_standalone_word<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_347,
+                &SHAPE_350,
                 &cont_of(&SHAPES_213),
                 __at.all(),
                 __at.index(),
@@ -30233,7 +36432,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_347, &cont_of(&SHAPES_213));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_350, &cont_of(&SHAPES_213));
                     match __at.peek() {
                         Some(__c) if __c.is_error() => {
                             __at.advance();
@@ -30294,7 +36493,7 @@ pub fn extract_standalone_word<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_339, &cont_of(&SHAPES_215));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_340, &cont_of(&SHAPES_215));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30318,7 +36517,7 @@ pub fn extract_standalone_word<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_340,
+                &SHAPE_343,
                 &cont_of(&SHAPES_216),
                 __at.all(),
                 __at.index(),
@@ -30327,23 +36526,60 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_340, &cont_of(&SHAPES_216));
-                    if let Some(__c) = __at.peek() {
-                        if __c.is_error() {
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_343, &cont_of(&SHAPES_216));
+                    match __at.peek() {
+                        Some(__c) if __c.is_error() => {
                             __at.advance();
                             NodeSlot::Error(__c)
-                        } else if __c.kind() == "form_marker" {
-                            __at.advance();
-                            if __c.is_missing() {
-                                NodeSlot::Missing(__c)
-                            } else {
-                                NodeSlot::Present(FormMarkerNode(__c))
-                            }
-                        } else {
-                            NodeSlot::Absent
                         }
-                    } else {
-                        NodeSlot::Absent
+                        Some(__c) if __c.is_missing() => {
+                            __at.advance();
+                            NodeSlot::Missing(__c)
+                        }
+                        _ => {
+                            match choice_split_inner(
+                                &SHAPES_217,
+                                &cont_of(&SHAPES_216),
+                                __at.all(),
+                                __at.index(),
+                                __at.memo(),
+                            ) {
+                                Some(ChoiceSelection {
+                                    alternative: 0,
+                                    end,
+                                }) => {
+                                    if let Some(__v) =
+                                        __at.take_if_kind("form_marker").map(FormMarkerNode)
+                                    {
+                                        NodeSlot::Present(StandaloneWordChild2Choice::FormMarker(
+                                            __v,
+                                        ))
+                                    } else if let Some(__c) = __at.take_declined_span(end) {
+                                        NodeSlot::Unexpected(__c)
+                                    } else {
+                                        NodeSlot::Absent
+                                    }
+                                }
+                                Some(ChoiceSelection {
+                                    alternative: 1,
+                                    end,
+                                }) => {
+                                    if let Some(__v) = __at
+                                        .take_if_kind("repeated_form_marker")
+                                        .map(RepeatedFormMarkerNode)
+                                    {
+                                        NodeSlot::Present(
+                                            StandaloneWordChild2Choice::RepeatedFormMarker(__v),
+                                        )
+                                    } else if let Some(__c) = __at.take_declined_span(end) {
+                                        NodeSlot::Unexpected(__c)
+                                    } else {
+                                        NodeSlot::Absent
+                                    }
+                                }
+                                _ => NodeSlot::Absent,
+                            }
+                        }
                     }
                 }),
                 Presence::Empty => {
@@ -30356,8 +36592,8 @@ pub fn extract_standalone_word<'tree>(
         let child_3 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_342,
-                &cont_of(&SHAPES_217),
+                &SHAPE_345,
+                &cont_of(&SHAPES_218),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -30365,7 +36601,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_342, &cont_of(&SHAPES_217));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_345, &cont_of(&SHAPES_218));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -30394,7 +36630,7 @@ pub fn extract_standalone_word<'tree>(
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_344,
+                &SHAPE_347,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -30403,7 +36639,7 @@ pub fn extract_standalone_word<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_344, &cont_of(&SHAPES_3));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_347, &cont_of(&SHAPES_3));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -30444,6 +36680,14 @@ pub fn extract_standalone_word<'tree>(
         }
     }
 }
+/// `standalone_word`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_standalone_word_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<StandaloneWordChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_standalone_word(StandaloneWordNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -30473,7 +36717,7 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_348, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_351, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30580,6 +36824,13 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
         }
     }
 }
+/// `t_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_t_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<THeaderChildren<'tree>> {
+    node.is_error().then(|| extract_t_header(THeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_tape_location_header<'tree>(node: TapeLocationHeaderNode<'tree>) -> TapeLocationHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -30611,7 +36862,7 @@ pub fn extract_tape_location_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_349, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_352, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -30718,6 +36969,14 @@ pub fn extract_tape_location_header<'tree>(
         }
     }
 }
+/// `tape_location_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_tape_location_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TapeLocationHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_tape_location_header(TapeLocationHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_terminator<'tree>(node: tree_sitter::Node<'tree>) -> TerminatorChildren<'tree>
 #[derive(Debug, Clone)]
@@ -30768,6 +37027,41 @@ impl<'tree> AsRawNode<'tree> for TerminatorChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for TerminatorChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "break_for_coding" => Some(TerminatorChoice::BreakForCoding(BreakForCodingNode(node))),
+            "broken_question" => Some(TerminatorChoice::BrokenQuestion(BrokenQuestionNode(node))),
+            "exclamation" => Some(TerminatorChoice::Exclamation(ExclamationNode(node))),
+            "interrupted_question" => Some(TerminatorChoice::InterruptedQuestion(
+                InterruptedQuestionNode(node),
+            )),
+            "interruption" => Some(TerminatorChoice::Interruption(InterruptionNode(node))),
+            "period" => Some(TerminatorChoice::Period(PeriodNode(node))),
+            "question" => Some(TerminatorChoice::Question(QuestionNode(node))),
+            "quoted_new_line" => Some(TerminatorChoice::QuotedNewLine(QuotedNewLineNode(node))),
+            "quoted_period_simple" => Some(TerminatorChoice::QuotedPeriodSimple(
+                QuotedPeriodSimpleNode(node),
+            )),
+            "self_interrupted_question" => Some(TerminatorChoice::SelfInterruptedQuestion(
+                SelfInterruptedQuestionNode(node),
+            )),
+            "self_interruption" => Some(TerminatorChoice::SelfInterruption(SelfInterruptionNode(
+                node,
+            ))),
+            "trailing_off" => Some(TerminatorChoice::TrailingOff(TrailingOffNode(node))),
+            "trailing_off_question" => Some(TerminatorChoice::TrailingOffQuestion(
+                TrailingOffQuestionNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct TerminatorChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -30787,43 +37081,9 @@ pub fn extract_terminator<'tree>(node: tree_sitter::Node<'tree>) -> TerminatorCh
     } else if node.is_missing() {
         NodeSlot::Missing(node)
     } else {
-        match node.kind() {
-            "break_for_coding" => {
-                NodeSlot::Present(TerminatorChoice::BreakForCoding(BreakForCodingNode(node)))
-            }
-            "broken_question" => {
-                NodeSlot::Present(TerminatorChoice::BrokenQuestion(BrokenQuestionNode(node)))
-            }
-            "exclamation" => {
-                NodeSlot::Present(TerminatorChoice::Exclamation(ExclamationNode(node)))
-            }
-            "interrupted_question" => NodeSlot::Present(TerminatorChoice::InterruptedQuestion(
-                InterruptedQuestionNode(node),
-            )),
-            "interruption" => {
-                NodeSlot::Present(TerminatorChoice::Interruption(InterruptionNode(node)))
-            }
-            "period" => NodeSlot::Present(TerminatorChoice::Period(PeriodNode(node))),
-            "question" => NodeSlot::Present(TerminatorChoice::Question(QuestionNode(node))),
-            "quoted_new_line" => {
-                NodeSlot::Present(TerminatorChoice::QuotedNewLine(QuotedNewLineNode(node)))
-            }
-            "quoted_period_simple" => NodeSlot::Present(TerminatorChoice::QuotedPeriodSimple(
-                QuotedPeriodSimpleNode(node),
-            )),
-            "self_interrupted_question" => NodeSlot::Present(
-                TerminatorChoice::SelfInterruptedQuestion(SelfInterruptedQuestionNode(node)),
-            ),
-            "self_interruption" => NodeSlot::Present(TerminatorChoice::SelfInterruption(
-                SelfInterruptionNode(node),
-            )),
-            "trailing_off" => {
-                NodeSlot::Present(TerminatorChoice::TrailingOff(TrailingOffNode(node)))
-            }
-            "trailing_off_question" => NodeSlot::Present(TerminatorChoice::TrailingOffQuestion(
-                TrailingOffQuestionNode(node),
-            )),
-            _ => NodeSlot::Unexpected(node),
+        match TerminatorChoice::from_node(node) {
+            Some(__classified) => NodeSlot::Present(__classified),
+            None => NodeSlot::Unexpected(node),
         }
     };
     TerminatorChildren {
@@ -30906,7 +37166,7 @@ pub fn extract_text_with_bullets<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_353, &cont_of(&SHAPES_218));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_356, &cont_of(&SHAPES_219));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -30918,8 +37178,8 @@ pub fn extract_text_with_bullets<'tree>(
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_220,
-                            &cont_of(&SHAPES_218),
+                            &SHAPES_221,
+                            &cont_of(&SHAPES_219),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -30943,8 +37203,8 @@ pub fn extract_text_with_bullets<'tree>(
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_352,
-                                    &cont_of(&SHAPES_218),
+                                    &SHAPE_355,
+                                    &cont_of(&SHAPES_219),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -30960,7 +37220,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
                                                         &SHAPE_27,
-                                                        &cont_of(&SHAPES_219),
+                                                        &cont_of(&SHAPES_220),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -30987,7 +37247,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
                                                     &SHAPE_9,
-                                                    &cont_of(&SHAPES_218),
+                                                    &cont_of(&SHAPES_219),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31072,7 +37332,7 @@ pub fn extract_text_with_bullets<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_353,
+                &SHAPE_356,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -31099,8 +37359,8 @@ pub fn extract_text_with_bullets<'tree>(
                                 }
                                 _ => {
                                     match choice_split_inner(
-                                        &SHAPES_220,
-                                        &cont_of(&SHAPES_218),
+                                        &SHAPES_221,
+                                        &cont_of(&SHAPES_219),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -31121,8 +37381,8 @@ pub fn extract_text_with_bullets<'tree>(
                                         }
                                         Some(ChoiceSelection { alternative: 1, end }) => {
                                             if let Some(__v) = if shape_match_inner(
-                                                    &SHAPE_352,
-                                                    &cont_of(&SHAPES_218),
+                                                    &SHAPE_355,
+                                                    &cont_of(&SHAPES_219),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31137,7 +37397,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let slot = {
                                                                 let mut __at = __at
-                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_219));
+                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_220));
                                                                 if let Some(__c) = __at.peek() {
                                                                     if __c.is_error() {
                                                                         __at.advance();
@@ -31163,7 +37423,7 @@ pub fn extract_text_with_bullets<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let __count = repeat_split_inner(
                                                                     &SHAPE_9,
-                                                                    &cont_of(&SHAPES_218),
+                                                                    &cont_of(&SHAPES_219),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -31256,6 +37516,14 @@ pub fn extract_text_with_bullets<'tree>(
             unexpected,
         }
     }
+}
+/// `text_with_bullets`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_text_with_bullets_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TextWithBulletsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_text_with_bullets(TextWithBulletsNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_text_with_bullets_and_pics<'tree>(node: TextWithBulletsAndPicsNode<'tree>) -> TextWithBulletsAndPicsChildren<'tree>
@@ -31361,7 +37629,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_357, &cont_of(&SHAPES_221));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_360, &cont_of(&SHAPES_222));
                 match __at.peek() {
                     Some(__c) if __c.is_error() => {
                         __at.advance();
@@ -31373,8 +37641,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                     }
                     _ => {
                         match choice_split_inner(
-                            &SHAPES_223,
-                            &cont_of(&SHAPES_221),
+                            &SHAPES_224,
+                            &cont_of(&SHAPES_222),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -31400,8 +37668,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_352,
-                                    &cont_of(&SHAPES_221),
+                                    &SHAPE_355,
+                                    &cont_of(&SHAPES_222),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -31417,7 +37685,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
                                                         &SHAPE_27,
-                                                        &cont_of(&SHAPES_222),
+                                                        &cont_of(&SHAPES_223),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -31444,7 +37712,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
                                                     &SHAPE_9,
-                                                    &cont_of(&SHAPES_221),
+                                                    &cont_of(&SHAPES_222),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31510,8 +37778,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 end,
                             }) => {
                                 if let Some(__v) = if shape_match_inner(
-                                    &SHAPE_356,
-                                    &cont_of(&SHAPES_221),
+                                    &SHAPE_359,
+                                    &cont_of(&SHAPES_222),
                                     __at.all(),
                                     __at.index(),
                                     __at.memo(),
@@ -31526,8 +37794,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at.skip_displaced_errors(
-                                                        &SHAPE_355,
-                                                        &cont_of(&SHAPES_222),
+                                                        &SHAPE_358,
+                                                        &cont_of(&SHAPES_223),
                                                     );
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
@@ -31556,7 +37824,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                     __cur.take_leading_extras::<FixedArity>();
                                                 let __count = repeat_split_inner(
                                                     &SHAPE_9,
-                                                    &cont_of(&SHAPES_221),
+                                                    &cont_of(&SHAPES_222),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31643,7 +37911,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_357,
+                &SHAPE_360,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -31670,8 +37938,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 }
                                 _ => {
                                     match choice_split_inner(
-                                        &SHAPES_223,
-                                        &cont_of(&SHAPES_221),
+                                        &SHAPES_224,
+                                        &cont_of(&SHAPES_222),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -31692,8 +37960,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                         }
                                         Some(ChoiceSelection { alternative: 1, end }) => {
                                             if let Some(__v) = if shape_match_inner(
-                                                    &SHAPE_352,
-                                                    &cont_of(&SHAPES_221),
+                                                    &SHAPE_355,
+                                                    &cont_of(&SHAPES_222),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31708,7 +37976,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let slot = {
                                                                 let mut __at = __at
-                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_222));
+                                                                    .skip_displaced_errors(&SHAPE_27, &cont_of(&SHAPES_223));
                                                                 if let Some(__c) = __at.peek() {
                                                                     if __c.is_error() {
                                                                         __at.advance();
@@ -31734,7 +38002,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let __count = repeat_split_inner(
                                                                     &SHAPE_9,
-                                                                    &cont_of(&SHAPES_221),
+                                                                    &cont_of(&SHAPES_222),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -31796,8 +38064,8 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                         }
                                         Some(ChoiceSelection { alternative: 2, end }) => {
                                             if let Some(__v) = if shape_match_inner(
-                                                    &SHAPE_356,
-                                                    &cont_of(&SHAPES_221),
+                                                    &SHAPE_359,
+                                                    &cont_of(&SHAPES_222),
                                                     __at.all(),
                                                     __at.index(),
                                                     __at.memo(),
@@ -31812,7 +38080,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let slot = {
                                                                 let mut __at = __at
-                                                                    .skip_displaced_errors(&SHAPE_355, &cont_of(&SHAPES_222));
+                                                                    .skip_displaced_errors(&SHAPE_358, &cont_of(&SHAPES_223));
                                                                 if let Some(__c) = __at.peek() {
                                                                     if __c.is_error() {
                                                                         __at.advance();
@@ -31838,7 +38106,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 .take_leading_extras::<FixedArity>();
                                                             let __count = repeat_split_inner(
                                                                     &SHAPE_9,
-                                                                    &cont_of(&SHAPES_221),
+                                                                    &cont_of(&SHAPES_222),
                                                                     __at.all(),
                                                                     __at.index(),
                                                                     __at.memo(),
@@ -31934,6 +38202,14 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
         }
     }
 }
+/// `text_with_bullets_and_pics`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_text_with_bullets_and_pics_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TextWithBulletsAndPicsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_text_with_bullets_and_pics(TextWithBulletsAndPicsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_thumbnail_header<'tree>(node: ThumbnailHeaderNode<'tree>) -> ThumbnailHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -31965,7 +38241,7 @@ pub fn extract_thumbnail_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_359, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_362, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32072,6 +38348,14 @@ pub fn extract_thumbnail_header<'tree>(
         }
     }
 }
+/// `thumbnail_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_thumbnail_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<ThumbnailHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_thumbnail_header(ThumbnailHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'tree>
 #[derive(Debug, Clone)]
@@ -32138,8 +38422,8 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let linkers = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_364,
-                &cont_of(&SHAPES_224),
+                &SHAPE_367,
+                &cont_of(&SHAPES_225),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -32147,7 +38431,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_364, &cont_of(&SHAPES_224));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_367, &cont_of(&SHAPES_225));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -32176,8 +38460,8 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let language_code = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_361,
-                &cont_of(&SHAPES_225),
+                &SHAPE_364,
+                &cont_of(&SHAPES_226),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -32185,14 +38469,14 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_361, &cont_of(&SHAPES_225));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_364, &cont_of(&SHAPES_226));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_361,
-                            &cont_of(&SHAPES_225),
+                            &SHAPE_364,
+                            &cont_of(&SHAPES_226),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -32207,8 +38491,8 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_360,
-                                                &cont_of(&SHAPES_226),
+                                                &SHAPE_363,
+                                                &cont_of(&SHAPES_227),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -32236,7 +38520,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_225),
+                                                &cont_of(&SHAPES_226),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -32285,7 +38569,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let content_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_227));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_112, &cont_of(&SHAPES_228));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32309,7 +38593,7 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
         let ending = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_363, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_366, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32343,6 +38627,14 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
             unexpected,
         }
     }
+}
+/// `tier_body`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_tier_body_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TierBodyChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_tier_body(TierBodyNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tree>
@@ -32467,6 +38759,13 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
         }
     }
 }
+/// `tier_sep`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_tier_sep_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TierSepChildren<'tree>> {
+    node.is_error().then(|| extract_tier_sep(TierSepNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_tim_dependent_tier<'tree>(node: TimDependentTierNode<'tree>) -> TimDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -32498,7 +38797,7 @@ pub fn extract_tim_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_365, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_368, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32619,6 +38918,14 @@ pub fn extract_tim_dependent_tier<'tree>(
         }
     }
 }
+/// `tim_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_tim_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TimDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_tim_dependent_tier(TimDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_time_duration_contents<'tree>(node: TimeDurationContentsNode<'tree>) -> TimeDurationContentsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -32633,6 +38940,22 @@ impl<'tree> AsRawNode<'tree> for TimeDurationContentsChoice<'tree> {
         match self {
             TimeDurationContentsChoice::StrictTime(inner) => inner.raw_node(),
             TimeDurationContentsChoice::GenericTime(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for TimeDurationContentsChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "strict_time" => Some(TimeDurationContentsChoice::StrictTime(StrictTimeNode(node))),
+            "generic_time" => Some(TimeDurationContentsChoice::GenericTime(GenericTimeNode(
+                node,
+            ))),
+            _ => None,
         }
     }
 }
@@ -32658,7 +38981,7 @@ pub fn extract_time_duration_contents<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_368, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_371, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -32670,7 +38993,7 @@ pub fn extract_time_duration_contents<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_228,
+                        &SHAPES_229,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -32720,6 +39043,14 @@ pub fn extract_time_duration_contents<'tree>(
         unexpected,
     }
 }
+/// `time_duration_contents`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_time_duration_contents_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TimeDurationContentsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_time_duration_contents(TimeDurationContentsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_time_duration_header<'tree>(node: TimeDurationHeaderNode<'tree>) -> TimeDurationHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -32751,7 +39082,7 @@ pub fn extract_time_duration_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_370, &cont_of(&SHAPES_229));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_373, &cont_of(&SHAPES_230));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32775,7 +39106,7 @@ pub fn extract_time_duration_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_230));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_231));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32799,7 +39130,7 @@ pub fn extract_time_duration_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_369, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_372, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32858,6 +39189,14 @@ pub fn extract_time_duration_header<'tree>(
         }
     }
 }
+/// `time_duration_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_time_duration_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TimeDurationHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_time_duration_header(TimeDurationHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_time_start_header<'tree>(node: TimeStartHeaderNode<'tree>) -> TimeStartHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -32889,7 +39228,7 @@ pub fn extract_time_start_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_371, &cont_of(&SHAPES_229));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_374, &cont_of(&SHAPES_230));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32913,7 +39252,7 @@ pub fn extract_time_start_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_230));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_231));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32937,7 +39276,7 @@ pub fn extract_time_start_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_369, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_372, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -32996,6 +39335,14 @@ pub fn extract_time_start_header<'tree>(
         }
     }
 }
+/// `time_start_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_time_start_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TimeStartHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_time_start_header(TimeStartHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_transcriber_header<'tree>(node: TranscriberHeaderNode<'tree>) -> TranscriberHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -33027,7 +39374,7 @@ pub fn extract_transcriber_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_372, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_375, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33134,6 +39481,14 @@ pub fn extract_transcriber_header<'tree>(
         }
     }
 }
+/// `transcriber_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_transcriber_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TranscriberHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_transcriber_header(TranscriberHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_transcription_header<'tree>(node: TranscriptionHeaderNode<'tree>) -> TranscriptionHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -33165,7 +39520,7 @@ pub fn extract_transcription_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_374, &cont_of(&SHAPES_231));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_377, &cont_of(&SHAPES_232));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33189,7 +39544,7 @@ pub fn extract_transcription_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_232));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_233));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33213,7 +39568,7 @@ pub fn extract_transcription_header<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_373, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_376, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33272,6 +39627,14 @@ pub fn extract_transcription_header<'tree>(
         }
     }
 }
+/// `transcription_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_transcription_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TranscriptionHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_transcription_header(TranscriptionHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_transcription_option<'tree>(node: TranscriptionOptionNode<'tree>) -> TranscriptionOptionChildren<'tree>
 #[derive(Debug, Clone)]
@@ -33307,6 +39670,28 @@ impl<'tree> AsRawNode<'tree> for TranscriptionOptionChoice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for TranscriptionOptionChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "eye_dialect" => Some(TranscriptionOptionChoice::EyeDialect(EyeDialectNode(node))),
+            "partial" => Some(TranscriptionOptionChoice::Partial(PartialNode(node))),
+            "full" => Some(TranscriptionOptionChoice::Full(FullNode(node))),
+            "detailed" => Some(TranscriptionOptionChoice::Detailed(DetailedNode(node))),
+            "coarse" => Some(TranscriptionOptionChoice::Coarse(CoarseNode(node))),
+            "checked" => Some(TranscriptionOptionChoice::Checked(CheckedNode(node))),
+            "anonymized" => Some(TranscriptionOptionChoice::Anonymized(AnonymizedNode(node))),
+            "generic_transcription" => Some(TranscriptionOptionChoice::GenericTranscription(
+                GenericTranscriptionNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct TranscriptionOptionChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
@@ -33329,7 +39714,7 @@ pub fn extract_transcription_option<'tree>(
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_383, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_386, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -33341,7 +39726,7 @@ pub fn extract_transcription_option<'tree>(
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_233,
+                        &SHAPES_234,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -33466,6 +39851,14 @@ pub fn extract_transcription_option<'tree>(
         unexpected,
     }
 }
+/// `transcription_option`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_transcription_option_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TranscriptionOptionChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_transcription_option(TranscriptionOptionNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -33511,7 +39904,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_387, &cont_of(&SHAPES_234));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_390, &cont_of(&SHAPES_235));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33535,7 +39928,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_235));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_236));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33559,7 +39952,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_384, &cont_of(&SHAPES_236));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_387, &cont_of(&SHAPES_237));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33584,7 +39977,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_237),
+                &cont_of(&SHAPES_238),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33592,7 +39985,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_237));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_238));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33621,7 +40014,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_4 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_238));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_239));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33646,7 +40039,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_239),
+                &cont_of(&SHAPES_240),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33654,7 +40047,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_239));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_240));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33683,7 +40076,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_6 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_385, &cont_of(&SHAPES_240));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_388, &cont_of(&SHAPES_241));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33708,7 +40101,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_241),
+                &cont_of(&SHAPES_242),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33716,7 +40109,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_241));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_242));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33745,7 +40138,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_8 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_242));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_158, &cont_of(&SHAPES_243));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33770,7 +40163,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_14,
-                &cont_of(&SHAPES_243),
+                &cont_of(&SHAPES_244),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -33778,7 +40171,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_243));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_244));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -33807,7 +40200,7 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         let child_10 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_386, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_389, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33874,6 +40267,14 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
         }
     }
 }
+/// `types_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_types_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TypesHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_types_header(TypesHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_unsupported_dependent_tier<'tree>(node: UnsupportedDependentTierNode<'tree>) -> UnsupportedDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -33905,7 +40306,7 @@ pub fn extract_unsupported_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_388, &cont_of(&SHAPES_244));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_391, &cont_of(&SHAPES_245));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33929,7 +40330,7 @@ pub fn extract_unsupported_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_245));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_246));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -33989,6 +40390,14 @@ pub fn extract_unsupported_dependent_tier<'tree>(
         }
     }
 }
+/// `unsupported_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_unsupported_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<UnsupportedDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_unsupported_dependent_tier(UnsupportedDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_unsupported_header<'tree>(node: UnsupportedHeaderNode<'tree>) -> UnsupportedHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -34020,7 +40429,7 @@ pub fn extract_unsupported_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_389, &cont_of(&SHAPES_246));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_392, &cont_of(&SHAPES_247));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -34044,7 +40453,7 @@ pub fn extract_unsupported_header<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_247));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_5, &cont_of(&SHAPES_248));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -34127,6 +40536,14 @@ pub fn extract_unsupported_header<'tree>(
         }
     }
 }
+/// `unsupported_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_unsupported_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<UnsupportedHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_unsupported_header(UnsupportedHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_unsupported_line<'tree>(node: UnsupportedLineNode<'tree>) -> UnsupportedLineChildren<'tree>
 #[derive(Debug, Clone)]
@@ -34188,6 +40605,14 @@ pub fn extract_unsupported_line<'tree>(
         }
     }
 }
+/// `unsupported_line`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_unsupported_line_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<UnsupportedLineChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_unsupported_line(UnsupportedLineNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -34213,7 +40638,7 @@ pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChil
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_390, &cont_of(&SHAPES_2));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_393, &cont_of(&SHAPES_2));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -34269,6 +40694,14 @@ pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChil
             unexpected,
         }
     }
+}
+/// `utf8_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_utf8_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<Utf8HeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_utf8_header(Utf8HeaderNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren<'tree>
@@ -34377,6 +40810,114 @@ impl<'tree> AsRawNode<'tree> for UtteranceChild1Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for UtteranceChild1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "act_dependent_tier" => Some(UtteranceChild1Choice::ActDependentTier(
+                ActDependentTierNode(node),
+            )),
+            "add_dependent_tier" => Some(UtteranceChild1Choice::AddDependentTier(
+                AddDependentTierNode(node),
+            )),
+            "alt_dependent_tier" => Some(UtteranceChild1Choice::AltDependentTier(
+                AltDependentTierNode(node),
+            )),
+            "cod_dependent_tier" => Some(UtteranceChild1Choice::CodDependentTier(
+                CodDependentTierNode(node),
+            )),
+            "coh_dependent_tier" => Some(UtteranceChild1Choice::CohDependentTier(
+                CohDependentTierNode(node),
+            )),
+            "com_dependent_tier" => Some(UtteranceChild1Choice::ComDependentTier(
+                ComDependentTierNode(node),
+            )),
+            "def_dependent_tier" => Some(UtteranceChild1Choice::DefDependentTier(
+                DefDependentTierNode(node),
+            )),
+            "eng_dependent_tier" => Some(UtteranceChild1Choice::EngDependentTier(
+                EngDependentTierNode(node),
+            )),
+            "err_dependent_tier" => Some(UtteranceChild1Choice::ErrDependentTier(
+                ErrDependentTierNode(node),
+            )),
+            "exp_dependent_tier" => Some(UtteranceChild1Choice::ExpDependentTier(
+                ExpDependentTierNode(node),
+            )),
+            "fac_dependent_tier" => Some(UtteranceChild1Choice::FacDependentTier(
+                FacDependentTierNode(node),
+            )),
+            "flo_dependent_tier" => Some(UtteranceChild1Choice::FloDependentTier(
+                FloDependentTierNode(node),
+            )),
+            "gls_dependent_tier" => Some(UtteranceChild1Choice::GlsDependentTier(
+                GlsDependentTierNode(node),
+            )),
+            "gpx_dependent_tier" => Some(UtteranceChild1Choice::GpxDependentTier(
+                GpxDependentTierNode(node),
+            )),
+            "gra_dependent_tier" => Some(UtteranceChild1Choice::GraDependentTier(
+                GraDependentTierNode(node),
+            )),
+            "int_dependent_tier" => Some(UtteranceChild1Choice::IntDependentTier(
+                IntDependentTierNode(node),
+            )),
+            "mod_dependent_tier" => Some(UtteranceChild1Choice::ModDependentTier(
+                ModDependentTierNode(node),
+            )),
+            "modsyl_dependent_tier" => Some(UtteranceChild1Choice::ModsylDependentTier(
+                ModsylDependentTierNode(node),
+            )),
+            "mor_dependent_tier" => Some(UtteranceChild1Choice::MorDependentTier(
+                MorDependentTierNode(node),
+            )),
+            "ort_dependent_tier" => Some(UtteranceChild1Choice::OrtDependentTier(
+                OrtDependentTierNode(node),
+            )),
+            "par_dependent_tier" => Some(UtteranceChild1Choice::ParDependentTier(
+                ParDependentTierNode(node),
+            )),
+            "pho_dependent_tier" => Some(UtteranceChild1Choice::PhoDependentTier(
+                PhoDependentTierNode(node),
+            )),
+            "phoaln_dependent_tier" => Some(UtteranceChild1Choice::PhoalnDependentTier(
+                PhoalnDependentTierNode(node),
+            )),
+            "phosyl_dependent_tier" => Some(UtteranceChild1Choice::PhosylDependentTier(
+                PhosylDependentTierNode(node),
+            )),
+            "sin_dependent_tier" => Some(UtteranceChild1Choice::SinDependentTier(
+                SinDependentTierNode(node),
+            )),
+            "sit_dependent_tier" => Some(UtteranceChild1Choice::SitDependentTier(
+                SitDependentTierNode(node),
+            )),
+            "spa_dependent_tier" => Some(UtteranceChild1Choice::SpaDependentTier(
+                SpaDependentTierNode(node),
+            )),
+            "tim_dependent_tier" => Some(UtteranceChild1Choice::TimDependentTier(
+                TimDependentTierNode(node),
+            )),
+            "unsupported_dependent_tier" => Some(UtteranceChild1Choice::UnsupportedDependentTier(
+                UnsupportedDependentTierNode(node),
+            )),
+            "wor_dependent_tier" => Some(UtteranceChild1Choice::WorDependentTier(
+                WorDependentTierNode(node),
+            )),
+            "x_dependent_tier" => Some(UtteranceChild1Choice::XDependentTier(XDependentTierNode(
+                node,
+            ))),
+            "xphoint_dependent_tier" => Some(UtteranceChild1Choice::XphointDependentTier(
+                XphointDependentTierNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct UtteranceChildren<'tree> {
     /// Positional member 0.
@@ -34401,7 +40942,7 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_335, &cont_of(&SHAPES_248));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_336, &cont_of(&SHAPES_249));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -34425,7 +40966,7 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_336,
+                &SHAPE_337,
                 &cont_of(&SHAPES_3),
                 __at.all(),
                 __at.index(),
@@ -34853,6 +41394,14 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
         }
     }
 }
+/// `utterance`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_utterance_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<UtteranceChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_utterance(UtteranceNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceEndChildren<'tree>
 #[derive(Debug, Clone)]
@@ -34903,6 +41452,49 @@ impl<'tree> AsRawNode<'tree> for UtteranceEndChild0Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for UtteranceEndChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "break_for_coding" => Some(UtteranceEndChild0Choice::BreakForCoding(
+                BreakForCodingNode(node),
+            )),
+            "broken_question" => Some(UtteranceEndChild0Choice::BrokenQuestion(
+                BrokenQuestionNode(node),
+            )),
+            "exclamation" => Some(UtteranceEndChild0Choice::Exclamation(ExclamationNode(node))),
+            "interrupted_question" => Some(UtteranceEndChild0Choice::InterruptedQuestion(
+                InterruptedQuestionNode(node),
+            )),
+            "interruption" => Some(UtteranceEndChild0Choice::Interruption(InterruptionNode(
+                node,
+            ))),
+            "period" => Some(UtteranceEndChild0Choice::Period(PeriodNode(node))),
+            "question" => Some(UtteranceEndChild0Choice::Question(QuestionNode(node))),
+            "quoted_new_line" => Some(UtteranceEndChild0Choice::QuotedNewLine(QuotedNewLineNode(
+                node,
+            ))),
+            "quoted_period_simple" => Some(UtteranceEndChild0Choice::QuotedPeriodSimple(
+                QuotedPeriodSimpleNode(node),
+            )),
+            "self_interrupted_question" => Some(UtteranceEndChild0Choice::SelfInterruptedQuestion(
+                SelfInterruptedQuestionNode(node),
+            )),
+            "self_interruption" => Some(UtteranceEndChild0Choice::SelfInterruption(
+                SelfInterruptionNode(node),
+            )),
+            "trailing_off" => Some(UtteranceEndChild0Choice::TrailingOff(TrailingOffNode(node))),
+            "trailing_off_question" => Some(UtteranceEndChild0Choice::TrailingOffQuestion(
+                TrailingOffQuestionNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct UtteranceEndChild2Children<'tree> {
     /// Positional member 0.
@@ -34946,7 +41538,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
                 &SHAPE_211,
-                &cont_of(&SHAPES_249),
+                &cont_of(&SHAPES_250),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -34954,7 +41546,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_211, &cont_of(&SHAPES_249));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_211, &cont_of(&SHAPES_250));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -35118,8 +41710,8 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_392,
-                &cont_of(&SHAPES_250),
+                &SHAPE_395,
+                &cont_of(&SHAPES_251),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -35127,7 +41719,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_392, &cont_of(&SHAPES_250));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_395, &cont_of(&SHAPES_251));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
@@ -35156,8 +41748,8 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_394,
-                &cont_of(&SHAPES_251),
+                &SHAPE_397,
+                &cont_of(&SHAPES_252),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -35165,14 +41757,14 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_394, &cont_of(&SHAPES_251));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_397, &cont_of(&SHAPES_252));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_394,
-                            &cont_of(&SHAPES_251),
+                            &SHAPE_397,
+                            &cont_of(&SHAPES_252),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -35187,7 +41779,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = match optional_split_inner(
                                             &SHAPE_14,
-                                            &cont_of(&SHAPES_252),
+                                            &cont_of(&SHAPES_253),
                                             __at.all(),
                                             __at.index(),
                                             __at.memo(),
@@ -35197,7 +41789,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                             Presence::Taken => Some({
                                                 let mut __at = __at.skip_displaced_errors(
                                                     &SHAPE_14,
-                                                    &cont_of(&SHAPES_252),
+                                                    &cont_of(&SHAPES_253),
                                                 );
                                                 if let Some(__c) = __at.peek() {
                                                     if __c.is_error() {
@@ -35230,7 +41822,7 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_27,
-                                                &cont_of(&SHAPES_251),
+                                                &cont_of(&SHAPES_252),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -35353,6 +41945,14 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
         }
     }
 }
+/// `utterance_end`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_utterance_end_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<UtteranceEndChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_utterance_end(UtteranceEndNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -35382,7 +41982,7 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_396, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_399, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35489,6 +42089,14 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
         }
     }
 }
+/// `videos_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_videos_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<VideosHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_videos_header(VideosHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_warning_header<'tree>(node: WarningHeaderNode<'tree>) -> WarningHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -35520,7 +42128,7 @@ pub fn extract_warning_header<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_397, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_400, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35627,6 +42235,14 @@ pub fn extract_warning_header<'tree>(
         }
     }
 }
+/// `warning_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_warning_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WarningHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_warning_header(WarningHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHeaderChildren<'tree>
 #[derive(Debug, Clone)]
@@ -35656,7 +42272,7 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_398, &cont_of(&SHAPES_4));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_401, &cont_of(&SHAPES_4));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35763,6 +42379,14 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
         }
     }
 }
+/// `window_header`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_window_header_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WindowHeaderChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_window_header(WindowHeaderNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_wor_dependent_tier<'tree>(node: WorDependentTierNode<'tree>) -> WorDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -35792,7 +42416,7 @@ pub fn extract_wor_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_400, &cont_of(&SHAPES_253));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_403, &cont_of(&SHAPES_254));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35816,7 +42440,7 @@ pub fn extract_wor_dependent_tier<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_254));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_0, &cont_of(&SHAPES_255));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35840,7 +42464,7 @@ pub fn extract_wor_dependent_tier<'tree>(
         let child_2 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_399, &cont_of(&SHAPES_3));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_402, &cont_of(&SHAPES_3));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -35873,6 +42497,14 @@ pub fn extract_wor_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `wor_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_wor_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WorDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_wor_dependent_tier(WorDependentTierNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBodyChildren<'tree>
@@ -35910,6 +42542,29 @@ impl<'tree> AsRawNode<'tree> for WorTierBodyChild1Child0Choice<'tree> {
             WorTierBodyChild1Child0Choice::Comma(inner) => inner.raw_node(),
             WorTierBodyChild1Child0Choice::TagMarker(inner) => inner.raw_node(),
             WorTierBodyChild1Child0Choice::VocativeMarker(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for WorTierBodyChild1Child0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "wor_word_item" => Some(WorTierBodyChild1Child0Choice::WorWordItem(WorWordItemNode(
+                node,
+            ))),
+            "bullet" => Some(WorTierBodyChild1Child0Choice::Bullet(BulletNode(node))),
+            "comma" => Some(WorTierBodyChild1Child0Choice::Comma(CommaNode(node))),
+            "tag_marker" => Some(WorTierBodyChild1Child0Choice::TagMarker(TagMarkerNode(
+                node,
+            ))),
+            "vocative_marker" => Some(WorTierBodyChild1Child0Choice::VocativeMarker(
+                VocativeMarkerNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -35974,6 +42629,49 @@ impl<'tree> AsRawNode<'tree> for WorTierBodyChild2Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for WorTierBodyChild2Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "break_for_coding" => Some(WorTierBodyChild2Choice::BreakForCoding(
+                BreakForCodingNode(node),
+            )),
+            "broken_question" => Some(WorTierBodyChild2Choice::BrokenQuestion(BrokenQuestionNode(
+                node,
+            ))),
+            "exclamation" => Some(WorTierBodyChild2Choice::Exclamation(ExclamationNode(node))),
+            "interrupted_question" => Some(WorTierBodyChild2Choice::InterruptedQuestion(
+                InterruptedQuestionNode(node),
+            )),
+            "interruption" => Some(WorTierBodyChild2Choice::Interruption(InterruptionNode(
+                node,
+            ))),
+            "period" => Some(WorTierBodyChild2Choice::Period(PeriodNode(node))),
+            "question" => Some(WorTierBodyChild2Choice::Question(QuestionNode(node))),
+            "quoted_new_line" => Some(WorTierBodyChild2Choice::QuotedNewLine(QuotedNewLineNode(
+                node,
+            ))),
+            "quoted_period_simple" => Some(WorTierBodyChild2Choice::QuotedPeriodSimple(
+                QuotedPeriodSimpleNode(node),
+            )),
+            "self_interrupted_question" => Some(WorTierBodyChild2Choice::SelfInterruptedQuestion(
+                SelfInterruptedQuestionNode(node),
+            )),
+            "self_interruption" => Some(WorTierBodyChild2Choice::SelfInterruption(
+                SelfInterruptionNode(node),
+            )),
+            "trailing_off" => Some(WorTierBodyChild2Choice::TrailingOff(TrailingOffNode(node))),
+            "trailing_off_question" => Some(WorTierBodyChild2Choice::TrailingOffQuestion(
+                TrailingOffQuestionNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct WorTierBodyChildren<'tree> {
     /// Positional member 0.
@@ -36013,8 +42711,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         let language_code = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_361,
-                &cont_of(&SHAPES_255),
+                &SHAPE_364,
+                &cont_of(&SHAPES_256),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -36022,14 +42720,14 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_361, &cont_of(&SHAPES_255));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_364, &cont_of(&SHAPES_256));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_361,
-                            &cont_of(&SHAPES_255),
+                            &SHAPE_364,
+                            &cont_of(&SHAPES_256),
                             __at.all(),
                             __at.index(),
                             __at.memo(),
@@ -36044,8 +42742,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_360,
-                                                &cont_of(&SHAPES_256),
+                                                &SHAPE_363,
+                                                &cont_of(&SHAPES_257),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -36073,7 +42771,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_255),
+                                                &cont_of(&SHAPES_256),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -36122,8 +42820,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let __count = repeat_split_inner(
-                &SHAPE_403,
-                &cont_of(&SHAPES_257),
+                &SHAPE_406,
+                &cont_of(&SHAPES_258),
                 __at.all(),
                 __at.index(),
                 __at.memo(),
@@ -36143,8 +42841,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                     __at.advance();
                                     NodeSlot::Error(__c)
                                 } else if shape_match_inner(
-                                        &SHAPE_403,
-                                        &cont_of(&SHAPES_255),
+                                        &SHAPE_406,
+                                        &cont_of(&SHAPES_256),
                                         __at.all(),
                                         __at.index(),
                                         __at.memo(),
@@ -36159,7 +42857,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                     .take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at
-                                                        .skip_displaced_errors(&SHAPE_402, &cont_of(&SHAPES_256));
+                                                        .skip_displaced_errors(&SHAPE_405, &cont_of(&SHAPES_257));
                                                     match __at.peek() {
                                                         Some(__c) if __c.is_error() => {
                                                             __at.advance();
@@ -36171,8 +42869,8 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                         }
                                                         _ => {
                                                             match choice_split_inner(
-                                                                &SHAPES_258,
-                                                                &cont_of(&SHAPES_256),
+                                                                &SHAPES_259,
+                                                                &cont_of(&SHAPES_257),
                                                                 __at.all(),
                                                                 __at.index(),
                                                                 __at.memo(),
@@ -36255,7 +42953,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                     .take_leading_extras::<FixedArity>();
                                                 let slot = {
                                                     let mut __at = __at
-                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_255));
+                                                        .skip_displaced_errors(&SHAPE_14, &cont_of(&SHAPES_256));
                                                     if let Some(__c) = __at.peek() {
                                                         if __c.is_error() {
                                                             __at.advance();
@@ -36509,6 +43207,14 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
         }
     }
 }
+/// `wor_tier_body`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_wor_tier_body_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WorTierBodyChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_wor_tier_body(WorTierBodyNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_wor_word_item<'tree>(node: WorWordItemNode<'tree>) -> WorWordItemChildren<'tree>
 #[derive(Debug, Clone)]
@@ -36562,6 +43268,14 @@ pub fn extract_wor_word_item<'tree>(node: WorWordItemNode<'tree>) -> WorWordItem
         unexpected,
     }
 }
+/// `wor_word_item`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_wor_word_item_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WorWordItemChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_wor_word_item(WorWordItemNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'tree>
 #[derive(Debug, Clone)]
@@ -36579,6 +43293,27 @@ impl<'tree> AsRawNode<'tree> for WordBodyWordSegmentChild0Choice<'tree> {
             WordBodyWordSegmentChild0Choice::WordSegment(inner) => inner.raw_node(),
             WordBodyWordSegmentChild0Choice::Shortening(inner) => inner.raw_node(),
             WordBodyWordSegmentChild0Choice::StressMarker(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for WordBodyWordSegmentChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "word_segment" => Some(WordBodyWordSegmentChild0Choice::WordSegment(
+                WordSegmentNode(node),
+            )),
+            "shortening" => Some(WordBodyWordSegmentChild0Choice::Shortening(ShorteningNode(
+                node,
+            ))),
+            "stress_marker" => Some(WordBodyWordSegmentChild0Choice::StressMarker(
+                StressMarkerNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -36615,6 +43350,45 @@ impl<'tree> AsRawNode<'tree> for WordBodyWordSegmentChild1LengtheningChoice<'tre
             WordBodyWordSegmentChild1LengtheningChoice::SyllablePause(inner) => inner.raw_node(),
             WordBodyWordSegmentChild1LengtheningChoice::Tilde(inner) => inner.raw_node(),
             WordBodyWordSegmentChild1LengtheningChoice::Variant8(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for WordBodyWordSegmentChild1LengtheningChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "lengthening" => Some(WordBodyWordSegmentChild1LengtheningChoice::Lengthening(
+                LengtheningNode(node),
+            )),
+            "overlap_point" => Some(WordBodyWordSegmentChild1LengtheningChoice::OverlapPoint(
+                OverlapPointNode(node),
+            )),
+            "ca_element" => Some(WordBodyWordSegmentChild1LengtheningChoice::CaElement(
+                CaElementNode(node),
+            )),
+            "ca_delimiter" => Some(WordBodyWordSegmentChild1LengtheningChoice::CaDelimiter(
+                CaDelimiterNode(node),
+            )),
+            "underline_begin" => Some(WordBodyWordSegmentChild1LengtheningChoice::UnderlineBegin(
+                UnderlineBeginNode(node),
+            )),
+            "underline_end" => Some(WordBodyWordSegmentChild1LengtheningChoice::UnderlineEnd(
+                UnderlineEndNode(node),
+            )),
+            "syllable_pause" => Some(WordBodyWordSegmentChild1LengtheningChoice::SyllablePause(
+                SyllablePauseNode(node),
+            )),
+            "tilde" => Some(WordBodyWordSegmentChild1LengtheningChoice::Tilde(
+                TildeNode(node),
+            )),
+            "+" => Some(WordBodyWordSegmentChild1LengtheningChoice::Variant8(
+                PlusNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -36679,6 +43453,33 @@ impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild0Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for WordBodyOverlapPointChild0Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "overlap_point" => Some(WordBodyOverlapPointChild0Choice::OverlapPoint(
+                OverlapPointNode(node),
+            )),
+            "ca_element" => Some(WordBodyOverlapPointChild0Choice::CaElement(CaElementNode(
+                node,
+            ))),
+            "ca_delimiter" => Some(WordBodyOverlapPointChild0Choice::CaDelimiter(
+                CaDelimiterNode(node),
+            )),
+            "underline_begin" => Some(WordBodyOverlapPointChild0Choice::UnderlineBegin(
+                UnderlineBeginNode(node),
+            )),
+            "syllable_pause" => Some(WordBodyOverlapPointChild0Choice::SyllablePause(
+                SyllablePauseNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum WordBodyOverlapPointChild1Choice<'tree> {
     /// Alternative `OverlapPoint`.
@@ -36703,6 +43504,33 @@ impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild1Choice<'tree> {
         }
     }
 }
+impl<'tree> FromNodeKind<'tree> for WordBodyOverlapPointChild1Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "overlap_point" => Some(WordBodyOverlapPointChild1Choice::OverlapPoint(
+                OverlapPointNode(node),
+            )),
+            "ca_element" => Some(WordBodyOverlapPointChild1Choice::CaElement(CaElementNode(
+                node,
+            ))),
+            "ca_delimiter" => Some(WordBodyOverlapPointChild1Choice::CaDelimiter(
+                CaDelimiterNode(node),
+            )),
+            "underline_begin" => Some(WordBodyOverlapPointChild1Choice::UnderlineBegin(
+                UnderlineBeginNode(node),
+            )),
+            "syllable_pause" => Some(WordBodyOverlapPointChild1Choice::SyllablePause(
+                SyllablePauseNode(node),
+            )),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub enum WordBodyOverlapPointChild2Choice<'tree> {
     /// Alternative `WordSegment`.
@@ -36718,6 +43546,27 @@ impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild2Choice<'tree> {
             WordBodyOverlapPointChild2Choice::WordSegment(inner) => inner.raw_node(),
             WordBodyOverlapPointChild2Choice::Shortening(inner) => inner.raw_node(),
             WordBodyOverlapPointChild2Choice::StressMarker(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for WordBodyOverlapPointChild2Choice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "word_segment" => Some(WordBodyOverlapPointChild2Choice::WordSegment(
+                WordSegmentNode(node),
+            )),
+            "shortening" => Some(WordBodyOverlapPointChild2Choice::Shortening(
+                ShorteningNode(node),
+            )),
+            "stress_marker" => Some(WordBodyOverlapPointChild2Choice::StressMarker(
+                StressMarkerNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -36754,6 +43603,45 @@ impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild3LengtheningChoice<'tr
             WordBodyOverlapPointChild3LengtheningChoice::SyllablePause(inner) => inner.raw_node(),
             WordBodyOverlapPointChild3LengtheningChoice::Tilde(inner) => inner.raw_node(),
             WordBodyOverlapPointChild3LengtheningChoice::Variant8(inner) => inner.raw_node(),
+        }
+    }
+}
+impl<'tree> FromNodeKind<'tree> for WordBodyOverlapPointChild3LengtheningChoice<'tree> {
+    /** Classify a node into this choice's own alternatives.
+
+    Returns `None` for a node of any other kind. That is a refusal,
+    not a failure: the caller holds a node this choice does not
+    describe, and saying so is the only true answer available.*/
+    fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
+        match node.kind() {
+            "lengthening" => Some(WordBodyOverlapPointChild3LengtheningChoice::Lengthening(
+                LengtheningNode(node),
+            )),
+            "overlap_point" => Some(WordBodyOverlapPointChild3LengtheningChoice::OverlapPoint(
+                OverlapPointNode(node),
+            )),
+            "ca_element" => Some(WordBodyOverlapPointChild3LengtheningChoice::CaElement(
+                CaElementNode(node),
+            )),
+            "ca_delimiter" => Some(WordBodyOverlapPointChild3LengtheningChoice::CaDelimiter(
+                CaDelimiterNode(node),
+            )),
+            "underline_begin" => Some(WordBodyOverlapPointChild3LengtheningChoice::UnderlineBegin(
+                UnderlineBeginNode(node),
+            )),
+            "underline_end" => Some(WordBodyOverlapPointChild3LengtheningChoice::UnderlineEnd(
+                UnderlineEndNode(node),
+            )),
+            "syllable_pause" => Some(WordBodyOverlapPointChild3LengtheningChoice::SyllablePause(
+                SyllablePauseNode(node),
+            )),
+            "tilde" => Some(WordBodyOverlapPointChild3LengtheningChoice::Tilde(
+                TildeNode(node),
+            )),
+            "+" => Some(WordBodyOverlapPointChild3LengtheningChoice::Variant8(
+                PlusNode(node),
+            )),
+            _ => None,
         }
     }
 }
@@ -36828,7 +43716,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
     let content = {
         let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
         let slot = {
-            let mut __at = __at.skip_displaced_errors(&SHAPE_421, &cont_of(&SHAPES_3));
+            let mut __at = __at.skip_displaced_errors(&SHAPE_424, &cont_of(&SHAPES_3));
             match __at.peek() {
                 Some(__c) if __c.is_error() => {
                     __at.advance();
@@ -36840,7 +43728,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                 }
                 _ => {
                     match choice_split_inner(
-                        &SHAPES_266,
+                        &SHAPES_267,
                         &cont_of(&SHAPES_3),
                         __at.all(),
                         __at.index(),
@@ -36851,7 +43739,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_417,
+                                &SHAPE_420,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -36867,8 +43755,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_408,
-                                                    &cont_of(&SHAPES_259),
+                                                    &SHAPE_411,
+                                                    &cont_of(&SHAPES_260),
                                                 );
                                                 match __at.peek() {
                                                     Some(__c) if __c.is_error() => {
@@ -36881,8 +43769,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     }
                                                     _ => {
                                                         match choice_split_inner(
-                                                            &SHAPES_260,
-                                                            &cont_of(&SHAPES_259),
+                                                            &SHAPES_261,
+                                                            &cont_of(&SHAPES_260),
                                                             __at.all(),
                                                             __at.index(),
                                                             __at.memo(),
@@ -36955,7 +43843,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             let (leading_extras, __at) =
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let __count = repeat_split_inner(
-                                                &SHAPE_415,
+                                                &SHAPE_418,
                                                 &cont_of(&SHAPES_3),
                                                 __at.all(),
                                                 __at.index(),
@@ -36982,8 +43870,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 }
                                                                 _ => {
                                                                     match choice_split_inner(
-                                                                        &SHAPES_262,
-                                                                        &cont_of(&SHAPES_259),
+                                                                        &SHAPES_263,
+                                                                        &cont_of(&SHAPES_260),
                                                                         __at.all(),
                                                                         __at.index(),
                                                                         __at.memo(),
@@ -37032,8 +43920,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
                                                                             if let Some(__v) = match choice_split_inner(
-                                                                                &SHAPES_261,
-                                                                                &cont_of(&SHAPES_259),
+                                                                                &SHAPES_262,
+                                                                                &cont_of(&SHAPES_260),
                                                                                 __at.all(),
                                                                                 __at.index(),
                                                                                 __at.memo(),
@@ -37193,7 +44081,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                             end,
                         }) => {
                             if let Some(__v) = if shape_match_inner(
-                                &SHAPE_420,
+                                &SHAPE_423,
                                 &cont_of(&SHAPES_3),
                                 __at.all(),
                                 __at.index(),
@@ -37209,8 +44097,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_418,
-                                                    &cont_of(&SHAPES_263),
+                                                    &SHAPE_421,
+                                                    &cont_of(&SHAPES_264),
                                                 );
                                                 match __at.peek() {
                                                     Some(__c) if __c.is_error() => {
@@ -37223,8 +44111,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     }
                                                     _ => {
                                                         match choice_split_inner(
-                                                            &SHAPES_264,
-                                                            &cont_of(&SHAPES_263),
+                                                            &SHAPES_265,
+                                                            &cont_of(&SHAPES_264),
                                                             __at.all(),
                                                             __at.index(),
                                                             __at.memo(),
@@ -37335,8 +44223,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             let (leading_extras, __at) =
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let __count = repeat_split_inner(
-                                                &SHAPE_418,
-                                                &cont_of(&SHAPES_265),
+                                                &SHAPE_421,
+                                                &cont_of(&SHAPES_266),
                                                 __at.all(),
                                                 __at.index(),
                                                 __at.memo(),
@@ -37362,8 +44250,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 }
                                                                 _ => {
                                                                     match choice_split_inner(
-                                                                        &SHAPES_264,
-                                                                        &cont_of(&SHAPES_263),
+                                                                        &SHAPES_265,
+                                                                        &cont_of(&SHAPES_264),
                                                                         __at.all(),
                                                                         __at.index(),
                                                                         __at.memo(),
@@ -37453,8 +44341,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let slot = {
                                                 let mut __at = __at.skip_displaced_errors(
-                                                    &SHAPE_408,
-                                                    &cont_of(&SHAPES_259),
+                                                    &SHAPE_411,
+                                                    &cont_of(&SHAPES_260),
                                                 );
                                                 match __at.peek() {
                                                     Some(__c) if __c.is_error() => {
@@ -37467,8 +44355,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                     }
                                                     _ => {
                                                         match choice_split_inner(
-                                                            &SHAPES_260,
-                                                            &cont_of(&SHAPES_259),
+                                                            &SHAPES_261,
+                                                            &cont_of(&SHAPES_260),
                                                             __at.all(),
                                                             __at.index(),
                                                             __at.memo(),
@@ -37541,7 +44429,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                             let (leading_extras, __at) =
                                                 __cur.take_leading_extras::<FixedArity>();
                                             let __count = repeat_split_inner(
-                                                &SHAPE_415,
+                                                &SHAPE_418,
                                                 &cont_of(&SHAPES_3),
                                                 __at.all(),
                                                 __at.index(),
@@ -37568,8 +44456,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 }
                                                                 _ => {
                                                                     match choice_split_inner(
-                                                                        &SHAPES_262,
-                                                                        &cont_of(&SHAPES_259),
+                                                                        &SHAPES_263,
+                                                                        &cont_of(&SHAPES_260),
                                                                         __at.all(),
                                                                         __at.index(),
                                                                         __at.memo(),
@@ -37618,8 +44506,8 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
                                                                             if let Some(__v) = match choice_split_inner(
-                                                                                &SHAPES_261,
-                                                                                &cont_of(&SHAPES_259),
+                                                                                &SHAPES_262,
+                                                                                &cont_of(&SHAPES_260),
                                                                                 __at.all(),
                                                                                 __at.index(),
                                                                                 __at.memo(),
@@ -37799,6 +44687,14 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
         unexpected,
     }
 }
+/// `word_body`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_word_body_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WordBodyChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_word_body(WordBodyNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_word_with_optional_annotations<'tree>(node: WordWithOptionalAnnotationsNode<'tree>) -> WordWithOptionalAnnotationsChildren<'tree>
 #[derive(Debug, Clone)]
@@ -37863,7 +44759,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
         let word = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_273, &cont_of(&SHAPES_267));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_273, &cont_of(&SHAPES_268));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -37887,7 +44783,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
         let child_1 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = match optional_split_inner(
-                &SHAPE_423,
+                &SHAPE_426,
                 &cont_of(&SHAPES_160),
                 __at.all(),
                 __at.index(),
@@ -37896,13 +44792,13 @@ pub fn extract_word_with_optional_annotations<'tree>(
             .presence
             {
                 Presence::Taken => Some({
-                    let mut __at = __at.skip_displaced_errors(&SHAPE_423, &cont_of(&SHAPES_160));
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_426, &cont_of(&SHAPES_160));
                     if let Some(__c) = __at.peek() {
                         if __c.is_error() {
                             __at.advance();
                             NodeSlot::Error(__c)
                         } else if shape_match_inner(
-                            &SHAPE_423,
+                            &SHAPE_426,
                             &cont_of(&SHAPES_160),
                             __at.all(),
                             __at.index(),
@@ -37919,7 +44815,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
                                                 &SHAPE_14,
-                                                &cont_of(&SHAPES_268),
+                                                &cont_of(&SHAPES_269),
                                             );
                                             if let Some(__c) = __at.peek() {
                                                 if __c.is_error() {
@@ -37946,7 +44842,7 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                             __cur.take_leading_extras::<FixedArity>();
                                         let slot = {
                                             let mut __at = __at.skip_displaced_errors(
-                                                &SHAPE_422,
+                                                &SHAPE_425,
                                                 &cont_of(&SHAPES_160),
                                             );
                                             if let Some(__c) = __at.peek() {
@@ -38044,6 +44940,14 @@ pub fn extract_word_with_optional_annotations<'tree>(
         }
     }
 }
+/// `word_with_optional_annotations`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_word_with_optional_annotations_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<WordWithOptionalAnnotationsChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_word_with_optional_annotations(WordWithOptionalAnnotationsNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_x_dependent_tier<'tree>(node: XDependentTierNode<'tree>) -> XDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -38075,7 +44979,7 @@ pub fn extract_x_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_425, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_428, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -38196,6 +45100,14 @@ pub fn extract_x_dependent_tier<'tree>(
         }
     }
 }
+/// `x_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_x_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<XDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_x_dependent_tier(XDependentTierNode(node)))
+}
 
 // Task 7 extract contract: pub fn extract_xphoint_dependent_tier<'tree>(node: XphointDependentTierNode<'tree>) -> XphointDependentTierChildren<'tree>
 #[derive(Debug, Clone)]
@@ -38227,7 +45139,7 @@ pub fn extract_xphoint_dependent_tier<'tree>(
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
             let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_426, &cont_of(&SHAPES_0));
+                let mut __at = __at.skip_displaced_errors(&SHAPE_429, &cont_of(&SHAPES_0));
                 if let Some(__c) = __at.peek() {
                     if __c.is_error() {
                         __at.advance();
@@ -38347,4 +45259,12 @@ pub fn extract_xphoint_dependent_tier<'tree>(
             unexpected,
         }
     }
+}
+/// `xphoint_dependent_tier`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_xphoint_dependent_tier_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<XphointDependentTierChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_xphoint_dependent_tier(XphointDependentTierNode(node)))
 }

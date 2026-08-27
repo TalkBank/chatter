@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# Runs the two message-aware commit gates, then chains to an optional local
+# commit-msg hook.
+#
+# Each check, and the measurement that produced it, is documented in its own
+# script. The short versions:
+#
+#   * `breaking-needs-changelog.sh`: of the seven breaking commits after
+#     v0.15.0, none touched the changelog and four were never written up at
+#     all. Deferring the entry is what loses it.
+#   * `production-rust-needs-evidence.sh`: THE LOOP says red first, and it was
+#     prose. Three commits in one session on 2026-08-26/27 each shipped a bug
+#     their own later review found.
+#
+# Both are commit-msg hooks rather than pre-commit because only commit-msg is
+# handed the message: one reads a marker in the subject, the other a trailer in
+# the body.
+#
+# Chaining follows `.githooks/pre-commit`: `core.hooksPath` makes git ignore
+# `.git/hooks` entirely, so `commit-msg.local` is the seam that gives a
+# contributor their own hook back. Keep this file free of any local hook's
+# identity; it is tracked and public.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+"$repo_root/scripts/lint/breaking-needs-changelog.sh" --commit "$1"
+"$repo_root/scripts/lint/production-rust-needs-evidence.sh" --commit "$1"
+
+LOCAL_HOOK="$(git rev-parse --git-dir)/hooks/commit-msg.local"
+if [ -x "$LOCAL_HOOK" ]; then
+    exec "$LOCAL_HOOK" "$@"
+fi
+
+exit 0

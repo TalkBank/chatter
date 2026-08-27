@@ -47,7 +47,7 @@
 //! - **E242** (LSP: inserts `" +..."`, "trailing off marker"):
 //!   `ErrorCode::UnbalancedQuotation` (E242) is actually "Unbalanced
 //!   quotation in word content" (verified against
-//!   `spec/errors/E242_auto.md` and a live run). Appending a trailing-off
+//!   `spec/errors/E242.md` and a live run). Appending a trailing-off
 //!   marker does not balance a quotation mark. No confident single-answer
 //!   fix exists (a missing open and a missing close both produce the same
 //!   diagnostic), so E242 gets no catalog entry.
@@ -67,7 +67,7 @@
 //!   `ErrorCode::EmptyColon` describes a missing colon TOKEN, not a line
 //!   worth deleting wholesale; deleting the entire utterance to fix a
 //!   missing punctuation mark is disproportionate. Also currently
-//!   unreachable (`spec/errors/E322_auto.md`: `Status: not_implemented`).
+//!   unreachable (`spec/errors/E322.md`: `Status: not_implemented`).
 //!   No catalog entry.
 //! - **E506** (LSP: `replace_diagnostic_range` with a participant
 //!   template): every real E506 diagnostic observed here carries
@@ -81,8 +81,8 @@
 //!   this module's scope. No catalog entry until it is fixed upstream.
 //! - **E312 / E313 / E323** (LSP: append `]` / `)` / `:`): the fixes
 //!   themselves are sound in intent, but all three codes are currently
-//!   unreachable via the tree-sitter parser (`spec/errors/E312_auto.md`,
-//!   `E313_auto.md`, `E323_auto.md`: `Status: not_implemented`; the
+//!   unreachable via the tree-sitter parser (`spec/errors/E312.md`,
+//!   `E313.md`, `E323.md`: `Status: not_implemented`; the
 //!   grammar produces a different code, usually E304/E316/E375, for every
 //!   input tried). A catalog entry with no way to construct a real
 //!   `ParseError` to test it against is speculative, not verified, so

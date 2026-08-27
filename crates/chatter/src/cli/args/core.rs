@@ -260,6 +260,18 @@ pub enum Commands {
         /// the rediarize book page.
         #[arg(long)]
         summary_json: Option<PathBuf>,
+
+        /// Report an utterance as CONTESTED when the runner-up track holds at
+        /// least this share (0.0 to 1.0) of its overlapped time.
+        ///
+        /// NO DEFAULT, deliberately: omit it and nothing is reported as
+        /// contested. What share makes an utterance genuinely mixed has not
+        /// been measured against human listening, and a default here would
+        /// hand every user a number wearing this tool's authority. Contested
+        /// utterances are still reattributed to their winning track; this
+        /// makes the mixed population visible, it does not change placement.
+        #[arg(long, value_name = "SHARE")]
+        contested_at: Option<f64>,
     },
 
     /// EXPERIMENTAL. Batch driver: loop `chatter pipeline` over matched donor /

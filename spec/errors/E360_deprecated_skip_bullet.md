@@ -1,8 +1,6 @@
 +++
 code = 'E360'
 name = 'Deprecated Skip Bullet'
-kind = 'Invalidity'
-status = 'not_implemented'
 status_note = "Unreachable via tree-sitter parser. The grammar's strict NAK-delimited media-bullet rule rejects the deprecated `start_end-` skip variant (dash before closing NAK) before Rust validation runs, producing E316 instead of E360. The Rust check (`InvalidMediaBullet`) only fires for bullets that parsed as `media_bullet` nodes but fail the structural check; the skip-dash form never parses as a media bullet."
 
 [[example]]

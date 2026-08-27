@@ -10,7 +10,6 @@ use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::GrammaticalRelation;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use tree_sitter::Node;
 
 /// Converts one `gra_relation` node (`index|head|label`) into `GrammaticalRelation`.
 ///
@@ -39,12 +38,13 @@ use tree_sitter::Node;
 ///   containing tier node has no tree-sitter error, so every field is `Present`;
 ///   they are handled explicitly for exhaustiveness, never fabricating a value.
 pub(super) fn parse_gra_relation(
-    node: Node,
+    typed: GraRelationNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<GrammaticalRelation> {
+    let node = typed.raw_node();
     let relation_span = node.start_byte()..node.end_byte();
-    let children = extract_gra_relation(GraRelationNode(node));
+    let children = extract_gra_relation(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     let index_text = match children.index.slot() {

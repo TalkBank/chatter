@@ -463,7 +463,7 @@
         },
         "scoped_annotations": {
           "$ref": "#/$defs/AnnotatedContentAnnotations",
-          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`."
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`.\nAlways at least one; see [`AnnotatedContentAnnotations`]. It carried\n`skip_serializing_if`/`default` until 2026-08-26, a pair whose only\neffect was to hide the empty case on the wire and rebuild it on read."
         },
         "untranscribed": {
           "anyOf": [
@@ -487,7 +487,8 @@
       "required": [
         "raw_text",
         "cleaned_text",
-        "content"
+        "content",
+        "scoped_annotations"
       ],
       "type": "object"
     },
@@ -500,11 +501,12 @@
         },
         "scoped_annotations": {
           "$ref": "#/$defs/AnnotatedContentAnnotations",
-          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`."
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`.\nAlways at least one; see [`AnnotatedContentAnnotations`]. It carried\n`skip_serializing_if`/`default` until 2026-08-26, a pair whose only\neffect was to hide the empty case on the wire and rebuild it on read."
         }
       },
       "required": [
-        "event_type"
+        "event_type",
+        "scoped_annotations"
       ],
       "type": "object"
     },
@@ -513,9 +515,12 @@
       "properties": {
         "scoped_annotations": {
           "$ref": "#/$defs/AnnotatedContentAnnotations",
-          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`."
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`.\nAlways at least one; see [`AnnotatedContentAnnotations`]. It carried\n`skip_serializing_if`/`default` until 2026-08-26, a pair whose only\neffect was to hide the empty case on the wire and rebuild it on read."
         }
       },
+      "required": [
+        "scoped_annotations"
+      ],
       "type": "object"
     },
     "Annotated4": {
@@ -527,7 +532,7 @@
         },
         "scoped_annotations": {
           "$ref": "#/$defs/AnnotatedContentAnnotations",
-          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`."
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`.\nAlways at least one; see [`AnnotatedContentAnnotations`]. It carried\n`skip_serializing_if`/`default` until 2026-08-26, a pair whose only\neffect was to hide the empty case on the wire and rebuild it on read."
         },
         "trailing_space": {
           "description": "Optional whitespace preserved before `>` for roundtrip fidelity.",
@@ -538,7 +543,8 @@
         }
       },
       "required": [
-        "content"
+        "content",
+        "scoped_annotations"
       ],
       "type": "object"
     },
@@ -559,20 +565,40 @@
         },
         "scoped_annotations": {
           "$ref": "#/$defs/AnnotatedContentAnnotations",
-          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`."
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`.\nAlways at least one; see [`AnnotatedContentAnnotations`]. It carried\n`skip_serializing_if`/`default` until 2026-08-26, a pair whose only\neffect was to hide the empty case on the wire and rebuild it on read."
         }
       },
       "required": [
         "content",
-        "kind"
+        "kind",
+        "scoped_annotations"
+      ],
+      "type": "object"
+    },
+    "Annotated6": {
+      "description": "Generic wrapper that adds scoped annotations to a content item.\n\nThis wrapper is used throughout CHAT to attach bracketed annotations to\nwords, events, groups, and actions. The annotations appear immediately\nafter the annotated element in CHAT format.\n\n# CHAT Format Examples\n\n```text\nwant [* m]                               Word error (missing word)\ngoing [* s]                              Word error (started utterance)\ndog [= explanation]                      Explanation annotation\n&=laughs [! loudly]                      Paralinguistic note\n<I want> [/] I need                      Repetition retracing\n<the dog> [//] the cat                   Correction retracing\nperro [= dog]                            Translation\n```\n\n# Type Parameter\n\n- `T` - The inner content type being annotated (Word, Event, Group, or Action)\n\n# Common Uses\n\n- `Annotated<Word>` - Word with error codes, explanations, or comments\n- `Annotated<Event>` - Event with paralinguistic notes\n- `Annotated<Group>` - Group with retracing markers\n- `Annotated<Action>` - Action with explanatory notes\n\n# References\n\n- [Scoped Symbols](https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols)\n- [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/BracketedContent",
+          "description": "Inner payload written between curly quote delimiters."
+        },
+        "scoped_annotations": {
+          "$ref": "#/$defs/AnnotatedContentAnnotations",
+          "description": "Scoped annotations emitted immediately after [`Self::inner`].\n\nExamples: `[*]`, `[= text]`, `[+ text]`, `[//]`.\nAlways at least one; see [`AnnotatedContentAnnotations`]. It carried\n`skip_serializing_if`/`default` until 2026-08-26, a pair whose only\neffect was to hide the empty case on the wire and rebuild it on read."
+        }
+      },
+      "required": [
+        "content",
+        "scoped_annotations"
       ],
       "type": "object"
     },
     "AnnotatedContentAnnotations": {
-      "description": "Scoped annotations attached to an `Annotated<T>` wrapper.\n\nWraps a `Vec<ContentAnnotation>` and provides collection-like access via `Deref`.\nMust contain at least one annotation (validated during the validation phase).\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>\n- <https://talkbank.org/0info/manuals/CHAT.html#Error_Coding>",
+      "description": "Scoped annotations attached to an `Annotated<T>` wrapper, NEVER empty.\n\n# The invariant is structural now, and it used to be a rule nothing enforced\n\n\"Must contain at least one annotation\" was prose here, backed by a runtime\ncode (E214) reported during validation. Measured 2026-08-26 across a\n106,000-file corpus, that arrangement was failing in both directions at\nonce. E214 could not fire on any input: an empty bracket is a parse error,\nits own spec example produced no diagnostics, and the only payload that was\nroutinely empty is an `Action`, whose wrapper is never validated because\n`Action` does not implement `Validate`. Meanwhile 20,184,072 `Annotated`\nvalues in the corpus DID carry an empty list, every one of them a bare `0`\nthe parser had nowhere else to put, because `UtteranceContent` had no bare\n`Action` variant while it had a bare `Event`.\n\nHow that number was taken, because a measurement without its method is not\none: over a `chatter to-json` mirror of roughly 106,000 files, counting\noccurrences of `\"type\": \"annotated_action\"` and subtracting those followed\nby a comma, a comma meaning the object carries further fields and so a real\nannotation. 20,318,021 total, 133,949 annotated, 20,184,072 empty. The\npattern needs the space after the colon: the mirror is pretty-printed, so\nthe unspaced form matches nothing on any input and reads as a clean zero.\n\nSo the rule was unenforceable where it was true and unenforced where it was\nviolated. The bare variant exists now and this type refuses the empty case,\nwhich retired E214 entirely.\n\n# Every route in, enumerated\n\nA proof type is only as strong as its weakest constructor, so: [`Self::new`]\nis the only public constructor and returns `None` for an empty list;\n`TryFrom<Vec<_>>` is the same check under the conversion trait, replacing an\ninfallible `From` that skipped it; `Deserialize` rejects an empty list\nrather than accepting one off the wire; there is deliberately no `Default`,\nwhich would have manufactured the forbidden value; and the type no longer\ntakes `collection_newtype_ops!`, whose `take` and `retain` can empty a\ncollection in place. None of those operations had a single caller on this\ntype. Read access is `Deref`, which cannot resize, and the `&mut` iterator\nyields elements without allowing the length to change.\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>\n- <https://talkbank.org/0info/manuals/CHAT.html#Error_Coding>",
       "items": {
         "$ref": "#/$defs/ContentAnnotation"
       },
+      "minItems": 1,
       "type": "array"
     },
     "BackgroundDescription": {
@@ -762,10 +788,30 @@
         {
           "allOf": [
             {
+              "$ref": "#/$defs/Group"
+            },
+            {
+              "description": "Group `<...>` with NO annotations, nested inside other bracketed\ncontent.\n\nThe mirror of `UtteranceContent::Action`, missing for the same reason\nand found the same day: without it, an unannotated nested group had to\nbecome an `AnnotatedGroup` carrying an empty list, and the re2c\nconverter said so in a comment rather than being able to fix it. With\n`AnnotatedContentAnnotations` non-empty by construction, that spelling\nno longer exists, so this variant has to.\n\nThe two content enums are now symmetric: every annotatable construct\nhas a bare and an annotated form on both sides.",
+              "properties": {
+                "type": {
+                  "const": "group",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
               "$ref": "#/$defs/Annotated4"
             },
             {
-              "description": "Nested regular group `<...>` WITH scoped annotations (non-retrace only)",
+              "description": "Nested regular group `<...>` WITH scoped annotations (non-retrace only).",
               "properties": {
                 "type": {
                   "const": "annotated_group",
@@ -869,6 +915,26 @@
               "properties": {
                 "type": {
                   "const": "quotation",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Annotated6"
+            },
+            {
+              "description": "A quotation carrying its own scoped annotations.\n\nParallel to `AnnotatedGroup` above, and required for the same reason:\n`content_item` admits a quotation with annotations since 2026-08-26,\nand `contents` is what a group encloses, so a quoted phrase retraced\ninside a group is representable in the CST. Without this variant its\nannotations would have nowhere to land and would be dropped on the way\ninto the model.",
+              "properties": {
+                "type": {
+                  "const": "annotated_quotation",
                   "type": "string"
                 }
               },
@@ -2344,7 +2410,7 @@
       "type": "string"
     },
     "ErrorCode": {
-      "description": "Standard error codes for CHAT parsing and validation.\n\nThis enum uses the `#[error_code_enum]` procedural macro which generates:\n- Serde rename attributes for each variant\n- `as_str()` method for ErrorCode -> &str conversion\n- `new()` method for &str -> ErrorCode conversion\n- `Display` implementation\n- `documentation_url()` method\n\nAll mappings are generated from a single source of truth, eliminating\nthe fragile double-maintenance pattern.",
+      "description": "Standard error codes for CHAT parsing and validation.\n\nThe `#[error_code_enum]` attribute macro derives, from the `#[code(\"...\")]`\nattributes below: the serde renames, `as_str`, `parse_exact`,\n`Display`, `documentation_url`, `iter` and `planned`. The attributes\nthemselves come from `spec/codes/error-codes.toml`, so the code strings, the\nvariant names and the enforcement split all have one owner and no gate\nstanding between two copies of them.\n\nSee [`super::CheckStatus`] for the enforced/planned distinction and\n[`ErrorCode::check_status`] for reading it off a value.",
       "oneOf": [
         {
           "const": "E001",
@@ -2404,11 +2470,6 @@
         {
           "const": "E213",
           "description": "Untranscribed marker in replacement (deprecated: use E391).",
-          "type": "string"
-        },
-        {
-          "const": "E214",
-          "description": "Empty annotated scoped annotations.",
           "type": "string"
         },
         {
@@ -7019,6 +7080,26 @@
         {
           "allOf": [
             {
+              "$ref": "#/$defs/Annotated6"
+            },
+            {
+              "description": "Quotation “...” WITH scoped annotations.\n\nExactly parallel to `Group` / `AnnotatedGroup`, and added 2026-08-26\nfor the same reason that pair exists: a quotation may be retraced or\ncommented, and the annotations belong to the quotation rather than to\nthe utterance around it. Until then `content_item` offered only a bare\n`quotation`, so `“plant” [//]` did not parse at all while\n`<“plant”> [//]` did. Real CLAN CHECK accepts both, so this is\nCHECK parity; 53 files under the data repos use the unbracketed form.",
+              "properties": {
+                "type": {
+                  "const": "annotated_quotation",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
               "$ref": "#/$defs/Retrace"
             },
             {
@@ -7119,10 +7200,30 @@
         {
           "allOf": [
             {
+              "$ref": "#/$defs/Action"
+            },
+            {
+              "description": "Action with NO annotations, `0` on its own.\n\nThe sibling of [`Self::Event`], and it was missing until 2026-08-26.\nIts absence is why the parser wrapped every bare `0` in an\n`Annotated<Action>` carrying an empty list: it had nowhere else to put\none. That was 20,184,072 values across the corpus, counted as recorded\non [`AnnotatedContentAnnotations`](crate::model::AnnotatedContentAnnotations),\nwhich carries the method beside the number. The variant's\nown doc comment used to assert the opposite of the data, saying \"bare\nAction is an error - actions defined by brackets\". It is not an error;\n`*CHI:\\t0 .` is ordinary CHAT and the validator has always accepted it.",
+              "properties": {
+                "type": {
+                  "const": "action",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
               "$ref": "#/$defs/Annotated3"
             },
             {
-              "description": "Action WITH scoped annotations (bare Action is an error - actions defined by brackets)",
+              "description": "Action WITH scoped annotations, e.g. `0 [= ! whining]`.",
               "properties": {
                 "type": {
                   "const": "annotated_action",
@@ -8043,7 +8144,7 @@
       "type": "array"
     },
     "WordLanguageInfo": {
-      "description": "Language metadata for a single word.\n\nStores the resolved language(s) and source for one word of the main tier.\n\nPosition is the record's position in [`LanguageMetadata::word_languages`],\nwhich serializes as a JSON array, so a consumer reads it with `enumerate()`.\nThere is deliberately no stored index. One existed, documented as \"the same\nindexing used for tier alignment\", and that could not be true: Mor excludes\nretraces and Pho counts them, so no single integer indexes both. Nothing\nenforced it and nothing read it, so when the walk skipped containers every\nfollowing record carried a position for a different word and no test, type\nor reader could see it.\n\nThis structure is used for:\n- **Code-switching analysis**: Identify which words are in which language(s)\n- **Code-mixing detection**: Identify words with @s:eng+fra style markers\n- **Ambiguity tracking**: Identify words with @s:eng&spa style markers\n- **Validation**: Ensure language markers are used correctly\n- **Data extraction**: Associate morphological annotations with language context\n\n# Fields\n\n- `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous\n- `source`: How the language was determined (see [`LanguageSource`])\n\n# CHAT Format Examples\n\n**Example 1: Code-switching with shortcuts**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- Word 0 \"I\": languages=Single(\"eng\"), source=Default\n- Word 1 \"want\": languages=Single(\"eng\"), source=Default\n- Word 2 \"galletas\": languages=Single(\"spa\"), source=WordShortcut\n- Word 3 \"please\": languages=Single(\"eng\"), source=WordShortcut\n- Word 4 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 2: Code-mixed word**\n\n```text\n@Languages: eng, spa\n*CHI: hello habla@s:eng+spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"habla\": languages=Multiple([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 3: Ambiguous word**\n\n```text\n@Languages: eng, spa\n*CHI: hello word@s:eng&spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"word\": languages=Ambiguous([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Second-Language Marker (single)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single)\n- [Second-Language Marker (multiple)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple)\n- [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)",
+      "description": "Language metadata for a single word.\n\nStores the resolved language(s) and source for one word of the main tier.\n\nPosition is the record's position in\n[`LanguageMetadata::word_languages`](super::LanguageMetadata::word_languages),\nwhich serializes as a JSON array, so a consumer reads it with `enumerate()`.\nThere is deliberately no stored index. One existed, documented as \"the same\nindexing used for tier alignment\", and that could not be true: Mor excludes\nretraces and Pho counts them, so no single integer indexes both. Nothing\nenforced it and nothing read it, so when the walk skipped containers every\nfollowing record carried a position for a different word and no test, type\nor reader could see it.\n\nThis structure is used for:\n- **Code-switching analysis**: Identify which words are in which language(s)\n- **Code-mixing detection**: Identify words with @s:eng+fra style markers\n- **Ambiguity tracking**: Identify words with @s:eng&spa style markers\n- **Validation**: Ensure language markers are used correctly\n- **Data extraction**: Associate morphological annotations with language context\n\n# Fields\n\n- `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous\n- `source`: How the language was determined (see [`LanguageSource`])\n\n# CHAT Format Examples\n\n**Example 1: Code-switching with shortcuts**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- Word 0 \"I\": languages=Single(\"eng\"), source=Default\n- Word 1 \"want\": languages=Single(\"eng\"), source=Default\n- Word 2 \"galletas\": languages=Single(\"spa\"), source=WordShortcut\n- Word 3 \"please\": languages=Single(\"eng\"), source=WordShortcut\n- Word 4 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 2: Code-mixed word**\n\n```text\n@Languages: eng, spa\n*CHI: hello habla@s:eng+spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"habla\": languages=Multiple([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 3: Ambiguous word**\n\n```text\n@Languages: eng, spa\n*CHI: hello word@s:eng&spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"word\": languages=Ambiguous([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Second-Language Marker (single)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single)\n- [Second-Language Marker (multiple)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple)\n- [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)",
       "properties": {
         "languages": {
           "$ref": "#/$defs/WordLanguages",

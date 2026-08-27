@@ -2,6 +2,7 @@
 #![allow(clippy::unreachable, clippy::unwrap_used, clippy::expect_used)]
 
 use crate::ast;
+use crate::source_text::SourceText;
 use crate::token::Token;
 use talkbank_model::ErrorSink;
 use talkbank_model::Span;
@@ -11,13 +12,13 @@ use talkbank_model::model::*;
 
 use super::*;
 
-pub fn main_tier_to_model(mt: &ast::MainTier<'_>) -> MainTier {
+pub fn main_tier_to_model(mt: &ast::MainTier<'_>, source: SourceText<'_>) -> MainTier {
     let speaker = SpeakerCode::new(mt.speaker.text());
     let content_items: Vec<UtteranceContent> = mt
         .tier_body
         .contents
         .iter()
-        .map(|c| content_item_to_model(c))
+        .map(|c| content_item_to_model(c, source))
         .collect();
     let terminator = mt
         .tier_body
@@ -84,15 +85,18 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>) -> MainTier {
 // Utterance conversion
 // ═══════════════════════════════════════════════════════════════
 
-pub fn utterance_to_model(u: &ast::Utterance<'_>) -> talkbank_model::model::Utterance {
-    let main = main_tier_to_model(&u.main_tier);
+pub fn utterance_to_model(
+    u: &ast::Utterance<'_>,
+    source: SourceText<'_>,
+) -> talkbank_model::model::Utterance {
+    let main = main_tier_to_model(&u.main_tier, source);
     // Skip tiers whose AST→model conversion failed (e.g. a `%mor:`
     // line with a missing or unrecognized terminator). Cross-tier
     // validators surface the absence as a typed diagnostic.
     let dep_tiers: Vec<talkbank_model::model::DependentTier> = u
         .dependent_tiers
         .iter()
-        .filter_map(dependent_tier_to_model)
+        .filter_map(|tier| dependent_tier_to_model(tier, source))
         .collect();
     talkbank_model::model::Utterance {
         preceding_headers: Default::default(),
@@ -125,6 +129,7 @@ pub fn utterance_to_model(u: &ast::Utterance<'_>) -> talkbank_model::model::Utte
 /// just declines to construct a `MorTier` from malformed input.
 pub fn dependent_tier_to_model(
     tier: &ast::DependentTierParsed<'_>,
+    source: SourceText<'_>,
 ) -> Option<talkbank_model::model::DependentTier> {
     Some(match tier {
         ast::DependentTierParsed::Mor(mor) => {
@@ -149,7 +154,7 @@ pub fn dependent_tier_to_model(
             talkbank_model::model::DependentTier::Sin(convert_sin_tier(sin))
         }
         ast::DependentTierParsed::Wor(wor_parsed) => {
-            talkbank_model::model::DependentTier::Wor(wor_tier_to_model(wor_parsed))
+            talkbank_model::model::DependentTier::Wor(wor_tier_to_model(wor_parsed, source))
         }
         ast::DependentTierParsed::Text { prefix, content } => {
             let prefix_text = prefix.text();
@@ -421,6 +426,10 @@ pub fn chat_file_to_model(
     file: &ast::ChatFile<'_>,
     errors: &(impl ErrorSink + ?Sized),
 ) -> talkbank_model::model::ChatFile {
+    // Derived, not passed: `ChatFile::source` IS the text the AST's slices
+    // borrow from, so taking it as a parameter would let a caller supply a
+    // different one and get `None` from every `span_of`. One owner.
+    let source = SourceText::new(file.source);
     let lines: Vec<talkbank_model::model::Line> = file
         .lines
         .iter()
@@ -430,9 +439,9 @@ pub fn chat_file_to_model(
                 span: Span::DUMMY,
                 separator: TierSeparator::CLEAN,
             },
-            ast::Line::Utterance(u) => {
-                talkbank_model::model::Line::Utterance(Box::new(utterance_to_model(u.as_ref())))
-            }
+            ast::Line::Utterance(u) => talkbank_model::model::Line::Utterance(Box::new(
+                utterance_to_model(u.as_ref(), source),
+            )),
         })
         .collect();
     // The join is the model's, not this backend's. Both parsers ask the
@@ -471,7 +480,10 @@ pub fn chat_file_to_model(
 /// `wor_tier_from_input`. Before 2026-08-08 those were two different
 /// conversions and the second one dropped timing bullets, language precodes
 /// and terminators on the floor.
-pub(crate) fn wor_tier_to_model(parsed: &ast::WorTierParsed<'_>) -> WorTier {
+pub(crate) fn wor_tier_to_model(
+    parsed: &ast::WorTierParsed<'_>,
+    source: SourceText<'_>,
+) -> WorTier {
     use talkbank_model::model::dependent_tier::wor::WorItem;
 
     let wor_items: Vec<WorItem> = parsed
@@ -479,7 +491,7 @@ pub(crate) fn wor_tier_to_model(parsed: &ast::WorTierParsed<'_>) -> WorTier {
         .iter()
         .map(|item| match item {
             ast::WorItemParsed::Word { word, bullet } => {
-                let mut w = word_from_parsed(word);
+                let mut w = word_from_parsed(word, source);
                 if let Some((start_ms, end_ms)) = bullet {
                     w = w.with_inline_bullet(Bullet::new(*start_ms, *end_ms));
                 }

@@ -1,0 +1,32 @@
+# Release-time lint: clippy over both workspaces and the feature-off build.
+# Runs on every release tag and on demand, never per push; `just gate` is the
+# per-push gate and does not include these because each recompiles the
+# workspace as its own cargo unit. Action pins are the same as ci.yml.
+name: release-lint
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-lint:
+    name: clippy + feature-off (release time)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: release-lint
+        run: just release-lint

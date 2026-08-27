@@ -56,7 +56,7 @@ pub(super) fn attach_mor(
                 separator,
             ));
     } else {
-        match parse_mor_tier(tier_node, input, errors) {
+        match parse_mor_tier(n, input, errors) {
             talkbank_model::ParseOutcome::Parsed(tier) => {
                 utterance
                     .dependent_tiers
@@ -98,7 +98,7 @@ pub(super) fn attach_gra(
                 separator,
             ));
     } else {
-        let tier = parse_gra_tier(tier_node, input, errors);
+        let tier = parse_gra_tier(n, input, errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
@@ -122,7 +122,7 @@ pub(super) fn attach_pho(
     } else {
         let separator =
             super::helpers::dependent_tier_separator(extract_pho_dependent_tier(n).child_1.slot());
-        let tier = parse_pho_tier(tier_node, input, errors);
+        let tier = parse_pho_tier(n, input, errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
@@ -145,7 +145,7 @@ pub(super) fn attach_mod(
     } else {
         let separator =
             super::helpers::dependent_tier_separator(extract_mod_dependent_tier(n).child_1.slot());
-        let tier = parse_mod_tier(tier_node, input, errors);
+        let tier = parse_mod_tier(n, input, errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
@@ -168,7 +168,7 @@ pub(super) fn attach_sin(
     } else {
         let separator =
             super::helpers::dependent_tier_separator(extract_sin_dependent_tier(n).child_1.slot());
-        let tier = parse_sin_tier(tier_node, input, errors);
+        let tier = parse_sin_tier(n, input, errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
@@ -194,7 +194,7 @@ pub(super) fn attach_wor(
     } else {
         let separator =
             super::helpers::dependent_tier_separator(extract_wor_dependent_tier(n).child_1.slot());
-        let tier = parse_wor_tier(tier_node, input, errors);
+        let tier = parse_wor_tier(n, input, errors);
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(

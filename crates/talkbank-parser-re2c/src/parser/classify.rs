@@ -180,6 +180,7 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
         Token::RetraceReformulation(_) => {
             ParsedAnnotation::Retrace(RetraceKindParsed::Reformulation)
         }
+        Token::UnknownAnnotation(inner) => ParsedAnnotation::Unknown(inner),
         Token::ScopedStressing(_) => ParsedAnnotation::Stressing,
         Token::ScopedContrastiveStressing(_) => ParsedAnnotation::ContrastiveStressing,
         Token::ScopedUncertain(_) => ParsedAnnotation::Uncertain,

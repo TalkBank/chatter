@@ -125,9 +125,13 @@ impl ChatParser for Re2cParser {
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelUtterance> {
         let parsed = crate::parser::parse_chat_file(input);
+        // `parsed.source`, not `input`: the lexer leaks a copy and the AST's
+        // slices borrow from THAT, so the caller's string places nothing.
+        let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line {
-                return ParseOutcome::parsed(shifted(ModelUtterance::from(u.as_ref()), offset));
+                let model = crate::convert::utterance_to_model(u.as_ref(), source);
+                return ParseOutcome::parsed(shifted(model, offset));
             }
         }
         ParseOutcome::rejected()
@@ -139,8 +143,14 @@ impl ChatParser for Re2cParser {
         offset: usize,
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelMainTier> {
-        match crate::parser::parse_main_tier(input) {
-            Some(parsed) => ParseOutcome::parsed(shifted(ModelMainTier::from(&parsed), offset)),
+        match crate::parser::parse_main_tier_with_source(input) {
+            Some((parsed, source)) => {
+                let model = crate::convert::main_tier_to_model(
+                    &parsed,
+                    crate::source_text::SourceText::new(source),
+                );
+                ParseOutcome::parsed(shifted(model, offset))
+            }
             None => ParseOutcome::rejected(),
         }
     }
@@ -152,7 +162,13 @@ impl ChatParser for Re2cParser {
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<Word> {
         match crate::parser::parse_word(input) {
-            Some(parsed) => ParseOutcome::parsed(shifted(Word::from(&parsed), offset)),
+            Some(parsed) => {
+                let word = crate::convert::word_from_parsed(
+                    &parsed,
+                    crate::source_text::SourceText::new(input),
+                );
+                ParseOutcome::parsed(shifted(word, offset))
+            }
             None => ParseOutcome::rejected(),
         }
     }
@@ -355,10 +371,13 @@ impl ChatParser for Re2cParser {
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelDependentTier> {
         let parsed = crate::parser::parse_chat_file(input);
+        // `parsed.source` is the LEAKED copy the AST borrows from; `input` is a
+        // different allocation and would place nothing.
+        let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line
                 && let Some(tier) = u.dependent_tiers.first()
-                && let Some(model_tier) = crate::convert::dependent_tier_to_model(tier)
+                && let Some(model_tier) = crate::convert::dependent_tier_to_model(tier, source)
             {
                 return ParseOutcome::parsed(shifted(model_tier, offset));
             }

@@ -1,8 +1,6 @@
 +++
 code = 'E316'
 name = 'Angle-bracketed annotation inside %mor stem is invalid'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'tier'

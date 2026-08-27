@@ -18,8 +18,8 @@
 //! loop, so a corpus-sized invocation did O(n^2) work inside cache
 //! initialization, BEFORE the progress display started. On the operator's
 //! real cache (136k files) `chatter validate --force <corpus-root>` sat at
-//! 150% CPU with a blank screen indefinitely. The corpus differential
-//! never sees this because it always starts from an empty isolated cache;
+//! 150% CPU with a blank screen indefinitely. A gate that starts from an
+//! empty isolated cache never sees this;
 //! this test warms a real cache through the real binary first.
 
 use std::time::{Duration, Instant};

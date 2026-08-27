@@ -17,10 +17,10 @@ use crate::model::{
     BracketedContent, BracketedItem, ContentAnnotation, ReplacedWord, UtteranceContent, Word,
 };
 
+use super::descent::{Descent, descend, excluded_by_annotations};
 use super::domain::TierDomain;
 use super::rules::{
-    annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator,
-    should_align_replaced_word_in_pho_sin, should_skip_group,
+    counts_for_tier, is_tag_marker_separator, should_align_replaced_word_in_pho_sin,
 };
 use super::to_chat_display_string as to_string;
 
@@ -190,31 +190,21 @@ fn count_alignable_item(item: &UtteranceContent, domain: TierDomain) -> usize {
             count_alignable_word(&annotated.inner, &annotated.scoped_annotations, domain)
         }
         UtteranceContent::ReplacedWord(replaced) => count_alignable_replaced_word(replaced, domain),
-        UtteranceContent::Group(group) => count_bracketed_alignable_content(&group.content, domain),
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            if should_skip_group(&annotated.scoped_annotations, domain) {
-                0
-            } else {
-                count_bracketed_alignable_content(&annotated.inner.content, domain)
-            }
-        }
-        UtteranceContent::PhoGroup(pho) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                count_bracketed_alignable_content(&pho.content, domain)
-            }
-            TierDomain::Pho => 1,
-            TierDomain::Sin => 0,
+        // Containers: ONE arm. `helpers::descent` owns the rule, and its
+        // three-valued answer is what a count needs and a walker discards:
+        // `Atomic` is a container that IS one position in this tier.
+        UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_) => match descend(item.structure(), Some(domain)) {
+            Descent::Into(entered) => count_bracketed_alignable_content(entered.content(), domain),
+            Descent::Atomic(_) => 1,
+            Descent::Excluded => 0,
         },
-        UtteranceContent::SinGroup(sin) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                count_bracketed_alignable_content(&sin.content, domain)
-            }
-            TierDomain::Sin => 1,
-            TierDomain::Pho => 0,
-        },
-        UtteranceContent::Quotation(quot) => {
-            count_bracketed_alignable_content(&quot.content, domain)
-        }
         UtteranceContent::Separator(sep) => {
             if domain == TierDomain::Mor && is_tag_marker_separator(sep) {
                 1
@@ -228,31 +218,8 @@ fn count_alignable_item(item: &UtteranceContent, domain: TierDomain) -> usize {
             // %mor and %sin also don't align to pauses
             if domain == TierDomain::Pho { 1 } else { 0 }
         }
-        UtteranceContent::AnnotatedAction(_) => {
-            if domain == TierDomain::Sin {
-                1
-            } else {
-                0
-            }
-        }
-        UtteranceContent::Retrace(retrace) => {
-            // Retrace content is excluded from %mor (not morphologically analyzed),
-            // but included in %pho/%sin/%wor (the words were phonologically produced).
-            if domain == TierDomain::Mor {
-                0
-            } else {
-                count_bracketed_alignable_content(&retrace.content, domain)
-            }
-        }
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            // Same rule as the bare form: the annotations sit on the
-            // wrapper and are not alignable, so only the retraced content
-            // is considered.
-            if domain == TierDomain::Mor {
-                0
-            } else {
-                count_bracketed_alignable_content(&annotated.inner.content, domain)
-            }
+        UtteranceContent::Action(_) | UtteranceContent::AnnotatedAction(_) => {
+            if domain == TierDomain::Sin { 1 } else { 0 }
         }
         // All remaining variants are non-alignable for every dependent tier:
         // events, markers, formatting, freecodes, overlap points, internal bullets.
@@ -289,51 +256,26 @@ fn count_bracketed_item(item: &BracketedItem, domain: TierDomain) -> usize {
             count_alignable_word(&annotated.inner, &annotated.scoped_annotations, domain)
         }
         BracketedItem::ReplacedWord(replaced) => count_alignable_replaced_word(replaced, domain),
-        BracketedItem::AnnotatedGroup(annotated) => {
-            if should_skip_group(&annotated.scoped_annotations, domain) {
-                0
-            } else {
-                count_bracketed_alignable_content(&annotated.inner.content, domain)
-            }
-        }
-        BracketedItem::PhoGroup(pho) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                count_bracketed_alignable_content(&pho.content, domain)
-            }
-            TierDomain::Pho => 1,
-            TierDomain::Sin => 0,
+        // Containers: ONE arm. `helpers::descent` owns the rule, and its
+        // three-valued answer is what a count needs and a walker discards:
+        // `Atomic` is a container that IS one position in this tier.
+        BracketedItem::Group(_)
+        | BracketedItem::AnnotatedGroup(_)
+        | BracketedItem::PhoGroup(_)
+        | BracketedItem::SinGroup(_)
+        | BracketedItem::Quotation(_)
+        | BracketedItem::AnnotatedQuotation(_)
+        | BracketedItem::Retrace(_)
+        | BracketedItem::AnnotatedRetrace(_) => match descend(item.structure(), Some(domain)) {
+            Descent::Into(entered) => count_bracketed_alignable_content(entered.content(), domain),
+            Descent::Atomic(_) => 1,
+            Descent::Excluded => 0,
         },
-        BracketedItem::SinGroup(sin) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                count_bracketed_alignable_content(&sin.content, domain)
-            }
-            TierDomain::Sin => 1,
-            TierDomain::Pho => 0,
-        },
-        BracketedItem::Quotation(quot) => count_bracketed_alignable_content(&quot.content, domain),
         BracketedItem::Separator(sep) => {
             if domain == TierDomain::Mor && is_tag_marker_separator(sep) {
                 1
             } else {
                 0
-            }
-        }
-        BracketedItem::Retrace(retrace) => {
-            // Retrace content is excluded from %mor but counted for %pho/%sin/%wor.
-            if domain == TierDomain::Mor {
-                0
-            } else {
-                count_bracketed_alignable_content(&retrace.content, domain)
-            }
-        }
-        BracketedItem::AnnotatedRetrace(annotated) => {
-            // Same rule as the bare form: the annotations sit on the
-            // wrapper and are not alignable, so only the retraced content
-            // is considered.
-            if domain == TierDomain::Mor {
-                0
-            } else {
-                count_bracketed_alignable_content(&annotated.inner.content, domain)
             }
         }
         // A pause INSIDE bracketed content contributes nothing, while a
@@ -393,10 +335,11 @@ fn count_alignable_word(
     annotations: &[ContentAnnotation],
     domain: TierDomain,
 ) -> usize {
-    // For individual words, retrace annotations only skip for Mor domain.
-    // Retraced words may still appear in %pho/%sin (they were spoken, just corrected).
-    // Note: Groups with retrace skip ALL domains - see should_skip_group.
-    if domain == TierDomain::Mor && annotations_have_alignment_ignore(annotations) {
+    // A word carries its own scoped annotations exactly as a group does, and
+    // the exclusion question is the same one, so it asks the same owner. This
+    // comment used to POINT AT `descent::excluded_by_annotations` on the line
+    // above a hand-written copy of it.
+    if excluded_by_annotations(annotations, Some(domain)) {
         return 0;
     }
 
@@ -409,8 +352,7 @@ fn count_alignable_word(
 
 /// Counts a `ReplacedWord` node after replacement/retrace rules.
 fn count_alignable_replaced_word(entry: &ReplacedWord, domain: TierDomain) -> usize {
-    // For replaced words (like groups), retrace annotations only skip for Mor domain
-    if domain == TierDomain::Mor && annotations_have_alignment_ignore(&entry.scoped_annotations) {
+    if excluded_by_annotations(&entry.scoped_annotations, Some(domain)) {
         return 0;
     }
 
@@ -470,41 +412,26 @@ fn extract_alignable_from_item(
         UtteranceContent::ReplacedWord(replaced) => {
             extract_alignable_from_replaced_word(replaced, domain, output)
         }
-        UtteranceContent::Group(group) => {
-            extract_alignable_from_bracketed_content(&group.content, domain, output)
-        }
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            if !should_skip_group(&annotated.scoped_annotations, domain) {
-                extract_alignable_from_bracketed_content(&annotated.inner.content, domain, output)
+        // Containers: ONE arm. The `Atomic` payload carries what describes the
+        // position, so the two hardcoded description strings that used to sit
+        // here have one owner in `descent::AtomicKind`.
+        UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_) => match descend(item.structure(), Some(domain)) {
+            Descent::Into(entered) => {
+                extract_alignable_from_bracketed_content(entered.content(), domain, output);
             }
-        }
-        UtteranceContent::PhoGroup(pho) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                extract_alignable_from_bracketed_content(&pho.content, domain, output)
-            }
-            TierDomain::Pho => {
-                output.push(TierPosition {
-                    text: to_string(pho),
-                    description: Some("phonological group".to_string()),
-                });
-            }
-            TierDomain::Sin => {}
+            Descent::Atomic(unit) => output.push(TierPosition {
+                text: unit.display_text(),
+                description: Some(unit.description().to_string()),
+            }),
+            Descent::Excluded => {}
         },
-        UtteranceContent::SinGroup(sin) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                extract_alignable_from_bracketed_content(&sin.content, domain, output)
-            }
-            TierDomain::Sin => {
-                output.push(TierPosition {
-                    text: to_string(sin),
-                    description: Some("sign group".to_string()),
-                });
-            }
-            TierDomain::Pho => {}
-        },
-        UtteranceContent::Quotation(quot) => {
-            extract_alignable_from_bracketed_content(&quot.content, domain, output)
-        }
         UtteranceContent::Separator(sep) => {
             if domain == TierDomain::Mor && is_tag_marker_separator(sep) {
                 output.push(TierPosition {
@@ -521,7 +448,7 @@ fn extract_alignable_from_item(
                 });
             }
         }
-        UtteranceContent::AnnotatedAction(action) => {
+        UtteranceContent::Action(action) => {
             if domain == TierDomain::Sin {
                 output.push(TierPosition {
                     text: to_string(action),
@@ -529,18 +456,12 @@ fn extract_alignable_from_item(
                 });
             }
         }
-        UtteranceContent::Retrace(retrace) => {
-            // Retrace content is excluded from %mor but extracted for %pho/%sin/%wor.
-            if domain != TierDomain::Mor {
-                extract_alignable_from_bracketed_content(&retrace.content, domain, output);
-            }
-        }
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            // Same rule as the bare form: the annotations sit on the
-            // wrapper and are not alignable, so only the retraced content
-            // is considered.
-            if domain != TierDomain::Mor {
-                extract_alignable_from_bracketed_content(&annotated.inner.content, domain, output);
+        UtteranceContent::AnnotatedAction(action) => {
+            if domain == TierDomain::Sin {
+                output.push(TierPosition {
+                    text: to_string(action),
+                    description: Some("action".to_string()),
+                });
             }
         }
         // All remaining variants produce no alignable items:
@@ -594,58 +515,32 @@ fn extract_alignable_from_bracketed_item(
         BracketedItem::ReplacedWord(replaced) => {
             extract_alignable_from_replaced_word(replaced, domain, output)
         }
-        BracketedItem::AnnotatedGroup(annotated) => {
-            if !should_skip_group(&annotated.scoped_annotations, domain) {
-                extract_alignable_from_bracketed_content(&annotated.inner.content, domain, output)
+        // Containers: ONE arm. The `Atomic` payload carries what describes the
+        // position, so the two hardcoded description strings that used to sit
+        // here have one owner in `descent::AtomicKind`.
+        BracketedItem::Group(_)
+        | BracketedItem::AnnotatedGroup(_)
+        | BracketedItem::PhoGroup(_)
+        | BracketedItem::SinGroup(_)
+        | BracketedItem::Quotation(_)
+        | BracketedItem::AnnotatedQuotation(_)
+        | BracketedItem::Retrace(_)
+        | BracketedItem::AnnotatedRetrace(_) => match descend(item.structure(), Some(domain)) {
+            Descent::Into(entered) => {
+                extract_alignable_from_bracketed_content(entered.content(), domain, output);
             }
-        }
-        BracketedItem::PhoGroup(pho) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                extract_alignable_from_bracketed_content(&pho.content, domain, output)
-            }
-            TierDomain::Pho => {
-                output.push(TierPosition {
-                    text: to_string(pho),
-                    description: Some("phonological group".to_string()),
-                });
-            }
-            TierDomain::Sin => {}
+            Descent::Atomic(unit) => output.push(TierPosition {
+                text: unit.display_text(),
+                description: Some(unit.description().to_string()),
+            }),
+            Descent::Excluded => {}
         },
-        BracketedItem::SinGroup(sin) => match domain {
-            TierDomain::Mor | TierDomain::Wor => {
-                extract_alignable_from_bracketed_content(&sin.content, domain, output)
-            }
-            TierDomain::Sin => {
-                output.push(TierPosition {
-                    text: to_string(sin),
-                    description: Some("sign group".to_string()),
-                });
-            }
-            TierDomain::Pho => {}
-        },
-        BracketedItem::Quotation(quot) => {
-            extract_alignable_from_bracketed_content(&quot.content, domain, output)
-        }
         BracketedItem::Separator(sep) => {
             if domain == TierDomain::Mor && is_tag_marker_separator(sep) {
                 output.push(TierPosition {
                     text: to_string(sep),
                     description: None,
                 });
-            }
-        }
-        BracketedItem::Retrace(retrace) => {
-            // Retrace content is excluded from %mor but extracted for %pho/%sin/%wor.
-            if domain != TierDomain::Mor {
-                extract_alignable_from_bracketed_content(&retrace.content, domain, output);
-            }
-        }
-        BracketedItem::AnnotatedRetrace(annotated) => {
-            // Same rule as the bare form: the annotations sit on the
-            // wrapper and are not alignable, so only the retraced content
-            // is considered.
-            if domain != TierDomain::Mor {
-                extract_alignable_from_bracketed_content(&annotated.inner.content, domain, output);
             }
         }
         // Emits nothing, mirroring the count path's `BracketedItem::Pause` arm,
@@ -684,7 +579,7 @@ fn extract_alignable_from_word(
     domain: TierDomain,
     output: &mut Vec<TierPosition>,
 ) {
-    if domain == TierDomain::Mor && annotations_have_alignment_ignore(annotations) {
+    if excluded_by_annotations(annotations, Some(domain)) {
         return;
     }
 
@@ -707,7 +602,7 @@ fn extract_alignable_from_replaced_word(
     domain: TierDomain,
     output: &mut Vec<TierPosition>,
 ) {
-    if domain == TierDomain::Mor && annotations_have_alignment_ignore(&entry.scoped_annotations) {
+    if excluded_by_annotations(&entry.scoped_annotations, Some(domain)) {
         return;
     }
 

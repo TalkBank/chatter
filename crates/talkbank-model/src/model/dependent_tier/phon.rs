@@ -384,7 +384,7 @@ fn numeric_pause_duration(word: &str) -> Option<crate::model::PauseTimedDuration
 ///
 /// The untimed pause forms are matched exactly (the serialized forms of the
 /// untimed [`crate::model::PauseDuration`] variants); a numeric pause is
-/// recognized via [`numeric_pause_duration`]; anything else must tokenize as
+/// recognized via `numeric_pause_duration`; anything else must tokenize as
 /// units via [`tokenize_syl_word`].
 pub fn classify_syl_word(word: &str) -> Result<SylWordKind, SylWordError> {
     use crate::model::PauseDuration;

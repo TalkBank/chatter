@@ -218,7 +218,20 @@ pub enum ContentItem<'a> {
     /// written form and makes the two backends agree.
     OrphanAnnotation(ParsedAnnotation<'a>),
     /// Separator: comma, semicolon, intonation contours, etc.
-    Separator(SeparatorKindParsed),
+    ///
+    /// Carries the source `text` as well as the kind, because the converter
+    /// needs the POSITION and this is the only thing that still knows it. The
+    /// variant held a bare kind until 2026-08-27, so `separator_from_kind`
+    /// opened with `let s = Span::DUMMY;` and every separator reached the
+    /// model at offset zero, which silently disabled every validation rule
+    /// that reads a separator span (E258 among them).
+    Separator {
+        /// Which separator this is.
+        kind: SeparatorKindParsed,
+        /// The separator's own text, borrowed from the source, so
+        /// [`crate::source_text::SourceText::span_of`] can place it.
+        text: &'a str,
+    },
     /// grammar.js: overlap_point, with its kind and index already resolved.
     ///
     /// Typed for the reason [`PauseKindParsed`] was: the parser selects the
@@ -373,6 +386,13 @@ pub enum ParsedAnnotation<'a> {
     Langcode(&'a str),
     /// `[+ code]`, postcode (rare in word annotation position)
     Postcode(&'a str),
+    /// A bracketed annotation whose marker no rule recognises. Content is the
+    /// text BETWEEN the brackets, so `[@ xyz]` carries `"@ xyz"`.
+    ///
+    /// Reaching the model as `ContentAnnotation::Unknown` is the point: the
+    /// validator then reports E207, which is a statement about the FILE, where
+    /// a parse failure (E321) is a statement about the parser.
+    Unknown(&'a str),
 }
 
 impl<'a> ParsedAnnotation<'a> {
@@ -391,6 +411,7 @@ impl<'a> ParsedAnnotation<'a> {
     /// invalid CHAT.
     pub fn chat_text(&self) -> String {
         match self {
+            Self::Unknown(inner) => format!("[{inner}]"),
             Self::Retrace(kind) => match kind {
                 RetraceKindParsed::Partial => "[/]".to_owned(),
                 RetraceKindParsed::Complete => "[//]".to_owned(),
@@ -596,7 +617,7 @@ impl<'a> ContentItem<'a> {
             | Self::Pause(_)
             | Self::Freecode(_)
             | Self::OrphanAnnotation(_)
-            | Self::Separator(_)
+            | Self::Separator { .. }
             | Self::OverlapPoint { .. }
             | Self::Event(_)
             | Self::AnnotatedEvent { .. }

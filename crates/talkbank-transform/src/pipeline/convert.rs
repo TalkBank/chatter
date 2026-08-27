@@ -10,10 +10,10 @@ use crate::json::{
     to_json_pretty_unvalidated, to_json_pretty_validated, to_json_unvalidated, to_json_validated,
 };
 use talkbank_model::ParseValidateOptions;
-use talkbank_model::WriteChat;
 
 use super::error::PipelineError;
 use super::parse::parse_and_validate;
+use super::rewrite::Rewrite;
 use talkbank_model::model::TranscriptName;
 
 /// Parse, validate, and serialize to JSON with schema validation.
@@ -161,12 +161,9 @@ pub fn chat_to_json_unvalidated(
 pub fn normalize_chat(
     content: &str,
     options: ParseValidateOptions,
-) -> Result<String, PipelineError> {
-    // Parse and validate
+) -> Result<Rewrite, PipelineError> {
     let chat_file = parse_and_validate(content, options)?;
-
-    // Serialize to CHAT format
-    Ok(chat_file.to_chat_string())
+    Rewrite::of(&chat_file, content).map_err(PipelineError::DroppedContent)
 }
 
 #[cfg(test)]

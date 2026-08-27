@@ -13,9 +13,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#ID_Header>
 
 use crate::error::{ErrorCollector, ErrorSink};
+use crate::generated_traversal::{
+    IdHeaderNode, LanguagesHeaderNode, MediaHeaderNode, ParticipantsHeaderNode,
+    SituationHeaderNode, TypesHeaderNode,
+};
 use crate::model::Header;
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 use crate::parser::tree_parsing::header::{
     parse_id_header, parse_languages_header, parse_media_header, parse_participants_header,
@@ -26,14 +29,14 @@ use crate::parser::tree_parsing::header::{
 /// `tree_parsing/header/` sub-parser under a local `ErrorCollector`, forward its
 /// collected diagnostics to `errors`, and return the parsed `Header`. This is the
 /// exact pre-migration wrapper behaviour, shared by all six entries below.
-fn call_sub<F>(
-    header_actual: Node,
+fn call_sub<N, F>(
+    header_actual: N,
     input: &str,
     errors: &impl ErrorSink,
     sub: F,
 ) -> ParseOutcome<Header>
 where
-    F: FnOnce(Node, &str, &ErrorCollector) -> Header,
+    F: FnOnce(N, &str, &ErrorCollector) -> Header,
 {
     let header_errors = ErrorCollector::new();
     let header = sub(header_actual, input, &header_errors);
@@ -43,7 +46,7 @@ where
 
 /// `@Languages` -> `parse_languages_header`.
 pub(super) fn languages(
-    header_actual: Node,
+    header_actual: LanguagesHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
@@ -52,7 +55,7 @@ pub(super) fn languages(
 
 /// `@Participants` -> `parse_participants_header`.
 pub(super) fn participants(
-    header_actual: Node,
+    header_actual: ParticipantsHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
@@ -61,7 +64,7 @@ pub(super) fn participants(
 
 /// `@ID` -> `parse_id_header`.
 pub(super) fn id(
-    header_actual: Node,
+    header_actual: IdHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
@@ -70,7 +73,7 @@ pub(super) fn id(
 
 /// `@Media` -> `parse_media_header`.
 pub(super) fn media(
-    header_actual: Node,
+    header_actual: MediaHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
@@ -79,7 +82,7 @@ pub(super) fn media(
 
 /// `@Situation` -> `parse_situation_header`.
 pub(super) fn situation(
-    header_actual: Node,
+    header_actual: SituationHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
@@ -88,7 +91,7 @@ pub(super) fn situation(
 
 /// `@Types` -> `parse_types_header`.
 pub(super) fn types(
-    header_actual: Node,
+    header_actual: TypesHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {

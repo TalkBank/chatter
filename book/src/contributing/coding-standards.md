@@ -1,13 +1,13 @@
 # Coding Standards
 
 **Status:** Current
-**Last updated:** 2026-07-25 22:40 EDT
+**Last updated:** 2026-08-27 14:04 EDT
 
 ## Rust Conventions
 
 - **Edition**: 2024
 - **Formatting**: `cargo fmt` before every commit
-- **Linting**: CI owns clippy (single pass, no flags; the workspace `[lints.clippy]` table denies only the panic family). Do not run clippy as a local habit; see the clippy policy in the root CLAUDE.md.
+- **Linting**: clippy is release-time, not per push and not per edit. Stated in full under Rust Conventions below; do not restate it here, because this file already carried the policy twice and the two copies claimed different things.
 
 ## Error Handling
 
@@ -74,11 +74,14 @@ Always regenerate from source inputs.
 - **Prefer `cargo test`** for faster parallel-per-test
   execution. Use `cargo test --doc` for doctests (they are not part of the normal run
   those).
-- CI runs **single-pass clippy** (`--workspace --all-targets`, no
-  flags): the workspace `[lints]` table denies the panic family in
-  production code; test code relaxes it via in-source attributes. Red
-  means a panic-policy violation, nothing else. See the clippy policy
-  section above.
+- **Clippy is release-time**, in `just release-lint` and in
+  `release-lint.yml` on a tag, never per push and never per edit: each
+  pass is its own cargo unit that recompiles the workspace. It is a
+  single pass (`--workspace --all-targets`) carrying `-D warnings`, so
+  ANY finding is red, not only a violation of the panic family the
+  workspace `[lints]` table denies; test code relaxes that family via
+  in-source attributes. A finding you intend to keep gets a scoped
+  `#[allow]` naming the reason. See the clippy policy section above.
 
 ### Error Handling
 

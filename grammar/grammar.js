@@ -105,6 +105,10 @@ export default grammar({
     [$.base_content_item, $.word_body],  // underline_begin can be standalone or word-internal
     [$.word_with_optional_annotations],
     [$.nonword_with_optional_annotations],  // Annotations create ambiguity with following content
+    // Same ambiguity as its two siblings above: after a quotation, whitespace
+    // may begin this quotation's `base_annotations` or separate it from the
+    // next content item, and only the token after the whitespace decides.
+    [$.quotation_with_optional_annotations],
     [$.base_annotations],
     [$.final_codes],
   ],
@@ -900,7 +904,7 @@ export default grammar({
     content_item: $ => choice(
       $.base_content_item,
       $.group_with_annotations,
-      $.quotation,
+      $.quotation_with_optional_annotations,
       $.illegal_curly_quote,
       $.main_pho_group,
       $.main_sin_group,
@@ -1275,7 +1279,7 @@ export default grammar({
     standalone_word: $ => prec.right(6, seq(
       optional(choice($.word_prefix, $.zero)),
       $.word_body,
-      optional($.form_marker),
+      optional(choice($.form_marker, $.repeated_form_marker)),
       optional($.word_lang_suffix),
       optional($.pos_tag),
     )),
@@ -1395,6 +1399,45 @@ export default grammar({
     form_marker: $ => token.immediate(
       /@(?:s[a-zA-Z][-a-zA-Z]*|[a-rt-zA-RT-Z][-a-zA-Z]*)(?::[a-zA-Z0-9_]+)?/
     ),
+    // A `@` suffix naming more than one marker: `hello@@c`, `hello@c@d`.
+    //
+    // WHY THE GRAMMAR ADMITS IT. `dog@j`, whose marker names no declared code,
+    // already parses and the MODEL names it E203. A word carrying two `@` runs
+    // is a defect of the same kind, and the reader can see exactly where the
+    // word ends, so refusing it here was not a principled boundary; it was
+    // where the rule happened to stop. It cost a named diagnostic: `hello@@c`
+    // fell to a generic E316 while the model's own rule for it, the `at_count
+    // > 1` branch of `validation/word/structure.rs::check_inline_at_markers`,
+    // could never fire because the word never reached the model.
+    //
+    // NO NEGATIVE PRECEDENCE, deliberately. `form_marker`'s character class
+    // excludes `@`, so the two can never match the same text and there is no
+    // tie to break. Giving it `prec(-1)` made tree-sitter prefer the SHORTER
+    // `form_marker` on `hello@c@d` (precedence beats length), leaving `@d`
+    // outside the word.
+    //
+    // A BARE TRAILING `@` IS NOT HERE. `hello@` wants the same treatment and a
+    // `token.immediate('@')` delivers it, but `@` is also the HEADER sigil:
+    // adding that token moved the diagnostic for a double-`@End` document from
+    // E501 at the first `@End` to a generic E316 at the second
+    // (`document_entrypoint_characterization`). One `@` is too ambiguous a
+    // token to admit in word position; two or more is not, because no header
+    // line carries a second `@`. `hello@` keeps its existing E202.
+    //
+    // ONE TOKEN FOR THE WHOLE RUN, because the defect is the RUN and not
+    // either half of it. A word may carry at most one `@` suffix; the rule,
+    // the ruling behind it and the CLAN CHECK divergence have ONE owner,
+    // `spec/errors/E203.md`, and are not restated here.
+    //
+    // What belongs here is the TOKENIZATION consequence: swallowing the run
+    // whole is what lets the word FORM, so the model names the defect and the
+    // word round-trips. A version narrowed to exclude a trailing language
+    // suffix existed for one day and dropped `word@k@st` to a generic E316.
+    // Both shapes are pinned in
+    // `grammar/test/corpus/manual/word_markers/repeated_form_marker.txt`.
+    repeated_form_marker: $ =>
+      token.immediate(/@[a-zA-Z0-9:_-]*(?:@[a-zA-Z0-9:_-]*)+/),
+
     // Language suffix: @s or @s:eng or @s:eng+zho+fra or @s:eng&zho&fra
     // Single immediate token to prevent colon/& from being consumed by other rules.
     word_lang_suffix: $ => token.immediate(
@@ -1858,6 +1901,28 @@ export default grammar({
       // Optional body: see the note on `text_with_bullets`.
       optional($.text_with_bullets),
       $.newline
+    ),
+
+    // A quotation may carry scoped annotations, exactly as a word or a
+    // `<...>` group may.
+    //
+    // Modelled on `nonword_with_optional_annotations`, and added 2026-08-26
+    // after the CHAT maintainer reported `“plant” [//] what is “plant” ?`
+    // against a real transcript. `content_item` offered a BARE `quotation`
+    // while only `group_with_annotations` could take `base_annotations`, so
+    // there was no production for a quotation followed by `[//]`: the region
+    // became an ERROR node, and the ERROR-text classifier then reported E242
+    // "unmatched curly quote" on a line whose four quotes were two matched
+    // pairs. `plant [//] plant` and `<“plant”> [//] plant` both parsed, which
+    // is what showed the gap was in what may CARRY an annotation.
+    //
+    // Real CLAN CHECK accepts all three forms, so this is CHECK parity rather
+    // than a widening: 53 files under the data repos use the unbracketed form
+    // and 247 use the bracketed one. Pinned by `legal` examples on E242 and
+    // E375, which is the assertion shape R2 added for exactly this case.
+    quotation_with_optional_annotations: $ => seq(
+      field('quotation', $.quotation),
+      field('annotations', optional($.base_annotations))
     ),
 
     // Quotation: "quoted speech"

@@ -87,48 +87,28 @@ fn walk_underline_balance_in_content(
                 walk_underline_balance_in_word(replacement, begin_spans, fallback_span, errors);
             }
         }
-        UtteranceContent::Group(group) => {
-            walk_underline_balance_in_bracketed(&group.content, begin_spans, fallback_span, errors);
-        }
-        UtteranceContent::AnnotatedGroup(group) => {
-            walk_underline_balance_in_bracketed(
-                &group.inner.content,
-                begin_spans,
-                fallback_span,
-                errors,
-            );
-        }
-        UtteranceContent::PhoGroup(group) => {
-            walk_underline_balance_in_bracketed(&group.content, begin_spans, fallback_span, errors);
-        }
-        UtteranceContent::SinGroup(group) => {
-            walk_underline_balance_in_bracketed(&group.content, begin_spans, fallback_span, errors);
-        }
-        UtteranceContent::Quotation(quote) => {
-            walk_underline_balance_in_bracketed(&quote.content, begin_spans, fallback_span, errors);
-        }
-        UtteranceContent::Retrace(retrace) => {
-            walk_underline_balance_in_bracketed(
-                &retrace.content,
-                begin_spans,
-                fallback_span,
-                errors,
-            );
-        }
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            // Same handling as the bare form: the wrapper carries only
-            // the annotations written after the marker, and the retraced
-            // content is unchanged.
-            walk_underline_balance_in_bracketed(
-                &annotated.inner.content,
-                begin_spans,
-                fallback_span,
-                errors,
-            );
+        // Containers: ONE arm. Every one of these recursed unconditionally
+        // into its enclosed content, which is what `ContentStructure::enclosed`
+        // is for; its own docstring names the walkers under `validation/` and
+        // `alignment/` as the callers that had not adopted it. The annotations
+        // sit on the wrapper and are not part of the enclosed content, which is
+        // what each of the separate arms already did.
+        UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_) => {
+            if let Some(content) = item.structure().enclosed() {
+                walk_underline_balance_in_bracketed(content, begin_spans, fallback_span, errors);
+            }
         }
         UtteranceContent::AnnotatedEvent(_)
         | UtteranceContent::Event(_)
         | UtteranceContent::Pause(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::Separator(_)
@@ -179,56 +159,28 @@ fn walk_underline_balance_in_bracketed(
                     walk_underline_balance_in_word(replacement, begin_spans, fallback_span, errors);
                 }
             }
-            BracketedItem::AnnotatedGroup(group) => {
-                walk_underline_balance_in_bracketed(
-                    &group.inner.content,
-                    begin_spans,
-                    fallback_span,
-                    errors,
-                );
-            }
-            BracketedItem::PhoGroup(group) => {
-                walk_underline_balance_in_bracketed(
-                    &group.content,
-                    begin_spans,
-                    fallback_span,
-                    errors,
-                );
-            }
-            BracketedItem::SinGroup(group) => {
-                walk_underline_balance_in_bracketed(
-                    &group.content,
-                    begin_spans,
-                    fallback_span,
-                    errors,
-                );
-            }
-            BracketedItem::Quotation(quote) => {
-                walk_underline_balance_in_bracketed(
-                    &quote.content,
-                    begin_spans,
-                    fallback_span,
-                    errors,
-                );
-            }
-            BracketedItem::Retrace(retrace) => {
-                walk_underline_balance_in_bracketed(
-                    &retrace.content,
-                    begin_spans,
-                    fallback_span,
-                    errors,
-                );
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same handling as the bare form: the wrapper carries only
-                // the annotations written after the marker, and the retraced
-                // content is unchanged.
-                walk_underline_balance_in_bracketed(
-                    &annotated.inner.content,
-                    begin_spans,
-                    fallback_span,
-                    errors,
-                );
+            // Containers: ONE arm. Every one of these recursed unconditionally
+            // into its enclosed content, which is what `ContentStructure::enclosed`
+            // is for; its own docstring names the walkers under `validation/` and
+            // `alignment/` as the callers that had not adopted it. The annotations
+            // sit on the wrapper and are not part of the enclosed content, which is
+            // what each of the separate arms already did.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(content) = item.structure().enclosed() {
+                    walk_underline_balance_in_bracketed(
+                        content,
+                        begin_spans,
+                        fallback_span,
+                        errors,
+                    );
+                }
             }
             BracketedItem::Event(_)
             | BracketedItem::AnnotatedEvent(_)

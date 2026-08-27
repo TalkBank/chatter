@@ -39,6 +39,7 @@ use talkbank_parser::generated_traversal::{
     AsRawNode, FullDocumentNode, HeaderChoice, LineChoice, NodeSlot, extract_full_document,
     extract_header, extract_line,
 };
+use talkbank_parser_tests::classify;
 
 /// Parse `source` into a tree-sitter tree using the CHAT grammar.
 fn parse_chat(source: &str) -> tree_sitter::Tree {
@@ -85,7 +86,7 @@ fn classify_header_types_concrete_header_nodes() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(FullDocumentNode(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // child_3 is the `repeat(line)` slot: `Vec<Positioned<NodeSlot<LineNode>>>`.
     let mut header_lines = 0usize;

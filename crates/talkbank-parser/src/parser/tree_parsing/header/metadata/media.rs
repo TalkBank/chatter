@@ -5,10 +5,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Linking>
 
 use crate::generated_traversal::{
-    AsRawNode, MediaContentsNode, MediaHeaderNode, NodeSlot, extract_media_contents,
-    extract_media_header,
+    AsRawNode, MediaHeaderNode, NodeSlot, extract_media_contents, extract_media_header,
 };
-use crate::node_types::MEDIA_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -83,25 +81,19 @@ fn decode_child_text(
 /// `child_4` to `child_4`'s nested GROUP `child_2` (the whole
 /// `comma+whitespaces+media_status` triple is what is optional at the
 /// grammar level, not `media_status` alone).
-pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> Header {
-    // Verify this is a media_header node.
-    if node.kind() != MEDIA_HEADER {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!("Expected media_header node, got: {}", node.kind()),
-        ));
-        return unknown_media_header(node, source, "Media header CST node had unexpected kind");
-    }
+pub fn parse_media_header(
+    typed: MediaHeaderNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Header {
+    let node = typed.raw_node();
 
     // Extract media_contents via typed slot `child_2` of the media_header.
     // `extract_media_header` exposes `media_contents` as a `NodeSlot`;
     // `present_or_recover().ok()` keeps only a Present media_contents; every
     // non-Present recovery state funnels to the same "Missing media_contents"
     // diagnostic + Header::Unknown.
-    let header_children = extract_media_header(MediaHeaderNode(node));
+    let header_children = extract_media_header(typed);
     let Some(contents) = header_children
         .child_2
         .slot()
@@ -125,7 +117,7 @@ pub fn parse_media_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // Decompose the media_contents node into its typed child slots. The index
     // remap from the OLD (whitespace-skipped) module is documented in the
     // function doc-comment above.
-    let contents_children = extract_media_contents(MediaContentsNode(contents_raw));
+    let contents_children = extract_media_contents(contents);
 
     // Extract filename from typed child_0 (unchanged index).
     // All values accepted via decode_child_text(); the validator flags semantic issues.

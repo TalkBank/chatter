@@ -55,8 +55,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, BeginHeaderNode, EndHeaderNode, FullDocumentChild1Choice, FullDocumentNode,
-    LineChoice, LineNode, NodeSlot, Utf8HeaderNode, extract_full_document, extract_line,
+    AsRawNode, BeginHeaderNode, EndHeaderNode, FullDocumentChild1Choice, FullDocumentChildren,
+    LineChoice, LineNode, NodeSlot, Utf8HeaderNode, extract_line,
 };
 use crate::model::{Header, Line};
 use crate::node_types::{BLANK_LINE, PRE_BEGIN_HEADER, UNSUPPORTED_LINE};
@@ -119,9 +119,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// - `child_2`: the `@Begin` anchor
     /// - `child_3`: the line repeat (the transcript body)
     /// - `child_4`: the `@End` anchor
-    pub(super) fn lower_document(&mut self, root: tree_sitter::Node<'_>) {
-        let children = extract_full_document(FullDocumentNode(root));
-
+    ///
+    /// Takes the CHILDREN, not the node. Which of the three things the root
+    /// turned out to be is decided by the caller, where all three are visible at
+    /// once; by the time the children exist the distinction has been made and
+    /// carries no meaning here, because a document reconstructed from the ERROR
+    /// standing in for one has the same type and the same content as a complete
+    /// one. There were briefly two public entry points differing only in name.
+    pub(super) fn lower_document(&mut self, children: FullDocumentChildren<'_>) {
         // Every field of the NEW `FullDocumentChildren` carrier is a
         // `Positioned<..>`: the position's `leading_extras` (whitespace/comments,
         // no-op for CHAT) plus its `slot`. A required member's `slot` is a
@@ -178,7 +183,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// is still surfaced because the backstop walks the whole tree.
     fn lower_utf8_anchor(&mut self, slot: &NodeSlot<'_, Utf8HeaderNode<'_>>) {
         match slot {
-            NodeSlot::Present(node) => self.push_anchor_header(node.0, Header::Utf8),
+            NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::Utf8),
             NodeSlot::Missing(_) | NodeSlot::Absent => {
                 // Layout omission; backstop + validation report missing headers.
             }
@@ -193,7 +198,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// for the recovery rationale; this mirrors the `BEGIN_HEADER` arm.
     fn lower_begin_anchor(&mut self, slot: &NodeSlot<'_, BeginHeaderNode<'_>>) {
         match slot {
-            NodeSlot::Present(node) => self.push_anchor_header(node.0, Header::Begin),
+            NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::Begin),
             NodeSlot::Missing(_) | NodeSlot::Absent => {
                 // Backstop + validation (missing @Begin) cover this.
             }
@@ -208,7 +213,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// for the recovery rationale; this mirrors the `END_HEADER` arm.
     fn lower_end_anchor(&mut self, slot: &NodeSlot<'_, EndHeaderNode<'_>>) {
         match slot {
-            NodeSlot::Present(node) => self.push_anchor_header(node.0, Header::End),
+            NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::End),
             NodeSlot::Missing(_) | NodeSlot::Absent => {
                 // Backstop + validation (missing @End) cover this.
             }
@@ -279,7 +284,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// shared top-level error path. `Missing` is a layout omission.
     fn lower_line_slot(&mut self, slot: &NodeSlot<'_, LineNode<'_>>) {
         match slot {
-            NodeSlot::Present(line_node) => self.dispatch_line(line_node.0),
+            NodeSlot::Present(line_node) => self.dispatch_line(*line_node),
             NodeSlot::Error(error_node) => self.handle_top_level_error(*error_node),
             NodeSlot::Missing(_) | NodeSlot::Absent => {
                 // Layout omission; backstop reports content MISSING nodes.
@@ -345,8 +350,9 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     ///
     /// After the content match, the carrier's `unexpected` sink is surfaced (see
     /// [`Self::surface_unexpected`]).
-    fn dispatch_line(&mut self, line_node: tree_sitter::Node<'_>) {
-        let children = extract_line(LineNode(line_node));
+    fn dispatch_line(&mut self, line: LineNode<'_>) {
+        let line_node = line.raw_node();
+        let children = extract_line(line);
         match children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(header_choice)) => {
                 // The `line` header case is the NESTED supertype choice
@@ -368,15 +374,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 }
             }
             NodeSlot::Present(LineChoice::Utterance(utterance)) => {
-                let node = utterance.0;
                 if let ParseOutcome::Parsed(utt) =
-                    parse_utterance_node(node, self.source, self.errors)
+                    parse_utterance_node(*utterance, self.source, self.errors)
                 {
                     self.lines.push(Line::utterance(utt));
                 }
             }
             NodeSlot::Present(LineChoice::UnsupportedLine(unsupported)) => {
-                let node = unsupported.0;
+                let node = unsupported.raw_node();
                 // Catch-all junk line: report and skip (CLAN-style unsupported line).
                 let text = node
                     .utf8_text(self.source.as_bytes())
@@ -419,7 +424,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 self.errors.report(error);
             }
             NodeSlot::Present(LineChoice::BlankLine(blank)) => {
-                let node = blank.0;
+                let node = blank.raw_node();
                 // The grammar represents a blank line as a `blank_line` node
                 // (CLAN CHECK 91: blank lines are not allowed). Under error
                 // recovery, though, the node can cover just the trailing

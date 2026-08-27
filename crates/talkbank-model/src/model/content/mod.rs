@@ -75,7 +75,10 @@ pub use pause::*;
 pub use postcode::*;
 pub use retrace::*;
 pub use separator::*;
-pub use structure::{ContentStructure, GroupRef, LeafContent, LeafRef, RetraceRef, WordRef};
+pub use structure::{
+    AngleRef, ContainerMut, ContentStructure, Descend, GroupKind, GroupMut, GroupRef, LeafContent,
+    LeafRef, QuotationRef, RetraceRef, WordRef,
+};
 pub use terminator::*;
 pub use tier_content::*;
 pub use tier_separator::TierSeparator;

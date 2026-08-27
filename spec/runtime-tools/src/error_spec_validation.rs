@@ -40,6 +40,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use talkbank_model::model::FileStem;
 use talkbank_model::model::TranscriptName;
+use talkbank_model::model::WriteChat;
+use talkbank_spec_vocabulary::registry::CodeRegistry;
 
 use generators::repo_paths::RepoRoot;
 use generators::spec::error::{ErrorExample, ErrorSpec};
@@ -85,10 +87,10 @@ impl CodeFilter {
 /// Whether this run skips a spec with the given status.
 ///
 /// POLICY, deliberately kept out of [`Status`] itself: two other readers of the
-/// same vocabulary make different calls (`SpecStatusGate` treats only
-/// `NotImplemented` as unenforced; the re2c parity gate measures everything
-/// except it). Three defensible judgements about one fact, so the fact is shared
-/// and the judgements are not.
+/// same vocabulary make different calls (`Status::is_enforced`, which the
+/// generated enum asks, treats only `NotImplemented` as unenforced; the re2c
+/// parity gate measures everything except it). Three defensible judgements
+/// about one fact, so the fact is shared and the judgements are not.
 ///
 /// This replaced a private `SpecStatus` enum that re-parsed the metadata string
 /// into a five-variant copy of the closed set. Its fifth variant existed to
@@ -102,7 +104,8 @@ fn is_skipped(status: Status) -> bool {
 
 /// One run's inputs.
 pub struct Request {
-    pub spec_dir: PathBuf,
+    /// Which specs to read, and the registry they resolve against.
+    pub specs: SpecTree,
     pub code_check: CodeCheck,
     pub skipped: SkippedSpecs,
     pub filter: CodeFilter,
@@ -119,14 +122,84 @@ impl Request {
     /// could not recognise had to abort the process; that panic was what kept
     /// `RepoRoot::from_manifest_dir` from returning a `Result`. Requiring an
     /// already-proved root moves the failure to the caller that can report it.
-    #[must_use]
-    pub fn for_repo(root: &RepoRoot) -> Self {
-        Self {
-            spec_dir: spec_dir(root),
+    /// # Errors
+    ///
+    /// When the per-code registry cannot be read or violates its own rules.
+    /// Fallible since R1: an infallible constructor holding a file read has
+    /// nowhere to report a bad registry but a panic, which is the shape this
+    /// workspace bans by name.
+    pub fn for_repo(root: &RepoRoot) -> Result<Self, String> {
+        Ok(Self {
+            specs: SpecTree::for_repo(root)?,
             code_check: CodeCheck::Verify,
             skipped: SkippedSpecs::Omit,
             filter: CodeFilter::All,
-        }
+        })
+    }
+}
+
+/// A directory of error specs, and the registry its files resolve against.
+///
+/// # Why this is one value and not two fields
+///
+/// `Request` carried `spec_dir` and `registry` as two `pub` fields under a
+/// docstring claiming "holding both together is the only way to state that
+/// they belong to each other". Two `pub` fields of a `pub struct` state
+/// nothing: a literal can pair any directory with any registry, and the one
+/// caller that is not [`Self::for_repo`] does exactly that ON PURPOSE. So the
+/// sentence was false in the same commit that wrote it.
+///
+/// Both modes are real. Naming them as constructors makes the odd one visible
+/// to a reader instead of inferable from a comment, and makes the claim true
+/// where it is made.
+#[derive(Debug)]
+pub struct SpecTree {
+    dir: PathBuf,
+    registry: CodeRegistry,
+}
+
+impl SpecTree {
+    /// Both halves from one proved checkout.
+    ///
+    /// # Errors
+    ///
+    /// When the registry cannot be read or violates its own rules.
+    pub fn for_repo(root: &RepoRoot) -> Result<Self, String> {
+        Ok(Self {
+            dir: spec_dir(root),
+            registry: root.code_registry().map_err(|why| why.to_string())?,
+        })
+    }
+
+    /// Specs from a directory the operator named, against THIS checkout's
+    /// registry.
+    ///
+    /// The `validate_error_specs --spec-dir` mode. The mismatch is deliberate:
+    /// the registry is the vocabulary of codes, which is a property of the
+    /// checkout, while the directory chooses which documents to read. A
+    /// separate constructor so that intent is written down rather than
+    /// reconstructed from a struct literal.
+    ///
+    /// # Errors
+    ///
+    /// When the registry cannot be read or violates its own rules.
+    pub fn with_foreign_specs(dir: PathBuf, root: &RepoRoot) -> Result<Self, String> {
+        Ok(Self {
+            dir,
+            registry: root.code_registry().map_err(|why| why.to_string())?,
+        })
+    }
+
+    /// The directory the specs are read from.
+    #[must_use]
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// The registry those specs resolve against.
+    #[must_use]
+    pub fn registry(&self) -> &CodeRegistry {
+        &self.registry
     }
 }
 
@@ -328,14 +401,14 @@ impl Report {
 /// that validates nothing must not report success), or when the parser cannot
 /// be constructed.
 pub fn run(request: &Request) -> Result<Report, String> {
-    let specs = ErrorSpec::load_all(&request.spec_dir)
-        .map_err(|err| format!("failed to load specs from {:?}: {err}", request.spec_dir))?;
+    let specs = ErrorSpec::load_all(request.specs.dir(), request.specs.registry())
+        .map_err(|err| format!("failed to load specs from {:?}: {err}", request.specs.dir()))?;
 
     if specs.is_empty() {
         return Err(format!(
             "no specs found in {:?}. This was a warning and an `Ok(())`, so a \
              mistyped path reported every spec valid.",
-            request.spec_dir
+            request.specs.dir()
         ));
     }
 
@@ -353,7 +426,7 @@ pub fn run(request: &Request) -> Result<Report, String> {
         if !request.filter.covers(spec.error.code.as_str()) {
             continue;
         }
-        let status = spec.metadata.status;
+        let status = spec.status();
 
         for (example_idx, example) in spec.error.examples.iter().enumerate() {
             match check_example(&parser, status, &spec.error.code, example, request) {
@@ -423,6 +496,15 @@ pub struct StagedDiagnostics {
     pub parse: Vec<talkbank_model::ParseError>,
     /// What validation (with alignment) emitted over the parsed model.
     pub validation: Vec<talkbank_model::ParseError>,
+    /// Whether serializing the parsed model reproduced the example's text.
+    ///
+    /// Measured HERE, in the one sanctioned example-running path, so the
+    /// snapshot and every other consumer see the same answer. The example's
+    /// text arrives without its closing newline (the spec loader strips it)
+    /// while a serialized file always ends in one, so the comparison is
+    /// against the example AS A FILE: one trailing newline appended when
+    /// absent, and nothing else normalized.
+    pub roundtrip: talkbank_spec_vocabulary::observations::Roundtrip,
 }
 
 impl StagedDiagnostics {
@@ -482,9 +564,20 @@ pub fn emit_for(parser: &TreeSitterParser, example: &ErrorExample) -> StagedDiag
         });
     let validation_sink = ErrorCollector::new();
     chat_file.validate_with_alignment(&validation_sink, name);
+    let as_file = if example.input.ends_with('\n') {
+        example.input.clone()
+    } else {
+        format!("{}\n", example.input)
+    };
+    let roundtrip = if chat_file.to_chat_string() == as_file {
+        talkbank_spec_vocabulary::observations::Roundtrip::ByteExact
+    } else {
+        talkbank_spec_vocabulary::observations::Roundtrip::Diverged
+    };
     StagedDiagnostics {
         parse: parse_sink.into_vec(),
         validation: validation_sink.into_vec(),
+        roundtrip,
     }
 }
 

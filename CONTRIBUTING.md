@@ -1,6 +1,6 @@
 # Contributing to chatter
 
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-08-27 14:04 EDT
 
 ## Development setup
 
@@ -71,8 +71,10 @@ High-friction rules to know up front:
 ## CI
 
 GitHub Actions runs `cargo fmt --check`, `cargo build`, `cargo test
---workspace`, `cargo clippy`, `mdbook build`, and `npm run
-compile` on every push and PR. See `.github/workflows/ci.yml`.
+--workspace`, `mdbook build`, and `npm run compile` on every push and PR.
+See `.github/workflows/ci.yml`. Clippy and the feature-off build are
+release-time, in `.github/workflows/release-lint.yml`; `just release-lint`
+runs the same set locally.
 
 ## Reporting issues
 

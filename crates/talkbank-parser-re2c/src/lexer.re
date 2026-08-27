@@ -192,8 +192,17 @@ impl<'a> Iterator for Lexer<'a> {
                          (w_text | w_short | w_stress);
         w_body_start = w_text_start | w_marker_start;
 
-        // Continuation: atom or compound (+atom). + only consumed when followed by atom.
-        w_cont = w_atom | ("+" w_atom);
+        // Continuation: atom, or a RUN of compound markers followed by an atom.
+        //
+        // `+` is only ever consumed when an atom follows, which is what stops a
+        // word absorbing the `+` that begins a linker (`hello+<`) or a `+...`
+        // terminator. The run is what allows an EMPTY compound part: `un++do`
+        // is one word by the grammar, and the validator reports E233 "empty
+        // part in compound word" for it. With a single `+` here the word ended
+        // at `un`, the `++` matched the LinkerQuickUptake rule, and re2c
+        // reported E766 "linker after utterance content" on a construct that
+        // contains no linker at all.
+        w_cont = w_atom | ("+"+ w_atom);
 
         // Complete word body
         w_body = w_body_start w_cont*;
@@ -995,7 +1004,20 @@ impl<'a> Iterator for Lexer<'a> {
         // wild-corpus files. `w_body` is the right surface: it allows
         // `:+`, `^`, `~`, CA elements, etc. but stops at terminators.
         // Found by the re2c parity oracle on 2026-04-30.
-        <MAIN_CONTENT> "&*" @t1 [A-Za-z0-9_'+\-]+ @t2 ":" @t3 w_body {
+        //
+        // `w_body` ALONE was still one production short, because
+        // `standalone_word` is a body PLUS the three optional suffixes the
+        // Word rules above spell out: a form marker, an `@s` language suffix
+        // and a `$` pos tag. So `&*VMO:a:nda@i` lexed as `a:nda`, the `@i`
+        // fell out of the token, and the utterance failed with E253 "Word
+        // content cannot be empty" pointing at byte 0 of the FILE. The
+        // suffixes are repeated verbatim rather than referenced because re2c
+        // cannot name a group; keep them identical to the Word rules. The
+        // emitted `text` runs to the cursor, so no tags are needed here.
+        // Found by the same parity oracle on 2026-08-26, from rhd-data
+        // Spanish PerLA. Spec:
+        // spec/constructs/word/interposed_word_with_form_marker.md
+        <MAIN_CONTENT> "&*" @t1 [A-Za-z0-9_'+\-]+ @t2 ":" @t3 w_body ("@" w_form_code (":" [a-zA-Z0-9_]+)?)? ("@s" (":" [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)?)? ("$" [a-zA-Z:]+)? {
             let end = self.cursor;
             return Some((Token::OtherSpokenEvent {
                 speaker: &yyinput[self.t1..self.t2],
@@ -1007,6 +1029,23 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "&" { emit!(Ampersand); }
 
         // grammar.js: left_bracket = '['
+        // An annotation whose marker no rule above recognised. LAST of the
+        // bracket rules on purpose: re2c takes the longest match and, on a
+        // tie, the rule written first, so every specific form above still
+        // wins for its own text. The inner class excludes BOTH `]` and `[`,
+        // the same discipline the `[:` replacement rule uses: excluding only
+        // `]` let this rule match from the first `[` of
+        // `[: unclosed replacement [* error]` to that line's only `]`,
+        // swallowing a malformed construct into a well-formed unknown
+        // annotation and reporting NOTHING where re2c previously spoke. The
+        // parity gate caught it as E311.md#0 moving from Conflicting to
+        // Re2cSilent, which is the class that must never grow.
+        //
+        // Without it `[@ xyz]` lexed as a bare `[` and the utterance died
+        // with E321 "unparsable", where tree-sitter reported E207 "unknown
+        // annotation" and `spec/errors/E207.md` says E207 is the answer.
+        <MAIN_CONTENT> "[" @t1 [^\x00[\]\r\n]+ @t2 "]" { emit_t1t2!(UnknownAnnotation); }
+
         <MAIN_CONTENT> "[" { emit!(LeftBracket); }
         // grammar.js: right_bracket = ']'
         <MAIN_CONTENT> "]" { emit!(RightBracket); }

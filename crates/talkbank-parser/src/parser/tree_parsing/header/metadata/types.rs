@@ -4,7 +4,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Types_Header>
 
 use crate::generated_traversal::{AsRawNode, NodeSlot, TypesHeaderNode, extract_types_header};
-use crate::node_types::TYPES_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -47,18 +46,12 @@ fn unknown_types_header(node: Node, source: &str, parse_reason: impl Into<String
 /// ```
 ///
 /// The @Types header has three mandatory fields: design, activity, group.
-pub fn parse_types_header(node: Node, source: &str, errors: &impl ErrorSink) -> Header {
-    // Verify this is a types_header node
-    if node.kind() != TYPES_HEADER {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!("Expected types_header node, got: {}", node.kind()),
-        ));
-        return unknown_types_header(node, source, "Types header CST node had unexpected kind");
-    }
+pub fn parse_types_header(
+    typed: TypesHeaderNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Header {
+    let node = typed.raw_node();
 
     // Grammar: seq(types_prefix, header_sep, types_design, comma, whitespaces?,
     // types_activity, comma, whitespaces?, types_group, newline). The NEW backend
@@ -70,7 +63,7 @@ pub fn parse_types_header(node: Node, source: &str, errors: &impl ErrorSink) -> 
     // `unknown_types_header` recovery are byte-identical to the pre-migration
     // `find_child_text` behaviour; the design->activity->group order (and its
     // short-circuit on the first missing field) is preserved.
-    let children = extract_types_header(TypesHeaderNode(node));
+    let children = extract_types_header(typed);
 
     let ParseOutcome::Parsed(design) = read_types_field(
         children.child_2.slot(),

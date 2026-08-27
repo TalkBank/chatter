@@ -1,515 +1,348 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-21 00:36 EDT
+**Last modified:** 2026-08-27 14:09 EDT
 
-Guidance for Claude Code when working in this repository
-(`TalkBank/chatter`). This file carries invariants, danger rules, and
-an index; procedures live in the book (`book/src/`) and per-module
-CLAUDE.md files. The pre-2026-07-25 long form is in git history; its
-content was moved, not deleted (see `book/src/contributing/` and the
-module files below).
+Guidance for Claude Code in `TalkBank/chatter`. This file carries the rules
+and an index; procedures live in the book (`book/src/`) and in per-module
+CLAUDE.md files. Everything here is public: no private paths, hosts,
+operators or data.
 
-## Repo positioning (read before doing anything)
+## Repo positioning
 
-This repository is the standalone, canonical home of the TalkBank CHAT
-format authority and the `chatter` tool family. **It is the source of
-truth for the `chatter` binary.** The CHAT-format core is
-self-contained; it builds and runs with no external TalkBank
-repository, so downstream consumers (including the Batchalign ML
-pipeline and external crates) depend on its crates directly.
+This repository is the canonical home of the TalkBank CHAT format authority
+and the `chatter` tool family, and the source of truth for the `chatter`
+binary. The CHAT core is self-contained: it builds and runs with no external
+repository, and downstream consumers depend on its crates directly.
 
-**Scope: general-purpose CHAT tooling only.** Everything here must be
-useful to CHAT users in general, never specific to one corpus, one
-data provider, or one workflow. Where a general capability needs
-per-corpus input, it takes a documented corpus-agnostic form (e.g. the
-`--session-context` JSON seam); producing that input from
-corpus-specific sources is a downstream concern.
+**Scope: general-purpose CHAT tooling only.** Nothing specific to one corpus,
+one data provider or one workflow. Where a general capability needs
+per-corpus input it takes a documented corpus-agnostic form (the
+`--session-context` JSON seam); producing that input is a downstream concern.
 
-**Git hygiene.** Never `git push --force` and never `--no-verify`.
-Do not change repository visibility or push to shared branches without
-maintainer sign-off. Never push to the `archive` remote. See
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for content hygiene (no secrets,
-internal paths, or personal data in commits).
+**Git hygiene.** Never `git push --force`, never `--no-verify`, never push to
+the `archive` remote, never change visibility or push a shared branch without
+the maintainer's sign-off. `CONTRIBUTING.md` covers content hygiene.
+
+## THE LOOP
+
+The development process. Every rule is enforced by the thing named beside
+it; a rule with no enforcement is a wish.
+
+1. **Inner loop: `just test`.** Red first (a type change or a failing test),
+   then green. Nothing else runs per edit. **The red must be VISIBLE before
+   the implementing edit**: the failing test's output, or the compiler
+   refusing the old call sites. A red nobody watched is a red nobody ran, and
+   that is what the skipped steps looked like from outside. Enforced by
+   `.githooks/commit-msg`, which refuses a commit changing production Rust
+   with no test, spec, corpus or fixture staged beside it unless the message
+   names what was red in a `Red:` trailer
+   (`scripts/lint/production-rust-needs-evidence.sh`; `just
+   evidence-gate-test` proves both directions).
+2. **Touched `grammar/`, `spec/` or a registry: `just regen`, then `just
+   test`, once.** Every derived artifact, one command, dependency order.
+   Enforced by each artifact's currency test, which fails the gate when it is
+   stale.
+3. **One review, on the final diff, before the commit.** Five angles: reuse,
+   simplification, efficiency, altitude, typestate. Not after every edit.
+4. **Every commit reduces the bug count and says what it removed.** A commit
+   that adds a defect is negative progress: it costs the fix, the retraction
+   and a squash. Write slowly and correctly, and be adversarial toward your
+   own tests: a test written to pass covers only the states its author
+   listed.
+5. **Before push: `just gate`, once.** Static checks plus every test CI
+   runs, a few minutes. It mirrors per-push CI exactly, so CI confirms and
+   never discovers; a red CI is a process failure. Enforced by
+   `.githooks/pre-push`, which refuses a push without the stamp. The stamp is
+   a hash of tree content (`scripts/tree-stamp.sh`), so gating a dirty tree
+   and then committing the same bytes is valid. Clippy and the feature-off
+   build are `just release-lint`, run before a release, never per push.
+6. **No push without the maintainer's word, ever.** No hook can know this; it
+   is the standing rule and has no exception.
+7. **Release: `just fmt`, `just release-lint`, `just gate`, then squash every
+   commit since the last tag into one release commit whose message is the
+   CHANGELOG section**, gate once more on the squashed tree (the content stamp
+   survives a squash), push on the maintainer's word, CI, `just release-tag
+   X.Y.Z`. Public history is one commit per release.
+
+**The spec system is the test corpus.** A construct with no spec example is
+the gap to fix. Nothing on this path needs data outside the repository, so
+every step can be run by any contributor.
 
 ## CHAT-validity authority
 
-**`chatter validate` is the authority on whether a byte sequence is
-valid CHAT.** When chatter rejects a file, the file is invalid; the
-right response is to clean the data, not weaken the parser.
+**`chatter validate` is the authority on whether a byte sequence is valid
+CHAT.** When it rejects a file, the file is invalid and the response is to
+clean the data, not weaken the parser.
 
-**That is a conclusion, never a default action, and chatter is NEVER
-assumed correct.** This tool is under active development and is not
-finished; its snapshot behaviour is not sacred at any stage. Before any
-data is touched, every validation error is adjudicated: **is this a
-chatter defect, or a data defect?** The working assumption is that we
-fix chatter, not the data, unless we are certain the data is at fault.
-Editing corpus files to silence a diagnostic destroys the evidence and
-hides the bug, which is the opposite of the job when the goal is
-hardening the validator.
+**That is a conclusion, never a default action, and chatter is never assumed
+correct.** Before any data is touched, every diagnostic is adjudicated: is
+this a chatter defect or a data defect? The working assumption is that
+chatter is wrong unless the data is certainly at fault. The test is whether
+the rejected construct actually fails to make sense. Signs the fault is
+chatter's: a message that does not match its input; a generic "unparsable"
+code standing in for a specific rule; an auto-generated error spec with no
+description; behaviour no spec justifies.
 
-The test is whether the rejected construct actually FAILS TO MAKE
-SENSE. Signs the fault is chatter's, not the data's:
+**Authority ordering:** the CHAT manual is dated background. When it and this
+project diverge, trust `spec/`, the grammar, and above all real corpus data.
+Never reintroduce a legacy construct that has been removed from the data and
+from chatter, whatever the manual or CLAN still say. **A permissive grammar
+is not a validity claim**: this grammar deliberately admits invalid
+constructs so the model can name them precisely, so grammar tolerance is
+weaker evidence of legality than CLAN CHECK's silence, not stronger.
 
-- a message that does not match its input (naming a construct the line
-  does not contain),
-- a generic "unparsable content" code standing in for a specific rule,
-- an auto-generated error spec with no description explaining what is
-  invalid and why,
-- behaviour no spec justifies.
+**A word may carry at most one `@` suffix** (maintainer ruling; a documented
+divergence from CLAN CHECK, recorded in `spec/errors/E203.md`).
 
-Worked example: continuation lines written `\t <content>` were rejected
-as unparsable tier content, and the resulting parse taint silently
-suppressed alignment checking, so one incidental space disabled real
-validation on a file. A space before free text on a comment tier cannot
-fail to make sense; the parser was wrong, and the fix belonged in
-`grammar.js`, not in the transcripts.
+## Danger rules
 
-**Authority ordering:** the CHAT manual
-(https://talkbank.org/0info/manuals/CHAT.html) is dated background;
-when it and this project diverge, trust `spec/`, the grammar, and
-above all real corpus data. Never reintroduce a legacy construct that
-has been removed from the data and from chatter, whatever the manual
-or CLAN still say.
-
-## Danger rules (each has burned a session; no exceptions)
-
-1. **`just gate` IS the pre-push gate, and `just push` runs it.** `gate-fast`
-   is twelve checks in under a minute; `gate-slow` is the tests and lints, 10-13
-   minutes; `gate` is both. Run the halves separately when the 900-second
-   command ceiling binds. `just test` is `--tests` only and CANNOT see doctests,
-   which are a separate compilation; never substitute it for the gate.
-
-   **The justfile owns every command CI runs**, and
-   `scripts/check_ci_gate_sync.py` fails if a workflow runs anything else, if a
-   recipe CI invokes is missing from the gate, or if a job calls `just` without
-   installing it. That check exists because this repository had FOUR
-   independent lists of what must pass (the workflows, `gate`, `test-all`, and
-   an untracked pre-push hook that printed "fast gate passed" after two of
-   twenty checks) and all four had drifted. Seventeen raw commands remain in
-   `scripts/ci-gate-baseline.txt`; that list may only shrink.
-
-2. **Never run two cargo-family commands concurrently against one
-   workspace** (this root workspace or `spec/`'s). The target-dir
-   lock silently queues them; wall clock explodes. If both are truly
-   needed, give the second its own `CARGO_TARGET_DIR`.
-3. **`grammar/src/parser.c` is GENERATED.** After ANY `grammar.js`
-   edit (including reverts): `tree-sitter generate` is mandatory
-   before trusting any parser behavior. `tree-sitter test` does NOT
-   detect a stale parser.c. Full sequence: the Grammar Change
-   Workflow below.
-4. **The JSON Schema is embedded at compile time.** Any change to a
-   ChatFile model type's shape, fields, serde attributes, or doc
-   comments requires regenerating `schema/chat-file.schema.json` AND
-   rebuilding, in the same change:
-   `cargo test -p talkbank-transform --tests generate_schema`, then
-   `cargo build -p chatter`. Guard: `committed_schema_matches_model`.
-5. **`release.yml` is generated by cargo-dist; never hand-edit.**
-   Change `dist-workspace.toml` and regenerate.
-6. **Corpus differential gate:** any change touching the grammar,
-   parser lowering, or serialization must pass the operator's
-   corpus-differential gate before push (a tripwire demanding
-   adjudication of every delta, not an absolute blocker).
-7. **Test failures are bugs until proven otherwise: STOP and ask.**
-   Never update a test expectation to match new behavior without
-   explicit approval. Applies doubly to `cleaned_text()`, overlap
-   markers, CA notation, lengthening, zero-words, and any grammar
-   change that alters CST structure.
-8. **No panics in long-lived code** (parser, model, validation, CLI,
-   LSP, background tooling): typed errors, no `unwrap`/`expect`.
-   The workspace `[lints.clippy]` table denies the panic family, and
-   **every crate declares `[lints] workspace = true`, which is what makes
-   the table reach it**. Cargo applies workspace lints per package, so a
-   crate that omits that stanza is silently exempt: six were, including
-   the whole CHAT core, from the table's creation until 2026-08-14. If you
-   add a crate, add the stanza. Test code relaxes the family in source, at
-   the test target's crate root.
-9. **Never create ad hoc `.cha` test files**; use `corpus/reference/`
-   or ask. Every error code tests through `spec/errors/` (generated,
-   never hand-written).
-10. **Program stack discipline:** `main()` spawns the program onto a
-    16 MiB thread; never move program logic back onto the bare OS
-    main thread (Windows 1 MiB incident). Gate:
-    `crates/chatter/tests/stack_limit_tests.rs`.
+1. **`just gate` is the pre-push gate**, and it is the only one. `just test`
+   is `--tests` only and cannot see doctests; never substitute it for the
+   gate. **The justfile owns every command CI runs**;
+   `scripts/check_ci_gate_sync.py` fails if a workflow runs anything else or
+   if a recipe CI invokes is missing from the gate.
+2. **Never run two cargo-family commands concurrently against one workspace**
+   (the root or `spec/`). The target-dir lock serializes them silently.
+3. **`grammar/src/parser.c`, `node_types.rs`, `generated_traversal.rs`, the
+   conformance inventory, the spec fixtures and snapshot, the symbol and
+   form-marker sites, and `schema/chat-file.schema.json` are all generated.**
+   Never hand-edit any of them; `just regen` rebuilds every one, and a
+   currency test refuses each stale one. `tree-sitter test` does not detect a
+   stale `parser.c`.
+4. **`release.yml` is generated by cargo-dist; never hand-edit.** Change
+   `dist-workspace.toml` and regenerate.
+5. **Test failures are bugs until proven otherwise: stop and ask.** Never
+   update an expectation to match new behaviour without explicit approval.
+   Doubly so for `cleaned_text()`, overlap markers, CA notation, lengthening,
+   zero-words, and any grammar change that alters CST structure.
+6. **No panics in long-lived code**: typed errors, no `unwrap`/`expect`. The
+   workspace `[lints.clippy]` table denies the panic family, and every crate
+   must declare `[lints] workspace = true` or it is silently exempt. Test
+   code relaxes the family at its crate root.
+7. **Never create ad hoc `.cha` test files.** Use `corpus/reference/` or the
+   spec system. Every error code tests through `spec/errors/`.
+8. **Program stack discipline:** `main()` spawns the program onto a 16 MiB
+   thread; never move program logic onto the bare OS main thread. Gate:
+   `crates/chatter/tests/stack_limit_tests.rs`.
+9. **`.githooks/commit-msg` runs two gates, neither with a bypass flag.** A
+   commit marked breaking must touch `CHANGELOG.md`, or a `type(scope)!:`
+   subject is refused; `just breaking-changelog [ref]` is the release-time
+   report. And production Rust must arrive with evidence of a red, or with a
+   `Red:` trailer naming one; see THE LOOP step 1.
+10. **`clippy` is release-time, not inner-loop and not per push.**
+    `just release-lint` runs it with `-D warnings` over both workspaces plus
+    the feature-off build; `release-lint.yml` runs the same on every tag. A
+    finding you intend to keep gets a scoped `#[allow]` naming the reason.
+    Never widen the gate.
 
 ## Type-oriented design is mandatory
 
-**Every change follows type-oriented design: make illegal states
-unrepresentable, and make transitions between well-defined states
-explicit.** The cross-cutting rules below are instances of this, not
-alternatives to it. It governs new code, changes to existing code, and
-any design note that precedes either.
+**Every change makes illegal states unrepresentable and makes transitions
+between well-defined states explicit.** It governs new code, old code, and
+the design notes that precede either. Not a licence to rewrite: apply it to
+what you touch and to new design.
 
-**An affordance beats a rule.** A prohibition in a guidance file loses
-to a type signature that makes the forbidden thing the natural thing to
-write. If a rule here keeps getting broken, the first question is which
-type is offering the wrong path, not how to word the rule more loudly.
+**An affordance beats a rule.** If a rule here keeps being broken, the first
+question is which type offers the wrong path, not how to word the rule
+louder.
 
 **Four shapes to recognise before writing the bug:**
 
-- **A value proxies for a richer fact, and the two drift.** Cure: derive
-  it from the fact instead of mirroring the fact.
-- **A sentinel is also a legal value.** A "dummy" span equal to the
-  default equal to a real zero-length position at offset 0 is three
-  meanings on one value, and the compiler cannot tell them apart. Cure:
-  a variant, an `Option`, or no `Default` at all.
-- **A total function silently discards information.** A strict parse
-  that throws away the model it built; a traversal that skips what its
-  map does not mention. Cure: return the information, and make the lossy
-  path the explicit one.
-- **Knowledge duplicated with no owner**, held together by a contract
-  test asserting two things stay equal. That test is a standing
-  confession that one of them should not exist. Cure: one owner, then
-  delete the test.
+- **A value proxies for a richer fact, and the two drift.** Derive it.
+- **A sentinel is also a legal value.** A variant, an `Option`, or no
+  `Default`.
+- **A total function silently discards information.** Return it; make the
+  lossy path the explicit one. Its commonest disguise is a log line.
+- **Knowledge duplicated with no owner**, held together by a test asserting
+  two things stay equal. One owner, then delete the test.
 
-**Decision test, before writing any type:** name a wrong value it
-permits, and ask what would notice. If the answer is a reviewer, a
-comment, or a doc, the type is wrong. If the answer is the compiler, it
-is right.
+**Decision test before writing any type:** name a wrong value it permits and
+ask what would notice. If the answer is a reviewer, a comment or a doc, the
+type is wrong; if the compiler, it is right. **After any type change, count
+what it removed**: lines, variants, checks, tests, branches. Nothing means
+you relocated a defect rather than eliminating one.
 
-Not a licence to rewrite: apply it to what you touch and to new design.
+**A single type is a point fix; the technique is a graph of them.** A node
+per distinct meaning, an edge per transition, each edge `fn(Previous) ->
+Next`, so the illegal state is unreachable rather than rejected. The tell
+that a graph is missing: several values of the same primitive type flowing
+through one pipeline, each meaning something different. Four steps: name
+every space; make transitions the only route between them; construct only at
+the boundary; make each sentinel a node. **A graph nobody travels is worth
+nothing**: building it is half the work, deleting every route around it in
+the same commit is the other half. `talkbank-model/src/alignment/indices.rs`
+is the worked example.
 
-**HUNT FOR TYPESTATE, and do it on every read AND explicitly during every
-review pass (maintainer, 2026-08-20).** The rule above deletes an ASSERTION
-when a type can hold an invariant. This is the stronger form: encode the STATE
-of a thing in its type, so an operation invalid in that state has no signature
-to travel through and whole SCENARIOS stop being writable. Not "this test is
-redundant" but "this test cannot be written, and neither can the bug".
+**Hunt for typestate on every read and in every review.** Whenever a comment,
+test name or docstring says "X happens only after Y", that is a sequence
+maintained by convention and exactly what a phase type expresses. Do not
+accept "no type expresses this" quickly. Two real limits: a scenario about
+the outside world (a subprocess, a clock, the generated grammar) still needs
+a test; and type-parameter typestate fights a collection of mixed-state
+values.
 
-**Ordering is the tell.** Whenever a comment, a test name or a docstring says
-"X happens strictly AFTER Y", "only once Y has succeeded", or
-"confirm-then-write", that is a sequence maintained by convention, and it is
-exactly what a phase type expresses: `fn(Previous) -> Next`, so the later step
-cannot be reached without the earlier one's RESULT in hand. A test that
-arranges a failure at Y and asserts X did not happen is a whole scenario the
-phase type deletes.
+**Fabricated values are banned, in new code and old.** A fabricated value is
+one the code invents because a total function had nothing true to return:
+`_ => Separator::Comma`, `unwrap_or("")` for an event, a struct literal with
+placeholder fields. The cure is always to record the fact where it is known,
+and to say "unknown" or "invalid" with a variant or a `Result`. The
+enforcement is `clippy::wildcard_enum_match_arm`, denied per file as each is
+cleaned; `talkbank-parser-tests/src/content_catch_alls.rs` is the inventory
+of what is not yet protected, with a both-directions ratchet. Shapes the lint
+cannot see are on you: `unwrap_or(<literal>)`, `unwrap_or_default()`, a
+`Default` on a type whose wrong value is invisible, a sentinel that is also a
+legal value.
 
-Do not accept "no type expresses this" quickly; that sentence is usually the
-convention defending itself. Two real limits: a scenario about the OUTSIDE
-world (a subprocess, a clock, the generated grammar) still needs a test,
-because no type of ours reaches it; and type-parameter typestate
-(`Worker<Idle>`) fights a collection of mixed-state values, so knowing which
-form fits is part of the work. A review that only tidies has skipped this.
+**Every touch leaves the types better than it found them**, and deletes
+whatever the improved type made impossible to fail. A ratchet that only
+`main()` performs is not a ratchet: write a gate, run it, then break it on
+purpose and watch it fail before believing any claim that rests on it.
 
-**FABRICATED VALUES ARE BANNED, IN NEW CODE AND OLD (maintainer, 2026-08-11).**
-A fabricated value is one the code INVENTS because a total function was forced
-to return something when it had nothing true to return. It is not a style
-question: every instance is a wrong answer that type-checks.
+**Remove tests by making illegal states unrepresentable.** A test guarding an
+invariant is a standing admission that nothing enforces it. What legitimately
+survives: wire formats, roundtrips between two separate functions,
+measurements, policy choices with real alternatives, and behaviour a
+signature cannot describe. A surviving test says which of those it is.
 
-Found and removed in a single week: `_ => Separator::Comma`,
-`_ => Terminator::Period`, `_ => PauseDuration::Short`, `unwrap_or("")` for an
-event, `Freecode(marker_text)` for an orphaned annotation (which made a whole
-invalid utterance read as VALID, because a freecode is legal content and
-silences everything after it), and a `SpecFile { path: PathBuf::new(), content:
-String::new() }` built solely to reach one accessor.
-
-**The cure is always the same: record the fact where it is known.** The parser
-knows which token it matched, so carry that instead of choosing a plausible
-variant downstream. Where the truth is genuinely "unknown" or "invalid", say so
-with a variant or a `Result`; never with a value that reads as data.
-
-**The enforcement is a lint, not this paragraph.** The largest mechanically
-detectable class is a catch-all arm over a closed enum, which is exactly
-`clippy::wildcard_enum_match_arm`. That lint is denied PER FILE and added as
-each file is cleaned, so a new catch-all in a cleaned file is a compile error.
-`talkbank-parser-tests/src/content_catch_alls.rs` is the inventory of what is
-not yet protected, with a both-directions ratchet; as of 2026-08-11, 19 files
-are protected and **21 remain on `UNPROTECTED`**. Working that list down is the
-concrete form of this ban, and it is real work, not housekeeping: four shipped
-defects in that module's own doc were catch-alls.
-
-**Shapes the lint cannot see, which are on you:** `unwrap_or(<literal>)` and
-`unwrap_or_default()` standing in for a real answer; a struct literal with empty
-placeholder fields; a `Default` impl on a type whose wrong value is invisible; a
-sentinel that is also a legal value. For each, ask what would notice if the
-value were wrong. If the answer is a reviewer, it is fabricated.
-
-**Every touch is a mechanism, and it is the FLOOR, not the ceiling.** Every bug
-fix, every refactor, and every drive-by reading of code you happened to open
-carries the same standing obligation: leave the types better than you found
-them, and delete whatever the improved type has just made impossible to fail.
-
-This paragraph used to end "there is no separate type-hygiene project before 1.0
-and there will not be one." That was measured wrong, on its own terms, in the
-four days after it was written: `Span::DUMMY` went 383 to 385 and
-`new_unchecked` 306 to 318, over exactly the incidental touches it prescribes.
-Incidental work fixes what it passes and nothing sequences what it does not, so
-a rule that relies on it alone loses ground on anything nobody happened to open.
-**A sequenced programme therefore runs alongside it**, in waves, each landing
-one named type, naming the tests that type retires, and passing the corpus
-differential before it ships. The two are not alternatives: the programme
-sequences the load-bearing types, and the every-touch rule covers everything the
-programme will never reach. Ask the maintainer for the current wave order.
-
-**A ratchet that only `main` performs is not a ratchet.** Same failure one layer
-up, found the same day: `audit_content_catch_alls` held its path-set check
-inside `main()`, and CI compiles a binary without ever running it, so the check
-asserted nothing anywhere while every doc citing it called it a gate. Moving the
-assertion into a `#[test]` was half the fix; the other half was that the crate
-sets `test = false` on every `[[bin]]`, which is target SELECTION and silently
-excluded it from `--tests` as well. When you write a gate, run it, then break it
-on purpose and watch it fail, before believing any claim that rests on it.
-
-**The test half is an explicit pre-1.0 goal: remove as many tests as possible
-by making illegal states unrepresentable.** A test guarding an invariant is a
-standing admission that nothing enforces it. When you meet one, ask whether a
-type could refuse the bad value outright. If it can, change the type and delete
-the test: a type cannot be forgotten, it covers callers the test never
-enumerated, and it fails at the point of the mistake instead of in CI. Apply
-this to tests you are merely passing through, not only to ones you are writing.
-
-What legitimately survives that question: **wire formats** (serde output no
-type pins), **roundtrips** between a formatter and a parser that are two
-separate functions, **measurements**, **policy** choices with real
-alternatives, and behaviour a signature cannot describe. A surviving test says
-which of those it is, in its own docstring.
-
-**Record what you notice even when you are not fixing it.** An unwritten
-observation is one the next reader has to make again, and the reader after
-that.
+**Record what you notice even when you are not fixing it.**
 
 ## Cross-cutting design rules
 
-1. Types are the first layer of documentation; newtypes over raw
-   primitives at stable boundaries; no tuple-packed domain seams; no
-   boolean blindness (enums over 2+ bools).
-2. Real domain errors (`thiserror`), streaming diagnostics via
-   `ErrorSink`, `ParseOutcome` for parse results; no silent
-   swallowing (`.ok()`, `.unwrap_or_default()`).
-3. Exhaustive matches on `UtteranceContent`/`BracketedItem`: no
-   `_ =>` catch-alls that discard content; all group types recurse.
-4. "Consecutive/adjacent" on the main tier ALWAYS means in-order
-   recursive traversal (`walk_words`), never flat-index adjacency.
-5. Parse, don't validate: strict + catch-all grammar pattern for
-   closed header-value sets (see `grammar/CLAUDE.md`).
-6. **The production parser is driven by the generated typed CST
-   traversal (`generated_traversal`, `NodeSlot`); hand-walking
-   `node.kind()` and classifying ERROR-node text are BANNED.** The
-   whole-tree recovery backstop is deliberately RETAINED alongside
-   per-position handling; both are load-bearing. Full doctrine +
-   history: `book/src/architecture/parsing.md`.
-7. **Recovery is not validity:** a document that needed a recovery
-   node is invalid; never silently drop a recovery node; never
-   fabricate dummy model values during recovery; parse-taint
-   (`ParseHealth`) gates alignment/validation; lenient recovery
-   preserves malformed `%mor`/`%gra` tier slots in place.
-8. Fix root causes, never symptoms; "pragmatic" is banned as a
-   justification for a band-aid; a workaround that prevents a crash
-   is evidence the architecture needs changing.
-9. **Types first, then red/green TDD top-down for what is left.**
-   Before writing a failing test, ask what type change would make the
-   defect unrepresentable, and prefer that: the compiler is red before
-   the change and green after, at every call site, including the ones
-   no test enumerates, and it reports at the mistake rather than in
-   CI. A change that introduces a type should DELETE the tests that
-   type obsoletes; keeping both relocates the check instead of
-   removing it.
-   For what a type genuinely cannot hold (wire formats, roundtrips
-   between two functions, measurements, policy choices with real
-   alternatives, anything reaching a subprocess or another machine),
-   the FIRST failing test is the highest-level test at the bug's real
-   boundary (CLI subprocess / real fragment through `parse_*` / `.cha`
-   through validate / LSP request). Unit tests supplement, never
-   substitute. Grammar/parser fixes also require a spec +
-   reference-corpus entry (permanent regression gates; a bug fixed
-   without a spec WILL regress).
-9b. **Performance regressions get a RED TEST FIRST, like any other bug,
-    and it asserts COUNTED WORK, never elapsed time.** Wall-clock
-    thresholds are machine-dependent and go flaky, and "flaky" is not a
-    diagnosis in this repo. Every performance bug this project has
-    actually shipped was algorithmic and had an exact, deterministic
-    proxy already available in the code:
-    - v0.5.0 was pulled because a cache refresh issued one statement per
-      FILE where one per RUN was needed. The invariant is a statement
-      count, not a duration.
-    - v0.6.0 folded a presentation preference into the cache key, so a
-      second run over 106,000 files hit ZERO cached entries instead of
-      all of them. The invariant is `cache_hits == total_files` on a
-      re-run, and it would have failed instantly.
-    - The cache accumulated 88 rules versions and 464,773 rows for a
-      106,000-file corpus, because nothing pruned rows no reader can
-      ever bind. The invariant is that unreachable rows stay at zero.
-
-    So: when a change could alter how much work is done, assert the
-    work. `ValidationStatsSnapshot` already exposes `cache_hits` and
-    `cache_misses`; use them. Prefer an invariant that holds at every
-    scale (a ratio, a count that must not grow with input size) over a
-    magic number, and if a magic number is unavoidable, comment what
-    input size it was measured at and why it cannot be a ratio.
-
-    A timing test is acceptable ONLY as a coarse smoke check with a
-    ceiling generous enough that it can never fail on a slow machine
-    (an order of magnitude, not 20%), and its docstring must say that
-    it exists to catch a hang rather than a slowdown.
-10. **%mor is UD-only.** Legacy CLAN-mor (`&` fusional suffixes) is
-    deliberately unsupported; hyphen-separated sentence-case UD
-    features only; never reintroduce `&` handling.
-11. Touched docs update their `Last modified` from real `date`
-    output; keep the book current in the SAME commit as any behavior
-    change (decision test: "would a book reader now believe
-    something untrue?").
-12. Architecture docs use Mermaid, per the canonical diagram rules:
+1. Types are the first layer of documentation: newtypes at stable
+   boundaries, no tuple-packed seams, enums over two or more bools.
+2. Domain errors via `thiserror`; streaming diagnostics via `ErrorSink`;
+   `ParseOutcome` for parse results; no silent swallowing (`.ok()`,
+   `.unwrap_or_default()`).
+3. Exhaustive matches on `UtteranceContent` and `BracketedItem`: no catch-all
+   that discards content; all group types recurse.
+4. "Consecutive" on the main tier always means in-order recursive traversal
+   (`walk_words`), never flat-index adjacency.
+5. Parse, don't validate: strict plus catch-all grammar pattern for closed
+   header-value sets (`grammar/CLAUDE.md`).
+6. **The production parser is driven by the generated typed CST traversal
+   (`generated_traversal`, `NodeSlot`); hand-walking `node.kind()` and
+   classifying ERROR-node text are banned.** The whole-tree recovery backstop
+   is retained alongside per-position handling; both are load-bearing.
+   `book/src/architecture/parsing.md`.
+7. **Recovery is not validity.** A document that needed a recovery node is
+   invalid; never drop a recovery node; never fabricate model values during
+   recovery; parse taint (`ParseHealth`) gates alignment and validation.
+8. Fix root causes, never symptoms. "Pragmatic" is banned as a justification
+   for a band-aid.
+9. **Types first, then red/green TDD top-down for what is left.** Before a
+   failing test, ask what type change makes the defect unrepresentable, and
+   prefer it; a change that introduces a type deletes the tests it obsoletes.
+   For what a type cannot hold, the first failing test is at the bug's real
+   boundary (CLI subprocess, real fragment through `parse_*`, `.cha` through
+   validate, LSP request). **A construct or parser bug is fixed by writing the
+   spec first**: the spec file is the failing test, `just regen` turns it into
+   fixtures, and the expected CST is derived by parsing, never hand-written. A
+   re2c-versus-tree-sitter divergence is a missing spec by definition.
+10. **Performance regressions get a red test first, asserting counted work,
+    never elapsed time.** `ValidationStatsSnapshot` exposes `cache_hits` and
+    `cache_misses`; prefer an invariant that holds at every scale. A timing
+    test is acceptable only as a coarse hang check with an order-of-magnitude
+    ceiling, and says so.
+11. **%mor is UD-only.** Legacy `&` fusional suffixes are unsupported.
+12. Touched docs update `Last modified` from real `date` output; the book is
+    kept current in the same commit as any behaviour change.
+13. Architecture docs use Mermaid:
     `book/src/contributing/documentation-architecture.md`.
-13. No historical CHAT options in new logic: structured `@Options`
-    names are `CA` and `NoAlign` only.
-14. **`From` is infallible; use `TryFrom` when construction can fail.**
-    A conversion that can reject its input must say so in its type.
-    Never launder a validation failure through an infallible `From`
-    plus a default value.
-15. **Never hand-parse CHAT with regex or string slicing, in any
-    language.** CHAT content is read through the typed model and the
-    fragment parsers (`parse_word`, `parse_main_tier`, and friends),
-    never by pattern-matching raw bytes. Never fabricate
-    `@UTF8`/`@Begin`/`@End` scaffolding to make a fragment parse, and
-    never re-parse text this codebase just serialized. Every
-    structured output gets a typed pre-serialization model, lowered
-    once at the boundary. Searching for FILES with a regex is fine;
-    extracting MEANING from CHAT with one is not.
-16. **Prefer `Result` to `Option` for anything that can fail.**
-    `Option` discards the reason. If a caller could reasonably ask
-    "what went wrong", that answer belongs in the type rather than in
-    a log line or a comment.
-17. **Do not materialize intermediate collections.** Prefer iterators
-    and sinks, materializing once at the end. This codebase runs over
-    corpora of six figures of files, where an incidental `collect()`
-    in a hot path is a real cost rather than a style question.
-18. **Never revert a deliberate dependency bump to make a build
-    pass.** Diagnose and fix the build under the new version.
-    Reverting discards the intent to stay current and hides the
-    fragility the bump exposed; revert a bumped manifest only when
-    the maintainer asks for it.
+14. Structured `@Options` names are `CA` and `NoAlign` only.
+15. **`From` is infallible; use `TryFrom` when construction can fail.**
+16. **Never hand-parse CHAT with regex or string slicing.** CHAT content is
+    read through the typed model and the fragment parsers; never fabricate
+    `@UTF8`/`@Begin`/`@End` scaffolding to make a fragment parse; never
+    re-parse text this codebase just serialized.
+17. **Prefer `Result` to `Option` for anything that can fail.**
+18. **Do not materialize intermediate collections**; prefer iterators and
+    sinks. This code runs over six-figure corpora.
+19. **Never revert a deliberate dependency bump to make a build pass.**
+20. **Closed vocabularies have one owner in `spec/`, and every site that
+    names them is generated.** Symbols from
+    `spec/symbols/symbol_registry.json`; form markers from
+    `spec/form_markers/form_marker_registry.json`. Before adding a list of a
+    closed set anywhere, including a comment, ask whether it can be generated
+    or linked instead.
 
-## Building, testing, releasing (pointers)
+## Building, testing, releasing
 
-- Dev commands, corpus validation, and gates:
-  `book/src/contributing/dev-checks.md` and the `justfile`
-  (`just test`, `just book`, `just fmt-check`). Mandatory
-  parser/model regression gates before any commit touching parser,
-  model, validation, alignment, serialization, or roundtrip:
-  `cargo test -p talkbank-parser-tests parser_equivalence`
-  and `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus`.
-- Pre-push gate: CI green on the pushed commit; the README badges are
-  the canonical signal.
-- Clippy: CI owns it (single pass, no flags; red means a panic-policy
-  violation, nothing else). Never run locally as a habit.
-- Releases: cargo-dist on `vX.Y.Z` tags. TWO COMMANDS, NEVER a hand
-  bump or a raw `git tag`: `just release-bump X.Y.Z` (rewrites the
-  workspace version, every path-dep pin, package.json; refreshes both
-  lockfiles), write the CHANGELOG section, commit + push + CI green,
-  then `just release-tag X.Y.Z` (fail-closed: refuses drift, missing
-  CHANGELOG section, or CI not green on the exact tagged commit; the
-  v0.5.0 bump missed files and tagged before CI, which is why this is
-  mechanized). Full story: `book/src/contributing/ci-and-release.md`.
-  The desktop version has a single source of truth (the workspace
-  version; `tauri.conf.json` deliberately carries NO `version` key, do
-  not re-add one).
-- Release freeze status and fleet coupling are operator concerns
-  tracked outside this repo; when in doubt whether a release may be
-  cut, ask the maintainer.
-
-## Grammar Change Workflow (mandatory sequence)
-
-On any grammar-source change: (1) `cd grammar && tree-sitter
-generate`; (2) `tree-sitter test`; (3) regenerate the typed traversal
-module (exact command shape: `crates/talkbank-parser/src/lib.rs` doc
-comment; never hand-edit the generated file; staleness guard
-`generated_traversal_is_current`); (4) regenerate corpus/error tests
-from specs (`spec/CLAUDE.md`); (5) `cargo test -p
-talkbank-parser -p talkbank-parser-tests`; (6) one real-file CLI
-validation over the changed syntax path. Do not regenerate corpus
-expectations blindly; review failures first. Full workflow:
-`book/src/contributing/grammar-workflow.md` and `grammar/CLAUDE.md`.
-Spec changes: regenerate per `spec/CLAUDE.md`, then run the
-equivalence + reference-corpus gates.
+- Dev commands: the `justfile` and `book/src/contributing/dev-checks.md`.
+- **Parser and model regression gates**, all in `just test`: the parity
+  oracle `equivalence_reference_corpus` (both backends over the reference
+  corpus, compared with `SemanticEq`); `reference_corpus_parses`;
+  `roundtrip_reference_corpus`; the spec observation snapshot
+  (`spec/observations/example-diagnostics.json`), which records for every
+  spec example the codes each stage emitted and whether the parsed model
+  serializes back byte-exact; and `KNOWN_DIVERGENCES`, the backend-parity
+  baseline per spec case. A diff in the snapshot or the baseline is
+  adjudicated in the commit as intended or unintended, never regenerated
+  blindly.
+- Releases: cargo-dist on `vX.Y.Z` tags, via two commands and never a hand
+  bump or raw `git tag`: `just release-bump X.Y.Z`, then after CI is green on
+  the pushed squash commit, `just release-tag X.Y.Z` (fail-closed on drift, a
+  missing CHANGELOG section, or CI not green on the exact commit).
+  `book/src/contributing/ci-and-release.md`. The desktop version inherits the
+  workspace version; `tauri.conf.json` carries no `version` key.
 
 ## Architecture (index)
 
-Data flows: **spec** (source of truth) → **grammar** → **crates**
-(parsers, model, transform, cli, lsp).
+Data flows: **spec** (source of truth) → **grammar** → **crates** (parsers,
+model, transform, cli, lsp).
 
 | Crate | Purpose |
 |-------|---------|
-| `talkbank-model` | Typed CHAT AST, WriteChat, validation, alignment, `walk_words` walkers, `ChatParser` trait |
+| `talkbank-model` | Typed CHAT AST, WriteChat, validation, alignment, `walk_words`, `ChatParser` trait |
 | `talkbank-derive` | SemanticEq / SpanShift / error-code proc macros |
-| `talkbank-cache` | SQLite validation/roundtrip cache (cross-process-safe init) |
-| `talkbank-parser` | Canonical tree-sitter parser (implements `ChatParser`) |
-| `talkbank-parser-re2c` | Independent re2c parser: spec oracle + wasm-clean backend (implements `ChatParser`) |
+| `talkbank-cache` | SQLite validation/roundtrip cache |
+| `talkbank-parser` | Canonical tree-sitter parser |
+| `talkbank-parser-re2c` | Independent re2c parser: spec oracle and wasm-clean backend |
 | `talkbank-parser-tests` | Equivalence, roundtrip, golden, property tests |
 | `talkbank-transform` | Pipelines, CHAT↔JSON, normalize, merge |
 | `chatter` | The CLI |
-| `talkbank-lsp` | LSP server (tree-sitter only; needs incremental parsing) |
+| `talkbank-lsp` | LSP server (tree-sitter only) |
 | `send2clan` | CLAN app bridge bindings |
 | `chatter-desktop` | Tauri v2 desktop app |
 
 Two Cargo workspaces: the root, and `spec/` (`spec/tools`,
-`spec/runtime-tools`); use the right manifest path for spec tooling.
-Shared symbols generate from `spec/symbols/symbol_registry.json`.
-
-**Closed vocabularies have ONE owner in `spec/`, and every site that names
-them is generated.** Shared symbols come from
-`spec/symbols/symbol_registry.json`; the CHAT special-form markers (`@b`,
-`@k`, `@z:label`) come from `spec/form_markers/form_marker_registry.json`
-(`just form-markers-gen`; see that directory's README). Before adding a list
-of a closed set anywhere, including a comment or a doc, ask whether it can be
-generated instead, and if it cannot, whether it can be a link. The form-marker
-set was spelled out in SIXTEEN places, three of which were already wrong when
-the registry was built, two of them wrong within an hour of a session that
-corrected the others. A copy nobody reads drifts first and silently.
-Parser-backend selection, the shared `ChatParser` trait, equivalence
-testing, and the re2c oracle workflow:
-`book/src/architecture/parser-backends.md` and
+`spec/runtime-tools`). Parser-backend selection and the oracle workflow:
+`book/src/architecture/parser-backends.md`,
 `crates/talkbank-parser-re2c/CLAUDE.md`.
 
-**"Parity" names TWO unrelated programmes. Always say which one.** Conflating
-them reads as "the validity work is unfinished", which it is not.
+**"Parity" names two unrelated programmes; always say which.** **CHECK
+adjudication** asks, per CLAN CHECK code, whether the rejected construct
+fails to make sense, and records a divergence or closes the gap; it is about
+CHAT validity and every entry in `tests/check_parity/manifest.json` carries a
+terminal verdict. **Backend parity** asks whether the two parsers answer
+identically; it is about our implementations, says nothing about CHAT, and
+is open, tracked per spec case in `KNOWN_DIVERGENCES`.
 
-- **CHECK adjudication** asks, for each CLAN CHECK error code, whether the
-  construct it rejects actually fails to make sense, and then either records a
-  deliberate divergence or closes the gap in chatter's own semantics. It is
-  about CHAT VALIDITY, its authorities are `spec/` and the wild data, and it is
-  COMPLETE: every entry in `tests/check_parity/manifest.json` carries a
-  terminal verdict, and there is no "open" status to hold one that does not.
-  The breakdown is the file's, not a number to copy:
-  `jq -r '.entries[].status' crates/talkbank-parser-tests/tests/check_parity/manifest.json | sort | uniq -c`
-- **Backend parity** asks whether `talkbank-parser` and `talkbank-parser-re2c`
-  answer identically. It is about our two IMPLEMENTATIONS, says nothing about
-  CHAT, and it is OPEN. Three instruments, each answering a different question,
-  and a clean run of one is no evidence about the others: `KNOWN_DIVERGENCES`
-  (per CODE, over spec fixtures), the corpus differential's cross-backend axis
-  (per VERDICT, over the wild corpus), and `just corpus-parse-equivalence`
-  (whole MODELS, over the wild corpus).
-
-**Reference corpus** (`corpus/reference/`) is a synthesized regression
-signal, NOT a validity authority: when a change rejects a reference
-file, adjudicate the FILE against the real authorities and fix the
-data (or move it to `spec/errors/`) rather than weaken the parser; the
-roundtrip gate stays green either way.
+**The reference corpus** (`corpus/reference/`) is a regression signal, not a
+validity authority: when a change rejects a reference file, adjudicate the
+file against the real authorities and fix the data (or move it to
+`spec/errors/`) rather than weaken the parser.
 
 ## Cache policy
 
-The validation cache lives in the OS cache directory; `--force`
-refreshes specific paths; `TALKBANK_CHAT_CACHE_DIR` relocates the root
-(the only effective override on Windows). Integration tests isolate
-the cache through `CliHarness`, never `HOME` tricks (Windows race).
-Initialization is concurrency-safe across threads AND processes
-(advisory init lock; bounded, typed timeout). Never delete a user's
-cache without an explicit request.
+The validation cache lives in the OS cache directory; `--force` refreshes
+specific paths; `TALKBANK_CHAT_CACHE_DIR` relocates the root. Integration
+tests isolate the cache through `CliHarness`, never `HOME` tricks.
+Initialization is concurrency-safe across threads and processes. Never delete
+a user's cache without an explicit request.
 
 ## Coding standards
 
-Full canonical charter (newtypes, integer discipline, closed-set
-enums, string-literal policy, path discipline, configurability,
-rustdoc-as-primary-documentation, file-size limits ≤400 recommended /
-≤800 hard, testability, refactoring triggers):
 `book/src/contributing/coding-standards.md` and
-`coding-standards-extended.md`. The highest-frequency rules are the
-design-rules list above. Conventional Commits for messages.
+`coding-standards-extended.md`: newtypes, integer discipline, closed-set
+enums, string-literal policy, path discipline, rustdoc as primary
+documentation, file-size limits (400 recommended, 800 hard). Conventional
+Commits for messages.
 
 ## LSP reliability
 
-Backend init failures surface as diagnostics, not panics; handlers
-degrade gracefully; diagnostics align with parse-health semantics.
-Everything else: `crates/talkbank-lsp/CLAUDE.md` (alignment lives in
-the model; three index spaces).
+Backend init failures surface as diagnostics, not panics; handlers degrade
+gracefully; diagnostics align with parse-health semantics.
+`crates/talkbank-lsp/CLAUDE.md`.
 
 ## Sub-project CLAUDE.md files
 
@@ -518,19 +351,16 @@ the model; three index spaces).
 | `grammar/CLAUDE.md` | Grammar design, verification sequence, strict+catch-all |
 | `spec/CLAUDE.md` + `spec/tools/CLAUDE.md` | Spec structure, generators, regeneration |
 | `crates/talkbank-lsp/CLAUDE.md` | LSP: model-owned alignment; index spaces; reliability |
-| `crates/talkbank-parser-re2c/CLAUDE.md` | Re2c parser + oracle workflow |
+| `crates/talkbank-parser-re2c/CLAUDE.md` | Re2c parser and oracle workflow |
 | `apps/chatter-desktop/CLAUDE.md` | Desktop app; TUI parity mandate |
 
 ## The book
 
-`book/` is the canonical user/developer documentation (CI builds it
-with a lychee link-check; verify locally with `just book`). One
-top-level README.md for the landing page; everything else is a book
-chapter, never parallel GUIDE/DEVELOPER files. Release notes ARE
-`CHANGELOG.md` via include, never a drifting copy. Keeping the book
-current is part of every behavior-changing commit (design rule 11).
+`book/` is the canonical documentation, built in CI with a link check
+(`just book` locally). One top-level README.md; everything else is a book
+chapter. Release notes are `CHANGELOG.md` via include, never a copy.
 
 ## Relationship to batchalign
 
-This repo contains no Batchalign code; the ML pipeline consumes
-chatter's crates from its own repository.
+This repo contains no Batchalign code; the ML pipeline consumes chatter's
+crates from its own repository.

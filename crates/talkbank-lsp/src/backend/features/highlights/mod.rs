@@ -9,6 +9,7 @@
 //! Tier-specific logic lives in [`tier_handlers`]; CST traversal for computing
 //! LSP ranges lives in [`range_finders`].
 
+use crate::editor_target::span_contains;
 use tower_lsp::lsp_types::*;
 
 use crate::backend::utils;
@@ -65,11 +66,6 @@ fn find_dependent_tier_at_offset(
 /// Return the source span for a dependent tier variant.
 fn dependent_tier_span(tier: &DependentTier) -> Option<Span> {
     Some(tier.span())
-}
-
-/// Return `true` when `outer` fully contains `inner`.
-fn span_contains(span: Span, offset: u32) -> bool {
-    offset >= span.start && offset <= span.end
 }
 
 #[cfg(test)]

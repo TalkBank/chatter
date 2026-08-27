@@ -47,6 +47,10 @@ use crate::repo_paths::RepoRoot;
 const INVALID_BY_CONSTRUCTION: &[(&str, &str)] = &[
     ("blank_line", "E747"),
     ("illegal_curly_quote", "E256"),
+    // A word carrying two `@` runs (`hello@@c`). The grammar was widened to
+    // form the word so the validator can NAME the defect, rather than letting
+    // the utterance fall to ERROR-node recovery and a generic E316.
+    ("repeated_form_marker", "E203"),
     ("sep_trailing_space", "E758"),
 ];
 
@@ -405,5 +409,49 @@ fn collect_node_types(
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_node_types(child, exercised, seen_here);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{INVALID_BY_CONSTRUCTION, NOT_YET_IN_CORPUS};
+    use crate::repo_paths::RepoRoot;
+    use talkbank_spec_vocabulary::SpecErrorCode;
+
+    /// SURVIVES: a roundtrip between two separate owners. The table names codes
+    /// as strings and the registry owns which codes exist; no type of this
+    /// crate's spans both, because `generators` is what GENERATES `ErrorCode`
+    /// and so cannot depend on it.
+    ///
+    /// Nothing checked this before. The code is read only when an
+    /// invalid-by-construction node turns up in the reference corpus, so a code
+    /// naming nothing would have stayed silent until the one run that had a
+    /// real corpus defect to report, and then named nothing in the report.
+    #[test]
+    fn every_invalid_by_construction_code_is_registered() -> Result<(), String> {
+        let root = RepoRoot::resolve(None).map_err(|why| why.to_string())?;
+        let registry = root.code_registry().map_err(|why| why.to_string())?;
+        for (kind, code) in INVALID_BY_CONSTRUCTION {
+            let parsed = SpecErrorCode::parse(code)
+                .ok_or_else(|| format!("{kind}: `{code}` is not a well-formed code token"))?;
+            registry
+                .resolve(&parsed)
+                .map_err(|why| format!("{kind}: {why}"))?;
+        }
+        Ok(())
+    }
+
+    /// SURVIVES: policy, in the same sense as the coverage gate itself. The two
+    /// slices mean different things and get opposite reverse checks, so a node
+    /// listed in both would be excused twice and checked inconsistently: once
+    /// as "must not appear" and once as "should appear eventually".
+    #[test]
+    fn no_node_type_is_excused_twice() {
+        for (kind, _) in INVALID_BY_CONSTRUCTION {
+            assert!(
+                !NOT_YET_IN_CORPUS.contains(kind),
+                "{kind} is listed as both invalid-by-construction and not-yet-in-corpus"
+            );
+        }
     }
 }

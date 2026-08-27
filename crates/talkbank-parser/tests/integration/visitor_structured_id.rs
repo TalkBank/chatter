@@ -55,30 +55,39 @@ const FULL: &str = include_str!("../../../../corpus/reference/languages/manchest
 const ABSENT: &str = include_str!("../../../../corpus/reference/content/words-markers.cha");
 
 // Existing @ID error-corpus fixtures (NOT hand-authored).
-const E505_1: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_auto_1.cha"
-);
-const E505_2: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_auto_2.cha"
-);
-const E505_3: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E505_auto_3.cha"
-);
-const E514: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E514_empty_id_corpus_1.cha"
-);
-const E542: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E542_unsupported_sex_1.cha"
-);
-const E546: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E546_unsupported_ses_1.cha"
-);
-const E518: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E518_auto_1.cha"
-);
-const E517: &str = include_str!(
-    "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E517_invalid_age_format_1.cha"
-);
+
+/// The committed spec-generated fixture for one example of one error code.
+///
+/// `include_str!` needs a string LITERAL, so this cannot take an `ErrorCode`
+/// the way `config_path_check_parity`'s helper does. What it can remove is the
+/// repetition that actually broke: the corpus path was spelled out eight
+/// times, and each fixture named its code twice, once in the const and once
+/// inside a filename the generator owns. When the error specs were renamed to
+/// the bare `E###.md` convention on 2026-08-26 the generator's fixture names
+/// moved with them, and all eight stopped compiling at once.
+///
+/// The naming rule (`<code>_<example index>`, R4) is now written once, here,
+/// instead of once per fixture.
+macro_rules! spec_fixture {
+    ($code:literal, $example:literal) => {
+        include_str!(concat!(
+            "../../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/",
+            $code,
+            "_",
+            $example,
+            ".cha"
+        ))
+    };
+}
+
+const E505_1: &str = spec_fixture!("E505", 1);
+const E505_2: &str = spec_fixture!("E505", 2);
+const E505_3: &str = spec_fixture!("E505", 3);
+const E514: &str = spec_fixture!("E514", 1);
+const E542: &str = spec_fixture!("E542", 1);
+const E546: &str = spec_fixture!("E546", 1);
+const E518: &str = spec_fixture!("E518", 1);
+const E517: &str = spec_fixture!("E517", 1);
 
 /// Parse `input` at the real streaming boundary and return the `Debug` string of
 /// every `Header::ID` / `Header::Unknown` (in document order) plus every collected

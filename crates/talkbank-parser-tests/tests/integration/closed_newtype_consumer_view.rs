@@ -48,6 +48,17 @@ use talkbank_parser_tests::test_error::TestError;
 /// is here so `every_collection_newtype_is_listed_here` stays exhaustive and a
 /// NEW unreachable type has to be added consciously.
 const NOT_ON_THE_MACRO: &[(&str, &str)] = &[
+    // NON-EMPTY by construction, which is incompatible with the macro rather
+    // than merely unimplemented on it. `take` leaves a collection empty and
+    // `retain` can shrink one to nothing, and both would reopen the exact
+    // state this type was closed to forbid on 2026-08-26. It offers `as_slice`
+    // for reading and nothing that can change its length; a consumer that
+    // needs different annotations builds a new one through
+    // `AnnotatedContentAnnotations::new`, which refuses the empty list.
+    (
+        "AnnotatedContentAnnotations",
+        "non-empty invariant: length-shrinking ops would break it",
+    ),
     // Publicly reachable, but SmallVec-backed, so the Vec-typed macro does not
     // fit. Worth revisiting if the macro gains a backing-store parameter.
     ("WordContents", "SmallVec-backed, not Vec"),
@@ -115,7 +126,6 @@ fn every_closed_collection_newtype_offers_the_consumer_api() {
     assert_consumer_api!(content::TierPostcodes, Postcode);
     assert_consumer_api!(annotation::ReplacementWords, Word);
     assert_consumer_api!(annotation::ReplacedWordAnnotations, ContentAnnotation);
-    assert_consumer_api!(annotation::AnnotatedContentAnnotations, ContentAnnotation);
     assert_consumer_api!(WordLanguageInfos, WordLanguageInfo);
 }
 

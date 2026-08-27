@@ -240,7 +240,7 @@ This is where the cost wall sits.
 > **Status (2026-06-05): macOS signing is provisioned.** An Apple Developer
 > Program membership, a Developer ID Application certificate (with its private
 > key), and an App Store Connect API key for notarization are all in hand and
-> held in the private operator workspace. The remaining work is wiring the
+> held outside this repository. The remaining work is wiring the
 > signing identity, a hardened-runtime entitlements file, and the notarization
 > step into the desktop app's Tauri bundle (and, later, the CLI archive). The
 > cost discussion below is retained for context and for the still-open Windows
@@ -397,8 +397,7 @@ independent trust root**:
   (`.env` files do not work; the build reads them from the environment).
 - **Losing the private key is unrecoverable:** existing installs can
   never be updated again. It is stored with the rest of the signing
-  material in the private operator workspace (`~/talkbank/codesign/`),
-  NEVER in any repo tree.
+  material outside this repository, NEVER in any repo tree.
 - **Manifest hosting needs no new server.** `createUpdaterArtifacts: true`
   makes the bundler emit update bundles plus detached `.sig` signatures
   (macOS `.app.tar.gz`, Windows `-setup.nsis.zip`, Linux

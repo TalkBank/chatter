@@ -100,26 +100,6 @@ fn marker_summary(row: &MarkerRow) -> String {
     )
 }
 
-/// Turn lines into a rustdoc comment.
-///
-/// Emitted at column 0 with no indent parameter: `render_rust` finishes by
-/// running rustfmt, which re-indents doc comments, attributes and match arms
-/// from scratch, so any indentation chosen here is written, reviewed and then
-/// discarded.
-fn doc_comment(lines: &[String]) -> String {
-    lines
-        .iter()
-        .map(|line| {
-            if line.is_empty() {
-                "///".to_owned()
-            } else {
-                format!("/// {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// A double-quoted literal. Marker codes are lowercase ASCII by construction
 /// (`MarkerCode` refuses anything else), so this only ever has to quote, and
 /// the result is valid in both Rust and re2c, which is why it is not named for
@@ -158,7 +138,7 @@ fn render_variants(registry: &FormMarkerRegistry) -> String {
         .markers()
         .iter()
         .map(|row| {
-            let doc = doc_comment(&[
+            let doc = crate::rust_source::doc_comment(&[
                 marker_summary(row),
                 String::new(),
                 format!("Reference: <{MANUAL}#{}>", row.manual_anchor),
@@ -214,7 +194,7 @@ fn render_from_payload(registry: &FormMarkerRegistry) -> String {
     /// from a `to_lowercase()` and the second from a literal `"z:"` prefix
     /// test in each caller. Neither is defensible and the corpus authority
     /// writes every marker lowercase, but changing what chatter accepts is not
-    /// a de-duplication and needs the corpus differential, so the incoherence
+    /// a de-duplication and needs a comparison over real corpora, so the incoherence
     /// is preserved here, in one place where it can be seen, instead of in
     /// three where it could not.
     ///
@@ -379,7 +359,7 @@ impl FormType {{
 {to_chat_marker}
 }}
 "#,
-        type_doc = doc_comment(&type_doc(registry)),
+        type_doc = crate::rust_source::doc_comment(type_doc(registry)),
         variants = render_variants(registry),
         suggestion = render_suggestion(registry),
         from_payload = render_from_payload(registry),

@@ -152,7 +152,7 @@ pub enum ValidationProfile {
 
 /// Look up a code's intrinsic [`DiagnosticKind`].
 ///
-/// Delegates to the GENERATED [`generated_diagnostic_kind::kind_of_from_spec`],
+/// Delegates to the GENERATED `generated_diagnostic_kind::kind_of_from_spec`,
 /// an exhaustive match over every [`ErrorCode`] variant with no `_ =>`
 /// wildcard arm: adding a new `ErrorCode` variant without regenerating (or
 /// hand-extending) that match is a COMPILE ERROR. That property is

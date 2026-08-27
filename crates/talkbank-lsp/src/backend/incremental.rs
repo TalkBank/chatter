@@ -22,7 +22,9 @@
 //! 5. [`collect_utterance_line_indices`] maps the surviving utterances back to
 //!    their line positions in the document.
 
-use tree_sitter::{Node, Range as TsRange, Tree};
+use talkbank_parser::DocumentRoot;
+use talkbank_parser::generated_traversal::{AsRawNode, FromNodeKind, UtteranceNode};
+use tree_sitter::{Range as TsRange, Tree};
 
 use talkbank_model::model::ChatFile;
 
@@ -103,27 +105,23 @@ fn is_context_affecting_header(kind: &str) -> bool {
     )
 }
 
-/// Collect utterance CST nodes in order and detect header changes.
-///
-/// Returns `(utterances, context_header_changed, any_header_changed)`:
-/// - `context_header_changed`: a header that affects validation context was modified
-///   (Participants, ID, Languages, Options)
-/// - `any_header_changed`: any header at all was modified (including decorative ones
-///   like Comment, Date, Location)
+/// Collect utterance CST nodes in order and classify the header change.
 pub fn collect_utterances_and_header_changes<'a>(
     tree: &'a Tree,
     changed_ranges: &[TsRange],
-) -> (Vec<Node<'a>>, bool, bool) {
-    let mut utterances = Vec::new();
+) -> (Vec<UtteranceNode<'a>>, HeaderChange) {
+    // Typed, because this function is where "is this an utterance?" is DECIDED.
+    // It used to push a bare `Node` after testing the kind, so every consumer
+    // downstream held a node with no evidence of what it was and the LSP's
+    // `parse_utterance_cst` had to take it on trust.
+    let mut utterances: Vec<UtteranceNode<'a>> = Vec::new();
     // (start_byte, end_byte, context_affecting)
     let mut header_ranges: Vec<(usize, usize, bool)> = Vec::new();
 
-    let root = tree.root_node();
-    // Grammar wraps content in a full_document node; descend into it if present.
-    let doc_node = root
-        .children(&mut root.walk())
-        .find(|c| c.kind() == talkbank_parser::node_types::FULL_DOCUMENT)
-        .unwrap_or(root);
+    // The THIRD copy of this navigation until 2026-08-26, and the one that
+    // searched all children rather than taking the first. `DocumentRoot` owns
+    // it, and its `node()` is the same fallback-to-root this had, stated once.
+    let doc_node = DocumentRoot::classify(tree).node();
     let mut cursor = doc_node.walk();
     for child in doc_node.children(&mut cursor) {
         if child.is_missing() || child.is_error() {
@@ -137,15 +135,19 @@ pub fn collect_utterances_and_header_changes<'a>(
                     continue;
                 }
 
-                let kind = line_child.kind();
-                if kind == talkbank_parser::node_types::UTTERANCE {
-                    utterances.push(line_child);
-                } else if is_header_kind(kind) {
-                    header_ranges.push((
-                        line_child.start_byte(),
-                        line_child.end_byte(),
-                        is_context_affecting_header(kind),
-                    ));
+                if let Some(utterance) = UtteranceNode::from_node(line_child) {
+                    utterances.push(utterance);
+                } else {
+                    // Only the non-utterance branch needs the kind, so only it
+                    // pays for reading it.
+                    let kind = line_child.kind();
+                    if is_header_kind(kind) {
+                        header_ranges.push((
+                            line_child.start_byte(),
+                            line_child.end_byte(),
+                            is_context_affecting_header(kind),
+                        ));
+                    }
                 }
             }
         } else if is_header_kind(child.kind()) {
@@ -157,22 +159,57 @@ pub fn collect_utterances_and_header_changes<'a>(
         }
     }
 
-    let mut context_header_changed = false;
-    let mut any_header_changed = false;
+    let mut change = HeaderChange::None;
     for range in changed_ranges {
         let start = range.start_byte;
         let end = range.end_byte;
         for &(h_start, h_end, context_affecting) in &header_ranges {
             if ranges_overlap(h_start, h_end, start, end) {
-                any_header_changed = true;
-                if context_affecting {
-                    context_header_changed = true;
-                }
+                change = change.max(if context_affecting {
+                    HeaderChange::ValidationContext
+                } else {
+                    HeaderChange::Decorative
+                });
             }
         }
     }
 
-    (utterances, context_header_changed, any_header_changed)
+    (utterances, change)
+}
+
+/// What kind of header changed, if any.
+///
+/// This was two `bool`s returned side by side, `context_header_changed` and
+/// `any_header_changed`, with a doc paragraph explaining what they meant
+/// TOGETHER. Context-affecting headers are a subset of headers, so
+/// `(context: true, any: false)` describes nothing in the world and was
+/// perfectly representable; the invariant lived in the assignment order of two
+/// lines. As one ordered value the impossible reading has no spelling, and
+/// `max` over the loop replaces the nested `if`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HeaderChange {
+    /// No header overlapped a changed range.
+    None,
+    /// A header changed, but only one validation does not read for context
+    /// (`@Comment`, `@Date`, `@Location`, ...).
+    Decorative,
+    /// A header validation reads for context changed (`@Participants`, `@ID`,
+    /// `@Languages`, `@Options`), so cached per-utterance results are void.
+    ValidationContext,
+}
+
+impl HeaderChange {
+    /// Whether any header changed at all.
+    #[must_use]
+    pub fn is_none(self) -> bool {
+        self == Self::None
+    }
+
+    /// Whether a header validation reads for context changed.
+    #[must_use]
+    pub fn affects_validation_context(self) -> bool {
+        self == Self::ValidationContext
+    }
 }
 
 /// Detect a single utterance insertion or deletion by comparing the new CST
@@ -188,7 +225,7 @@ pub fn collect_utterances_and_header_changes<'a>(
 ///
 /// Returns `None` if the count difference is not ±1.
 pub fn detect_utterance_splice(
-    utterance_nodes: &[Node],
+    utterance_nodes: &[UtteranceNode<'_>],
     diff_start: usize,
     old_utterance_count: usize,
 ) -> Option<(usize, bool)> {
@@ -202,10 +239,11 @@ pub fn detect_utterance_splice(
         // Insertion: find the new utterance that contains or starts at diff_start.
         // Note: end_byte() is exclusive, so use strict < for the upper bound.
         for (i, node) in utterance_nodes.iter().enumerate() {
-            if node.start_byte() <= diff_start && diff_start < node.end_byte() {
+            let raw = node.raw_node();
+            if raw.start_byte() <= diff_start && diff_start < raw.end_byte() {
                 return Some((i, true));
             }
-            if node.start_byte() > diff_start {
+            if raw.start_byte() > diff_start {
                 return Some((i, true));
             }
         }
@@ -216,7 +254,7 @@ pub fn detect_utterance_splice(
         // after diff_start, i.e., the index where the deleted utterance was.
         let idx = utterance_nodes
             .iter()
-            .position(|n| n.start_byte() >= diff_start)
+            .position(|n| n.raw_node().start_byte() >= diff_start)
             .unwrap_or(new_count);
         Some((idx, false))
     }
@@ -224,7 +262,7 @@ pub fn detect_utterance_splice(
 
 /// Find utterance indices whose CST nodes overlap changed ranges.
 pub fn affected_utterance_indices<'a>(
-    utterance_nodes: &[Node<'a>],
+    utterance_nodes: &[UtteranceNode<'a>],
     changed_ranges: &[TsRange],
 ) -> Vec<usize> {
     if changed_ranges.is_empty() {
@@ -233,8 +271,8 @@ pub fn affected_utterance_indices<'a>(
 
     let mut indices = Vec::new();
     for (idx, node) in utterance_nodes.iter().enumerate() {
-        let start = node.start_byte();
-        let end = node.end_byte();
+        let raw = node.raw_node();
+        let (start, end) = (raw.start_byte(), raw.end_byte());
         if changed_ranges
             .iter()
             .any(|range| ranges_overlap(start, end, range.start_byte, range.end_byte))
@@ -345,8 +383,7 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _, _) =
-            collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
 
         assert_eq!(new_utterances.len(), 2);
         let result = detect_utterance_splice(&new_utterances, diff_start, 1);
@@ -362,8 +399,7 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _, _) =
-            collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
 
         assert_eq!(new_utterances.len(), 2);
         let result = detect_utterance_splice(&new_utterances, diff_start, 1);
@@ -379,8 +415,7 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _, _) =
-            collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
 
         assert_eq!(new_utterances.len(), 1);
         let result = detect_utterance_splice(&new_utterances, diff_start, 2);
@@ -396,8 +431,7 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _, _) =
-            collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
 
         // Count diff is +2, not ±1, should return None
         let result = detect_utterance_splice(&new_utterances, diff_start, 1);

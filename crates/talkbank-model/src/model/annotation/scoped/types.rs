@@ -425,3 +425,40 @@ pub struct ScopedUnknown {
     /// The annotation text
     pub text: smol_str::SmolStr,
 }
+
+impl ScopedUnknown {
+    /// The E207 diagnostic message for this annotation.
+    ///
+    /// # One owner, because there are two emitters and they had drifted
+    ///
+    /// `AnnotatedContentAnnotations::report_unknown_markers` and
+    /// `ReplacedWordAnnotations::validate` both report `UnknownAnnotation`, and
+    /// each built its own sentence. Both said `"{marker}" is not a known scoped
+    /// annotation type`, which the parser does not know: an annotation reaches
+    /// `Unknown` whenever no specific rule matched it WHOLE, which happens both
+    /// when the marker is genuinely unknown (`[qq]`, `[@ xyz]`) and when a
+    /// KNOWN marker carries content the rule refuses. Under `--parser=re2c`,
+    /// whose rule set is narrower, `[x 0]` and `[:]` land there, and the
+    /// message then denied that `x` and `:` are known types. Both are.
+    ///
+    /// The replacement copy went further and appended an INVENTORY, "known
+    /// types are *, =, +, <, >, //, ///", which omitted `x`, `:`, `!`, `?`,
+    /// `%`, `-` and `e`, and printed on a word whose `[: cat]` had just parsed
+    /// successfully: a list asserting `:` is not known, beside a demonstration
+    /// that it is. An inventory in a message is a copy nothing checks, so
+    /// there is none here.
+    ///
+    /// Naming the annotation AS WRITTEN is true in every case and shows more
+    /// than the marker alone, which is the half the reader can already see.
+    #[must_use]
+    pub fn unreadable_message(&self) -> String {
+        if self.text.is_empty() {
+            format!("could not read [{}] as a scoped annotation", self.marker)
+        } else {
+            format!(
+                "could not read [{} {}] as a scoped annotation",
+                self.marker, self.text
+            )
+        }
+    }
+}

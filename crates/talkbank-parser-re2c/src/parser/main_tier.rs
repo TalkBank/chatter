@@ -80,11 +80,16 @@ fn pause<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 /// token is which separator, rather than repeating that list here.
 fn separator<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
     any().try_map(|tok: Token<'a>, _span| {
+        // `_span` is chumsky's index into the TOKEN slice, not a byte range,
+        // so it cannot give a source position; the token's own text can, and
+        // `SourceText::span_of` turns it into one at conversion time.
+        //
         // The parser's error type carries no payload, so a non-separator is
         // simply "this alternative did not match", which is what `choice`
         // wants: the next alternative gets the token.
+        let text = tok.text();
         SeparatorKindParsed::from_token(&tok)
-            .map(ContentItem::Separator)
+            .map(|kind| ContentItem::Separator { kind, text })
             .ok_or_else(Default::default)
     })
 }

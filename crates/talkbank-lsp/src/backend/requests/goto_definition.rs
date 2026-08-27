@@ -4,8 +4,14 @@
 //! - Speaker code (`*CHI:`) → `@Participants` header definition
 //! - `%mor` / `%gra` item → aligned main-tier word (via `AlignmentSet`)
 
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
+
+use crate::editor_target::editor_target_span;
 use talkbank_model::Span;
-use talkbank_model::model::{ChatFile, UtteranceContent};
+use talkbank_model::model::ChatFile;
 use talkbank_parser::node_types::{
     GRA_CONTENTS, GRA_DEPENDENT_TIER, GRA_RELATION, MOR_CONTENT, MOR_CONTENTS, MOR_DEPENDENT_TIER,
     PARTICIPANT, PARTICIPANTS_HEADER, SPEAKER,
@@ -287,7 +293,7 @@ fn find_main_tier_word_location(
     word_idx: usize,
 ) -> Option<Location> {
     let content = get_alignable_content_by_index(&utterance.main.content.content, word_idx)?;
-    let span = content_span(content)?;
+    let span = editor_target_span(content)?;
 
     Some(Location {
         uri: uri.clone(),
@@ -296,21 +302,6 @@ fn find_main_tier_word_location(
             end: utils::offset_to_position(doc, span.end),
         },
     })
-}
-
-/// Return the source span for a main-tier content item.
-fn content_span(content: &UtteranceContent) -> Option<Span> {
-    match content {
-        UtteranceContent::Word(word) => Some(word.span),
-        UtteranceContent::AnnotatedWord(annotated) => Some(annotated.span),
-        UtteranceContent::ReplacedWord(replaced) => Some(replaced.span),
-        UtteranceContent::Group(group) => Some(group.span),
-        UtteranceContent::AnnotatedGroup(annotated) => Some(annotated.span),
-        UtteranceContent::PhoGroup(_) => None,
-        UtteranceContent::SinGroup(_) => None,
-        UtteranceContent::Quotation(_) => None,
-        _ => None,
-    }
 }
 
 /// Return `true` when an absolute byte offset falls inside an utterance span.

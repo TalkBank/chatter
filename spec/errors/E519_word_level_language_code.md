@@ -1,8 +1,6 @@
 +++
 code = 'E519'
 name = 'Word-level language code not in the ISO 639-3 registry'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'utterance'

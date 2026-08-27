@@ -1,8 +1,6 @@
 +++
 code = 'E243'
 name = 'Pipe character in main-tier word text'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'

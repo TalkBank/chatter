@@ -20,7 +20,6 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E210](E210.md) | Deprecated, replaced by E387 | Invalidity | word | ? |
 | [E212](E212.md) | Invalid word format | Invalidity | word | ⏳ |
 | [E213](E213.md) | Deprecated, replaced by E391 | Invalidity | word | ? |
-| [E214](E214.md) | Empty scoped annotation content | Invalidity | word | ⏳ |
 | [E220](E220.md) | Illegal digits in word content | Invalidity | word | ✅ |
 | [E230](E230.md) | Unbalanced CA delimiter | Invalidity | word | ✅ |
 | [E231](E231.md) | Auto-generated from corpus | Invalidity | word | ✅ |
@@ -28,7 +27,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E233](E233.md) | Empty compound part | Invalidity | word | ✅ |
 | [E241](E241.md) | Auto-generated from corpus | Invalidity | word | ✅ |
 | [E241](E241.md) | Illegal Untranscribed Marker 'xx' | Invalidity | word | ✅ |
-| [E242](E242.md) | Unbalanced quotation marks | Invalidity | word | ✅ |
+| [E242](E242.md) | Unbalanced quotation marks | Invalidity | word, utterance | ✅ |
 | [E243](E243.md) | Illegal characters in word | Invalidity | word | ✅ |
 | [E243](E243.md) | Pipe character in main-tier word text | Invalidity | word | ✅ |
 | [E244](E244.md) | Auto-generated from corpus | Invalidity | word | ✅ |
@@ -91,7 +90,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E359](E359.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |
 | [E360](E360.md) | Invalid media bullet | Invalidity | utterance | ⏳ |
 | [E360](E360.md) | Deprecated Skip Bullet | Invalidity | utterance | ⏳ |
-| [E361](E361.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |
+| [E361](E361.md) | Auto-generated from corpus | Invalidity | utterance | ⏳ |
 | [E362](E362.md) | Bullet timestamps must be monotonic | Invalidity | utterance | ✅ |
 | [E363](E363.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |
 | [E364](E364.md) | Malformed word content | Invalidity | utterance | ⏳ |
@@ -107,7 +106,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E376](E376.md) | Replacement parse error | Invalidity | utterance | ✅ |
 | [E377](E377.md) | A retracing marker with no material of its own | Invalidity | utterance | ✅ |
 | [E378](E378.md) | A retracing marker over material with no words | Invalidity | utterance | ✅ |
-| [E382](E382.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |
+| [E382](E382.md) | Auto-generated from corpus | Invalidity | utterance | ⏳ |
 | [E387](E387.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |
 | [E388](E388.md) | Replacement on non-word | Invalidity | utterance | ✅ |
 | [E389](E389.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |

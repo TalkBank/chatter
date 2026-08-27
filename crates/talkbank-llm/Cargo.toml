@@ -40,5 +40,14 @@ talkbank-model = { workspace = true }
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
-# This crate is new: no legacy panic sites to grandfather, so the panic-discipline
-# lints are denied outright (matching talkbank-cache, the other post-audit crate).
+# The panic-discipline lints reach this crate through the workspace table.
+#
+# The stanza below is what makes that true. Cargo applies `[workspace.lints]`
+# only to packages that OPT IN, so a crate without it is silently exempt. This
+# comment used to say the lints were "denied outright" beside no `[lints]`
+# table at all: the per-crate table was removed when the clippy policy was
+# unified and the opt-in was never added in its place, so the guarantee it
+# asserts had not held since.
+
+[lints]
+workspace = true

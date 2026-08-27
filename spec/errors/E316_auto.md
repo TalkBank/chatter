@@ -1,8 +1,6 @@
 +++
 code = 'E316'
 name = 'Unparsable content'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'utterance'

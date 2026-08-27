@@ -49,7 +49,7 @@ fn arb_error_code() -> impl Strategy<Value = ErrorCode> {
 }
 
 proptest! {
-    /// `ErrorCode::new(code.as_str())` round-trips back to the same variant.
+    /// `ErrorCode::parse_exact(code.as_str())` round-trips back to the same variant.
     ///
     /// The proc macro generates `as_str` and `new` from the same mapping table,
     /// so every known code must survive a full round-trip. `UnknownError` is
@@ -57,10 +57,11 @@ proptest! {
     #[test]
     fn error_code_roundtrip(code in arb_error_code()) {
         let code_str = code.as_str();
-        let reconstructed = ErrorCode::new(code_str);
+        let reconstructed =
+            ErrorCode::parse_exact(code_str).expect("as_str() must name a real code");
         prop_assert_eq!(
             reconstructed, code,
-            "Round-trip failed: {:?}.as_str() = {:?}, new({:?}) = {:?}",
+            "Round-trip failed: {:?}.as_str() = {:?}, parse_exact({:?}) = {:?}",
             code, code_str, code_str, reconstructed
         );
     }

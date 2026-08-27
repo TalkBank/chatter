@@ -38,15 +38,22 @@
 //! - A valid two-speaker file WITH `%mor` + `%gra` dependent tiers parses to two
 //!   utterances, each carrying both dependent tiers, with zero diagnostics and a
 //!   `Clean` parse-health. This exercises the `Present(main_tier)` arm followed by
-//!   the `Present(dependent_tier)` repeat arm in document order, and pins the
-//!   build-order invariant (the main tier is built before any dependent tier is
-//!   attached).
+//!   the `Present(dependent_tier)` repeat arm in document order.
+//!
+//!   It no longer pins the BUILD ORDER. `UtteranceUnderConstruction` does:
+//!   `build_main_tier_from_node` is its sole producer and
+//!   `attach_dependent_tier_child` its sole consumer, so attaching a dependent
+//!   tier before the main tier exists has no signature to travel through. What
+//!   survives here is the OUTCOME on a real file, which no type reaches.
 //! - A `*CHI:` utterance with a structurally well-formed but semantically invalid
 //!   `%gra:\t0|0|ROOT` line produces exactly one E709 diagnostic at the exact
-//!   span, still attaches the `%gra` tier to the already-built main tier (proving
-//!   the `utterance_builder.take()` build order survives), and taints ONLY the
-//!   `Gra` alignment domain (Main stays clean). This exercises the dependent-tier
-//!   Present arm's internal error-check + taint.
+//!   span, still attaches the `%gra` tier to the already-built main tier, and
+//!   taints ONLY the `Gra` alignment domain (Main stays clean). This exercises
+//!   the dependent-tier Present arm's internal error-check + taint.
+//!
+//!   The `utterance_builder.take()` this used to name is gone: the utterance
+//!   travels in and out of the attach by value, so there is no window in which
+//!   it exists only inside the call and an early return could drop it.
 
 use talkbank_model::model::{ParseHealthState, ParseHealthTier};
 

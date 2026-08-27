@@ -52,6 +52,7 @@
 
 pub mod alignment;
 pub mod backend;
+mod editor_target;
 pub mod graph;
 pub mod highlight;
 pub mod semantic_tokens;

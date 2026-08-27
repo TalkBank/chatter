@@ -3,11 +3,11 @@
 //! Regression pin for the v0.5.0 `--force` "hang" (2026-07-30): the
 //! original implementation fetched EVERY `file_path` in the cache into
 //! memory and then issued an individual autocommitted `DELETE` per
-//! matching file. On the operator's real cache (136k distinct paths)
-//! that turned `chatter validate --force <corpus-root>` into minutes of
-//! silent CPU before validation began. The corpus differential could
-//! never catch this class because it always runs on fresh isolated
-//! caches; this test exercises the big-warm-cache path directly.
+//! matching file. On a real cache (136k distinct paths) that turned
+//! `chatter validate --force <corpus-root>` into minutes of silent CPU
+//! before validation began. A gate that runs on a fresh isolated cache can
+//! never catch this class; this test exercises the big-warm-cache path
+//! directly.
 
 use std::path::Path;
 use std::time::{Duration, Instant};

@@ -350,7 +350,7 @@ fn test_offset_with_chinese_characters() -> Result<(), TestError> {
 
 /// Tests word parsing with offset.
 #[test]
-fn test_parser_equivalence_word_with_offset() -> Result<(), TestError> {
+fn test_word_parses_with_offset() -> Result<(), TestError> {
     let parser = make_parser()?;
     let input = "hello@s";
     let offset = 100;
@@ -367,7 +367,7 @@ fn test_parser_equivalence_word_with_offset() -> Result<(), TestError> {
 
 /// Tests main tier parsing with offset.
 #[test]
-fn test_parser_equivalence_main_tier_with_offset() -> Result<(), TestError> {
+fn test_main_tier_parses_with_offset() -> Result<(), TestError> {
     let parser = make_parser()?;
     let input = "*CHI:\thello world .";
     let offset = 200;
@@ -384,7 +384,7 @@ fn test_parser_equivalence_main_tier_with_offset() -> Result<(), TestError> {
 
 /// Tests mor tier parsing with offset.
 #[test]
-fn test_parser_equivalence_mor_tier_with_offset() -> Result<(), TestError> {
+fn test_mor_tier_parses_with_offset() -> Result<(), TestError> {
     let parser = make_parser()?;
     let input = "pro|I v|want .";
     let offset = 300;

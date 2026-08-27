@@ -6,13 +6,17 @@
 //! all dependent tiers; dependent-tier handlers resolve back to the main tier
 //! and then to sibling tiers.
 
+// Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
+// a content enum means a future variant compiles clean and answers wrong.
+// Added per file as each is cleaned; `content_catch_alls` lists the rest.
+#![deny(clippy::wildcard_enum_match_arm)]
+
+use crate::editor_target::{find_content_index_at_offset, mor_alignment_index};
 use tower_lsp::lsp_types::*;
 
-use talkbank_model::Span;
-use talkbank_model::alignment::{GraIndex, TierDomain, count_tier_positions_until};
-use talkbank_model::model::UtteranceContent;
+use talkbank_model::alignment::GraIndex;
 
-use crate::alignment::finders::{count_alignable_before, get_alignable_content_by_index};
+use crate::alignment::finders::get_alignable_content_by_index;
 use crate::backend::utils;
 
 use super::range_finders::{
@@ -60,11 +64,7 @@ pub(super) fn highlights_from_main_tier(
     let offset = utils::position_to_offset(document, position) as u32;
     let content_idx = find_content_index_at_offset(&utterance.main.content.content, offset)?;
 
-    if !is_alignable_content(&utterance.main.content.content, content_idx) {
-        return None;
-    }
-
-    let alignment_idx = count_alignable_before(&utterance.main.content.content, content_idx);
+    let alignment_idx = mor_alignment_index(&utterance.main.content.content, content_idx)?;
 
     let mut highlights = Vec::new();
 
@@ -384,43 +384,4 @@ pub(super) fn highlights_from_gra_tier(
     } else {
         Some(highlights)
     }
-}
-
-/// Finds content index at offset.
-fn find_content_index_at_offset(content: &[UtteranceContent], offset: u32) -> Option<usize> {
-    content.iter().enumerate().find_map(|(idx, item)| {
-        let span = content_span(item)?;
-        if span_contains(span, offset) {
-            Some(idx)
-        } else {
-            None
-        }
-    })
-}
-
-/// Returns whether alignable content.
-fn is_alignable_content(content: &[UtteranceContent], index: usize) -> bool {
-    let before = count_tier_positions_until(content, index, TierDomain::Mor);
-    let after = count_tier_positions_until(content, index + 1, TierDomain::Mor);
-    after > before
-}
-
-/// Return the source span for a main-tier content item.
-fn content_span(content: &UtteranceContent) -> Option<Span> {
-    match content {
-        UtteranceContent::Word(word) => Some(word.span),
-        UtteranceContent::AnnotatedWord(annotated) => Some(annotated.span),
-        UtteranceContent::ReplacedWord(replaced) => Some(replaced.span),
-        UtteranceContent::Group(group) => Some(group.span),
-        UtteranceContent::AnnotatedGroup(annotated) => Some(annotated.span),
-        UtteranceContent::PhoGroup(_) => None,
-        UtteranceContent::SinGroup(_) => None,
-        UtteranceContent::Quotation(_) => None,
-        _ => None,
-    }
-}
-
-/// Return `true` when `outer` fully contains `inner`.
-fn span_contains(span: Span, offset: u32) -> bool {
-    offset >= span.start && offset <= span.end
 }

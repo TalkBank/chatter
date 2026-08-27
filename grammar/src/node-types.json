@@ -1088,7 +1088,7 @@
           "named": true
         },
         {
-          "type": "quotation",
+          "type": "quotation_with_optional_annotations",
           "named": true
         }
       ]
@@ -3566,6 +3566,32 @@
     }
   },
   {
+    "type": "quotation_with_optional_annotations",
+    "named": true,
+    "fields": {
+      "annotations": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "base_annotations",
+            "named": true
+          }
+        ]
+      },
+      "quotation": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "quotation",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "recording_quality_header",
     "named": true,
     "fields": {},
@@ -3946,6 +3972,10 @@
         },
         {
           "type": "pos_tag",
+          "named": true
+        },
+        {
+          "type": "repeated_form_marker",
           "named": true
         },
         {
@@ -5495,6 +5525,10 @@
   },
   {
     "type": "recording_quality_prefix",
+    "named": true
+  },
+  {
+    "type": "repeated_form_marker",
     "named": true
   },
   {

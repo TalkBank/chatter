@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use spec_runtime_tools::error_spec_validation::{
-    CodeCheck, CodeFilter, Request, SkippedSpecs, run, spec_dir,
+    CodeCheck, CodeFilter, Request, SkippedSpecs, SpecTree, run,
 };
 
 #[derive(Parser)]
@@ -39,20 +39,32 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    // ONE root resolution, and the mode is NAMED. This resolved `RepoRoot`
+    // twice, eighteen lines apart, with two `match`/`eprintln!`/FAILURE arms,
+    // to answer one question. `SpecTree`'s two constructors also say which
+    // mode this run is in: `--spec-dir` deliberately reads a foreign tree
+    // against THIS checkout's registry, because the registry is the vocabulary
+    // of codes and the directory only chooses which documents to read.
+    let root = match generators::repo_paths::RepoRoot::resolve(None) {
+        Ok(root) => root,
+        Err(why) => {
+            eprintln!("{why}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let specs = match args.spec_dir {
+        Some(given) => SpecTree::with_foreign_specs(given, &root),
+        None => SpecTree::for_repo(&root),
+    };
+    let specs = match specs {
+        Ok(specs) => specs,
+        Err(why) => {
+            eprintln!("{why}");
+            return ExitCode::FAILURE;
+        }
+    };
     let request = Request {
-        // The operator's directory if they named one, this checkout's
-        // otherwise. Resolved only when it is actually needed, and only from a
-        // root that proved itself a chatter checkout.
-        spec_dir: match args.spec_dir {
-            Some(given) => given,
-            None => match generators::repo_paths::RepoRoot::resolve(None) {
-                Ok(root) => spec_dir(&root),
-                Err(why) => {
-                    eprintln!("{why}");
-                    return ExitCode::FAILURE;
-                }
-            },
-        },
+        specs,
         code_check: if args.check_codes {
             CodeCheck::Verify
         } else {

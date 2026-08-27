@@ -35,6 +35,7 @@ use crate::generated_traversal::{
     WorTierBodyChild1Child0Choice, WorTierBodyNode, extract_wor_dependent_tier,
     extract_wor_tier_body,
 };
+use crate::parser::node_span::span_of;
 use talkbank_model::ErrorSink;
 use talkbank_model::model::Bullet;
 use talkbank_model::model::dependent_tier::{WorItem, WorTier};
@@ -74,20 +75,25 @@ use talkbank_model::ParseOutcome;
 ///   silent-partial is PRESERVED; it is unreachable from the boundary
 ///   (`parse_wor_tier` is only invoked when the tier node has no tree-sitter error)
 ///   but is reproduced for exhaustiveness.
-pub fn parse_wor_tier(node: Node, source: &str, errors: &impl ErrorSink) -> WorTier {
-    let span = talkbank_model::Span::new(node.start_byte() as u32, node.end_byte() as u32);
+pub fn parse_wor_tier(
+    typed: WorDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> WorTier {
+    let node = typed.raw_node();
+    let span = span_of(node);
 
-    let children = extract_wor_dependent_tier(WorDependentTierNode(node));
+    let children = extract_wor_dependent_tier(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot() {
-        NodeSlot::Present(body) => {
-            parse_wor_tier_body(body.raw_node(), source, errors).with_span(span)
-        }
-        NodeSlot::Missing(raw) => parse_wor_tier_body(*raw, source, errors).with_span(span),
-        NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
-            WorTier::new(Vec::new()).with_span(span)
-        }
+    match children
+        .child_2
+        .slot()
+        .typed_or_placeholder()
+        .present_or_placeholder()
+    {
+        Some(body) => parse_wor_tier_body(body, source, errors).with_span(span),
+        None => WorTier::new(Vec::new()).with_span(span),
     }
 }
 
@@ -96,8 +102,12 @@ pub fn parse_wor_tier(node: Node, source: &str, errors: &impl ErrorSink) -> WorT
 ///
 /// Each of the four typed fields is handled explicitly; the returned tier has no
 /// span yet (the caller attaches the dep-tier span).
-fn parse_wor_tier_body(body: Node, source: &str, errors: &impl ErrorSink) -> WorTier {
-    let children = extract_wor_tier_body(WorTierBodyNode(body));
+fn parse_wor_tier_body(
+    typed: WorTierBodyNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> WorTier {
+    let children = extract_wor_tier_body(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     // `language_code` (optional): reproduce the old LANGCODE arm. Unlike the OLD
@@ -298,7 +308,7 @@ fn push_wor_item(
 /// `COMMA | TAG_MARKER | VOCATIVE_MARKER` arm exactly; a UTF-8 error on the
 /// marker text drops the separator without a fabricated value, as before.
 fn push_marker_separator(marker: Node, source: &str, items: &mut Vec<WorItem>) {
-    let item_span = talkbank_model::Span::new(marker.start_byte() as u32, marker.end_byte() as u32);
+    let item_span = span_of(marker);
     if let Ok(text) = marker.utf8_text(source.as_bytes()) {
         items.push(WorItem::Separator {
             text: text.to_string(),

@@ -3,8 +3,10 @@
 
 use crate::ast;
 use crate::ast::{CaDelimiterKind, CaElementKind, OverlapKind, StressKind, WordBodyItem};
+use crate::source_text::SourceText;
 use crate::token::Token;
 use talkbank_model::Span;
+use talkbank_model::annotation::AnnotatedContentAnnotations;
 use talkbank_model::model::WordCompoundMarker;
 use talkbank_model::model::*;
 
@@ -137,8 +139,11 @@ fn fold_phonetic(content_items: Vec<WordContent>) -> Vec<WordContent> {
 // ═══════════════════════════════════════════════════════════════
 
 /// Convert a parsed word to the model Word type.
-/// Uses the word's self-contained `raw_text`, no external `source` needed.
-pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
+/// `raw_text` is the word's slice of `source` on the rich-word path, so
+/// `span_of` places it. A word built by `subtoken_word` reconstructs its
+/// `raw_text` into a FRESH allocation, so it cannot be placed and keeps
+/// `Span::DUMMY`; see the note at the span assignment below.
+pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>) -> Word {
     let raw = w.raw_text;
     let cleaned = compute_cleaned_text(&w.body);
 
@@ -225,6 +230,24 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
         word = word.with_part_of_speech(tag);
     }
 
+    // On the rich-word path `raw_text` IS the word's slice of the source, so
+    // its position is recoverable; nothing recovered it, and every re2c word
+    // reached the model at `Span::DUMMY`.
+    //
+    // `None` has TWO causes and only one of them is a caller error. The caller
+    // may have paired this word with a source it did not come from; or the
+    // word came from `subtoken_word`, which rebuilds `raw_text` by leaking a
+    // fresh concatenation of its tokens' display forms, so the string is a
+    // different allocation and can never be placed. The second is a real gap:
+    // such words keep `Span::DUMMY`, which silently disables span-keyed rules
+    // and renders surviving diagnostics at byte 0 of the FILE. Fixing it needs
+    // the lexer's own byte range, which `parser/mod.rs` discards; pointer
+    // arithmetic cannot reach it. Leaving the span untouched is the honest
+    // answer here, not a fabricated position.
+    if let Some(span) = source.span_of(w.raw_text) {
+        word = word.with_span(span);
+    }
+
     word
 }
 
@@ -260,9 +283,12 @@ pub(crate) fn linker_token_to_model(tok: &Token<'_>) -> Option<Linker> {
     Some(Linker::new(kind, Span::DUMMY))
 }
 
-pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
+pub fn content_item_to_model(
+    item: &ast::ContentItem<'_>,
+    source: SourceText<'_>,
+) -> UtteranceContent {
     match item {
-        ast::ContentItem::Word(w) => word_with_annotations_to_model(w),
+        ast::ContentItem::Word(w) => word_with_annotations_to_model(w, source),
         ast::ContentItem::Pause(kind) => UtteranceContent::Pause(Pause::new(pause_duration(kind))),
         ast::ContentItem::Event(event_text) => {
             let event_text = *event_text;
@@ -272,16 +298,18 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
             let event_text = *event;
             let event_model = Event::new(event_text);
             let scoped = annotations_to_scoped(annotations);
-            if scoped.is_empty() {
-                UtteranceContent::Event(event_model)
-            } else {
-                UtteranceContent::AnnotatedEvent(
-                    Annotated::new(event_model).with_scoped_annotations(scoped),
-                )
+            // The constructor's `Option` IS the bare-versus-annotated
+            // question, so it replaces the `is_empty` check that used to ask it
+            // separately.
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => UtteranceContent::Event(event_model),
+                Some(scoped) => {
+                    UtteranceContent::AnnotatedEvent(Annotated::new(event_model, scoped))
+                }
             }
         }
-        ast::ContentItem::Separator(kind) => {
-            UtteranceContent::Separator(separator_from_kind(*kind))
+        ast::ContentItem::Separator { kind, text } => {
+            UtteranceContent::Separator(separator_from_kind(*kind, source.span_of(text)))
         }
         ast::ContentItem::Freecode(text) => UtteranceContent::Freecode(Freecode::new(*text)),
         // An annotation with nothing to scope over is invalid CHAT, reported as
@@ -300,8 +328,11 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
                 crate::ast::RetraceKindParsed::Multiple => RetraceKind::Multiple,
                 crate::ast::RetraceKindParsed::Reformulation => RetraceKind::Reformulation,
             };
-            let content: Vec<BracketedItem> =
-                r.content.iter().map(content_item_to_bracketed).collect();
+            let content: Vec<BracketedItem> = r
+                .content
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             let mut retrace = Retrace::new(BracketedContent::new(content), kind);
             if r.is_group {
                 retrace = retrace.as_group();
@@ -312,29 +343,32 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
             // it are already on the retraced word inside `r.content` and never
             // reach here.
             let scoped = annotations_to_scoped(&r.annotations);
-            if scoped.is_empty() {
-                UtteranceContent::Retrace(Box::new(retrace))
-            } else {
-                UtteranceContent::AnnotatedRetrace(Box::new(
-                    talkbank_model::model::Annotated::new(retrace).with_scoped_annotations(scoped),
-                ))
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => UtteranceContent::Retrace(Box::new(retrace)),
+                Some(scoped) => UtteranceContent::AnnotatedRetrace(Box::new(
+                    talkbank_model::model::Annotated::new(retrace, scoped),
+                )),
             }
         }
         ast::ContentItem::Group(g) => {
-            let content: Vec<BracketedItem> =
-                g.contents.iter().map(content_item_to_bracketed).collect();
+            let content: Vec<BracketedItem> = g
+                .contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             let group = Group::new(BracketedContent::new(content));
             let scoped = annotations_to_scoped(&g.annotations);
-            if scoped.is_empty() {
-                UtteranceContent::Group(group)
-            } else {
-                let annotated = Annotated::new(group).with_scoped_annotations(scoped);
-                UtteranceContent::AnnotatedGroup(annotated)
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => UtteranceContent::Group(group),
+                Some(scoped) => UtteranceContent::AnnotatedGroup(Annotated::new(group, scoped)),
             }
         }
         ast::ContentItem::Quotation(q) => {
-            let content: Vec<BracketedItem> =
-                q.contents.iter().map(content_item_to_bracketed).collect();
+            let content: Vec<BracketedItem> = q
+                .contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             UtteranceContent::Quotation(Quotation::new(BracketedContent::new(content)))
         }
         ast::ContentItem::OverlapPoint { kind, index } => {
@@ -368,17 +402,29 @@ pub fn content_item_to_model(item: &ast::ContentItem<'_>) -> UtteranceContent {
         }
         ast::ContentItem::Action { annotations, .. } => {
             let scoped = annotations_to_scoped(annotations);
-            let annotated = Annotated::new(Action::new()).with_scoped_annotations(scoped);
-            UtteranceContent::AnnotatedAction(annotated)
+            // This backend had the same defect as the tree-sitter one: it
+            // wrapped EVERY action, so a bare `0` became an annotated node
+            // carrying nothing. It now asks the same question the three sites
+            // above it were already asking.
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => UtteranceContent::Action(Action::new()),
+                Some(scoped) => {
+                    UtteranceContent::AnnotatedAction(Annotated::new(Action::new(), scoped))
+                }
+            }
         }
         ast::ContentItem::PhoGroup(contents) => {
-            let items: Vec<BracketedItem> =
-                contents.iter().map(content_item_to_bracketed).collect();
+            let items: Vec<BracketedItem> = contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             UtteranceContent::PhoGroup(PhoGroup::new(BracketedContent::new(items)))
         }
         ast::ContentItem::SinGroup(contents) => {
-            let items: Vec<BracketedItem> =
-                contents.iter().map(content_item_to_bracketed).collect();
+            let items: Vec<BracketedItem> = contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             UtteranceContent::SinGroup(SinGroup::new(BracketedContent::new(items)))
         }
     }
@@ -398,8 +444,11 @@ pub(crate) fn annotations_to_scoped(
 /// - No annotations → Word
 /// - Has [: replacement] → ReplacedWord (with any other annotations as scoped)
 /// - Has other annotations → AnnotatedWord
-pub(crate) fn word_with_annotations_to_model(w: &ast::WordWithAnnotations<'_>) -> UtteranceContent {
-    let word = word_from_parsed(w);
+pub(crate) fn word_with_annotations_to_model(
+    w: &ast::WordWithAnnotations<'_>,
+    source: SourceText<'_>,
+) -> UtteranceContent {
+    let word = word_from_parsed(w, source);
 
     // Check if there's a replacement annotation
     let replacement_idx = w
@@ -434,28 +483,135 @@ pub(crate) fn word_with_annotations_to_model(w: &ast::WordWithAnnotations<'_>) -
             .iter()
             .filter_map(|a| parsed_annotation_to_scoped(a))
             .collect();
-        if scoped.is_empty() {
-            UtteranceContent::Word(Box::new(word))
-        } else {
-            let annotated = Annotated::new(word).with_scoped_annotations(scoped);
-            UtteranceContent::AnnotatedWord(Box::new(annotated))
+        match AnnotatedContentAnnotations::new(scoped) {
+            None => UtteranceContent::Word(Box::new(word)),
+            Some(scoped) => {
+                // Read the span BEFORE the word moves into the wrapper.
+                let placed = annotated_span(word.span, &w.annotations, source);
+                let annotated = Annotated::new(word, scoped);
+                let annotated = match placed {
+                    Some(span) => annotated.with_span(span),
+                    None => annotated,
+                };
+                UtteranceContent::AnnotatedWord(Box::new(annotated))
+            }
         }
     }
+}
+
+/// The span to give an `Annotated` wrapper: the annotated construct, EXTENDED
+/// to cover every annotation this backend can place.
+///
+/// # Why this exists
+///
+/// `Annotated::new` starts at `Span::DUMMY`, the tree-sitter parser follows it
+/// with `.with_span(..)`, and this converter never did. `Span::DUMMY` is
+/// `{0, 0}`, which is also a real position, so every E207 this backend
+/// produced was reported at "line 1, column 1, bytes 0..0", pointing at
+/// `@UTF8`. That is the same defect the separator and word spans carried until
+/// 2026-08-27, in the one place the sweep did not reach.
+///
+/// # It EXTENDS rather than replaces, and REFUSES rather than fabricating
+///
+/// `span_of` refuses a slice that does not belong to this source rather than
+/// inventing an offset, and only some `ParsedAnnotation` variants carry a
+/// slice at all. So the construct's own span is the floor, every annotation
+/// that CAN be placed widens it, and one that cannot is skipped rather than
+/// answered with a zero. The result is therefore an UNDER-approximation when
+/// an annotation carries no slice, never a wrong position.
+///
+/// `None` when there is nothing to say, rather than `Span::DUMMY`: the
+/// sentinel IS a real position, and handing it back as an answer is how this
+/// defect arose in the first place. The caller then leaves the wrapper's own
+/// span untouched instead of overwriting it with a zero.
+fn annotated_span(
+    construct: Span,
+    annotations: &[ast::ParsedAnnotation<'_>],
+    source: SourceText<'_>,
+) -> Option<Span> {
+    // `merge` is a hull, so a DUMMY floor would drag every result back to
+    // offset 0 and reintroduce exactly the bug this function exists to fix.
+    // A dummy construct span therefore contributes NOTHING and the hull starts
+    // at the first annotation that places, which is the honest reading:
+    // "somewhere in these annotations" beats "the start of the file".
+    let mut span = (!construct.is_dummy()).then_some(construct);
+    for annotation in annotations {
+        // EXHAUSTIVE, with no catch-all. A wildcard here would silently skip
+        // the next slice-carrying variant somebody adds, and the only symptom
+        // would be a hull that is quietly too small: no compile error, no test
+        // failure, and a diagnostic pointing at less than it should. Five
+        // variants were missing from the first version of this match for
+        // exactly that reason.
+        let slice = match annotation {
+            ast::ParsedAnnotation::Unknown(inner)
+            | ast::ParsedAnnotation::CodeSwitchExplicit(inner)
+            | ast::ParsedAnnotation::Error(inner)
+            | ast::ParsedAnnotation::OverlapPrecedes(inner)
+            | ast::ParsedAnnotation::OverlapFollows(inner)
+            | ast::ParsedAnnotation::Explanation(inner)
+            | ast::ParsedAnnotation::Paralinguistic(inner)
+            | ast::ParsedAnnotation::Alternative(inner)
+            | ast::ParsedAnnotation::PercentComment(inner)
+            | ast::ParsedAnnotation::Replacement(inner)
+            | ast::ParsedAnnotation::Langcode(inner)
+            | ast::ParsedAnnotation::Postcode(inner) => *inner,
+            // These carry no slice of the source at all, so there is nothing
+            // to place: the marker IS the whole annotation.
+            ast::ParsedAnnotation::Retrace(_)
+            | ast::ParsedAnnotation::Stressing
+            | ast::ParsedAnnotation::ContrastiveStressing
+            | ast::ParsedAnnotation::Uncertain
+            | ast::ParsedAnnotation::Exclude
+            | ast::ParsedAnnotation::CodeSwitchShortcut => continue,
+        };
+        let Some(placed) = source.span_of(slice) else {
+            continue;
+        };
+        span = Some(match span {
+            Some(so_far) => so_far.merge(placed),
+            None => placed,
+        });
+    }
+    span
 }
 
 /// Parse a word string through the lexer+parser and convert to model Word.
 /// Used for replacement words which may have internal structure (compounds, etc.)
 pub(crate) fn parse_word_to_model(text: &str) -> Word {
     if let Some(parsed) = crate::parser::parse_word(text) {
-        word_from_parsed(&parsed)
+        // EVERY SPAN FROM THIS PATH IS ABSENT, and that is the honest outcome
+        // rather than the intended one. `parse_word` leaks its own NUL-padded
+        // copy of the input and does not hand it back, so the AST's slices
+        // borrow from an allocation the caller cannot name. `text` below is a
+        // DIFFERENT allocation, and `SourceText::span_of` refuses a slice that
+        // does not lie inside the source it was given, so it answers `None`
+        // for every one and the word arrives unplaced.
+        //
+        // This comment previously claimed the opposite, that passing `text`
+        // "would LOOK right and place nothing, which is worse than saying so
+        // here", directly above the line that passes `text`. The refusal is
+        // what keeps it safe: nothing is fabricated, the spans are simply
+        // missing. Giving `parse_word` a way to return its source is the fix,
+        // and it is the same change the retrace spans need.
+        word_from_parsed(&parsed, SourceText::new(text))
     } else {
         Word::simple(text)
     }
 }
 
-/// Convert a separator token to model Separator.
-pub(crate) fn separator_from_kind(kind: ast::SeparatorKindParsed) -> Separator {
-    let s = Span::DUMMY;
+/// Convert a separator token to model Separator, at `span`.
+///
+/// `span` is `None` only when the caller paired the item with a source it did
+/// not come from, which is a programming error rather than a property of the
+/// input. `Span::DUMMY` is the honest answer for "we do not know", and it is
+/// what this function used to return UNCONDITIONALLY: every separator arrived
+/// at offset zero, and `comma_span()` filters that value out, so E258 and every
+/// other span-keyed rule was silently unreachable under this backend.
+pub(crate) fn separator_from_kind(kind: ast::SeparatorKindParsed, span: Option<Span>) -> Separator {
+    let s = match span {
+        Some(span) => span,
+        None => Span::DUMMY,
+    };
     match kind {
         ast::SeparatorKindParsed::Comma => Separator::Comma { span: s },
         ast::SeparatorKindParsed::Semicolon => Separator::Semicolon { span: s },
@@ -552,10 +708,13 @@ pub(crate) fn bullet_times(start: &str, end: &str) -> (u64, u64) {
 /// `Token` (~180 variants), where enumeration buys nothing. Design rule 3 is
 /// about the CONTENT enums, and the textual catch-all ratchet in
 /// `talkbank-parser-tests` is what holds that line for this file.
-pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> BracketedItem {
+pub(crate) fn content_item_to_bracketed(
+    item: &ast::ContentItem<'_>,
+    source: SourceText<'_>,
+) -> BracketedItem {
     match item {
         ast::ContentItem::Word(w) => {
-            let word = word_from_parsed(w);
+            let word = word_from_parsed(w, source);
             let replacement_idx = w
                 .annotations
                 .iter()
@@ -582,11 +741,11 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Brackete
                 BracketedItem::ReplacedWord(Box::new(replaced))
             } else {
                 let scoped = annotations_to_scoped(&w.annotations);
-                if scoped.is_empty() {
-                    BracketedItem::Word(Box::new(word))
-                } else {
-                    let annotated = Annotated::new(word).with_scoped_annotations(scoped);
-                    BracketedItem::AnnotatedWord(Box::new(annotated))
+                match AnnotatedContentAnnotations::new(scoped) {
+                    None => BracketedItem::Word(Box::new(word)),
+                    Some(scoped) => {
+                        BracketedItem::AnnotatedWord(Box::new(Annotated::new(word, scoped)))
+                    }
                 }
             }
         }
@@ -599,36 +758,42 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Brackete
             let event_text = *event;
             let event_model = Event::new(event_text);
             let scoped = annotations_to_scoped(annotations);
-            if scoped.is_empty() {
-                BracketedItem::Event(event_model)
-            } else {
-                BracketedItem::AnnotatedEvent(
-                    Annotated::new(event_model).with_scoped_annotations(scoped),
-                )
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => BracketedItem::Event(event_model),
+                Some(scoped) => BracketedItem::AnnotatedEvent(Annotated::new(event_model, scoped)),
             }
         }
         ast::ContentItem::Action { annotations, .. } => {
             let scoped = annotations_to_scoped(annotations);
-            let annotated = Annotated::new(Action::new()).with_scoped_annotations(scoped);
-            BracketedItem::AnnotatedAction(annotated)
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => BracketedItem::Action(Action::new()),
+                Some(scoped) => {
+                    BracketedItem::AnnotatedAction(Annotated::new(Action::new(), scoped))
+                }
+            }
         }
         ast::ContentItem::OtherSpokenEvent { speaker, text } => {
             BracketedItem::OtherSpokenEvent(OtherSpokenEvent::new(*speaker, *text))
         }
-        ast::ContentItem::Separator(kind) => {
-            let sep = separator_from_kind(*kind);
+        ast::ContentItem::Separator { kind, text } => {
+            let sep = separator_from_kind(*kind, source.span_of(text));
             BracketedItem::Separator(sep)
         }
         ast::ContentItem::Group(g) => {
-            let inner: Vec<BracketedItem> =
-                g.contents.iter().map(content_item_to_bracketed).collect();
+            let inner: Vec<BracketedItem> = g
+                .contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             let group = Group::new(BracketedContent::new(inner));
-            // `BracketedItem` has no bare `Group`, so an unannotated nested
-            // group becomes an `AnnotatedGroup` carrying an empty annotation
-            // list. This used to be an `if` whose two branches were identical,
-            // which read as though the empty case were handled differently.
+            // `BracketedItem` HAS a bare `Group` now. It did not until
+            // 2026-08-26, which is why this used to hand an empty annotation
+            // list to `AnnotatedGroup` and explain itself in a comment.
             let scoped = annotations_to_scoped(&g.annotations);
-            BracketedItem::AnnotatedGroup(Annotated::new(group).with_scoped_annotations(scoped))
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => BracketedItem::Group(group),
+                Some(scoped) => BracketedItem::AnnotatedGroup(Annotated::new(group, scoped)),
+            }
         }
         ast::ContentItem::Retrace(r) => {
             let kind = match r.kind {
@@ -637,8 +802,11 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Brackete
                 crate::ast::RetraceKindParsed::Multiple => RetraceKind::Multiple,
                 crate::ast::RetraceKindParsed::Reformulation => RetraceKind::Reformulation,
             };
-            let inner: Vec<BracketedItem> =
-                r.content.iter().map(content_item_to_bracketed).collect();
+            let inner: Vec<BracketedItem> = r
+                .content
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             let mut retrace =
                 talkbank_model::model::Retrace::new(BracketedContent::new(inner), kind);
             if r.is_group {
@@ -647,12 +815,11 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Brackete
             // As at the tier-level site above: only the after-the-marker
             // annotations reach here.
             let scoped = annotations_to_scoped(&r.annotations);
-            if scoped.is_empty() {
-                BracketedItem::Retrace(Box::new(retrace))
-            } else {
-                BracketedItem::AnnotatedRetrace(Box::new(
-                    talkbank_model::model::Annotated::new(retrace).with_scoped_annotations(scoped),
-                ))
+            match AnnotatedContentAnnotations::new(scoped) {
+                None => BracketedItem::Retrace(Box::new(retrace)),
+                Some(scoped) => BracketedItem::AnnotatedRetrace(Box::new(
+                    talkbank_model::model::Annotated::new(retrace, scoped),
+                )),
             }
         }
         ast::ContentItem::Freecode(text) => BracketedItem::Freecode(Freecode::new(*text)),
@@ -686,18 +853,25 @@ pub(crate) fn content_item_to_bracketed(item: &ast::ContentItem<'_>) -> Brackete
             BracketedItem::NonvocalSimple(NonvocalSimple::new(NonvocalLabel::new(*label)))
         }
         ast::ContentItem::PhoGroup(contents) => {
-            let items: Vec<BracketedItem> =
-                contents.iter().map(content_item_to_bracketed).collect();
+            let items: Vec<BracketedItem> = contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             BracketedItem::PhoGroup(PhoGroup::new(BracketedContent::new(items)))
         }
         ast::ContentItem::SinGroup(contents) => {
-            let items: Vec<BracketedItem> =
-                contents.iter().map(content_item_to_bracketed).collect();
+            let items: Vec<BracketedItem> = contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             BracketedItem::SinGroup(SinGroup::new(BracketedContent::new(items)))
         }
         ast::ContentItem::Quotation(q) => {
-            let items: Vec<BracketedItem> =
-                q.contents.iter().map(content_item_to_bracketed).collect();
+            let items: Vec<BracketedItem> = q
+                .contents
+                .iter()
+                .map(|i| content_item_to_bracketed(i, source))
+                .collect();
             BracketedItem::Quotation(Quotation::new(BracketedContent::new(items)))
         }
     }
@@ -711,6 +885,22 @@ pub(crate) fn parsed_annotation_to_scoped(
 ) -> Option<ContentAnnotation> {
     match ann {
         crate::ast::ParsedAnnotation::Retrace(_) => None, // Retraces handled at content level
+        // `[@ xyz]` carries `"@ xyz"`. The MARKER is the leading run of
+        // non-space characters and the TEXT is whatever follows it, matching
+        // `ScopedUnknown`'s two fields; a marker with no text (`[@@@]`) keeps
+        // an empty text rather than borrowing the marker into it.
+        crate::ast::ParsedAnnotation::Unknown(inner) => {
+            let (marker, text) = match inner.split_once(' ') {
+                Some((marker, text)) => (marker, text.trim()),
+                None => (*inner, ""),
+            };
+            Some(ContentAnnotation::Unknown(
+                talkbank_model::model::ScopedUnknown {
+                    marker: marker.into(),
+                    text: text.into(),
+                },
+            ))
+        }
         crate::ast::ParsedAnnotation::Stressing => Some(ContentAnnotation::Stressing),
         crate::ast::ParsedAnnotation::ContrastiveStressing => {
             Some(ContentAnnotation::ContrastiveStressing)

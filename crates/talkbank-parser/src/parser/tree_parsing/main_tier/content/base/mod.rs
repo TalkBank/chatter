@@ -236,7 +236,7 @@ mod tests {
     /// it does not know" cannot be made unrepresentable. It can only be
     /// detected and reported.
     ///
-    /// This is what `spec/errors/E340_auto.md` names as the out-of-corpus test
+    /// This is what `spec/errors/E340.md` names as the out-of-corpus test
     /// its `unreachable_from_chat` status owes. Before the classification was
     /// split out of `parse_base_content`, covering it meant fabricating a
     /// `tree_sitter::Node` whose kind the grammar cannot emit, so

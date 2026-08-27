@@ -300,7 +300,7 @@ pub fn wor_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, WorTierParsed<'a>> +
                 ContentItem::Pause(_)
                 | ContentItem::Freecode(_)
                 | ContentItem::OrphanAnnotation(_)
-                | ContentItem::Separator(_)
+                | ContentItem::Separator { .. }
                 | ContentItem::OverlapPoint { .. }
                 | ContentItem::Group(_)
                 | ContentItem::Quotation(_)

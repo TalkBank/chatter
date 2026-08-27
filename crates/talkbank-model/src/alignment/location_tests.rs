@@ -349,7 +349,7 @@ fn test_mor_alignment_error_too_few_has_proper_location() {
     assert_eq!(alignment.errors.len(), 1);
 
     let error = &alignment.errors[0];
-    assert_eq!(error.code, ErrorCode::new("E705"));
+    assert_eq!(error.code, ErrorCode::MorCountMismatchTooFew);
 
     // Primary span should be the main tier
     assert_eq!(error.location.span.start, 0);
@@ -392,7 +392,7 @@ fn test_mor_alignment_error_too_many_has_proper_location() {
     assert_eq!(alignment.errors.len(), 1);
 
     let error = &alignment.errors[0];
-    assert_eq!(error.code, ErrorCode::new("E706"));
+    assert_eq!(error.code, ErrorCode::MorCountMismatchTooMany);
 
     // Primary span should be the main tier (consistent with pho/sin/wor)
     assert_eq!(error.location.span.start, 0);

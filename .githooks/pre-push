@@ -1,30 +1,26 @@
 #!/usr/bin/env bash
 #
-# Refuse a push unless BOTH halves of `just gate` have passed on this tree.
+# Refuse a push unless `just gate` has passed on this tree.
 #
-# THIS HOOK RUNS NO CHECKS. It reads two stamps that only `just gate-fast` and
-# `just gate-slow` write.
+# THIS HOOK RUNS NO CHECKS. It reads one stamp that only `just gate` writes.
 #
 # # Why it does no work
 #
-# The obvious hook runs the gate. That fails two ways at once. The gate takes
-# 12-15 minutes, and git has already opened its connection to the remote before
-# the hook runs, so a slow hook is closed by GitHub's SSH idle timeout and the
-# push fails AFTER passing. And a 15-minute hook manufactures pressure to use
-# `--no-verify`, which this project forbids outright, so it would convert a
-# real gate into a habitually bypassed one.
+# The obvious hook runs the gate. That fails two ways at once. Git has already
+# opened its connection to the remote before the hook runs, so a slow hook is
+# closed by GitHub's SSH idle timeout and the push fails AFTER passing. And a
+# multi-minute hook manufactures pressure to use `--no-verify`, which this
+# project forbids outright, so it would convert a real gate into a habitually
+# bypassed one.
 #
-# # Why two stamps rather than one
+# # Why one stamp
 #
-# `gate` is `gate-fast` plus `gate-slow`, and on a cold build the pair exceeds
-# a single command invocation's time ceiling, so the halves have to be
-# runnable separately. The first version of this hook read ONE stamp that only
-# the combined `gate` wrote, which meant running both halves did all the work
-# and produced no proof: the split and the stamp were added an hour apart and
-# nothing checked that one satisfied the other.
-#
-# Two stamps make the composition real. Running the halves is now equivalent to
-# running `gate`, which is what the split claimed all along.
+# There were two, `gate-fast` and `gate-slow`, because the slow half exceeded a
+# single command invocation's time ceiling on a cold build. That split existed
+# to work around a gate that compiled the same code four or five times; clippy
+# and the feature-off build moved to `just release-lint` and the remaining gate
+# runs in one go, so the halves and their two stamps are gone. One gate, one
+# stamp, one thing for this hook to check.
 #
 # # Why it exists at all
 #
@@ -48,28 +44,30 @@ set -euo pipefail
 # "clean". That is correct rather than annoying, because it makes the stamp
 # mean "the gate ran on exactly what you are pushing", which is the only claim
 # worth having. Gate the thing you are about to push.
-TREE_STATE="$(git status --porcelain | shasum | cut -d' ' -f1)"
+#
+# `tree-stamp.sh` exits non-zero rather than printing an empty stamp; under
+# `set -e` that aborts the push here, which is the point. Its first version
+# printed nothing on failure and this hook then compared "" to "" and passed.
+TREE_STATE="$(bash "$(git rev-parse --show-toplevel)/scripts/tree-stamp.sh")"
 
-for half in fast slow; do
-    stamp=".git/gate-${half}-passed"
-    if [ ! -f "$stamp" ]; then
-        echo "[pre-push] REFUSED: no stamp from 'just gate-${half}'." >&2
-        echo "           Run 'just push', or 'just gate-fast' and" >&2
-        echo "           'just gate-slow' if a time ceiling forces the split." >&2
-        exit 1
-    fi
-    got="$(cat "$stamp")"
-    if [ "$got" != "$TREE_STATE" ]; then
-        echo "[pre-push] REFUSED: the gate-${half} stamp is for a different tree." >&2
-        echo "           stamped: $got" >&2
-        echo "           pushing: $TREE_STATE" >&2
-        exit 1
-    fi
-done
+# `git rev-parse --git-dir`, never a literal `.git`: in a worktree `.git` is a
+# file, and the gate writes its stamp to the same resolved directory.
+stamp="$(git rev-parse --git-dir)/gate-passed"
+if [ ! -f "$stamp" ]; then
+    echo "[pre-push] REFUSED: no stamp from 'just gate'." >&2
+    exit 1
+fi
+got="$(cat "$stamp")"
+if [ "$got" != "$TREE_STATE" ]; then
+    echo "[pre-push] REFUSED: the gate stamp is for a different tree." >&2
+    echo "           stamped: $got" >&2
+    echo "           pushing: $TREE_STATE" >&2
+    exit 1
+fi
 
-echo "[pre-push] both gate stamps match this tree."
+echo "[pre-push] the gate stamp matches this tree."
 
-# Chain to an optional local pre-push hook, AFTER the gate stamps, so a stamp
+# Chain to an optional local pre-push hook, AFTER the gate stamp, so a stamp
 # failure short-circuits first and a contributor's own check never masks it.
 #
 # `core.hooksPath` points git at this directory, which means it ignores

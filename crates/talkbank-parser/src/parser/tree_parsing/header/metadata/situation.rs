@@ -4,7 +4,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>
 
 use crate::generated_traversal::{AsRawNode, SituationHeaderNode, extract_situation_header};
-use crate::node_types::SITUATION_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -38,22 +37,12 @@ fn unknown_situation_header(node: Node, source: &str, parse_reason: impl Into<St
 ///     $.newline
 /// )
 /// ```
-pub fn parse_situation_header(node: Node, source: &str, errors: &impl ErrorSink) -> Header {
-    // Verify this is a situation_header node
-    if node.kind() != SITUATION_HEADER {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!("Expected situation_header node, got: {}", node.kind()),
-        ));
-        return unknown_situation_header(
-            node,
-            source,
-            "Situation header CST node had unexpected kind",
-        );
-    }
+pub fn parse_situation_header(
+    typed: SituationHeaderNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Header {
+    let node = typed.raw_node();
 
     // Grammar: seq(situation_prefix, header_sep, free_text, newline). The free
     // text is DIRECT at `child_2` (there is no inner contents node, and no
@@ -63,7 +52,7 @@ pub fn parse_situation_header(node: Node, source: &str, errors: &impl ErrorSink)
     // Present free_text; every non-Present recovery state funnels to the SAME
     // "missing situation text" diagnostic at the HEADER NODE span, exactly as the
     // pre-migration `find_child_by_kind` None branch did.
-    let children = extract_situation_header(SituationHeaderNode(node));
+    let children = extract_situation_header(typed);
     let Some(free_text) = present(children.child_2.slot()) else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,

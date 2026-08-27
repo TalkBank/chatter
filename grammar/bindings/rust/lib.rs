@@ -73,6 +73,17 @@ pub const TAGS_QUERY: &str = include_str!("../../queries/tags.scm");
 
 #[cfg(test)]
 mod tests {
+    // Test code relaxes the panic family, the same way `talkbank-parser-re2c`
+    // does at its own test module. A smoke test that cannot panic cannot fail,
+    // and this one exists precisely to fail loudly if the generated language
+    // will not register.
+    //
+    // The relaxation is scoped to this module rather than the crate, and it is
+    // written down because `grammar` only came under the workspace lint table
+    // on 2026-08-26; before that it declared no `[lints]` stanza and was
+    // silently exempt from every workspace lint, which is what hid this site.
+    #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+
     /// Smoke test: ensure the generated language can be registered with a parser.
     #[test]
     fn test_can_load_grammar() {

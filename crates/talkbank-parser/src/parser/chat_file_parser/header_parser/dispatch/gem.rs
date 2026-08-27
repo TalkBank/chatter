@@ -86,10 +86,11 @@ fn parse_gem_label(
 /// E342 for a missing required element) is emitted by the tree-sitter backstop and
 /// is orthogonal to the model kind.
 pub(super) fn bg(
-    header_actual: Node,
+    typed: BgHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // LEVEL 2: read the optional `seq(header_sep, free_text)` GROUP through the
     // typed positional slot (extract_bg_header child_1:
     // Option<NodeSlot<BgHeaderChild1Children>>), then descend one level into the
@@ -98,7 +99,7 @@ pub(super) fn bg(
     // meaning the whole group is grammar-absent) collapses to None, mapping to the
     // Option<Node> parse_gem_label expects; the VALID path is byte-identical to
     // the old `child_2.map(|w| w.raw_node())`.
-    let children = extract_bg_header(BgHeaderNode(header_actual));
+    let children = extract_bg_header(typed);
     let group = children
         .child_1
         .slot()
@@ -121,13 +122,14 @@ pub(super) fn bg(
 
 /// `@Eg` -> `Header::EndGem`.
 pub(super) fn eg(
-    header_actual: Node,
+    typed: EgHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // Same optional-GROUP shape as `bg` (see its comment); `eg_header`'s pair is
     // `EgHeaderChild1Children { child_0: header_sep, child_1: free_text }`.
-    let children = extract_eg_header(EgHeaderNode(header_actual));
+    let children = extract_eg_header(typed);
     let group = children
         .child_1
         .slot()
@@ -149,14 +151,19 @@ pub(super) fn eg(
 }
 
 /// `@G` -> `Header::LazyGem`.
-pub(super) fn g(header_actual: Node, input: &str, errors: &impl ErrorSink) -> ParseOutcome<Header> {
+pub(super) fn g(
+    typed: GHeaderNode<'_>,
+    input: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // LEVEL 2: read the required free_text child through the typed positional slot
     // (extract_g_header child_2: &NodeSlot<FreeTextNode>, the SAME index as the OLD
     // module: g_header's free_text is grammar-required, so there is no optional
     // group to descend into here). `present_or_recover().ok()` maps Present to the
     // node and every non-Present recovery variant to None, the Option<Node>
     // parse_gem_label expects; the VALID path is byte-identical to the old read.
-    let children = extract_g_header(GHeaderNode(header_actual));
+    let children = extract_g_header(typed);
     let free_text_child = children
         .child_2
         .slot()

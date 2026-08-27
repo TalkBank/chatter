@@ -88,6 +88,9 @@ fn annotate(
         UtteranceContent::AnnotatedGroup(annotated) => {
             UtteranceContent::AnnotatedGroup(annotated.with_scoped_annotation(annotation))
         }
+        UtteranceContent::AnnotatedQuotation(annotated) => {
+            UtteranceContent::AnnotatedQuotation(annotated.with_scoped_annotation(annotation))
+        }
         UtteranceContent::AnnotatedEvent(annotated) => {
             UtteranceContent::AnnotatedEvent(annotated.with_scoped_annotation(annotation))
         }
@@ -110,24 +113,26 @@ fn annotate(
         }
         // Not yet a wrapper: become one.
         UtteranceContent::Word(word) => UtteranceContent::AnnotatedWord(Box::new(
-            Annotated::new(*word)
-                .with_scoped_annotation(annotation)
-                .with_span(span),
+            Annotated::with_one(*word, annotation).with_span(span),
         )),
-        UtteranceContent::Group(group) => UtteranceContent::AnnotatedGroup(
-            Annotated::new(group)
-                .with_scoped_annotation(annotation)
-                .with_span(span),
+        UtteranceContent::Group(group) => {
+            UtteranceContent::AnnotatedGroup(Annotated::with_one(group, annotation).with_span(span))
+        }
+        UtteranceContent::Quotation(quotation) => UtteranceContent::AnnotatedQuotation(
+            Annotated::with_one(quotation, annotation).with_span(span),
         ),
-        UtteranceContent::Event(event) => UtteranceContent::AnnotatedEvent(
-            Annotated::new(event)
-                .with_scoped_annotation(annotation)
-                .with_span(span),
+        UtteranceContent::Event(event) => {
+            UtteranceContent::AnnotatedEvent(Annotated::with_one(event, annotation).with_span(span))
+        }
+        // Added 2026-08-26 with the bare `Action` variant: an action that
+        // meets its first scoped marker is promoted exactly as an event is.
+        // Before that variant existed the parser had pre-wrapped every action,
+        // so there was nothing here to promote.
+        UtteranceContent::Action(action) => UtteranceContent::AnnotatedAction(
+            Annotated::with_one(action, annotation).with_span(span),
         ),
         UtteranceContent::Retrace(retraced) => UtteranceContent::AnnotatedRetrace(Box::new(
-            Annotated::new(*retraced)
-                .with_scoped_annotation(annotation)
-                .with_span(span),
+            Annotated::with_one(*retraced, annotation).with_span(span),
         )),
         // Unreachable from the three seed call sites, which produce only
         // `Word`, `ReplacedWord`, `Group`, `Event` and `AnnotatedAction`, and
@@ -140,7 +145,6 @@ fn annotate(
         item @ (UtteranceContent::Pause(_)
         | UtteranceContent::PhoGroup(_)
         | UtteranceContent::SinGroup(_)
-        | UtteranceContent::Quotation(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::Separator(_)
         | UtteranceContent::OverlapPoint(_)
@@ -167,9 +171,16 @@ fn retrace(current: UtteranceContent, kind: RetraceKind, span: Span) -> Utteranc
     // crate's own AST type, so no constructor can own it for both. Drift here
     // is silent and corrupts output, so the enforcement is the cross-parser
     // test `equivalence_marker_chain`; change one of these two and run it.
-    let built = match convert_to_group_content(current) {
-        Ok(item) => Retrace::new(BracketedContent::new(vec![item]), kind),
-        Err(group) => Retrace::new(group.content, kind).as_group(),
+    let built = if let UtteranceContent::Group(group) = current {
+        // A BARE group hands its brackets to the retrace, which is what
+        // `Retrace::is_group` records. Tested here rather than reported by the
+        // converter, because this is the only caller for which it matters.
+        Retrace::new(group.content, kind).as_group()
+    } else {
+        Retrace::new(
+            BracketedContent::new(vec![convert_to_group_content(current)]),
+            kind,
+        )
     };
     UtteranceContent::Retrace(Box::new(built.with_span(span)))
 }

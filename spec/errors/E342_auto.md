@@ -1,8 +1,6 @@
 +++
 code = 'E342'
 name = 'Missing required element'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'utterance'

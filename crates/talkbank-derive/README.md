@@ -1,7 +1,7 @@
 # talkbank-derive
 
 **Status:** Current
-**Last modified:** 2026-05-30 19:33 EDT
+**Last modified:** 2026-08-27 01:00 EDT
 
 Procedural derive macros for the TalkBank CHAT Rust model crates.
 
@@ -29,7 +29,14 @@ it is not a fully generic derive toolkit for arbitrary unrelated crate layouts.
 
 ## Usage
 
-```rust
+The block below is `ignore`d rather than compiled, and the reason is the
+limitation stated two paragraphs above: the generated impls reference
+`crate::model`, so this cannot build in a crate that has no such module. It is
+illustrative by necessity. Every OTHER ```rust block in this README is compiled
+by `cargo test --doc` through `ReadmeDoctests` in `src/lib.rs`; keep new
+examples compilable so they cannot rot.
+
+```rust,ignore
 use talkbank_derive::{SemanticEq, SpanShift};
 
 #[derive(SemanticEq, SpanShift)]

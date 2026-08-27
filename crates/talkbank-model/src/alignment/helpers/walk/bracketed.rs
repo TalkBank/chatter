@@ -1,15 +1,23 @@
 //! Bracketed-content recursion for the walk helpers.
 //!
-//! The four `walk_bracketed_*` recursors (the bracketed twins of the top-level
-//! `walk_content`/`walk_words` walkers) plus the two `should_skip_*` group-gating
-//! predicates. Extracted verbatim from `walk/mod.rs`; the top-level walkers call
-//! these through the `use bracketed::*;` re-export in the parent. The visited-item
+//! The four `walk_bracketed_*` recursors, the bracketed twins of the top-level
+//! `walk_content`/`walk_words` walkers. Split out of `walk/mod.rs` to keep both
+//! files browseable; the parent imports them by name.
+//!
+//! Gating is NOT here, for containers or for annotated words:
+//! `helpers::descent` owns it for every traversal in the crate. The visited-item
 //! enums ([`ContentItem`](super::ContentItem), [`WordItem`](super::WordItem), and
 //! their `*Mut` twins) live in the parent module and are imported here.
 
-use crate::alignment::helpers::{domain::TierDomain, rules::should_skip_group};
-use crate::model::{BracketedItem, ContentAnnotation};
+// The sibling gating modules (`count.rs`, `overlap.rs`) carry this and these
+// depend on exhaustiveness harder than either: a new container variant that
+// lands in the wrong arm here silently stops eight walkers descending.
+#![deny(clippy::wildcard_enum_match_arm)]
 
+use crate::alignment::helpers::domain::TierDomain;
+use crate::model::BracketedItem;
+
+use super::super::descent::{descend, descend_mut, excluded_by_annotations};
 use super::{ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut};
 
 pub(super) fn walk_bracketed_content<'a>(
@@ -23,7 +31,7 @@ pub(super) fn walk_bracketed_content<'a>(
                 f(ContentItem::Word(word));
             }
             BracketedItem::AnnotatedWord(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     f(ContentItem::Word(&annotated.inner));
                 }
             }
@@ -81,36 +89,17 @@ pub(super) fn walk_bracketed_content<'a>(
             BracketedItem::OtherSpokenEvent(ose) => {
                 f(ContentItem::OtherSpokenEvent(ose));
             }
-            // Groups: descend into content
-            BracketedItem::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_content(&annotated.inner.content.content, domain, f);
-                }
-            }
-            BracketedItem::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content(&pho.content.content, domain, f);
-                }
-            }
-            BracketedItem::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content(&sin.content.content, domain, f);
-                }
-            }
-            BracketedItem::Quotation(quot) => {
-                walk_bracketed_content(&quot.content.content, domain, f);
-            }
-            BracketedItem::Retrace(retrace) => {
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content(&retrace.content.content, domain, f);
-                }
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content(&annotated.inner.content.content, domain, f);
+            // Containers: ONE arm, and `descent::descend` owns the rule.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), domain).entered() {
+                    walk_bracketed_content(&into.content().content, domain, f);
                 }
             }
         }
@@ -128,7 +117,7 @@ pub(super) fn walk_bracketed_content_mut<'a>(
                 f(ContentItemMut::Word(word));
             }
             BracketedItem::AnnotatedWord(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     f(ContentItemMut::Word(&mut annotated.inner));
                 }
             }
@@ -186,44 +175,27 @@ pub(super) fn walk_bracketed_content_mut<'a>(
             BracketedItem::OtherSpokenEvent(ose) => {
                 f(ContentItemMut::OtherSpokenEvent(ose));
             }
-            // Groups: descend into content
-            BracketedItem::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_content_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
-                }
-            }
-            BracketedItem::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content_mut(pho.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            BracketedItem::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content_mut(sin.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            BracketedItem::Quotation(quot) => {
-                walk_bracketed_content_mut(quot.content.content.as_mut_slice(), domain, f);
-            }
-            BracketedItem::Retrace(retrace) => {
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content_mut(retrace.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
+            // Containers: ONE gate per rule, not one per variant. These were
+            // one arm per variant applying three rules, and they drifted: the two
+            // `AnnotatedQuotation` arms shipped ungated on 2026-08-26 while
+            // `count.rs` gated the same variant, so the walkers disagreed about
+            // one node. `container_mut` hands over the kind, the annotations
+            // and the content together, so the gate cannot be dropped by
+            // copying the wrong neighbour.
+            //
+            // The annotations sit on the retrace WRAPPER, are not words, and
+            // are not walked; only the retraced content is, which is why the
+            // retrace rule reads the domain alone.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(content) = descend_mut(item.container_mut(), domain) {
+                    walk_bracketed_content_mut(content.content.as_mut_slice(), domain, f);
                 }
             }
         }
@@ -246,7 +218,7 @@ pub(super) fn walk_bracketed_words<'a>(
                 f(WordItem::Word(word), scope);
             }
             BracketedItem::AnnotatedWord(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     // A scoped annotation may attach to ONE content item without
                     // angle brackets, so `hallo [@s]` governs its own word just
                     // as `<a b> [@s]` governs the words it encloses.
@@ -262,36 +234,19 @@ pub(super) fn walk_bracketed_words<'a>(
             BracketedItem::Separator(sep) => {
                 f(WordItem::Separator(sep), scope);
             }
-            BracketedItem::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    let inner = scope.inside(&annotated.scoped_annotations);
-                    walk_bracketed_words(&annotated.inner.content.content, domain, inner, f);
-                }
-            }
-            BracketedItem::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&pho.content.content, domain, scope, f);
-                }
-            }
-            BracketedItem::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&sin.content.content, domain, scope, f);
-                }
-            }
-            BracketedItem::Quotation(quot) => {
-                walk_bracketed_words(&quot.content.content, domain, scope, f);
-            }
-            BracketedItem::Retrace(retrace) => {
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&retrace.content.content, domain, scope, f);
-                }
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&annotated.inner.content.content, domain, scope, f);
+            // Containers: ONE arm. `descend` decides whether to enter and
+            // `scope_in` carries the code-switch rule; `descent` owns both.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), domain).entered() {
+                    let inner = into.scope_in(scope);
+                    walk_bracketed_words(&into.content().content, domain, inner, f);
                 }
             }
             // Non-word bracketed items.
@@ -326,7 +281,7 @@ pub(super) fn walk_bracketed_words_mut<'a>(
                 f(WordItemMut::Word(word));
             }
             BracketedItem::AnnotatedWord(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     let a = annotated.as_mut();
                     f(WordItemMut::Word(&mut a.inner));
                 }
@@ -337,43 +292,18 @@ pub(super) fn walk_bracketed_words_mut<'a>(
             BracketedItem::Separator(sep) => {
                 f(WordItemMut::Separator(sep));
             }
-            BracketedItem::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_words_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
-                }
-            }
-            BracketedItem::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words_mut(pho.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            BracketedItem::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words_mut(sin.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            BracketedItem::Quotation(quot) => {
-                walk_bracketed_words_mut(quot.content.content.as_mut_slice(), domain, f);
-            }
-            BracketedItem::Retrace(retrace) => {
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words_mut(retrace.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
+            // Containers: one gate per RULE. See `walk_bracketed_content_mut`
+            // for why these stopped being one arm per variant.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(content) = descend_mut(item.container_mut(), domain) {
+                    walk_bracketed_words_mut(content.content.as_mut_slice(), domain, f);
                 }
             }
             BracketedItem::Event(_)
@@ -394,30 +324,4 @@ pub(super) fn walk_bracketed_words_mut<'a>(
             | BracketedItem::OtherSpokenEvent(_) => {}
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-/// Returns `true` when an annotated word/group should be skipped for the given domain.
-///
-/// Checks for alignment-ignore annotations (currently `[e]` exclude marker).
-/// Retrace skipping is handled by the `Retrace` content variant directly.
-pub(super) fn should_skip_annotated_group(
-    annotations: &[ContentAnnotation],
-    domain: Option<TierDomain>,
-) -> bool {
-    match domain {
-        Some(d) => should_skip_group(annotations, d),
-        None => false,
-    }
-}
-
-/// Returns `true` when PhoGroup/SinGroup should be skipped.
-///
-/// Pho and Sin domains treat these as atomic units rather than recursing
-/// into their word content.
-pub(super) fn should_skip_pho_sin_group(domain: Option<TierDomain>) -> bool {
-    matches!(domain, Some(TierDomain::Pho | TierDomain::Sin))
 }

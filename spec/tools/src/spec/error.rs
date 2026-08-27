@@ -7,12 +7,50 @@
 //! examples that should trigger the error. Generators consume these types to
 //! emit Rust validation tests and error documentation pages.
 
-use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::path::Path;
 
 use super::comrak_text::section_source;
 use super::metadata::{SpecDescription, SpecErrorCode, SpecLevel, Status};
+
+/// The per-code facts a SPEC needs: which axis it reports on, and whether the
+/// validator runs it.
+///
+/// `Copy`, and deliberately a subset of [`CodeEntry`]. A spec never reads the
+/// code's variant name or rustdoc back off itself; only the two generators do,
+/// and they hold the registry directly. Carrying the whole entry meant cloning
+/// three `String`s per spec file to reach two bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CodeFacts {
+    kind: ErrorKind,
+    status: Status,
+}
+
+impl CodeFacts {
+    /// Take the two facts a spec needs from a registry entry.
+    ///
+    /// Private, and takes a `&CodeEntry`, so the only way to reach one is to
+    /// have resolved a code against the registry.
+    fn of(entry: &CodeEntry) -> Self {
+        Self {
+            kind: entry.kind(),
+            status: entry.status(),
+        }
+    }
+}
+use crate::repo_paths::RepoRoot;
+use talkbank_spec_vocabulary::registry::{CodeEntry, CodeRegistry};
+
+/// The four `DiagnosticKind` axis values a code can carry.
+///
+/// Re-exported, not defined: it moved to the vocabulary crate with `kind`
+/// itself under R1, since a `kind` is a fact about a CODE and the registry is
+/// where codes live.
+///
+/// The re-export justified itself as keeping the name working "for the
+/// generators that name it", and after R1 no generator does: they read
+/// `CodeEntry::kind` off the registry. What it still serves is this module's
+/// own [`ErrorSpec::kind`] signature, which is a fair reason on its own.
+pub use talkbank_spec_vocabulary::registry::ErrorKind;
 
 /// Root structure for an error specification file.
 ///
@@ -21,8 +59,8 @@ use super::metadata::{SpecDescription, SpecErrorCode, SpecLevel, Status};
 ///
 /// # There is exactly one way to build one, and it is [`Self::load_all`]
 ///
-/// This derived `Deserialize` until 2026-08-18, along with `ErrorMetadata`,
-/// `ErrorDefinition` and `ErrorExample`, and nothing in the workspace ever
+/// This derived `Deserialize` until 2026-08-18, along with the since-deleted
+/// `ErrorMetadata`, `ErrorDefinition` and `ErrorExample`, and nothing in the workspace ever
 /// deserialized any of them: there is no JSON or TOML route into a spec, only
 /// the markdown loader below. What the derive actually did was make the
 /// `#[serde(default)]` attributes read as a documented schema, so five fields
@@ -31,9 +69,28 @@ use super::metadata::{SpecDescription, SpecErrorCode, SpecLevel, Status};
 /// values. Removing it is what let those fields be deleted.
 #[derive(Debug)]
 pub struct ErrorSpec {
-    /// What the frontmatter declares about the code itself (description,
-    /// status, kind). `level` is a fact about each EXAMPLE, not the code.
-    pub metadata: ErrorMetadata,
+    /// This document's `## Description` section.
+    ///
+    /// Was `metadata: ErrorMetadata` until R1's review. Once `kind` and
+    /// `status` moved to the registry, `ErrorMetadata` wrapped one already
+    /// validated newtype and had one reader, so it was a level of nesting
+    /// standing for nothing. `level` is a fact about each EXAMPLE and lives
+    /// there.
+    pub description: SpecDescription,
+    /// The code's own facts, resolved from the registry at load.
+    ///
+    /// PRIVATE and `Copy`, reached only through [`Self::kind`] and
+    /// [`Self::status`]. Their presence is the proof that this file names a
+    /// code that exists: [`Self::from_frontmatter`] is the only constructor
+    /// and it resolves, so the `spec/errors <-> ErrorCode` divergence check
+    /// the DiagnosticKind generator used to run has nothing left to find.
+    ///
+    /// This was a cloned `CodeEntry`, and cloning the whole record deep-copied
+    /// three `String`s per spec file (236 of them) to reach two one-byte
+    /// enums; nothing ever read the code, variant or rustdoc back off a spec.
+    /// The code STRING stays on [`ErrorDefinition::code`], which is what the
+    /// document declares.
+    code_facts: CodeFacts,
     /// The error this spec defines.
     ///
     /// ONE, not a `Vec`. It was `errors: Vec<ErrorDefinition>` and the loader
@@ -206,138 +263,6 @@ pub enum Demonstration {
     NoExamples,
 }
 
-/// Metadata about the error, as the spec's frontmatter declares it.
-#[derive(Debug)]
-pub struct ErrorMetadata {
-    /// The spec's `## Description` section.
-    pub description: SpecDescription,
-    /// Implementation status, parsed at load into the closed set.
-    ///
-    /// Was a `String` on this struct until 2026-08-15, while the sibling parser
-    /// of the same files had it typed. Why that mattered, and what it cost, is
-    /// recorded once on [`Status`].
-    ///
-    /// [`Status`] has no `Default`, deliberately, so a spec that declares
-    /// nothing is refused rather than given an invented answer.
-    pub status: Status,
-    /// What this diagnostic intrinsically IS, per the code's own spec.
-    ///
-    /// Deliberately REQUIRED, not `Option` with a default: a spec file
-    /// declaring no `kind` fails to load (see
-    /// [`ErrorSpec::from_frontmatter`]) rather than silently falling back to a
-    /// guess.
-    /// The talkbank-model `DiagnosticKind` registry
-    /// (`crates/talkbank-model/src/errors/generated_diagnostic_kind.rs`) is
-    /// generated from this field across every spec file, so an unclassified
-    /// code is a build-time failure here, not a silent gap in that registry.
-    pub kind: ErrorKind,
-}
-
-/// The four `DiagnosticKind` axis values a spec file's `## Metadata` block
-/// can declare via its `- **Kind**:` bullet.
-///
-/// Mirrors `talkbank_model::errors::DiagnosticKind` structurally by name.
-/// This crate cannot depend on `talkbank-model` (that would be circular:
-/// `talkbank-model`'s own diagnostic-kind registry is generated FROM this
-/// crate's spec loader, by a binary in the sibling `spec/runtime-tools`
-/// crate, which is the one place both directions of the dependency meet).
-/// The generator maps each variant here to the identically-named
-/// `DiagnosticKind` variant by name; a variant added to one and not the
-/// other is caught at the generator's match, not silently ignored.
-///
-/// # Deserialized THROUGH [`Self::parse`], not by the derive
-///
-/// A plain `Deserialize` derive would spell the four variant names a second
-/// time, in serde's generated code, where nothing holds them to
-/// [`Self::as_str`]. That is the same duplication this type's own doc warns
-/// about one paragraph down, so the read route goes through the table rather
-/// than beside it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String")]
-pub enum ErrorKind {
-    /// Violates the spec, or the construct does not make sense.
-    Invalidity,
-    /// Preserved but not interpreted: a chatter coverage gap, never a fault
-    /// in the file itself.
-    Unmodeled,
-    /// Valid now, discouraged, on a sunset path toward `Invalidity`.
-    Deprecation,
-    /// Valid, purely stylistic.
-    Style,
-}
-
-impl TryFrom<String> for ErrorKind {
-    type Error = String;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::parse(&value)
-    }
-}
-
-impl ErrorKind {
-    /// ONE table, the way [`Status`] already has one.
-    ///
-    /// This name is FOUR things at once: what a spec's `kind` frontmatter
-    /// value must say,
-    /// what the generated `DiagnosticKind` registry emits as source text, what
-    /// `docs/errors/*.md` publishes, and what the index table shows. Three of
-    /// those were separate matches until 2026-08-15, and the published pair
-    /// were `{:?}` on the derived `Debug`, so renaming a variant would have
-    /// silently changed user-facing documentation while
-    /// `diagnostic_kind_variant` kept emitting the old literal and only
-    /// `parse` failed loudly.
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Invalidity => "Invalidity",
-            Self::Unmodeled => "Unmodeled",
-            Self::Deprecation => "Deprecation",
-            Self::Style => "Style",
-        }
-    }
-
-    /// Parse a `kind` frontmatter value. Case-sensitive and exact: the
-    /// four spelled-out variant names, nothing else (no abbreviations, no
-    /// synonyms), so a typo in a spec file fails loudly at load time
-    /// instead of silently defaulting.
-    fn parse(value: &str) -> Result<Self, String> {
-        // A plain match, the shape `Status::from_str` uses. This was a `find`
-        // over a four-element array of variants, which
-        // that impl's own doc records as tried and REMOVED: the array is a
-        // second hand-maintained list that nothing checks for completeness, so
-        // a fifth variant breaks `as_str`'s match at compile time (the guard
-        // that matters) while the array stays at four and every spec declaring
-        // the new value fails to load. This was the last enum in the format
-        // still written that way.
-        match value.trim() {
-            "Invalidity" => Ok(Self::Invalidity),
-            "Unmodeled" => Ok(Self::Unmodeled),
-            "Deprecation" => Ok(Self::Deprecation),
-            "Style" => Ok(Self::Style),
-            other => Err(format!(
-                "unrecognized Kind value {other:?}: expected one of \
-                 Invalidity, Unmodeled, Deprecation, Style"
-            )),
-        }
-    }
-
-    /// The identically-named `talkbank_model::errors::DiagnosticKind`
-    /// variant this value maps to, as source text for code generation.
-    ///
-    /// Identical to [`Self::as_str`] by construction rather than by
-    /// coincidence, and named separately because the CALLER's intent differs:
-    /// this one is Rust source text and must not drift if the published
-    /// spelling ever gains a space.
-    pub fn diagnostic_kind_variant(self) -> &'static str {
-        self.as_str()
-    }
-}
-
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// A single error definition
 #[derive(Debug)]
 pub struct ErrorDefinition {
@@ -400,7 +325,26 @@ pub struct ErrorExample {
 
 impl ErrorSpec {
     /// Load all error specifications from a directory
-    pub fn load_all(root: impl AsRef<Path>) -> Result<Vec<Self>, String> {
+    /// Every error spec in THIS checkout, with the registry it resolves
+    /// against, both derived from one root.
+    ///
+    /// The default route. Eight of the eleven `load_all` call sites derived
+    /// both from one root and spelled `CodeRegistry::load(root)` themselves,
+    /// which is a relationship held by each caller's discipline; the sibling
+    /// loader in the other workspace had already made this move and this one
+    /// had not. The two-argument form below stays for the two callers that
+    /// genuinely read a FOREIGN tree (`--spec-dir`), where the mismatch is the
+    /// point.
+    ///
+    /// # Errors
+    ///
+    /// When the registry or any spec fails to load.
+    pub fn load_for_repo(root: &RepoRoot) -> Result<Vec<Self>, String> {
+        let registry = root.code_registry().map_err(|why| why.to_string())?;
+        Self::load_all(crate::artifacts::error_dir(root.as_path()), &registry)
+    }
+
+    pub fn load_all(root: impl AsRef<Path>, registry: &CodeRegistry) -> Result<Vec<Self>, String> {
         let root = root.as_ref();
         let mut specs = Vec::new();
         let mut issues = Vec::new();
@@ -413,27 +357,50 @@ impl ErrorSpec {
         for path in &paths {
             let loaded = std::fs::read_to_string(path)
                 .map_err(|err| format!("failed to read: {err}"))
-                .and_then(|content| Self::from_frontmatter(path, &content));
+                .and_then(|content| Self::from_frontmatter(path, &content, registry));
             match loaded {
                 Ok(spec) => specs.push(spec),
                 Err(err) => issues.push(format!("Failed to load {}: {}", path.display(), err)),
             }
         }
 
-        // A load failure (missing/invalid Kind, malformed metadata, a WalkDir
+        // A load failure (an unregistered code, malformed metadata, a WalkDir
         // error) must actually fail the whole load: this used to be collected
         // into `issues` and then silently discarded (the `println!` below was
         // commented out), which meant a spec file that failed to parse was
         // just dropped from the result with NO signal to the caller. Every
         // caller of `load_all` already propagates a `Result` with `?`, so
         // surfacing failures here costs nothing and closes that hole. This is
-        // also what makes `ErrorMetadata::kind` genuinely REQUIRED rather
-        // than "required unless the loader swallows the error."
+        // also what makes the registry resolution genuinely BINDING rather
+        // than "binding unless the loader swallows the error."
         if issues.is_empty() {
             Ok(specs)
         } else {
             Err(issues.join("\n"))
         }
+    }
+
+    /// What this diagnostic intrinsically IS.
+    ///
+    /// From the registry, not from this file. Every spec file for a code used
+    /// to declare it, so eleven codes carried two or three copies and the
+    /// DiagnosticKind generator had a loop whose only job was refusing to
+    /// proceed when they disagreed. There is one copy now and no loop.
+    #[must_use]
+    pub fn kind(&self) -> ErrorKind {
+        self.code_facts.kind
+    }
+
+    /// Whether the validator actually enforces this code's rule.
+    ///
+    /// From the registry, for the same reason as [`Self::kind`]. Callers
+    /// apply their own policy to it: the example runner skips `Deprecated`,
+    /// the fixture corpus excuses `UnreachableFromChat`, and the generated
+    /// enum asks [`Status::is_enforced`]. Three policies over one fact, which
+    /// is why `Status` carries the vocabulary and not the verdict.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        self.code_facts.status
     }
 
     /// Load a spec from its `+++` TOML frontmatter and its prose body.
@@ -454,12 +421,20 @@ impl ErrorSpec {
     ///
     /// When the frontmatter is absent, malformed, violates the schema, or the
     /// body carries no `## Description`.
-    pub fn from_frontmatter(path: impl AsRef<Path>, content: &str) -> Result<Self, String> {
+    pub fn from_frontmatter(
+        path: impl AsRef<Path>,
+        content: &str,
+        registry: &CodeRegistry,
+    ) -> Result<Self, String> {
         let path = path.as_ref();
-        let (front, body): (
-            talkbank_spec_vocabulary::frontmatter::SpecFrontmatter<ErrorKind>,
-            &str,
-        ) = talkbank_spec_vocabulary::frontmatter::read(content).map_err(|why| why.to_string())?;
+        // ONE call, because the vocabulary crate owns the verb. Reading and
+        // resolving were two steps here and two more in the other workspace,
+        // with four error spellings between them, which is exactly why
+        // `frontmatter::read` exists one step down.
+        let (front, entry, body) =
+            talkbank_spec_vocabulary::frontmatter::read_resolved(content, registry)
+                .map_err(|why| why.to_string())?;
+        let code_facts = CodeFacts::of(entry);
 
         let arena = comrak::Arena::new();
         let root = comrak::parse_document(&arena, body, &comrak::Options::default());
@@ -490,11 +465,8 @@ impl ErrorSpec {
             .collect();
 
         Ok(ErrorSpec {
-            metadata: ErrorMetadata {
-                description,
-                status: front.status,
-                kind: front.kind,
-            },
+            description,
+            code_facts,
             error: ErrorDefinition {
                 code: front.code,
                 name: front.name,
@@ -538,27 +510,31 @@ mod tests {
         // The path is provenance the loader records; the TEXT is the input.
         // Reading the bytes back to hand them to the loader proved nothing
         // about the loader, only about the filesystem.
-        ErrorSpec::from_frontmatter(&path, source)
+        ErrorSpec::from_frontmatter(&path, source, &test_registry())
+    }
+
+    /// A registry declaring the one code these fixtures use.
+    ///
+    /// Since R1 a spec cannot load without resolving its code, which is the
+    /// whole point: the corpus-wide divergence check became a per-file parse.
+    fn test_registry() -> CodeRegistry {
+        crate::test_registry::declaring(&[("E999", Status::NotImplemented)])
     }
 
     /// A minimal but valid error spec.
     ///
-    /// # Why this no longer has a hole where the status bullet went
+    /// # It declares no status and no kind, because a spec file cannot
     ///
-    /// It did, so that one body could serve the absent case that
-    /// `status_is_required` asserted was refused. That test is gone and the
-    /// hole with it: `status` is a required field of a `deny_unknown_fields`
-    /// struct, so a spec omitting it does not deserialize at all, and the
-    /// refusal is the schema's, tested where the schema is. A fixture shaped
-    /// around a test that no longer needs to exist is a fixture with a hole in
-    /// it for no reason.
-    fn spec_source(status: &str) -> String {
-        format!(
-            "+++
+    /// Both were fields here until R1 moved them to the registry. The fixture
+    /// took a `status` parameter solely so one test could assert the declared
+    /// value reached the model; there is no declared value now, and that test
+    /// went with the field.
+    fn spec_source() -> String {
+        // No interpolation left: `kind` and `status` were the only values
+        // this fixture varied, and a spec file no longer declares either.
+        "+++
 code = 'E999'
 name = 'Test error'
-kind = 'Invalidity'
-status = '{status}'
 
 [[example]]
 level = 'utterance'
@@ -574,20 +550,37 @@ chat = '''
 
 A test error description.
 "
-        )
+        .to_owned()
     }
 
-    /// The declared status reaches the model.
+    /// The REGISTRY's status reaches the model, and the spec file has no say.
     ///
-    /// Wiring, not parsing. That a status is one of a closed set is
-    /// [`Status`]'s property and that the field is required is the schema's;
-    /// what is checked here is that this loader puts the value where the
-    /// generators read it.
+    /// This replaces `the_declared_status_reaches_the_model`, which asserted
+    /// that a `status = ` line in the file reached `metadata.status`. There is
+    /// no such line any more; a document does not get to state a fact about
+    /// the code it describes.
     #[test]
-    fn the_declared_status_reaches_the_model() {
-        let spec = load_from_source("E999_test.md", &spec_source("not_implemented"))
-            .expect("spec should parse");
-        assert_eq!(spec.metadata.status, Status::NotImplemented);
+    fn the_registrys_status_and_kind_reach_the_model() {
+        let spec = load_from_source("E999_test.md", &spec_source()).expect("spec should parse");
+        assert_eq!(spec.status(), Status::NotImplemented);
+        assert_eq!(spec.kind(), ErrorKind::Invalidity);
+    }
+
+    /// A spec naming a code the registry does not declare is REFUSED.
+    ///
+    /// The corpus-wide `spec/errors <-> ErrorCode` divergence check, which the
+    /// DiagnosticKind generator ran over every file at generation time, is
+    /// this one line at the boundary. An orphaned spec file (W602's survived
+    /// its variant's deletion for two weeks) now cannot load at all.
+    #[test]
+    fn a_spec_naming_an_unregistered_code_is_refused() {
+        let source = spec_source().replace("E999", "E998");
+        let why = load_from_source("E998_test.md", &source)
+            .expect_err("an unregistered code must be refused");
+        assert!(
+            why.contains("E998"),
+            "the message must name the code: {why}"
+        );
     }
 
     /// A loaded spec retains the path it came from, so the generator can record
@@ -597,9 +590,10 @@ A test error description.
     fn spec_retains_its_source_path() {
         let dir = tempfile::tempdir().expect("temp dir");
         let path = dir.path().join("E999_test.md");
-        let source = spec_source("implemented");
+        let source = spec_source();
         std::fs::write(&path, &source).expect("write");
-        let spec = ErrorSpec::from_frontmatter(&path, &source).expect("spec should parse");
+        let spec =
+            ErrorSpec::from_frontmatter(&path, &source, &test_registry()).expect("should parse");
         assert_eq!(spec.source_path, path);
         assert_eq!(spec.source_file(), "E999_test.md");
     }
@@ -612,8 +606,7 @@ A test error description.
     /// first hour of this format's existence.
     #[test]
     fn the_example_input_arrives_without_the_closing_newline() {
-        let spec =
-            load_from_source("E999_test.md", &spec_source("implemented")).expect("should parse");
+        let spec = load_from_source("E999_test.md", &spec_source()).expect("should parse");
         assert_eq!(spec.error.examples[0].input, "@UTF8\n@Begin\n@End");
     }
 
@@ -625,7 +618,7 @@ A test error description.
     /// section is found by reading the document.
     #[test]
     fn a_body_without_a_description_is_refused() {
-        let source = spec_source("implemented").replace("## Description", "## Notes");
+        let source = spec_source().replace("## Description", "## Notes");
         let why = load_from_source("E999_test.md", &source)
             .expect_err("a spec with no Description must be refused");
         assert!(why.contains("Description"), "{why}");

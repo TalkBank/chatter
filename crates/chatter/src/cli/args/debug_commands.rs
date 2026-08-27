@@ -42,6 +42,29 @@ pub enum DebugCommands {
         path: Vec<PathBuf>,
     },
 
+    /// Retag every occurrence of one language code as another, in place.
+    ///
+    /// A language code is named four ways, by `@Languages`, by a `[- code]`
+    /// utterance scope, by a `word@s:code` marker and by a `<a b> [@s:code]`
+    /// span, and a repair that moves some of them leaves a file contradicting
+    /// itself. This moves the first three together and REFUSES a file using the
+    /// fourth, rather than half-finishing.
+    ///
+    /// For a code the file already declares alongside the wrong one, the wrong
+    /// entry is removed rather than duplicated.
+    RetagLanguage {
+        /// The code to replace, for example `sun`.
+        #[arg(long)]
+        from: String,
+
+        /// The code to replace it with, for example `fin`.
+        #[arg(long)]
+        to: String,
+
+        /// Path to CHAT file(s) or directory trees to rewrite in place.
+        path: Vec<PathBuf>,
+    },
+
     /// Join dangling-retrace utterances (E370) with their successor.
     ///
     /// Repairs the unambiguous subset of E370 ("dangling retrace"): an

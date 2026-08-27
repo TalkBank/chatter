@@ -56,7 +56,7 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 /// The caller passes the already-collected main-tier bullets to avoid a
 /// duplicate walk; all other timing surfaces are discovered here.
 ///
-/// Spec: `spec/errors/E544_media_linkage_without_timing.md`.
+/// Spec: `spec/errors/E544.md`.
 pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
     headers: &[(&Header, crate::Span)],
     file: &ChatFile<S>,
@@ -119,7 +119,7 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
 /// The caller passes the already-collected main-tier bullets to avoid a
 /// duplicate walk.
 ///
-/// Spec: `spec/errors/E752_timing_without_media.md`.
+/// Spec: `spec/errors/E752.md`.
 pub(super) fn check_timing_has_media<S: ValidationState>(
     headers: &[(&Header, crate::Span)],
     file: &ChatFile<S>,
@@ -174,7 +174,7 @@ pub(super) fn check_timing_has_media<S: ValidationState>(
 /// is declared at all: a missing/empty `@Languages` is its own header
 /// error, and double-flagging every precode against it would be noise.
 ///
-/// Spec: `spec/errors/E755_undeclared_utterance_language.md`.
+/// Spec: `spec/errors/E755.md`.
 pub(super) fn check_utterance_language_declared<S: ValidationState>(
     file: &ChatFile<S>,
     errors: &impl crate::ErrorSink,

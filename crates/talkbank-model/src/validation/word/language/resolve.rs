@@ -187,6 +187,32 @@ fn report_word_code_issues(code: &LanguageCode, span: Span, diagnostics: &mut Ve
 /// redundant, and NOTHING reports it yet: a rule for it is proposed but
 /// unimplemented. Resolution still has to answer, and the more specific mark is
 /// the only defensible answer.
+/// Resolve a word that carries NO language marker.
+///
+/// TAKES NO SPAN, and that is the point rather than an omission: this path
+/// cannot emit a diagnostic, so there is nothing to anchor. It is what lets a
+/// SYNTHETIC word, one that came from no transcript and therefore has no
+/// position at all, be resolved without inventing a position for it.
+///
+/// Split out of [`resolve_marker_at`], whose `None` arm this was. While the two
+/// shared one signature, every marker-less caller had to supply a span it did
+/// not have, and `GoverningMark` supplied `Span::DUMMY`, which is `{0, 0}`:
+/// indistinguishable from a real word at byte 0.
+pub(crate) fn resolve_without_marker(
+    tier_language: Option<&LanguageCode>,
+) -> LanguageResolutionOutcome {
+    let resolution = match tier_language {
+        Some(tier_lang) => LanguageResolution::Single(tier_lang.clone()),
+        // No marker and no tier/default language context. Not necessarily a
+        // word-level error, but it must not fabricate a language.
+        None => LanguageResolution::Unresolved,
+    };
+    LanguageResolutionOutcome {
+        resolution,
+        diagnostics: Vec::new(),
+    }
+}
+
 /// Resolve a language from the governing MARKER and a span, with no `Word`.
 ///
 /// The `Word` was only ever used for `word.span`, to place diagnostics. Taking
@@ -200,10 +226,14 @@ pub(crate) fn resolve_marker_at(
     tier_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
 ) -> LanguageResolutionOutcome {
+    let Some(marker) = marker else {
+        return resolve_without_marker(tier_language);
+    };
+
     let mut diagnostics = Vec::new();
 
     let resolution = match marker {
-        Some(WordLanguageMarker::Shortcut) => {
+        WordLanguageMarker::Shortcut => {
             if let Some(current_lang) = tier_language {
                 if is_tertiary_language(current_lang, declared_languages) {
                     diagnostics.push(
@@ -248,7 +278,7 @@ pub(crate) fn resolve_marker_at(
                 LanguageResolution::Unresolved
             }
         }
-        Some(WordLanguageMarker::Explicit(code)) => {
+        WordLanguageMarker::Explicit(code) => {
             // An explicit word-level code is self-contained: it deliberately
             // carries NO requirement to be declared in @Languages (maintainer
             // ruling 2026-07-15, docs/design/2026-07-15-at-s-language-
@@ -262,7 +292,7 @@ pub(crate) fn resolve_marker_at(
             report_word_code_issues(code, span, &mut diagnostics);
             LanguageResolution::Single(code.clone())
         }
-        Some(WordLanguageMarker::Multiple(codes)) => {
+        WordLanguageMarker::Multiple(codes) => {
             // Multiple languages mixed together (code-mixing)
             // Content must be valid in ALL component languages, and every
             // component must be a real ISO 639-3 code (ruling part 2).
@@ -271,19 +301,10 @@ pub(crate) fn resolve_marker_at(
             }
             LanguageResolution::Multiple(codes.clone())
         }
-        Some(WordLanguageMarker::Ambiguous(codes)) => {
+        WordLanguageMarker::Ambiguous(codes) => {
             // Ambiguous between languages
             // Content must be valid in ALL possibilities
             LanguageResolution::Ambiguous(codes.clone())
-        }
-        None => {
-            if let Some(tier_lang) = tier_language {
-                LanguageResolution::Single(tier_lang.clone())
-            } else {
-                // No marker and no tier/default language context.
-                // This is not necessarily a word-level error, but it must not fabricate a language.
-                LanguageResolution::Unresolved
-            }
         }
     };
 

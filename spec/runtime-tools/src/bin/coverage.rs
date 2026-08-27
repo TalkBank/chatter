@@ -142,8 +142,11 @@ fn report_residue(grouped: &SpecsByCode) {
 fn check_error_coverage(dir: &PathBuf) -> anyhow::Result<()> {
     println!("=== Error Coverage ===\n");
 
-    // Load all specs
-    let specs = ErrorSpec::load_all(dir)
+    // The registry is a property of the CHECKOUT: `--spec-dir` chooses which
+    // spec tree to read, not which codes exist.
+    let root = generators::repo_paths::RepoRoot::resolve(None)?;
+    let registry = talkbank_spec_vocabulary::registry::CodeRegistry::load(root.as_path())?;
+    let specs = ErrorSpec::load_all(dir, &registry)
         .map_err(|e| anyhow::anyhow!("Failed to load error specs: {}", e))?;
 
     // Grouped ONCE, and this is the owner afterwards. A plain `code -> spec`

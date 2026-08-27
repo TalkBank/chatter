@@ -1367,6 +1367,17 @@ fn test_form_marker() -> Result<(), talkbank_parser_tests::test_error::TestError
 
 #[test]
 /// Tests expected behavior.
+fn test_interposed_word_with_form_marker() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*MAM:\tlas tiré al suelo &*VMO:a:nda@i .\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
 fn test_language_suffix() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
     // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic

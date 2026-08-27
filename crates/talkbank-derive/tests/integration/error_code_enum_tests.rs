@@ -46,18 +46,26 @@ fn as_str_returns_code_string() {
     assert_eq!(TestErrorCode::UnknownError.as_str(), "E999");
 }
 
+/// The fallible constructor parses a known code and refuses an unknown one.
+///
+/// Replaces two tests of `from_code_or_unknown`, deleted 2026-08-27 with the
+/// method itself: it mapped any unrecognised string to the unknown-code
+/// sentinel and, once every internal caller took a variant instead, had no
+/// production callers left. A constructor that exists only to be tested is a
+/// constructor nothing needs.
 #[test]
-fn new_parses_known_codes() {
-    assert_eq!(TestErrorCode::new("E001"), TestErrorCode::InternalError);
-    assert_eq!(TestErrorCode::new("E101"), TestErrorCode::InvalidFormat);
-    assert_eq!(TestErrorCode::new("E201"), TestErrorCode::MissingHeader);
-}
-
-#[test]
-fn new_returns_unknown_for_unrecognized_code() {
-    assert_eq!(TestErrorCode::new("E000"), TestErrorCode::UnknownError);
-    assert_eq!(TestErrorCode::new("ZZZZ"), TestErrorCode::UnknownError);
-    assert_eq!(TestErrorCode::new(""), TestErrorCode::UnknownError);
+fn parse_exact_parses_known_codes_and_refuses_others() {
+    assert_eq!(
+        TestErrorCode::parse_exact("E001"),
+        Some(TestErrorCode::InternalError)
+    );
+    assert_eq!(
+        TestErrorCode::parse_exact("E101"),
+        Some(TestErrorCode::InvalidFormat)
+    );
+    assert_eq!(TestErrorCode::parse_exact("E000"), None);
+    assert_eq!(TestErrorCode::parse_exact("ZZZZ"), None);
+    assert_eq!(TestErrorCode::parse_exact(""), None);
 }
 
 #[test]

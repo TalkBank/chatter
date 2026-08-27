@@ -50,6 +50,12 @@ fn is_comma_licensing(item: &UtteranceContent) -> bool {
         UtteranceContent::Quotation(quot) => {
             quot.content.content.iter().any(is_spoken_bracketed_item)
         }
+        UtteranceContent::AnnotatedQuotation(quot) => quot
+            .inner
+            .content
+            .content
+            .iter()
+            .any(is_spoken_bracketed_item),
         // Pauses license commas (matching CLAN CHECK behavior).
         UtteranceContent::Pause(_) => true,
         // Retrace content may contain spoken words, recurse to check.
@@ -65,6 +71,7 @@ fn is_comma_licensing(item: &UtteranceContent) -> bool {
         // Events, separators, actions, markers, etc. do not license commas.
         UtteranceContent::Event(_)
         | UtteranceContent::AnnotatedEvent(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::Separator(_)
@@ -89,7 +96,14 @@ fn is_spoken_bracketed_item(item: &BracketedItem) -> bool {
         BracketedItem::Word(word) => is_real_word(word),
         BracketedItem::AnnotatedWord(annotated) => is_real_word(&annotated.inner),
         BracketedItem::ReplacedWord(replaced) => is_real_word(&replaced.word),
+        BracketedItem::Group(group) => group.content.content.iter().any(is_spoken_bracketed_item),
         BracketedItem::AnnotatedGroup(group) => group
+            .inner
+            .content
+            .content
+            .iter()
+            .any(is_spoken_bracketed_item),
+        BracketedItem::AnnotatedQuotation(quot) => quot
             .inner
             .content
             .content

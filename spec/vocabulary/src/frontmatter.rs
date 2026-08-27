@@ -31,7 +31,8 @@
 
 use serde::Deserialize;
 
-use crate::{SpecErrorCode, SpecLevel, Status};
+use crate::registry::{CodeEntry, CodeRegistry, UnregisteredCode};
+use crate::{SpecErrorCode, SpecLevel};
 
 /// The delimiter line opening and closing the frontmatter block.
 ///
@@ -48,7 +49,7 @@ pub enum FrontmatterError {
     /// The file does not open with the delimiter.
     #[error(
         "no `{DELIMITER}` frontmatter: a spec file opens with a TOML block \
-         declaring at least code, name, kind and status"
+         declaring at least a code and a name"
     )]
     Missing,
     /// The opening delimiter is never closed.
@@ -144,38 +145,80 @@ pub fn split(text: &str) -> Result<SpecSource<'_>, FrontmatterError> {
 ///
 /// When the file carries no well-formed `+++` block, or its contents violate
 /// the schema.
-pub fn read<Kind>(text: &str) -> Result<(SpecFrontmatter<Kind>, &str), FrontmatterError>
-where
-    Kind: serde::de::DeserializeOwned,
-{
+pub fn read(text: &str) -> Result<(SpecFrontmatter, &str), FrontmatterError> {
     let source = split(text)?;
     Ok((toml::from_str(source.frontmatter)?, source.body))
 }
 
+/// Read a spec file AND resolve the code it names, in one decision.
+///
+/// # The same verb, one step further on
+///
+/// [`read`] exists because `split` was a well-typed noun with no verb, so both
+/// readers of these files wrote the same two steps by hand and each invented
+/// its own error text. R1 added a third step, resolving the declared code
+/// against the registry, and both readers immediately wrote THAT by hand too,
+/// in the same two files, with two more error spellings. One function again.
+///
+/// It also states something the split form could not: the returned
+/// [`SpecFrontmatter`] and [`CodeEntry`] came from the SAME read of the same
+/// text against the registry the caller supplied. Two values returned
+/// separately are related only by the caller's discipline.
+///
+/// # Errors
+///
+/// When the file carries no well-formed `+++` block, its contents violate the
+/// schema, or `registry` does not declare the code it names.
+pub fn read_resolved<'a>(
+    text: &'a str,
+    registry: &'a CodeRegistry,
+) -> Result<(SpecFrontmatter, &'a CodeEntry, &'a str), ResolvedReadError> {
+    let (front, body) = read(text)?;
+    let entry = registry.resolve(&front.code)?;
+    Ok((front, entry, body))
+}
+
+/// A spec file could not be read, or names a code nothing declares.
+#[derive(Debug, thiserror::Error)]
+pub enum ResolvedReadError {
+    /// The `+++` block is absent, malformed, or violates the schema.
+    #[error(transparent)]
+    Frontmatter(#[from] FrontmatterError),
+    /// The file parses and names a code the registry does not declare.
+    #[error(transparent)]
+    Unregistered(#[from] UnregisteredCode),
+}
+
 /// What a spec file's frontmatter declares.
 ///
-/// # Why `Kind` is a type parameter
+/// # A spec file describes a code; it does not DEFINE one
 ///
-/// The format owns the field SET; it cannot name the value type of `kind`,
-/// which mirrors `talkbank_model::errors::DiagnosticKind` and therefore lives
-/// with the loader that maps it. This is the same division the
-/// `SpecFieldKind` trait made for the bullet format (deleted with it): the
-/// format states which fields exist, and a consumer supplies the types the
-/// format has no way to name. A caller that does not care reads
-/// `SpecFrontmatter<serde::de::IgnoredAny>`.
+/// `kind` and `status` were fields here until R1. They are facts about the
+/// CODE, so every one of a code's spec files carried a copy and a generator
+/// had to check they agreed; eleven codes have more than one file. They live
+/// in [`crate::registry`] now, and [`Self::code`] is the foreign key that
+/// reaches them. The `Kind` type parameter went with them: it existed only
+/// because the format could not name `kind`'s value type, and there is
+/// nothing left for it to abstract over.
 ///
 /// # Every field is REQUIRED unless its type says otherwise
 ///
-/// No `#[serde(default)]` on `code`, `kind` or `status` (nor on the
-/// per-example `level` and `claim`). Each was
-/// made required in the bullet format one at a time, each time after a default
-/// had silently answered for a spec nobody had written yet; see [`Status`],
-/// which has no `Default` for that reason. (`layer` was in this list until R4
-/// deleted the field outright.)
+/// No `#[serde(default)]` on `code`, nor on the per-example `level` and
+/// `claim`. Each was made required in the bullet format one at a time, each
+/// time after a default had silently answered for a spec nobody had written
+/// yet; see [`crate::Status`], which has no `Default` for that reason.
+/// (`layer` was
+/// in this list until R4 deleted the field outright, and `kind`/`status`
+/// until R1 moved them.)
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SpecFrontmatter<Kind> {
-    /// The code this spec is about.
+pub struct SpecFrontmatter {
+    /// The code this spec DOCUMENTS, and the key into [`crate::registry`].
+    ///
+    /// Several spec files may name one code; none of them owns the code's own
+    /// facts. Resolving this against the registry is what proves the file
+    /// describes a code that exists, and a loader that resolves it can offer
+    /// `kind` and `status` as accessors rather than as fields anyone can set.
     ///
     /// Declared, never derived from the filename or the heading. The bullet
     /// format had three routes to it (the `- **Error Code**:` bullet, the H1,
@@ -185,17 +228,6 @@ pub struct SpecFrontmatter<Kind> {
     pub code: SpecErrorCode,
     /// The spec's short name, which was the remainder of its H1.
     pub name: String,
-    /// What sort of fault the code reports.
-    pub kind: Kind,
-    /// Whether the validator actually checks this rule.
-    ///
-    /// There is NO `layer` field beside this one, as of R4. Which stage of
-    /// the pipeline catches a rule is an OBSERVATION, recorded per example in
-    /// the snapshot (`spec/observations/`), and the authored field it
-    /// replaces disagreed with the observation on 17 examples while deciding
-    /// which artifacts a spec fed. `deny_unknown_fields` makes a straggler
-    /// `layer =` line a load error naming the file.
-    pub status: Status,
     /// A human's adjudication of the code's current state.
     ///
     /// The one unmodelled label worth keeping of the five the bullet format
@@ -526,7 +558,6 @@ impl From<BlockText> for String {
 #[cfg(test)]
 mod tests {
     use super::{BlockText, Claim, DELIMITER, FrontmatterError, SpecFrontmatter, split};
-    use serde::de::IgnoredAny;
 
     /// The ordinary shape: a block, then prose.
     #[test]
@@ -578,9 +609,9 @@ mod tests {
     /// nothing refused them.
     #[test]
     fn an_unknown_key_is_a_load_error() {
-        let toml = "code = \"E256\"\nname = \"n\"\nkind = 1\nstatus = \"implemented\"\n\
+        let toml = "code = \"E256\"\nname = \"n\"\n\
                     last_updated = \"2026-04-04\"\n";
-        let parsed = toml::from_str::<SpecFrontmatter<IgnoredAny>>(toml);
+        let parsed = toml::from_str::<SpecFrontmatter>(toml);
         let message = parsed.expect_err("unknown key must be refused").to_string();
         assert!(
             message.contains("last_updated"),
@@ -592,12 +623,12 @@ mod tests {
     /// takes one code or several.
     #[test]
     fn the_claim_vocabulary_parses() {
-        let toml = "code = \"E256\"\nname = \"n\"\nkind = 1\nstatus = \"implemented\"\n\
+        let toml = "code = \"E256\"\nname = \"n\"\n\
                     [[example]]\nlevel = \"word\"\nchat = \"a\"\nclaim = \"violates\"\n\
                     [[example]]\nlevel = \"word\"\nchat = \"b\"\nclaim = \"legal\"\n\
                     [[example]]\nlevel = \"word\"\nchat = \"c\"\nclaim = { subsumed_by = \"E316\" }\n\
                     [[example]]\nlevel = \"word\"\nchat = \"d\"\nclaim = { subsumed_by = [\"E246\", \"E249\"] }\n";
-        let parsed: SpecFrontmatter<IgnoredAny> = toml::from_str(toml).expect("well-formed");
+        let parsed: SpecFrontmatter = toml::from_str(toml).expect("well-formed");
         assert!(matches!(parsed.examples[0].claim, Claim::Violates));
         assert!(matches!(parsed.examples[1].claim, Claim::Legal));
         let Claim::SubsumedBy(one) = &parsed.examples[2].claim else {
@@ -615,9 +646,9 @@ mod tests {
     /// A wire-format property serde owns, so it survives as a test.
     #[test]
     fn an_example_without_a_claim_is_refused() {
-        let toml = "code = \"E256\"\nname = \"n\"\nkind = 1\nstatus = \"implemented\"\n\
+        let toml = "code = \"E256\"\nname = \"n\"\n\
                     [[example]]\nlevel = \"word\"\nchat = \"a\"\n";
-        let why = toml::from_str::<SpecFrontmatter<IgnoredAny>>(toml)
+        let why = toml::from_str::<SpecFrontmatter>(toml)
             .expect_err("a claimless example must be refused")
             .to_string();
         assert!(why.contains("claim"), "{why}");
@@ -632,9 +663,9 @@ mod tests {
     /// value can be empty once one exists.
     #[test]
     fn an_empty_subsumed_by_list_is_refused() {
-        let toml = "code = \"E256\"\nname = \"n\"\nkind = 1\nstatus = \"implemented\"\n\
+        let toml = "code = \"E256\"\nname = \"n\"\n\
                     [[example]]\nlevel = \"word\"\nchat = \"a\"\nclaim = { subsumed_by = [] }\n";
-        let why = toml::from_str::<SpecFrontmatter<IgnoredAny>>(toml)
+        let why = toml::from_str::<SpecFrontmatter>(toml)
             .expect_err("an empty subsumed_by must be refused")
             .to_string();
         assert!(why.contains("names no codes"), "{why}");

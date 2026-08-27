@@ -1,7 +1,7 @@
 # Testing and Quality Gates
 
 **Status:** Current
-**Last modified:** 2026-08-12 23:40 EDT
+**Last modified:** 2026-08-27 14:04 EDT
 
 How local verification relates to CI. The local commands themselves live in
 [Developer Verification Checks](dev-checks.md), which is their single owner;
@@ -44,7 +44,7 @@ jobs than this page used to admit:
 
 | Job | Checks |
 |---|---|
-| `rust` | build, test, clippy, and the `spec/` workspace |
+| `rust` | build, test, and the `spec/` workspace. NOT clippy: that is release-time |
 | `wasm` | the re2c parser still compiles for `wasm32` |
 | `book` | mdBook build plus a lychee link check |
 | `rust-version-sync` | version pins in workflows, and doc date headers |
@@ -53,9 +53,11 @@ jobs than this page used to admit:
 | `grammar` | the grammar's own checks |
 | `dependency-audit` | dependency advisories |
 
-Separate workflows cover cross-platform builds (`cross-platform.yml`), rolling
-clippy drift (`clippy-rolling.yml`), crates.io readiness, and the release and
-desktop pipelines.
+Separate workflows cover release-time lint (`release-lint.yml`: clippy over
+both workspaces plus the feature-off build, on a tag or on demand),
+cross-platform builds (`cross-platform.yml`), rolling clippy drift
+(`clippy-rolling.yml`), crates.io readiness, and the release and desktop
+pipelines.
 
 ## What CI does NOT cover
 
@@ -65,10 +67,13 @@ Worth knowing, because these are the gaps where a local run is the only signal:
   that the committed lexer matches `lexer.re`. `just verify-vendored-lexer` is
   the only check, and it must be run by hand. `build.rs` used to claim a CI job
   did this; there has never been one.
-- **The corpus differential.** Any change touching the grammar, parser
-  lowering, or serialization is expected to pass it before a push. It is an
-  operator-run gate against real corpus data, not a CI job, and a failure is a
-  tripwire demanding adjudication rather than an automatic block.
+- **The observation snapshot** (`spec/observations/example-diagnostics.json`)
+  records, for every spec example, the codes each stage emitted and whether
+  the parsed model serializes back byte-exact. It IS in CI, through its
+  currency test, but the gap is human: a regenerated snapshot with a changed
+  entry passes the test, so every diff in it must be adjudicated in the
+  commit as intended or unintended rather than committed because `just regen`
+  produced it.
 - **A consumer's behaviour after regenerating a generated module.** A
   differential over generated TEXT is blind to a change in behaviour precisely
   when the text is expected to change; only running the consumer's own suite

@@ -1,14 +1,16 @@
 //! Attribute macro implementation for canonical error-code enums.
 //!
-//! Generates:
-//! - Serde rename attributes for each variant
-//! - `as_str()` for enum-to-code conversion
-//! - `new()` for code-to-enum conversion with `UnknownError` fallback
-//! - `parse_exact()` for a fallible code-to-enum conversion that returns
-//!   `None` for any code that names no declared variant, instead of
-//!   silently falling back
-//! - `Display` implementation
-//! - `documentation_url()` helper
+//! Given an enum whose unit variants each carry a `#[code("E123")]`
+//! attribute, this generates the enum itself plus the conversions,
+//! enumeration helpers and `Display` that every error-code enum in the
+//! workspace is expected to offer.
+//!
+//! The authoritative account of WHAT is generated is the `quote!` block at
+//! the end of this file, whose generated items carry their own rustdoc. A
+//! summary lived here until 2026-08-27 and is deliberately not replaced: it
+//! was a hand-maintained mirror of that block and had drifted three ways at
+//! once, still advertising a `new()` deleted the day before while omitting
+//! `all()`, `iter()` and `planned()`.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -87,6 +89,13 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         }
     };
 
+    /// The variant every error-code enum must declare, so that a caller
+    /// which must still produce a code for an unrecognized one has a variant
+    /// to name. The CHECK below and the MESSAGE it produces read this same
+    /// constant; they spelled the name out separately until 2026-08-27, so a
+    /// rename could have left the diagnostic naming a variant nothing sought.
+    const UNKNOWN_VARIANT: &str = "UnknownError";
+
     let mut variants_with_codes = Vec::new();
     let mut planned_variants: Vec<&syn::Ident> = Vec::new();
     let mut unknown_variant = None;
@@ -125,11 +134,14 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
             }
         };
 
-        // `#[status(planned)]` marks a code whose spec is documented but not
-        // yet enforced. Absence means enforced, which is a default that would
-        // normally be a hazard (wrong invisibly); it is safe here only because
-        // `SpecStatusGate` compares every variant against `spec/errors/*.md`
-        // and fails on any disagreement in either direction.
+        // `#[status(planned)]` marks a code that is documented but not yet
+        // enforced. Absence means enforced, which is a default that would
+        // normally be a hazard (wrong invisibly); it is safe here because the
+        // attribute is not authored. Since R1 the whole enum is GENERATED from
+        // `spec/codes/error-codes.toml`, and this attribute is emitted from
+        // that code's `status`, so there is no second copy to disagree with.
+        // `SpecStatusGate` used to reconcile the two and was deleted with the
+        // copy.
         let planned = variant.attrs.iter().any(|attr| {
             attr.path().is_ident("status")
                 && matches!(&attr.meta, Meta::List(list) if list.tokens.to_string() == "planned")
@@ -138,8 +150,8 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
             planned_variants.push(variant_name);
         }
 
-        if variant_name == "UnknownError" {
-            unknown_variant = Some(variant_name.clone());
+        if variant_name == UNKNOWN_VARIANT {
+            unknown_variant = Some(variant_name);
         }
 
         // Keep non-code attributes
@@ -167,16 +179,19 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         return err;
     }
 
-    let unknown_ident = match unknown_variant {
-        Some(ident) => ident,
+    // The requirement survives the deletion of the fallback arm; the
+    // identifier does not. This macro no longer GENERATES anything naming the
+    // unknown variant, so it validates its input and binds nothing.
+    match unknown_variant {
+        Some(_) => {}
         None => {
             return syn::Error::new_spanned(
                 enum_name,
-                "ErrorCode enum must have UnknownError variant",
+                format!("ErrorCode enum must have {UNKNOWN_VARIANT} variant"),
             )
             .to_compile_error();
         }
-    };
+    }
 
     // Generate enum with serde rename attributes.
     let enum_variants = variants_with_codes
@@ -196,17 +211,11 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         }
     });
 
-    // Generate new() match arms
-    let new_arms = variants_with_codes.iter().map(|(variant_name, code, _)| {
-        quote! {
-            #code => #enum_name::#variant_name
-        }
-    });
-
-    // Generate parse_exact() match arms: same code-to-variant mapping as
-    // new(), but each arm is wrapped in `Some` and there is no fallback arm,
-    // so a caller can tell "named a real variant" apart from "named nothing
-    // we know about" (new() conflates the two into UnknownError).
+    // Generate parse_exact() match arms: one per declared code, each wrapped
+    // in `Some`, with no fallback arm, so a caller can tell "named a real
+    // variant" apart from "named nothing we know about". The arms for the
+    // deleted fallback constructor were still being built here, and emitted
+    // nowhere, until 2026-08-27.
     let parse_exact_arms = variants_with_codes.iter().map(|(variant_name, code, _)| {
         quote! {
             #code => Some(#enum_name::#variant_name)
@@ -241,25 +250,15 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
                 }
             }
 
-            /// Parse a short code into an enum variant.
-            ///
-            /// Unknown values map to `UnknownError`.
-            pub fn new(code: &str) -> Self {
-                match code {
-                    #(#new_arms,)*
-                    _ => #enum_name::#unknown_ident,
-                }
-            }
-
             /// Parse a short code into an enum variant, without a silent fallback.
             ///
             /// Returns `None` when `code` does not exactly match any declared
-            /// variant's code. Unlike [`Self::new`], this never coerces an
-            /// unrecognized string into the unknown-code sentinel variant, so
-            /// callers that must distinguish "this names a real code" from
-            /// "this is a typo" (e.g. validating user-supplied CLI arguments)
-            /// should use this instead of comparing `new()`'s result against
-            /// the sentinel variant by name.
+            /// variant's code. THE ONLY string constructor: a fallback form
+            /// that coerced an unrecognized string into the unknown-code
+            /// sentinel lived here until 2026-08-27 and was deleted once every
+            /// internal caller took a variant instead, leaving it with no
+            /// production callers and two tests of its own behaviour. Where a
+            /// code is known at compile time, name the variant.
             pub fn parse_exact(code: &str) -> Option<Self> {
                 match code {
                     #(#parse_exact_arms,)*

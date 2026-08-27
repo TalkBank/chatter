@@ -24,6 +24,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use crate::editor_target::span_contains;
 pub mod finders;
 pub mod formatters;
 #[cfg(test)]
@@ -111,11 +112,4 @@ fn find_dependent_tier_at_offset(utterance: &Utterance, offset: u32) -> Option<&
 /// sits in (helpful for explaining `%mor` vs `%gra` alignment errors as described in the manual).
 fn dependent_tier_span(tier: &DependentTier) -> Option<Span> {
     Some(tier.span())
-}
-
-/// Return `true` when `offset` lies within `span`.
-///
-/// Basic utility used to ensure the hover logic follows the CHAT span semantics for tiers and utterances.
-fn span_contains(span: Span, offset: u32) -> bool {
-    offset >= span.start && offset <= span.end
 }

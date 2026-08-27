@@ -10,9 +10,9 @@ use crate::generated_traversal::{
     AsRawNode, NodeSlot, SinDependentTierNode, SinGroupNode, SinGroupsNode,
     extract_sin_dependent_tier, extract_sin_groups,
 };
+use crate::parser::node_span::span_of;
+use talkbank_model::ErrorSink;
 use talkbank_model::model::{SinItem, SinTier};
-use talkbank_model::{ErrorSink, Span};
-use tree_sitter::Node;
 
 use super::groups::{extract_sin_group_items, push_sin_separator};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -46,24 +46,28 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_une
 ///   tier SILENTLY (no diagnostic). This silent-partial is PRESERVED behavior; it
 ///   is unreachable from the boundary (`parse_sin_tier` is only invoked when the
 ///   tier node has no tree-sitter error) but is reproduced for exhaustiveness.
-pub fn parse_sin_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SinTier {
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+pub fn parse_sin_tier(
+    typed: SinDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> SinTier {
+    let node = typed.raw_node();
+    let span = span_of(node);
 
-    let children = extract_sin_dependent_tier(SinDependentTierNode(node));
+    let children = extract_sin_dependent_tier(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot() {
-        NodeSlot::Present(groups) => {
-            let items = parse_sin_groups(groups.raw_node(), source, errors);
+    match children
+        .child_2
+        .slot()
+        .typed_or_placeholder()
+        .present_or_placeholder()
+    {
+        Some(groups) => {
+            let items = parse_sin_groups(groups, source, errors);
             SinTier::new(items).with_span(span)
         }
-        NodeSlot::Missing(raw) => {
-            let items = parse_sin_groups(*raw, source, errors);
-            SinTier::new(items).with_span(span)
-        }
-        NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
-            SinTier::new(Vec::new()).with_span(span)
-        }
+        None => SinTier::new(Vec::new()).with_span(span),
     }
 }
 
@@ -79,8 +83,12 @@ pub fn parse_sin_tier(node: Node, source: &str, errors: &impl ErrorSink) -> SinT
 /// `child_0` position inside each repeat element (`child_1` holds the
 /// `sin_group`); that position is purely structural and handled by
 /// [`push_sin_separator`].
-fn parse_sin_groups(sin_groups: Node, source: &str, errors: &impl ErrorSink) -> Vec<SinItem> {
-    let groups = extract_sin_groups(SinGroupsNode(sin_groups));
+fn parse_sin_groups(
+    typed: SinGroupsNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Vec<SinItem> {
+    let groups = extract_sin_groups(typed);
     let mut items: Vec<SinItem> = Vec::with_capacity(groups.child_1.slot().len() + 1);
 
     push_sin_group(groups.child_0.slot(), source, errors, &mut items);
@@ -134,11 +142,7 @@ fn push_sin_group<'tree>(
 ) {
     match slot {
         NodeSlot::Present(group_node) => {
-            items.extend(extract_sin_group_items(
-                group_node.raw_node(),
-                source,
-                errors,
-            ));
+            items.extend(extract_sin_group_items(*group_node, source, errors));
         }
         NodeSlot::Missing(raw) => {
             check_not_missing(*raw, source, errors, "sin_groups");

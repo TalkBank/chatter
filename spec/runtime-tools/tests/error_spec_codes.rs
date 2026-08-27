@@ -22,7 +22,7 @@ use spec_runtime_tools::error_spec_validation::{Request, run};
 #[test]
 fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
     let root = generators::repo_paths::RepoRoot::resolve(None).map_err(|why| why.to_string())?;
-    let report = run(&Request::for_repo(&root))?;
+    let report = run(&Request::for_repo(&root)?)?;
 
     // The spec corpus has been ~330 examples for a long time, so a collapse
     // means a loading fault rather than a real reduction. Checked HERE, off the
@@ -58,13 +58,11 @@ fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
 fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
     let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
     let root = generators::repo_paths::RepoRoot::resolve(None).map_err(|why| why.to_string())?;
-    let specs = generators::spec::error::ErrorSpec::load_all(
-        spec_runtime_tools::error_spec_validation::spec_dir(&root),
-    )?;
+    let specs = generators::spec::error::ErrorSpec::load_for_repo(&root)?;
 
     let mut stale = Vec::new();
     for spec in &specs {
-        if spec.metadata.status == generators::spec::metadata::Status::Implemented {
+        if spec.status() == generators::spec::metadata::Status::Implemented {
             continue;
         }
         let definition = &spec.error;
@@ -77,7 +75,7 @@ fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
                 stale.push(format!(
                     "{} is `{}` but already emits {}",
                     spec.source_file(),
-                    spec.metadata.status,
+                    spec.status(),
                     definition.code
                 ));
             }

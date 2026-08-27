@@ -55,8 +55,8 @@ impl Utterance {
         // `walk_words` with no domain IS this traversal, and chatter design
         // rule 4 names it as the meaning of in-order main-tier order. With
         // `domain: None` it recurses every container (verified against
-        // `should_skip_annotated_group` and `should_skip_pho_sin_group`, both
-        // of which return false for `None`) and yields word-like leaves.
+        // `descent::descend`, which enters every container when the domain is
+        // `None`) and yields word-like leaves.
         //
         // The previous version of this function hand-rolled the same descent,
         // which made it the fifth main-tier traversal in the crate. The bug it

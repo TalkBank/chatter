@@ -1,7 +1,7 @@
 # GitHub Readiness and Open Source Governance
 
 **Status:** Current
-**Last modified:** 2026-06-21 21:33 EDT
+**Last modified:** 2026-08-27 14:04 EDT
 
 ## Objective
 Prepare `TalkBank/chatter` to operate as a healthy public project with clear legal, security,
@@ -16,7 +16,7 @@ contribution, and release processes.
 | `CODE_OF_CONDUCT.md` | **TODO (deferred)** | Intentionally absent for now: it is held until a durable enforcement contact (an institutional address or successor handle, not an individual) is settled. The plan is to adopt the Contributor Covenant once that contact exists. |
 | `SECURITY.md` | Done | Root file added; issue-template contact link now resolves to a real policy |
 | `CODEOWNERS` | **TODO** | Not added yet: repo contents do not currently publish an authoritative GitHub owner/team map for path-level review ownership |
-| `.github/workflows/*.yml` | Done | `ci.yml` (Rust build+test, mdBook, Rust-version-sync) + `cross-platform.yml` (OS matrix) + `clippy-rolling.yml` + `crates-io-foundation.yml` + `release.yml` + `release-desktop.yml` |
+| `.github/workflows/*.yml` | Done | `ci.yml` (Rust build+test, mdBook, Rust-version-sync) + `cross-platform.yml` (OS matrix) + `release-lint.yml` (clippy + feature-off, on a tag) + `clippy-rolling.yml` + `crates-io-foundation.yml` + `release.yml` + `release-desktop.yml` |
 | `.github/ISSUE_TEMPLATE/*` | Done | Bug report + feature request (YAML forms) |
 | Pull request template | Done | `.github/PULL_REQUEST_TEMPLATE.md` mirrors current CONTRIBUTING + PR review requirements |
 

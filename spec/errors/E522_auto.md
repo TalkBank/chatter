@@ -1,8 +1,6 @@
 +++
 code = 'E522'
 name = '@Participants header cannot be empty'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'header'

@@ -269,7 +269,7 @@ proptest! {
 
     /// Both parsers produce same serialized output for the same input.
     #[test]
-    fn parser_equivalence_on_roundtrip(
+    fn parse_roundtrip_is_stable(
         text in word_text(),
         prefix_opt in prop::option::of(category_prefix()),
         form_opt in prop::option::of(form_type_suffix())

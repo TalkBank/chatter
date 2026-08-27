@@ -138,34 +138,11 @@ jobs:
         timeout-minutes: 15
         run: cargo test -p talkbank-derive --features ui-tests --tests ui_tests --locked
 
-      # Single-pass clippy (unified 2026-07-08). Production strictness
-      # lives in the workspace [lints] deny table; test relaxation
-      # lives in source (crate-root cfg_attr for unit tests, an
-      # #![allow] header in each tests/*.rs). One flag set means one
-      # build profile and a policy readable entirely from source.
-      #
-      # CI is the ONLY place clippy runs routinely: the local
-      # developer loop and the pre-push gate deliberately skip it
-      # (correctness is gated locally by tests; style/policy audit is
-      # async here). A red clippy on main is a fix-forward cosmetic
-      # commit, never a revert. Severity is two-tier and readable
-      # from the workspace [lints] table alone: the panic-family
-      # policy lints are deny (a violation of the no-panics house
-      # rule is the ONLY thing that turns this job red); every other
-      # lint surfaces as a warning annotation for leisure triage.
-      # Drift pulse: the weekly clippy-rolling.yml job plus
-      # opportunistic session sweeps (advisory lint rotted to ~100
-      # warnings once before, 2026-05-29; leisure needs a pulse).
-      - name: cargo clippy (single pass; red only on panic-policy denies)
-        run: just clippy
-      # The spec workspace had fmt and test in CI but NEVER clippy, so its
-      # lint debt accumulated unseen: 20 warnings by 2026-08-05, all
-      # machine-applicable, in the tooling that GENERATES the corpus tests,
-      # the parser tests and the validation fixtures. Same two-tier severity
-      # as the main pass above; this exists so the count cannot silently
-      # climb again.
-      - name: cargo clippy (spec workspace)
-        run: just clippy-spec
+      # Clippy is RELEASE-TIME, not per push: `release-lint.yml` runs
+      # `just release-lint` on every tag and on demand. Per-push CI runs
+      # exactly what `just gate` runs locally, so a green local gate is a
+      # green CI; a lint pass that recompiles the workspace on every push
+      # bought nothing that the release-time pass does not.
   # Pins the wasm-cleanliness contract: talkbank-model and the pure-Rust
   # re2c parser must keep compiling for wasm32 (no C toolchain, no
   # tree-sitter runtime). External consumers depend on exactly this

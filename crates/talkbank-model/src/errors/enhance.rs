@@ -201,7 +201,7 @@ mod tests {
 
         // Error at "error" on line 2 (byte offset 14-19)
         let mut errors = vec![ParseError::new(
-            ErrorCode::new("E999"),
+            ErrorCode::UnknownError,
             Severity::Error,
             SourceLocation::from_offsets(14, 19),
             ErrorContext::new("", Span::from_usize(0, 0), ""),
@@ -253,7 +253,7 @@ mod tests {
         let error_end = error_start + "error".len();
 
         let mut errors = vec![ParseError::new(
-            ErrorCode::new("E999"),
+            ErrorCode::UnknownError,
             Severity::Error,
             SourceLocation::from_offsets(error_start, error_end),
             ErrorContext::new("error", Span::from_usize(0, 5), "error") // partial context
@@ -289,7 +289,7 @@ mod tests {
         let source = "first line error\nsecond line\n";
 
         let mut errors = vec![ParseError::new(
-            ErrorCode::new("E999"),
+            ErrorCode::UnknownError,
             Severity::Error,
             SourceLocation::from_offsets(11, 16), // "error"
             ErrorContext::new("", Span::from_usize(0, 0), ""),
@@ -314,7 +314,7 @@ mod tests {
         let source = "first line\nlast line error";
 
         let mut errors = vec![ParseError::new(
-            ErrorCode::new("E999"),
+            ErrorCode::UnknownError,
             Severity::Error,
             SourceLocation::from_offsets(21, 26), // "error" on last line
             ErrorContext::new("", Span::from_usize(0, 0), ""),
@@ -373,7 +373,7 @@ mod tests {
         // Normal error (not about markers) - should apply formatting
         // "world" starts at position 14 in original (after space at 13)
         let mut errors = vec![ParseError::new(
-            ErrorCode::new("E999"),
+            ErrorCode::UnknownError,
             Severity::Error,
             SourceLocation::from_offsets(14, 19), // Points to "world"
             ErrorContext::new("", Span::from_usize(0, 0), ""),
@@ -409,7 +409,7 @@ mod tests {
 
         let mut errors = vec![
             ParseError::new(
-                ErrorCode::new("E714"),
+                ErrorCode::PhoCountMismatchTooFew,
                 Severity::Error,
                 SourceLocation::from_offsets(main_start, main_end),
                 ErrorContext::new("", Span::from_usize(0, 0), ""),
@@ -470,7 +470,7 @@ mod tests {
 
         let mut errors = vec![
             ParseError::new(
-                ErrorCode::new("E999"),
+                ErrorCode::UnknownError,
                 Severity::Error,
                 SourceLocation::from_offsets(gamma_start, gamma_end),
                 ErrorContext::new("", Span::from_usize(0, 0), ""),

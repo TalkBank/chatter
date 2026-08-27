@@ -73,4 +73,15 @@ pub use model::*;
 pub use parser_api::*;
 pub use pipeline::*;
 pub use text_types::{ChatCleanedText, ChatRawText};
-pub use validation::{GoverningMarker, Validate, ValidationContext};
+pub use validation::{GoverningMark, GoverningMarkKind, Validate, ValidationContext};
+
+/// Compiles this crate's README so its examples cannot rot.
+///
+/// `#[cfg(doctest)]`, so the README is not duplicated into the rendered crate
+/// docs; it exists only to make `cargo test --doc` typecheck every ```rust
+/// block in it. Until 2026-08-27 no crate here did this and every README
+/// example in the workspace was unchecked prose; see `talkbank-transform` for
+/// the one that was already wrong.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

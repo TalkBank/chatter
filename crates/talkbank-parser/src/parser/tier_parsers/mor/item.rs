@@ -6,13 +6,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    MorContentNode, MorPostCliticChildren, MorPostCliticNode, MorWordNode, NodeSlot,
-    extract_mor_content, extract_mor_post_clitic,
+    AsRawNode, MorContentNode, MorPostCliticChildren, MorPostCliticNode, MorWordNode, NodeSlot,
+    SlotValue, extract_mor_content, extract_mor_post_clitic,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Mor, MorWord};
-use tree_sitter::Node;
 
 use super::word::parse_mor_word;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -39,33 +38,33 @@ use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
 /// `Present` AND `Missing` slots to [`parse_mor_word`] / [`parse_mor_post_clitic`]
 /// identically; only `Error`/`Unexpected` diverge from `Present`/`Missing`,
 /// matching the removed loop's `_ =>` arm.
-pub fn parse_mor_content(node: Node, source: &str, errors: &impl ErrorSink) -> ParseOutcome<Mor> {
-    let children = extract_mor_content(MorContentNode(node));
+pub fn parse_mor_content(
+    typed: MorContentNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Mor> {
+    let node = typed.raw_node();
+    let children = extract_mor_content(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     let main_word = decode_main_word(children.main.slot(), source, errors);
 
     let mut post_clitics = Vec::new();
     for element in children.post_clitics.slot() {
-        match element.slot() {
-            NodeSlot::Present(clitic_node) => {
+        match element.slot().typed_or_placeholder() {
+            SlotValue::Present(clitic) | SlotValue::Placeholder(clitic) => {
                 if let ParseOutcome::Parsed(Some(clitic)) =
-                    parse_mor_post_clitic(clitic_node.0, source, errors)
+                    parse_mor_post_clitic(clitic, source, errors)
                 {
                     post_clitics.push(clitic);
                 }
             }
-            NodeSlot::Missing(raw) => {
-                if let ParseOutcome::Parsed(Some(clitic)) =
-                    parse_mor_post_clitic(*raw, source, errors)
-                {
-                    post_clitics.push(clitic);
-                }
+            SlotValue::UnclassifiedPlaceholder(raw)
+            | SlotValue::Error(raw)
+            | SlotValue::Unexpected(raw) => {
+                errors.report(unexpected_node_error(raw, source, "mor_content"));
             }
-            NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(*raw, source, "mor_content"));
-            }
-            NodeSlot::Absent => {}
+            SlotValue::Absent => {}
         }
     }
 
@@ -89,20 +88,20 @@ fn decode_main_word<'tree>(
     source: &str,
     errors: &impl ErrorSink,
 ) -> Option<MorWord> {
-    match slot {
-        NodeSlot::Present(word_node) => match parse_mor_word(word_node.0, source, errors) {
-            ParseOutcome::Parsed(word) => Some(word),
-            ParseOutcome::Rejected => None,
-        },
-        NodeSlot::Missing(raw) => match parse_mor_word(*raw, source, errors) {
-            ParseOutcome::Parsed(word) => Some(word),
-            ParseOutcome::Rejected => None,
-        },
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "mor_content"));
+    match slot.typed_or_placeholder() {
+        SlotValue::Present(word) | SlotValue::Placeholder(word) => {
+            match parse_mor_word(word, source, errors) {
+                ParseOutcome::Parsed(word) => Some(word),
+                ParseOutcome::Rejected => None,
+            }
+        }
+        SlotValue::UnclassifiedPlaceholder(raw)
+        | SlotValue::Error(raw)
+        | SlotValue::Unexpected(raw) => {
+            errors.report(unexpected_node_error(raw, source, "mor_content"));
             None
         }
-        NodeSlot::Absent => None,
+        SlotValue::Absent => None,
     }
 }
 
@@ -120,11 +119,12 @@ fn decode_main_word<'tree>(
 /// (`kind::TILDE => {}` never distinguished missing-ness), and a MISSING
 /// `mor_word` is still dispatched into [`parse_mor_word`] like a present one.
 fn parse_mor_post_clitic(
-    node: Node,
+    typed: MorPostCliticNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<MorWord>> {
-    let children: MorPostCliticChildren<'_> = extract_mor_post_clitic(MorPostCliticNode(node));
+    let node = typed.raw_node();
+    let children: MorPostCliticChildren<'_> = extract_mor_post_clitic(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     match children.child_0.slot() {
@@ -134,21 +134,18 @@ fn parse_mor_post_clitic(
         }
     }
 
-    match children.child_1.slot() {
-        NodeSlot::Present(word_node) => {
-            if let ParseOutcome::Parsed(word) = parse_mor_word(word_node.0, source, errors) {
+    match children.child_1.slot().typed_or_placeholder() {
+        SlotValue::Present(word) | SlotValue::Placeholder(word) => {
+            if let ParseOutcome::Parsed(word) = parse_mor_word(word, source, errors) {
                 return ParseOutcome::parsed(Some(word));
             }
         }
-        NodeSlot::Missing(raw) => {
-            if let ParseOutcome::Parsed(word) = parse_mor_word(*raw, source, errors) {
-                return ParseOutcome::parsed(Some(word));
-            }
+        SlotValue::UnclassifiedPlaceholder(raw)
+        | SlotValue::Error(raw)
+        | SlotValue::Unexpected(raw) => {
+            errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "mor_post_clitic"));
-        }
-        NodeSlot::Absent => {}
+        SlotValue::Absent => {}
     }
 
     errors.report(unexpected_node_error(

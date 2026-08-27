@@ -36,6 +36,7 @@
 //! - [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)
 
 mod language_switch;
+pub use language_switch::UnspannedSwitchTarget;
 #[cfg(test)]
 mod tests;
 mod wor;
@@ -261,7 +262,7 @@ impl crate::validation::Validate for MainTier {
     /// Validates speaker IDs, tier content, and delegation to nested validators.
     fn validate(&self, context: &crate::validation::ValidationContext, errors: &impl ErrorSink) {
         use crate::validation::main_tier::{
-            check_no_nested_quotations, check_no_pauses_in_pho_groups,
+            check_no_nested_quotations, check_no_pauses_in_pho_groups, report_unknown_annotations,
         };
         use crate::validation::retrace::check_retraces;
 
@@ -418,6 +419,9 @@ impl crate::validation::Validate for MainTier {
         // E372: Validate no nested quotations
         check_no_nested_quotations(self, errors);
 
+        // E207: an unrecognised scoped annotation, on ANY construct.
+        report_unknown_annotations(self, errors);
+
         if let Some(target_lang) = self.whole_utterance_language_switch_target(
             word_context.shared.default_language.as_ref(),
             &word_context.shared.declared_languages,
@@ -431,13 +435,13 @@ impl crate::validation::Validate for MainTier {
                     None,
                     format!(
                         "Whole-utterance language switch to '{}' should use utterance precode [- {}] instead of tagging every lexical word with @s",
-                        target_lang.as_str(),
-                        target_lang.as_str()
+                        target_lang.language().as_str(),
+                        target_lang.language().as_str()
                     ),
                 )
                 .with_suggestion(format!(
                     "Rewrite the utterance as '[- {}] ...' and remove the per-word @s markers",
-                    target_lang.as_str()
+                    target_lang.language().as_str()
                 )),
             );
         }

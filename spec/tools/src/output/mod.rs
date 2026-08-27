@@ -9,7 +9,10 @@
 //!   crates.
 //! - [`markdown`] -- Markdown documentation pages (error catalogs, construct
 //!   references).
+//! - [`error_code_enum`] -- the `ErrorCode` enum itself, from the per-code
+//!   registry.
 
+pub mod error_code_enum;
 pub mod markdown;
 pub mod rust_test;
 pub mod tree_sitter;

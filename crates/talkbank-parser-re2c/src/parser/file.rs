@@ -27,29 +27,6 @@ pub fn parse_file<'a>(tokens: &'a [Token<'a>], source: &'a str) -> ChatFile<'a> 
     parse_file_with_errors(tokens, source, &NullErrorSink)
 }
 
-/// Report E749 for every comma token immediately followed by a word
-/// token with no whitespace/newline between (`hey ,you`; CLAN CHECK
-/// 92). Mirrors the model-validation rule `check_comma_glued_to_next`
-/// (talkbank-model `validation/utterance/comma.rs`), which cannot fire
-/// on this parser's output because its separators carry dummy spans;
-/// the lexer tokenizes whitespace, so adjacency IS the absence of a
-/// whitespace token between the comma and the next word. Narrowed to
-/// word-next exactly like the model rule (group/overlap/CA tokens after
-/// a comma are exempt in CHECK 92).
-fn report_comma_glued_to_next_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for pair in tokens.windows(2) {
-        if matches!(pair[0], Token::Comma(_)) && matches!(pair[1], Token::Word { .. }) {
-            errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::CommaGluedToNextWord,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                "Comma must be followed by a space or end-of-line".to_owned(),
-            ));
-        }
-    }
-}
-
 /// Report E750 for whitespace hugging an angle-group delimiter: a
 /// `LessThan` token immediately followed by whitespace, or whitespace
 /// immediately followed by `GreaterThan` (`< dog>` / `<dog >`; CLAN
@@ -76,6 +53,42 @@ fn report_space_inside_angle_group<'a>(tokens: &[Token<'a>], errors: &impl Error
                 talkbank_model::SourceLocation::new(Span::DUMMY),
                 None,
                 format!("Space is not allowed {position} in an angle-bracket group"),
+            ));
+        }
+    }
+}
+
+/// Report E765 for a PAUSE immediately followed by content (`(.)and`).
+///
+/// The model rule `check_separator_glued_to_following_content` covers this
+/// case in principle: its `free_standing_end` returns `Some(pause.span.end)`.
+/// It cannot fire on this backend's output, because pause spans are still
+/// `Span::DUMMY` and the rule skips `end == Span::DUMMY.end`.
+///
+/// SEPARATORS are deliberately NOT handled here any more. They carry real
+/// spans since 2026-08-27, so the model rule reaches them, and this scan
+/// reported E765 a SECOND time for every one it caught: `dog :and .` gave two.
+/// A mirror is only correct while its model rule is genuinely unreachable, and
+/// `re2c_reports_no_diagnostic_twice` is what notices when that stops being
+/// true. Delete this the moment pauses carry spans.
+fn report_pause_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
+    let is_pause = |t: &Token<'a>| {
+        matches!(
+            t,
+            Token::PauseShort(_)
+                | Token::PauseMedium(_)
+                | Token::PauseLong(_)
+                | Token::PauseTimed(_)
+        )
+    };
+    for pair in tokens.windows(2) {
+        if is_pause(&pair[0]) && (matches!(pair[1], Token::Word { .. }) || is_pause(&pair[1])) {
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::SeparatorGluedToFollowingContent,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::new(Span::DUMMY),
+                None,
+                "Separator must be separated from the following content by a space".to_owned(),
             ));
         }
     }
@@ -133,79 +146,6 @@ fn report_code_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &imp
                 talkbank_model::SourceLocation::new(Span::DUMMY),
                 None,
                 "Bracketed code must be separated from the following word by a space".to_owned(),
-            ));
-        }
-    }
-}
-
-/// Report E764 for every `&`-prefixed word token immediately following
-/// another word token with no whitespace between (`dog&-um`). Mirrors the
-/// model-validation rule `check_prefixed_form_glued_to_preceding_word`
-/// (talkbank-model `validation/utterance/spacing.rs`), which cannot fire
-/// on this parser's output because its words carry dummy spans.
-///
-/// The lexer already extracts the category prefix as its own field, so
-/// the test is on that field rather than on the raw text: `0` (omission)
-/// is deliberately not this rule (see the model-side note).
-fn report_prefixed_form_glued_to_preceding_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for pair in tokens.windows(2) {
-        let Token::Word {
-            prefix: Some(prefix),
-            ..
-        } = pair[1]
-        else {
-            continue;
-        };
-        if matches!(pair[0], Token::Word { .. }) && matches!(prefix, "&-" | "&~" | "&+") {
-            errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::PrefixedFormGluedToPrecedingWord,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                "Prefixed form must be separated from the preceding word by a space".to_owned(),
-            ));
-        }
-    }
-}
-
-/// Whether this token is a free-standing item that nothing may be glued
-/// after: a plain `:` or `;` separator, or a pause.
-///
-/// Every CA mark and both overlap markers are deliberately EXCLUDED, and
-/// so is the comma. Scope and evidence: the model-side
-/// `separator_forbids_trailing_glue` (talkbank-model
-/// `validation/utterance/spacing.rs`), which this mirrors.
-fn is_free_standing<'a>(token: &Token<'a>) -> bool {
-    matches!(
-        token,
-        Token::Semicolon(_)
-            | Token::Colon(_)
-            | Token::PauseShort(_)
-            | Token::PauseMedium(_)
-            | Token::PauseLong(_)
-            | Token::PauseTimed(_)
-    )
-}
-
-/// Report E765 for every item glued directly after a free-standing item
-/// (`:and`, `;;`, `(.)dog`). Mirrors the model-validation rule
-/// `check_separator_glued_to_following_content` (talkbank-model
-/// `validation/utterance/spacing.rs`), which cannot fire on this parser's
-/// output because its items carry dummy spans.
-///
-/// Only this direction, as in the model rule: trailing glue onto a word
-/// (`word↘`) is documented CHAT convention.
-fn report_separator_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for pair in tokens.windows(2) {
-        if is_free_standing(&pair[0])
-            && (matches!(pair[1], Token::Word { .. }) || is_free_standing(&pair[1]))
-        {
-            errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::SeparatorGluedToFollowingContent,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                "Separator must be separated from the following content by a space".to_owned(),
             ));
         }
     }
@@ -322,7 +262,7 @@ fn report_leading_space_on_main_tier<'a>(tokens: &[Token<'a>], errors: &impl Err
 /// Report E748 for every media-bullet timestamp written with a leading
 /// zero before another digit (`012`); a bare `0` is legal. Mirrors the
 /// tree-sitter parser's check in `media_bullet.rs` (CLAN CHECK 90,
-/// spec `E748_leading_zero_bullet_time.md`). Token-level scan because
+/// spec `E748.md`). Token-level scan because
 /// the raw digit text exists only here: the model stores `u64`
 /// milliseconds, so the representation is invisible downstream. The
 /// bullet still parses; the diagnostic alone makes the file invalid.
@@ -360,12 +300,10 @@ pub fn parse_file_with_errors<'a>(
     errors: &impl ErrorSink,
 ) -> ChatFile<'a> {
     report_leading_zero_bullet_times(tokens, errors);
-    report_comma_glued_to_next_word(tokens, errors);
     report_space_inside_angle_group(tokens, errors);
     report_pause_glued_to_word(tokens, errors);
+    report_pause_glued_to_following_content(tokens, errors);
     report_code_glued_to_following_content(tokens, errors);
-    report_prefixed_form_glued_to_preceding_word(tokens, errors);
-    report_separator_glued_to_following_content(tokens, errors);
     report_leading_space_on_main_tier(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();

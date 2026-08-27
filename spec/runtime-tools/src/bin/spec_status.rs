@@ -23,7 +23,6 @@ use generators::spec::error::ErrorSpec;
 use generators::spec::metadata::Status;
 use spec_runtime_tools::error_spec_validation::{self, Request, spec_dir};
 use std::collections::BTreeMap;
-use std::path::Path;
 
 /// The parity manifest, read for a COUNT only.
 ///
@@ -52,7 +51,7 @@ fn repo_root() -> Result<RepoRoot, String> {
     RepoRoot::resolve(None).map_err(|why| why.to_string())
 }
 
-/// Count the loaded specs by their declared `Status`.
+/// Count the loaded specs by the `Status` their CODE carries.
 ///
 /// # Derived from the LOADER, not from the file text
 ///
@@ -64,16 +63,14 @@ fn repo_root() -> Result<RepoRoot, String> {
 /// statuses, printing a confident wrong answer under a heading that says
 /// STATUS.
 ///
-/// Taking the tally from the loaded specs also deletes the bucket. The loader
-/// refuses a spec that declares no status and filters non-spec files out by
-/// the code-shaped stem rule, so "declared nothing" is no longer a state a row
-/// can report.
+/// Taking the tally from the loaded specs also deletes the bucket. Since R1 a
+/// spec file does not declare a status at all: it names a code, and the code's
+/// status lives in `spec/codes/error-codes.toml`, so a spec that could report
+/// "declared nothing" is now one that does not load.
 fn spec_statuses(specs: &[ErrorSpec]) -> BTreeMap<String, usize> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for spec in specs {
-        *counts
-            .entry(spec.metadata.status.as_str().to_owned())
-            .or_default() += 1;
+        *counts.entry(spec.status().as_str().to_owned()).or_default() += 1;
     }
     counts
 }
@@ -84,12 +81,12 @@ fn spec_statuses(specs: &[ErrorSpec]) -> BTreeMap<String, usize> {
 /// tests carry `#[ignore]`. If the rule has since been implemented and nobody
 /// updated the status, that is coverage sitting switched off: the work is done
 /// and nothing checks it. This asks the validator directly.
-fn list_deferred(spec_dir: &Path) -> Result<(), String> {
+fn list_deferred(root: &RepoRoot) -> Result<(), String> {
     let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
-    let specs = generators::spec::error::ErrorSpec::load_all(spec_dir)?;
+    let specs = generators::spec::error::ErrorSpec::load_for_repo(root)?;
     let (mut ready, mut genuine) = (0usize, 0usize);
     for spec in &specs {
-        if spec.metadata.status == Status::Implemented {
+        if spec.status() == Status::Implemented {
             continue;
         }
         let definition = &spec.error;
@@ -106,7 +103,7 @@ fn list_deferred(spec_dir: &Path) -> Result<(), String> {
                 "  {:<44} ex{} {:<16} {} emits: {}",
                 spec.source_file(),
                 index + 1,
-                spec.metadata.status,
+                spec.status(),
                 if emits_own {
                     "IMPLEMENTED ->"
                 } else {
@@ -129,30 +126,30 @@ fn list_deferred(spec_dir: &Path) -> Result<(), String> {
 fn main() -> Result<(), String> {
     let root = repo_root()?;
     if std::env::args().any(|arg| arg == "--deferred") {
-        return list_deferred(&spec_dir(&root));
+        return list_deferred(&root);
     }
     let spec_dir = spec_dir(&root);
 
     println!("SPEC SYSTEM STATUS");
     println!("==================\n");
 
-    let specs = ErrorSpec::load_all(&spec_dir)?;
+    let specs = ErrorSpec::load_for_repo(&root)?;
     println!("Error specs in {}:", spec_dir.display());
     for (status, count) in spec_statuses(&specs) {
         println!("  {count:>4}  {status}");
     }
     println!(
-        "\n  `status` is REQUIRED: a spec that declares none does not load, and the\n  \
-         file is named. It used to default to `implemented`, so 104 of 238 specs\n  \
-         said nothing and had an answer invented for them (fixed 2026-08-11).\n  \
-         These counts are the LOADED specs, so a non-spec file in the directory\n  \
-         cannot appear as a row."
+        "\n  `status` is a fact about a CODE, declared once in\n  \
+         spec/codes/error-codes.toml and reached through the code a spec names.\n  \
+         A spec naming an unregistered code does not load, and the file is\n  \
+         named, so these counts are the LOADED specs and a non-spec file in the\n  \
+         directory cannot appear as a row."
     );
 
     // The same REQUEST the CI gate builds, not a copy of its four fields. The
     // comment here used to say these numbers cannot disagree with the gate's,
     // beside a hand-written struct literal that could drift from it silently.
-    let report = error_spec_validation::run(&Request::for_repo(&root))?;
+    let report = error_spec_validation::run(&Request::for_repo(&root)?)?;
 
     println!("\nExamples ({} in total):", report.total());
     println!(

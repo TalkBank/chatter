@@ -10,6 +10,7 @@ use super::TreeSitterParser;
 use crate::error::{
     ErrorCode, ErrorContext, ParseError, ParseErrors, ParseResult, Severity, SourceLocation,
 };
+use crate::generated_traversal::{AsRawNode, FromNodeKind, MainTierNode};
 use crate::model::MainTier;
 use crate::parser::tree_parsing::main_tier::structure::{
     collect_main_tier_errors, convert_main_tier_node,
@@ -43,7 +44,7 @@ pub(super) fn parse_main_tier(parser: &TreeSitterParser, input: &str) -> ParseRe
     let root = tree.root_node();
     let main_tier_node = if root.kind() == "source_file" {
         root.child(0)
-            .filter(|c| c.kind() == "main_tier")
+            .and_then(MainTierNode::from_node)
             .ok_or_else(|| {
                 let mut errors = ParseErrors::new();
                 let actual = root
@@ -74,9 +75,9 @@ pub(super) fn parse_main_tier(parser: &TreeSitterParser, input: &str) -> ParseRe
     };
 
     // Check for parse errors
-    if main_tier_node.has_error() {
+    if main_tier_node.raw_node().has_error() {
         let mut errors = ParseErrors::new();
-        collect_main_tier_errors(main_tier_node, &to_parse, input, 0, &mut errors);
+        collect_main_tier_errors(main_tier_node.raw_node(), &to_parse, input, 0, &mut errors);
         if !errors.is_empty() {
             return Err(errors);
         }

@@ -30,7 +30,9 @@ pub fn format_content_item(item: &UtteranceContent) -> String {
         UtteranceContent::Pause(p) => format!("({})", p),
         UtteranceContent::Event(e) => format!("&{}", e),
         UtteranceContent::AnnotatedEvent(ae) => format!("&{}", ae.inner),
-        UtteranceContent::AnnotatedAction(_) => String::from("action"),
+        UtteranceContent::Action(_) | UtteranceContent::AnnotatedAction(_) => {
+            String::from("action")
+        }
         UtteranceContent::Freecode(f) => f.text.to_string(),
         UtteranceContent::Separator(_) => String::new(),
         // Handle other variants (PhoGroup, SinGroup, Quotation, etc.)
@@ -44,6 +46,17 @@ fn format_bracketed_item(item: &BracketedItem) -> String {
         BracketedItem::Word(w) => w.cleaned_text().to_string(),
         BracketedItem::AnnotatedWord(aw) => aw.inner.cleaned_text().to_string(),
         BracketedItem::ReplacedWord(rw) => rw.word.cleaned_text().to_string(),
+        BracketedItem::Group(group) => {
+            let mut text = String::from("[");
+            for (idx, gc) in group.content.content.iter().enumerate() {
+                if idx > 0 {
+                    text.push(' ');
+                }
+                text.push_str(&format_bracketed_item(gc));
+            }
+            text.push(']');
+            text
+        }
         BracketedItem::AnnotatedGroup(annotated) => {
             let mut text = String::from("[");
             for (idx, gc) in annotated.inner.content.content.iter().enumerate() {

@@ -1,8 +1,6 @@
 +++
 code = 'E243'
 name = 'Illegal characters in word'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'

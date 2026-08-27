@@ -102,9 +102,13 @@ fn test_parse_errors_separation() {
 // =========================================================================
 
 /// Builds test error.
-fn make_test_error(code: &str) -> ParseError {
+///
+/// Takes the VARIANT, not a code string. The `&str` form let a caller name a
+/// code that does not exist and get `UnknownError` without a word said, which
+/// is the same silent coercion that hid three live checks in `alignment/mor.rs`.
+fn make_test_error(code: ErrorCode) -> ParseError {
     ParseError::new(
-        ErrorCode::new(code),
+        code,
         Severity::Error,
         SourceLocation::from_offsets(0, 4),
         ErrorContext::new("test", 0..4, "test"),
@@ -119,7 +123,7 @@ fn test_parse_tracker_counts_severities() {
     assert!(!tracker.has_error());
     assert!(!tracker.has_warning());
 
-    tracker.report(make_test_error("E001"));
+    tracker.report(make_test_error(ErrorCode::InternalError));
     tracker.report(ParseError::new(
         ErrorCode::SpeakerNotFoundInParticipants,
         Severity::Warning,
@@ -141,11 +145,11 @@ fn test_error_collector_basic() {
     assert!(sink.is_empty());
     assert_eq!(sink.len(), 0);
 
-    sink.report(make_test_error("E001"));
+    sink.report(make_test_error(ErrorCode::InternalError));
     assert!(!sink.is_empty());
     assert_eq!(sink.len(), 1);
 
-    sink.report(make_test_error("E002"));
+    sink.report(make_test_error(ErrorCode::TestError));
     assert_eq!(sink.len(), 2);
 
     let errors = sink.into_vec();
@@ -171,7 +175,7 @@ fn test_error_collector_has_errors() {
     assert!(!sink.has_errors());
 
     // Add an error
-    sink.report(make_test_error("E001"));
+    sink.report(make_test_error(ErrorCode::InternalError));
     assert!(sink.has_errors());
 }
 
@@ -180,9 +184,9 @@ fn test_error_collector_has_errors() {
 fn test_error_collector_report_all() {
     let sink = ErrorCollector::new();
     let errors = vec![
-        make_test_error("E001"),
-        make_test_error("E002"),
-        make_test_error("E003"),
+        make_test_error(ErrorCode::InternalError),
+        make_test_error(ErrorCode::TestError),
+        make_test_error(ErrorCode::EmptyString),
     ];
 
     sink.report_all(errors);
@@ -193,14 +197,14 @@ fn test_error_collector_report_all() {
 #[test]
 fn test_error_collector_to_vec() {
     let sink = ErrorCollector::new();
-    sink.report(make_test_error("E001"));
+    sink.report(make_test_error(ErrorCode::InternalError));
 
     // to_vec doesn't consume the sink
     let errors1 = sink.to_vec();
     assert_eq!(errors1.len(), 1);
 
     // Can still use the sink
-    sink.report(make_test_error("E002"));
+    sink.report(make_test_error(ErrorCode::TestError));
     let errors2 = sink.to_vec();
     assert_eq!(errors2.len(), 2);
 }
@@ -209,7 +213,7 @@ fn test_error_collector_to_vec() {
 #[test]
 fn test_error_collector_collects_single_error() {
     let sink = ErrorCollector::new();
-    sink.report(make_test_error("E001"));
+    sink.report(make_test_error(ErrorCode::InternalError));
 
     let errors = sink.into_vec();
     assert_eq!(errors.len(), 1);
@@ -223,8 +227,8 @@ fn test_channel_error_sink() {
     let (tx, rx) = crossbeam_channel::bounded(10);
     let sink = ChannelErrorSink::new(tx);
 
-    sink.report(make_test_error("E001"));
-    sink.report(make_test_error("E002"));
+    sink.report(make_test_error(ErrorCode::InternalError));
+    sink.report(make_test_error(ErrorCode::TestError));
     drop(sink); // Close the sender
 
     let mut received = Vec::new();
@@ -247,7 +251,7 @@ fn test_channel_error_sink_handles_closed_receiver() {
     drop(rx); // Close the receiver
 
     // Should not panic, just silently ignore
-    sink.report(make_test_error("E001"));
+    sink.report(make_test_error(ErrorCode::InternalError));
 }
 
 /// Tests error sink reference impl.
@@ -256,7 +260,7 @@ fn test_error_sink_reference_impl() {
     let sink = ErrorCollector::new();
     let sink_ref: &dyn ErrorSink = &sink;
 
-    sink_ref.report(make_test_error("E001"));
+    sink_ref.report(make_test_error(ErrorCode::InternalError));
     assert_eq!(sink.len(), 1);
 }
 
@@ -283,7 +287,7 @@ fn test_line_offset_adjustment_in_labels() -> Result<(), String> {
         ErrorContext::new(context_text, span_in_context, "<").with_line_offset(line_number);
 
     let error = ParseError::new(
-        ErrorCode::new("E302"),
+        ErrorCode::MissingNode,
         Severity::Error,
         location,
         context,
@@ -317,7 +321,7 @@ fn test_line_offset_no_adjustment_for_line_1() -> Result<(), String> {
     let context = ErrorContext::new(context_text, span_in_context, "hello").with_line_offset(1);
 
     let error = ParseError::new(
-        ErrorCode::new("E001"),
+        ErrorCode::InternalError,
         Severity::Error,
         location,
         context,
@@ -347,7 +351,7 @@ fn test_miette_output_uses_line_offset() -> Result<(), String> {
     let error_end = error_start + "error".len();
 
     let mut errors = vec![ParseError::new(
-        ErrorCode::new("E999"),
+        ErrorCode::UnknownError,
         Severity::Error,
         SourceLocation::from_offsets(error_start, error_end),
         ErrorContext::new("", Span::from_usize(0, 0), ""),

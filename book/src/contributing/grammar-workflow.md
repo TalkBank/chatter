@@ -1,7 +1,7 @@
 # Grammar Workflow
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:42 EDT
+**Last modified:** 2026-08-27 00:33 EDT
 
 The tree-sitter grammar at `grammar/grammar.js` is the formal definition of the CHAT format. Changes require careful validation.
 
@@ -18,13 +18,13 @@ flowchart TD
     equiv["parser equivalence\n(corpus/reference/ files)"]
     spec_check{"Grammar change\naffects spec examples?"}
     test_gen["spec/tools generators\n→ grammar/test/corpus/generated/\n→ parser-tests generated tests\n→ validation fixture corpus"]
-    differential["corpus differential\n(before any push)"]
+    snapshot["observation snapshot\n(codes + roundtrip per spec example)\nadjudicate every diff"]
     commit(["Commit"])
 
     edit --> generate --> traversal --> grammar_test --> rust_test --> equiv --> spec_check
-    spec_check -->|Yes| test_gen --> differential
-    spec_check -->|No| differential
-    differential --> commit
+    spec_check -->|Yes| test_gen --> snapshot
+    spec_check -->|No| snapshot
+    snapshot --> commit
 ```
 
 ## Step-by-Step Procedure
@@ -107,7 +107,7 @@ This verifies the Rust parser wrapper handles all CST nodes correctly.
 ### 6. Run Parser Equivalence
 
 ```bash
-cargo test -p talkbank-parser-tests parser_equivalence
+cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus
 ```
 
 Every file in the reference corpus must parse correctly. Each `.cha` file is its own test, so failures are reported per file.
@@ -128,17 +128,17 @@ still depend on the spec pipeline.
 
 Do this when the grammar change actually affects generated artifacts.
 
-### 8. Check the corpus differential
+### 8. Adjudicate the observation snapshot
 
-Any change touching the grammar, parser lowering, or serialization runs the
-operator's corpus differential before a push. It diffs per-code validate counts
-and roundtrip-failing file sets against the fleet's archived binary over real
-corpus data.
-
-It is a TRIPWIRE demanding adjudication, not an absolute blocker: corpus data is
-not guaranteed valid CHAT, so every new error instance is classified as either
-INTENDED (a deliberately stricter rule correctly flagging bad data: ship, and
-the files join the cleanup queue) or UNINTENDED (a regression: do not ship).
+`just regen` rewrites `spec/observations/example-diagnostics.json`, which
+records for every spec example the codes each stage emitted and whether the
+parsed model serializes back byte-exact. Its currency test keeps it honest,
+but the test is satisfied by any regenerated file, so the gate here is human:
+read the diff. Every changed entry is either INTENDED (the behaviour change
+was the point; commit the regenerated snapshot in the same change) or
+UNINTENDED (a regression; fix the code, never the snapshot). A construct the
+suite does not exercise is a missing spec example, and adding one is part of
+the change, not a follow-up.
 
 ## The reference corpus is a regression signal, NOT a validity authority
 

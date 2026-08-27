@@ -37,36 +37,69 @@ use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
-/// Scoped annotations attached to an `Annotated<T>` wrapper.
+/// Scoped annotations attached to an `Annotated<T>` wrapper, NEVER empty.
 ///
-/// Wraps a `Vec<ContentAnnotation>` and provides collection-like access via `Deref`.
-/// Must contain at least one annotation (validated during the validation phase).
+/// # The invariant is structural now, and it used to be a rule nothing enforced
+///
+/// "Must contain at least one annotation" was prose here, backed by a runtime
+/// code (E214) reported during validation. Measured 2026-08-26 across a
+/// 106,000-file corpus, that arrangement was failing in both directions at
+/// once. E214 could not fire on any input: an empty bracket is a parse error,
+/// its own spec example produced no diagnostics, and the only payload that was
+/// routinely empty is an `Action`, whose wrapper is never validated because
+/// `Action` does not implement `Validate`. Meanwhile 20,184,072 `Annotated`
+/// values in the corpus DID carry an empty list, every one of them a bare `0`
+/// the parser had nowhere else to put, because `UtteranceContent` had no bare
+/// `Action` variant while it had a bare `Event`.
+///
+/// How that number was taken, because a measurement without its method is not
+/// one: over a `chatter to-json` mirror of roughly 106,000 files, counting
+/// occurrences of `"type": "annotated_action"` and subtracting those followed
+/// by a comma, a comma meaning the object carries further fields and so a real
+/// annotation. 20,318,021 total, 133,949 annotated, 20,184,072 empty. The
+/// pattern needs the space after the colon: the mirror is pretty-printed, so
+/// the unspaced form matches nothing on any input and reads as a clean zero.
+///
+/// So the rule was unenforceable where it was true and unenforced where it was
+/// violated. The bare variant exists now and this type refuses the empty case,
+/// which retired E214 entirely.
+///
+/// # Every route in, enumerated
+///
+/// A proof type is only as strong as its weakest constructor, so: [`Self::new`]
+/// is the only public constructor and returns `None` for an empty list;
+/// `TryFrom<Vec<_>>` is the same check under the conversion trait, replacing an
+/// infallible `From` that skipped it; `Deserialize` rejects an empty list
+/// rather than accepting one off the wire; there is deliberately no `Default`,
+/// which would have manufactured the forbidden value; and the type no longer
+/// takes `collection_newtype_ops!`, whose `take` and `retain` can empty a
+/// collection in place. None of those operations had a single caller on this
+/// type. Read access is `Deref`, which cannot resize, and the `&mut` iterator
+/// yields elements without allowing the length to change.
 ///
 /// References:
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Error_Coding>
-#[derive(
-    Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift, Default,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct AnnotatedContentAnnotations(Vec<ContentAnnotation>);
-
-crate::collection_newtype_ops!(AnnotatedContentAnnotations, ContentAnnotation);
+pub struct AnnotatedContentAnnotations(#[schemars(length(min = 1))] Vec<ContentAnnotation>);
 
 impl AnnotatedContentAnnotations {
-    /// Wraps scoped annotations for an [`Annotated`] payload.
+    /// Wraps scoped annotations, or `None` when there are none.
     ///
-    /// Validation of "must not be empty" is intentionally deferred to
-    /// [`crate::validation::Validate`], so parsers can stay lenient and report
-    /// a typed error instead of failing construction.
-    pub fn new(annotations: Vec<ContentAnnotation>) -> Self {
-        Self(annotations)
-    }
-
-    /// Returns `true` when no scoped markers are attached.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    /// `None` is not a failure and is not reported as one: it means the caller
+    /// is not looking at an annotated construct at all, and should build the
+    /// BARE variant instead. That branch is the whole point of the type, which
+    /// is why this returns an `Option` rather than a `Result` with a domain
+    /// error nobody would ever surface.
+    #[must_use]
+    pub fn new(annotations: Vec<ContentAnnotation>) -> Option<Self> {
+        if annotations.is_empty() {
+            None
+        } else {
+            Some(Self(annotations))
+        }
     }
 }
 
@@ -79,10 +112,36 @@ impl Deref for AnnotatedContentAnnotations {
     }
 }
 
-impl From<Vec<ContentAnnotation>> for AnnotatedContentAnnotations {
-    /// Wraps a raw scoped-annotation vector without copying.
-    fn from(annotations: Vec<ContentAnnotation>) -> Self {
-        Self(annotations)
+/// The empty list, which is not an annotated construct.
+///
+/// Its own type rather than a bare `()` so a caller reading a `Result` sees
+/// what went wrong without consulting the docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("an annotated construct must carry at least one scoped annotation")]
+pub struct NoScopedAnnotations;
+
+impl TryFrom<Vec<ContentAnnotation>> for AnnotatedContentAnnotations {
+    type Error = NoScopedAnnotations;
+
+    /// Wraps a raw scoped-annotation vector, refusing the empty one.
+    ///
+    /// `TryFrom` rather than `From`: an infallible conversion that skips an
+    /// invariant is how the empty state got in, and the house rule is that a
+    /// conversion which can reject its input must say so in its type.
+    fn try_from(annotations: Vec<ContentAnnotation>) -> Result<Self, Self::Error> {
+        Self::new(annotations).ok_or(NoScopedAnnotations)
+    }
+}
+
+impl<'de> Deserialize<'de> for AnnotatedContentAnnotations {
+    /// Rejects an empty list off the wire.
+    ///
+    /// The wire is a route into the type exactly as a constructor is, and a
+    /// transparent derive would have accepted `[]` and rebuilt the state the
+    /// rest of this file exists to forbid.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let annotations = Vec::<ContentAnnotation>::deserialize(deserializer)?;
+        Self::new(annotations).ok_or_else(|| serde::de::Error::custom(NoScopedAnnotations))
     }
 }
 
@@ -116,31 +175,25 @@ impl IntoIterator for AnnotatedContentAnnotations {
     }
 }
 
-impl crate::validation::Validate for AnnotatedContentAnnotations {
-    /// Enforces non-empty annotations and reports unknown scoped markers.
-    fn validate(
-        &self,
-        context: &crate::validation::ValidationContext,
+impl AnnotatedContentAnnotations {
+    /// Report unknown scoped markers, located at `span`.
+    ///
+    /// Takes the span rather than reading it out of a `ValidationContext`,
+    /// which is why this is no longer a `Validate` impl. That indirection cost
+    /// an `unwrap_or(Span::DUMMY)`: a sentinel equal to `Span::default()` and
+    /// to a real zero-length position at offset 0, standing in for a location
+    /// the only caller always had. It also enforced non-empty, reporting E214,
+    /// until the type made that state unconstructible.
+    /// Takes a SLICE, not `&self`: the traversal that owns this question hands
+    /// out `&[ContentAnnotation]` through
+    /// `ContentStructure::scoped_annotations`, because a LEAF carries its
+    /// annotations as a plain field and has no newtype to offer.
+    pub(crate) fn report_unknown_markers(
+        annotations: &[ContentAnnotation],
+        span: crate::Span,
         errors: &impl crate::ErrorSink,
     ) {
-        // DEFAULT: Missing span indicates unknown location; use dummy span for diagnostics.
-        let span = context.field_span.unwrap_or(crate::Span::DUMMY);
-        // DEFAULT: Absent source text is reported as empty for error context.
-        let text = context.field_text.as_deref().unwrap_or_default();
-        // DEFAULT: Missing label falls back to generic "annotation".
-        let label = context.field_label.unwrap_or("annotation");
-
-        if self.is_empty() {
-            errors.report(crate::ParseError::new(
-                crate::ErrorCode::EmptyAnnotatedContentAnnotations,
-                crate::Severity::Error,
-                crate::SourceLocation::new(span),
-                crate::ErrorContext::new(text, span, label),
-                "Annotated content must include at least one scoped annotation",
-            ));
-        }
-
-        for annotation in &self.0 {
+        for annotation in annotations {
             if let ContentAnnotation::Unknown(unknown) = annotation {
                 let marker = &unknown.marker;
                 errors.report(
@@ -149,7 +202,7 @@ impl crate::validation::Validate for AnnotatedContentAnnotations {
                         crate::Severity::Error,
                         crate::SourceLocation::new(span),
                         crate::ErrorContext::new(marker.as_str(), 0..marker.len(), "annotation"),
-                        format!("\"{}\" is not a known scoped annotation type", marker),
+                        unknown.unreadable_message(),
                     )
                     .with_suggestion("Check CHAT manual for valid annotation types"),
                 );
@@ -200,7 +253,9 @@ pub struct Annotated<T> {
     /// Scoped annotations emitted immediately after [`Self::inner`].
     ///
     /// Examples: `[*]`, `[= text]`, `[+ text]`, `[//]`.
-    #[serde(skip_serializing_if = "AnnotatedContentAnnotations::is_empty", default)]
+    /// Always at least one; see [`AnnotatedContentAnnotations`]. It carried
+    /// `skip_serializing_if`/`default` until 2026-08-26, a pair whose only
+    /// effect was to hide the empty case on the wire and rebuild it on read.
     pub scoped_annotations: AnnotatedContentAnnotations,
 
     /// Source span for error reporting (not serialized to JSON)
@@ -251,28 +306,63 @@ impl<T: SemanticDiff> SemanticDiff for Annotated<T> {
 }
 
 impl<T> Annotated<T> {
-    /// Creates an annotated wrapper with an empty scoped-annotation list.
+    /// Creates an annotated wrapper around `inner`.
     ///
-    /// This is convenient for builder-style assembly where annotations are added
-    /// afterward via [`Self::with_scoped_annotation`] or
-    /// [`Self::with_scoped_annotations`].
-    pub fn new(inner: T) -> Self {
+    /// Takes the annotations rather than starting empty and filling in
+    /// afterwards. The builder shape it replaces (`new(inner)` then
+    /// `with_scoped_annotation`) meant every wrapper passed through the empty
+    /// state, and one caller simply never left it: the parser wrapped every
+    /// bare `0` and produced 20,184,072 empty wrappers across the corpus; see
+    /// [`AnnotatedContentAnnotations`] for how that was counted.
+    ///
+    /// # Everything this needs is reachable from `talkbank_model::model`
+    ///
+    /// The example below is compiled, and that is its job. When the non-empty
+    /// invariant landed it added three public items and re-exported none of
+    /// them, so a caller who could name `Annotated` could name neither the
+    /// proof this constructor demands nor the error its `TryFrom` returns. A
+    /// prose note would not have noticed; a doctest that imports only from the
+    /// curated path fails to compile the moment one of them leaves it again.
+    ///
+    /// ```
+    /// use talkbank_model::model::{
+    ///     Action, Annotated, AnnotatedContentAnnotations, ContentAnnotation,
+    ///     NoScopedAnnotations, ScopedExplanation,
+    /// };
+    ///
+    /// let annotations = AnnotatedContentAnnotations::try_from(vec![
+    ///     ContentAnnotation::Explanation(ScopedExplanation { text: "whining".into() }),
+    /// ])?;
+    /// let annotated = Annotated::new(Action::new(), annotations);
+    /// assert_eq!(annotated.scoped_annotations.len(), 1);
+    ///
+    /// // The empty list is refused, and the refusal has a name a caller can match on.
+    /// assert_eq!(
+    ///     AnnotatedContentAnnotations::try_from(Vec::new()).err(),
+    ///     Some(NoScopedAnnotations),
+    /// );
+    /// # Ok::<(), NoScopedAnnotations>(())
+    /// ```
+    pub fn new(inner: T, scoped_annotations: AnnotatedContentAnnotations) -> Self {
         Self {
             inner,
-            scoped_annotations: AnnotatedContentAnnotations::new(Vec::new()),
+            scoped_annotations,
             span: crate::Span::DUMMY,
         }
+    }
+
+    /// Creates an annotated wrapper carrying exactly one annotation.
+    ///
+    /// The promotion path: a bare construct meets its first scoped marker and
+    /// becomes an annotated one. Infallible by construction, which is why it
+    /// exists beside [`Self::new`].
+    pub fn with_one(inner: T, annotation: ContentAnnotation) -> Self {
+        Self::new(inner, AnnotatedContentAnnotations(vec![annotation]))
     }
 
     /// Sets source span metadata used in diagnostics.
     pub fn with_span(mut self, span: crate::Span) -> Self {
         self.span = span;
-        self
-    }
-
-    /// Replaces the scoped-annotation list.
-    pub fn with_scoped_annotations(mut self, scoped: Vec<ContentAnnotation>) -> Self {
-        self.scoped_annotations = scoped.into();
         self
     }
 
@@ -295,59 +385,25 @@ impl<T: WriteChat> WriteChat for Annotated<T> {
     }
 }
 
-impl<T: crate::validation::Validate> crate::validation::Validate for Annotated<T> {
-    /// Validates inner payload first, then validates scoped-annotation constraints.
-    fn validate(
-        &self,
-        context: &crate::validation::ValidationContext,
-        errors: &impl crate::ErrorSink,
-    ) {
-        // Validate the inner item
-        self.inner.validate(context, errors);
-        let scoped_context = context
-            .clone()
-            .with_field_span(self.span)
-            .with_field_label("annotation");
-        self.scoped_annotations.validate(&scoped_context, errors);
-    }
-}
+// `impl<T: Validate> Validate for Annotated<T>` stood here and is DELETED.
+//
+// It did two things: validate the inner payload, and report unknown scoped
+// annotations. The second half moved to
+// `validation::main_tier::report_unknown_annotations` on 2026-08-27, because
+// reaching a construct's annotations only when its PAYLOAD implements
+// `Validate` is a trait bound standing in for a policy, and it left the re2c
+// backend silent on four hosts.
+//
+// That left this impl as pure delegation, and leaving it standing was the
+// hazard rather than the cost: an affordance beats a rule, so the next reader
+// would see `Annotated<T>: Validate` and reasonably put the annotation check
+// back into it, re-creating the coupling. Its two call sites in
+// `word_recursion` say `annotated.inner.validate(..)` now, which is what the
+// impl did, said where it happens.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ErrorCollector;
-    use crate::model::{ContentAnnotation, Word};
-    use crate::validation::{Validate, ValidationContext};
-
-    /// Reports E214 when an `Annotated<T>` has no scoped annotations.
-    #[test]
-    fn empty_scoped_annotations_report_error() {
-        let annotated = Annotated::new(Word::new_unchecked("hi", "hi"));
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        annotated.validate(&ctx, &errors);
-
-        let error_vec = errors.into_vec();
-        assert!(
-            error_vec.iter().any(|e| e.code.as_str() == "E214"),
-            "Expected E214 for empty scoped annotations, got: {:#?}",
-            error_vec
-        );
-    }
-
-    /// Does not report E214 when at least one scoped annotation is present.
-    #[test]
-    fn nonempty_scoped_annotations_pass() {
-        let annotated = Annotated::new(Word::new_unchecked("hi", "hi"))
-            .with_scoped_annotation(ContentAnnotation::Stressing);
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        annotated.validate(&ctx, &errors);
-
-        let error_vec = errors.into_vec();
-        assert!(
-            !error_vec.iter().any(|e| e.code.as_str() == "E214"),
-            "Non-empty scoped annotations should not trigger E214"
-        );
-    }
-}
+// The test module that stood here is gone with the code it guarded. Its two
+// tests asserted that an empty scoped-annotation list reports E214, and that a
+// non-empty one does not. The empty list cannot be built any more, so the first
+// test could not be written and the second has only one case left. A type that
+// makes a state unconstructible retires the tests that guarded it rather than
+// keeping them as runtime proof of what the compiler now refuses.

@@ -1,8 +1,6 @@
 +++
 code = 'E519'
 name = 'Auto-generated from corpus'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'header'

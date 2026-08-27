@@ -18,7 +18,7 @@
 //! When a divergence appears there, it names a file; here it names a construct.
 //!
 //! Corpus-wide equivalence is deliberately NOT here. It belongs to
-//! `equivalence_tests.rs` and to the `parser_equivalence` gate, which walk every
+//! `equivalence_tests.rs`, which walks every
 //! reference file and isolate failures per file; a copy here would re-walk the
 //! same tree with coarser reporting and, when the corpus is absent, pass while
 //! testing nothing.
@@ -142,8 +142,12 @@ fn main_tier_retrace_structure() {
 fn main_tier_equivalence_simple() {
     let input = "*CHI:\thello world .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_main_tier(input).unwrap();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(&re2c_parsed);
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "simple main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -156,8 +160,12 @@ fn main_tier_equivalence_simple() {
 fn main_tier_equivalence_retrace() {
     let input = "*CHI:\tthe the [/] dog .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_main_tier(input).unwrap();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(&re2c_parsed);
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "retrace main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -170,8 +178,12 @@ fn main_tier_equivalence_retrace() {
 fn main_tier_equivalence_compound() {
     let input = "*CHI:\tI want ice+cream .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_main_tier(input).unwrap();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(&re2c_parsed);
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "compound main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -184,8 +196,12 @@ fn main_tier_equivalence_compound() {
 fn main_tier_equivalence_event() {
     let input = "*CHI:\t&=laughs .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_main_tier(input).unwrap();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(&re2c_parsed);
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "event main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -198,8 +214,12 @@ fn main_tier_equivalence_event() {
 fn main_tier_equivalence_pause() {
     let input = "*CHI:\tI (.) want cookies .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_main_tier(input).unwrap();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(&re2c_parsed);
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "pause main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -212,8 +232,12 @@ fn main_tier_equivalence_pause() {
 fn main_tier_equivalence_trailing_off() {
     let input = "*CHI:\tI was going to the +...\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_main_tier(input).unwrap();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(&re2c_parsed);
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "trailing off mismatch:\n  ts:   {}\n  re2c: {}",
@@ -268,7 +292,13 @@ fn gra_tier_equivalence() {
 /// Parse a word using our re2c parser and convert to model Word.
 fn re2c_word(input: &str) -> talkbank_model::model::Word {
     let parsed = talkbank_parser_re2c::parser::parse_word(input).expect("re2c parse_word");
-    talkbank_parser_re2c::convert::word_from_parsed(&parsed)
+    // `parse_word` leaks its own copy and does not hand it back, so no source
+    // can place these slices; the span stays dummy and these tests compare
+    // content, which `semantic_eq` does anyway.
+    talkbank_parser_re2c::convert::word_from_parsed(
+        &parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(input),
+    )
 }
 
 /// Diff a single file's parse between TreeSitter and Re2c. Standard
@@ -310,5 +340,167 @@ fn study_diff_one_file() {
     std::fs::write("/tmp/re2c_compare_re2c.json", &re2c_json).unwrap();
     eprintln!(
         "wrote /tmp/re2c_compare_ts.json + /tmp/re2c_compare_re2c.json (run: diff /tmp/re2c_compare_ts.json /tmp/re2c_compare_re2c.json)"
+    );
+}
+
+/// Both backends place every main-tier item at the same source span.
+///
+/// Pins the half of the picture that is correct, so the comparison below has a
+/// fixed reference. Written while establishing why `E258` (consecutive commas)
+/// is silent under re2c: that rule reads `comma_span()`, which FILTERS OUT
+/// `Span::DUMMY`, so a dummy span switches the check off with no diagnostic.
+/// Before the fix, re2c reported `Span::DUMMY` for all four items on this
+/// input, through the whole-file path as well as the fragment API, so every
+/// span-keyed rule was unreachable under `--parser=re2c`.
+///
+/// Words were fixed in the same arc: `WordWithAnnotations::raw_text` IS the
+/// word's slice of the source, so `span_of` places it directly.
+#[test]
+fn whole_file_spans_are_reported() {
+    let src = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+        @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello ,, world .\n@End\n";
+    let ts_errors = talkbank_model::errors::ErrorCollector::new();
+    use talkbank_model::ChatParser as _;
+    let ts_file = ts().parse_chat_file_streaming(src, &ts_errors);
+    let re2c = talkbank_parser_re2c::Re2cParser::new();
+    let re_errors = talkbank_model::errors::ErrorCollector::new();
+    let re_out = re2c.parse_chat_file(src, 0, &re_errors);
+
+    let talkbank_model::ParseOutcome::Parsed(re2c_file) = re_out else {
+        panic!("re2c must parse this input");
+    };
+
+    let item_spans = |f: &talkbank_model::ChatFile| -> Vec<talkbank_model::Span> {
+        f.utterances()
+            .flat_map(|u| u.main.content.content.iter())
+            .filter_map(|item| match item {
+                talkbank_model::model::UtteranceContent::Separator(sep) => Some(sep.span()),
+                talkbank_model::model::UtteranceContent::Word(w) => Some(w.span),
+                _ => None,
+            })
+            .collect()
+    };
+    let ts_spans = item_spans(&ts_file);
+    assert_eq!(
+        ts_spans.len(),
+        4,
+        "two words and two commas, got {ts_spans:?}"
+    );
+    assert!(
+        ts_spans.iter().all(|s| *s != talkbank_model::Span::DUMMY),
+        "tree-sitter must place every item, got {ts_spans:?}"
+    );
+    assert_eq!(
+        item_spans(&re2c_file),
+        ts_spans,
+        "both backends must place every main-tier item identically"
+    );
+}
+
+/// A MULTI-TOKEN word must be placed too, not just a single-token one.
+///
+/// `subtoken_word` rebuilds `raw_text` by `Box::leak`ing a fresh concatenation
+/// of its tokens' display forms, so that string is a DIFFERENT ALLOCATION from
+/// the source and `SourceText::span_of` correctly refuses it. The word then
+/// keeps `Span::DUMMY`. `whole_file_spans_are_reported` cannot see this: every
+/// word in its input is a single token.
+#[test]
+fn multi_token_words_are_placed_too() {
+    let input =
+        std::env::var("PROBE_INPUT").unwrap_or_else(|_| "*CHI:\tthe he(l)lo world .\n".to_string());
+    let input = input.as_str();
+    let ts_mt = ts().parse_main_tier(input).unwrap();
+    let (re2c_parsed, re2c_src) =
+        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+    );
+    let spans = |mt: &talkbank_model::model::MainTier| -> Vec<talkbank_model::Span> {
+        mt.content
+            .content
+            .iter()
+            .filter_map(|i| match i {
+                talkbank_model::model::UtteranceContent::Word(w) => Some(w.span),
+                _ => None,
+            })
+            .collect()
+    };
+    println!("ts:   {:?}", spans(&ts_mt));
+    println!("re2c: {:?}", spans(&re2c_mt));
+    assert_eq!(
+        spans(&re2c_mt),
+        spans(&ts_mt),
+        "multi-token word spans differ"
+    );
+}
+
+/// No diagnostic is reported TWICE by the re2c backend.
+///
+/// # The gate that cannot see this
+///
+/// `backends_diverge_only_where_recorded` stores each side's codes as
+/// `Codes(BTreeSet<ErrorCode>)`, so multiplicity is structurally
+/// unrepresentable there: a rule reported once and a rule reported twice are
+/// the same value. Nothing else in the tree compares counts either.
+///
+/// # Why that mattered
+///
+/// `parser/file.rs` carries hand-written token scans that MIRROR model rules,
+/// each justified by a comment saying the model rule "cannot fire on this
+/// parser's output because its X carry dummy spans". When the 2026-08-27 span
+/// work made words and separators carry real spans, three of those model rules
+/// became reachable and their mirrors were not removed, so re2c reported
+/// E749, E764 and E765 twice each. Measured, not supposed.
+///
+/// A mirror is therefore only correct while its model rule is genuinely
+/// unreachable, and this test is what notices when that stops being true.
+#[test]
+fn re2c_reports_no_diagnostic_twice() {
+    use std::collections::BTreeMap;
+    use talkbank_model::ChatParser as _;
+
+    // One utterance per rule that has, or had, a mirror in `parser/file.rs`.
+    let cases = [
+        ("comma glued to next word", "hey ,you ."),
+        ("prefixed form glued to preceding word", "dog&-um ."),
+        ("separator glued to following content", "dog :and ."),
+        ("pause glued to word", "hello(.) world ."),
+        ("code glued to following content", "hello [/]x ."),
+        ("consecutive commas", "hello ,, world ."),
+    ];
+
+    let re2c = talkbank_parser_re2c::Re2cParser::new();
+    let mut offenders = Vec::new();
+    for (label, utterance) in cases {
+        let src = format!(
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
+             @ID:\teng|corpus|CHI|3;00.||||Child|||\n*CHI:\t{utterance}\n@End\n"
+        );
+        // PARSE AND VALIDATE, which is the boundary `chatter validate` uses.
+        // Parsing alone does not run the model rules, and the whole point here
+        // is that a parser mirror and a model rule can BOTH fire; a test below
+        // that boundary sees one of the two and passes.
+        let errors = talkbank_model::errors::ErrorCollector::new();
+        if let talkbank_model::ParseOutcome::Parsed(file) = re2c.parse_chat_file(&src, 0, &errors) {
+            // `Anonymous`: these are test strings, so filename rules do not run.
+            file.validate(&errors, talkbank_model::model::TranscriptName::Anonymous);
+        }
+        let mut counts: BTreeMap<talkbank_model::ErrorCode, usize> = BTreeMap::new();
+        for e in errors.into_vec() {
+            *counts.entry(e.code).or_insert(0) += 1;
+        }
+        for (code, n) in counts {
+            if n > 1 {
+                offenders.push(format!(
+                    "{label} ({utterance:?}): {code:?} reported {n} times"
+                ));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "re2c reported these diagnostics more than once:\n  {}",
+        offenders.join("\n  ")
     );
 }

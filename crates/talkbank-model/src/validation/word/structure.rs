@@ -9,7 +9,7 @@
 use std::ops::RangeInclusive;
 
 use crate::model::content::word::{MarkerSpelling, UntranscribedStatus};
-use crate::model::{Word, WordContent, WordMaterial, WordStressMarkerType};
+use crate::model::{FormType, Word, WordContent, WordMaterial, WordStressMarkerType};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 /// Enforce character-level hygiene for the normalized word surface.
@@ -445,8 +445,32 @@ pub(crate) fn has_spoken_material(word: &Word) -> bool {
 
 /// Validate inline `@...` marker integrity from raw text.
 ///
-/// This catches parser-recovery cases where malformed marker suffixes are split
-/// into standalone ERROR nodes and would otherwise be lost.
+/// # Both branches were unreachable until 2026-08-27
+///
+/// The comment below used to say this "catches parser-recovery cases where
+/// malformed marker suffixes are split into standalone ERROR nodes". It did
+/// not: a word whose `@` suffix was malformed never FORMED, so neither branch
+/// could see one. Measured before the grammar change, `hello@` reported E202
+/// from tree-sitter classifying an ERROR node's TEXT, and `hello@@c` reported
+/// a generic E316; this function's E202 and E203 branches fired on neither.
+///
+/// The grammar admits the repeated shape now (`repeated_form_marker`), so such
+/// a word forms and the `at_count` branch is live. There is NO
+/// `dangling_form_marker`: this comment named one until 2026-08-27 and the
+/// grammar never had it, because `@` is the header sigil and admitting a single
+/// one in word position moved the diagnostic for a doubled `@End`. `hello@`
+/// still parses as a word body plus a sibling ERROR, so the E202 branch below
+/// remains UNREACHABLE and is not evidence of anything.
+///
+/// The dangling branch reported E243 "illegal characters in word", which is
+/// what an unreachable rule's code drifts to. `spec/errors/E202_missing_form_type.md`
+/// carries `*CHI:\thello@ .` and E202's own summary is "Missing form type on
+/// special word", so E202 is the code and it is used here now.
+///
+/// STILL OWED: this reads `word.raw_text` and counts `@` bytes, which is the
+/// text-scanning this project bans. The grammar knows the answer structurally,
+/// in the node kind; the model cannot see it because `Word` has no slot for
+/// "the form marker was malformed, and how". That slot is the next change.
 pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
     let at_count = word
         .raw_text
@@ -458,10 +482,28 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
         return;
     }
 
+    // A word whose marker the PARSER already refused is not reported twice,
+    // and that covers BOTH branches below.
+    //
+    // The suppression existed for the `at_count > 1` branch only, so `word@@`
+    // and `word@c@` reported the parser's specific E203 ("a word may carry
+    // only one '@' suffix, found '@@'") AND this function's generic E202
+    // ("dangling '@' marker"), for one defect: the specific diagnostic buried
+    // under the generic one, which is the shape the re2c doubling was fixed
+    // for hours earlier on the other side of the same release.
+    //
+    // `FormType::Undeclared` means the form-marker text names no declared
+    // code, which the parser says at parse time with the text in hand. A bare
+    // trailing `@` (`hello@`) carries no form type at all, so it is not
+    // suppressed and keeps its E202, which is the case this branch exists for.
+    if matches!(word.form_type, Some(FormType::Undeclared(_))) {
+        return;
+    }
+
     if word.raw_text.ends_with('@') {
         errors.report(
             ParseError::new(
-                ErrorCode::IllegalCharactersInWord,
+                ErrorCode::MissingFormType,
                 Severity::Error,
                 SourceLocation::new(word.span),
                 ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
@@ -471,6 +513,30 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
         );
     }
 
+    // A word whose marker the PARSER already refused is not reported twice.
+    //
+    // `FormType::Undeclared` means the form-marker text names no declared code,
+    // and the parser says so at parse time with the text in hand:
+    // `Undeclared form marker '@@c'`. This branch would then add
+    // `Malformed form marker suffix` for the same word, because a repeated `@`
+    // is BOTH. Two E203s for one defect, the specific one buried under the
+    // generic one, which is the shape the re2c doubling was fixed for hours
+    // earlier on the other side.
+    //
+    // WHAT THIS BRANCH IS FOR, now that the ruling is made: the re2c backend.
+    // Its lexer has no repeated-suffix rule, so `word@k@s:spa` arrives there as
+    // a form marker plus a language suffix and two `@` in `raw_text`, and this
+    // count is the only thing that refuses it. On tree-sitter the grammar
+    // swallows the whole run into one node the parser names directly, so the
+    // suppression below is what stops the same defect being reported twice.
+    //
+    // This paragraph said the opposite for a few hours on 2026-08-27, that
+    // `word@k@s:spa` carries `FormType::K`, reaches the report, and that
+    // whether it should was a "live adjudication". It was ruled that day (a
+    // word may carry at most ONE `@` suffix, `spec/errors/E203.md`), and under
+    // that ruling's grammar such a word carries `FormType::Undeclared` and is
+    // suppressed here. Corrected in place, because a reader deciding whether
+    // this branch may be deleted looks exactly here.
     if at_count > 1 {
         errors.report(
             ParseError::new(

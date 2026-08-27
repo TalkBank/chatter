@@ -1,8 +1,6 @@
 +++
 code = 'E241'
 name = "Illegal Untranscribed Marker 'xx'"
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'

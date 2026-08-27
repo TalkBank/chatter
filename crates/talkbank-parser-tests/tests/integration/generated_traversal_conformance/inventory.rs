@@ -18,6 +18,7 @@
 
 #![allow(clippy::too_many_lines)]
 
+use talkbank_parser_tests::classify;
 use talkbank_parser_tests::generated_traversal::*;
 
 use super::{Inspect, InspectField, RawViolation};
@@ -351,12 +352,14 @@ impl_inspect_leaf!(
     PostcodeNode,
     QuestionNode,
     QuotationNode,
+    QuotationWithOptionalAnnotationsNode,
     QuotedNewLineNode,
     QuotedPeriodSimpleNode,
     RParenNode,
     RecordingQualityHeaderNode,
     RecordingQualityOptionNode,
     RecordingQualityPrefixNode,
+    RepeatedFormMarkerNode,
     ReplacementNode,
     RestOfLineNode,
     RetraceCompleteNode,
@@ -554,7 +557,7 @@ impl_inspect_choice!(ContentItemCaNoBreakLinkerChoice {
 impl_inspect_choice!(ContentItemChoice {
     BaseContentItem,
     GroupWithAnnotations,
-    Quotation,
+    QuotationWithOptionalAnnotations,
     IllegalCurlyQuote,
     MainPhoGroup,
     MainSinGroup,
@@ -954,6 +957,10 @@ impl_inspect_choice!(SourceFileChoice {
     StandaloneWord
 });
 impl_inspect_choice!(StandaloneWordChild0Choice { WordPrefix, Zero });
+impl_inspect_choice!(StandaloneWordChild2Choice {
+    FormMarker,
+    RepeatedFormMarker
+});
 impl_inspect_choice!(TerminatorChoice {
     BreakForCoding,
     BrokenQuestion,
@@ -1703,6 +1710,10 @@ impl_inspect_struct!(QuotationChildren {
     child_1,
     child_2
 });
+impl_inspect_struct!(QuotationWithOptionalAnnotationsChildren {
+    quotation,
+    annotations
+});
 impl_inspect_struct!(RecordingQualityHeaderChildren {
     child_0,
     child_1,
@@ -1948,315 +1959,400 @@ impl_inspect_struct!(XphointDependentTierChildren {
 /// inspect the returned children. One arm per `extract_*` free function.
 pub(super) fn dispatch(node: tree_sitter::Node, out: &mut Vec<RawViolation>) {
     match node.kind() {
-        "act_dependent_tier" => extract_act_dependent_tier(ActDependentTierNode(node))
+        "act_dependent_tier" => extract_act_dependent_tier(classify::<ActDependentTierNode>(node))
             .inspect("act_dependent_tier", out),
-        "activities_header" => {
-            extract_activities_header(ActivitiesHeaderNode(node)).inspect("activities_header", out)
-        }
-        "add_dependent_tier" => extract_add_dependent_tier(AddDependentTierNode(node))
+        "activities_header" => extract_activities_header(classify::<ActivitiesHeaderNode>(node))
+            .inspect("activities_header", out),
+        "add_dependent_tier" => extract_add_dependent_tier(classify::<AddDependentTierNode>(node))
             .inspect("add_dependent_tier", out),
-        "alt_annotation" => {
-            extract_alt_annotation(AltAnnotationNode(node)).inspect("alt_annotation", out)
-        }
-        "alt_dependent_tier" => extract_alt_dependent_tier(AltDependentTierNode(node))
+        "alt_annotation" => extract_alt_annotation(classify::<AltAnnotationNode>(node))
+            .inspect("alt_annotation", out),
+        "alt_dependent_tier" => extract_alt_dependent_tier(classify::<AltDependentTierNode>(node))
             .inspect("alt_dependent_tier", out),
         "base_annotation" => extract_base_annotation(node).inspect("base_annotation", out),
-        "base_annotations" => {
-            extract_base_annotations(BaseAnnotationsNode(node)).inspect("base_annotations", out)
+        "base_annotations" => extract_base_annotations(classify::<BaseAnnotationsNode>(node))
+            .inspect("base_annotations", out),
+        "base_content_item" => extract_base_content_item(classify::<BaseContentItemNode>(node))
+            .inspect("base_content_item", out),
+        "bck_header" => {
+            extract_bck_header(classify::<BckHeaderNode>(node)).inspect("bck_header", out)
         }
-        "base_content_item" => {
-            extract_base_content_item(BaseContentItemNode(node)).inspect("base_content_item", out)
+        "begin_header" => {
+            extract_begin_header(classify::<BeginHeaderNode>(node)).inspect("begin_header", out)
         }
-        "bck_header" => extract_bck_header(BckHeaderNode(node)).inspect("bck_header", out),
-        "begin_header" => extract_begin_header(BeginHeaderNode(node)).inspect("begin_header", out),
-        "bg_header" => extract_bg_header(BgHeaderNode(node)).inspect("bg_header", out),
-        "birth_of_header" => {
-            extract_birth_of_header(BirthOfHeaderNode(node)).inspect("birth_of_header", out)
+        "bg_header" => extract_bg_header(classify::<BgHeaderNode>(node)).inspect("bg_header", out),
+        "birth_of_header" => extract_birth_of_header(classify::<BirthOfHeaderNode>(node))
+            .inspect("birth_of_header", out),
+        "birthplace_of_header" => {
+            extract_birthplace_of_header(classify::<BirthplaceOfHeaderNode>(node))
+                .inspect("birthplace_of_header", out)
         }
-        "birthplace_of_header" => extract_birthplace_of_header(BirthplaceOfHeaderNode(node))
-            .inspect("birthplace_of_header", out),
-        "blank_header" => extract_blank_header(BlankHeaderNode(node)).inspect("blank_header", out),
-        "blank_line" => extract_blank_line(BlankLineNode(node)).inspect("blank_line", out),
-        "bullet" => extract_bullet(BulletNode(node)).inspect("bullet", out),
-        "cod_dependent_tier" => extract_cod_dependent_tier(CodDependentTierNode(node))
+        "blank_header" => {
+            extract_blank_header(classify::<BlankHeaderNode>(node)).inspect("blank_header", out)
+        }
+        "blank_line" => {
+            extract_blank_line(classify::<BlankLineNode>(node)).inspect("blank_line", out)
+        }
+        "bullet" => extract_bullet(classify::<BulletNode>(node)).inspect("bullet", out),
+        "cod_dependent_tier" => extract_cod_dependent_tier(classify::<CodDependentTierNode>(node))
             .inspect("cod_dependent_tier", out),
-        "code_switch_annotation" => extract_code_switch_annotation(CodeSwitchAnnotationNode(node))
-            .inspect("code_switch_annotation", out),
-        "coh_dependent_tier" => extract_coh_dependent_tier(CohDependentTierNode(node))
+        "code_switch_annotation" => {
+            extract_code_switch_annotation(classify::<CodeSwitchAnnotationNode>(node))
+                .inspect("code_switch_annotation", out)
+        }
+        "coh_dependent_tier" => extract_coh_dependent_tier(classify::<CohDependentTierNode>(node))
             .inspect("coh_dependent_tier", out),
-        "color_words_header" => extract_color_words_header(ColorWordsHeaderNode(node))
+        "color_words_header" => extract_color_words_header(classify::<ColorWordsHeaderNode>(node))
             .inspect("color_words_header", out),
-        "com_dependent_tier" => extract_com_dependent_tier(ComDependentTierNode(node))
+        "com_dependent_tier" => extract_com_dependent_tier(classify::<ComDependentTierNode>(node))
             .inspect("com_dependent_tier", out),
-        "comment_header" => {
-            extract_comment_header(CommentHeaderNode(node)).inspect("comment_header", out)
+        "comment_header" => extract_comment_header(classify::<CommentHeaderNode>(node))
+            .inspect("comment_header", out),
+        "content_item" => {
+            extract_content_item(classify::<ContentItemNode>(node)).inspect("content_item", out)
         }
-        "content_item" => extract_content_item(ContentItemNode(node)).inspect("content_item", out),
-        "contents" => extract_contents(ContentsNode(node)).inspect("contents", out),
+        "contents" => extract_contents(classify::<ContentsNode>(node)).inspect("contents", out),
         "date_contents" => {
-            extract_date_contents(DateContentsNode(node)).inspect("date_contents", out)
+            extract_date_contents(classify::<DateContentsNode>(node)).inspect("date_contents", out)
         }
-        "date_header" => extract_date_header(DateHeaderNode(node)).inspect("date_header", out),
-        "def_dependent_tier" => extract_def_dependent_tier(DefDependentTierNode(node))
+        "date_header" => {
+            extract_date_header(classify::<DateHeaderNode>(node)).inspect("date_header", out)
+        }
+        "def_dependent_tier" => extract_def_dependent_tier(classify::<DefDependentTierNode>(node))
             .inspect("def_dependent_tier", out),
         "dependent_tier" => extract_dependent_tier(node).inspect("dependent_tier", out),
-        "eg_header" => extract_eg_header(EgHeaderNode(node)).inspect("eg_header", out),
-        "end_header" => extract_end_header(EndHeaderNode(node)).inspect("end_header", out),
-        "eng_dependent_tier" => extract_eng_dependent_tier(EngDependentTierNode(node))
+        "eg_header" => extract_eg_header(classify::<EgHeaderNode>(node)).inspect("eg_header", out),
+        "end_header" => {
+            extract_end_header(classify::<EndHeaderNode>(node)).inspect("end_header", out)
+        }
+        "eng_dependent_tier" => extract_eng_dependent_tier(classify::<EngDependentTierNode>(node))
             .inspect("eng_dependent_tier", out),
-        "err_dependent_tier" => extract_err_dependent_tier(ErrDependentTierNode(node))
+        "err_dependent_tier" => extract_err_dependent_tier(classify::<ErrDependentTierNode>(node))
             .inspect("err_dependent_tier", out),
-        "event" => extract_event(EventNode(node)).inspect("event", out),
-        "exp_dependent_tier" => extract_exp_dependent_tier(ExpDependentTierNode(node))
+        "event" => extract_event(classify::<EventNode>(node)).inspect("event", out),
+        "exp_dependent_tier" => extract_exp_dependent_tier(classify::<ExpDependentTierNode>(node))
             .inspect("exp_dependent_tier", out),
-        "explanation_annotation" => extract_explanation_annotation(ExplanationAnnotationNode(node))
-            .inspect("explanation_annotation", out),
-        "fac_dependent_tier" => extract_fac_dependent_tier(FacDependentTierNode(node))
+        "explanation_annotation" => {
+            extract_explanation_annotation(classify::<ExplanationAnnotationNode>(node))
+                .inspect("explanation_annotation", out)
+        }
+        "fac_dependent_tier" => extract_fac_dependent_tier(classify::<FacDependentTierNode>(node))
             .inspect("fac_dependent_tier", out),
-        "final_codes" => extract_final_codes(FinalCodesNode(node)).inspect("final_codes", out),
-        "flo_dependent_tier" => extract_flo_dependent_tier(FloDependentTierNode(node))
+        "final_codes" => {
+            extract_final_codes(classify::<FinalCodesNode>(node)).inspect("final_codes", out)
+        }
+        "flo_dependent_tier" => extract_flo_dependent_tier(classify::<FloDependentTierNode>(node))
             .inspect("flo_dependent_tier", out),
-        "font_header" => extract_font_header(FontHeaderNode(node)).inspect("font_header", out),
-        "free_text" => extract_free_text(FreeTextNode(node)).inspect("free_text", out),
+        "font_header" => {
+            extract_font_header(classify::<FontHeaderNode>(node)).inspect("font_header", out)
+        }
+        "free_text" => extract_free_text(classify::<FreeTextNode>(node)).inspect("free_text", out),
         "full_document" => {
-            extract_full_document(FullDocumentNode(node)).inspect("full_document", out)
+            extract_full_document(classify::<FullDocumentNode>(node)).inspect("full_document", out)
         }
-        "g_header" => extract_g_header(GHeaderNode(node)).inspect("g_header", out),
-        "gls_dependent_tier" => extract_gls_dependent_tier(GlsDependentTierNode(node))
+        "g_header" => extract_g_header(classify::<GHeaderNode>(node)).inspect("g_header", out),
+        "gls_dependent_tier" => extract_gls_dependent_tier(classify::<GlsDependentTierNode>(node))
             .inspect("gls_dependent_tier", out),
-        "gpx_dependent_tier" => extract_gpx_dependent_tier(GpxDependentTierNode(node))
+        "gpx_dependent_tier" => extract_gpx_dependent_tier(classify::<GpxDependentTierNode>(node))
             .inspect("gpx_dependent_tier", out),
-        "gra_contents" => extract_gra_contents(GraContentsNode(node)).inspect("gra_contents", out),
-        "gra_dependent_tier" => extract_gra_dependent_tier(GraDependentTierNode(node))
+        "gra_contents" => {
+            extract_gra_contents(classify::<GraContentsNode>(node)).inspect("gra_contents", out)
+        }
+        "gra_dependent_tier" => extract_gra_dependent_tier(classify::<GraDependentTierNode>(node))
             .inspect("gra_dependent_tier", out),
-        "gra_relation" => extract_gra_relation(GraRelationNode(node)).inspect("gra_relation", out),
-        "group_with_annotations" => extract_group_with_annotations(GroupWithAnnotationsNode(node))
-            .inspect("group_with_annotations", out),
+        "gra_relation" => {
+            extract_gra_relation(classify::<GraRelationNode>(node)).inspect("gra_relation", out)
+        }
+        "group_with_annotations" => {
+            extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node))
+                .inspect("group_with_annotations", out)
+        }
         "header" => extract_header(node).inspect("header", out),
-        "header_gap" => extract_header_gap(HeaderGapNode(node)).inspect("header_gap", out),
-        "header_sep" => extract_header_sep(HeaderSepNode(node)).inspect("header_sep", out),
-        "id_age" => extract_id_age(IdAgeNode(node)).inspect("id_age", out),
-        "id_contents" => extract_id_contents(IdContentsNode(node)).inspect("id_contents", out),
-        "id_header" => extract_id_header(IdHeaderNode(node)).inspect("id_header", out),
-        "id_languages" => extract_id_languages(IdLanguagesNode(node)).inspect("id_languages", out),
-        "id_ses" => extract_id_ses(IdSesNode(node)).inspect("id_ses", out),
-        "id_sex" => extract_id_sex(IdSexNode(node)).inspect("id_sex", out),
-        "int_dependent_tier" => extract_int_dependent_tier(IntDependentTierNode(node))
+        "header_gap" => {
+            extract_header_gap(classify::<HeaderGapNode>(node)).inspect("header_gap", out)
+        }
+        "header_sep" => {
+            extract_header_sep(classify::<HeaderSepNode>(node)).inspect("header_sep", out)
+        }
+        "id_age" => extract_id_age(classify::<IdAgeNode>(node)).inspect("id_age", out),
+        "id_contents" => {
+            extract_id_contents(classify::<IdContentsNode>(node)).inspect("id_contents", out)
+        }
+        "id_header" => extract_id_header(classify::<IdHeaderNode>(node)).inspect("id_header", out),
+        "id_languages" => {
+            extract_id_languages(classify::<IdLanguagesNode>(node)).inspect("id_languages", out)
+        }
+        "id_ses" => extract_id_ses(classify::<IdSesNode>(node)).inspect("id_ses", out),
+        "id_sex" => extract_id_sex(classify::<IdSexNode>(node)).inspect("id_sex", out),
+        "int_dependent_tier" => extract_int_dependent_tier(classify::<IntDependentTierNode>(node))
             .inspect("int_dependent_tier", out),
-        "l1_of_header" => extract_l1_of_header(L1OfHeaderNode(node)).inspect("l1_of_header", out),
-        "langcode" => extract_langcode(LangcodeNode(node)).inspect("langcode", out),
-        "languages_contents" => extract_languages_contents(LanguagesContentsNode(node))
+        "l1_of_header" => {
+            extract_l1_of_header(classify::<L1OfHeaderNode>(node)).inspect("l1_of_header", out)
+        }
+        "langcode" => extract_langcode(classify::<LangcodeNode>(node)).inspect("langcode", out),
+        "languages_contents" => extract_languages_contents(classify::<LanguagesContentsNode>(node))
             .inspect("languages_contents", out),
-        "languages_header" => {
-            extract_languages_header(LanguagesHeaderNode(node)).inspect("languages_header", out)
-        }
-        "line" => extract_line(LineNode(node)).inspect("line", out),
+        "languages_header" => extract_languages_header(classify::<LanguagesHeaderNode>(node))
+            .inspect("languages_header", out),
+        "line" => extract_line(classify::<LineNode>(node)).inspect("line", out),
         "linker" => extract_linker(node).inspect("linker", out),
-        "linkers" => extract_linkers(LinkersNode(node)).inspect("linkers", out),
-        "location_header" => {
-            extract_location_header(LocationHeaderNode(node)).inspect("location_header", out)
+        "linkers" => extract_linkers(classify::<LinkersNode>(node)).inspect("linkers", out),
+        "location_header" => extract_location_header(classify::<LocationHeaderNode>(node))
+            .inspect("location_header", out),
+        "long_feature" => {
+            extract_long_feature(classify::<LongFeatureNode>(node)).inspect("long_feature", out)
         }
-        "long_feature" => extract_long_feature(LongFeatureNode(node)).inspect("long_feature", out),
-        "long_feature_begin" => extract_long_feature_begin(LongFeatureBeginNode(node))
+        "long_feature_begin" => extract_long_feature_begin(classify::<LongFeatureBeginNode>(node))
             .inspect("long_feature_begin", out),
-        "long_feature_end" => {
-            extract_long_feature_end(LongFeatureEndNode(node)).inspect("long_feature_end", out)
+        "long_feature_end" => extract_long_feature_end(classify::<LongFeatureEndNode>(node))
+            .inspect("long_feature_end", out),
+        "main_pho_group" => extract_main_pho_group(classify::<MainPhoGroupNode>(node))
+            .inspect("main_pho_group", out),
+        "main_sin_group" => extract_main_sin_group(classify::<MainSinGroupNode>(node))
+            .inspect("main_sin_group", out),
+        "main_tier" => extract_main_tier(classify::<MainTierNode>(node)).inspect("main_tier", out),
+        "media_contents" => extract_media_contents(classify::<MediaContentsNode>(node))
+            .inspect("media_contents", out),
+        "media_filename" => extract_media_filename(classify::<MediaFilenameNode>(node))
+            .inspect("media_filename", out),
+        "media_header" => {
+            extract_media_header(classify::<MediaHeaderNode>(node)).inspect("media_header", out)
         }
-        "main_pho_group" => {
-            extract_main_pho_group(MainPhoGroupNode(node)).inspect("main_pho_group", out)
+        "media_status" => {
+            extract_media_status(classify::<MediaStatusNode>(node)).inspect("media_status", out)
         }
-        "main_sin_group" => {
-            extract_main_sin_group(MainSinGroupNode(node)).inspect("main_sin_group", out)
+        "media_type" => {
+            extract_media_type(classify::<MediaTypeNode>(node)).inspect("media_type", out)
         }
-        "main_tier" => extract_main_tier(MainTierNode(node)).inspect("main_tier", out),
-        "media_contents" => {
-            extract_media_contents(MediaContentsNode(node)).inspect("media_contents", out)
-        }
-        "media_filename" => {
-            extract_media_filename(MediaFilenameNode(node)).inspect("media_filename", out)
-        }
-        "media_header" => extract_media_header(MediaHeaderNode(node)).inspect("media_header", out),
-        "media_status" => extract_media_status(MediaStatusNode(node)).inspect("media_status", out),
-        "media_type" => extract_media_type(MediaTypeNode(node)).inspect("media_type", out),
-        "mod_dependent_tier" => extract_mod_dependent_tier(ModDependentTierNode(node))
+        "mod_dependent_tier" => extract_mod_dependent_tier(classify::<ModDependentTierNode>(node))
             .inspect("mod_dependent_tier", out),
-        "modsyl_dependent_tier" => extract_modsyl_dependent_tier(ModsylDependentTierNode(node))
-            .inspect("modsyl_dependent_tier", out),
-        "mor_content" => extract_mor_content(MorContentNode(node)).inspect("mor_content", out),
-        "mor_contents" => extract_mor_contents(MorContentsNode(node)).inspect("mor_contents", out),
-        "mor_dependent_tier" => extract_mor_dependent_tier(MorDependentTierNode(node))
+        "modsyl_dependent_tier" => {
+            extract_modsyl_dependent_tier(classify::<ModsylDependentTierNode>(node))
+                .inspect("modsyl_dependent_tier", out)
+        }
+        "mor_content" => {
+            extract_mor_content(classify::<MorContentNode>(node)).inspect("mor_content", out)
+        }
+        "mor_contents" => {
+            extract_mor_contents(classify::<MorContentsNode>(node)).inspect("mor_contents", out)
+        }
+        "mor_dependent_tier" => extract_mor_dependent_tier(classify::<MorDependentTierNode>(node))
             .inspect("mor_dependent_tier", out),
-        "mor_feature" => extract_mor_feature(MorFeatureNode(node)).inspect("mor_feature", out),
-        "mor_post_clitic" => {
-            extract_mor_post_clitic(MorPostCliticNode(node)).inspect("mor_post_clitic", out)
+        "mor_feature" => {
+            extract_mor_feature(classify::<MorFeatureNode>(node)).inspect("mor_feature", out)
         }
-        "mor_word" => extract_mor_word(MorWordNode(node)).inspect("mor_word", out),
-        "new_episode_header" => extract_new_episode_header(NewEpisodeHeaderNode(node))
+        "mor_post_clitic" => extract_mor_post_clitic(classify::<MorPostCliticNode>(node))
+            .inspect("mor_post_clitic", out),
+        "mor_word" => extract_mor_word(classify::<MorWordNode>(node)).inspect("mor_word", out),
+        "new_episode_header" => extract_new_episode_header(classify::<NewEpisodeHeaderNode>(node))
             .inspect("new_episode_header", out),
-        "non_colon_separator" => extract_non_colon_separator(NonColonSeparatorNode(node))
-            .inspect("non_colon_separator", out),
-        "nonvocal" => extract_nonvocal(NonvocalNode(node)).inspect("nonvocal", out),
-        "nonvocal_begin" => {
-            extract_nonvocal_begin(NonvocalBeginNode(node)).inspect("nonvocal_begin", out)
+        "non_colon_separator" => {
+            extract_non_colon_separator(classify::<NonColonSeparatorNode>(node))
+                .inspect("non_colon_separator", out)
         }
-        "nonvocal_end" => extract_nonvocal_end(NonvocalEndNode(node)).inspect("nonvocal_end", out),
-        "nonvocal_simple" => {
-            extract_nonvocal_simple(NonvocalSimpleNode(node)).inspect("nonvocal_simple", out)
+        "nonvocal" => extract_nonvocal(classify::<NonvocalNode>(node)).inspect("nonvocal", out),
+        "nonvocal_begin" => extract_nonvocal_begin(classify::<NonvocalBeginNode>(node))
+            .inspect("nonvocal_begin", out),
+        "nonvocal_end" => {
+            extract_nonvocal_end(classify::<NonvocalEndNode>(node)).inspect("nonvocal_end", out)
         }
-        "nonword" => extract_nonword(NonwordNode(node)).inspect("nonword", out),
-        "nonword_with_optional_annotations" => {
-            extract_nonword_with_optional_annotations(NonwordWithOptionalAnnotationsNode(node))
-                .inspect("nonword_with_optional_annotations", out)
-        }
+        "nonvocal_simple" => extract_nonvocal_simple(classify::<NonvocalSimpleNode>(node))
+            .inspect("nonvocal_simple", out),
+        "nonword" => extract_nonword(classify::<NonwordNode>(node)).inspect("nonword", out),
+        "nonword_with_optional_annotations" => extract_nonword_with_optional_annotations(
+            classify::<NonwordWithOptionalAnnotationsNode>(node),
+        )
+        .inspect("nonword_with_optional_annotations", out),
         "number_header" => {
-            extract_number_header(NumberHeaderNode(node)).inspect("number_header", out)
+            extract_number_header(classify::<NumberHeaderNode>(node)).inspect("number_header", out)
         }
         "number_option" => {
-            extract_number_option(NumberOptionNode(node)).inspect("number_option", out)
+            extract_number_option(classify::<NumberOptionNode>(node)).inspect("number_option", out)
         }
-        "option_name" => extract_option_name(OptionNameNode(node)).inspect("option_name", out),
-        "options_contents" => {
-            extract_options_contents(OptionsContentsNode(node)).inspect("options_contents", out)
+        "option_name" => {
+            extract_option_name(classify::<OptionNameNode>(node)).inspect("option_name", out)
         }
-        "options_header" => {
-            extract_options_header(OptionsHeaderNode(node)).inspect("options_header", out)
-        }
-        "ort_dependent_tier" => extract_ort_dependent_tier(OrtDependentTierNode(node))
+        "options_contents" => extract_options_contents(classify::<OptionsContentsNode>(node))
+            .inspect("options_contents", out),
+        "options_header" => extract_options_header(classify::<OptionsHeaderNode>(node))
+            .inspect("options_header", out),
+        "ort_dependent_tier" => extract_ort_dependent_tier(classify::<OrtDependentTierNode>(node))
             .inspect("ort_dependent_tier", out),
-        "other_spoken_event" => extract_other_spoken_event(OtherSpokenEventNode(node))
+        "other_spoken_event" => extract_other_spoken_event(classify::<OtherSpokenEventNode>(node))
             .inspect("other_spoken_event", out),
-        "page_header" => extract_page_header(PageHeaderNode(node)).inspect("page_header", out),
-        "par_dependent_tier" => extract_par_dependent_tier(ParDependentTierNode(node))
-            .inspect("par_dependent_tier", out),
-        "para_annotation" => {
-            extract_para_annotation(ParaAnnotationNode(node)).inspect("para_annotation", out)
+        "page_header" => {
+            extract_page_header(classify::<PageHeaderNode>(node)).inspect("page_header", out)
         }
-        "participant" => extract_participant(ParticipantNode(node)).inspect("participant", out),
-        "participants_contents" => extract_participants_contents(ParticipantsContentsNode(node))
-            .inspect("participants_contents", out),
-        "participants_header" => extract_participants_header(ParticipantsHeaderNode(node))
-            .inspect("participants_header", out),
-        "percent_annotation" => extract_percent_annotation(PercentAnnotationNode(node))
+        "par_dependent_tier" => extract_par_dependent_tier(classify::<ParDependentTierNode>(node))
+            .inspect("par_dependent_tier", out),
+        "para_annotation" => extract_para_annotation(classify::<ParaAnnotationNode>(node))
+            .inspect("para_annotation", out),
+        "participant" => {
+            extract_participant(classify::<ParticipantNode>(node)).inspect("participant", out)
+        }
+        "participants_contents" => {
+            extract_participants_contents(classify::<ParticipantsContentsNode>(node))
+                .inspect("participants_contents", out)
+        }
+        "participants_header" => {
+            extract_participants_header(classify::<ParticipantsHeaderNode>(node))
+                .inspect("participants_header", out)
+        }
+        "percent_annotation" => extract_percent_annotation(classify::<PercentAnnotationNode>(node))
             .inspect("percent_annotation", out),
-        "pho_dependent_tier" => extract_pho_dependent_tier(PhoDependentTierNode(node))
+        "pho_dependent_tier" => extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node))
             .inspect("pho_dependent_tier", out),
-        "pho_group" => extract_pho_group(PhoGroupNode(node)).inspect("pho_group", out),
-        "pho_grouped_content" => extract_pho_grouped_content(PhoGroupedContentNode(node))
-            .inspect("pho_grouped_content", out),
-        "pho_groups" => extract_pho_groups(PhoGroupsNode(node)).inspect("pho_groups", out),
-        "pho_words" => extract_pho_words(PhoWordsNode(node)).inspect("pho_words", out),
-        "phoaln_dependent_tier" => extract_phoaln_dependent_tier(PhoalnDependentTierNode(node))
-            .inspect("phoaln_dependent_tier", out),
-        "phosyl_dependent_tier" => extract_phosyl_dependent_tier(PhosylDependentTierNode(node))
-            .inspect("phosyl_dependent_tier", out),
-        "pid_header" => extract_pid_header(PidHeaderNode(node)).inspect("pid_header", out),
-        "postcode" => extract_postcode(PostcodeNode(node)).inspect("postcode", out),
+        "pho_group" => extract_pho_group(classify::<PhoGroupNode>(node)).inspect("pho_group", out),
+        "pho_grouped_content" => {
+            extract_pho_grouped_content(classify::<PhoGroupedContentNode>(node))
+                .inspect("pho_grouped_content", out)
+        }
+        "pho_groups" => {
+            extract_pho_groups(classify::<PhoGroupsNode>(node)).inspect("pho_groups", out)
+        }
+        "pho_words" => extract_pho_words(classify::<PhoWordsNode>(node)).inspect("pho_words", out),
+        "phoaln_dependent_tier" => {
+            extract_phoaln_dependent_tier(classify::<PhoalnDependentTierNode>(node))
+                .inspect("phoaln_dependent_tier", out)
+        }
+        "phosyl_dependent_tier" => {
+            extract_phosyl_dependent_tier(classify::<PhosylDependentTierNode>(node))
+                .inspect("phosyl_dependent_tier", out)
+        }
+        "pid_header" => {
+            extract_pid_header(classify::<PidHeaderNode>(node)).inspect("pid_header", out)
+        }
+        "postcode" => extract_postcode(classify::<PostcodeNode>(node)).inspect("postcode", out),
         "pre_begin_header" => extract_pre_begin_header(node).inspect("pre_begin_header", out),
-        "quotation" => extract_quotation(QuotationNode(node)).inspect("quotation", out),
+        "quotation" => extract_quotation(classify::<QuotationNode>(node)).inspect("quotation", out),
+        "quotation_with_optional_annotations" => {
+            extract_quotation_with_optional_annotations(classify::<
+                QuotationWithOptionalAnnotationsNode,
+            >(node))
+            .inspect("quotation_with_optional_annotations", out)
+        }
         "recording_quality_header" => {
-            extract_recording_quality_header(RecordingQualityHeaderNode(node))
+            extract_recording_quality_header(classify::<RecordingQualityHeaderNode>(node))
                 .inspect("recording_quality_header", out)
         }
         "recording_quality_option" => {
-            extract_recording_quality_option(RecordingQualityOptionNode(node))
+            extract_recording_quality_option(classify::<RecordingQualityOptionNode>(node))
                 .inspect("recording_quality_option", out)
         }
-        "replacement" => extract_replacement(ReplacementNode(node)).inspect("replacement", out),
-        "room_layout_header" => extract_room_layout_header(RoomLayoutHeaderNode(node))
+        "replacement" => {
+            extract_replacement(classify::<ReplacementNode>(node)).inspect("replacement", out)
+        }
+        "room_layout_header" => extract_room_layout_header(classify::<RoomLayoutHeaderNode>(node))
             .inspect("room_layout_header", out),
-        "separator" => extract_separator(SeparatorNode(node)).inspect("separator", out),
-        "shortening" => extract_shortening(ShorteningNode(node)).inspect("shortening", out),
-        "sin_dependent_tier" => extract_sin_dependent_tier(SinDependentTierNode(node))
+        "separator" => extract_separator(classify::<SeparatorNode>(node)).inspect("separator", out),
+        "shortening" => {
+            extract_shortening(classify::<ShorteningNode>(node)).inspect("shortening", out)
+        }
+        "sin_dependent_tier" => extract_sin_dependent_tier(classify::<SinDependentTierNode>(node))
             .inspect("sin_dependent_tier", out),
-        "sin_group" => extract_sin_group(SinGroupNode(node)).inspect("sin_group", out),
-        "sin_grouped_content" => extract_sin_grouped_content(SinGroupedContentNode(node))
-            .inspect("sin_grouped_content", out),
-        "sin_groups" => extract_sin_groups(SinGroupsNode(node)).inspect("sin_groups", out),
-        "sin_word" => extract_sin_word(SinWordNode(node)).inspect("sin_word", out),
-        "sit_dependent_tier" => extract_sit_dependent_tier(SitDependentTierNode(node))
+        "sin_group" => extract_sin_group(classify::<SinGroupNode>(node)).inspect("sin_group", out),
+        "sin_grouped_content" => {
+            extract_sin_grouped_content(classify::<SinGroupedContentNode>(node))
+                .inspect("sin_grouped_content", out)
+        }
+        "sin_groups" => {
+            extract_sin_groups(classify::<SinGroupsNode>(node)).inspect("sin_groups", out)
+        }
+        "sin_word" => extract_sin_word(classify::<SinWordNode>(node)).inspect("sin_word", out),
+        "sit_dependent_tier" => extract_sit_dependent_tier(classify::<SitDependentTierNode>(node))
             .inspect("sit_dependent_tier", out),
-        "situation_header" => {
-            extract_situation_header(SituationHeaderNode(node)).inspect("situation_header", out)
+        "situation_header" => extract_situation_header(classify::<SituationHeaderNode>(node))
+            .inspect("situation_header", out),
+        "source_file" => {
+            extract_source_file(classify::<SourceFileNode>(node)).inspect("source_file", out)
         }
-        "source_file" => extract_source_file(SourceFileNode(node)).inspect("source_file", out),
-        "spa_dependent_tier" => extract_spa_dependent_tier(SpaDependentTierNode(node))
+        "spa_dependent_tier" => extract_spa_dependent_tier(classify::<SpaDependentTierNode>(node))
             .inspect("spa_dependent_tier", out),
-        "standalone_word" => {
-            extract_standalone_word(StandaloneWordNode(node)).inspect("standalone_word", out)
+        "standalone_word" => extract_standalone_word(classify::<StandaloneWordNode>(node))
+            .inspect("standalone_word", out),
+        "t_header" => extract_t_header(classify::<THeaderNode>(node)).inspect("t_header", out),
+        "tape_location_header" => {
+            extract_tape_location_header(classify::<TapeLocationHeaderNode>(node))
+                .inspect("tape_location_header", out)
         }
-        "t_header" => extract_t_header(THeaderNode(node)).inspect("t_header", out),
-        "tape_location_header" => extract_tape_location_header(TapeLocationHeaderNode(node))
-            .inspect("tape_location_header", out),
         "terminator" => extract_terminator(node).inspect("terminator", out),
-        "text_with_bullets" => {
-            extract_text_with_bullets(TextWithBulletsNode(node)).inspect("text_with_bullets", out)
-        }
+        "text_with_bullets" => extract_text_with_bullets(classify::<TextWithBulletsNode>(node))
+            .inspect("text_with_bullets", out),
         "text_with_bullets_and_pics" => {
-            extract_text_with_bullets_and_pics(TextWithBulletsAndPicsNode(node))
+            extract_text_with_bullets_and_pics(classify::<TextWithBulletsAndPicsNode>(node))
                 .inspect("text_with_bullets_and_pics", out)
         }
-        "thumbnail_header" => {
-            extract_thumbnail_header(ThumbnailHeaderNode(node)).inspect("thumbnail_header", out)
-        }
-        "tier_body" => extract_tier_body(TierBodyNode(node)).inspect("tier_body", out),
-        "tier_sep" => extract_tier_sep(TierSepNode(node)).inspect("tier_sep", out),
-        "tim_dependent_tier" => extract_tim_dependent_tier(TimDependentTierNode(node))
+        "thumbnail_header" => extract_thumbnail_header(classify::<ThumbnailHeaderNode>(node))
+            .inspect("thumbnail_header", out),
+        "tier_body" => extract_tier_body(classify::<TierBodyNode>(node)).inspect("tier_body", out),
+        "tier_sep" => extract_tier_sep(classify::<TierSepNode>(node)).inspect("tier_sep", out),
+        "tim_dependent_tier" => extract_tim_dependent_tier(classify::<TimDependentTierNode>(node))
             .inspect("tim_dependent_tier", out),
-        "time_duration_contents" => extract_time_duration_contents(TimeDurationContentsNode(node))
-            .inspect("time_duration_contents", out),
-        "time_duration_header" => extract_time_duration_header(TimeDurationHeaderNode(node))
-            .inspect("time_duration_header", out),
-        "time_start_header" => {
-            extract_time_start_header(TimeStartHeaderNode(node)).inspect("time_start_header", out)
+        "time_duration_contents" => {
+            extract_time_duration_contents(classify::<TimeDurationContentsNode>(node))
+                .inspect("time_duration_contents", out)
         }
-        "transcriber_header" => extract_transcriber_header(TranscriberHeaderNode(node))
+        "time_duration_header" => {
+            extract_time_duration_header(classify::<TimeDurationHeaderNode>(node))
+                .inspect("time_duration_header", out)
+        }
+        "time_start_header" => extract_time_start_header(classify::<TimeStartHeaderNode>(node))
+            .inspect("time_start_header", out),
+        "transcriber_header" => extract_transcriber_header(classify::<TranscriberHeaderNode>(node))
             .inspect("transcriber_header", out),
-        "transcription_header" => extract_transcription_header(TranscriptionHeaderNode(node))
-            .inspect("transcription_header", out),
-        "transcription_option" => extract_transcription_option(TranscriptionOptionNode(node))
-            .inspect("transcription_option", out),
-        "types_header" => extract_types_header(TypesHeaderNode(node)).inspect("types_header", out),
+        "transcription_header" => {
+            extract_transcription_header(classify::<TranscriptionHeaderNode>(node))
+                .inspect("transcription_header", out)
+        }
+        "transcription_option" => {
+            extract_transcription_option(classify::<TranscriptionOptionNode>(node))
+                .inspect("transcription_option", out)
+        }
+        "types_header" => {
+            extract_types_header(classify::<TypesHeaderNode>(node)).inspect("types_header", out)
+        }
         "unsupported_dependent_tier" => {
-            extract_unsupported_dependent_tier(UnsupportedDependentTierNode(node))
+            extract_unsupported_dependent_tier(classify::<UnsupportedDependentTierNode>(node))
                 .inspect("unsupported_dependent_tier", out)
         }
-        "unsupported_header" => extract_unsupported_header(UnsupportedHeaderNode(node))
+        "unsupported_header" => extract_unsupported_header(classify::<UnsupportedHeaderNode>(node))
             .inspect("unsupported_header", out),
-        "unsupported_line" => {
-            extract_unsupported_line(UnsupportedLineNode(node)).inspect("unsupported_line", out)
+        "unsupported_line" => extract_unsupported_line(classify::<UnsupportedLineNode>(node))
+            .inspect("unsupported_line", out),
+        "utf8_header" => {
+            extract_utf8_header(classify::<Utf8HeaderNode>(node)).inspect("utf8_header", out)
         }
-        "utf8_header" => extract_utf8_header(Utf8HeaderNode(node)).inspect("utf8_header", out),
-        "utterance" => extract_utterance(UtteranceNode(node)).inspect("utterance", out),
+        "utterance" => extract_utterance(classify::<UtteranceNode>(node)).inspect("utterance", out),
         "utterance_end" => {
-            extract_utterance_end(UtteranceEndNode(node)).inspect("utterance_end", out)
+            extract_utterance_end(classify::<UtteranceEndNode>(node)).inspect("utterance_end", out)
         }
         "videos_header" => {
-            extract_videos_header(VideosHeaderNode(node)).inspect("videos_header", out)
+            extract_videos_header(classify::<VideosHeaderNode>(node)).inspect("videos_header", out)
         }
-        "warning_header" => {
-            extract_warning_header(WarningHeaderNode(node)).inspect("warning_header", out)
-        }
+        "warning_header" => extract_warning_header(classify::<WarningHeaderNode>(node))
+            .inspect("warning_header", out),
         "window_header" => {
-            extract_window_header(WindowHeaderNode(node)).inspect("window_header", out)
+            extract_window_header(classify::<WindowHeaderNode>(node)).inspect("window_header", out)
         }
-        "wor_dependent_tier" => extract_wor_dependent_tier(WorDependentTierNode(node))
+        "wor_dependent_tier" => extract_wor_dependent_tier(classify::<WorDependentTierNode>(node))
             .inspect("wor_dependent_tier", out),
         "wor_tier_body" => {
-            extract_wor_tier_body(WorTierBodyNode(node)).inspect("wor_tier_body", out)
+            extract_wor_tier_body(classify::<WorTierBodyNode>(node)).inspect("wor_tier_body", out)
         }
         "wor_word_item" => {
-            extract_wor_word_item(WorWordItemNode(node)).inspect("wor_word_item", out)
+            extract_wor_word_item(classify::<WorWordItemNode>(node)).inspect("wor_word_item", out)
         }
-        "word_body" => extract_word_body(WordBodyNode(node)).inspect("word_body", out),
-        "word_with_optional_annotations" => {
-            extract_word_with_optional_annotations(WordWithOptionalAnnotationsNode(node))
-                .inspect("word_with_optional_annotations", out)
+        "word_body" => extract_word_body(classify::<WordBodyNode>(node)).inspect("word_body", out),
+        "word_with_optional_annotations" => extract_word_with_optional_annotations(classify::<
+            WordWithOptionalAnnotationsNode,
+        >(node))
+        .inspect("word_with_optional_annotations", out),
+        "x_dependent_tier" => extract_x_dependent_tier(classify::<XDependentTierNode>(node))
+            .inspect("x_dependent_tier", out),
+        "xphoint_dependent_tier" => {
+            extract_xphoint_dependent_tier(classify::<XphointDependentTierNode>(node))
+                .inspect("xphoint_dependent_tier", out)
         }
-        "x_dependent_tier" => {
-            extract_x_dependent_tier(XDependentTierNode(node)).inspect("x_dependent_tier", out)
-        }
-        "xphoint_dependent_tier" => extract_xphoint_dependent_tier(XphointDependentTierNode(node))
-            .inspect("xphoint_dependent_tier", out),
         _ => {}
     }
 }

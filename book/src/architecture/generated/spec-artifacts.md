@@ -3,9 +3,9 @@
 | Artifact | Committed at | Directory ownership |
 |---|---|---|
 | example-diagnostics observation snapshot | `spec/observations/` | the whole directory, cleared on every run |
+| talkbank-model's generated sources | `crates/talkbank-model/src/errors/` | only the files it produces |
 | tree-sitter corpus tests | `grammar/test/corpus/generated/` | the whole directory, cleared on every run |
 | generated Rust test bodies | `crates/talkbank-parser-tests/tests/integration/generated/` | only the files it produces |
 | published error documentation | `docs/errors/` | the whole directory, cleared on every run |
 | validation fixture corpus + manifest | `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | the whole directory, cleared on every run |
-| DiagnosticKind registry | `crates/talkbank-model/src/errors/` | only the files it produces |
 | the book's artifact table | `book/src/architecture/generated/` | only the files it produces |

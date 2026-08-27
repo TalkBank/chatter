@@ -10,19 +10,6 @@ use crate::model::{ContentAnnotation, ReplacedWord, Separator, Word, WordCategor
 
 use super::domain::TierDomain;
 
-/// Returns `true` if a group with these annotations should be skipped during alignment.
-///
-/// Retrace annotations skip only for the Mor domain; retraced content
-/// was phonologically produced, so %pho, %sin, and %wor include it.
-/// This helper exists so callers can consistently apply the same domain gate
-/// when handling annotated groups at any nesting level.
-pub fn should_skip_group(annotations: &[ContentAnnotation], domain: TierDomain) -> bool {
-    // Retrace annotations skip ONLY for Mor domain (linguistic content analysis).
-    // Retraced content WAS produced phonologically (speaker said it before correcting),
-    // so %pho, %sin, and %wor all include transcriptions for retraced groups.
-    domain == TierDomain::Mor && annotations_have_alignment_ignore(annotations)
-}
-
 /// Returns `true` if any annotation in the slice excludes content from alignment.
 ///
 /// This helper is domain-agnostic; callers decide whether exclusion applies in

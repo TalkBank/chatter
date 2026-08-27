@@ -225,10 +225,13 @@ fn chat_to_json_unvalidated_produces_json() -> Result<(), PipelineError> {
 #[test]
 fn normalize_chat_idempotent() -> Result<(), PipelineError> {
     let options = ParseValidateOptions::default();
+    // `normalize_chat` returns the proof, not a bare `String`: holding it is
+    // the point, so the text comes through `text()`.
     let first = normalize_chat(VALID_CHAT, options.clone())?;
-    let second = normalize_chat(&first, options)?;
+    let second = normalize_chat(first.text(), options)?;
     assert_eq!(
-        first, second,
+        first.text(),
+        second.text(),
         "Normalizing twice should produce the same output"
     );
     Ok(())

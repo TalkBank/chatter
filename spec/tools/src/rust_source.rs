@@ -97,3 +97,33 @@ pub fn format_generated_rust(source: &str) -> Result<String, RustfmtError> {
     }
     String::from_utf8(output.stdout).map_err(|_| RustfmtError::OutputNotUtf8)
 }
+
+/// Render lines as a `///` doc comment block.
+///
+/// # One owner, because the second copy arrived within a fortnight
+///
+/// A blank line becomes a bare `///`, which is a paragraph break in rustdoc.
+/// The form-marker renderer had this; `error_code_enum` wrote it again for
+/// `ErrorCode`'s variants, in the same crate, with a hardcoded four-space
+/// indent on top.
+///
+/// It lives HERE rather than beside either caller for the reason this module
+/// exists at all: both callers pipe their output through
+/// [`format_generated_rust`], so this is the same seam.
+///
+/// # It emits NO indentation, deliberately
+///
+/// Every caller formats through [`format_generated_rust`], and rustfmt
+/// re-indents doc comments from scratch. Indentation written here is written,
+/// reviewed and then discarded, and it makes a caller's assertions depend on a
+/// value rustfmt overwrites.
+pub fn doc_comment<S: AsRef<str>>(lines: impl IntoIterator<Item = S>) -> String {
+    lines
+        .into_iter()
+        .map(|line| match line.as_ref().is_empty() {
+            true => "///".to_owned(),
+            false => format!("/// {}", line.as_ref()),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}

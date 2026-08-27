@@ -86,29 +86,23 @@ fn collect_wor_item(item: &UtteranceContent, out: &mut Vec<WorItem>) {
         UtteranceContent::ReplacedWord(replaced) => {
             collect_wor_replaced_word(replaced, out);
         }
-        UtteranceContent::Group(group) => {
-            collect_wor_bracketed_content(&group.content, out);
-        }
-        UtteranceContent::AnnotatedGroup(annotated) => {
-            collect_wor_bracketed_content(&annotated.inner.content, out);
-        }
-        UtteranceContent::PhoGroup(pho) => {
-            collect_wor_bracketed_content(&pho.content, out);
-        }
-        UtteranceContent::SinGroup(sin) => {
-            collect_wor_bracketed_content(&sin.content, out);
-        }
-        UtteranceContent::Quotation(quotation) => {
-            collect_wor_bracketed_content(&quotation.content, out);
-        }
-        UtteranceContent::Retrace(retrace) => {
-            collect_wor_bracketed_content(&retrace.content, out);
-        }
-        UtteranceContent::AnnotatedRetrace(annotated) => {
-            // Same handling as the bare form: the wrapper carries only
-            // the annotations written after the marker, and the retraced
-            // content is unchanged.
-            collect_wor_bracketed_content(&annotated.inner.content, out);
+        // Containers: ONE arm. Every one of these recursed unconditionally
+        // into its enclosed content, which is what `ContentStructure::enclosed`
+        // is for; its own docstring names the walkers under `validation/` and
+        // `alignment/` as the callers that had not adopted it. The annotations
+        // sit on the wrapper and are not part of the enclosed content, which is
+        // what each of the separate arms already did.
+        UtteranceContent::Group(_)
+        | UtteranceContent::AnnotatedGroup(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::PhoGroup(_)
+        | UtteranceContent::SinGroup(_)
+        | UtteranceContent::Quotation(_)
+        | UtteranceContent::Retrace(_)
+        | UtteranceContent::AnnotatedRetrace(_) => {
+            if let Some(content) = item.structure().enclosed() {
+                collect_wor_bracketed_content(content, out);
+            }
         }
         UtteranceContent::Separator(sep) => {
             if is_tag_marker_separator(sep) {
@@ -121,6 +115,7 @@ fn collect_wor_item(item: &UtteranceContent, out: &mut Vec<WorItem>) {
         UtteranceContent::Event(_)
         | UtteranceContent::AnnotatedEvent(_)
         | UtteranceContent::Pause(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::OverlapPoint(_)
@@ -161,26 +156,23 @@ fn collect_wor_bracketed_item(item: &BracketedItem, out: &mut Vec<WorItem>) {
         BracketedItem::ReplacedWord(replaced) => {
             collect_wor_replaced_word(replaced, out);
         }
-        BracketedItem::AnnotatedGroup(annotated) => {
-            collect_wor_bracketed_content(&annotated.inner.content, out);
-        }
-        BracketedItem::PhoGroup(pho) => {
-            collect_wor_bracketed_content(&pho.content, out);
-        }
-        BracketedItem::SinGroup(sin) => {
-            collect_wor_bracketed_content(&sin.content, out);
-        }
-        BracketedItem::Quotation(quotation) => {
-            collect_wor_bracketed_content(&quotation.content, out);
-        }
-        BracketedItem::Retrace(retrace) => {
-            collect_wor_bracketed_content(&retrace.content, out);
-        }
-        BracketedItem::AnnotatedRetrace(annotated) => {
-            // Same handling as the bare form: the wrapper carries only
-            // the annotations written after the marker, and the retraced
-            // content is unchanged.
-            collect_wor_bracketed_content(&annotated.inner.content, out);
+        // Containers: ONE arm. Every one of these recursed unconditionally
+        // into its enclosed content, which is what `ContentStructure::enclosed`
+        // is for; its own docstring names the walkers under `validation/` and
+        // `alignment/` as the callers that had not adopted it. The annotations
+        // sit on the wrapper and are not part of the enclosed content, which is
+        // what each of the separate arms already did.
+        BracketedItem::Group(_)
+        | BracketedItem::AnnotatedGroup(_)
+        | BracketedItem::AnnotatedQuotation(_)
+        | BracketedItem::PhoGroup(_)
+        | BracketedItem::SinGroup(_)
+        | BracketedItem::Quotation(_)
+        | BracketedItem::Retrace(_)
+        | BracketedItem::AnnotatedRetrace(_) => {
+            if let Some(content) = item.structure().enclosed() {
+                collect_wor_bracketed_content(content, out);
+            }
         }
         BracketedItem::Separator(sep) => {
             if is_tag_marker_separator(sep) {

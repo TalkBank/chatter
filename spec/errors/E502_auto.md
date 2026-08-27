@@ -1,8 +1,6 @@
 +++
 code = 'E502'
 name = 'Missing required @End header'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'header'

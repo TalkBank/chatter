@@ -55,11 +55,12 @@ use crate::parser::tree_parsing::parser_helpers::{
 /// (which only fired for a wrong-kind `child(1)`, impossible in an error-free
 /// tier) rather than silently losing a reachable diagnostic.
 pub(super) fn extract_sin_group_items(
-    node: Node,
+    typed: SinGroupNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<SinItem> {
-    let children = extract_sin_group(SinGroupNode(node));
+    let node = typed.raw_node();
+    let children = extract_sin_group(typed);
     surface_unexpected(&children.unexpected, source, errors);
     match children.content.slot() {
         NodeSlot::Present(SinGroupChoice::SinWord(sin_word)) => {
@@ -78,11 +79,8 @@ pub(super) fn extract_sin_group_items(
             surface_unexpected(&seq.unexpected, source, errors);
             match seq.child_1.slot() {
                 NodeSlot::Present(grouped_content) => {
-                    let gestures = extract_sin_grouped_content_tokens(
-                        grouped_content.raw_node(),
-                        source,
-                        errors,
-                    );
+                    let gestures =
+                        extract_sin_grouped_content_tokens(*grouped_content, source, errors);
                     if !gestures.is_empty() {
                         vec![SinItem::SinGroup(SinGroupGestures::new(gestures))]
                     } else {
@@ -135,11 +133,11 @@ fn fallback_group_as_token(node: Node, source: &str, errors: &impl ErrorSink) ->
 /// element (`child_1` holds the `sin_word`); that position is purely structural
 /// and handled by [`push_sin_separator`].
 fn extract_sin_grouped_content_tokens(
-    node: Node,
+    typed: SinGroupedContentNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<SinToken> {
-    let contents = extract_sin_grouped_content(SinGroupedContentNode(node));
+    let contents = extract_sin_grouped_content(typed);
     let mut tokens: Vec<SinToken> = Vec::with_capacity(contents.child_1.slot().len() + 1);
 
     push_sin_token(contents.child_0.slot(), source, errors, &mut tokens);

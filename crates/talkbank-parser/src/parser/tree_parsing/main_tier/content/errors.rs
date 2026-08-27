@@ -367,7 +367,7 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
             SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
             ErrorContext::new(error_text, 0..error_text.len(), error_text),
             format!(
-                "Unmatched curly quote {} found on the tier",
+                "Could not parse the quoted material around {} on this tier",
                 if error_text.contains(LEFT_DOUBLE_QUOTE) {
                     LEFT_DOUBLE_QUOTE
                 } else {
@@ -375,7 +375,23 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
                 }
             ),
         )
-        .with_suggestion("Use straight double quotes (\") for CHAT quotation");
+        // The message says what is KNOWN. This branch classifies an ERROR
+        // node by its raw text, so all it knows is that a curly double quote
+        // is somewhere inside a region that failed to parse; it said
+        // "Unmatched curly quote", which is a claim it cannot check and which
+        // was FALSE on the report that surfaced this (a line whose four
+        // quotes were two matched pairs).
+        //
+        // The suggestion said "Use straight double quotes (\") for CHAT
+        // quotation", which is backwards: `quotation` in the grammar is
+        // delimited by U+201C/U+201D, and a straight double quote does not
+        // parse at all (E316 + E342). Following that advice damages the file.
+        .with_suggestion(
+            "CHAT quotation uses curly double quotes (\u{201C} \u{201D}) as a \
+             matched pair; straight double quotes are not valid CHAT. To attach \
+             a scoped annotation to quoted material, bracket it: \
+             <\u{201C}text\u{201D}> [//]",
+        );
     }
 
     // Closing bracket fragment "] word", other half of a broken annotation

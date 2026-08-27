@@ -1,0 +1,18 @@
+================================================================================
+e530_1 - Lazy gem inside background
+================================================================================
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
+@Bg:activity
+@Comment:	We are inside a @Bg/@Eg scope
+@G:	playing with blocks
+@Comment:	ERROR: @G (lazy gem) should not be allowed inside @Bg/@Eg scope
+@Eg:activity
+@End
+
+--------------------------------------------------------------------------------
+
+(source_file (full_document (utf8_header (newline)) (begin_header (newline)) (line (languages_header (languages_prefix) (header_sep (colon) (tab)) (languages_contents (language_code)) (newline))) (line (participants_header (participants_prefix) (header_sep (colon) (tab)) (participants_contents (participant code: (speaker) (whitespaces) (participant_word))) (newline))) (line (id_header (id_prefix) (header_sep (colon) (tab)) (id_contents (id_languages (languages_contents (language_code))) (pipe) (id_corpus) (pipe) (id_speaker) (pipe) (id_age (age_format)) (pipe) (id_sex (male_value)) (pipe) (pipe) (pipe) (id_role) (pipe) (pipe) (pipe)) (newline))) (line (bg_header (bg_prefix) (ERROR (colon)) (newline))) (line (comment_header (comment_prefix) (header_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline))) (line (g_header (g_prefix) (header_sep (colon) (tab)) (free_text (rest_of_line)) (newline))) (line (comment_header (comment_prefix) (header_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline))) (line (eg_header (eg_prefix) (ERROR (colon)) (newline))) (end_header (newline))))

@@ -10,7 +10,7 @@
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters>
-//! - Spec: `spec/errors/E753_word_only_repetition_segments.md`
+//! - Spec: `spec/errors/E753.md`
 
 use crate::alignment::helpers::{WordItem, walk_words};
 use crate::model::{CADelimiterType, Utterance, Word, WordContent};

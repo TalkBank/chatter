@@ -517,7 +517,7 @@ If you add a new structural marker to the grammar:
    ```bash
    cd grammar && tree-sitter generate && tree-sitter test
    cargo test -p talkbank-parser
-   cargo test -p talkbank-parser-tests parser_equivalence
+   cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus
    cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
    ```
 

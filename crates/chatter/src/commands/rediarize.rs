@@ -14,7 +14,7 @@ use tracing::{Level, info, span, warn};
 use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
 use talkbank_model::ParseValidateOptions;
 use talkbank_transform::rediarize::{
-    RediarizeSummary, TurnsJsonError, parse_turns_json, rediarize_content,
+    ContestedThreshold, RediarizeSummary, TurnsJsonError, parse_turns_json, rediarize_content,
 };
 
 /// Cap on individually-listed flagged utterances in the summary; a
@@ -36,7 +36,18 @@ pub fn run_rediarize(
     turns_path: &Path,
     output: Option<&PathBuf>,
     summary_json: Option<&Path>,
+    contested_at: Option<f64>,
 ) {
+    // Validated HERE, before anything is read, so a bad share fails the
+    // command rather than silently meaning "nothing is contested". A `NaN`
+    // would satisfy no comparison and is exactly that silent case.
+    let contested_at = match contested_at.map(ContestedThreshold::new).transpose() {
+        Ok(threshold) => threshold,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(EXIT_INPUT_ERROR);
+        }
+    };
     let _span = span!(
         Level::INFO,
         "chatter_rediarize",
@@ -81,15 +92,19 @@ pub fn run_rediarize(
         info!("diarization source: {source}");
     }
 
-    let (rewritten, outcome) =
-        match rediarize_content(&content, &turns_file.turns, ParseValidateOptions::default()) {
-            Ok(result) => result,
-            Err(e) => {
-                warn!("rediarize failed: {}", e);
-                eprintln!("Error: {}", e);
-                std::process::exit(EXIT_INPUT_ERROR);
-            }
-        };
+    let (rewritten, outcome) = match rediarize_content(
+        &content,
+        &turns_file.turns,
+        ParseValidateOptions::default(),
+        contested_at,
+    ) {
+        Ok(result) => result,
+        Err(e) => {
+            warn!("rediarize failed: {}", e);
+            eprintln!("Error: {}", e);
+            std::process::exit(EXIT_INPUT_ERROR);
+        }
+    };
 
     match output {
         Some(path) => {

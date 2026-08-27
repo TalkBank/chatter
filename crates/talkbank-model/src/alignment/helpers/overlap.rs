@@ -17,6 +17,7 @@
 // defects; see `talkbank-parser-tests/src/content_catch_alls.rs`.
 #![deny(clippy::wildcard_enum_match_arm)]
 
+use crate::alignment::helpers::descent::descend;
 use crate::alignment::helpers::{TierDomain, counts_for_tier};
 use crate::model::{
     BracketedItem, OverlapIndex, OverlapPointKind, UtteranceContent, Word, WordContent,
@@ -214,41 +215,31 @@ fn walk_content_visiting(
             UtteranceContent::ReplacedWord(replaced) => {
                 scan_word_visiting(&replaced.word, word_count, visitor);
             }
-            UtteranceContent::Group(group) => {
-                walk_bracketed_visiting(group.content.content.as_slice(), word_count, visitor);
-            }
-            UtteranceContent::AnnotatedGroup(group) => {
-                walk_bracketed_visiting(
-                    group.inner.content.content.as_slice(),
-                    word_count,
-                    visitor,
-                );
-            }
-            UtteranceContent::Quotation(q) => {
-                walk_bracketed_visiting(q.content.content.as_slice(), word_count, visitor);
-            }
-            UtteranceContent::PhoGroup(g) => {
-                walk_bracketed_visiting(g.content.content.as_slice(), word_count, visitor);
-            }
-            UtteranceContent::SinGroup(g) => {
-                walk_bracketed_visiting(g.content.content.as_slice(), word_count, visitor);
-            }
-            UtteranceContent::Retrace(retrace) => {
-                walk_bracketed_visiting(retrace.content.content.as_slice(), word_count, visitor);
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form: the annotations sit on the
-                // wrapper and are not alignable, so only the retraced content
-                // is considered.
-                walk_bracketed_visiting(
-                    annotated.inner.content.content.as_slice(),
-                    word_count,
-                    visitor,
-                );
+            // Containers: ONE arm, through `descent` at the `%wor` domain.
+            //
+            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
+            // which agrees with `descent` only because the `Wor` row of the
+            // table is `Enter` for every container kind. That agreement was a
+            // coincidence nothing in the types recorded, in the one traversal
+            // whose scale must match `count_tier_positions(content, Wor)` and
+            // which has already drifted from it once, moving real timing
+            // anchors. Naming the domain makes the row load-bearing.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
+                    walk_bracketed_visiting(into.content().content.as_slice(), word_count, visitor);
+                }
             }
             UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Event(_)
             | UtteranceContent::Pause(_)
+            | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::Separator(_)
@@ -288,34 +279,26 @@ fn walk_bracketed_visiting(
             BracketedItem::ReplacedWord(replaced) => {
                 scan_word_visiting(&replaced.word, word_count, visitor);
             }
-            BracketedItem::AnnotatedGroup(annotated) => {
-                walk_bracketed_visiting(
-                    annotated.inner.content.content.as_slice(),
-                    word_count,
-                    visitor,
-                );
-            }
-            BracketedItem::PhoGroup(g) => {
-                walk_bracketed_visiting(g.content.content.as_slice(), word_count, visitor);
-            }
-            BracketedItem::SinGroup(g) => {
-                walk_bracketed_visiting(g.content.content.as_slice(), word_count, visitor);
-            }
-            BracketedItem::Quotation(q) => {
-                walk_bracketed_visiting(q.content.content.as_slice(), word_count, visitor);
-            }
-            BracketedItem::Retrace(retrace) => {
-                walk_bracketed_visiting(retrace.content.content.as_slice(), word_count, visitor);
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form: the annotations sit on the
-                // wrapper and are not alignable, so only the retraced content
-                // is considered.
-                walk_bracketed_visiting(
-                    annotated.inner.content.content.as_slice(),
-                    word_count,
-                    visitor,
-                );
+            // Containers: ONE arm, through `descent` at the `%wor` domain.
+            //
+            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
+            // which agrees with `descent` only because the `Wor` row of the
+            // table is `Enter` for every container kind. That agreement was a
+            // coincidence nothing in the types recorded, in the one traversal
+            // whose scale must match `count_tier_positions(content, Wor)` and
+            // which has already drifted from it once, moving real timing
+            // anchors. Naming the domain makes the row load-bearing.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
+                    walk_bracketed_visiting(into.content().content.as_slice(), word_count, visitor);
+                }
             }
             BracketedItem::Event(_)
             | BracketedItem::AnnotatedEvent(_)
@@ -516,37 +499,31 @@ fn walk_content(
                 // timing anchors. Two copies of one traversal, drifted.
                 scan_word(&replaced.word, word_count, markers);
             }
-            UtteranceContent::Group(group) => {
-                walk_bracketed(group.content.content.as_slice(), word_count, markers);
-            }
-            UtteranceContent::AnnotatedGroup(group) => {
-                walk_bracketed(group.inner.content.content.as_slice(), word_count, markers);
-            }
-            UtteranceContent::Quotation(q) => {
-                walk_bracketed(q.content.content.as_slice(), word_count, markers);
-            }
-            UtteranceContent::PhoGroup(g) => {
-                walk_bracketed(g.content.content.as_slice(), word_count, markers);
-            }
-            UtteranceContent::SinGroup(g) => {
-                walk_bracketed(g.content.content.as_slice(), word_count, markers);
-            }
-            UtteranceContent::Retrace(retrace) => {
-                walk_bracketed(retrace.content.content.as_slice(), word_count, markers);
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form: the annotations sit on the
-                // wrapper and are not alignable, so only the retraced content
-                // is considered.
-                walk_bracketed(
-                    annotated.inner.content.content.as_slice(),
-                    word_count,
-                    markers,
-                );
+            // Containers: ONE arm, through `descent` at the `%wor` domain.
+            //
+            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
+            // which agrees with `descent` only because the `Wor` row of the
+            // table is `Enter` for every container kind. That agreement was a
+            // coincidence nothing in the types recorded, in the one traversal
+            // whose scale must match `count_tier_positions(content, Wor)` and
+            // which has already drifted from it once, moving real timing
+            // anchors. Naming the domain makes the row load-bearing.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
+                    walk_bracketed(into.content().content.as_slice(), word_count, markers);
+                }
             }
             UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Event(_)
             | UtteranceContent::Pause(_)
+            | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::Separator(_)
@@ -586,34 +563,26 @@ fn walk_bracketed(
                     scan_word(word, word_count, markers);
                 }
             }
-            BracketedItem::AnnotatedGroup(annotated) => {
-                walk_bracketed(
-                    annotated.inner.content.content.as_slice(),
-                    word_count,
-                    markers,
-                );
-            }
-            BracketedItem::PhoGroup(g) => {
-                walk_bracketed(g.content.content.as_slice(), word_count, markers);
-            }
-            BracketedItem::SinGroup(g) => {
-                walk_bracketed(g.content.content.as_slice(), word_count, markers);
-            }
-            BracketedItem::Quotation(q) => {
-                walk_bracketed(q.content.content.as_slice(), word_count, markers);
-            }
-            BracketedItem::Retrace(retrace) => {
-                walk_bracketed(retrace.content.content.as_slice(), word_count, markers);
-            }
-            BracketedItem::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form: the annotations sit on the
-                // wrapper and are not alignable, so only the retraced content
-                // is considered.
-                walk_bracketed(
-                    annotated.inner.content.content.as_slice(),
-                    word_count,
-                    markers,
-                );
+            // Containers: ONE arm, through `descent` at the `%wor` domain.
+            //
+            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
+            // which agrees with `descent` only because the `Wor` row of the
+            // table is `Enter` for every container kind. That agreement was a
+            // coincidence nothing in the types recorded, in the one traversal
+            // whose scale must match `count_tier_positions(content, Wor)` and
+            // which has already drifted from it once, moving real timing
+            // anchors. Naming the domain makes the row load-bearing.
+            BracketedItem::Group(_)
+            | BracketedItem::AnnotatedGroup(_)
+            | BracketedItem::Quotation(_)
+            | BracketedItem::AnnotatedQuotation(_)
+            | BracketedItem::PhoGroup(_)
+            | BracketedItem::SinGroup(_)
+            | BracketedItem::Retrace(_)
+            | BracketedItem::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
+                    walk_bracketed(into.content().content.as_slice(), word_count, markers);
+                }
             }
             BracketedItem::Event(_)
             | BracketedItem::AnnotatedEvent(_)

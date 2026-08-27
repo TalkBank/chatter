@@ -171,7 +171,7 @@ fn valid_reference_text_tiers_parse_byte_identical_with_zero_diagnostics() {
 // now the correct answer.
 //
 // Not rewritten in place, because the same input is already gated permanently
-// and generatively: spec `E756_empty_dependent_tier.md` Example 3 produces
+// and generatively: spec `E756.md` Example 3 produces
 // `error_corpus/validation_errors/E756_empty_dependent_tier_3.cha`. Keeping a
 // hand-written twin here would relocate a check the spec owns rather than
 // remove one. Deletion approved by the maintainer, per danger rule 7.

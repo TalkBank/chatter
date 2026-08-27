@@ -91,9 +91,8 @@
 //! line is the list being empty. That is what "re2c tracks tree-sitter" means,
 //! and no percentage could ever show it.
 //!
-//! Only the spec suite is in scope. Divergence on WILD data is a different
-//! measurement with a different instrument (the corpus differential), and this
-//! gate must not be read as covering it.
+//! Only the spec suite is in scope. Divergence on data outside the repository
+//! is a different measurement, and this gate must not be read as covering it.
 //!
 //! # Layout
 //!

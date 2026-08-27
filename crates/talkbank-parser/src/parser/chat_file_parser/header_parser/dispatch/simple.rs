@@ -149,15 +149,16 @@ pub(super) fn read_simple_content<'tree, T: AsRawNode<'tree>>(
 
 /// `@Date` -> `Header::Date`.
 pub(super) fn date(
-    header_actual: Node,
+    typed: DateHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // Grammar: date_contents = choice(strict_date, generic_date). Both
     // alternatives are wrapped in the date_contents node; we extract the text and
     // let ChatDate::new() classify or mark Unsupported. Validator reports E518 for
     // malformed dates.
-    let children = extract_date_header(DateHeaderNode(header_actual));
+    let children = extract_date_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -182,11 +183,12 @@ pub(super) fn date(
 
 /// `@Tape Location` -> `Header::TapeLocation`.
 pub(super) fn tape_location(
-    header_actual: Node,
+    typed: TapeLocationHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_tape_location_header(TapeLocationHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_tape_location_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -211,14 +213,15 @@ pub(super) fn tape_location(
 
 /// `@Time Duration` -> `Header::TimeDuration`.
 pub(super) fn time_duration(
-    header_actual: Node,
+    typed: TimeDurationHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // Grammar: time_duration_contents = choice(strict_time, generic_time).
     // TimeDurationValue::new() classifies or marks Unsupported. Validator reports
     // E541 for malformed durations.
-    let children = extract_time_duration_header(TimeDurationHeaderNode(header_actual));
+    let children = extract_time_duration_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -243,13 +246,14 @@ pub(super) fn time_duration(
 
 /// `@Time Start` -> `Header::TimeStart`.
 pub(super) fn time_start(
-    header_actual: Node,
+    typed: TimeStartHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
     // Same grammar pattern as TIME_DURATION_HEADER (the content node is also a
     // `time_duration_contents`). Validator reports E542 for malformed start times.
-    let children = extract_time_start_header(TimeStartHeaderNode(header_actual));
+    let children = extract_time_start_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -274,11 +278,12 @@ pub(super) fn time_start(
 
 /// `@Location` -> `Header::Location`.
 pub(super) fn location(
-    header_actual: Node,
+    typed: LocationHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_location_header(LocationHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_location_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -303,11 +308,12 @@ pub(super) fn location(
 
 /// `@Room Layout` -> `Header::RoomLayout`.
 pub(super) fn room_layout(
-    header_actual: Node,
+    typed: RoomLayoutHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_room_layout_header(RoomLayoutHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_room_layout_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -332,11 +338,12 @@ pub(super) fn room_layout(
 
 /// `@Transcriber` -> `Header::Transcriber`.
 pub(super) fn transcriber(
-    header_actual: Node,
+    typed: TranscriberHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_transcriber_header(TranscriberHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_transcriber_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -361,11 +368,12 @@ pub(super) fn transcriber(
 
 /// `@Warning` -> `Header::Warning`.
 pub(super) fn warning(
-    header_actual: Node,
+    typed: WarningHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_warning_header(WarningHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_warning_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -390,11 +398,12 @@ pub(super) fn warning(
 
 /// `@Activities` -> `Header::Activities`.
 pub(super) fn activities(
-    header_actual: Node,
+    typed: ActivitiesHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_activities_header(ActivitiesHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_activities_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -419,11 +428,12 @@ pub(super) fn activities(
 
 /// `@Bck` -> `Header::Bck`.
 pub(super) fn bck(
-    header_actual: Node,
+    typed: BckHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_bck_header(BckHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_bck_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -448,11 +458,12 @@ pub(super) fn bck(
 
 /// `@Page` -> `Header::Page`.
 pub(super) fn page(
-    header_actual: Node,
+    typed: PageHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_page_header(PageHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_page_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -477,11 +488,12 @@ pub(super) fn page(
 
 /// `@Videos` -> `Header::Videos`.
 pub(super) fn videos(
-    header_actual: Node,
+    typed: VideosHeaderNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_videos_header(VideosHeaderNode(header_actual));
+    let header_actual = typed.raw_node();
+    let children = extract_videos_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,
@@ -505,8 +517,13 @@ pub(super) fn videos(
 }
 
 /// `@T` -> `Header::T`.
-pub(super) fn t(header_actual: Node, input: &str, errors: &impl ErrorSink) -> ParseOutcome<Header> {
-    let children = extract_t_header(THeaderNode(header_actual));
+pub(super) fn t(
+    typed: THeaderNode<'_>,
+    input: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Header> {
+    let header_actual = typed.raw_node();
+    let children = extract_t_header(typed);
     let outcome = match read_simple_content(
         children.child_2.slot(),
         header_actual,

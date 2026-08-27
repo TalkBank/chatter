@@ -1,31 +1,30 @@
-//! The generated artifacts that need the live `ErrorCode` enum, and therefore
-//! cannot live in `spec/tools`.
+//! The generated artifacts that need the live PARSER, and therefore cannot
+//! live in `spec/tools`.
 //!
 //! This is the second half of the registry whose first half is
 //! [`generators::artifacts::ARTIFACTS`]. The split is not organisational: it is
 //! the dependency boundary this crate exists to draw. `spec/tools` reads
-//! markdown and writes files and never links the parser or model; anything that
-//! has to ask the compiled `ErrorCode` enum what variants exist belongs here.
+//! markdown and writes files and never links the parser or model; anything
+//! that has to RUN the parser belongs here.
+//!
+//! That criterion said "needs the live `ErrorCode` enum" until R1's review,
+//! and by then it was false of everything left in the crate: the snapshot
+//! needs the PARSER, and the book table needs nothing at all. The true
+//! statement was written thirty lines below the false one, which is the
+//! correction-appended-under-a-stale-claim shape this workspace forbids.
 //!
 //! `spec_gen` runs both halves, so a contributor sees one command and one list.
 
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
 use std::path::Path;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use generators::artifacts::{Artifact, GeneratedFiles, Ownership};
-use generators::repo_paths::RepoRelativePath;
-use generators::rust_source::format_generated_rust;
-use generators::spec::ErrorSpec;
-use generators::spec::error::ErrorKind;
-use talkbank_model::ErrorCode;
 
 /// The observation snapshot, which regenerates BEFORE everything else.
 ///
 /// R3 of the spec-system redesign: for every spec example, what the current
-/// binary actually emits, by stage. The corpus differential aimed at the spec
-/// suite; a diff is adjudicated, never silently regenerated.
+/// binary actually emits, by stage, and whether the parsed model serializes
+/// back byte-exact. A diff is adjudicated, never silently regenerated.
 ///
 /// Its own slice rather than a row below, because [`all`] yields it FIRST:
 /// since R4, the tree-sitter corpus DERIVES its membership from this file, so
@@ -39,23 +38,25 @@ pub static SNAPSHOT_ARTIFACT: &[Artifact] = &[Artifact {
     build: crate::observations::build_snapshot,
 }];
 
-/// Artifacts generated from `spec/` that need the live model.
-pub static RUNTIME_ARTIFACTS: &[Artifact] = &[
-    Artifact {
-        what: "DiagnosticKind registry",
-        root: "crates/talkbank-model/src/errors",
-        // The model's error module is hand-authored apart from this one file,
-        // so claiming the directory would delete the rest of the module.
-        ownership: Ownership::NamedFiles { retired: &[] },
-        build: build_diagnostic_kind,
-    },
-    Artifact {
-        what: "the book's artifact table",
-        root: "book/src/architecture/generated",
-        ownership: Ownership::NamedFiles { retired: &[] },
-        build: build_book_artifact_table,
-    },
-];
+/// Artifacts that must run AFTER the pure half, and the one that runs the
+/// parser.
+///
+/// The `DiagnosticKind` registry LEFT this list under R1. It read
+/// `ErrorCode::iter()` only to join the enum's vocabulary against the specs';
+/// with both generated from one registry there is nothing to join, so it is a
+/// pure TOML-to-Rust transform and lives in the other half.
+///
+/// Neither survivor is here for the same reason. `build_snapshot` runs the
+/// tree-sitter parser, which is the crate boundary. `build_book_artifact_table`
+/// needs no parser and no model: it is here because it iterates [`all`], so it
+/// must be downstream of everything it describes. Two reasons, stated, rather
+/// than one criterion that covers neither.
+pub static RUNTIME_ARTIFACTS: &[Artifact] = &[Artifact {
+    what: "the book's artifact table",
+    root: "book/src/architecture/generated",
+    ownership: Ownership::NamedFiles { retired: &[] },
+    build: build_book_artifact_table,
+}];
 
 /// The file name of the book's generated artifact table.
 const BOOK_TABLE_FILE: &str = "spec-artifacts.md";
@@ -112,155 +113,4 @@ pub fn all() -> impl Iterator<Item = &'static Artifact> {
         .iter()
         .chain(generators::artifacts::ARTIFACTS.iter())
         .chain(RUNTIME_ARTIFACTS.iter())
-}
-
-/// The file name this artifact produces inside its root.
-const DIAGNOSTIC_KIND_FILE: &str = "generated_diagnostic_kind.rs";
-
-/// Build the exhaustive per-`ErrorCode` `DiagnosticKind` registry.
-///
-/// # Fails closed on divergence
-///
-/// `ErrorCode` (the enum) and `spec/errors/` (the spec files) are two
-/// independently maintained sets. This refuses to produce anything when they
-/// disagree, in either direction: a variant with no spec file naming it, or a
-/// spec-named code with no matching variant.
-///
-/// There is deliberately no default-to-`Invalidity` fallback for the first
-/// case. A defaulted arm is exactly how a code with no specification, and
-/// therefore no authority to be adjudicated against, stayed invisible until
-/// 2026-07-31. A code with no spec file has no basis for ANY classification,
-/// not even the status-quo-preserving one.
-fn build_diagnostic_kind(repo_root: &Path) -> Result<GeneratedFiles> {
-    let specs = ErrorSpec::load_all(crate::error_spec_validation::spec_dir(repo_root))
-        .map_err(|e| anyhow::anyhow!("Failed to load error specs: {e}"))?;
-
-    // code string -> (Kind, spec file it came from). A code can legitimately
-    // have more than one spec file (an `_auto.md` plus a hand-authored
-    // companion); every one of them must agree on Kind, since Kind is a
-    // property of the CODE, not of any one example file. Disagreement is a
-    // spec defect and fails the run loudly rather than picking a winner.
-    // Keyed by `String`, not `SpecErrorCode`, because both divergence checks
-    // below JOIN against the live `ErrorCode` enum's own vocabulary. Two
-    // vocabularies meet here and the enum's is the wider one. When the
-    // redesign makes `ErrorCode` generated FROM `spec/errors/`, they become
-    // one vocabulary and this key should become `SpecErrorCode`.
-    let mut by_code: BTreeMap<String, (ErrorKind, RepoRelativePath)> = BTreeMap::new();
-    for spec in &specs {
-        let def = &spec.error;
-        let kind = spec.metadata.kind;
-        match by_code.entry(def.code.to_string()) {
-            Entry::Vacant(slot) => {
-                slot.insert((kind, RepoRelativePath::new(repo_root, spec.source_file())));
-            }
-            Entry::Occupied(slot) => {
-                // A second spec file for the same code is fine; disagreeing
-                // about Kind is not, since Kind is a property of the CODE.
-                let (existing_kind, existing_file) = slot.get();
-                if *existing_kind != kind {
-                    bail!(
-                        "code {} has conflicting Kind across spec files: {} says {:?}, {} says {:?}",
-                        def.code,
-                        existing_file,
-                        existing_kind,
-                        RepoRelativePath::new(repo_root, spec.source_file()),
-                        kind
-                    );
-                }
-            }
-        }
-    }
-
-    // Divergence check 1: every `ErrorCode` variant must be named by at least
-    // one spec file.
-    let missing_specs: Vec<String> = ErrorCode::iter()
-        .map(|code| code.as_str().to_string())
-        .filter(|code_str| !by_code.contains_key(code_str))
-        .collect();
-
-    // Divergence check 2: every spec-named code must name a live `ErrorCode`
-    // variant. A spec file surviving the retirement or renumbering of its code
-    // is the same divergence in the other direction (e.g. W602, deleted from
-    // the enum on 2026-07-16 without its spec file being removed).
-    let orphan_specs: Vec<(String, RepoRelativePath)> = by_code
-        .iter()
-        .filter(|(code_str, _)| ErrorCode::parse_exact(code_str).is_none())
-        .map(|(code_str, (_, source_file))| (code_str.clone(), source_file.clone()))
-        .collect();
-
-    if !missing_specs.is_empty() || !orphan_specs.is_empty() {
-        let mut msg = String::from(
-            "spec/errors <-> ErrorCode divergence detected; the DiagnosticKind \
-             registry was NOT regenerated.\n",
-        );
-        if !missing_specs.is_empty() {
-            msg.push_str(&format!(
-                "\n{} ErrorCode variant(s) have no spec file:\n",
-                missing_specs.len()
-            ));
-            for code in &missing_specs {
-                msg.push_str(&format!("  {code}\n"));
-            }
-        }
-        if !orphan_specs.is_empty() {
-            msg.push_str(&format!(
-                "\n{} spec-named code(s) name no live ErrorCode variant:\n",
-                orphan_specs.len()
-            ));
-            for (code, source_file) in &orphan_specs {
-                msg.push_str(&format!("  {code} ({source_file})\n"));
-            }
-        }
-        msg.push_str(
-            "\nEvery ErrorCode variant needs exactly one spec file, and every \
-             spec-named code must name a live ErrorCode variant: write the \
-             missing spec(s), delete the dead variant(s), or delete the \
-             orphaned spec file(s).\n",
-        );
-        bail!(msg);
-    }
-
-    // `by_code` is now total over `ErrorCode::iter()` with no orphans, so every
-    // lookup below succeeds by the checks above. The lookup still returns a
-    // `Result` (never `.unwrap()`/`.expect()`) so a future refactor that
-    // weakens the guard fails loudly instead of panicking.
-    let mut arms = String::new();
-    for code in ErrorCode::iter() {
-        let code_str = code.as_str();
-        let variant_name = format!("{code:?}");
-        let (kind, source_file) = by_code.get(code_str).ok_or_else(|| {
-            anyhow::anyhow!("{code_str}: missing from by_code after divergence check")
-        })?;
-        let variant = kind.diagnostic_kind_variant();
-        arms.push_str(&format!(
-            "        ErrorCode::{variant_name} => DiagnosticKind::{variant}, // {code_str}: {source_file}\n"
-        ));
-    }
-
-    let source = format!(
-        "//! Generated by `spec_gen` from `spec/errors/*.md`'s required\n\
-         //! `- **Kind**:` metadata field. DO NOT EDIT BY HAND.\n\
-         //!\n\
-         //! Regenerate with `just spec-gen`; `just spec-check` reports whether\n\
-         //! this copy is current without writing anything.\n\
-         //!\n\
-         //! Every arm's trailing comment names the spec file its `Kind` came\n\
-         //! from. The generator refuses to run at all when any `ErrorCode`\n\
-         //! variant has no spec file, or any spec-named code has no matching\n\
-         //! variant, so this match is exhaustive with no defaulted arms.\n\n\
-         use super::codes::ErrorCode;\n\
-         use super::diagnostic_kind::DiagnosticKind;\n\n\
-         /// Exhaustive per-[`ErrorCode`] [`DiagnosticKind`] lookup, generated from\n\
-         /// spec. See [`super::diagnostic_kind::kind_of`] for the stable public\n\
-         /// entry point that delegates here.\n\
-         pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {{\n\
-         \x20   match code {{\n\
-         {arms}\
-         \x20   }}\n\
-         }}\n"
-    );
-
-    let mut files = GeneratedFiles::new();
-    files.insert(DIAGNOSTIC_KIND_FILE.into(), format_generated_rust(&source)?);
-    Ok(files)
 }

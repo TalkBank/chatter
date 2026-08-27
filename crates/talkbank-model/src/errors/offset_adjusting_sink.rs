@@ -143,7 +143,7 @@ mod tests {
         // Create an error at position 110..119 in wrapped document
         // Should be adjusted to 9..18 in original input (clamped to input length)
         let error = ParseError::new(
-            ErrorCode::new("E001"),
+            ErrorCode::InternalError,
             Severity::Error,
             SourceLocation::from_offsets(110, 119),
             ErrorContext::new("wrapped content", 110..119, "test"),
@@ -169,7 +169,7 @@ mod tests {
 
         // Error exactly at the start of original input in wrapper
         let error = ParseError::new(
-            ErrorCode::new("E001"),
+            ErrorCode::InternalError,
             Severity::Error,
             SourceLocation::from_offsets(101, 110),
             ErrorContext::new("wrapped content", 101..110, "test"),
@@ -195,7 +195,7 @@ mod tests {
 
         // Error that would extend beyond original input
         let error = ParseError::new(
-            ErrorCode::new("E001"),
+            ErrorCode::InternalError,
             Severity::Error,
             SourceLocation::from_offsets(110, 200),
             ErrorContext::new("wrapped content", 110..200, "test"),

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-12 23:55 EDT
+**Last modified:** 2026-08-27 00:33 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -163,7 +163,7 @@ The build script (`build.rs`) runs `re2rust` on `src/lexer.re` -> `OUT_DIR/lexer
 - **Corpus lexer tests:** `tests/corpus_lex_tests.rs`, lex real lines from the wild data corpus.
 - **Parser tests:** `tests/golden_parse.rs`, `tests/parser_fixtures.rs`, parsed AST structures.
 - **Equivalence tests:** `tests/equivalence_tests.rs`, Re2cParser vs TreeSitterParser comparison via `ChatParser` trait.
-- **Single-construct probes:** `tests/integration/model_study.rs`, one hand-picked construct each, checked for `semantic_eq` between the two parsers. Corpus-wide equivalence is NOT here: it belongs to `equivalence_tests.rs` and to the `parser_equivalence` gate, which walk every reference file.
+- **Single-construct probes:** `tests/integration/model_study.rs`, one hand-picked construct each, checked for `semantic_eq` between the two parsers. Corpus-wide equivalence is NOT here: it belongs to `equivalence_tests.rs` and to `equivalence_reference_corpus`, which walks every reference file.
 - **Full corpus tests:** `tests/full_corpus_parse_test.rs`, wild-corpus SemanticEq comparison.
 - **Benchmarks:** `benches/parse_comparison.rs`, divan benchmarks comparing both parsers.
 - **When a test fails, STOP and ask.** CHAT semantics are domain-specific.

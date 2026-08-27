@@ -90,29 +90,23 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
                 // label and `@x` refuses one, and both facts arrive through
                 // `from_payload`. This site used to re-derive the `@z:` half
                 // itself, with the re2c parser re-deriving it a second time.
-                let text = extract_utf8_text(child, source, errors, "form_marker", "");
-                // The `@` is stripped HERE rather than by the payload type,
-                // because the guarantee that it is present is the GRAMMAR's,
-                // and this is the only code that reads a grammar token. If it
-                // were ever absent the text is read as a bare payload, which is
-                // the honest reading, not a safe one: a bare declared code
-                // would parse. The re2c parser hands over a payload already
-                // stripped and calls the same constructor.
-                let payload = FormMarkerPayload::after_at(text.strip_prefix('@').unwrap_or(text));
-                match FormType::from_payload(payload) {
+                let text = extract_utf8_text(child, source, errors, child.kind(), "");
+                // The `@` is stripped HERE rather than by the payload type, because
+                // the guarantee that it is present is the GRAMMAR's, and this is
+                // the only code that reads a grammar token. If it were ever absent
+                // the text is read as a bare payload, which is the honest reading,
+                // not a safe one: a bare declared code would parse.
+                let payload = text.strip_prefix('@').unwrap_or(text);
+                match FormType::from_payload(FormMarkerPayload::after_at(payload)) {
                     Ok(declared) => form_type = Some(declared),
                     Err(undeclared) => {
                         // CLAN CHECK 147, "undeclared special form marker".
-                        errors.report(
-                            ParseError::new(
-                                ErrorCode::InvalidFormType,
-                                Severity::Error,
-                                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                                format!("Undeclared form marker '@{}'", undeclared.payload()),
-                            )
-                            .with_suggestion(undeclared.suggestion()),
-                        );
+                        errors.report(at_suffix_error(
+                            child,
+                            source,
+                            format!("Undeclared form marker '@{}'", undeclared.payload()),
+                            undeclared.suggestion(),
+                        ));
                         // Record what was WRITTEN, not a marker that happens
                         // to be declared. This used to store
                         // `UserDefined(payload)`, which claimed `word@zz` was
@@ -123,6 +117,51 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
                         form_type = Some(FormType::Undeclared(undeclared.into_payload()));
                     }
                 }
+            }
+            // A word carrying MORE THAN ONE `@` suffix run. The rule and the
+            // ruling behind it live in `spec/errors/E203.md`; two things are
+            // decided HERE and belong here.
+            //
+            // THE MESSAGE NAMES THE RUN, not a marker. `@c` in `@c@s:spa` is
+            // perfectly real, so `Undeclared form marker '@c@s:spa'` would send
+            // a transcriber hunting for a marker that does not exist instead of
+            // deleting one of the two that do. The node KIND carries this,
+            // which is the structural answer `check_inline_at_markers` says the
+            // model could not previously see.
+            //
+            // THE TEXT IS STORED VERBATIM, so the word serializes back byte for
+            // byte and `normalize` refuses the file rather than rewriting it.
+            "repeated_form_marker" => {
+                let text = extract_utf8_text(child, source, errors, child.kind(), "");
+                // REFUSED rather than absorbed, unlike the sibling arm above.
+                // That arm may read a sigil-less token as a bare payload; here
+                // it cannot, because the payload is stored and `write_chat`
+                // puts the `@` back. Absorbing a sigil-less text would emit an
+                // `@` that was never in the source, breaking the round trip
+                // this arm exists to protect. The grammar cannot produce this
+                // node without a leading `@`, so the branch is unreachable and
+                // says so rather than inventing a value.
+                let Some(payload) = text.strip_prefix('@') else {
+                    errors.report(ParseError::new(
+                        ErrorCode::TreeParsingError,
+                        Severity::Error,
+                        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
+                        ErrorContext::new(
+                            source,
+                            child.start_byte()..child.end_byte(),
+                            "repeated_form_marker",
+                        ),
+                        format!("repeated form marker token has no leading '@': {text:?}"),
+                    ));
+                    continue;
+                };
+                errors.report(at_suffix_error(
+                    child,
+                    source,
+                    format!("A word may carry only one '@' suffix, found '{text}'"),
+                    "Keep one marker on the word and remove the rest",
+                ));
+                form_type = Some(FormType::Undeclared(payload.to_owned()));
             }
             "word_lang_suffix" => {
                 lang = Some(build_lang_marker(child, source, errors));
@@ -226,6 +265,27 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
 /// Falls back to the original pieces if serialization yields nothing (a
 /// content-free word already rejected upstream) so no information is ever
 /// dropped.
+/// An E203 anchored on one `@` suffix token.
+///
+/// The two arms that report it differ only in their message and suggestion;
+/// the code, severity, location and context were spelled out twice, with
+/// `child.start_byte()`/`end_byte()` appearing four times between them.
+fn at_suffix_error(
+    child: Node,
+    source: &str,
+    message: String,
+    suggestion: &'static str,
+) -> ParseError {
+    ParseError::new(
+        ErrorCode::InvalidFormType,
+        Severity::Error,
+        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
+        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
+        message,
+    )
+    .with_suggestion(suggestion)
+}
+
 fn fold_phonetic(content_items: SmallVec<[WordContent; 2]>) -> SmallVec<[WordContent; 2]> {
     let mut phonetic = String::new();
     for item in &content_items {

@@ -8,7 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    MorFeatureNode, MorWordNode, NodeSlot, extract_mor_feature, extract_mor_word,
+    AsRawNode, MorFeatureNode, MorWordNode, NodeSlot, extract_mor_feature, extract_mor_word,
 };
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::dependent_tier::{MorFeature, MorWord, PosCategory};
@@ -40,13 +40,18 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_une
 /// `utf8_text` read on a child that failed `check_not_missing`); `Error` /
 /// `Unexpected` fall through to the removed loop's `_ =>` arm
 /// ([`unexpected_node_error`]).
-pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> ParseOutcome<MorWord> {
-    let children = extract_mor_word(MorWordNode(node));
+pub fn parse_mor_word(
+    typed: MorWordNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<MorWord> {
+    let node = typed.raw_node();
+    let children = extract_mor_word(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     let pos = match children.child_0.slot() {
         NodeSlot::Present(pos_node) => {
-            let field = pos_node.0;
+            let field = pos_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
                 Ok(text) if !text.is_empty() => Some(text),
                 Ok(_) => {
@@ -105,7 +110,7 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
 
     let lemma = match children.child_2.slot() {
         NodeSlot::Present(lemma_node) => {
-            let field = lemma_node.0;
+            let field = lemma_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
                 Ok(text) if !text.is_empty() => Some(text),
                 Ok(_) => {
@@ -154,7 +159,7 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
         match element.slot() {
             NodeSlot::Present(feature_node) => {
                 if let ParseOutcome::Parsed(Some(feature)) =
-                    parse_mor_feature(feature_node.0, source, errors)
+                    parse_mor_feature(*feature_node, source, errors)
                 {
                     features.push(feature);
                 }
@@ -218,11 +223,11 @@ pub fn parse_mor_word(node: Node, source: &str, errors: &impl ErrorSink) -> Pars
 /// that distinction faithfully: `Present` and `Missing` share identical
 /// handling here, unlike every other position in this file.
 fn parse_mor_feature(
-    node: Node,
+    typed: MorFeatureNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<MorFeature>> {
-    let children = extract_mor_feature(MorFeatureNode(node));
+    let children = extract_mor_feature(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     match children.child_0.slot() {
@@ -234,7 +239,7 @@ fn parse_mor_feature(
 
     match children.child_1.slot() {
         NodeSlot::Present(value_node) => {
-            if let Some(feature) = decode_feature_value(value_node.0, source, errors) {
+            if let Some(feature) = decode_feature_value(value_node.raw_node(), source, errors) {
                 return ParseOutcome::parsed(Some(feature));
             }
         }

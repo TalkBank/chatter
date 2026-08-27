@@ -5,22 +5,18 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Comment_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
 
-use super::super::header_parser::helpers::parse_optional_gem_label;
+use super::super::header_parser::parse_header_node;
 use super::finder::find_header_node_in_tree;
 use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
 };
-use crate::model::{ChatDate, Header, TapeLocationDescription, WarningText};
+use crate::model::{Header, WarningText};
 use crate::node_types::*;
 use crate::parser::TreeSitterParser;
+use crate::parser::tree_parsing::header::parse_pid_header;
 use tree_sitter::Node;
 
-use crate::parser::tree_parsing::header::{
-    parse_id_header, parse_languages_header, parse_media_header, parse_participants_header,
-    parse_pid_header, parse_situation_header, parse_t_header, parse_types_header,
-};
-use crate::parser::tree_parsing::parser_helpers::find_child_by_kind;
 use talkbank_model::ParseOutcome;
 
 impl TreeSitterParser {
@@ -156,85 +152,37 @@ impl TreeSitterParser {
                 }
             } else {
                 match header_node.kind() {
+                    // The four kinds the `header` supertype does NOT name, so
+                    // the generated classifier cannot route them: `@UTF8`,
+                    // `@Begin` and `@End` are the document's own anchors, and
+                    // `pid_header` is a `pre_begin_header` subtype.
                     UTF8_HEADER => Header::Utf8,
                     BEGIN_HEADER => Header::Begin,
                     END_HEADER => Header::End,
-                    LANGUAGES_HEADER => parse_languages_header(header_node, wrapped, &error_sink),
-                    PARTICIPANTS_HEADER => {
-                        parse_participants_header(header_node, wrapped, &error_sink)
-                    }
-                    ID_HEADER => parse_id_header(header_node, wrapped, &error_sink),
-                    COMMENT_HEADER => {
-                        use crate::parser::tree_parsing::bullet_content::parse_bullet_content;
-
-                        // Grammar: seq(prefix, header_sep, text_with_bullets_and_pics, newline)
-                        let content =
-                            match find_child_by_kind(header_node, TEXT_WITH_BULLETS_AND_PICS) {
-                                Some(content_node) => {
-                                    parse_bullet_content(content_node, wrapped, &error_sink)
-                                }
-                                None => {
-                                    error_sink.report(ParseError::new(
-                                        ErrorCode::TreeParsingError,
-                                        Severity::Error,
-                                        SourceLocation::from_offsets(
-                                            header_node.start_byte(),
-                                            header_node.end_byte(),
-                                        ),
-                                        ErrorContext::new(
-                                            wrapped,
-                                            header_node.start_byte()..header_node.end_byte(),
-                                            COMMENT_HEADER,
-                                        ),
-                                        "Missing comment content".to_string(),
-                                    ));
-                                    return Ok(unknown_header_with_reason(
-                                        header_node,
-                                        wrapped,
-                                        "Missing comment content",
-                                        None,
-                                    ));
-                                }
-                            };
-                        Header::Comment { content }
-                    }
-                    DATE_HEADER => {
-                        // Grammar: seq(prefix, header_sep, date_contents, newline)
-                        let Some(content) = find_child_text(header_node, wrapped, DATE_CONTENTS)
-                        else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    DATE_HEADER,
-                                ),
-                                "Missing @Date content",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing @Date content",
-                                None,
-                            ));
-                        };
-                        Header::Date {
-                            date: ChatDate::new(content),
-                        }
-                    }
                     PID_HEADER => parse_pid_header(header_node, wrapped, &error_sink),
-                    MEDIA_HEADER => parse_media_header(header_node, wrapped, &error_sink),
-                    SITUATION_HEADER => parse_situation_header(header_node, wrapped, &error_sink),
-                    BIRTH_OF_HEADER => {
-                        let Some(participant) = find_child_text(header_node, wrapped, SPEAKER)
-                        else {
+                    // EVERYTHING ELSE goes to the one exhaustive dispatcher.
+                    //
+                    // This used to be nineteen more hand-written arms plus an
+                    // `unknown =>` catch-all, and it covered 19 of the `header`
+                    // supertype's 34 subtypes. The other 15 (`@Activities`,
+                    // `@Location`, `@Options`, `@Time Start`, `@Transcriber`,
+                    // ...) parsed correctly INSIDE a document, where
+                    // `parse_header_node` matches `HeaderChoice` exhaustively,
+                    // and were REJECTED here, out of the public
+                    // `parse_header` / `parse_header_fragment` entry points.
+                    // Two dispatchers for one job, one of them a drifted subset,
+                    // and the tests covered only the arms that existed.
+                    //
+                    // `dispatch_header_choice` has no `_` arm, so a future
+                    // `header` subtype fails to compile until it is handled
+                    // rather than silently reaching a catch-all here.
+                    unknown => match parse_header_node(header_node, wrapped, &error_sink) {
+                        ParseOutcome::Parsed(header) => header,
+                        // Not a `header` subtype at all: the same diagnostic and
+                        // the same fallback value the catch-all produced.
+                        ParseOutcome::Rejected => {
                             error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
+                                ErrorCode::MalformedTierContent,
                                 Severity::Error,
                                 SourceLocation::from_offsets(
                                     header_node.start_byte(),
@@ -243,291 +191,20 @@ impl TreeSitterParser {
                                 ErrorContext::new(
                                     wrapped,
                                     header_node.start_byte()..header_node.end_byte(),
-                                    BIRTH_OF_HEADER,
+                                    "",
                                 ),
-                                "Missing participant code in @Birth of header",
+                                format!(
+                                    "Unknown header type '{unknown}' - will be flagged during validation"
+                                ),
                             ));
-                            return Ok(unknown_header_with_reason(
+                            unknown_header_with_reason(
                                 header_node,
                                 wrapped,
-                                "Missing participant code in @Birth of header",
+                                format!("Unrecognized header type: {unknown}"),
                                 None,
-                            ));
-                        };
-                        let Some(date) = find_child_text(header_node, wrapped, DATE_CONTENTS)
-                        else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    BIRTH_OF_HEADER,
-                                ),
-                                "Missing date value in @Birth of header",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing date value in @Birth of header",
-                                None,
-                            ));
-                        };
-                        Header::Birth {
-                            participant: crate::model::SpeakerCode::new(participant),
-                            date: ChatDate::new(date),
+                            )
                         }
-                    }
-                    BIRTHPLACE_OF_HEADER => {
-                        let Some(participant) = find_child_text(header_node, wrapped, SPEAKER)
-                        else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    BIRTHPLACE_OF_HEADER,
-                                ),
-                                "Missing participant code in @Birthplace of header",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing participant code in @Birthplace of header",
-                                None,
-                            ));
-                        };
-                        let Some(place) = find_child_text(header_node, wrapped, FREE_TEXT) else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    BIRTHPLACE_OF_HEADER,
-                                ),
-                                "Missing place value in @Birthplace of header",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing place value in @Birthplace of header",
-                                None,
-                            ));
-                        };
-                        Header::Birthplace {
-                            participant: crate::model::SpeakerCode::new(participant),
-                            place: crate::model::BirthplaceDescription::new(place),
-                        }
-                    }
-                    L1_OF_HEADER => {
-                        let Some(participant) = find_child_text(header_node, wrapped, SPEAKER)
-                        else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    L1_OF_HEADER,
-                                ),
-                                "Missing participant code in @L1 of header",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing participant code in @L1 of header",
-                                None,
-                            ));
-                        };
-                        let Some(language) = find_child_text(header_node, wrapped, LANGUAGE_CODE)
-                        else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    L1_OF_HEADER,
-                                ),
-                                "Missing language value in @L1 of header",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing language value in @L1 of header",
-                                None,
-                            ));
-                        };
-                        // @L1 of values are ISO 639-3 codes; an empty value
-                        // cannot form a code and takes the unknown-header
-                        // fallback like the missing-value path above.
-                        let Ok(language) = crate::model::LanguageCode::new(language) else {
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Empty language value in @L1 of header",
-                                None,
-                            ));
-                        };
-                        Header::L1Of {
-                            participant: crate::model::SpeakerCode::new(participant),
-                            language,
-                        }
-                    }
-                    WARNING_HEADER => {
-                        let Some(content) = find_child_text(header_node, wrapped, FREE_TEXT) else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    WARNING_HEADER,
-                                ),
-                                "Missing @Warning content",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing @Warning content",
-                                None,
-                            ));
-                        };
-                        Header::Warning {
-                            text: WarningText::new(content),
-                        }
-                    }
-                    VIDEOS_HEADER => {
-                        let Some(content) = find_child_text(header_node, wrapped, FREE_TEXT) else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    VIDEOS_HEADER,
-                                ),
-                                "Missing @Videos content",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing @Videos content",
-                                None,
-                            ));
-                        };
-                        Header::Videos {
-                            videos: crate::model::VideoSpec::new(content),
-                        }
-                    }
-                    NEW_EPISODE_HEADER => Header::NewEpisode,
-                    BG_HEADER => {
-                        let label = match parse_optional_gem_label(
-                            find_child_by_kind(header_node, FREE_TEXT),
-                            wrapped,
-                            &error_sink,
-                        ) {
-                            ParseOutcome::Parsed(label) => label,
-                            ParseOutcome::Rejected => None,
-                        };
-                        Header::BeginGem { label }
-                    }
-                    EG_HEADER => {
-                        let label = match parse_optional_gem_label(
-                            find_child_by_kind(header_node, FREE_TEXT),
-                            wrapped,
-                            &error_sink,
-                        ) {
-                            ParseOutcome::Parsed(label) => label,
-                            ParseOutcome::Rejected => None,
-                        };
-                        Header::EndGem { label }
-                    }
-                    BLANK_HEADER => Header::Blank,
-                    TAPE_LOCATION_HEADER => {
-                        let Some(content) = find_child_text(header_node, wrapped, FREE_TEXT) else {
-                            error_sink.report(ParseError::new(
-                                ErrorCode::TreeParsingError,
-                                Severity::Error,
-                                SourceLocation::from_offsets(
-                                    header_node.start_byte(),
-                                    header_node.end_byte(),
-                                ),
-                                ErrorContext::new(
-                                    wrapped,
-                                    header_node.start_byte()..header_node.end_byte(),
-                                    TAPE_LOCATION_HEADER,
-                                ),
-                                "Missing @Tape Location content",
-                            ));
-                            return Ok(unknown_header_with_reason(
-                                header_node,
-                                wrapped,
-                                "Missing @Tape Location content",
-                                None,
-                            ));
-                        };
-                        Header::TapeLocation {
-                            location: TapeLocationDescription::new(content),
-                        }
-                    }
-                    TYPES_HEADER => parse_types_header(header_node, wrapped, &error_sink),
-                    T_HEADER => parse_t_header(header_node, wrapped, &error_sink),
-                    unknown => {
-                        error_sink.report(ParseError::new(
-                            ErrorCode::MalformedTierContent,
-                            Severity::Error,
-                            SourceLocation::from_offsets(
-                                header_node.start_byte(),
-                                header_node.end_byte(),
-                            ),
-                            ErrorContext::new(
-                                wrapped,
-                                header_node.start_byte()..header_node.end_byte(),
-                                "",
-                            ),
-                            format!(
-                                "Unknown header type '{}' - will be flagged during validation",
-                                unknown
-                            ),
-                        ));
-                        unknown_header_with_reason(
-                            header_node,
-                            wrapped,
-                            format!("Unrecognized header type: {}", unknown),
-                            None,
-                        )
-                    }
+                    },
                 }
             };
 
@@ -558,17 +235,6 @@ impl TreeSitterParser {
                 }
             }
         }
-    }
-}
-
-/// Return UTF-8 text for the first child node of `kind`.
-fn find_child_text(node: Node, input: &str, kind: &str) -> Option<String> {
-    match find_child_by_kind(node, kind) {
-        Some(child) => match child.utf8_text(input.as_bytes()) {
-            Ok(text) => Some(text.to_string()),
-            Err(_) => None,
-        },
-        None => None,
     }
 }
 

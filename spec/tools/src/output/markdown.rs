@@ -168,8 +168,8 @@ pub fn generate_error_page(code: &SpecErrorCode, specs: &CodeSpecs) -> String {
 /// argument rather than noticing.
 fn render_spec(spec: &ErrorSpec, placement: SpecPlacement) -> String {
     let error = &spec.error;
-    let status = spec.metadata.status;
-    let kind = spec.metadata.kind;
+    let status = spec.status();
+    let kind = spec.kind();
     let mut output = String::new();
     let badge = status_badge(status);
 
@@ -204,7 +204,7 @@ fn render_spec(spec: &ErrorSpec, placement: SpecPlacement) -> String {
 
     // Description
     output.push_str(&format!("{} Description\n\n", placement.section()));
-    output.push_str(&format!("{}\n\n", spec.metadata.description.full()));
+    output.push_str(&format!("{}\n\n", spec.description.full()));
 
     // Examples
     if !error.examples.is_empty() {
@@ -301,9 +301,9 @@ pub fn generate_error_index(by_code: &SpecsByCode) -> String {
             spec.error.code,
             spec.error.code,
             spec.error.name,
-            spec.metadata.kind,
+            spec.kind(),
             level_cell,
-            status_icon(spec.metadata.status),
+            status_icon(spec.status()),
         ));
     }
     output.push('\n');
@@ -316,38 +316,36 @@ mod tests {
     use super::*;
     use crate::spec::error::*;
 
-    /// Build a whole spec, because the renderer takes a whole spec.
+    /// Build a whole spec THROUGH THE LOADER, because the renderer takes a
+    /// whole spec and the loader is the only way to make one.
     ///
     /// These tests used to hand-assemble an `ErrorDefinition` plus three loose
     /// metadata values to satisfy a four-argument signature. That is how the
     /// EMPTY `## How to Fix` section survived for as long as it did: the
     /// fixtures filled in a `suggestion` the loader never set, so the tests
     /// could only see a page production does not generate.
+    ///
+    /// Since R1 the struct literal is not merely discouraged, it does not
+    /// compile: `ErrorSpec::entry` is private and is the proof that the file
+    /// names a registered code. Writing the frontmatter out is what the format
+    /// asks of a real spec, so the fixture and production read the same bytes
+    /// the same way.
     fn spec(code: &str, name: &str, status: Status, chat_rule: Option<&str>) -> ErrorSpec {
-        ErrorSpec {
-            metadata: ErrorMetadata {
-                description: "Word contains illegal untranscribed marker"
-                    .parse()
-                    .expect("a non-empty description parses"),
-                status,
-                kind: ErrorKind::Invalidity,
-            },
-            error: ErrorDefinition {
-                code: code.parse().expect("a well-formed code"),
-                name: name.to_string(),
-                chat_rule: chat_rule.map(str::to_string),
-                // One example, because `level` is a fact about examples since
-                // the Phase 2 move: a page's Level line renders their distinct
-                // set and is omitted when there are none.
-                examples: vec![ErrorExample {
-                    input: "@UTF8\n@Begin\nxx .\n@End".to_string(),
-                    level: "word".parse().expect("a non-empty level parses"),
-                    claim: talkbank_spec_vocabulary::frontmatter::Claim::Violates,
-                    source: None,
-                }],
-            },
-            source_path: std::path::PathBuf::from("spec/errors/test.md"),
-        }
+        let registry = crate::test_registry::declaring(&[(code, status)]);
+
+        let rule_section = match chat_rule {
+            Some(rule) => format!("\n## CHAT Rule\n\n{rule}\n"),
+            None => String::new(),
+        };
+        let source = format!(
+            "+++\ncode = '{code}'\nname = '{name}'\n\n\
+             [[example]]\nlevel = 'word'\nclaim = 'violates'\n\
+             chat = '''\n@UTF8\n@Begin\nxx .\n@End\n'''\n\
+             +++\n\n## Description\n\n\
+             Word contains illegal untranscribed marker\n{rule_section}"
+        );
+        ErrorSpec::from_frontmatter("spec/errors/test.md", &source, &registry)
+            .expect("the fixture spec loads")
     }
 
     /// Render a page the way production does: group, then ask for the entry.

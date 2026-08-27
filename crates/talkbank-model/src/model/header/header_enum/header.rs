@@ -61,6 +61,29 @@ impl LanguageCodes {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Declares `to` wherever `from` was declared, reporting whether it moved.
+    ///
+    /// DEDUPLICATES rather than duplicating: retagging a code the header
+    /// already declares removes the wrong entry instead of producing a second
+    /// `to`. That is the common shape for a mislabelled code, because the right
+    /// one is usually declared alongside it (`swe, fin, sun` -> `swe, fin`).
+    ///
+    /// A NAMED length-changing operation, for the reason [`Self::extend`] gives:
+    /// `DerefMut` is deliberately absent from this family so an invariant on the
+    /// code list COULD be enforced in one place. A caller reaching for
+    /// `codes.remove(i)` would be routing around that.
+    pub fn retag(&mut self, from: &LanguageCode, to: &LanguageCode) -> bool {
+        let Some(at) = self.0.iter().position(|code| code == from) else {
+            return false;
+        };
+        if self.0.iter().any(|code| code == to) {
+            self.0.remove(at);
+        } else {
+            self.0[at] = to.clone();
+        }
+        true
+    }
 }
 
 impl crate::model::WriteChat for LanguageCodes {

@@ -1,8 +1,6 @@
 +++
 code = 'E502'
 name = 'false positive, a %wor parse error cascades to the entire file'
-kind = 'Invalidity'
-status = 'implemented'
 +++
 
 ## Description

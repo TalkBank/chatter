@@ -61,9 +61,8 @@
 //! separators carry no payload and are ignored.
 
 use crate::generated_traversal::{
-    AsRawNode, IdContentsNode, IdHeaderNode, NodeSlot, extract_id_contents, extract_id_header,
+    AsRawNode, IdHeaderNode, NodeSlot, extract_id_contents, extract_id_header,
 };
-use crate::node_types::ID_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -149,25 +148,15 @@ fn optional_field<'tree, T: AsRawNode<'tree>>(
 }
 
 /// Parse ID header from tree-sitter node.
-pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Header {
-    // Verify this is an id_header node.
-    if node.kind() != ID_HEADER {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!("Expected id_header node, got: {}", node.kind()),
-        ));
-        return unknown_id_header("ID header CST node had unexpected kind");
-    }
+pub fn parse_id_header(typed: IdHeaderNode<'_>, source: &str, errors: &impl ErrorSink) -> Header {
+    let node = typed.raw_node();
 
     // Descend to the id_contents payload via the typed `child_2` slot of the
     // id_header (unchanged index from the OLD module: id_header has no
     // interstitial whitespace positions of its own). `present_or_recover().ok()`
     // keeps only a Present id_contents; every non-Present recovery state funnels
     // to the pre-migration `find_child_by_kind(node, ID_CONTENTS) == None` branch.
-    let header_children = extract_id_header(IdHeaderNode(node));
+    let header_children = extract_id_header(typed);
     let Some(contents) = header_children
         .child_2
         .slot()
@@ -192,7 +181,7 @@ pub fn parse_id_header(node: Node, source: &str, errors: &impl ErrorSink) -> Hea
     // fields is its OWN position; the field indices below are wider than the OLD
     // module's (see the field-mapping table in the module doc comment) but the
     // FIELDS THEMSELVES are unchanged.
-    let contents = extract_id_contents(IdContentsNode(id_contents));
+    let contents = extract_id_contents(contents);
 
     let language = required_field(
         contents.child_0.slot(),

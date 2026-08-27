@@ -1,7 +1,7 @@
 # Rediarize (`chatter rediarize`)
 
 **Status:** Draft
-**Last modified:** 2026-07-08 21:50 EDT
+**Last updated:** 2026-08-27 16:57 EDT
 
 `chatter rediarize` re-attributes utterance speakers in a CHAT file
 from an external diarization. Given a transcript whose utterances
@@ -61,6 +61,9 @@ rediarize: 214 reassigned, 671 unchanged, 7 flagged
 Flagged utterances (see below) are listed individually with their
 utterance index, kept speaker, and reason.
 
+`--contested-at SHARE` additionally reports utterances whose time is
+split between tracks; see [Contested utterances](#contested-utterances-contested-at).
+
 ## Machine-readable summary (`--summary-json`)
 
 Batch drivers looping `rediarize` over a corpus should not scrape the
@@ -80,6 +83,11 @@ chatter rediarize INPUT.cha --turns TURNS.json \
   "flagged": [
     {"utterance_index": 12, "kept_speaker": "PAR1",
      "reason": "no_overlapping_turn"}
+  ],
+  "contested": [
+    {"utterance_index": 41, "assigned": "PAR2",
+     "ownership": {"shares": [["PAR2", 600], ["PAR1", 400]],
+                   "total_ms": 1000}}
   ]
 }
 ```
@@ -94,8 +102,49 @@ chatter rediarize INPUT.cha --turns TURNS.json \
   `utterance_index` is the 0-based position among main-tier lines;
   `reason` is `"no_bullet"` or `"no_overlapping_turn"`.
 
+- `contested`: utterances whose time was meaningfully split between
+  tracks, empty unless `--contested-at` was given. These were still
+  reattributed, to `assigned`, so they are NOT in `flagged`, which means
+  "declined". `ownership.shares` is every overlapping track with its
+  summed milliseconds, descending; `ownership.total_ms` is the
+  denominator. The whole distribution is emitted rather than a winner
+  and a runner-up, because that narrower shape cannot tell a 55/45 split
+  from 55/23/22 and the difference is the point.
+
 Field names and the `reason` strings are a stable output contract.
 The summary is written only on exit 0, after the CHAT output.
+
+## Contested utterances (`--contested-at`)
+
+An utterance's bullet can overlap turns from more than one track. The
+tool assigns it to the track holding the most of it, which is the best
+available answer, but "most" can mean 95% or 34%, and those are
+different situations that the output otherwise reports identically.
+
+```bash
+chatter rediarize INPUT.cha --turns TURNS.json --contested-at 0.25
+```
+
+Reports an utterance as contested when the RUNNER-UP track holds at
+least that share of the utterance's overlapped time. Two rivals at 20%
+each is a different situation from one at 40%, and this is the latter
+question.
+
+**There is no default, deliberately.** Omit the flag and nothing is
+reported as contested. What share makes an utterance genuinely mixed
+has not been measured against human listening, so shipping a number
+here would hand every user a constant wearing this tool's authority.
+Supply one you can defend, or none.
+
+The flag changes **reporting only**: placement is byte-identical with
+and without it. A value outside `0.0` to `1.0`, or `NaN`, fails the
+command before any file is read, rather than silently meaning "nothing
+is ever contested".
+
+Known limitation: summed milliseconds per track cannot distinguish a
+speaker change INSIDE an utterance (one track holds the first half, the
+other the second) from crosstalk (both across the whole), and those want
+opposite remedies. Contested says the time is split, not how.
 
 ## The turns JSON format
 

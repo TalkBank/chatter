@@ -36,14 +36,17 @@
 //! instead, for the reason that crate exists.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::output::{markdown, rust_test, tree_sitter, validation_corpus};
+use crate::output::{error_code_enum, markdown, rust_test, tree_sitter, validation_corpus};
 use crate::owned_output::clear_owned;
+use crate::rust_source::format_generated_rust;
 use crate::spec::by_code::SpecsByCode;
 use crate::spec::{ConstructSpec, ErrorSpec};
+use talkbank_spec_vocabulary::registry::CodeRegistry;
 
 /// The complete contents of one artifact: relative path to file body.
 ///
@@ -122,11 +125,21 @@ pub struct Artifact {
     pub build: fn(&Path) -> Result<GeneratedFiles>,
 }
 
-/// Every artifact generated from `spec/` that needs no parser or model crate.
+/// Every artifact generated from `spec/` that needs no parser.
 ///
-/// Artifacts needing the live `ErrorCode` enum live in `spec-runtime-tools`,
-/// which is the whole reason that crate is separate from this one.
+/// Artifacts that RUN the parser live in `spec-runtime-tools`, which is the
+/// whole reason that crate is separate from this one. This said "needing the
+/// live `ErrorCode` enum" until R1's review; nothing in either half needs the
+/// enum any more, since it is generated here.
 pub static ARTIFACTS: &[Artifact] = &[
+    Artifact {
+        what: "talkbank-model's generated sources",
+        root: "crates/talkbank-model/src/errors",
+        // The model's error module is hand-authored apart from these two
+        // files, so claiming the directory would delete the rest of it.
+        ownership: Ownership::NamedFiles { retired: &[] },
+        build: build_model_sources,
+    },
     Artifact {
         what: "tree-sitter corpus tests",
         root: "grammar/test/corpus/generated",
@@ -178,6 +191,110 @@ pub(crate) fn error_dir(repo_root: &Path) -> PathBuf {
     repo_root.join("spec/errors")
 }
 
+/// Both Rust files generated into `talkbank-model` from the per-code registry.
+///
+/// # Why ONE row for two files
+///
+/// They were two rows, and their roots NESTED: the enum landed in
+/// `.../errors/codes`, inside the `DiagnosticKind` registry's `.../errors`.
+/// `no_artifact_root_contains_another` fired on exactly that the moment it was
+/// strengthened from equality to containment, and it was right to: if the
+/// outer row ever became `WholeDirectory`, `clear_owned`'s `remove_dir_all`
+/// would delete the inner's committed output, and `committed_files` walks
+/// recursively so it would report it as `Extra` first.
+///
+/// `GeneratedFiles` is keyed by a path RELATIVE to the root, `write` already
+/// does `create_dir_all` on each file's parent and `check` already joins, so a
+/// nested key needs no new machinery. One row, ONE registry read, and the
+/// containment hazard is gone rather than excused.
+fn build_model_sources(repo_root: &Path) -> Result<GeneratedFiles> {
+    let registry = CodeRegistry::load(repo_root)?;
+    let mut files = GeneratedFiles::new();
+    files.insert(
+        Path::new("codes").join(error_code_enum::OUTPUT_FILE),
+        render_error_code_enum(&registry)?,
+    );
+    files.insert(
+        DIAGNOSTIC_KIND_FILE.into(),
+        render_diagnostic_kind(&registry)?,
+    );
+    Ok(files)
+}
+
+/// The `ErrorCode` enum, from the per-code registry.
+///
+/// # Why this is in the pure-markdown half
+///
+/// It reads a TOML file and writes Rust text; it links no model and no parser.
+/// That is what lets it rebuild the enum when the committed enum does not
+/// compile, which is the only bootstrap route this subsystem has. See
+/// `output::error_code_enum` for the rest of that argument.
+fn render_error_code_enum(registry: &CodeRegistry) -> Result<String> {
+    Ok(format_generated_rust(&error_code_enum::render(registry))?)
+}
+
+/// The file name the `DiagnosticKind` registry produces inside its root.
+const DIAGNOSTIC_KIND_FILE: &str = "generated_diagnostic_kind.rs";
+
+/// The exhaustive per-`ErrorCode` `DiagnosticKind` lookup, from the registry.
+///
+/// # What R1 deleted here, and why the compiler is the replacement
+///
+/// This used to iterate the COMPILED `ErrorCode::iter()`, build a
+/// `BTreeMap<String, (ErrorKind, RepoRelativePath)>` from every spec file, and
+/// refuse to run on any divergence in either direction: a variant no spec
+/// names, or a spec-named code with no variant. It also required a code's
+/// several spec files to agree about `kind`. All three were joins between two
+/// vocabularies, and there is one vocabulary now.
+///
+/// The exhaustiveness that check bought is not lost, it MOVED to the compiler:
+/// the enum is generated from this same registry, so a match arm naming a
+/// variant that does not exist, or omitting one that does, fails to build
+/// `talkbank-model`. That is strictly better than a generator-time check,
+/// because it also catches a STALE committed enum, which the old check could
+/// not see at all.
+fn render_diagnostic_kind(registry: &CodeRegistry) -> Result<String> {
+    // `writeln!` into the buffer, not `push_str(&format!(...))`: the sibling
+    // generator added in the same commit already does it this way, and one
+    // throwaway `String` per arm is the intermediate this workspace's rules
+    // name by hand.
+    let mut arms = String::new();
+    for entry in registry.entries() {
+        let _ = writeln!(
+            arms,
+            "        ErrorCode::{} => DiagnosticKind::{}, // {}",
+            entry.variant(),
+            entry.kind().diagnostic_kind_variant(),
+            entry.code(),
+        );
+    }
+
+    let source = format!(
+        "//! Generated by `spec_gen` from each code's `kind` in\n\
+         //! `spec/codes/error-codes.toml`. DO NOT EDIT BY HAND.\n\
+         //!\n\
+         //! Regenerate with `just spec-gen`; `just spec-check` reports whether\n\
+         //! this copy is current without writing anything.\n\
+         //!\n\
+         //! Exhaustive with no defaulted arm, and that is the COMPILER's\n\
+         //! guarantee rather than a generator's: `ErrorCode` is generated from\n\
+         //! the same registry, so an arm for a variant that does not exist, or\n\
+         //! a missing arm for one that does, fails to build this crate.\n\n\
+         use super::codes::ErrorCode;\n\
+         use super::diagnostic_kind::DiagnosticKind;\n\n\
+         /// Exhaustive per-[`ErrorCode`] [`DiagnosticKind`] lookup, generated from\n\
+         /// spec. See [`super::diagnostic_kind::kind_of`] for the stable public\n\
+         /// entry point that delegates here.\n\
+         pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {{\n\
+         \x20   match code {{\n\
+         {arms}\
+         \x20   }}\n\
+         }}\n"
+    );
+
+    Ok(format_generated_rust(&source)?)
+}
+
 /// The published per-code documentation and its index, from the error specs.
 ///
 /// # Why this is in the registry at all
@@ -190,7 +307,8 @@ pub(crate) fn error_dir(repo_root: &Path) -> PathBuf {
 /// an example the spec had gained. A published document telling users a check
 /// does not fire, when it does, is worse than no document.
 fn build_error_docs(repo_root: &Path) -> Result<GeneratedFiles> {
-    let specs = ErrorSpec::load_all(error_dir(repo_root))
+    let registry = CodeRegistry::load(repo_root)?;
+    let specs = ErrorSpec::load_all(error_dir(repo_root), &registry)
         .map_err(|e| anyhow::anyhow!("Failed to load error specs: {e}"))?;
 
     // ONE grouping, shared by the pages and the index, and it DISCARDS NOTHING.
@@ -219,7 +337,8 @@ fn build_error_docs(repo_root: &Path) -> Result<GeneratedFiles> {
 fn build_tree_sitter_corpus(repo_root: &Path) -> Result<GeneratedFiles> {
     let specs = ConstructSpec::load_all(construct_dir(repo_root))
         .map_err(|e| anyhow::anyhow!("Failed to load construct specs: {e}"))?;
-    let error_specs = ErrorSpec::load_all(error_dir(repo_root))
+    let registry = CodeRegistry::load(repo_root)?;
+    let error_specs = ErrorSpec::load_all(error_dir(repo_root), &registry)
         .map_err(|e| anyhow::anyhow!("Failed to load error specs: {e}"))?;
 
     // Membership is decided per EXAMPLE from the observation snapshot, an
@@ -428,15 +547,34 @@ mod tests {
 
     /// Two artifacts writing the same directory would each report the other's
     /// files as `Extra`, and each would delete the other's on write.
+    ///
+    /// CONTAINMENT, not equality. This asserted string equality until R1,
+    /// which introduced the repo's first nested pair: the `ErrorCode` enum
+    /// lands in `crates/talkbank-model/src/errors/codes`, INSIDE the
+    /// `DiagnosticKind` registry's `crates/talkbank-model/src/errors`. Equality
+    /// passes on that. If the outer row ever became `WholeDirectory`,
+    /// `clear_owned`'s `remove_dir_all` would delete the inner artifact's
+    /// committed output, and `committed_files` walks recursively so it would
+    /// report it as `Extra` first.
+    ///
+    /// SURVIVES a type: the hazard is a relationship between two `&'static
+    /// str` constants and what the filesystem does with them, which no
+    /// signature here can see.
     #[test]
-    fn no_two_artifacts_claim_the_same_root() {
-        let mut seen = std::collections::BTreeSet::new();
-        for artifact in ARTIFACTS {
-            assert!(
-                seen.insert(artifact.root),
-                "two artifacts claim {}",
-                artifact.root
-            );
+    fn no_artifact_root_contains_another() {
+        for outer in ARTIFACTS {
+            for inner in ARTIFACTS {
+                if std::ptr::eq(outer, inner) {
+                    continue;
+                }
+                assert!(
+                    !inner.root.starts_with(outer.root),
+                    "{} is inside {}, so a WholeDirectory clear of the outer \
+                     would delete the inner's committed output",
+                    inner.root,
+                    outer.root
+                );
+            }
         }
     }
 

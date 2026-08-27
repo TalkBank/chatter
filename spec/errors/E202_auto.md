@@ -1,8 +1,6 @@
 +++
 code = 'E202'
 name = 'Missing form type after @'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'

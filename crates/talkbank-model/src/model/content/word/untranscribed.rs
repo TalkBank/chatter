@@ -95,7 +95,7 @@ pub enum MarkerSpelling {
 impl MarkerSpelling {
     /// Classify a token against the whole marker vocabulary.
     ///
-    /// Derived by iterating [`UntranscribedStatus::ALL`], so the set of
+    /// Derived by iterating `UntranscribedStatus::ALL`, so the set of
     /// rejected spellings is a consequence of the marker list rather than a
     /// second thing to keep beside it.
     #[must_use]

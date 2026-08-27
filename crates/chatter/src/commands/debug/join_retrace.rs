@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use talkbank_model::WriteChat;
 use talkbank_transform::join_retrace::{
     JoinRetraceStats, RetraceJoinScope, join_dangling_retraces,
 };
@@ -33,39 +32,37 @@ pub fn run_join_retrace(paths: &[PathBuf], dry_run: bool, scope: RetraceJoinScop
     let mut totals = JoinRetraceStats::default();
 
     for path in files {
-        let source = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", path.display())));
-        let Some(mut parsed) = parse_or_report(&parser, &path, &source) else {
+        let Some(mut open) = InPlace::open(&parser, path) else {
             continue;
         };
 
-        let stats = join_dangling_retraces(&mut parsed, scope);
+        let stats = join_dangling_retraces(open.model_mut(), scope);
         if stats.is_empty() {
             continue;
         }
 
-        let rewritten = parsed.to_chat_string();
-        if rewritten == source {
-            continue;
-        }
-
-        if dry_run {
-            println!(
-                "[dry-run] {}: would join {} utterance(s){}",
-                path.display(),
-                stats.joined_utterances,
-                remorphotag_suffix(&stats)
-            );
+        let display = open.path().display().to_string();
+        let mode = if dry_run {
+            Commit::DryRun
         } else {
-            std::fs::write(&path, &rewritten)
-                .unwrap_or_else(|e| die(&format!("cannot write {}: {e}", path.display())));
-            println!(
-                "{}: joined {} utterance(s){}",
-                path.display(),
+            Commit::Write
+        };
+        // The dry run and the real write share ONE change detection, so
+        // `--dry-run` cannot report a file the real run would leave alone.
+        let announced = match open.commit(mode) {
+            Committed::Wrote => format!(
+                "{display}: joined {} utterance(s){}",
                 stats.joined_utterances,
                 remorphotag_suffix(&stats)
-            );
-        }
+            ),
+            Committed::WouldWrite => format!(
+                "[dry-run] {display}: would join {} utterance(s){}",
+                stats.joined_utterances,
+                remorphotag_suffix(&stats)
+            ),
+            Committed::Unchanged => continue,
+        };
+        println!("{announced}");
 
         changed_files += 1;
         totals.joined_utterances += stats.joined_utterances;

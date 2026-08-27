@@ -230,7 +230,7 @@ fn whole_utterance_target_returns_some_for_uniform_at_s_only_words() {
     ];
     let target = main.whole_utterance_language_switch_target(Some(&default), &declared);
     assert_eq!(
-        target.as_ref().map(|c| c.as_str()),
+        target.as_ref().map(|t| t.language().as_str()),
         Some("eng"),
         "all-@s utterance with default=yue, declared=yue,eng must resolve to eng"
     );
@@ -409,7 +409,7 @@ fn whole_utterance_target_accepts_rewrite_when_filler_has_matching_explicit_lang
     ];
     let target = main.whole_utterance_language_switch_target(None, &declared);
     assert_eq!(
-        target.as_ref().map(|c| c.as_str()),
+        target.as_ref().map(|t| t.language().as_str()),
         Some("eng"),
         "filler with explicit matching @s:LANG must not block the rewrite"
     );

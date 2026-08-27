@@ -12,12 +12,10 @@ use crate::generated_traversal::{
     AsRawNode, GraContentsNode, GraDependentTierNode, GraRelationNode, NodeSlot, WhitespacesNode,
     extract_gra_contents, extract_gra_dependent_tier,
 };
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};
-use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
-use tree_sitter::Node;
+use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 use super::relation::parse_gra_relation;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -41,11 +39,11 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_une
 ///   expected kind, so both a real body and a MISSING body were found (the old
 ///   `Some(gra_contents)` branch) and drive relation iteration. A MISSING/empty
 ///   `gra_contents` yields zero relations with no diagnostic, identical to the
-///   old loop iterating an empty node. The two arms can no longer share one
-///   `|`-pattern binding: the NEW backend's `NodeSlot::Missing` carries the raw
-///   `tree_sitter::Node` directly, not the typed `GraContentsNode` wrapper OLD
-///   carried, so `Present` calls [`AsRawNode::raw_node`] while `Missing` passes
-///   its raw node straight through; the observable parse is unchanged.
+///   old loop iterating an empty node. Both are reached through
+///   `NodeSlot::node_or_placeholder`, which answers for exactly the two states
+///   where the position identifies itself. (This paragraph used to explain why
+///   the two had to be written as separate arms. That was true of the backend
+///   at the time and is no longer.)
 /// - `Absent` / `Error` / `Unexpected`: no child of kind `gra_contents` was
 ///   found (the old `None` branch): an ERROR node or an unexpected-kind node does
 ///   not match `gra_contents`, and an absent child is not there at all. Emit the
@@ -53,21 +51,27 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_une
 ///   silent-partial is PRESERVED behavior; it is unreachable from the boundary
 ///   (`parse_gra_tier` is only invoked when the tier node has no tree-sitter
 ///   error) but is reproduced here for exhaustiveness.
-pub fn parse_gra_tier(node: Node, source: &str, errors: &impl ErrorSink) -> GraTier {
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let children = extract_gra_dependent_tier(GraDependentTierNode(node));
+pub fn parse_gra_tier(
+    typed: GraDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> GraTier {
+    let node = typed.raw_node();
+    let span = span_of(node);
+    let children = extract_gra_dependent_tier(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
-    match children.child_2.slot() {
-        NodeSlot::Present(contents) => {
-            let relations = parse_gra_relations(contents.raw_node(), source, errors);
+    match children
+        .child_2
+        .slot()
+        .typed_or_placeholder()
+        .present_or_placeholder()
+    {
+        Some(contents) => {
+            let relations = parse_gra_relations(contents, source, errors);
             GraTier::new(GraTierType::Gra, relations).with_span(span)
         }
-        NodeSlot::Missing(raw_contents) => {
-            let relations = parse_gra_relations(*raw_contents, source, errors);
-            GraTier::new(GraTierType::Gra, relations).with_span(span)
-        }
-        NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
+        None => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
@@ -94,11 +98,11 @@ pub fn parse_gra_tier(node: Node, source: &str, errors: &impl ErrorSink) -> GraT
 /// decode) and, per [`push_gra_separator`], unreachable in practice for the
 /// same reason the relation slots below are.
 fn parse_gra_relations(
-    gra_contents: Node,
+    typed: GraContentsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<GrammaticalRelation> {
-    let contents = extract_gra_contents(GraContentsNode(gra_contents));
+    let contents = extract_gra_contents(typed);
     let mut relations: Vec<GrammaticalRelation> =
         Vec::with_capacity(contents.child_1.slot().len() + 1);
 
@@ -185,7 +189,7 @@ fn push_gra_relation<'tree>(
     match slot {
         NodeSlot::Present(relation_node) => {
             if let ParseOutcome::Parsed(relation) =
-                parse_gra_relation(relation_node.raw_node(), source, errors)
+                parse_gra_relation(*relation_node, source, errors)
             {
                 relations.push(relation);
             }

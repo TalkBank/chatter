@@ -126,7 +126,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
             let error = build_alignment_error(
                 main,
                 mor,
-                "E716",
+                ErrorCode::MorTerminatorValueMismatch,
                 format!(
                     "Main tier terminator \"{}\" does not match %mor terminator \"{}\"",
                     main_str, mor_str,
@@ -171,7 +171,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
             format_positional_mismatch("Main tier", "%mor tier", &main_items, &mor_items);
 
         let error = ParseError::at_span(
-            ErrorCode::new("E705"),
+            ErrorCode::MorCountMismatchTooFew,
             Severity::Error,
             main.span,
             detailed_message,
@@ -201,7 +201,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
             format_positional_mismatch("Main tier", "%mor tier", &main_items, &mor_items);
 
         let error = ParseError::at_span(
-            ErrorCode::new("E706"),
+            ErrorCode::MorCountMismatchTooMany,
             Severity::Error,
             main.span,
             detailed_message,
@@ -228,12 +228,11 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
 fn build_alignment_error(
     main: &MainTier,
     mor: &MorTier,
-    code: &str,
+    error_code: ErrorCode,
     message: String,
     suggestion: &str,
     location_span: crate::Span,
 ) -> ParseError {
-    let error_code = ErrorCode::new(code);
     let alignment_context = build_alignment_preview(main, mor);
 
     let suggestion_text = if alignment_context.is_empty() {

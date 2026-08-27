@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod frontmatter;
 pub mod observations;
+pub mod registry;
 
 /// Raised when a metadata value fails the rule its type states.
 #[derive(Debug, thiserror::Error)]
@@ -42,9 +43,27 @@ pub struct UnknownMetadataValue {
     value: String,
 }
 
-/// Implementation status of an error spec: whether the validator actually
+impl UnknownMetadataValue {
+    /// Name the field that was wrong and the value it was given.
+    ///
+    /// `pub(crate)` and constructor-only: the fields stay private so the
+    /// rendered message cannot be assembled from parts by a caller who then
+    /// spells the field name differently from the type that owns the rule.
+    pub(crate) fn new(field: &'static str, value: &str) -> Self {
+        Self {
+            field,
+            value: value.to_owned(),
+        }
+    }
+}
+
+/// Implementation status of an error CODE: whether the validator actually
 /// checks its rule. The runner asserts `Implemented` examples fire and skips
 /// the rest.
+///
+/// A property of the code, declared in [`crate::registry`], NOT of any spec
+/// file describing it. It was per-file until R1, so eleven codes carried two
+/// or three copies with a generator checking they agreed.
 /// # There is deliberately no `Default`
 ///
 /// There was one, `#[default] Implemented`, and removing it is the point of
@@ -57,8 +76,11 @@ pub struct UnknownMetadataValue {
 /// authoritative.
 ///
 /// A `Default` whose wrong value is invisible is banned by name in this
-/// project. Both parsers now require the bullet, and they agree by type rather
-/// than by two docstrings that said different things.
+/// project. Since R1 there is no `**Status**` bullet and no `status` key in a
+/// spec file at all: the value is declared once per CODE in
+/// `spec/codes/error-codes.toml`, which is required by the same schema that
+/// reads it, so there is one place for it to be missing from and one error
+/// naming it.
 /// # Deserialized THROUGH [`FromStr`], not by a `rename_all` derive
 ///
 /// A `rename_all = "snake_case"` derive spells the four names a second time,
@@ -106,6 +128,31 @@ impl Status {
             Self::NotImplemented => "not_implemented",
             Self::Deprecated => "deprecated",
             Self::UnreachableFromChat => "unreachable_from_chat",
+        }
+    }
+
+    /// Does the binary actually run this check?
+    ///
+    /// # The one owner of a policy that was a gate's private function
+    ///
+    /// Only `not_implemented` means unenforced. `deprecated` and
+    /// `unreachable_from_chat` are checks that EXIST: one fires on a
+    /// construct we no longer want, the other cannot be reached from a `.cha`
+    /// file but is reachable from a deserialized model. That is the same
+    /// judgement the CLI's old hand-written 43-code list made by omitting
+    /// them, and it lived in `SpecStatusGate::as_check_status` until R1
+    /// deleted the gate.
+    ///
+    /// It is deliberately NOT baked into the variants: two other callers read
+    /// `Status` with different policies (the example runner skips
+    /// `deprecated`, the fixture corpus excuses `unreachable_from_chat`), so
+    /// a single "is this live" bit on the enum would be wrong for both. This
+    /// method answers ONE question and says in its name which.
+    #[must_use]
+    pub const fn is_enforced(self) -> bool {
+        match self {
+            Self::NotImplemented => false,
+            Self::Implemented | Self::Deprecated | Self::UnreachableFromChat => true,
         }
     }
 }

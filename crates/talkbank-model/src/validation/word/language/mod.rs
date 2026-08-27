@@ -17,7 +17,8 @@ mod resolve;
 mod tests;
 
 pub(crate) use digits::check_word_digits_multi;
-pub use governing::GoverningMarker;
+pub(crate) use governing::GoverningMarker;
+pub use governing::{GoverningMark, GoverningMarkKind};
 pub(crate) use helpers::mixed_language_allows_prefix_marker;
-pub(crate) use resolve::resolve_marker_at;
 pub use resolve::{LanguageResolution, LanguageResolutionOutcome};
+pub(crate) use resolve::{resolve_marker_at, resolve_without_marker};

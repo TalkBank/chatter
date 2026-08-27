@@ -77,6 +77,12 @@ pub fn render_utterance_content(
             bracketed::render_bracketed_content(&quot.content, rendered, retrace_spans);
             rendered.push(crate::chars::RIGHT_DOUBLE_QUOTE);
         }
+        UtteranceContent::AnnotatedQuotation(quot) => {
+            rendered.push(crate::chars::LEFT_DOUBLE_QUOTE);
+            bracketed::render_bracketed_content(&quot.inner.content, rendered, retrace_spans);
+            rendered.push(crate::chars::RIGHT_DOUBLE_QUOTE);
+            render_scoped_annotations(quot.scoped_annotations.iter(), rendered);
+        }
         UtteranceContent::Separator(sep) => {
             sep.write_chat(rendered).ok();
         }
@@ -111,6 +117,9 @@ pub fn render_utterance_content(
         }
         UtteranceContent::NonvocalSimple(marker) => {
             marker.write_chat(rendered).ok();
+        }
+        UtteranceContent::Action(action) => {
+            action.write_chat(rendered).ok();
         }
         UtteranceContent::AnnotatedAction(ann) => {
             ann.inner.write_chat(rendered).ok();

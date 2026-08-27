@@ -46,7 +46,7 @@
 //!   `analyze_line_error(error_node, line_node, ...)` call as the old
 //!   `is_error()` branch (identical arguments, identical path). That code
 //!   path is structurally equivalent between old and new; divergence would
-//!   surface in the gate tests (`parser_equivalence`, `roundtrip_reference_corpus`,
+//!   surface in the gate tests (`reference_corpus_parses`, `roundtrip_reference_corpus`,
 //!   `chatter_matches_check`) which run against the full error corpus.
 //! - The `Missing(_)` and `Absent` arms map to the old `is_missing() ->
 //!   continue` path (no diagnostic), which is also covered by the gate tests.

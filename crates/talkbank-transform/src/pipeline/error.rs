@@ -19,6 +19,14 @@ pub enum PipelineError {
     Validation(Vec<talkbank_model::ParseError>),
     /// JSON serialization error
     JsonSerialization(String),
+    /// Writing the serialized model over its source would DROP part of it.
+    ///
+    /// Distinct from [`PipelineError::Parse`] and
+    /// [`PipelineError::Validation`] on purpose: the source may be perfectly
+    /// valid CHAT and still round-trip lossily, and a caller that only
+    /// refuses on invalidity will write the loss. See
+    /// [`crate::Rewrite`].
+    DroppedContent(super::rewrite::DroppedContent),
 }
 
 impl std::fmt::Display for PipelineError {
@@ -34,6 +42,7 @@ impl std::fmt::Display for PipelineError {
             PipelineError::JsonSerialization(msg) => {
                 write!(f, "JSON serialization failed: {}", msg)
             }
+            PipelineError::DroppedContent(dropped) => write!(f, "{dropped}"),
         }
     }
 }

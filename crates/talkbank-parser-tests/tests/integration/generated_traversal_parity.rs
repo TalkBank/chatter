@@ -20,6 +20,7 @@
 //! 3. Speaker text, tier body, headers extract correctly
 
 use std::collections::BTreeMap;
+use talkbank_parser_tests::classify;
 
 use talkbank_parser_tests::generated_traversal::*;
 
@@ -80,7 +81,7 @@ fn test_main_tier_all_fields_present() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "main_tier" {
-            let c = extract_main_tier(MainTierNode(node));
+            let c = extract_main_tier(classify::<MainTierNode>(node));
             assert!(
                 matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "star: {:?}",
@@ -113,7 +114,7 @@ fn test_main_tier_all_fields_present() {
             );
 
             if let NodeSlot::Present(spk) = c.speaker.slot() {
-                assert_eq!(node_text(spk.0, source), "CHI");
+                assert_eq!(node_text(spk.raw_node(), source), "CHI");
             }
             found = true;
         }
@@ -133,7 +134,7 @@ fn test_participants_header() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "participants_header" {
-            let c = extract_participants_header(ParticipantsHeaderNode(node));
+            let c = extract_participants_header(classify::<ParticipantsHeaderNode>(node));
             // Should have all required children present
             assert!(
                 matches!(c.child_0.slot(), NodeSlot::Present(_)),
@@ -165,7 +166,7 @@ fn test_date_header() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "date_header" {
-            let c = extract_date_header(DateHeaderNode(node));
+            let c = extract_date_header(classify::<DateHeaderNode>(node));
             assert!(
                 matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "date_prefix: {:?}",
@@ -183,7 +184,7 @@ fn test_date_header() {
             );
 
             if let NodeSlot::Present(date) = c.child_2.slot() {
-                assert_eq!(node_text(date.0, source), "01-JAN-2000");
+                assert_eq!(node_text(date.raw_node(), source), "01-JAN-2000");
             }
             found = true;
         }
@@ -206,7 +207,7 @@ fn test_full_document_extraction() {
     let full_doc = root.child(0).expect("should have full_document child");
     assert_eq!(full_doc.kind(), "full_document");
 
-    let c = extract_full_document(FullDocumentNode(full_doc));
+    let c = extract_full_document(classify::<FullDocumentNode>(full_doc));
     assert!(
         matches!(c.child_0.slot(), NodeSlot::Present(_)),
         "utf8_header: {:?}",
@@ -249,83 +250,84 @@ fn test_corpus_wide_extraction() {
             // Call extraction for key SEQ rules to verify they work
             match kind {
                 "full_document" => {
-                    let _ = extract_full_document(FullDocumentNode(node));
+                    let _ = extract_full_document(classify::<FullDocumentNode>(node));
                 }
                 "main_tier" => {
-                    let _ = extract_main_tier(MainTierNode(node));
+                    let _ = extract_main_tier(classify::<MainTierNode>(node));
                 }
                 "utterance" => {
-                    let _ = extract_utterance(UtteranceNode(node));
+                    let _ = extract_utterance(classify::<UtteranceNode>(node));
                 }
                 "tier_body" => {
-                    let _ = extract_tier_body(TierBodyNode(node));
+                    let _ = extract_tier_body(classify::<TierBodyNode>(node));
                 }
                 "utterance_end" => {
-                    let _ = extract_utterance_end(UtteranceEndNode(node));
+                    let _ = extract_utterance_end(classify::<UtteranceEndNode>(node));
                 }
                 "participants_header" => {
-                    let _ = extract_participants_header(ParticipantsHeaderNode(node));
+                    let _ = extract_participants_header(classify::<ParticipantsHeaderNode>(node));
                 }
                 "languages_header" => {
-                    let _ = extract_languages_header(LanguagesHeaderNode(node));
+                    let _ = extract_languages_header(classify::<LanguagesHeaderNode>(node));
                 }
                 "id_header" => {
-                    let _ = extract_id_header(IdHeaderNode(node));
+                    let _ = extract_id_header(classify::<IdHeaderNode>(node));
                 }
                 "date_header" => {
-                    let _ = extract_date_header(DateHeaderNode(node));
+                    let _ = extract_date_header(classify::<DateHeaderNode>(node));
                 }
                 "media_header" => {
-                    let _ = extract_media_header(MediaHeaderNode(node));
+                    let _ = extract_media_header(classify::<MediaHeaderNode>(node));
                 }
                 "comment_header" => {
-                    let _ = extract_comment_header(CommentHeaderNode(node));
+                    let _ = extract_comment_header(classify::<CommentHeaderNode>(node));
                 }
                 "mor_dependent_tier" => {
-                    let _ = extract_mor_dependent_tier(MorDependentTierNode(node));
+                    let _ = extract_mor_dependent_tier(classify::<MorDependentTierNode>(node));
                 }
                 "gra_dependent_tier" => {
-                    let _ = extract_gra_dependent_tier(GraDependentTierNode(node));
+                    let _ = extract_gra_dependent_tier(classify::<GraDependentTierNode>(node));
                 }
                 "pho_dependent_tier" => {
-                    let _ = extract_pho_dependent_tier(PhoDependentTierNode(node));
+                    let _ = extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node));
                 }
                 "com_dependent_tier" => {
-                    let _ = extract_com_dependent_tier(ComDependentTierNode(node));
+                    let _ = extract_com_dependent_tier(classify::<ComDependentTierNode>(node));
                 }
                 "word_with_optional_annotations" => {
-                    let _ = extract_word_with_optional_annotations(
-                        WordWithOptionalAnnotationsNode(node),
-                    );
+                    let _ = extract_word_with_optional_annotations(classify::<
+                        WordWithOptionalAnnotationsNode,
+                    >(node));
                 }
                 "nonword_with_optional_annotations" => {
-                    let _ = extract_nonword_with_optional_annotations(
-                        NonwordWithOptionalAnnotationsNode(node),
-                    );
+                    let _ = extract_nonword_with_optional_annotations(classify::<
+                        NonwordWithOptionalAnnotationsNode,
+                    >(node));
                 }
                 "mor_word" => {
-                    let _ = extract_mor_word(MorWordNode(node));
+                    let _ = extract_mor_word(classify::<MorWordNode>(node));
                 }
                 "mor_content" => {
-                    let _ = extract_mor_content(MorContentNode(node));
+                    let _ = extract_mor_content(classify::<MorContentNode>(node));
                 }
                 "gra_relation" => {
-                    let _ = extract_gra_relation(GraRelationNode(node));
+                    let _ = extract_gra_relation(classify::<GraRelationNode>(node));
                 }
                 "replacement" => {
-                    let _ = extract_replacement(ReplacementNode(node));
+                    let _ = extract_replacement(classify::<ReplacementNode>(node));
                 }
                 "group_with_annotations" => {
-                    let _ = extract_group_with_annotations(GroupWithAnnotationsNode(node));
+                    let _ =
+                        extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node));
                 }
                 "begin_header" => {
-                    let _ = extract_begin_header(BeginHeaderNode(node));
+                    let _ = extract_begin_header(classify::<BeginHeaderNode>(node));
                 }
                 "end_header" => {
-                    let _ = extract_end_header(EndHeaderNode(node));
+                    let _ = extract_end_header(classify::<EndHeaderNode>(node));
                 }
                 "utf8_header" => {
-                    let _ = extract_utf8_header(Utf8HeaderNode(node));
+                    let _ = extract_utf8_header(classify::<Utf8HeaderNode>(node));
                 }
                 _ => {}
             }
@@ -427,9 +429,9 @@ fn test_speaker_parity_with_existing_parser() {
         let mut gen_speakers = Vec::new();
         walk_all(tree.root_node(), &mut |node| {
             if node.kind() == "main_tier" {
-                let c = extract_main_tier(MainTierNode(node));
+                let c = extract_main_tier(classify::<MainTierNode>(node));
                 if let NodeSlot::Present(spk) = c.speaker.slot() {
-                    gen_speakers.push(node_text(spk.0, &source).to_string());
+                    gen_speakers.push(node_text(spk.raw_node(), &source).to_string());
                 }
             }
         });
@@ -481,456 +483,460 @@ fn test_speaker_parity_with_existing_parser() {
 fn try_extract(node: tree_sitter::Node) -> bool {
     match node.kind() {
         "act_dependent_tier" => {
-            let _ = extract_act_dependent_tier(ActDependentTierNode(node));
+            let _ = extract_act_dependent_tier(classify::<ActDependentTierNode>(node));
             true
         }
         "activities_header" => {
-            let _ = extract_activities_header(ActivitiesHeaderNode(node));
+            let _ = extract_activities_header(classify::<ActivitiesHeaderNode>(node));
             true
         }
         "add_dependent_tier" => {
-            let _ = extract_add_dependent_tier(AddDependentTierNode(node));
+            let _ = extract_add_dependent_tier(classify::<AddDependentTierNode>(node));
             true
         }
         "alt_dependent_tier" => {
-            let _ = extract_alt_dependent_tier(AltDependentTierNode(node));
+            let _ = extract_alt_dependent_tier(classify::<AltDependentTierNode>(node));
             true
         }
         "bck_header" => {
-            let _ = extract_bck_header(BckHeaderNode(node));
+            let _ = extract_bck_header(classify::<BckHeaderNode>(node));
             true
         }
         "begin_header" => {
-            let _ = extract_begin_header(BeginHeaderNode(node));
+            let _ = extract_begin_header(classify::<BeginHeaderNode>(node));
             true
         }
         "bg_header" => {
-            let _ = extract_bg_header(BgHeaderNode(node));
+            let _ = extract_bg_header(classify::<BgHeaderNode>(node));
             true
         }
         "birth_of_header" => {
-            let _ = extract_birth_of_header(BirthOfHeaderNode(node));
+            let _ = extract_birth_of_header(classify::<BirthOfHeaderNode>(node));
             true
         }
         "birthplace_of_header" => {
-            let _ = extract_birthplace_of_header(BirthplaceOfHeaderNode(node));
+            let _ = extract_birthplace_of_header(classify::<BirthplaceOfHeaderNode>(node));
             true
         }
         "blank_header" => {
-            let _ = extract_blank_header(BlankHeaderNode(node));
+            let _ = extract_blank_header(classify::<BlankHeaderNode>(node));
             true
         }
         "cod_dependent_tier" => {
-            let _ = extract_cod_dependent_tier(CodDependentTierNode(node));
+            let _ = extract_cod_dependent_tier(classify::<CodDependentTierNode>(node));
             true
         }
         "coh_dependent_tier" => {
-            let _ = extract_coh_dependent_tier(CohDependentTierNode(node));
+            let _ = extract_coh_dependent_tier(classify::<CohDependentTierNode>(node));
             true
         }
         "color_words_header" => {
-            let _ = extract_color_words_header(ColorWordsHeaderNode(node));
+            let _ = extract_color_words_header(classify::<ColorWordsHeaderNode>(node));
             true
         }
         "com_dependent_tier" => {
-            let _ = extract_com_dependent_tier(ComDependentTierNode(node));
+            let _ = extract_com_dependent_tier(classify::<ComDependentTierNode>(node));
             true
         }
         "comment_header" => {
-            let _ = extract_comment_header(CommentHeaderNode(node));
+            let _ = extract_comment_header(classify::<CommentHeaderNode>(node));
             true
         }
         "date_header" => {
-            let _ = extract_date_header(DateHeaderNode(node));
+            let _ = extract_date_header(classify::<DateHeaderNode>(node));
             true
         }
         "def_dependent_tier" => {
-            let _ = extract_def_dependent_tier(DefDependentTierNode(node));
+            let _ = extract_def_dependent_tier(classify::<DefDependentTierNode>(node));
             true
         }
         "full_document" => {
-            let _ = extract_full_document(FullDocumentNode(node));
+            let _ = extract_full_document(classify::<FullDocumentNode>(node));
             true
         }
         "eg_header" => {
-            let _ = extract_eg_header(EgHeaderNode(node));
+            let _ = extract_eg_header(classify::<EgHeaderNode>(node));
             true
         }
         "end_header" => {
-            let _ = extract_end_header(EndHeaderNode(node));
+            let _ = extract_end_header(classify::<EndHeaderNode>(node));
             true
         }
         "eng_dependent_tier" => {
-            let _ = extract_eng_dependent_tier(EngDependentTierNode(node));
+            let _ = extract_eng_dependent_tier(classify::<EngDependentTierNode>(node));
             true
         }
         "err_dependent_tier" => {
-            let _ = extract_err_dependent_tier(ErrDependentTierNode(node));
+            let _ = extract_err_dependent_tier(classify::<ErrDependentTierNode>(node));
             true
         }
         "event" => {
-            let _ = extract_event(EventNode(node));
+            let _ = extract_event(classify::<EventNode>(node));
             true
         }
         "exp_dependent_tier" => {
-            let _ = extract_exp_dependent_tier(ExpDependentTierNode(node));
+            let _ = extract_exp_dependent_tier(classify::<ExpDependentTierNode>(node));
             true
         }
         "fac_dependent_tier" => {
-            let _ = extract_fac_dependent_tier(FacDependentTierNode(node));
+            let _ = extract_fac_dependent_tier(classify::<FacDependentTierNode>(node));
             true
         }
         "flo_dependent_tier" => {
-            let _ = extract_flo_dependent_tier(FloDependentTierNode(node));
+            let _ = extract_flo_dependent_tier(classify::<FloDependentTierNode>(node));
             true
         }
         "font_header" => {
-            let _ = extract_font_header(FontHeaderNode(node));
+            let _ = extract_font_header(classify::<FontHeaderNode>(node));
             true
         }
         "g_header" => {
-            let _ = extract_g_header(GHeaderNode(node));
+            let _ = extract_g_header(classify::<GHeaderNode>(node));
             true
         }
         "gls_dependent_tier" => {
-            let _ = extract_gls_dependent_tier(GlsDependentTierNode(node));
+            let _ = extract_gls_dependent_tier(classify::<GlsDependentTierNode>(node));
             true
         }
         "gpx_dependent_tier" => {
-            let _ = extract_gpx_dependent_tier(GpxDependentTierNode(node));
+            let _ = extract_gpx_dependent_tier(classify::<GpxDependentTierNode>(node));
             true
         }
         "gra_contents" => {
-            let _ = extract_gra_contents(GraContentsNode(node));
+            let _ = extract_gra_contents(classify::<GraContentsNode>(node));
             true
         }
         "gra_dependent_tier" => {
-            let _ = extract_gra_dependent_tier(GraDependentTierNode(node));
+            let _ = extract_gra_dependent_tier(classify::<GraDependentTierNode>(node));
             true
         }
         "gra_relation" => {
-            let _ = extract_gra_relation(GraRelationNode(node));
+            let _ = extract_gra_relation(classify::<GraRelationNode>(node));
             true
         }
         "group_with_annotations" => {
-            let _ = extract_group_with_annotations(GroupWithAnnotationsNode(node));
+            let _ = extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node));
             true
         }
         "header_sep" => {
-            let _ = extract_header_sep(HeaderSepNode(node));
+            let _ = extract_header_sep(classify::<HeaderSepNode>(node));
             true
         }
         "id_contents" => {
-            let _ = extract_id_contents(IdContentsNode(node));
+            let _ = extract_id_contents(classify::<IdContentsNode>(node));
             true
         }
         "id_header" => {
-            let _ = extract_id_header(IdHeaderNode(node));
+            let _ = extract_id_header(classify::<IdHeaderNode>(node));
             true
         }
         "int_dependent_tier" => {
-            let _ = extract_int_dependent_tier(IntDependentTierNode(node));
+            let _ = extract_int_dependent_tier(classify::<IntDependentTierNode>(node));
             true
         }
         "l1_of_header" => {
-            let _ = extract_l1_of_header(L1OfHeaderNode(node));
+            let _ = extract_l1_of_header(classify::<L1OfHeaderNode>(node));
             true
         }
         "languages_contents" => {
-            let _ = extract_languages_contents(LanguagesContentsNode(node));
+            let _ = extract_languages_contents(classify::<LanguagesContentsNode>(node));
             true
         }
         "languages_header" => {
-            let _ = extract_languages_header(LanguagesHeaderNode(node));
+            let _ = extract_languages_header(classify::<LanguagesHeaderNode>(node));
             true
         }
         "location_header" => {
-            let _ = extract_location_header(LocationHeaderNode(node));
+            let _ = extract_location_header(classify::<LocationHeaderNode>(node));
             true
         }
         "long_feature_begin" => {
-            let _ = extract_long_feature_begin(LongFeatureBeginNode(node));
+            let _ = extract_long_feature_begin(classify::<LongFeatureBeginNode>(node));
             true
         }
         "long_feature_end" => {
-            let _ = extract_long_feature_end(LongFeatureEndNode(node));
+            let _ = extract_long_feature_end(classify::<LongFeatureEndNode>(node));
             true
         }
         "main_pho_group" => {
-            let _ = extract_main_pho_group(MainPhoGroupNode(node));
+            let _ = extract_main_pho_group(classify::<MainPhoGroupNode>(node));
             true
         }
         "main_sin_group" => {
-            let _ = extract_main_sin_group(MainSinGroupNode(node));
+            let _ = extract_main_sin_group(classify::<MainSinGroupNode>(node));
             true
         }
         "main_tier" => {
-            let _ = extract_main_tier(MainTierNode(node));
+            let _ = extract_main_tier(classify::<MainTierNode>(node));
             true
         }
         "media_contents" => {
-            let _ = extract_media_contents(MediaContentsNode(node));
+            let _ = extract_media_contents(classify::<MediaContentsNode>(node));
             true
         }
         "media_header" => {
-            let _ = extract_media_header(MediaHeaderNode(node));
+            let _ = extract_media_header(classify::<MediaHeaderNode>(node));
             true
         }
         "mod_dependent_tier" => {
-            let _ = extract_mod_dependent_tier(ModDependentTierNode(node));
+            let _ = extract_mod_dependent_tier(classify::<ModDependentTierNode>(node));
             true
         }
         "modsyl_dependent_tier" => {
-            let _ = extract_modsyl_dependent_tier(ModsylDependentTierNode(node));
+            let _ = extract_modsyl_dependent_tier(classify::<ModsylDependentTierNode>(node));
             true
         }
         "mor_content" => {
-            let _ = extract_mor_content(MorContentNode(node));
+            let _ = extract_mor_content(classify::<MorContentNode>(node));
             true
         }
         "mor_contents" => {
-            let _ = extract_mor_contents(MorContentsNode(node));
+            let _ = extract_mor_contents(classify::<MorContentsNode>(node));
             true
         }
         "mor_dependent_tier" => {
-            let _ = extract_mor_dependent_tier(MorDependentTierNode(node));
+            let _ = extract_mor_dependent_tier(classify::<MorDependentTierNode>(node));
             true
         }
         "mor_feature" => {
-            let _ = extract_mor_feature(MorFeatureNode(node));
+            let _ = extract_mor_feature(classify::<MorFeatureNode>(node));
             true
         }
         "mor_post_clitic" => {
-            let _ = extract_mor_post_clitic(MorPostCliticNode(node));
+            let _ = extract_mor_post_clitic(classify::<MorPostCliticNode>(node));
             true
         }
         "mor_word" => {
-            let _ = extract_mor_word(MorWordNode(node));
+            let _ = extract_mor_word(classify::<MorWordNode>(node));
             true
         }
         "new_episode_header" => {
-            let _ = extract_new_episode_header(NewEpisodeHeaderNode(node));
+            let _ = extract_new_episode_header(classify::<NewEpisodeHeaderNode>(node));
             true
         }
         "nonvocal_begin" => {
-            let _ = extract_nonvocal_begin(NonvocalBeginNode(node));
+            let _ = extract_nonvocal_begin(classify::<NonvocalBeginNode>(node));
             true
         }
         "nonvocal_end" => {
-            let _ = extract_nonvocal_end(NonvocalEndNode(node));
+            let _ = extract_nonvocal_end(classify::<NonvocalEndNode>(node));
             true
         }
         "nonvocal_simple" => {
-            let _ = extract_nonvocal_simple(NonvocalSimpleNode(node));
+            let _ = extract_nonvocal_simple(classify::<NonvocalSimpleNode>(node));
             true
         }
         "nonword_with_optional_annotations" => {
-            let _ =
-                extract_nonword_with_optional_annotations(NonwordWithOptionalAnnotationsNode(node));
+            let _ = extract_nonword_with_optional_annotations(classify::<
+                NonwordWithOptionalAnnotationsNode,
+            >(node));
             true
         }
         "number_header" => {
-            let _ = extract_number_header(NumberHeaderNode(node));
+            let _ = extract_number_header(classify::<NumberHeaderNode>(node));
             true
         }
         "options_contents" => {
-            let _ = extract_options_contents(OptionsContentsNode(node));
+            let _ = extract_options_contents(classify::<OptionsContentsNode>(node));
             true
         }
         "options_header" => {
-            let _ = extract_options_header(OptionsHeaderNode(node));
+            let _ = extract_options_header(classify::<OptionsHeaderNode>(node));
             true
         }
         "ort_dependent_tier" => {
-            let _ = extract_ort_dependent_tier(OrtDependentTierNode(node));
+            let _ = extract_ort_dependent_tier(classify::<OrtDependentTierNode>(node));
             true
         }
         "other_spoken_event" => {
-            let _ = extract_other_spoken_event(OtherSpokenEventNode(node));
+            let _ = extract_other_spoken_event(classify::<OtherSpokenEventNode>(node));
             true
         }
         "page_header" => {
-            let _ = extract_page_header(PageHeaderNode(node));
+            let _ = extract_page_header(classify::<PageHeaderNode>(node));
             true
         }
         "par_dependent_tier" => {
-            let _ = extract_par_dependent_tier(ParDependentTierNode(node));
+            let _ = extract_par_dependent_tier(classify::<ParDependentTierNode>(node));
             true
         }
         "participant" => {
-            let _ = extract_participant(ParticipantNode(node));
+            let _ = extract_participant(classify::<ParticipantNode>(node));
             true
         }
         "participants_contents" => {
-            let _ = extract_participants_contents(ParticipantsContentsNode(node));
+            let _ = extract_participants_contents(classify::<ParticipantsContentsNode>(node));
             true
         }
         "participants_header" => {
-            let _ = extract_participants_header(ParticipantsHeaderNode(node));
+            let _ = extract_participants_header(classify::<ParticipantsHeaderNode>(node));
             true
         }
         "pho_dependent_tier" => {
-            let _ = extract_pho_dependent_tier(PhoDependentTierNode(node));
+            let _ = extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node));
             true
         }
         "pho_grouped_content" => {
-            let _ = extract_pho_grouped_content(PhoGroupedContentNode(node));
+            let _ = extract_pho_grouped_content(classify::<PhoGroupedContentNode>(node));
             true
         }
         "pho_groups" => {
-            let _ = extract_pho_groups(PhoGroupsNode(node));
+            let _ = extract_pho_groups(classify::<PhoGroupsNode>(node));
             true
         }
         "pho_words" => {
-            let _ = extract_pho_words(PhoWordsNode(node));
+            let _ = extract_pho_words(classify::<PhoWordsNode>(node));
             true
         }
         "phoaln_dependent_tier" => {
-            let _ = extract_phoaln_dependent_tier(PhoalnDependentTierNode(node));
+            let _ = extract_phoaln_dependent_tier(classify::<PhoalnDependentTierNode>(node));
             true
         }
         "phosyl_dependent_tier" => {
-            let _ = extract_phosyl_dependent_tier(PhosylDependentTierNode(node));
+            let _ = extract_phosyl_dependent_tier(classify::<PhosylDependentTierNode>(node));
             true
         }
         "pid_header" => {
-            let _ = extract_pid_header(PidHeaderNode(node));
+            let _ = extract_pid_header(classify::<PidHeaderNode>(node));
             true
         }
         "quotation" => {
-            let _ = extract_quotation(QuotationNode(node));
+            let _ = extract_quotation(classify::<QuotationNode>(node));
             true
         }
         "recording_quality_header" => {
-            let _ = extract_recording_quality_header(RecordingQualityHeaderNode(node));
+            let _ = extract_recording_quality_header(classify::<RecordingQualityHeaderNode>(node));
             true
         }
         "replacement" => {
-            let _ = extract_replacement(ReplacementNode(node));
+            let _ = extract_replacement(classify::<ReplacementNode>(node));
             true
         }
         "room_layout_header" => {
-            let _ = extract_room_layout_header(RoomLayoutHeaderNode(node));
+            let _ = extract_room_layout_header(classify::<RoomLayoutHeaderNode>(node));
             true
         }
         "sin_dependent_tier" => {
-            let _ = extract_sin_dependent_tier(SinDependentTierNode(node));
+            let _ = extract_sin_dependent_tier(classify::<SinDependentTierNode>(node));
             true
         }
         "sin_grouped_content" => {
-            let _ = extract_sin_grouped_content(SinGroupedContentNode(node));
+            let _ = extract_sin_grouped_content(classify::<SinGroupedContentNode>(node));
             true
         }
         "sin_groups" => {
-            let _ = extract_sin_groups(SinGroupsNode(node));
+            let _ = extract_sin_groups(classify::<SinGroupsNode>(node));
             true
         }
         "sit_dependent_tier" => {
-            let _ = extract_sit_dependent_tier(SitDependentTierNode(node));
+            let _ = extract_sit_dependent_tier(classify::<SitDependentTierNode>(node));
             true
         }
         "situation_header" => {
-            let _ = extract_situation_header(SituationHeaderNode(node));
+            let _ = extract_situation_header(classify::<SituationHeaderNode>(node));
             true
         }
         "spa_dependent_tier" => {
-            let _ = extract_spa_dependent_tier(SpaDependentTierNode(node));
+            let _ = extract_spa_dependent_tier(classify::<SpaDependentTierNode>(node));
             true
         }
         "t_header" => {
-            let _ = extract_t_header(THeaderNode(node));
+            let _ = extract_t_header(classify::<THeaderNode>(node));
             true
         }
         "tape_location_header" => {
-            let _ = extract_tape_location_header(TapeLocationHeaderNode(node));
+            let _ = extract_tape_location_header(classify::<TapeLocationHeaderNode>(node));
             true
         }
         "thumbnail_header" => {
-            let _ = extract_thumbnail_header(ThumbnailHeaderNode(node));
+            let _ = extract_thumbnail_header(classify::<ThumbnailHeaderNode>(node));
             true
         }
         "tier_body" => {
-            let _ = extract_tier_body(TierBodyNode(node));
+            let _ = extract_tier_body(classify::<TierBodyNode>(node));
             true
         }
         "tier_sep" => {
-            let _ = extract_tier_sep(TierSepNode(node));
+            let _ = extract_tier_sep(classify::<TierSepNode>(node));
             true
         }
         "tim_dependent_tier" => {
-            let _ = extract_tim_dependent_tier(TimDependentTierNode(node));
+            let _ = extract_tim_dependent_tier(classify::<TimDependentTierNode>(node));
             true
         }
         "time_duration_header" => {
-            let _ = extract_time_duration_header(TimeDurationHeaderNode(node));
+            let _ = extract_time_duration_header(classify::<TimeDurationHeaderNode>(node));
             true
         }
         "time_start_header" => {
-            let _ = extract_time_start_header(TimeStartHeaderNode(node));
+            let _ = extract_time_start_header(classify::<TimeStartHeaderNode>(node));
             true
         }
         "transcriber_header" => {
-            let _ = extract_transcriber_header(TranscriberHeaderNode(node));
+            let _ = extract_transcriber_header(classify::<TranscriberHeaderNode>(node));
             true
         }
         "transcription_header" => {
-            let _ = extract_transcription_header(TranscriptionHeaderNode(node));
+            let _ = extract_transcription_header(classify::<TranscriptionHeaderNode>(node));
             true
         }
         "types_header" => {
-            let _ = extract_types_header(TypesHeaderNode(node));
+            let _ = extract_types_header(classify::<TypesHeaderNode>(node));
             true
         }
         "unsupported_dependent_tier" => {
-            let _ = extract_unsupported_dependent_tier(UnsupportedDependentTierNode(node));
+            let _ =
+                extract_unsupported_dependent_tier(classify::<UnsupportedDependentTierNode>(node));
             true
         }
         "unsupported_header" => {
-            let _ = extract_unsupported_header(UnsupportedHeaderNode(node));
+            let _ = extract_unsupported_header(classify::<UnsupportedHeaderNode>(node));
             true
         }
         "unsupported_line" => {
-            let _ = extract_unsupported_line(UnsupportedLineNode(node));
+            let _ = extract_unsupported_line(classify::<UnsupportedLineNode>(node));
             true
         }
         "utf8_header" => {
-            let _ = extract_utf8_header(Utf8HeaderNode(node));
+            let _ = extract_utf8_header(classify::<Utf8HeaderNode>(node));
             true
         }
         "utterance" => {
-            let _ = extract_utterance(UtteranceNode(node));
+            let _ = extract_utterance(classify::<UtteranceNode>(node));
             true
         }
         "utterance_end" => {
-            let _ = extract_utterance_end(UtteranceEndNode(node));
+            let _ = extract_utterance_end(classify::<UtteranceEndNode>(node));
             true
         }
         "videos_header" => {
-            let _ = extract_videos_header(VideosHeaderNode(node));
+            let _ = extract_videos_header(classify::<VideosHeaderNode>(node));
             true
         }
         "warning_header" => {
-            let _ = extract_warning_header(WarningHeaderNode(node));
+            let _ = extract_warning_header(classify::<WarningHeaderNode>(node));
             true
         }
         "window_header" => {
-            let _ = extract_window_header(WindowHeaderNode(node));
+            let _ = extract_window_header(classify::<WindowHeaderNode>(node));
             true
         }
         "wor_dependent_tier" => {
-            let _ = extract_wor_dependent_tier(WorDependentTierNode(node));
+            let _ = extract_wor_dependent_tier(classify::<WorDependentTierNode>(node));
             true
         }
         "wor_tier_body" => {
-            let _ = extract_wor_tier_body(WorTierBodyNode(node));
+            let _ = extract_wor_tier_body(classify::<WorTierBodyNode>(node));
             true
         }
         "word_with_optional_annotations" => {
-            let _ = extract_word_with_optional_annotations(WordWithOptionalAnnotationsNode(node));
+            let _ = extract_word_with_optional_annotations(classify::<
+                WordWithOptionalAnnotationsNode,
+            >(node));
             true
         }
         "x_dependent_tier" => {
-            let _ = extract_x_dependent_tier(XDependentTierNode(node));
+            let _ = extract_x_dependent_tier(classify::<XDependentTierNode>(node));
             true
         }
         _ => false,
@@ -1033,7 +1039,7 @@ fn test_options_header_semantic_conversion() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
-            let children = extract_options_header(OptionsHeaderNode(node));
+            let children = extract_options_header(classify::<OptionsHeaderNode>(node));
 
             // The payload is options_contents (child_2); its slot already
             // carries the typed `OptionsContentsNode` wrapper, so it is
@@ -1043,7 +1049,7 @@ fn test_options_header_semantic_conversion() {
                 let contents_children = extract_options_contents(*contents_node);
 
                 if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
-                    let option_text = node_text(option_node.0, source);
+                    let option_text = node_text(option_node.raw_node(), source);
 
                     let value = talkbank_model::ChatOptionFlag::from_text(option_text);
                     assert_eq!(value, talkbank_model::ChatOptionFlag::Ca);
@@ -1069,12 +1075,14 @@ fn test_options_header_unknown_value() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
-            let children = extract_options_header(OptionsHeaderNode(node));
+            let children = extract_options_header(classify::<OptionsHeaderNode>(node));
             if let NodeSlot::Present(contents_node) = children.child_2.slot() {
                 let contents_children = extract_options_contents(*contents_node);
                 if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
-                    let value =
-                        talkbank_model::ChatOptionFlag::from_text(node_text(option_node.0, source));
+                    let value = talkbank_model::ChatOptionFlag::from_text(node_text(
+                        option_node.raw_node(),
+                        source,
+                    ));
                     assert!(
                         matches!(value, talkbank_model::ChatOptionFlag::Unsupported(ref s) if s == "SomeUnknownOption"),
                         "Unknown option should be Unsupported, got {value:?}"

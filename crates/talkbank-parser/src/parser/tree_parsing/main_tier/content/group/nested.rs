@@ -9,16 +9,16 @@ use crate::model::UtteranceContent;
 use crate::node_types::{
     BASE_CONTENT_ITEM, CA_CONTINUATION_MARKER, CA_NO_BREAK, CA_TECHNICAL_BREAK, COLON, COMMA,
     CONTENT_ITEM, FALLING_TO_LOW, FALLING_TO_MID, GROUP_WITH_ANNOTATIONS, LEVEL_PITCH,
-    MAIN_PHO_GROUP, MAIN_SIN_GROUP, NON_COLON_SEPARATOR, OVERLAP_POINT, QUOTATION, RISING_TO_HIGH,
-    RISING_TO_MID, SEMICOLON, SEPARATOR, TAG_MARKER, UNMARKED_ENDING, UPTAKE_SYMBOL,
-    VOCATIVE_MARKER, WHITESPACES,
+    MAIN_PHO_GROUP, MAIN_SIN_GROUP, NON_COLON_SEPARATOR, OVERLAP_POINT,
+    QUOTATION_WITH_OPTIONAL_ANNOTATIONS, RISING_TO_HIGH, RISING_TO_MID, SEMICOLON, SEPARATOR,
+    TAG_MARKER, UNMARKED_ENDING, UPTAKE_SYMBOL, VOCATIVE_MARKER, WHITESPACES,
 };
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::base::{parse_base_content, parse_overlap_point};
 use super::super::pho_group::parse_pho_group_content;
-use super::super::quotation::parse_quotation_content;
+use super::super::quotation::parse_quotation_with_annotations_content;
 use super::super::sin_group::parse_sin_group_content;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::parse_separator_like;
@@ -34,7 +34,8 @@ use crate::parser::tree_parsing::parser_helpers::parse_separator_like;
 /// **Grammar Rule:**
 /// ```text
 /// contents: $ => repeat1(choice(whitespaces, content_item, separator, overlap_point))
-/// content_item: $ => choice(base_content_item, group_with_annotations, quotation, ...)
+/// content_item: $ => choice(base_content_item, group_with_annotations,
+///   quotation_with_optional_annotations, ...)
 /// ```
 pub(crate) fn parse_nested_content(
     node: Node,
@@ -96,9 +97,9 @@ pub(crate) fn parse_nested_content(
                     results.push(content);
                 }
             }
-            QUOTATION => {
+            QUOTATION_WITH_OPTIONAL_ANNOTATIONS => {
                 if let ParseOutcome::Parsed(content) =
-                    parse_quotation_content(child, source, errors)
+                    parse_quotation_with_annotations_content(child, source, errors)
                 {
                     results.push(content);
                 }
@@ -151,7 +152,9 @@ fn parse_content_item_nested(
             GROUP_WITH_ANNOTATIONS => {
                 return super::parser::parse_group_content(child, source, errors);
             }
-            QUOTATION => return parse_quotation_content(child, source, errors),
+            QUOTATION_WITH_OPTIONAL_ANNOTATIONS => {
+                return parse_quotation_with_annotations_content(child, source, errors);
+            }
             MAIN_PHO_GROUP => return parse_pho_group_content(child, source, errors),
             MAIN_SIN_GROUP => {
                 return parse_sin_group_content(child, source, errors);

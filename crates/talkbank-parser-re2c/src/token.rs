@@ -355,6 +355,15 @@ pub enum Token<'a> {
 
     /// grammar.js: ampersand = '&'
     Ampersand(&'a str),
+    /// An annotation whose marker this parser does not recognise: the text
+    /// BETWEEN the brackets of a `[...]` that matched no specific rule.
+    ///
+    /// Exists so an unknown marker is a validity question rather than a parse
+    /// failure. `*CHI:\thello [@ xyz] world .` used to lex as a bare
+    /// `LeftBracket` and take the whole utterance down with E321 "unparsable",
+    /// while tree-sitter parsed it and reported E207 "unknown annotation",
+    /// which is what `spec/errors/E207.md` says should happen.
+    UnknownAnnotation(&'a str),
     /// grammar.js: left_bracket = '['
     LeftBracket(&'a str),
     /// grammar.js: right_bracket = ']'
@@ -648,6 +657,7 @@ impl<'a> Token<'a> {
             | Token::Zero(s)
             | Token::FormMarker(s)
             | Token::PosTag(s)
+            | Token::UnknownAnnotation(s)
             | Token::Comma(s)
             | Token::Semicolon(s)
             | Token::Colon(s)

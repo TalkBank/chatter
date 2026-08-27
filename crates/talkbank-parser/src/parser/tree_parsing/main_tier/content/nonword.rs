@@ -10,7 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
 use crate::error::{ErrorSink, Span};
-use crate::model::{Action, Annotated, Event, UtteranceContent};
+use crate::model::{Action, Event, UtteranceContent};
 use crate::node_types::{BASE_ANNOTATIONS, EVENT, EVENT_SEGMENT, NONWORD, WHITESPACES, ZERO};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
@@ -117,13 +117,13 @@ pub(crate) fn parse_nonword_content(
         let full_span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
         let core = match nonword {
             ParsedNonword::Event(event, _span) => UtteranceContent::Event(event),
-            // Actions are ALWAYS wrapped, even with no annotations. That is
-            // pre-existing behaviour and produces an `Annotated` with an empty
-            // list, which is the state a verifying constructor on `Annotated`
-            // would make unrepresentable; changing it is not this fold's job.
-            ParsedNonword::Action(action, _span) => {
-                UtteranceContent::AnnotatedAction(Annotated::new(action).with_span(full_span))
-            }
+            // Bare, exactly like the event above. This used to wrap every
+            // action in an `Annotated` carrying an empty list, because
+            // `UtteranceContent` had no bare `Action` variant; the wrapper is
+            // now unconstructible without an annotation, and the annotated
+            // spelling is reached only through `fold_marker_chain` below, when
+            // a marker actually arrives.
+            ParsedNonword::Action(action, _span) => UtteranceContent::Action(action),
         };
         fold_marker_chain(core, markers, full_span)
     }))

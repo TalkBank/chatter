@@ -9,10 +9,11 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    MorContentNode, MorContentsChild0Choice, MorContentsChild0MorContentChild2Child1Choice,
-    MorContentsNode, MorDependentTierNode, NodeSlot, WhitespacesNode, extract_mor_contents,
-    extract_mor_dependent_tier,
+    AsRawNode, MorContentNode, MorContentsChild0Choice,
+    MorContentsChild0MorContentChild2Child1Choice, MorContentsNode, MorDependentTierNode, NodeSlot,
+    WhitespacesNode, extract_mor_contents, extract_mor_dependent_tier,
 };
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::structure::terminator::terminator_from_new_choice;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::content::Terminator;
@@ -58,19 +59,17 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_une
 /// as the removed hand-walk never looked at the prefix / tier-sep / newline
 /// positions either; `child_0`/`child_1`/`child_3` stay unexamined.
 pub fn parse_mor_tier_inner(
-    node: Node,
+    typed: MorDependentTierNode<'_>,
     source: &str,
-    tier_type: MorTierType,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<MorTier> {
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let children = extract_mor_dependent_tier(MorDependentTierNode(node));
+    let node = typed.raw_node();
+    let span = span_of(node);
+    let children = extract_mor_dependent_tier(typed);
     surface_unexpected(&children.unexpected, source, errors);
 
     match children.child_2.slot() {
-        NodeSlot::Present(contents) => {
-            parse_mor_contents_body(contents.0, source, tier_type, span, errors)
-        }
+        NodeSlot::Present(contents) => parse_mor_contents_body(*contents, source, span, errors),
         NodeSlot::Missing(raw) => {
             // Reproduces the removed `expect_child_at`'s MISSING arm exactly
             // (its message text, not the shared `check_not_missing` wording,
@@ -131,13 +130,13 @@ pub fn parse_mor_tier_inner(
 /// flag), so a partially-malformed `%mor` line never surfaces a miscounted
 /// tier to cross-tier validators.
 fn parse_mor_contents_body(
-    mor_contents_node: Node,
+    typed: MorContentsNode<'_>,
     source: &str,
-    tier_type: MorTierType,
     span: Span,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<MorTier> {
-    let contents = extract_mor_contents(MorContentsNode(mor_contents_node));
+    let mor_contents_node = typed.raw_node();
+    let contents = extract_mor_contents(typed);
 
     match contents.child_0.slot() {
         NodeSlot::Present(MorContentsChild0Choice::MorContent(items_children)) => {
@@ -216,7 +215,6 @@ fn parse_mor_contents_body(
             );
 
             finish_mor_tier(
-                tier_type,
                 items,
                 terminator,
                 had_item_failure,
@@ -238,7 +236,6 @@ fn parse_mor_contents_body(
             );
 
             finish_mor_tier(
-                tier_type,
                 Vec::new(),
                 terminator,
                 had_item_failure,
@@ -273,7 +270,6 @@ fn parse_mor_contents_body(
 /// running BEFORE its terminator-missing check).
 #[allow(clippy::too_many_arguments)]
 fn finish_mor_tier(
-    tier_type: MorTierType,
     items: Vec<Mor>,
     terminator: Option<Terminator>,
     had_item_failure: bool,
@@ -289,7 +285,13 @@ fn finish_mor_tier(
         report_missing_terminator(mor_contents_node, source, errors);
         return ParseOutcome::Rejected;
     };
-    ParseOutcome::Parsed(MorTier::new(tier_type, items, typed_terminator).with_span(span))
+    // `MorTierType` has one variant, so it carried no information as a
+    // parameter: it was threaded through three signatures from one caller that
+    // always passed `Mor`, and examined nowhere but here. Named at the single
+    // site that builds the tier. If a second `%mor`-family tier ever lands, the
+    // answer is a sum type carrying its own node, on the `PhoBodyTier` model,
+    // not a re-added argument that a caller can get wrong.
+    ParseOutcome::Parsed(MorTier::new(MorTierType::Mor, items, typed_terminator).with_span(span))
 }
 
 /// Reports the same `MissingTerminator` diagnostic the removed hand-walk
@@ -330,7 +332,7 @@ fn push_mor_content_item<'tree>(
     had_item_failure: &mut bool,
 ) {
     match slot {
-        NodeSlot::Present(item_node) => match parse_mor_content(item_node.0, source, errors) {
+        NodeSlot::Present(item_node) => match parse_mor_content(*item_node, source, errors) {
             ParseOutcome::Parsed(mor) => items.push(mor),
             ParseOutcome::Rejected => *had_item_failure = true,
         },

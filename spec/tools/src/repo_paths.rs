@@ -23,6 +23,8 @@
 
 use std::path::{Path, PathBuf};
 
+use talkbank_spec_vocabulary::registry::{CodeRegistry, RegistryLoadError};
+
 /// The chatter repository root.
 ///
 /// A newtype rather than a `PathBuf`, because "the repository root", "a spec
@@ -119,6 +121,25 @@ const ROOT_MARKERS: &[RootMarker] = &[
 ];
 
 impl RepoRoot {
+    /// This checkout's per-code registry.
+    ///
+    /// # Why this is a method on the ROOT
+    ///
+    /// `CodeRegistry::load` takes a bare `&Path`, and every real caller holds
+    /// a `RepoRoot`, so five call sites across four binaries were writing
+    /// `CodeRegistry::load(root.as_path())` and inventing their own error
+    /// mapping around it. That is a downgrade of the very proof this type
+    /// exists to carry: the module doc above records a spec directory reaching
+    /// a repo-root parameter and putting a home directory into a committed
+    /// manifest. `spec_dir(&root)` is the existing precedent for this shape.
+    ///
+    /// # Errors
+    ///
+    /// When the registry file is unreadable or violates its own rules.
+    pub fn code_registry(&self) -> Result<CodeRegistry, RegistryLoadError> {
+        CodeRegistry::load(self.as_path())
+    }
+
     /// The number of levels from a member crate's manifest directory to the
     /// repository root: `<root>/spec/<crate>`.
     const DEPTH: usize = 2;

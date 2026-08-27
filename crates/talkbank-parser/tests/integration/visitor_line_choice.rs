@@ -30,9 +30,10 @@
 //! `MediaTypeNode` wrapper struct AND gains a `MediaTypeChoice` enum.
 
 use talkbank_parser::generated_traversal::{
-    FullDocumentNode, LineChoice, LineNode, MediaTypeChoice, MediaTypeNode, NodeSlot,
+    AsRawNode, FullDocumentNode, LineChoice, LineNode, MediaTypeChoice, MediaTypeNode, NodeSlot,
     extract_full_document, extract_line,
 };
+use talkbank_parser_tests::classify;
 
 /// Compile-time proof that the dual-role rule `media_type` has BOTH the wrapper
 /// struct `MediaTypeNode` (emitted because `media_type` also appears as a
@@ -94,7 +95,7 @@ fn extract_line_classifies_header_and_utterance() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(FullDocumentNode(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // child_3 is the `repeat(line)` slot: `Vec<Positioned<NodeSlot<LineNode>>>`.
     let mut header_lines = 0usize;
@@ -107,7 +108,7 @@ fn extract_line_classifies_header_and_utterance() {
             other => panic!("line repeat element {i} should be Present, got {other:?}"),
         };
         assert_eq!(
-            line_node.0.kind(),
+            line_node.raw_node().kind(),
             "line",
             "repeat element {i} should be a `line` node"
         );

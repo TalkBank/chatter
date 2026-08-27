@@ -1,11 +1,18 @@
 //! Typed index spaces for `%mor`/`%gra` alignment.
 //!
-//! `%mor`/`%gra` alignment involves four distinct integer "positions" that
-//! used to share the same untyped `usize`. Confusing them produces bugs
-//! that look like the code is working (the indices are `usize`, they
-//! compile, the types match) but silently project to the wrong word on
-//! any utterance containing a post-clitic. This module makes the four
-//! spaces distinct types so the compiler rejects the confusion.
+//! Alignment involves several distinct integer "positions" that used to share
+//! the same untyped `usize`. Confusing them produces bugs that look like the
+//! code is working (the indices are `usize`, they compile, the types match)
+//! but silently project to the wrong word on any utterance containing a
+//! post-clitic. This module gives each space its own type so the compiler
+//! rejects the confusion.
+//!
+//! The count is deliberately not stated. It said "four" from the day this
+//! module was written until 2026-08-26, above a table that listed five, in a
+//! file that declares six of them plus [`GraHeadRef`]. A number beside the
+//! list it counts is the first defect shape this repository names, and the
+//! cure is to let the list be the list. The table below is a reader's map,
+//! not an inventory; the `zero_indexed_newtype!` invocations are.
 //!
 //! | Type | 0- or 1-indexed | Sequence |
 //! |------|-----------------|----------|

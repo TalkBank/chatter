@@ -123,6 +123,7 @@ pub(crate) mod parser;
 
 /// Main parser type, initialization error, and the strict whole-file parse
 /// product type.
+pub use parser::document_root::DocumentRoot;
 pub use parser::{ParseProduct, ParserInitError, TreeSitterParser};
 /// The error type (and its `Result` alias) that every public
 /// `TreeSitterParser::parse_*` method returns. Re-exported from
@@ -148,3 +149,14 @@ pub use api::{dependent_tier::parse_dependent_tier, tiers};
 /// callers that depend on `talkbank-transform` rather than this crate
 /// directly).
 pub use tree_sitter_talkbank::GRAMMAR_FINGERPRINT;
+
+/// Compiles this crate's README so its examples cannot rot.
+///
+/// `#[cfg(doctest)]`, so the README is not duplicated into the rendered crate
+/// docs; it exists only to make `cargo test --doc` typecheck every ```rust
+/// block in it. Until 2026-08-27 no crate here did this and every README
+/// example in the workspace was unchecked prose; see `talkbank-transform` for
+/// the one that was already wrong.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

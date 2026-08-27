@@ -77,3 +77,14 @@ pub use api::{
     open_location_in_clan, send_to_clan, version,
 };
 pub use error::{Error, Result};
+
+/// Compiles this crate's README so its examples cannot rot.
+///
+/// `#[cfg(doctest)]`, so the README is not duplicated into the rendered crate
+/// docs; it exists only to make `cargo test --doc` typecheck every ```rust
+/// block in it. Until 2026-08-27 no crate here did this and every README
+/// example in the workspace was unchecked prose; see `talkbank-transform` for
+/// the one that was already wrong.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

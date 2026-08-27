@@ -5,57 +5,17 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, UnsupportedDependentTierNode, XDependentTierNode,
+    AsRawNode, UnsupportedDependentTierNode, XDependentTierNode,
     extract_unsupported_dependent_tier, extract_x_dependent_tier,
 };
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::model::{NonEmptyString, Utterance};
-use crate::node_types::{
-    TEXT_WITH_BULLETS, UNSUPPORTED_DEPENDENT_TIER, UNSUPPORTED_TIER_PREFIX, X_DEPENDENT_TIER,
-    X_TIER_PREFIX,
-};
+use crate::node_types::{TEXT_WITH_BULLETS, UNSUPPORTED_TIER_PREFIX, X_TIER_PREFIX};
 use talkbank_model::model::dependent_tier::{
     PhoalnTier, SylTier, SylTierType, parse_phoaln_content, parse_syl_content,
 };
-use tree_sitter::Node;
 
 use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
-
-/// Parse and attach user-defined/unsupported dependent tiers.
-pub(super) fn apply_user_defined_tier(
-    utterance: &mut Utterance,
-    tier_kind: &str,
-    tier_node: Node,
-    input: &str,
-    errors: &impl ErrorSink,
-) -> bool {
-    match tier_kind {
-        X_DEPENDENT_TIER => apply_x_tier(utterance, tier_node, input, errors),
-        UNSUPPORTED_DEPENDENT_TIER => apply_unsupported_tier(utterance, tier_node, input, errors),
-        _ => false,
-    }
-}
-
-/// The node a positional slot resolves to, treating a `Present` node and a
-/// tree-sitter `Missing` placeholder as "found" and every other recovery state
-/// as "not found".
-///
-/// This reproduces the removed `find_child_by_kind` helper byte for byte: that
-/// helper located the FIRST direct child whose `kind()` equalled a target, and a
-/// MISSING node still carries its expected kind (so it was found and its empty
-/// text read), while an `ERROR` node (kind `ERROR`), an unexpected-kind node, or
-/// an absent child never satisfied the kind filter. Callers below then apply the
-/// same `utf8_text` decode and the same diagnostics the removed code did.
-fn found_node<'tree, T>(slot: &NodeSlot<'tree, T>) -> Option<Node<'tree>>
-where
-    T: AsRawNode<'tree>,
-{
-    match slot {
-        NodeSlot::Present(node) => Some(node.raw_node()),
-        NodeSlot::Missing(raw) => Some(*raw),
-        NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => None,
-    }
-}
 
 /// Handle user-defined %x* tiers (%xfoo, %xpho, %xmod, etc.).
 ///
@@ -66,20 +26,26 @@ where
 /// prefix (`child_0`, an `x_tier_prefix`) and the body (`child_2`, a
 /// `text_with_bullets`) as typed slots, replacing the removed
 /// `find_child_by_kind(tier_node, X_TIER_PREFIX)` / `..(tier_node,
-/// TEXT_WITH_BULLETS)` `match child.kind()` scans (see [`found_node`]).
-fn apply_x_tier(
+/// TEXT_WITH_BULLETS)` `match child.kind()` scans. `node_or_placeholder`
+/// reproduces the removed `find_child_by_kind` byte for byte: that helper
+/// located the first direct child whose `kind()` matched, and a MISSING node
+/// still carries its expected kind, so it was found and its empty text read,
+/// while an `ERROR` node (kind `ERROR`), an unexpected-kind node and an absent
+/// child never satisfied the filter.
+pub(super) fn apply_x_tier(
     utterance: &mut Utterance,
-    tier_node: Node,
+    node: XDependentTierNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
-) -> bool {
+) {
     // Grammar: x_dependent_tier = x_tier_prefix, tier_sep, text_with_bullets, newline
     // x_tier_prefix is a single token matching /%x[a-zA-Z][a-zA-Z0-9]*/
-    let children = extract_x_dependent_tier(XDependentTierNode(tier_node));
+    let tier_node = node.raw_node();
+    let children = extract_x_dependent_tier(node);
     let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
     surface_unexpected(&children.unexpected, input, errors);
 
-    let full_prefix = match found_node(children.child_0.slot()) {
+    let full_prefix = match children.child_0.slot().node_or_placeholder() {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => text,
             Err(_) => {
@@ -90,7 +56,7 @@ fn apply_x_tier(
                     ErrorContext::new(input, n.start_byte()..n.end_byte(), X_TIER_PREFIX),
                     "User-defined tier prefix is not valid UTF-8",
                 ));
-                return true;
+                return;
             }
         },
         None => {
@@ -101,7 +67,7 @@ fn apply_x_tier(
                 ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
                 "Missing tier prefix in user-defined tier",
             ));
-            return true;
+            return;
         }
     };
 
@@ -144,11 +110,11 @@ fn apply_x_tier(
             utterance
                 .dependent_tiers
                 .push(DependentTierEntry::with_separator(tier, separator));
-            return true;
+            return;
         }
     };
 
-    let content_text = match found_node(body_slot) {
+    let content_text = match body_slot.node_or_placeholder() {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => text,
             Err(_) => {
@@ -159,7 +125,7 @@ fn apply_x_tier(
                     ErrorContext::new(input, n.start_byte()..n.end_byte(), TEXT_WITH_BULLETS),
                     "User-defined tier content is not valid UTF-8",
                 ));
-                return true;
+                return;
             }
         },
         None => {
@@ -170,7 +136,7 @@ fn apply_x_tier(
                 ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
                 format!("Missing content in user-defined tier %x{}", tier_label),
             ));
-            return true;
+            return;
         }
     };
 
@@ -185,7 +151,7 @@ fn apply_x_tier(
                 ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
                 format!("Empty content in user-defined tier %x{}", tier_label),
             ));
-            return true;
+            return;
         }
     };
 
@@ -204,7 +170,7 @@ fn apply_x_tier(
                     DependentTier::Modsyl(SylTier::new(SylTierType::Modsyl, words).with_span(span)),
                     separator,
                 ));
-            return true;
+            return;
         }
         "phosyl" => {
             let words = parse_syl_content(content.as_str());
@@ -214,7 +180,7 @@ fn apply_x_tier(
                     DependentTier::Phosyl(SylTier::new(SylTierType::Phosyl, words).with_span(span)),
                     separator,
                 ));
-            return true;
+            return;
         }
         "phoaln" => {
             match parse_phoaln_content(content.as_str()) {
@@ -240,7 +206,7 @@ fn apply_x_tier(
                     ));
                 }
             }
-            return true;
+            return;
         }
         _ => {}
     }
@@ -254,7 +220,6 @@ fn apply_x_tier(
     utterance
         .dependent_tiers
         .push(DependentTierEntry::with_separator(tier, separator));
-    true
 }
 
 /// Handle unsupported dependent tiers (%custom, %foo, etc.) caught by the grammar catch-all.
@@ -273,18 +238,19 @@ fn apply_x_tier(
 /// text exactly as the pre-migration code did, which is behavior-preserving. The
 /// generator-side gap (modeling a bare anonymous seq-token as a leaf) is flagged
 /// for 4a / conformance.
-fn apply_unsupported_tier(
+pub(super) fn apply_unsupported_tier(
     utterance: &mut Utterance,
-    tier_node: Node,
+    node: UnsupportedDependentTierNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
-) -> bool {
-    let children = extract_unsupported_dependent_tier(UnsupportedDependentTierNode(tier_node));
+) {
+    let tier_node = node.raw_node();
+    let children = extract_unsupported_dependent_tier(node);
     let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
     surface_unexpected(&children.unexpected, input, errors);
 
     // Extract the tier prefix (e.g. "%custom") from the unsupported_tier_prefix child.
-    let label_text = match found_node(children.child_0.slot()) {
+    let label_text = match children.child_0.slot().node_or_placeholder() {
         Some(n) => match n.utf8_text(input.as_bytes()) {
             Ok(text) => {
                 // Strip the leading '%'
@@ -298,7 +264,7 @@ fn apply_unsupported_tier(
                     ErrorContext::new(input, n.start_byte()..n.end_byte(), UNSUPPORTED_TIER_PREFIX),
                     "Unsupported tier prefix is not valid UTF-8",
                 ));
-                return true;
+                return;
             }
         },
         None => {
@@ -309,7 +275,7 @@ fn apply_unsupported_tier(
                 ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
                 "Missing tier prefix in unsupported dependent tier",
             ));
-            return true;
+            return;
         }
     };
 
@@ -349,5 +315,4 @@ fn apply_unsupported_tier(
     utterance
         .dependent_tiers
         .push(DependentTierEntry::with_separator(tier, separator));
-    true
 }

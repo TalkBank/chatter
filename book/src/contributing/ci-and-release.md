@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-07-07 21:20 EDT
+**Last updated:** 2026-08-27 14:04 EDT
 
 ## Pre-Merge Verification
 
@@ -69,6 +69,7 @@ artifacts, and the desktop installers before announcing.
 | `.github/workflows/crates-io-foundation.yml` | First-wave crates.io readiness | Checks foundation-crate metadata, package surfaces, hold-backs, and publish order |
 | `.github/workflows/release.yml` | cargo-dist release automation | Builds dist-enabled workspace artifacts from version tags; owns the GitHub Release |
 | `.github/workflows/release-desktop.yml` | Desktop installer release automation | Builds chatter-desktop installers on the same version tags and uploads them into the release that `release.yml` creates; `workflow_dispatch` runs build-only |
+| `.github/workflows/release-lint.yml` | Release-time lint | `just release-lint`: clippy over both workspaces plus the feature-off build. Runs on a version tag and on `workflow_dispatch`, never per push |
 | `.github/workflows/clippy-rolling.yml` | New-stable clippy drift detection | Weekly maintenance workflow |
 
 ### Current release stance
@@ -115,3 +116,27 @@ macOS codesigning if `macos-sign` is enabled, which uses the separate
 Rotation: replacing the certificate or notary key means updating these
 secrets and nothing else; no workflow edits are needed. A maintainer must
 re-create all of them on any new repository (secrets do not transfer).
+
+## The development loop
+
+Set on 2026-08-27, after a single parser fix cost a day to the process
+around it rather than to the fix.
+
+1. **Inner loop:** `just test`. Write the failing test or the type change
+   first, then make it green. `clippy` and `fmt` are run before a release,
+   not per edit.
+2. **After any change under `grammar/`, `spec/` or a registry:** `just
+   regen`, then `just test`. Every derived artifact has a currency test, and
+   they are far cheaper to satisfy together than one gate run at a time.
+3. **Before committing:** review the final diff once.
+4. **Before pushing:** `just gate`, once. It mirrors per-push CI exactly, so
+   CI is a confirmation and never a discovery. The pre-push hook refuses a
+   push without the stamp; the stamp hashes tree content, so a gate run on
+   uncommitted changes stays valid once the same bytes are committed. Clippy
+   and the feature-off build are `just release-lint`, run before a release.
+5. **Releasing:** format, `just release-lint`, gate, squash every commit since the last tag into
+   one release commit carrying the changelog section, gate once more, push,
+   wait for CI, then `just release-tag`. Public history carries one commit
+   per release.
+
+Nothing on this path needs data that is not in the repository.

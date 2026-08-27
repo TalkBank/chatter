@@ -254,3 +254,58 @@ fn header_date() {
         insta::assert_debug_snapshot!("header_parsing_tests__header_date", result);
     });
 }
+
+/// Every header the grammar's `header` supertype names must parse as ITSELF
+/// through the single-header entry point, not as `Header::Unknown`.
+///
+/// The bug this pins: `parse_header`'s dispatch was a hand-written
+/// `match header_node.kind()` covering 19 of the 34 `header` subtypes, with an
+/// `unknown =>` catch-all. The other 15 parsed correctly INSIDE a document,
+/// where `parse_header_node` matches the generated `HeaderChoice` exhaustively,
+/// and came back `Unknown` as a fragment. The two dispatchers disagreed, and
+/// the tests only covered the arms that existed, so nothing noticed.
+///
+/// Not a snapshot: the point is the VERDICT, one per header kind, and a
+/// snapshot of 15 debug dumps would obscure which one regressed.
+#[test]
+fn every_header_kind_parses_as_itself_and_not_as_unknown() {
+    // One minimal, valid line per kind that reached `unknown =>` before, plus a
+    // few that already worked, so the test also guards against losing those.
+    let cases: &[(&str, &str)] = &[
+        ("@Activities:\tplaying", "Activities"),
+        ("@Bck:\tbackground note", "Bck"),
+        ("@G:\tgem label", "G"),
+        ("@Location:\tPittsburgh, PA", "Location"),
+        ("@Number:\t42", "Number"),
+        ("@Options:\tmulti", "Options"),
+        ("@Page:\t7", "Page"),
+        ("@Recording Quality:\tgood", "RecordingQuality"),
+        ("@Room Layout:\tliving room", "RoomLayout"),
+        ("@Time Duration:\t01:30:00", "TimeDuration"),
+        ("@Time Start:\t09:00:00", "TimeStart"),
+        ("@Transcriber:\tRB", "Transcriber"),
+        ("@Transcription:\tbasic", "Transcription"),
+        // Already handled before; here so the fix cannot trade one gap for another.
+        ("@Date:\t01-JAN-2000", "Date"),
+        ("@Languages:\teng", "Languages"),
+        ("@Comment:\ta remark", "Comment"),
+    ];
+
+    let mut unknown = Vec::new();
+    for (line, expected) in cases {
+        match parse_header(line) {
+            Ok(crate::model::Header::Unknown { .. }) => unknown.push((*line, *expected)),
+            Ok(_) => {}
+            Err(errors) => unknown.push((
+                *line,
+                Box::leak(
+                    format!("{expected} (rejected: {} error(s))", errors.len()).into_boxed_str(),
+                ),
+            )),
+        }
+    }
+    assert!(
+        unknown.is_empty(),
+        "these header kinds did not parse as themselves through `parse_header`: {unknown:#?}"
+    );
+}

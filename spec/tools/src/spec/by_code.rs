@@ -323,12 +323,11 @@ impl SpecsByCode {
 mod tests {
     use super::*;
     use crate::spec::error::ErrorSpec;
-    use std::path::Path;
 
     /// Load the real spec corpus, which is where the contested codes live.
     fn real_specs() -> Vec<ErrorSpec> {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../errors");
-        ErrorSpec::load_all(&dir).expect("the committed spec corpus loads")
+        let root = crate::repo_paths::RepoRoot::resolve(None).expect("a chatter checkout");
+        ErrorSpec::load_for_repo(&root).expect("the committed spec corpus loads")
     }
 
     /// The property the old `BTreeMap<&str, &ErrorSpec>` could not have.

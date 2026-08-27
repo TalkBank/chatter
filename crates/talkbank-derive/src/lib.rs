@@ -123,7 +123,7 @@
 //!
 //! // Generated methods:
 //! // ErrorCode::InternalError.as_str()           -> "E001"
-//! // ErrorCode::new("E101")                      -> Some(ErrorCode::InvalidLineFormat)
+//! // ErrorCode::parse_exact("E101")              -> Some(ErrorCode::InvalidLineFormat)
 //! // format!("{}", ErrorCode::MissingBeginHeader) -> "E201"
 //! // ErrorCode::InternalError.documentation_url() -> "https://..."
 //! ```
@@ -293,7 +293,8 @@ pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
 ///
 /// - **`#[serde(rename = "E###")]`** on each variant for JSON/TOML serialization.
 /// - **`fn as_str(&self) -> &'static str`** -- returns the code string (e.g., `"E001"`).
-/// - **`fn new(code: &str) -> Option<Self>`** -- parses a code string back to a variant.
+/// - **`fn parse_exact(code: &str) -> Option<Self>`** -- parses a code string,
+///   refusing one that names no variant. There is deliberately no coercing form.
 /// - **`impl Display`** -- formats as the code string.
 /// - **`fn documentation_url(&self) -> String`** -- returns the canonical docs URL.
 ///
@@ -320,7 +321,7 @@ pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
 ///
 /// // Generated API:
 /// assert_eq!(ErrorCode::InternalError.as_str(), "E001");
-/// assert_eq!(ErrorCode::new("E201"), Some(ErrorCode::MissingBeginHeader));
+/// assert_eq!(ErrorCode::parse_exact("E201"), Some(ErrorCode::MissingBeginHeader));
 /// assert_eq!(format!("{}", ErrorCode::InvalidLineFormat), "E101");
 /// ```
 #[proc_macro_attribute]
@@ -328,3 +329,14 @@ pub fn error_code_enum(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = error_code_enum::impl_error_code_enum(item.into());
     TokenStream::from(expanded)
 }
+
+/// Compiles this crate's README so its examples cannot rot.
+///
+/// `#[cfg(doctest)]`, so the README is not duplicated into the rendered crate
+/// docs; it exists only to make `cargo test --doc` typecheck every ```rust
+/// block in it. Until 2026-08-27 no crate here did this and every README
+/// example in the workspace was unchecked prose; see `talkbank-transform` for
+/// the one that was already wrong.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

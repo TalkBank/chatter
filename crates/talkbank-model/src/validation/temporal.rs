@@ -264,8 +264,8 @@ mod tests {
     use super::has_transcribed_content;
     use crate::Span;
     use crate::model::{
-        Annotated, BracketedContent, BracketedItem, Group, Retrace, RetraceKind, UtteranceContent,
-        Word, WordCategory,
+        BracketedContent, BracketedItem, Group, Retrace, RetraceKind, UtteranceContent, Word,
+        WordCategory,
     };
 
     // Note: Full integration tests should go in talkbank-model/tests/
@@ -333,9 +333,10 @@ mod tests {
             trailing_space: None,
         };
         let outer = Group {
-            content: BracketedContent::new(vec![BracketedItem::AnnotatedGroup(Annotated::new(
-                inner,
-            ))]),
+            // A nested group carrying no annotations, which is what this test
+            // means and could not say until `BracketedItem::Group` existed: it
+            // used to build an ANNOTATED group with an empty list.
+            content: BracketedContent::new(vec![BracketedItem::Group(inner)]),
             span: Span::from_usize(0, 0),
             trailing_space: None,
         };

@@ -38,8 +38,8 @@
 //!
 //! | Test file | What it checks |
 //! |-----------|----------------|
-//! | `parser_equivalence_files` | Per-file equivalence on the 74-file reference corpus |
-//! | `parser_equivalence_words` | Per-word equivalence on the golden word list |
+//! | `reference_corpus_parses` | Per-file PARSE check on the reference corpus, one parser, compares nothing |
+//! | `golden_words_parse` | Per-word PARSE check on the golden word list, one parser |
 //! | `generated_tests` / `generated` | Spec-generated parse + validation assertions |
 //! | `golden_words_validation` | Round-trip fidelity of the golden word corpus |
 //! | `golden_tiers_validation` | Round-trip fidelity of golden tier corpora |
@@ -64,7 +64,7 @@
 //! cargo test -p talkbank-parser-tests
 //!
 //! # Parser equivalence only (73 per-file tests)
-//! cargo test -p talkbank-parser-tests parser_equivalence
+//! cargo test -p talkbank-parser-tests reference_corpus_parses
 //!
 //! # A single reference file
 //! cargo test -p talkbank-parser-tests some_filename
@@ -133,10 +133,39 @@ pub mod golden_word_validity;
 /// `generated_traversal`); re-exported here for the tests in this crate
 /// that drive the free-fn API directly (conformance, parity, slot-repeat).
 pub use talkbank_parser::generated_traversal;
+
+/// Classify a node found BY KIND into the wrapper that names that kind.
+///
+/// Every caller has just located a node whose kind it knows, and needs the
+/// typed wrapper an `extract_*` takes. `T` is inferred from that parameter, so
+/// call sites read `extract_main_tier(classify(node))`.
+///
+/// # Panics
+///
+/// If `node` is not a `T`. That is a defect in the test, not a property of the
+/// input under test: the node was selected by the very kind `T` names. This
+/// existed as a hand-written `T::from_node(node).expect("...")` at 156 sites
+/// with the same string literal at each.
+#[must_use]
+#[expect(
+    clippy::panic,
+    reason = "a test-support helper: the node was selected BY the kind `T` names, so a \
+              refusal here is a defect in the test, and the alternative is 156 call sites \
+              each spelling out their own expect"
+)]
+pub fn classify<'tree, T: generated_traversal::FromNodeKind<'tree>>(
+    node: tree_sitter::Node<'tree>,
+) -> T {
+    T::from_node(node).unwrap_or_else(|| {
+        panic!(
+            "a node found by kind must classify as its own wrapper, but `{}` did not",
+            node.kind()
+        )
+    })
+}
 pub mod error_specs;
 pub mod repo_paths;
 pub mod snapshot;
-pub mod spec_status;
 pub mod template;
 pub mod test_error;
 pub mod test_hygiene;

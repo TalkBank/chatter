@@ -91,7 +91,7 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
             if error_vec.is_empty() {
                 let span = Span::from(0..input.len());
                 let err = ParseError::new(
-                    ErrorCode::new("E999"),
+                    ErrorCode::UnknownError,
                     Severity::Error,
                     SourceLocation::new(span),
                     ErrorContext::new(input, 0..input.len(), ""),
@@ -107,7 +107,7 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
         if error_vec.is_empty() {
             let span = Span::from(0..input.len());
             let err = ParseError::new(
-                ErrorCode::new("E999"),
+                ErrorCode::UnknownError,
                 Severity::Error,
                 SourceLocation::new(span),
                 ErrorContext::new(input, 0..input.len(), ""),

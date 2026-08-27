@@ -1,8 +1,6 @@
 +++
 code = 'E604'
 name = '%gra Tier Without %mor Tier'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'utterance'

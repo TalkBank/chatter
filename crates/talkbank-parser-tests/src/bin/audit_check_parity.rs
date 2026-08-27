@@ -204,7 +204,16 @@ fn map_rule(rule: CheckRule, talkbank_codes: &HashSet<String>) -> MappingResult 
     // with the ErrorCode enum by the compiler): any code whose canonical CHECK
     // number is this rule's id covers it.
     for code in talkbank_codes {
-        if check_error_number(&ErrorCode::new(code)) == rule.id {
+        // `parse_exact`, not the unknown-code fallback: these strings come from
+        // a data file, and a typo there would have become `UnknownError`,
+        // matched no rule id, and silently under-reported this audit's coverage
+        // with nothing to distinguish it from a code that genuinely maps
+        // elsewhere. An unrecognised code is a defect in the input and says so.
+        let Some(parsed) = ErrorCode::parse_exact(code) else {
+            eprintln!("audit_check_parity: {code:?} is not a known ErrorCode; skipping");
+            continue;
+        };
+        if check_error_number(&parsed) == rule.id {
             mapped.push(code.clone());
         }
     }

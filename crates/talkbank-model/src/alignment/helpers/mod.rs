@@ -12,6 +12,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 mod count;
+mod descent;
 mod domain;
 pub mod overlap;
 pub mod overlap_groups;
@@ -45,10 +46,8 @@ pub use overlap_groups::{
     FileOverlapAnalysis, OverlapAnchor, OverlapGroup, PerUtteranceOverlap, analyze_file_overlaps,
 };
 pub use rules::should_align_replaced_word_in_pho_sin;
-pub use rules::{
-    annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator, should_skip_group,
-};
+pub use rules::{annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator};
 pub use walk::{
-    ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut, walk_content,
-    walk_content_mut, walk_words, walk_words_mut, walk_words_scoped,
+    ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut, walk_code_switch_spans,
+    walk_content, walk_content_mut, walk_words, walk_words_mut, walk_words_scoped,
 };

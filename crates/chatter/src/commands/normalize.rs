@@ -63,7 +63,7 @@ pub fn normalize_chat(
         let _span = span!(Level::DEBUG, "pipeline").entered();
         match talkbank_transform::normalize_chat(&content, options) {
             Ok(chat_str) => {
-                debug!("Pipeline successful, {} bytes", chat_str.len());
+                debug!("Pipeline successful, {} bytes", chat_str.text().len());
                 if validate {
                     info!("✓ Validation passed");
                     eprintln!("✓ Validation passed");
@@ -87,10 +87,14 @@ pub fn normalize_chat(
         }
     };
 
-    // Write or print canonical CHAT
+    // Write or print canonical CHAT. `canonical_chat` is a
+    // `talkbank_transform::Rewrite`, not a `String`: holding it this far is the
+    // point, because the fact it carries (no source line vanished) is what the
+    // bare `String` could not say when this command wrote a ZERO-BYTE file over
+    // a transcript at exit 0.
     if let Some(output_path) = output {
         let _span = span!(Level::DEBUG, "write_output").entered();
-        if let Err(e) = fs::write(output_path, canonical_chat) {
+        if let Err(e) = fs::write(output_path, canonical_chat.text()) {
             warn!("Failed to write output: {}", e);
             eprintln!("Error writing CHAT to {:?}: {}", output_path, e);
             std::process::exit(1);
@@ -106,6 +110,6 @@ pub fn normalize_chat(
             output_path.display()
         );
     } else {
-        print!("{}", canonical_chat);
+        print!("{}", canonical_chat.text());
     }
 }

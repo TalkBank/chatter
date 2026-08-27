@@ -12,12 +12,10 @@ mod languages;
 mod media;
 mod pid;
 mod situation;
-mod t_header;
 mod types;
 
 pub use languages::parse_languages_header;
 pub use media::parse_media_header;
 pub use pid::parse_pid_header;
 pub use situation::parse_situation_header;
-pub use t_header::parse_t_header;
 pub use types::parse_types_header;

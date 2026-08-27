@@ -78,6 +78,7 @@ pub mod num_words;
 pub mod parse;
 pub mod redact;
 pub mod rediarize;
+pub mod retag_language;
 pub mod serialize;
 pub mod splice;
 pub mod validate;
@@ -126,11 +127,11 @@ pub use self::json::{
     validate_json_string,
 };
 pub use self::pipeline::{
-    PipelineError, chat_to_json, chat_to_json_named, chat_to_json_unvalidated, normalize_chat,
-    parse_and_validate, parse_and_validate_named, parse_and_validate_streaming,
-    parse_and_validate_streaming_for_path, parse_and_validate_streaming_named,
-    parse_and_validate_streaming_with_parser, parse_and_validate_with_parser,
-    parse_file_and_validate,
+    DroppedContent, PipelineError, Rewrite, chat_to_json, chat_to_json_named,
+    chat_to_json_unvalidated, normalize_chat, parse_and_validate, parse_and_validate_named,
+    parse_and_validate_streaming, parse_and_validate_streaming_for_path,
+    parse_and_validate_streaming_named, parse_and_validate_streaming_with_parser,
+    parse_and_validate_with_parser, parse_file_and_validate,
 };
 pub use self::presentation::{ConfigurableErrorSink, PresentationPolicy};
 pub use self::rendering::{
@@ -157,3 +158,15 @@ pub use talkbank_cache::{
 // cache-compatibility version without a new direct dependency.
 #[cfg(feature = "validation-runner")]
 pub use talkbank_parser::GRAMMAR_FINGERPRINT;
+
+/// Compiles this crate's README so its examples cannot rot.
+///
+/// `#[cfg(doctest)]`, so the README is not duplicated into the rendered crate
+/// docs; it exists only to make `cargo test --doc` typecheck every ```rust
+/// block in it. Until 2026-08-27 no crate here did this, and every README
+/// example in the workspace was unchecked prose. One was already wrong:
+/// this crate's own README imported `ParseValidateOptions` from here, and
+/// it lives in `talkbank_model`, which this crate does not re-export it from.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

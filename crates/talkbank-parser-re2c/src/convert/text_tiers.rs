@@ -266,33 +266,29 @@ pub fn sin_tier_from_text(input: &str) -> talkbank_model::model::SinTier {
 pub fn wor_tier_from_input(input: &str) -> Option<WorTier> {
     use chumsky::Parser as _;
 
-    let tokens = crate::parser::lex_to_tokens(input, crate::lexer::COND_MAIN_CONTENT);
+    // The leaked source, not `input`: the lexer copies, so the caller's string
+    // is a different allocation and would place nothing.
+    let (tokens, source) =
+        crate::parser::lex_to_tokens_and_source(input, crate::lexer::COND_MAIN_CONTENT);
+    let source = crate::source_text::SourceText::new(source);
     crate::parser::dependent_tiers::wor_tier_parser()
         .parse(tokens)
         .into_result()
         .ok()
-        .map(|parsed| crate::convert::tiers::wor_tier_to_model(&parsed))
+        .map(|parsed| crate::convert::tiers::wor_tier_to_model(&parsed, source))
 }
 
-// From impls that are now possible (no source needed)
+// `From<&ast::MainTier>` and `From<&ast::Utterance>` USED to live here, under
+// a comment saying "no source needed". That stopped being true when separators
+// began carrying their position: placing a borrowed slice needs the text it
+// was borrowed from, and a `From` has nowhere to receive it. Keeping them
+// would have meant fabricating `Span::DUMMY` inside an infallible conversion,
+// which is the defect this change exists to remove, so they are gone and the
+// two callers pass a `SourceText` explicitly.
 
-impl<'a> From<&ast::MainTier<'a>> for MainTier {
-    fn from(mt: &ast::MainTier<'a>) -> Self {
-        main_tier_to_model(mt)
-    }
-}
-
-impl<'a> From<&ast::Utterance<'a>> for talkbank_model::model::Utterance {
-    fn from(u: &ast::Utterance<'a>) -> Self {
-        utterance_to_model(u)
-    }
-}
-
-impl<'a> From<&ast::WordWithAnnotations<'a>> for Word {
-    fn from(w: &ast::WordWithAnnotations<'a>) -> Self {
-        word_from_parsed(w)
-    }
-}
+// `From<&ast::WordWithAnnotations>` went the same way and for the same reason:
+// a word's span comes from the text its `raw_text` borrows, and a `From` has
+// nowhere to receive it.
 
 impl<'a> From<&ast::IdHeaderParsed<'a>> for IDHeader {
     fn from(id: &ast::IdHeaderParsed<'a>) -> Self {

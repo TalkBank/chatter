@@ -93,8 +93,8 @@ fn languages_contents_repeat_member_enumerates_every_code() {
     // `node.kind() == "languages_contents"` walk would also hit those single-code
     // nodes; we descend through the header to reach the real list.)
     walk_all(tree.root_node(), &mut |node| {
-        if node.kind() == "languages_header" {
-            let header = extract_languages_header(LanguagesHeaderNode(node));
+        if let Some(header_node) = LanguagesHeaderNode::from_node(node) {
+            let header = extract_languages_header(header_node);
             let NodeSlot::Present(contents) = header.child_2.slot() else {
                 panic!("@Languages header must have a Present languages_contents child");
             };
@@ -107,7 +107,7 @@ fn languages_contents_repeat_member_enumerates_every_code() {
                 .clone()
                 .present_or_recover()
                 .ok()
-                .map(|n| node_text(n.0, &source));
+                .map(|n| node_text(n.raw_node(), &source));
             assert_eq!(
                 first,
                 Some("eng"),
@@ -125,7 +125,9 @@ fn languages_contents_repeat_member_enumerates_every_code() {
                 .iter()
                 .filter_map(|element| match element.slot() {
                     NodeSlot::Present(group) => match group.child_3.slot() {
-                        NodeSlot::Present(code_node) => Some(node_text(code_node.0, &source)),
+                        NodeSlot::Present(code_node) => {
+                            Some(node_text(code_node.raw_node(), &source))
+                        }
                         _ => None,
                     },
                     _ => None,

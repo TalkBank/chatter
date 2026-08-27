@@ -142,7 +142,7 @@ expression: snapshot
         "content": {
           "content": [
             {
-              "type": "annotated_action"
+              "type": "action"
             },
             {
               "cleaned_text": "foo",
@@ -156,7 +156,7 @@ expression: snapshot
               "type": "word"
             },
             {
-              "type": "annotated_action"
+              "type": "action"
             },
             {
               "content": {

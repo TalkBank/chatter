@@ -39,7 +39,7 @@ use tree_sitter::Node;
 pub use id::parse_id_header;
 pub use metadata::{
     parse_languages_header, parse_media_header, parse_pid_header, parse_situation_header,
-    parse_t_header, parse_types_header,
+    parse_types_header,
 };
 pub use participants::parse_participants_header;
 

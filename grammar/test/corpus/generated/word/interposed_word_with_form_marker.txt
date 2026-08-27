@@ -1,0 +1,8 @@
+================================================================================
+interposed_word_with_form_marker - Interposed word (&*SPK:text) whose payload is a full word: lengthening inside it, and a @ form marker after it.
+================================================================================
+*MAM:	las tiré al suelo &*VMO:a:nda@i .
+
+--------------------------------------------------------------------------------
+
+(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (other_spoken_event (ampersand) (star) (speaker) (colon) (standalone_word (word_body (word_segment) (lengthening) (word_segment)) (form_marker))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

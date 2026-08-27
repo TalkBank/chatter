@@ -233,8 +233,12 @@ fn lex_fixture_header_activities() {
 
 #[test]
 fn trailing_ca_no_break_stays_separator_in_model_conversion() {
-    let ast = parser::parse_main_tier("*CHI:\tno break ≈\n").expect("expected main tier AST");
-    let main_tier = main_tier_to_model(&ast);
+    let input = "*CHI:\tno break ≈\n";
+    let (ast, src) = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
+    let main_tier = main_tier_to_model(
+        &ast,
+        talkbank_parser_re2c::source_text::SourceText::new(src),
+    );
 
     assert!(
         main_tier.content.terminator.is_none(),
@@ -248,9 +252,12 @@ fn trailing_ca_no_break_stays_separator_in_model_conversion() {
 
 #[test]
 fn trailing_ca_technical_break_stays_separator_in_model_conversion() {
-    let ast =
-        parser::parse_main_tier("*CHI:\ttechnical break ≋\n").expect("expected main tier AST");
-    let main_tier = main_tier_to_model(&ast);
+    let input = "*CHI:\ttechnical break ≋\n";
+    let (ast, src) = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
+    let main_tier = main_tier_to_model(
+        &ast,
+        talkbank_parser_re2c::source_text::SourceText::new(src),
+    );
 
     assert!(
         main_tier.content.terminator.is_none(),

@@ -22,12 +22,19 @@ pub enum AgeValue {
         /// Years component.
         #[span_shift(skip)]
         years: u16,
-        /// Months component. Conventionally 0-11, but NOT range-checked
-        /// at parse time: the raw parsed value is preserved.
+        /// Months component. Conventionally 0-11, and deliberately NOT
+        /// range-checked at parse time: `13` is preserved as `13` so the
+        /// validator, not the parser, decides what to say about it.
+        ///
+        /// REPRESENTABILITY is a different question from range, and is
+        /// checked: a value above `u8::MAX` cannot be preserved here at all,
+        /// so the whole age becomes [`AgeValue::Unsupported`] rather than
+        /// some other number. Until 2026-08-26 it became `0`.
         #[span_shift(skip)]
         months: Option<u8>,
-        /// Days component. Conventionally 0-30, but NOT range-checked
-        /// at parse time: the raw parsed value is preserved.
+        /// Days component. Conventionally 0-30, with the same split between
+        /// range (not checked, preserved) and representability (checked) as
+        /// [`Self::Valid::months`].
         #[span_shift(skip)]
         days: Option<u8>,
         /// Original text preserved for exact roundtrip.
@@ -37,6 +44,37 @@ pub enum AgeValue {
     },
     /// Unrecognized value preserved for validation.
     Unsupported(String),
+}
+
+/// An age component whose digits do not fit the field that must hold them.
+///
+/// Its own type rather than `()` so the `Err` arm at each call site reads as
+/// the fact it is, and so a reader of the signature learns that failure here
+/// is about REPRESENTABILITY rather than about syntax.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Unrepresentable;
+
+/// Parse one `;`/`.` separated age component.
+///
+/// Three outcomes, and collapsing them is the defect this exists to prevent:
+/// ABSENT is legal CHAT (`1;` has no months, `2;08.` no days) and yields
+/// `Ok(None)`; a component that is not digits, or whose digits exceed
+/// `u8::MAX`, is `Err(Unrepresentable)` and must sink the whole age.
+///
+/// The two error cases are deliberately one variant. They differ in cause but
+/// not in consequence: neither can be stored, and [`AgeValue::Unsupported`]
+/// keeps the original text byte for byte either way, so nothing a caller
+/// could act on is lost by joining them.
+fn age_component(text: &str) -> Result<Option<u8>, Unrepresentable> {
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if !text.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(Unrepresentable);
+    }
+    // All digits by the check above, so `parse` can now fail for exactly one
+    // reason: the value is above `u8::MAX`. That used to be `unwrap_or(0)`.
+    text.parse::<u8>().map(Some).map_err(|_| Unrepresentable)
 }
 
 impl AgeValue {
@@ -56,30 +94,20 @@ impl AgeValue {
             return Self::Unsupported(value.to_string());
         };
 
-        let (months, days) = if let Some((months_str, days_str)) = rest.split_once('.') {
-            let months = if months_str.is_empty() {
-                None
-            } else if months_str.bytes().all(|b| b.is_ascii_digit()) {
-                Some(months_str.parse::<u8>().unwrap_or(0))
-            } else {
-                return Self::Unsupported(value.to_string());
-            };
-
-            let days = if days_str.is_empty() {
-                None
-            } else if days_str.bytes().all(|b| b.is_ascii_digit()) {
-                Some(days_str.parse::<u8>().unwrap_or(0))
-            } else {
-                return Self::Unsupported(value.to_string());
-            };
-
-            (months, days)
-        } else if rest.is_empty() {
-            (None, None)
-        } else if rest.bytes().all(|b| b.is_ascii_digit()) {
-            (Some(rest.parse::<u8>().unwrap_or(0)), None)
-        } else {
-            return Self::Unsupported(value.to_string());
+        let (months, days) = match rest.split_once('.') {
+            Some((months_str, days_str)) => {
+                match (age_component(months_str), age_component(days_str)) {
+                    (Ok(months), Ok(days)) => (months, days),
+                    _ => return Self::Unsupported(value.to_string()),
+                }
+            }
+            // No period: everything after the semicolon is the months field,
+            // and an empty `rest` (`1;`) is the legal no-months form, which
+            // `age_component` reports as `Ok(None)`.
+            None => match age_component(rest) {
+                Ok(months) => (months, None),
+                Err(Unrepresentable) => return Self::Unsupported(value.to_string()),
+            },
         };
 
         Self::Valid {
@@ -218,5 +246,86 @@ impl From<String> for AgeValue {
 impl From<&str> for AgeValue {
     fn from(value: &str) -> Self {
         Self::from_text(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An age component too large for its type must not come back as a
+    /// different number.
+    ///
+    /// `from_text` guards each component with an all-ASCII-digits test, so
+    /// `parse::<u8>()` on it can fail for exactly ONE reason: the digits
+    /// denote a value above 255. The three call sites answered that with
+    /// `unwrap_or(0)`, so `2;300.` parsed as `Valid { months: Some(0) }`:
+    /// two years and no months, reported as a successful parse, in the field
+    /// that is the primary variable of most CHILDES research.
+    ///
+    /// The blast radius was bounded and is worth stating exactly, because
+    /// overclaiming a fix is its own defect: a component of three or more
+    /// digits also fails `violates_depfile_pattern`, which requires exactly
+    /// two, so such a file was always REPORTED invalid. What was wrong is
+    /// what the typed model then said about it. A library caller, or anyone
+    /// reading `chatter to-json`, saw a fabricated `0` presented as parsed
+    /// truth, and the variant's own docstring promised the opposite: "the raw
+    /// parsed value is preserved".
+    ///
+    /// `Unsupported` is the answer the enum already had for this. It keeps
+    /// the original text byte for byte, so nothing is lost and the validator
+    /// still reports it.
+    #[test]
+    fn a_component_too_large_for_its_type_is_unsupported_not_zero() {
+        for text in ["2;300.", "2;300", "3;06.999", "1;256.", "1;06.256"] {
+            match AgeValue::from_text(text) {
+                AgeValue::Unsupported(raw) => assert_eq!(raw, text, "text preserved verbatim"),
+                other => panic!("{text} parsed as {other:?}, expected Unsupported"),
+            }
+        }
+    }
+
+    /// The boundary the case above turns on, so a future widening of the
+    /// component type cannot quietly move it: 255 fits and 256 does not.
+    #[test]
+    fn the_largest_representable_component_still_parses() {
+        match AgeValue::from_text("1;255.255") {
+            AgeValue::Valid {
+                years,
+                months,
+                days,
+                ..
+            } => {
+                assert_eq!((years, months, days), (1, Some(255), Some(255)));
+            }
+            other => panic!("expected Valid, got {other:?}"),
+        }
+    }
+
+    /// The ordinary forms keep working, including the three shapes
+    /// `depfile.cut` declares legal. Pins that the fix above did not make the
+    /// parser stricter about anything except representability.
+    #[test]
+    fn conventional_ages_are_unaffected() {
+        let cases = [
+            ("3;06.15", 3u16, Some(6u8), Some(15u8)),
+            ("2;08.", 2, Some(8), None),
+            ("1;", 1, None, None),
+            ("0;11.30", 0, Some(11), Some(30)),
+        ];
+        for (text, y, m, d) in cases {
+            match AgeValue::from_text(text) {
+                AgeValue::Valid {
+                    years,
+                    months,
+                    days,
+                    raw,
+                } => {
+                    assert_eq!((years, months, days), (y, m, d), "{text}");
+                    assert_eq!(raw.as_str(), text, "roundtrip text for {text}");
+                }
+                other => panic!("{text} parsed as {other:?}, expected Valid"),
+            }
+        }
     }
 }

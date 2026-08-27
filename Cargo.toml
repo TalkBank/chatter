@@ -21,7 +21,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 authors = ["Franklin Chen <franklinchen@franklinchen.com>"]
 license = "MIT OR Apache-2.0"
@@ -46,6 +46,34 @@ categories = ["parser-implementations", "text-processing"]
 # Test code keeps panic discipline relaxed, assertion macros panic by
 # design, and `unwrap()` on a fixture that's known to parse is the standard
 # Rust testing idiom.
+# rustc lints, denied because a WARNING was advisory forever when these were
+# added: `just clippy` then ran without `-D warnings`, so a lint that could
+# only warn could not be a gate, whatever it detected. That gap is closed at
+# the recipe now, and these stay denied here anyway, because a deny in the
+# table reports at the mistake in every editor and every hand-typed cargo
+# invocation, not only where the flag is passed.
+#
+# Both of these were added 2026-08-26 after a real defect shipped past them.
+# A new parser match wrote `QUOTATION => ...` without importing the constant,
+# so Rust read a BINDING pattern: it matched every child, the arms below it
+# became dead, and every child was handed to the quotation parser. It regressed
+# clean files and put 507 spurious diagnostics on the transcript that reported
+# the original bug. rustc said BOTH of these things at warn level and the build
+# passed.
+#
+# `clippy::wildcard_enum_match_arm` could not have caught it twice over: the
+# scrutinee was `node.kind()`, a `&str` rather than a closed enum, and there
+# was no wildcard arm at all. Its per-file ratchet
+# (`talkbank-parser-tests/src/content_catch_alls.rs`) is structurally blind to
+# this shape, which is why these two live here instead of there.
+[workspace.lints.rust]
+# An ALL-CAPS binding is a constant somebody forgot to import. Fires wherever
+# the arm sits, including last, where nothing below it is shadowed and
+# `unreachable_patterns` therefore stays silent.
+non_snake_case = "deny"
+# The arms-below-are-dead half. Also catches a genuinely duplicated arm.
+unreachable_patterns = "deny"
+
 [workspace.lints.clippy]
 unwrap_used   = "deny"
 expect_used   = "deny"
@@ -140,17 +168,17 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # TalkBank crates, path for local dev, version for crates.io publishing
-send2clan = { path = "crates/send2clan", version = "0.15.0" }
-talkbank-cache = { path = "crates/talkbank-cache", version = "0.15.0" }
-chatter = { path = "crates/chatter", version = "0.15.0" }
-talkbank-derive = { path = "crates/talkbank-derive", version = "0.15.0" }
-talkbank-llm = { path = "crates/talkbank-llm", version = "0.15.0" }
-talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.15.0" }
-talkbank-model = { path = "crates/talkbank-model", version = "0.15.0" }
-talkbank-parser = { path = "crates/talkbank-parser", version = "0.15.0" }
-talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.15.0" }
-talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.15.0" }
-talkbank-transform = { path = "crates/talkbank-transform", version = "0.15.0" }
+send2clan = { path = "crates/send2clan", version = "0.16.0" }
+talkbank-cache = { path = "crates/talkbank-cache", version = "0.16.0" }
+chatter = { path = "crates/chatter", version = "0.16.0" }
+talkbank-derive = { path = "crates/talkbank-derive", version = "0.16.0" }
+talkbank-llm = { path = "crates/talkbank-llm", version = "0.16.0" }
+talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.16.0" }
+talkbank-model = { path = "crates/talkbank-model", version = "0.16.0" }
+talkbank-parser = { path = "crates/talkbank-parser", version = "0.16.0" }
+talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.16.0" }
+talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.16.0" }
+talkbank-transform = { path = "crates/talkbank-transform", version = "0.16.0" }
 
 # Testing
 assert_cmd = "2.2"

@@ -6,10 +6,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#G_Header>
 
 use crate::error::{ErrorSink, Span};
-use crate::generated_traversal::{AsRawNode, HeaderSepNode, NodeSlot, extract_header_sep};
+use crate::generated_traversal::{
+    AsRawNode, FromNodeKind, HeaderSepNode, NodeSlot, extract_header_sep,
+};
 use crate::model;
 use crate::model::TierSeparator;
-use crate::node_types::{CONTINUATION, HEADER_SEP, REST_OF_LINE};
+use crate::node_types::{CONTINUATION, REST_OF_LINE};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
@@ -81,10 +83,13 @@ pub(crate) fn header_separator(header_node: Node) -> TierSeparator {
     let Some(sep_node) = header_node.named_child(1) else {
         return TierSeparator::CLEAN;
     };
-    if sep_node.kind() != HEADER_SEP {
+    // The hand-written `sep_node.kind() != HEADER_SEP` guard that stood here was
+    // `from_node` spelled out against a separate constant; one call is the same
+    // test with nothing to drift.
+    let Some(sep) = HeaderSepNode::from_node(sep_node) else {
         return TierSeparator::CLEAN;
-    }
-    let sep_children = extract_header_sep(HeaderSepNode(sep_node));
+    };
+    let sep_children = extract_header_sep(sep);
     let trailing = sep_children.child_2.slot();
     match trailing {
         Some(NodeSlot::Present(sep)) => {

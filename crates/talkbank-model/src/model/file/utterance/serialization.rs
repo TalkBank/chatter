@@ -14,7 +14,8 @@ use crate::WriteChat;
 /// Walking an utterance's content.
 ///
 /// **Do not hand-roll the walk or the word filter.** Use
-/// [`walk_words`](crate::alignment::walk_words) with the [`TierDomain`] you
+/// [`walk_words`](crate::alignment::walk_words) with the
+/// [`TierDomain`](crate::alignment::TierDomain) you
 /// care about, and [`counts_for_tier`](crate::alignment::counts_for_tier) to
 /// decide which words that domain aligns against. The Alignment section of
 /// [`Word`](crate::model::Word)'s rustdoc explains why hand-rolling the

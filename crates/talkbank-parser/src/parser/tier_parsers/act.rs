@@ -9,76 +9,47 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Action_Code>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
-use crate::generated_traversal::{
-    ActDependentTierNode, AsRawNode, NodeSlot, extract_act_dependent_tier,
-};
-use crate::parser::tree_parsing::bullet_content::parse_bullet_content;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
-use talkbank_model::model::{ActTier, BulletContent};
-use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
-use tree_sitter::Node;
+use crate::generated_traversal::{ActDependentTierNode, AsRawNode, extract_act_dependent_tier};
+use crate::parser::node_span::span_of;
+use crate::parser::tier_parsers::text::helpers::parse_optional_text_tier_content;
+use talkbank_model::ErrorSink;
+use talkbank_model::model::ActTier;
 
-/// Converts one `%act` tier node into an `ActTier`.
+/// Converts one `%act` tier node into a `ActTier`.
 ///
 /// **Grammar Rule:**
 /// ```text
 /// act_dependent_tier: seq('%', 'act', colon, tab, optional(text_with_bullets), newline)
 /// ```
 ///
-/// Driven by the generated typed visitor: `extract_act_dependent_tier` yields the
-/// prefix / tier-sep / body / newline as typed `Positioned` slots. The body
-/// (`child_2.slot`, a `text_with_bullets` node) is matched EXHAUSTIVELY over
-/// [`NodeSlot`] (no `_` catch-all, no `.ok()`), reproducing the removed hand-walk
-/// byte for byte:
+/// Delegates the whole five-state body policy to
+/// [`parse_optional_text_tier_content`], the owner shared with the seven
+/// text-like tiers. This file used to carry a private copy of that policy,
+/// differing in ONE state: a malformed body gets no `unexpected_node_error`
+/// here, because the removed hand-walk loop had none and simply fell through to
+/// the "Missing content" rejection. That difference is now
+/// [`MalformedBody::ReportMissingOnly`], a value rather than a fork, so the four
+/// states nobody disputes cannot drift between the copies.
 ///
-/// - `Some(Present)` / `Some(Missing)`: the removed loop matched the body by kind,
-///   and a
-///   tree-sitter MISSING node carries that expected kind, so both parse the raw
-///   body node via [`parse_bullet_content`]. The two arms can no longer share one
-///   `|`-pattern binding: the NEW backend's `NodeSlot::Missing` carries the raw
-///   `tree_sitter::Node` directly, not the typed wrapper OLD carried, so `Present`
-///   reads it via [`AsRawNode::raw_node`] and `Missing` passes its raw node
-///   straight through; the observable parse is unchanged.
-/// - `Some(Error / Unexpected / Absent)`: unlike the shared text-tier helper, the
-///   removed act loop had NO unexpected-node report; a non-text body simply left
-///   `content` unset and fell through to the "Missing content" rejection. That is
-///   preserved exactly (no `unexpected_node_error`), at the same code and span.
-/// - `None`: the body slot is an `Option` because the grammar marks the body
-///   `optional(...)` (E756 widening, 2026-08-16). An absent body is the empty
-///   tier, not a parse failure; it lowers to [`BulletContent::empty`] with no
-///   diagnostic and the validator reports E756.
-pub fn parse_act_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ActTier {
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let children = extract_act_dependent_tier(ActDependentTierNode(node));
-    surface_unexpected(&children.unexpected, source, errors);
-
-    let content = match children.child_2.slot() {
-        // The grammar body is `optional(...)`, so an ABSENT body is not a parse
-        // failure: `%act:` with nothing after the separator is a real (if
-        // invalid) construct, and it lowers to content that says it is empty so
-        // `DependentTier::empty_content_span` can hand it to E756. Reporting
-        // here instead would drop the tier and lose the line on roundtrip.
-        None => BulletContent::empty(),
-        Some(NodeSlot::Present(text)) => parse_bullet_content(text.raw_node(), source, errors),
-        Some(NodeSlot::Missing(raw)) => parse_bullet_content(*raw, source, errors),
-        Some(NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(
-                    source,
-                    node.start_byte()..node.end_byte(),
-                    "act_dependent_tier",
-                ),
-                "Missing content in %act tier".to_string(),
-            ));
-            BulletContent::empty()
-        }
-    };
-
+/// The `Option` on the body slot is the grammar's `optional(...)` (E756
+/// widening, 2026-08-16): an absent body is the empty tier, not a parse
+/// failure, so it lowers to empty content with no diagnostic and the validator
+/// reports E756.
+pub fn parse_act_tier(
+    typed: ActDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ActTier {
+    let node = typed.raw_node();
+    let span = span_of(node);
+    let children = extract_act_dependent_tier(typed);
+    let content = parse_optional_text_tier_content(
+        typed,
+        children.child_2.slot(),
+        &children.unexpected,
+        source,
+        errors,
+    );
     ActTier::new(content).with_span(span)
 }
 

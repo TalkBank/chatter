@@ -8,9 +8,6 @@
 .claude/skills/grammar-change/SKILL.md
 .claude/skills/regen-json-schema/SKILL.md
 .claude/skills/regen-spec-artifacts/SKILL.md
-.github/ISSUE_TEMPLATE/bug_report.md
-.github/ISSUE_TEMPLATE/feature_request.md
-.github/PULL_REQUEST_TEMPLATE.md
 README.md
 SECURITY.md
 book/src/SUMMARY.md
@@ -28,7 +25,6 @@ book/src/architecture/memory-and-ownership.md
 book/src/architecture/overlap-binding.md
 book/src/architecture/parser-and-grammar/ca-terminator-resolution.md
 book/src/architecture/parser-and-grammar/validation-cache.md
-book/src/architecture/parser-backends.md
 book/src/chat-format/headers.md
 book/src/chat-format/mor-tier.md
 book/src/chat-format/overview.md
@@ -49,9 +45,7 @@ book/src/chatter/user-guide/clan-line-numbering.md
 book/src/chatter/user-guide/sanitize.md
 book/src/chatter/user-guide/speaker-id.md
 book/src/contributing/chat-processing-playbook.md
-book/src/contributing/ci-and-release.md
 book/src/contributing/coding-standards-extended.md
-book/src/contributing/coding-standards.md
 book/src/contributing/compile-times.md
 book/src/contributing/crates-io-publication.md
 book/src/contributing/desktop-testing.md
@@ -60,9 +54,7 @@ book/src/contributing/reference-corpus.md
 book/src/release-notes.md
 corpus/README.md
 crates/send2clan/README.md
-crates/talkbank-derive/README.md
 crates/talkbank-lsp/ARCHITECTURE.md
-crates/talkbank-lsp/CLAUDE.md
 crates/talkbank-lsp/DEBUGGING.md
 crates/talkbank-lsp/README.md
 crates/talkbank-model/README.md
@@ -71,8 +63,6 @@ crates/talkbank-parser-re2c/docs/parity-report.md
 crates/talkbank-parser-tests/clan-check-reference/check-error-codes.md
 crates/talkbank-parser-tests/clan-check-reference/gui-vs-unix-check.md
 crates/talkbank-parser/PARSING_PATTERNS.md
-crates/talkbank-parser/README.md
-crates/talkbank-transform/README.md
 docs/audits/check-parity-audit.md
 docs/design/2026-07-18-recovery-and-leniency-boundary.md
 docs/panic-audit/README.md

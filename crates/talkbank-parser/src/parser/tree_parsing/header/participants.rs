@@ -53,22 +53,12 @@ fn unknown_participants_header(
 }
 
 /// Parse Participants header from tree-sitter node
-pub fn parse_participants_header(node: Node, source: &str, errors: &impl ErrorSink) -> Header {
-    // Verify this is a participants_header node
-    if node.kind() != PARTICIPANTS_HEADER {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!("Expected participants_header node, got: {}", node.kind()),
-        ));
-        return unknown_participants_header(
-            node,
-            source,
-            "Participants header CST node had unexpected kind",
-        );
-    }
+pub fn parse_participants_header(
+    typed: ParticipantsHeaderNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Header {
+    let node = typed.raw_node();
 
     // The participant-list parsing below only descends into
     // `participants_contents`; the shared header scan reports any structural
@@ -94,7 +84,7 @@ pub fn parse_participants_header(node: Node, source: &str, errors: &impl ErrorSi
     // behavior-visible restructuring beyond a pure call-convention swap, so it is
     // deliberately DEFERRED out of scope for B2 (see the special.rs `@Options`
     // note for the same deferral rationale).
-    let header_children = extract_participants_header(ParticipantsHeaderNode(node));
+    let header_children = extract_participants_header(typed);
     let Some(contents_node) = header_children
         .child_2
         .slot()

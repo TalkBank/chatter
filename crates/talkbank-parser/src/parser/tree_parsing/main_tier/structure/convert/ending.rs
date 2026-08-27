@@ -57,11 +57,11 @@ pub(super) struct UtteranceEndTail {
 /// EXHAUSTIVELY; the valid path emits no diagnostics. Replaces the removed
 /// flat-loop `parse_utterance_end`.
 pub(super) fn parse_utterance_end(
-    node: Node<'_>,
+    typed: UtteranceEndNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> UtteranceEndTail {
-    let end = extract_utterance_end(UtteranceEndNode(node));
+    let end = extract_utterance_end(typed);
 
     // child_0 (`terminator` supertype, optional). A `Present` choice maps through
     // the exhaustive typed match; an `Error` slot routes to the shared word-error

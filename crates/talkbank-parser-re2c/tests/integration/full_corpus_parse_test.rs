@@ -33,9 +33,9 @@
 //!
 //! What that costs is real and worth stating: this is the only test in the
 //! workspace that runs both parsers over real data, so between deliberate
-//! runs nothing here is watching. The gate that watches continuously is the
-//! corpus differential's cross-backend axis, which compares VERDICTS; this
-//! compares parsed MODELS, which is strictly more, and is why it still
+//! runs nothing here is watching. The parity baseline over spec cases
+//! compares CODES; this compares parsed MODELS, which is strictly more, and
+//! is why it still
 //! exists.
 //!
 //! # It could pass by doing nothing, and on most machines it did

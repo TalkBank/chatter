@@ -1,8 +1,6 @@
 +++
 code = 'E375'
 name = 'Replacement [: ...] glued to a word without a preceding space'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'

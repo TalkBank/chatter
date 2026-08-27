@@ -57,7 +57,7 @@ fn parses_within_budget(content: String) -> bool {
 }
 
 /// Every reference conversation file that historically exercised the blowup,
-/// plus the whole reference set is covered by `parser_equivalence`; here we
+/// plus the whole reference set is covered by `reference_corpus_parses`; here we
 /// pin the three known-pathological files by name.
 #[test]
 fn reference_files_parse_in_bounded_time() {

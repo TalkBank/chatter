@@ -44,12 +44,18 @@ insta = { workspace = true }
 # `#[allow]` annotations carrying rationales; new sites are now
 # blocked from landing without a deliberate opt-in.
 #
-# Cargo does not allow combining `[lints] workspace = true` with
-# crate-level overrides, so this table inlines the workspace lints
-# (kept in sync with root `Cargo.toml`'s `[workspace.lints.clippy]`)
-# and then promotes the panic-shape lints to `deny` for this crate
-# specifically. Other crates still inherit the workspace `warn`
-# floor.
+# The lints reach this crate through the workspace table, and the stanza below
+# is what makes that true.
+#
+# This comment described a crate-local table that INLINED the workspace lints
+# and promoted the panic family to `deny` here. That table is gone (the clippy
+# policy was unified into one pass) and no opt-in replaced it, so this crate
+# was outside the panic policy entirely while a five-line comment explained how
+# strictly it was covered. The workspace table denies the panic family for
+# everyone now, so there is nothing left to promote.
+
+[lints]
+workspace = true
 
 [package.metadata.dist]
 # Shipped as a standalone, first-class release artifact: the LSP server is

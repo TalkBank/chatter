@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-08-12 21:15 EDT
+**Last updated:** 2026-08-27 00:33 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -80,6 +80,26 @@ with `node.kind()` comparisons, and classifying the text of ERROR nodes
 to guess what was malformed, are both banned in production parser code
 for exactly this reason.
 
+**What to write instead, when the question really is "which alternative is
+this node?"** A grammar rule whose alternatives are each a single named kind
+lowers to a `<Rule>Choice` enum, and the generator emits that enum's own
+classifier, `<Rule>Choice::from_node`. It returns `Option<Self>`: `None` says
+the node is not one of the alternatives, which is a fact about the input, not a
+default to paper over. Matching the result is exhaustive, so adding an
+alternative to the grammar breaks compilation at every site that decides on it,
+which a chain of `kind()` string comparisons never does.
+
+The classifier is emitted exactly when a kind can identify an alternative. A
+choice with a sequence, repeat or optional alternative is told apart by
+STRUCTURE, so it deliberately gets none: there, the shape is the question, and
+a kind-keyed answer would be a guess. When no classifier exists, extract the
+rule and match on the carrier rather than reaching for `kind()`.
+
+The ban above stood for a year with nothing to point at, which is why the
+`node_types` kind-constant catalogue kept being reached for: a prohibition
+loses to whatever the API actually makes easy. This is that missing
+affordance, and it lives in the generator so every consuming grammar gets it.
+
 Recovery handling is two-layered by design: the per-position `NodeSlot`
 states cover every position the grammar models, and a whole-tree
 recovery backstop (see the recovery discussion below) surfaces recovery
@@ -124,7 +144,7 @@ This allows the parser to skip individual malformed elements while continuing to
 The reference corpus is the primary correctness signal:
 
 ```bash
-cargo test -p talkbank-parser-tests --tests parser_equivalence
+cargo test -p talkbank-parser-tests --tests reference_corpus_parses
 ```
 
 Each `.cha` file is its own test, so failures are reported per file. The file

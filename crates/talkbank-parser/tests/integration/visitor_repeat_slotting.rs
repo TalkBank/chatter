@@ -34,7 +34,10 @@
 //! enumerated, not skipped; the NEW backend's recovery-aware repeat split
 //! absorbs a mid-repeat ERROR as a repeat element, per Task B1).
 
-use talkbank_parser::generated_traversal::{FullDocumentNode, NodeSlot, extract_full_document};
+use talkbank_parser::generated_traversal::{
+    AsRawNode, FullDocumentNode, NodeSlot, extract_full_document,
+};
+use talkbank_parser_tests::classify;
 
 /// Parse `source` into a tree-sitter tree using the CHAT grammar.
 fn parse_chat(source: &str) -> tree_sitter::Tree {
@@ -80,7 +83,7 @@ fn full_document_enumerates_clean_line_repeat() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let children = extract_full_document(FullDocumentNode(full_doc));
+    let children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // begin_header (production index 2) and end_header (index 4) anchors must
     // classify as Present: before the fix the swallowed repeat misaligned them.
@@ -105,7 +108,7 @@ fn full_document_enumerates_clean_line_repeat() {
         match &elem.slot() {
             NodeSlot::Present(node) => {
                 assert_eq!(
-                    node.0.kind(),
+                    node.raw_node().kind(),
                     "line",
                     "line repeat element {i} should be a `line` node"
                 );
@@ -134,7 +137,7 @@ fn full_document_repeat_captures_error_line() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let children = extract_full_document(FullDocumentNode(full_doc));
+    let children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // The line repeat must contain at least one ERROR slot (the unparsable
     // bare `*CHI` line) AND at least one Present `line` slot (the
@@ -150,7 +153,7 @@ fn full_document_repeat_captures_error_line() {
         .child_3
         .slot()
         .iter()
-        .filter(|s| matches!(&s.slot(), NodeSlot::Present(n) if n.0.kind() == "line"))
+        .filter(|s| matches!(&s.slot(), NodeSlot::Present(n) if n.raw_node().kind() == "line"))
         .count();
 
     assert!(

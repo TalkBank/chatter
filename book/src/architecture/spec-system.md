@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:12 EDT
+**Last modified:** 2026-08-27 13:44 EDT
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -72,8 +72,6 @@ Invalid CHAT, and the codes it must produce. Everything declared lives in
 +++
 code = 'E207'
 name = 'Unknown scoped annotation marker'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 source = 'E2xx_word_errors/E207_multiple_form_types.cha'
@@ -104,10 +102,8 @@ DOES, which a type cannot.
 
 | Field | Effect |
 |-------|--------|
-| `code` | The code the spec is about; names the generated tests. |
-| `name` | The spec's short name, published as the page's title. |
-| `kind` | The `DiagnosticKind` axis. |
-| `status` | Whether examples are verified or deferred, see below. |
+| `code` | The code the spec DOCUMENTS; names the generated tests, and is resolved against `spec/codes/error-codes.toml` at load, so a spec naming an unregistered code does not load. |
+| `name` | THIS FILE's short name, published as the page's title. Per file, not per code: `E241`'s two specs and `E519`'s three all differ, legitimately. |
 | `status_note` | A human's adjudication of the code's current state. Prose, published nowhere, read by people. |
 | `example.chat` | The input itself, a whole CHAT file. Required: an example without one is not an example. |
 | `example.source` | The fixture the example came from. **Its stem NAMES the transcript**, see below. |
@@ -125,6 +121,55 @@ Two prose sections are published as well as read by humans:
 
 Write the RULE in `## CHAT Rule`, not a bare manual link. The pages exist so a
 data maintainer can fix a file without reading the validator's source.
+
+### `kind` and `status` are facts about a CODE, and live in the registry
+
+Until R1 (2026-08-26) every spec declared `kind` and `status`. Both are
+properties of the CODE, so each of a code's spec files carried a copy, and
+eleven codes have two or three files. Nothing made them agree; a generator
+checked, and refused to run on disagreement.
+
+They live in [`spec/codes/error-codes.toml`](#the-code-registry) now, one entry
+per code, and a spec reaches them through the code it names. Three things went
+with the move: the `spec_status` gate that reconciled `#[status(planned)]` on
+the enum against the specs in both directions, the `spec/errors <-> ErrorCode`
+divergence check the `DiagnosticKind` generator ran, and the per-code `kind`
+agreement loop beside it.
+
+## The code registry
+
+`spec/codes/error-codes.toml` is the source of truth for everything true of a
+CODE, as opposed to true of a document about one:
+
+```toml
+[[code]]
+code    = 'E202'
+variant = 'MissingFormType'   # the ErrorCode variant it compiles to
+summary = 'Missing form type on special word.'   # the variant's rustdoc
+kind    = 'Invalidity'
+status  = 'implemented'
+
+[[retired]]
+code   = 'W601'
+reason = 'renumbered to E756 on 2026-07-16; the warning prefix was the bug'
+```
+
+`crates/talkbank-model/src/errors/codes/generated_error_code.rs` (the
+`ErrorCode` enum) and `generated_diagnostic_kind.rs` are both GENERATED from
+it, and both are under the currency gate, so the enum cannot disagree with the
+specs about which checks run.
+
+The schema, with a reason per field, is
+`talkbank_spec_vocabulary::registry`. It refuses, at load: an unrecognised key,
+a code registered twice, two codes compiling to one Rust identifier, and a
+RETIRED number brought back. That last one was a twenty-line comment in the
+enum asking readers not to reuse `W210`, `W601`, `E754` and eight others; it
+is a load error now, and it names the retirement's own recorded reason.
+
+What the registry deliberately does NOT own is whether a code is DOCUMENTED.
+That used to be entangled with the vocabulary question, since "this variant has
+no spec file" read as a divergence. It is a coverage question, and
+`error_code_specs` asks it as one.
 
 ### There is no longer a rule about where a field sits
 
@@ -196,12 +241,14 @@ diagnostics, so there is structure to pin.
 | `implemented` | Examples are verified. |
 | `not_implemented` | Examples are DEFERRED, not checked, and generated tests carry `#[ignore]`. |
 | `deprecated`, `unreachable_from_chat` | Deferred, same as above. |
-| **absent** | REFUSED: the spec fails to load, naming the file. |
+| **absent** | REFUSED: `spec/codes/error-codes.toml` fails to load, naming the entry. |
 
-`Status` used to default to `implemented` when the bullet was missing, so the
-file said nothing and the loader invented an answer. On 2026-08-11 that was
-true of **104 of 238 specs**. All of them now declare it explicitly and the
-default is gone, so `implemented` in a spec file means somebody decided it.
+Declared per CODE, in the registry, since R1. It was a per-FILE field, and
+before 2026-08-11 it defaulted to `implemented` when absent, so the file said
+nothing and the loader invented an answer: on that date it was true of **104 of
+238 specs**. The default went first and the duplication went second, so
+`implemented` now means one person decided it once for the code, rather than
+each of its spec files claiming it separately.
 
 Changing a spec from `not_implemented` to `implemented` un-`#[ignore]`s its
 generated tests, and those tests may never have run. Regenerate and run them in
@@ -225,7 +272,7 @@ produces, split by the stage (parse or validation) that emitted them. It
 covers every spec regardless of `status`, because an observation is not an
 assertion: for an unimplemented rule the honest record is "nothing fires".
 
-It is the corpus differential aimed at the spec suite: **a diff in this file
+It is the regression instrument for the spec suite: **a diff in this file
 is a review event**, and every changed entry is adjudicated INTENDED (the
 behaviour change was the point; commit the regenerated snapshot in the same
 change) or UNINTENDED (a regression; fix the code, never the snapshot). It is

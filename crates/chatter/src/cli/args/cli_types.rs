@@ -52,13 +52,21 @@ pub enum OutputFormat {
 /// Which parser backend to use for CHAT parsing.
 ///
 /// Tree-sitter (default) supports incremental reparsing and is used by the LSP.
-/// Re2c is a DFA-based parser that is faster for batch validation.
+/// Re2c is a DFA-based second implementation, kept as a specification oracle.
+///
+/// **The default backend is the authority on CHAT validity. Re2c is not, and
+/// as of 0.16.0 it is not ready to be.** It ACCEPTS constructs the default
+/// backend refuses, so a clean `--parser re2c` run is not evidence a file is
+/// valid.
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
 pub enum ParserBackend {
-    /// Tree-sitter parser (default, supports incremental reparsing)
+    /// Tree-sitter parser (default, supports incremental reparsing). The
+    /// authority on CHAT validity.
     #[default]
     TreeSitter,
-    /// Re2c DFA parser (faster batch validation)
+    /// Re2c DFA parser. NOT READY as a validity authority: it accepts some
+    /// input the default backend refuses. Use it as an oracle for comparing
+    /// two implementations, not to decide whether a file is valid.
     Re2c,
 }
 

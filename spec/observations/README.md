@@ -8,7 +8,7 @@ validation) that emitted them. It is an OBSERVATION, never an assertion:
 the normative claims live in the specs themselves, and this file is what
 they are checked against and derived from.
 
-**A diff here is a review event, adjudicated like a corpus differential:**
+**A diff here is a review event, adjudicated as intended or unintended:**
 every changed entry is classified INTENDED (the behaviour change was the
 point; commit the regenerated snapshot in the same change) or UNINTENDED
 (a regression; fix the code, not the snapshot).

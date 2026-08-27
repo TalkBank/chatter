@@ -14,10 +14,10 @@ pub mod item;
 pub mod tier;
 pub mod word;
 
+use crate::generated_traversal::MorDependentTierNode;
 use talkbank_model::ErrorSink;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{MorTier, MorTierType};
-use tree_sitter::Node;
+use talkbank_model::model::MorTier;
 
 pub use tier::parse_mor_tier_inner;
 
@@ -29,6 +29,10 @@ pub use tier::parse_mor_tier_inner;
 /// the supplied [`ErrorSink`]; the caller decides per-utterance
 /// whether to mark the morphology as `BlockedByMorParseFailure` (rule
 /// 6e) or skip it.
-pub fn parse_mor_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ParseOutcome<MorTier> {
-    parse_mor_tier_inner(node, source, MorTierType::Mor, errors)
+pub fn parse_mor_tier(
+    node: MorDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<MorTier> {
+    parse_mor_tier_inner(node, source, errors)
 }

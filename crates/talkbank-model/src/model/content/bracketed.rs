@@ -87,7 +87,20 @@ pub enum BracketedItem {
     /// Action WITH scoped annotations (e.g., <0 [= ! whining]>)
     #[serde(rename = "annotated_action")]
     AnnotatedAction(Annotated<Action>),
-    /// Nested regular group `<...>` WITH scoped annotations (non-retrace only)
+    /// Group `<...>` with NO annotations, nested inside other bracketed
+    /// content.
+    ///
+    /// The mirror of `UtteranceContent::Action`, missing for the same reason
+    /// and found the same day: without it, an unannotated nested group had to
+    /// become an `AnnotatedGroup` carrying an empty list, and the re2c
+    /// converter said so in a comment rather than being able to fix it. With
+    /// `AnnotatedContentAnnotations` non-empty by construction, that spelling
+    /// no longer exists, so this variant has to.
+    ///
+    /// The two content enums are now symmetric: every annotatable construct
+    /// has a bare and an annotated form on both sides.
+    Group(super::Group),
+    /// Nested regular group `<...>` WITH scoped annotations (non-retrace only).
     #[serde(rename = "annotated_group")]
     AnnotatedGroup(Annotated<super::Group>),
     /// Nested retraced content, words the speaker said then corrected.
@@ -106,6 +119,17 @@ pub enum BracketedItem {
     SinGroup(super::SinGroup),
     /// Nested quotation "..."
     Quotation(super::Quotation),
+
+    /// A quotation carrying its own scoped annotations.
+    ///
+    /// Parallel to `AnnotatedGroup` above, and required for the same reason:
+    /// `content_item` admits a quotation with annotations since 2026-08-26,
+    /// and `contents` is what a group encloses, so a quoted phrase retraced
+    /// inside a group is representable in the CST. Without this variant its
+    /// annotations would have nowhere to land and would be dropped on the way
+    /// into the model.
+    #[serde(rename = "annotated_quotation")]
+    AnnotatedQuotation(Annotated<super::Quotation>),
     /// Overlap point marker (CA transcription: ⌊, ⌋, ⌈, ⌉)
     #[serde(rename = "overlap_point")]
     OverlapPoint(OverlapPoint),
@@ -155,10 +179,12 @@ impl WriteChat for BracketedItem {
             BracketedItem::Pause(pause) => pause.write_chat(w),
             BracketedItem::Action(action) => action.write_chat(w),
             BracketedItem::AnnotatedAction(ann) => ann.write_chat(w),
+            BracketedItem::Group(group) => group.write_chat(w),
             BracketedItem::AnnotatedGroup(ann) => ann.write_chat(w),
             BracketedItem::PhoGroup(pho) => pho.write_chat(w),
             BracketedItem::SinGroup(sin) => sin.write_chat(w),
             BracketedItem::Quotation(quot) => quot.write_chat(w),
+            BracketedItem::AnnotatedQuotation(ann) => ann.write_chat(w),
             BracketedItem::OverlapPoint(marker) => marker.write_chat(w),
             BracketedItem::Separator(sep) => sep.write_chat(w),
             BracketedItem::InternalBullet(bullet) => {

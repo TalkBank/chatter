@@ -23,7 +23,7 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
-use crate::generated_traversal::{AsRawNode, NodeSlot, TierBodyChildren};
+use crate::generated_traversal::{AsRawNode, NodeSlot, SlotValue, TierBodyChildren};
 use tree_sitter::Node;
 
 use super::super::super::content::{
@@ -78,28 +78,29 @@ pub(super) fn parse_tier_body(
     // the old behavior of running the contents walk over whatever node sat at
     // this position. The contents internals are migrated separately (this
     // cluster's `contents.rs`, below).
-    let content = match body.content_2.slot() {
-        NodeSlot::Present(contents_node) => {
-            parse_main_tier_contents(contents_node.raw_node(), source, errors)
+    let content = match body.content_2.slot().typed_or_placeholder() {
+        SlotValue::Present(contents) | SlotValue::Placeholder(contents) => {
+            parse_main_tier_contents(contents, source, errors)
         }
-        NodeSlot::Missing(node) => parse_main_tier_contents(*node, source, errors),
         // Unreachable on valid input: a required slot recovers as Present/MISSING,
         // never as an ERROR or a wrong kind. Surface the node (the whole-tree
         // backstop also covers ERROR nodes) and yield empty content rather than
         // fabricating model values.
-        NodeSlot::Error(node) => {
+        SlotValue::Error(node) => {
             errors.report(classify_main_tier_recovery(
-                *node,
+                node,
                 source,
                 MainTierRegion::Body,
             ));
             Vec::new()
         }
-        NodeSlot::Unexpected(node) => {
-            report_unexpected_tier_body_child(*node, source, errors);
+        // A MISSING placeholder of a kind `contents` does not name has no
+        // `contents` node to walk either, so it is the same case.
+        SlotValue::Unexpected(node) | SlotValue::UnclassifiedPlaceholder(node) => {
+            report_unexpected_tier_body_child(node, source, errors);
             Vec::new()
         }
-        NodeSlot::Absent => Vec::new(),
+        SlotValue::Absent => Vec::new(),
     };
 
     // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
@@ -114,19 +115,19 @@ pub(super) fn parse_tier_body(
         terminator,
         postcodes,
         bullet,
-    } = match body.ending.slot() {
-        NodeSlot::Present(ending_node) => {
-            parse_utterance_end(ending_node.raw_node(), source, errors)
+    } = match body.ending.slot().typed_or_placeholder() {
+        SlotValue::Present(ending) | SlotValue::Placeholder(ending) => {
+            parse_utterance_end(ending, source, errors)
         }
-        NodeSlot::Missing(node) => parse_utterance_end(*node, source, errors),
-        // A stray ERROR node landed at the `utterance_end` slot position. The
+        // A stray ERROR node landed at the `utterance_end` slot position, or a
+        // MISSING placeholder of a kind `utterance_end` does not name. The
         // previous tier-body walk surfaced such an ERROR via the shared
         // word-error analyzer (and then re-found the real `utterance_end`); route
         // it to the same analyzer here. No terminator is recovered; the whole-tree
         // backstop covers the surviving ERROR / MISSING nodes. Malformed-only path.
-        NodeSlot::Error(error_node) => {
+        SlotValue::Error(error_node) | SlotValue::UnclassifiedPlaceholder(error_node) => {
             errors.report(classify_main_tier_recovery(
-                *error_node,
+                error_node,
                 source,
                 MainTierRegion::Body,
             ));
@@ -139,7 +140,7 @@ pub(super) fn parse_tier_body(
         // terminator-less-but-otherwise-well-formed line, which still yields a
         // `Present` `utterance_end` (its OWN inner terminator slot is merely
         // absent) rather than reaching this arm.
-        NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+        SlotValue::Unexpected(_) | SlotValue::Absent => {
             report_missing_child(
                 carrier.clone(),
                 original_input,

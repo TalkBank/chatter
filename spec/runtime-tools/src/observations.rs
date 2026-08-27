@@ -7,10 +7,12 @@
 //! a generated artifact under `spec/observations/` and held current by the same
 //! byte-compare gate as every other artifact, so **a change in what the specs'
 //! own examples trigger is a review event**: the diff names each example whose
-//! behaviour moved, and each movement is adjudicated INTENDED or UNINTENDED,
-//! exactly the way a corpus-differential delta is. This is the same instrument
-//! as the corpus differential, aimed at the spec suite instead of the wild
-//! corpus.
+//! behaviour moved, and each movement is adjudicated INTENDED (the behaviour
+//! change was the point; commit the regenerated snapshot in the same change)
+//! or UNINTENDED (a regression; fix the code, never the snapshot). Because
+//! every example is also checked for a byte-exact round trip, the snapshot is
+//! the regression instrument for both what the parser SAYS and what it
+//! WRITES, over data that ships with the repository.
 //!
 //! # What it exists to enable, which is Phase 2's other two steps
 //!
@@ -55,8 +57,7 @@ pub use talkbank_spec_vocabulary::observations::{
 };
 
 /// The constant provenance sentence.
-const GENERATED_BY: &str =
-    "just spec-gen (spec-runtime-tools::observations); adjudicate diffs like a corpus differential";
+const GENERATED_BY: &str = "just spec-gen (spec-runtime-tools::observations); adjudicate every diff as intended or unintended";
 
 /// Build the snapshot by running every example through the ONE sanctioned
 /// example-running path, [`emit_for`].
@@ -69,7 +70,8 @@ const GENERATED_BY: &str =
 /// nondeterministic across builds, and a snapshot that quietly carries a
 /// panicking example reads as a finished observation of it.
 pub fn build_snapshot(repo_root: &std::path::Path) -> Result<GeneratedFiles> {
-    let specs = ErrorSpec::load_all(spec_dir(repo_root))
+    let registry = talkbank_spec_vocabulary::registry::CodeRegistry::load(repo_root)?;
+    let specs = ErrorSpec::load_all(spec_dir(repo_root), &registry)
         .map_err(|err| anyhow::anyhow!("loading specs: {err}"))?;
     if specs.is_empty() {
         bail!("no specs found; a snapshot of nothing must not be written as though observed");
@@ -124,6 +126,7 @@ fn observe(
         example: id.position(),
         parse: crate::error_spec_validation::distinct_codes(&staged.parse),
         validation: crate::error_spec_validation::distinct_codes(&staged.validation),
+        roundtrip: staged.roundtrip,
     }
 }
 
@@ -163,7 +166,7 @@ fn readme() -> String {
     let _ = writeln!(out);
     let _ = writeln!(
         out,
-        "**A diff here is a review event, adjudicated like a corpus differential:**"
+        "**A diff here is a review event, adjudicated as intended or unintended:**"
     );
     let _ = writeln!(
         out,

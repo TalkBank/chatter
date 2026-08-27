@@ -15,6 +15,7 @@ use crate::error::{
 use crate::model::{ChatDate, Header, Line, WarningText};
 use crate::parser::TreeSitterParser;
 use crate::parser::chat_file_parser::utterance_parser::classify_percent_error_text;
+use crate::parser::document_root::DocumentRoot;
 use crate::parser::tree_parsing::parser_helpers::collect_recovery_nodes;
 use tracing::{debug, info, trace, warn};
 
@@ -267,18 +268,9 @@ pub(super) fn parse_lines_with_old_tree(
     let tree_to_return = tree.clone();
 
     trace!("Tree-sitter parse completed");
-    let ts_root = tree.root_node();
-
-    // With multi-root grammar, root is `source_file` containing `full_document`.
-    // Navigate to `full_document` if present, otherwise use root directly.
-    let root_node = if ts_root.kind() == "source_file" {
-        ts_root
-            .child(0)
-            .filter(|c| c.kind() == "full_document")
-            .unwrap_or(ts_root)
-    } else {
-        ts_root
-    };
+    // One owner of "where is the document, and what did it turn out to be".
+    let root = DocumentRoot::classify(&tree);
+    let root_node = root.node();
 
     // Check if the root node itself has errors AND is empty (e.g., empty file)
     if root_node.has_error() && root_node.child_count() == 0 {
@@ -295,9 +287,11 @@ pub(super) fn parse_lines_with_old_tree(
         return (Vec::new(), None);
     }
 
-    // Track whether root is ERROR; we'll need this after the loop to report
-    // an error if no valid lines were recovered.
-    let root_is_error = root_node.is_error();
+    // Whether the parser RECOVERED at the document position, needed after the
+    // loop to report a file from which no valid lines came back. Read off the
+    // classification rather than re-derived with a second `is_error()`, which
+    // had to agree with whether the recovery reconstruction was attempted.
+    let root_is_error = root.recovered_at_root();
 
     // Tee the sink into a collector so the streaming loop's per-region
     // diagnostics are recorded as well as forwarded. The loop only inspects
@@ -322,7 +316,16 @@ pub(super) fn parse_lines_with_old_tree(
     // hand-walk. `DocumentLowering` borrows the Tee'd sink so its emissions are
     // recorded for the backstop's span-dedup below.
     let mut lowering = DocumentLowering::new(input, errors, root_node.child_count());
-    lowering.lower_document(root_node);
+    // A recovered document lowers exactly like a complete one: the ERROR
+    // standing in for a `full_document` carries the same children, so a missing
+    // `@End` still recovers every line and the absent trailer surfaces as an
+    // `Absent` slot for the validator to report as E502. `None` is the file with
+    // nothing document-shaped in it at all; the recovery backstop below still
+    // runs over the node, and the "no valid lines recovered" path still reports
+    // it.
+    if let Some(children) = root.into_children() {
+        lowering.lower_document(children);
+    }
     let lines = lowering.into_lines();
 
     // When the root IS an ERROR node and the loop couldn't recover any valid

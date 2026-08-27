@@ -1,3 +1,21 @@
+# There is deliberately NO `[workspace.lints]` table here, and the three
+# members deliberately do not opt into one. That is a decision, not the
+# silent-exemption bug the root workspace hit in August 2026, so it is written
+# down where somebody will next go looking for it.
+#
+# The root workspace denies the panic family because a panic in the parser,
+# model, CLI or LSP takes down something long-lived. Nothing here is long
+# lived: `tools` and `runtime-tools` are build-time generators run by
+# `just spec-gen`, and `vocabulary` is a library whose only consumers are those
+# generators and two TEST crates. Measured 2026-08-26:
+# `cargo tree -p chatter --edges normal | grep spec-vocabulary` finds nothing,
+# so none of this reaches a shipped binary.
+#
+# Denying the family here would mean 77 findings, almost all `expect()` in a
+# generator hitting a state its own inputs make impossible, where failing
+# loudly at build time is the CORRECT behaviour and an `unwrap_or` would be the
+# defect. Severity is still gated: `just clippy-spec` runs `-D warnings`, so
+# every lint clippy raises by default is an error here.
 [workspace]
 members = ["tools", "runtime-tools", "vocabulary"]
 resolver = "3"

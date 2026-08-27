@@ -1,6 +1,6 @@
 # Error Spec Format Reference
 
-**Last modified:** 2026-08-21 13:12 EDT
+**Last updated:** 2026-08-27 18:09 EDT
 
 This document defines the exact format of `spec/errors/*.md` files. These files
 are the **source of truth** for error code test cases. Generators in
@@ -28,8 +28,6 @@ A spec looks like this:
 +++
 code = 'E256'
 name = 'Illegal curly single quote'
-kind = 'Invalidity'
-status = 'implemented'
 
 [[example]]
 level = 'word'
@@ -211,7 +209,8 @@ normalized during comparison.
 | tree-sitter corpus tests | construct specs + every error example the snapshot observed parse-stage diagnostics for |
 | Rust test bodies | construct + error specs |
 | validation fixture corpus + `manifest.json` | EVERY error example; the runner checks both stages |
-| `DiagnosticKind` registry | every error spec's `kind` |
+| `DiagnosticKind` registry | each code's `kind`, from `spec/codes/error-codes.toml` |
+| the `ErrorCode` enum | `spec/codes/error-codes.toml`: variant, rustdoc, code string, enforcement |
 | published error documentation (`docs/errors/`) | every error spec |
 
 ## Tooling: what kinds exist, and how to see the real list
@@ -260,6 +259,9 @@ is real. `spec-coverage` answers which codes have specs and which specs
 demonstrate their own code; `spec-status` answers example counts and parity.
 Neither observes the validator. The honest successor is DERIVED, not declared:
 run the validator over the fixture corpus and record which codes actually fire,
-which is most of what `just spec-validate-examples` already does. Each spec's
-hand-declared `status` is the same mirror one layer down.
+which is most of what `just spec-validate-examples` already does. The
+hand-declared `status` was the same mirror one layer down, copied into every
+spec file for a code; R1 gave it one owner in `spec/codes/error-codes.toml`,
+which removes the DUPLICATION but not the declaration: it is still authored,
+and still not an observation.
 

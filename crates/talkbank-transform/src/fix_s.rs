@@ -1,12 +1,13 @@
 //! Rewrite whole-utterance `@s` runs into utterance-level `[- LANG]` precodes.
 
 use talkbank_model::alignment::helpers::{
-    TierDomain, WordItem, WordItemMut, walk_words, walk_words_mut,
+    WordItem, WordItemMut, walk_code_switch_spans, walk_words, walk_words_mut,
 };
 use talkbank_model::model::{
-    ChatFile, Header, LanguageCode, Line, MainTier, ReplacedWord, Word, WordLanguageMarker,
+    ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, MainTier, ReplacedWord,
+    UnspannedSwitchTarget, Word, WordLanguageMarker,
 };
-use talkbank_model::validation::{LanguageResolution, ValidationState};
+use talkbank_model::validation::ValidationState;
 
 /// Rewrite summary for one CHAT file.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -111,17 +112,50 @@ fn collect_missing_explicit_languages_from_main_tier(
     known: &mut Vec<LanguageCode>,
     missing: &mut Vec<LanguageCode>,
 ) {
-    walk_words(
-        &main_tier.content.content,
-        Some(TierDomain::Mor),
-        &mut |item| match item {
-            WordItem::Word(word) => record_missing_explicit_language(word, known, missing),
-            WordItem::ReplacedWord(replaced) => {
-                record_missing_explicit_languages_in_replaced_word(replaced, known, missing);
-            }
-            WordItem::Separator(_) => {}
-        },
-    );
+    // TWO QUESTIONS, TWO WALKS, and they are genuinely different questions.
+    //
+    // An explicit code can be named by a `<...> [@s:eng]` span as well as by a
+    // word's own `@s:eng`, and both mean the same thing about the transcript,
+    // so both must reach the header. Reading only `word.lang` declared `eng`
+    // for `how@s:eng to@s:eng` and not for `<how to> [@s:eng]`, which made the
+    // header depend on the transcriber's choice of notation.
+    //
+    // Taking the SPAN half off the word walk's scope argument fixed that case
+    // and left a subtler one, because a scope is only delivered when a word is
+    // delivered. A span is then reported once per word it encloses (redundant),
+    // and a span enclosing no word at all is reported NEVER (wrong). Measured:
+    // `*CHI: I said <how to> [//] [@s:fra] this .` yields no `%mor` word leaves,
+    // since the domain filter skips a reformulation group, so `fra` never
+    // reached the header while a `deu` from a plain word marker did. The same
+    // notation-dependence the comment above says was fixed, one level down.
+    //
+    // So the spans come from a walk over SPANS, which is not domain-filtered:
+    // which languages a tier NAMES is a fact about the transcript, and a French
+    // reformulation is French whether or not it is morphologically analysed.
+    walk_code_switch_spans(&main_tier.content.content, &mut |span| {
+        if let CodeSwitchSpan::Explicit(code) = span {
+            record_missing_code(code, known, missing);
+        }
+    });
+
+    // The WORD half is NOT domain-filtered either, for the same reason. It was,
+    // and that left the invariant above false with the sign flipped: measured,
+    // `*CHI: I said <how@s:fra to@s:fra> [//] this .` is valid CHAT carrying two
+    // explicit `fra` markers and declared NOTHING, while the span spelling of
+    // the same content declared `fra`. Filtering one half and not the other is
+    // how a fix for notation-dependence reintroduces it one notation over.
+    //
+    // OUTPUT CHANGE, stated because it is one: codes named only inside
+    // retraced or reformulated material now reach `@Languages`. That is the
+    // intended direction (the header should say which languages the transcript
+    // contains), but it is a change in what `fix-s` writes.
+    walk_words(&main_tier.content.content, None, &mut |item| match item {
+        WordItem::Word(word) => record_missing_explicit_language(word, known, missing),
+        WordItem::ReplacedWord(replaced) => {
+            record_missing_explicit_languages_in_replaced_word(replaced, known, missing);
+        }
+        WordItem::Separator(_) => {}
+    });
 }
 
 fn record_missing_explicit_languages_in_replaced_word(
@@ -143,6 +177,18 @@ fn record_missing_explicit_language(
     let Some(WordLanguageMarker::Explicit(code)) = word.lang.as_ref() else {
         return;
     };
+    record_missing_code(code, known, missing);
+}
+
+/// Record one explicit code, whatever notation named it.
+///
+/// Split out so a word's `@s:code` and a span's `[@s:code]` reach the header by
+/// the same route; they are the same claim about the transcript.
+fn record_missing_code(
+    code: &LanguageCode,
+    known: &mut Vec<LanguageCode>,
+    missing: &mut Vec<LanguageCode>,
+) {
     if known.contains(code) {
         return;
     }
@@ -156,7 +202,7 @@ fn rewrite_main_tier_language_switch(
     default_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
 ) -> bool {
-    let Some(target_language) =
+    let Some(target) =
         main_tier.whole_utterance_language_switch_target(default_language, declared_languages)
     else {
         return false;
@@ -175,9 +221,10 @@ fn rewrite_main_tier_language_switch(
     // skip fillers, leaving any `@s` shortcut on a filler in place;
     // that shortcut would then resolve against the new tier-language
     // (set by the precode below) and FLIP its meaning. The predicate
-    // has already verified that every word's `@s` resolves to
-    // `target_language`, so it is safe, and necessary, to clear
-    // every `@s` marker that resolves there.
+    // has already verified that every word's `@s` resolves to the target and
+    // that NO word is span-governed, which is what `UnspannedSwitchTarget`
+    // carries; so it is safe, and necessary, to clear every `@s` marker that
+    // resolves there.
     walk_words_mut(
         main_tier.content.content.as_mut_slice(),
         None,
@@ -187,7 +234,7 @@ fn rewrite_main_tier_language_switch(
                     word,
                     original_tier_language.as_ref(),
                     declared_languages,
-                    &target_language,
+                    &target,
                 );
             }
             WordItemMut::ReplacedWord(replaced) => {
@@ -195,16 +242,16 @@ fn rewrite_main_tier_language_switch(
                     replaced,
                     original_tier_language.as_ref(),
                     declared_languages,
-                    &target_language,
+                    &target,
                 );
             }
             WordItemMut::Separator(_) => {}
         },
     );
 
-    let language_changed = main_tier.content.language_code.as_ref() != Some(&target_language);
+    let language_changed = main_tier.content.language_code.as_ref() != Some(target.language());
     if language_changed {
-        main_tier.content.language_code = Some(target_language);
+        main_tier.content.language_code = Some(target.language().clone());
     }
 
     language_changed || cleared_any_word_marker
@@ -214,24 +261,19 @@ fn clear_matching_word_language_marker(
     word: &mut Word,
     tier_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
-    target_language: &LanguageCode,
+    target: &UnspannedSwitchTarget,
 ) -> bool {
     let Some(_) = word.lang.as_ref() else {
         return false;
     };
 
-    // `None`: this only ever runs on words the predicate has already accepted,
-    // and the predicate REFUSES any utterance with a span-governed word,
-    // precisely because clearing `word.lang` inside a span hands the word to
-    // the span and changes its language. Writing the scope out is the point of
-    // `GoverningMarker::of` taking it: the old unscoped call could not express
-    // this claim, so nothing checked it, and the rewrite corrupted language.
-    let outcome = talkbank_model::GoverningMarker::of(word, None).resolve(
-        word,
-        tier_language,
-        declared_languages,
-    );
-    if outcome.resolution == LanguageResolution::Single(target_language.clone()) {
+    // The unscoped resolution this needs, and the argument for why it is sound,
+    // both live on `UnspannedSwitchTarget::governs`. They used to be a free
+    // `GoverningMark::of(word, None)` here under a comment, with `target`
+    // passed alongside purely for its language, so the proof was a parameter
+    // any `&LanguageCode` could have satisfied and the dangerous call was
+    // writable by anyone.
+    if target.governs(word, tier_language, declared_languages) {
         word.lang = None;
         true
     } else {
@@ -243,21 +285,17 @@ fn clear_matching_replaced_word_language_markers(
     replaced: &mut ReplacedWord,
     tier_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
-    target_language: &LanguageCode,
+    target: &UnspannedSwitchTarget,
 ) -> bool {
     let mut cleared_any_word_marker = clear_matching_word_language_marker(
         &mut replaced.word,
         tier_language,
         declared_languages,
-        target_language,
+        target,
     );
     for word in &mut replaced.replacement.words {
-        cleared_any_word_marker |= clear_matching_word_language_marker(
-            word,
-            tier_language,
-            declared_languages,
-            target_language,
-        );
+        cleared_any_word_marker |=
+            clear_matching_word_language_marker(word, tier_language, declared_languages, target);
     }
     cleared_any_word_marker
 }
@@ -490,5 +528,143 @@ mod tests {
             }
         );
         assert_eq!(rewritten, expected);
+    }
+
+    /// A span's code reaches `@Languages` even when the span encloses no word
+    /// the `%mor` walk delivers.
+    ///
+    /// The reformulation group is skipped by `TierDomain::Mor`, so no word leaf
+    /// is emitted from inside it. While the span half of this collection was
+    /// read off the WORD walk's scope argument, that meant `fra` was never seen
+    /// at all: a scope is only delivered when a word is, and no word was. The
+    /// `deu` beside it came through, so the header depended on which notation
+    /// the transcriber used, which is the exact failure the span-aware
+    /// collection was introduced to fix, one level down.
+    #[test]
+    fn a_span_on_a_reformulation_still_declares_its_language() {
+        let input = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|||||Target_Child|||
+*CHI:\tI said <how to> [//] [@s:fra] this .
+*CHI:\tand hello@s:deu there .
+@End
+";
+        let (rewritten, _) = rewrite(input);
+        assert!(
+            rewritten.contains("@Languages:\teng, fra, deu"),
+            "both notations must reach the header:\n{rewritten}"
+        );
+    }
+
+    /// A span enclosing no word AT ALL still declares its language.
+    ///
+    /// `<&=laughs> [@s:hin]` holds one event and no word, so the word walk has
+    /// nothing to hand a scope to. Marking a laugh as Hindi is unusual; the
+    /// point is that the transcriber wrote a code and the header must say so,
+    /// and that a walk over words cannot answer a question about spans.
+    #[test]
+    fn a_span_enclosing_no_word_still_declares_its_language() {
+        let input = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|||||Target_Child|||
+*CHI:\thello <&=laughs> [@s:hin] there .
+@End
+";
+        let (rewritten, _) = rewrite(input);
+        assert!(
+            rewritten.contains("@Languages:\teng, hin"),
+            "a word-free span still names a language:\n{rewritten}"
+        );
+    }
+
+    /// A code named by many words of one span is declared ONCE.
+    ///
+    /// The redundancy that made the two bugs above visible: reading spans off
+    /// the word walk reported a span once per word it encloses. Idempotent, so
+    /// it produced the right header, which is why it survived; the same shape
+    /// produced the wrong header wherever the word count was zero.
+    #[test]
+    fn a_multi_word_span_declares_its_language_once() {
+        let input = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|||||Target_Child|||
+*CHI:\tI said <how are you> [@s:fra] today .
+@End
+";
+        let (rewritten, _) = rewrite(input);
+        // The HEADER line only: the utterance itself legitimately contains
+        // `[@s:fra]`, so counting across the whole file counts the source text
+        // as well as the declaration, which is what the first version of this
+        // assertion did.
+        let languages = rewritten
+            .lines()
+            .find(|line| line.starts_with("@Languages:"))
+            .unwrap_or_else(|| panic!("no @Languages header in:\n{rewritten}"));
+        assert_eq!(
+            languages.matches("fra").count(),
+            1,
+            "the code belongs to the span, not to each word under it: {languages}"
+        );
+    }
+
+    /// A span on a REPLACED word declares its language.
+    ///
+    /// `dog [: cat] [@s:fra]` carries its scoped annotations on the replaced
+    /// word itself, not on an enclosing group. The first span walk hand-wrote
+    /// an exhaustive match per content enum and listed `ReplacedWord` among the
+    /// leaves that carry no annotations, so this declared nothing while the
+    /// group form `<the dog> [@s:fra]` worked: the same notation-dependence the
+    /// walk exists to remove, one variant over.
+    ///
+    /// `ScopedAnnotated`'s own docs record a previous hand-written accessor
+    /// making exactly this mistake on exactly this variant, which is why the
+    /// walk now asks `ContentStructure` instead of matching the enum itself.
+    #[test]
+    fn a_span_on_a_replaced_word_declares_its_language() {
+        let input = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|||||Target_Child|||
+*CHI:\tI want the dog [: cat] [@s:fra] .
+*CHI:\tand hello@s:deu there .
+@End
+";
+        let (rewritten, _) = rewrite(input);
+        assert!(
+            rewritten.contains("@Languages:\teng, fra, deu"),
+            "a span on a replaced word names a language:\n{rewritten}"
+        );
+    }
+
+    /// Word markers inside a reformulation declare their language.
+    ///
+    /// The mirror of the span case: `<how@s:fra to@s:fra> [//]` is valid CHAT
+    /// carrying two explicit codes, and while the WORD half of this collection
+    /// was filtered to `TierDomain::Mor` it declared nothing, because the
+    /// filter skips a reformulation group. The span spelling of the same
+    /// content declared `fra`, so the header still depended on notation after
+    /// the span half was fixed.
+    #[test]
+    fn word_markers_inside_a_reformulation_declare_their_language() {
+        let input = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child
+@ID:\teng|corpus|CHI|||||Target_Child|||
+*CHI:\tI said <how@s:fra to@s:fra> [//] this .
+@End
+";
+        let (rewritten, _) = rewrite(input);
+        assert!(
+            rewritten.contains("@Languages:\teng, fra"),
+            "both notations must reach the header:\n{rewritten}"
+        );
     }
 }

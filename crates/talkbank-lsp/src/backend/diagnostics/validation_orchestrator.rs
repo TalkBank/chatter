@@ -134,17 +134,17 @@ pub(crate) async fn validate_and_publish(
             };
 
             if let Some(mut chat_file) = old_chat_file {
-                let (utterance_nodes, context_header_changed, any_header_changed) =
+                let (utterance_nodes, header_change) =
                     collect_utterances_and_header_changes(new_tree, &changed_ranges);
                 let utterance_count = chat_file.utterances().count();
 
                 // When falling through to full fallback, headers can be reused
                 // if no header was changed at all.
-                if !any_header_changed {
+                if header_change.is_none() {
                     fallback_reuse_headers = true;
                 }
 
-                if !context_header_changed && utterance_nodes.len() == utterance_count {
+                if !header_change.affects_validation_context() && utterance_nodes.len() == utterance_count {
                     let line_indices = collect_utterance_line_indices(&chat_file);
                     if line_indices.len() == utterance_count {
                         let affected_indices =
@@ -297,7 +297,7 @@ pub(crate) async fn validate_and_publish(
                                 path = "incremental-rebuild",
                                 "LSP: cache miss or size mismatch, rebuilding validation cache"
                             );
-                            let cache = if !any_header_changed {
+                            let cache = if header_change.is_none() {
                                 if let Some(old_cache) = validation_cache.get(&uri) {
                                     debug!(
                                         path = "incremental-rebuild",
@@ -342,7 +342,7 @@ pub(crate) async fn validate_and_publish(
                             text,
                         );
                     }
-                } else if !context_header_changed
+                } else if !header_change.affects_validation_context()
                     && let Some(diff_span_val) = diff_span
                     && let Some((splice_idx, is_insertion)) =
                         detect_utterance_splice(&utterance_nodes, diff_span_val.0, utterance_count)

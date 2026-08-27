@@ -80,7 +80,7 @@ pub use crate::AsyncChannelErrorSink;
 #[cfg(feature = "async")]
 pub use async_runtime::{AsyncValidationError, validate_async, validate_with_rules_async};
 pub use word::language::LanguageResolution;
-pub use word::{GoverningMarker, LanguageResolutionOutcome};
+pub use word::{GoverningMark, GoverningMarkKind, LanguageResolutionOutcome};
 
 // Public bullet validation function
 pub(crate) use bullet::check_bullet;
@@ -96,33 +96,56 @@ mod tests {
     use crate::model::{Annotated, ContentAnnotation, Word};
     use crate::validation::Validate;
 
-    /// Verifies word validation with unknown annotation.
+    /// An unrecognised annotation on a word is reported, EXACTLY ONCE.
+    ///
+    /// Drives a real `MainTier`, not a bare `Annotated<Word>`, because the
+    /// rule moved there; see `main_tier::report_unknown_annotations`.
+    ///
+    /// The COUNT is the assertion, in both directions. A second emitter left
+    /// standing shows up here as two, and that is not hypothetical: deleting
+    /// the first one missed `ReplacedWordAnnotations`, which doubled E207 on
+    /// a replaced word until an integration test counted it.
     #[test]
-    fn test_word_validation_with_unknown_annotation() {
-        // Build word programmatically (not by parsing)
-        let word = Annotated::new(Word::new_unchecked("hello [::: stuff]", "hello"))
-            .with_scoped_annotations(vec![ContentAnnotation::Unknown(
-                crate::model::ScopedUnknown {
-                    marker: ":::".into(),
-                    text: "stuff".into(),
-                },
-            )]);
-
-        // Validate it (no language context needed for this test)
-        let errors = ErrorCollector::new();
-        let context = ValidationContext::new();
-        word.validate(&context, &errors);
-        let error_vec = errors.into_vec();
-
-        // Should have E207 error for unknown annotation
+    fn an_unknown_annotation_on_a_word_is_reported_exactly_once() {
         use crate::ErrorCode;
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnknownAnnotation);
-        // Note: The actual error message may vary, just check that it contains the marker
+        use crate::model::{MainTier, Terminator, UtteranceContent};
+
+        let word = Annotated::with_one(
+            Word::new_unchecked("hello [::: stuff]", "hello"),
+            ContentAnnotation::Unknown(crate::model::ScopedUnknown {
+                marker: ":::".into(),
+                text: "stuff".into(),
+            }),
+        );
+        // No terminator: the missing-terminator diagnostic is filtered out
+        // below, and building one here would test the terminator model rather
+        // than this rule.
+        let main = MainTier::new(
+            "CHI",
+            vec![UtteranceContent::AnnotatedWord(Box::new(word))],
+            Option::<Terminator>::None,
+        );
+
+        let errors = ErrorCollector::new();
+        let context = ValidationContext::new()
+            .with_participant_ids(std::iter::once(crate::model::SpeakerCode::new("CHI")).collect());
+        main.validate(&context, &errors);
+
+        let reported: Vec<_> = errors
+            .into_vec()
+            .into_iter()
+            .filter(|e| e.code == ErrorCode::UnknownAnnotation)
+            .collect();
+        assert_eq!(
+            reported.len(),
+            1,
+            "exactly one E207, not zero (unreported) and not two (reported by \
+             both the old impl and the new traversal); got {reported:?}"
+        );
         assert!(
-            error_vec[0].message.contains(":::"),
-            "Error message should mention the unknown marker ':::'. Got: {}",
-            error_vec[0].message
+            reported[0].message.contains(":::"),
+            "the message must name the marker as written. Got: {}",
+            reported[0].message
         );
     }
 
@@ -131,7 +154,6 @@ mod tests {
     fn test_word_validation_no_errors() {
         // Build valid word programmatically
         // Note: Don't wrap in Annotated unless there are actual annotations,
-        // as E214 fires for empty scoped annotations in Annotated wrappers.
         let word = Word::new_unchecked("hello", "hello");
 
         let errors = ErrorCollector::new();

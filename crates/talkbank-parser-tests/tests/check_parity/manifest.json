@@ -106,7 +106,7 @@
    "fixture": "CHECK_011_undeclared_symbol_pct_fac.cha",
    "status": "divergence",
    "expected_chatter_codes": [],
-   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts. FACET SPLIT (2026-07-24): CHECK 11's EMPTY-symbol facet (a %mor item with an empty POS, `|we`) now has the dedicated chatter code E760 (spec E760_mor_item_empty_pos.md), grounded as parity; the general undeclared-symbol-membership facet remains this documented divergence."
+   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts. FACET SPLIT (2026-07-24): CHECK 11's EMPTY-symbol facet (a %mor item with an empty POS, `|we`) now has the dedicated chatter code E760 (spec E760.md), grounded as parity; the general undeclared-symbol-membership facet remains this documented divergence."
   },
   {
    "check_code": 12,
@@ -502,7 +502,7 @@
    "expected_chatter_codes": [
     "E759"
    ],
-   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). PARITY CLOSED 2026-07-24: chatter now has the dedicated code E759 (AnnotationAtUtteranceStart, spec E759_annotation_at_utterance_start.md), replacing the former E375 scoped-annotation catch-all routing (and the still-earlier E747 mislabel)."
+   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). PARITY CLOSED 2026-07-24: chatter now has the dedicated code E759 (AnnotationAtUtteranceStart, spec E759.md), replacing the former E375 scoped-annotation catch-all routing (and the still-earlier E747 mislabel)."
   },
   {
    "check_code": 53,
@@ -553,7 +553,7 @@
    "expected_chatter_codes": [
     "E751"
    ],
-   "note": "Pause '(' opening directly at the end of a word (check.cpp 4437). GAP CLOSED 2026-07-09: model validation check_pause_glued_to_word (span adjacency, utterance/spacing.rs) + re2c word-then-pause token-window mirror. Spec: E751_pause_glued_to_word.md. CLAN also emits (48) on the same fixture; expected_chatter_codes are subset-asserted so E751 alone is the pinned signal. ADJUDICATED (maintainer decision, 2026-07-10): NOT a pause-spacing rule; in our AST '(.)' is not a legal shortening ('.' is not a word character), so word-glued '(.)' is a PARSE error in nature. Rejection kept; refactor queued to move the diagnostic from the validation layer to the parse layer."
+   "note": "Pause '(' opening directly at the end of a word (check.cpp 4437). GAP CLOSED 2026-07-09: model validation check_pause_glued_to_word (span adjacency, utterance/spacing.rs) + re2c word-then-pause token-window mirror. Spec: E751.md. CLAN also emits (48) on the same fixture; expected_chatter_codes are subset-asserted so E751 alone is the pinned signal. ADJUDICATED (maintainer decision, 2026-07-10): NOT a pause-spacing rule; in our AST '(.)' is not a legal shortening ('.' is not a word character), so word-glued '(.)' is a PARSE error in nature. Rejection kept; refactor queued to move the diagnostic from the validation layer to the parse layer."
   },
   {
    "check_code": 58,
@@ -892,7 +892,7 @@
    "expected_chatter_codes": [
     "E748"
    ],
-   "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748_leading_zero_bullet_time.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors."
+   "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors."
   },
   {
    "check_code": 91,
@@ -912,7 +912,7 @@
    "expected_chatter_codes": [
     "E749"
    ],
-   "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749_comma_glued_to_next_word.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Comma-glue is unambiguous under our grammar; kept as an error by project policy: style violations are errors."
+   "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Comma-glue is unambiguous under our grammar; kept as an error by project policy: style violations are errors."
   },
   {
    "check_code": 93,
@@ -1105,7 +1105,7 @@
    "expected_chatter_codes": [
     "E752"
    ],
-   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output. CLOSED 2026-07-15 per the 2026-07-14 MEANINGFUL ruling: chatter rejects timing-without-@Media as E752 (inverse of E544); spec spec/errors/E752_timing_without_media.md."
+   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output. CLOSED 2026-07-15 per the 2026-07-14 MEANINGFUL ruling: chatter rejects timing-without-@Media as E752 (inverse of E544); spec spec/errors/E752.md."
   },
   {
    "check_code": 113,
@@ -1586,7 +1586,7 @@
    "expected_chatter_codes": [
     "E750"
    ],
-   "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750_space_inside_angle_group.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error."
+   "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error."
   },
   {
    "check_code": 161,

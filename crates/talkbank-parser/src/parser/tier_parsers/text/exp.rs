@@ -7,9 +7,8 @@
 
 use talkbank_model::ErrorSink;
 use talkbank_model::model::ExpTier;
-use tree_sitter::Node;
 
-use crate::generated_traversal::{ExpDependentTierNode, extract_exp_dependent_tier};
+use crate::generated_traversal::{AsRawNode, ExpDependentTierNode, extract_exp_dependent_tier};
 
 use super::helpers::{parse_optional_text_tier_content, span_of};
 
@@ -24,17 +23,20 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 /// body as `child_2.slot`, matched exhaustively by the shared
 /// [`parse_optional_text_tier_content`], which also surfaces the carrier's `unexpected`
 /// sink (R2).
-pub fn parse_exp_tier(node: Node, source: &str, errors: &impl ErrorSink) -> ExpTier {
+pub fn parse_exp_tier(
+    typed: ExpDependentTierNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ExpTier {
+    let node = typed.raw_node();
     let span = span_of(node);
-    let children = extract_exp_dependent_tier(ExpDependentTierNode(node));
+    let children = extract_exp_dependent_tier(typed);
     let content = parse_optional_text_tier_content(
-        node,
+        typed,
         children.child_2.slot(),
         &children.unexpected,
         source,
         errors,
-        "exp_dependent_tier",
-        "Missing content in %exp tier",
     );
     ExpTier::new(content).with_span(span)
 }

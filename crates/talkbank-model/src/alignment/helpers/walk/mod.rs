@@ -2,8 +2,10 @@
 //!
 //! Centralizes the recursive traversal of [`UtteranceContent`] (24 variants) and
 //! [`BracketedItem`] (22 variants) so callers provide only item-handling logic.
-//! Domain-aware group gating (retrace skip for Mor, PhoGroup/SinGroup skip for
-//! Pho/Sin) is handled once here.
+//! Container gating is owned by `helpers::descent`, once, for every traversal
+//! in the crate rather than only for the walkers here. It used to be written
+//! once per container VARIANT per walker, and it drifted; that module's header
+//! has the account.
 //!
 //! # Walkers
 //!
@@ -15,6 +17,12 @@
 //! [`walk_words`] / [`walk_words_mut`] delegate to [`walk_words`] / [`walk_words_mut`].
 //! [`ContentLeaf`] / [`ContentLeafMut`] are type aliases for [`WordItem`] / [`WordItemMut`].
 
+// The sibling gating modules (`count.rs`, `overlap.rs`) carry this and these
+// depend on exhaustiveness harder than either: a new container variant that
+// lands in the wrong arm here silently stops eight walkers descending.
+#![deny(clippy::wildcard_enum_match_arm)]
+
+use crate::ContentStructure;
 use crate::alignment::helpers::domain::TierDomain;
 use crate::model::{
     Action, Bullet, CodeSwitchSpan, ContentAnnotation, Event, Freecode, LongFeatureBegin,
@@ -22,13 +30,15 @@ use crate::model::{
     Pause, ReplacedWord, Separator, UnderlineMarker, UtteranceContent, Word,
 };
 
-// The bracketed-content recursors and group-gating predicates live in a sibling
-// submodule to keep this file browseable; the top-level walkers below call
-// them by their bare names.
+// `bracketed` holds the bracketed-content recursors, split out to keep this
+// file browseable. The rule deciding whether a traversal enters a container
+// at all lives one level up, in `helpers::descent`, because `count.rs` needs
+// it too and needs the outcome this module's walkers discard.
 mod bracketed;
+use super::descent::{descend, descend_mut, excluded_by_annotations};
 use bracketed::{
-    should_skip_annotated_group, should_skip_pho_sin_group, walk_bracketed_content,
-    walk_bracketed_content_mut, walk_bracketed_words, walk_bracketed_words_mut,
+    walk_bracketed_content, walk_bracketed_content_mut, walk_bracketed_words,
+    walk_bracketed_words_mut,
 };
 
 // ---------------------------------------------------------------------------
@@ -200,10 +210,9 @@ pub enum WordItemMut<'a> {
 
 /// Walk utterance content and call `f` for every non-container item.
 ///
-/// Groups are descended into transparently. Annotated wrappers are unwrapped
-/// to expose the inner item. Domain gating applies as with [`walk_words`]:
-/// `Some(Mor)` skips retrace/reformulation groups, `Some(Pho|Sin)` skips
-/// PhoGroup/SinGroup.
+/// Containers are descended into transparently and annotated wrappers are
+/// unwrapped to expose the inner item. Which containers `domain` enters is
+/// `descent`'s to state, and is deliberately not restated here.
 pub fn walk_content<'a>(
     content: &'a [UtteranceContent],
     domain: Option<TierDomain>,
@@ -218,7 +227,7 @@ pub fn walk_content<'a>(
                 // Single-word retraces (e.g. `cup [/]`) are AnnotatedWord with
                 // retrace annotations, skip them in the Mor domain just like
                 // multi-word AnnotatedGroup retraces.
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     f(ContentItem::Word(&annotated.inner));
                 }
             }
@@ -236,6 +245,9 @@ pub fn walk_content<'a>(
             }
             UtteranceContent::Pause(pause) => {
                 f(ContentItem::Pause(pause));
+            }
+            UtteranceContent::Action(action) => {
+                f(ContentItem::Action(action));
             }
             UtteranceContent::AnnotatedAction(annotated) => {
                 f(ContentItem::Action(&annotated.inner));
@@ -273,41 +285,17 @@ pub fn walk_content<'a>(
             UtteranceContent::OtherSpokenEvent(ose) => {
                 f(ContentItem::OtherSpokenEvent(ose));
             }
-            // Groups: descend into content
-            UtteranceContent::Group(group) => {
-                walk_bracketed_content(&group.content.content, domain, f);
-            }
-            UtteranceContent::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_content(&annotated.inner.content.content, domain, f);
-                }
-            }
-            UtteranceContent::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content(&pho.content.content, domain, f);
-                }
-            }
-            UtteranceContent::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content(&sin.content.content, domain, f);
-                }
-            }
-            UtteranceContent::Quotation(quot) => {
-                walk_bracketed_content(&quot.content.content, domain, f);
-            }
-            UtteranceContent::Retrace(retrace) => {
-                // Retrace content is excluded from %mor (not morphologically analyzed),
-                // but included in %pho/%sin/%wor and for domain-unspecified walks.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content(&retrace.content.content, domain, f);
-                }
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content(&annotated.inner.content.content, domain, f);
+            // Containers: ONE arm, and `descent` owns the rule.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), domain).entered() {
+                    walk_bracketed_content(&into.content().content, domain, f);
                 }
             }
         }
@@ -328,7 +316,7 @@ pub fn walk_content_mut<'a>(
                 f(ContentItemMut::Word(word));
             }
             UtteranceContent::AnnotatedWord(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     f(ContentItemMut::Word(&mut annotated.inner));
                 }
             }
@@ -346,6 +334,9 @@ pub fn walk_content_mut<'a>(
             }
             UtteranceContent::Pause(pause) => {
                 f(ContentItemMut::Pause(pause));
+            }
+            UtteranceContent::Action(action) => {
+                f(ContentItemMut::Action(action));
             }
             UtteranceContent::AnnotatedAction(annotated) => {
                 f(ContentItemMut::Action(&mut annotated.inner));
@@ -383,49 +374,17 @@ pub fn walk_content_mut<'a>(
             UtteranceContent::OtherSpokenEvent(ose) => {
                 f(ContentItemMut::OtherSpokenEvent(ose));
             }
-            // Groups: descend into content
-            UtteranceContent::Group(group) => {
-                walk_bracketed_content_mut(group.content.content.as_mut_slice(), domain, f);
-            }
-            UtteranceContent::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_content_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
-                }
-            }
-            UtteranceContent::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content_mut(pho.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            UtteranceContent::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_content_mut(sin.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            UtteranceContent::Quotation(quot) => {
-                walk_bracketed_content_mut(quot.content.content.as_mut_slice(), domain, f);
-            }
-            UtteranceContent::Retrace(retrace) => {
-                // Retrace content is excluded from %mor (not morphologically analyzed),
-                // but included in %pho/%sin/%wor and for domain-unspecified walks.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content_mut(retrace.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_content_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
+            // Containers: ONE arm, and `descent` owns the rule.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_) => {
+                if let Some(content) = descend_mut(item.container_mut(), domain) {
+                    walk_bracketed_content_mut(content.content.as_mut_slice(), domain, f);
                 }
             }
         }
@@ -464,10 +423,10 @@ pub enum LanguageScope<'a> {
 /// A convenience filter over the content walk that emits only words, replaced
 /// words and separators.
 ///
-/// When `domain` is `Some(Mor)`, annotated groups with retrace/reformulation
-/// annotations are skipped. When `domain` is `Some(Pho)` or `Some(Sin)`,
-/// PhoGroup and SinGroup are skipped (treated as atomic units by those
-/// domains). When `domain` is `None`, all groups are recursed unconditionally.
+/// Which containers `domain` enters is `descent`'s to state. This
+/// docstring used to restate it, and had gone stale in a way prose always
+/// does: it named retrace and reformulation ANNOTATIONS as the trigger,
+/// which stopped being true when retraces became first-class content.
 ///
 /// This is the one descent for word-like leaves: [`walk_words`] wraps it and
 /// discards the scope, so the two cannot disagree about which leaves exist. A
@@ -512,7 +471,8 @@ impl<'a> LanguageScope<'a> {
 
     /// The span governing this scope, if any.
     ///
-    /// The bridge to [`GoverningMarker::of`], which takes the `Option` rather
+    /// The bridge to [`GoverningMark::of`](crate::validation::word::language::GoverningMark::of),
+    /// which takes the `Option` rather
     /// than this enum: the walk threads a scope, word validation stores one,
     /// and only this accessor converts between them.
     #[must_use]
@@ -535,8 +495,94 @@ impl<'a> LanguageScope<'a> {
     pub fn selected_by(annotations: &[ContentAnnotation]) -> Option<&CodeSwitchSpan> {
         annotations.iter().find_map(|annotation| match annotation {
             ContentAnnotation::CodeSwitch(span) => Some(span),
-            _ => None,
+            // Every other annotation, listed rather than swept into `_`, so a
+            // new one has to be classified here instead of silently answering
+            // "opens no scope". This arm was a catch-all until 2026-08-26 and
+            // was invisible to the catch-all ratchet, whose scan covers the
+            // CONTENT enums; `ContentAnnotation` is a closed vocabulary it does
+            // not walk. The file-level deny is what found it.
+            ContentAnnotation::Error(_)
+            | ContentAnnotation::Explanation(_)
+            | ContentAnnotation::OverlapBegin(_)
+            | ContentAnnotation::OverlapEnd(_)
+            | ContentAnnotation::Stressing
+            | ContentAnnotation::ContrastiveStressing
+            | ContentAnnotation::Uncertain
+            | ContentAnnotation::Paralinguistic(_)
+            | ContentAnnotation::Alternative(_)
+            | ContentAnnotation::PercentComment(_)
+            | ContentAnnotation::Exclude
+            | ContentAnnotation::Unknown(_) => None,
         })
+    }
+}
+
+/// Visit every `<...> [@s]` / `[@s:code]` span in `content`, once each, in
+/// document order.
+///
+/// # Why this is not the word walk, and not derived from it
+///
+/// [`walk_words_scoped`] answers "which WORDS are here, and what scope governs
+/// each". Reading the set of SPANS off its scope argument looks equivalent and
+/// is not: a scope is only delivered when a word is, so a span is reported once
+/// per word it encloses, and a span enclosing NO word is reported never.
+///
+/// The second is the one that matters. `fix-s` collects explicit language codes
+/// to append to `@Languages`, on the stated principle that `word@s:fra` and
+/// `<word> [@s:fra]` name the same fact and must reach the header identically.
+/// Derived from the word walk, that principle failed exactly where the word
+/// walk sees no words: `*CHI: I said <how to> [//] [@s:fra] this .` yields no
+/// `%mor` word leaves, because the domain filter skips a reformulation group,
+/// so `fra` never reached the header while a `deu` from a plain word marker
+/// did. Measured on that file before this existed.
+///
+/// # Why it does NOT take a `TierDomain`
+///
+/// The domain filter answers a question about morphological analysis: which
+/// words get a `%mor` entry. Which languages a tier NAMES is a question about
+/// the transcript, and a French reformulation is French whether or not it is
+/// morphologically analysed. So this descends through every container
+/// unconditionally, including the ones `TierDomain::Mor` skips.
+///
+/// # Why it asks [`ContentStructure`] rather than matching the enums
+///
+/// The first version of this hand-wrote two exhaustive matches, one per content
+/// enum, each answering "what annotations does this carry" and "what does it
+/// enclose". Both questions already have an owner, and the hand-written copy
+/// got `ReplacedWord` wrong: it listed the variant as a leaf carrying no
+/// annotations, so `the dog [: cat] [@s:fra]` did not declare `fra` while
+/// `<the dog> [@s:fra]` did. That is the same notation-dependence this function
+/// exists to remove, one variant over, and it is the SAME MISTAKE
+/// `ScopedAnnotated` was introduced to stop: its own docs record a previous
+/// hand-written accessor answering "no annotations" for exactly that variant.
+///
+/// Asking `structure()` puts the answer where the field is. A new content
+/// variant is handled by the one owner instead of by every copy of the match,
+/// and cannot be silently classified as a leaf here.
+pub fn walk_code_switch_spans<'a>(
+    content: &'a [UtteranceContent],
+    f: &mut impl FnMut(&'a CodeSwitchSpan),
+) {
+    for item in content {
+        visit_code_switch_structure(item.structure(), f);
+    }
+}
+
+/// Emit the span a classified item opens, then descend into what it encloses.
+///
+/// The whole traversal, written once for both content enums: they classify into
+/// the same [`ContentStructure`], so there is no second copy to disagree.
+pub(super) fn visit_code_switch_structure<'a>(
+    structure: ContentStructure<'a>,
+    f: &mut impl FnMut(&'a CodeSwitchSpan),
+) {
+    if let Some(span) = LanguageScope::selected_by(structure.scoped_annotations()) {
+        f(span);
+    }
+    if let Some(enclosed) = structure.enclosed() {
+        for item in &enclosed.content {
+            visit_code_switch_structure(item.structure(), f);
+        }
     }
 }
 
@@ -565,7 +611,7 @@ fn walk_words_in_scope<'a>(
                 f(WordItem::Word(word), scope);
             }
             UtteranceContent::AnnotatedWord(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     // A scoped annotation may attach to ONE content item without
                     // angle brackets, so `hallo [@s]` governs its own word just
                     // as `<a b> [@s]` governs the words it encloses.
@@ -581,41 +627,19 @@ fn walk_words_in_scope<'a>(
             UtteranceContent::Separator(sep) => {
                 f(WordItem::Separator(sep), scope);
             }
-            UtteranceContent::Group(group) => {
-                walk_bracketed_words(&group.content.content, domain, scope, f);
-            }
-            UtteranceContent::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    let inner = scope.inside(&annotated.scoped_annotations);
-                    walk_bracketed_words(&annotated.inner.content.content, domain, inner, f);
-                }
-            }
-            UtteranceContent::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&pho.content.content, domain, scope, f);
-                }
-            }
-            UtteranceContent::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words(&sin.content.content, domain, scope, f);
-                }
-            }
-            UtteranceContent::Quotation(quot) => {
-                walk_bracketed_words(&quot.content.content, domain, scope, f);
-            }
-            UtteranceContent::Retrace(retrace) => {
-                // Retrace content is excluded from %mor (not morphologically analyzed),
-                // but included in %pho/%sin/%wor and for domain-unspecified walks.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&retrace.content.content, domain, scope, f);
-                }
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words(&annotated.inner.content.content, domain, scope, f);
+            // Containers: ONE arm. `descend` decides whether to enter and
+            // `scope_in` carries the code-switch rule; `descent` owns both.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_) => {
+                if let Some(into) = descend(item.structure(), domain).entered() {
+                    let inner = into.scope_in(scope);
+                    walk_bracketed_words(&into.content().content, domain, inner, f);
                 }
             }
             // Non-word items: events, pauses, actions, overlap markers, bullets,
@@ -624,6 +648,7 @@ fn walk_words_in_scope<'a>(
             UtteranceContent::Event(_)
             | UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Pause(_)
+            | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::OverlapPoint(_)
@@ -655,7 +680,7 @@ pub fn walk_words_mut<'a>(
             }
             UtteranceContent::AnnotatedWord(annotated) => {
                 // Split borrow: mut inner + shared annotations (disjoint fields).
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
+                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
                     let a = annotated.as_mut();
                     f(WordItemMut::Word(&mut a.inner));
                 }
@@ -666,53 +691,24 @@ pub fn walk_words_mut<'a>(
             UtteranceContent::Separator(sep) => {
                 f(WordItemMut::Separator(sep));
             }
-            UtteranceContent::Group(group) => {
-                walk_bracketed_words_mut(group.content.content.as_mut_slice(), domain, f);
-            }
-            UtteranceContent::AnnotatedGroup(annotated) => {
-                if !should_skip_annotated_group(&annotated.scoped_annotations, domain) {
-                    walk_bracketed_words_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
-                }
-            }
-            UtteranceContent::PhoGroup(pho) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words_mut(pho.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            UtteranceContent::SinGroup(sin) => {
-                if !should_skip_pho_sin_group(domain) {
-                    walk_bracketed_words_mut(sin.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            UtteranceContent::Quotation(quot) => {
-                walk_bracketed_words_mut(quot.content.content.as_mut_slice(), domain, f);
-            }
-            UtteranceContent::Retrace(retrace) => {
-                // Retrace content is excluded from %mor (not morphologically analyzed),
-                // but included in %pho/%sin/%wor and for domain-unspecified walks.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words_mut(retrace.content.content.as_mut_slice(), domain, f);
-                }
-            }
-            UtteranceContent::AnnotatedRetrace(annotated) => {
-                // Same rule as the bare form. The annotations sit on the
-                // wrapper, are not words, and are not walked; only the retraced
-                // content is.
-                if !matches!(domain, Some(TierDomain::Mor)) {
-                    walk_bracketed_words_mut(
-                        annotated.inner.content.content.as_mut_slice(),
-                        domain,
-                        f,
-                    );
+            // Containers: one gate per RULE. See `walk_bracketed_content_mut`
+            // in `bracketed.rs` for the drift this shape exists to prevent.
+            UtteranceContent::Group(_)
+            | UtteranceContent::AnnotatedGroup(_)
+            | UtteranceContent::Quotation(_)
+            | UtteranceContent::AnnotatedQuotation(_)
+            | UtteranceContent::PhoGroup(_)
+            | UtteranceContent::SinGroup(_)
+            | UtteranceContent::Retrace(_)
+            | UtteranceContent::AnnotatedRetrace(_) => {
+                if let Some(content) = descend_mut(item.container_mut(), domain) {
+                    walk_bracketed_words_mut(content.content.as_mut_slice(), domain, f);
                 }
             }
             UtteranceContent::Event(_)
             | UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Pause(_)
+            | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::OverlapPoint(_)

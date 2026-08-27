@@ -39,12 +39,23 @@ pub fn parse_chat_file_to_model(
 
 /// Parse a main tier string starting with '*'.
 pub fn parse_main_tier(input: &str) -> Option<MainTier<'_>> {
+    parse_main_tier_with_source(input).map(|(tier, _source)| tier)
+}
+
+/// Parse a main tier and return the LEAKED source its slices borrow from.
+///
+/// The lexer NUL-pads and leaks a COPY of `input`, so the caller's own string
+/// is a different allocation and `SourceText::new(input)` would place nothing.
+/// A caller that wants source spans needs this one; `parse_main_tier` remains
+/// for callers that do not.
+pub fn parse_main_tier_with_source(input: &str) -> Option<(MainTier<'_>, &str)> {
     use chumsky::Parser as _;
-    let tokens = lex_to_tokens(input, 0);
+    let (tokens, source) = crate::parser::lex_to_tokens_and_source(input, 0);
     main_tier::main_tier_parser()
         .parse(tokens)
         .into_result()
         .ok()
+        .map(|tier| (tier, source))
 }
 
 /// Parse an @ID header content (after `@ID:\t`).

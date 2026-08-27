@@ -50,6 +50,8 @@ fn word_family_start(item: &UtteranceContent) -> Option<u32> {
         | UtteranceContent::PhoGroup(_)
         | UtteranceContent::SinGroup(_)
         | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::Separator(_)
@@ -74,13 +76,16 @@ fn word_family_start(item: &UtteranceContent) -> Option<u32> {
 /// - any annotated item CARRYING scoped annotations (`hello [!]`,
 ///   `bobo [= toy]`), whose wrapper span covers the annotations.
 ///
-/// An annotated item with no scoped annotations is deliberately excluded:
-/// its wrapper span ends at the payload, and word-glued-to-word is a
-/// different question (`dogdog` is ONE word, by definition).
+/// This used to exclude "an annotated item with no scoped annotations",
+/// guarding a case that no longer exists: `AnnotatedContentAnnotations` is
+/// non-empty by construction since 2026-08-26, so an annotated item always
+/// carries at least one annotation and its wrapper span always covers them.
+/// The guard was removed rather than left as a check the type had made
+/// unfalsifiable.
 fn glued_code_end(item: &UtteranceContent) -> Option<u32> {
-    /// The wrapper span, but only when scoped annotations are present.
+    /// The wrapper span, which always covers the annotations.
     fn annotated_end<T>(annotated: &crate::model::Annotated<T>) -> Option<u32> {
-        (!annotated.scoped_annotations.is_empty()).then_some(annotated.span.end)
+        Some(annotated.span.end)
     }
     match item {
         UtteranceContent::Retrace(retrace) => Some(retrace.span.end),
@@ -91,8 +96,12 @@ fn glued_code_end(item: &UtteranceContent) -> Option<u32> {
         UtteranceContent::AnnotatedGroup(annotated) => annotated_end(annotated),
         UtteranceContent::AnnotatedEvent(annotated) => annotated_end(annotated),
         UtteranceContent::AnnotatedAction(annotated) => annotated_end(annotated),
-        // Not code-terminated: nothing here ends with a `]`.
-        UtteranceContent::Word(_)
+        UtteranceContent::AnnotatedQuotation(annotated) => annotated_end(annotated),
+        // Not code-terminated: nothing here ends with a `]`. A bare action is
+        // `0`, which does not, so it belongs here rather than beside its
+        // annotated sibling above.
+        UtteranceContent::Action(_)
+        | UtteranceContent::Word(_)
         | UtteranceContent::ReplacedWord(_)
         | UtteranceContent::Event(_)
         | UtteranceContent::Pause(_)
@@ -268,6 +277,8 @@ fn free_standing_end(item: &UtteranceContent) -> Option<u32> {
         | UtteranceContent::PhoGroup(_)
         | UtteranceContent::SinGroup(_)
         | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::InternalBullet(_)
@@ -317,6 +328,8 @@ fn glued_target_start(item: &UtteranceContent) -> Option<u32> {
         | UtteranceContent::PhoGroup(_)
         | UtteranceContent::SinGroup(_)
         | UtteranceContent::Quotation(_)
+        | UtteranceContent::AnnotatedQuotation(_)
+        | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
         | UtteranceContent::OverlapPoint(_)
         | UtteranceContent::Freecode(_)
