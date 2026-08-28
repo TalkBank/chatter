@@ -9,6 +9,37 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- **`merge_chat_files` returns the provenance of every merged utterance**, not
+  only the merged file. It always knew this and threw it away: it walks each
+  input in order building two lists, then stable-sorts the combination by
+  `start_ms`. A consumer joining the output back to its inputs had to
+  reconstruct the mapping by matching `(speaker, raw bullet)`, which is correct
+  only while two facts hold that no caller can check, that the sort is stable
+  and that inserted utterances are cloned unedited.
+
+  The return type is now `Merged`, carrying the file, one `MergeOrigin` per
+  output utterance in output order (`Retained` / `Inserted`, each with an
+  ordinal over that input's own `utterances()`), and one `DonorFate` per donor
+  utterance in donor order. `merge_chats`, the string-in/string-out wrapper, is
+  unchanged.
+
+  Prefer `Merged::utterances_with_origin()` to pairing the accessors by hand:
+  zipping `origins()` against `file().lines` type-checks and is wrong by the
+  number of header lines.
+
+  `DonorFate` is a partition rather than a list of exclusions, so "this donor
+  utterance is unaccounted for" is not expressible. An earlier form returned
+  only the excluded ordinals and proved completeness with arithmetic, which
+  balances just as well when every ordinal is shifted by the donor's header
+  count.
+
+  Not a complete account of everything a merge omits, and the accessor is named
+  `excluded_by_retain` rather than `excluded` to say so: File 1 utterances whose
+  speaker is not retained are still dropped with no record, as are donor headers
+  other than `@ID` and `@Comment`.
+
 ## [0.16.0] - 2026-08-27
 
 ### Removed

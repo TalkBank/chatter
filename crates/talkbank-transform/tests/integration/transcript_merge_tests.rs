@@ -21,7 +21,10 @@
 
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::SpeakerCode;
-use talkbank_transform::transcript_merge::{MergeError, default_strip_tiers, merge_chats};
+use talkbank_model::UtteranceIdx;
+use talkbank_transform::transcript_merge::{
+    DonorFate, MergeError, MergeOrigin, default_strip_tiers, merge_chat_files, merge_chats,
+};
 
 /// File 1 fixture for cycle 2. CHI carries:
 ///   - a CHAT error code `[*]`
@@ -846,8 +849,9 @@ fn merge_ambiguous_speaker_returns_err() {
 // ============================================================================
 
 /// File 1 fixture: reference transcript that vestigially declares `INV`
-/// (a placeholder header row) but has zero `*INV:` utterances. Reproduces
-/// the `CWNS-264-4` / `CWNS-265-4` shape from the IISRP merge.
+/// (a placeholder header row) but has zero `*INV:` utterances. This shape
+/// occurs in real corpora, where a transcriber declares an investigator who
+/// then says nothing on the recording.
 const FIX_REF_VESTIGIAL_INV: &str = "@UTF8
 @Begin
 @Languages:\teng
@@ -1199,3 +1203,152 @@ fn donor_comments_survive_a_reference_that_has_none() {
 // any input the parser accepts. The arm stays in the code as the symmetric
 // case, and this note stays here so the next person does not write the same
 // test again.
+
+// --- Merge origin: where each output utterance came from ---
+
+/// A reference file whose speakers are NOT all retained.
+///
+/// This is the fixture the first version of these tests lacked, and the gap
+/// mattered: with every File 1 speaker retained, the retained subset and the
+/// full utterance sequence are the same list, so a `Retained` ordinal counting
+/// the subset instead of the sequence gives identical answers and no test can
+/// see the difference. MOT speaks second here, so the two spaces diverge.
+const FIX_REF_WITH_UNRETAINED_SPEAKER: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child, MOT Mother
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@ID:\teng|corpus|MOT|||||Mother|||
+@Media:\tcycle2, audio
+*CHI:\tfirst thing . \u{15}500_1500\u{15}
+*MOT:\tnot retained . \u{15}1600_2000\u{15}
+*CHI:\tthird thing . \u{15}5000_6500\u{15}
+@End
+";
+
+/// A donor that also speaks a RETAINED code, so the retain filter has
+/// something to keep out.
+///
+/// A new fixture rather than a reused one, and the reason is the point: of the
+/// 24 pre-existing fixtures none is a donor containing a retained speaker,
+/// because until now nothing observed what the filter dropped.
+const FIX_DONOR_WITH_RETAINED_SPEAKER: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tINV Investigator, CHI Target_Child
+@ID:\teng|corpus|INV|||||Investigator|||
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@Media:\tcycle2, audio
+*INV:\twhat happened next . \u{15}3500_4800\u{15}
+*CHI:\tthis one is dropped . \u{15}4800_4900\u{15}
+@End
+";
+
+/// The merge reports, for every output utterance, which input it came from.
+///
+/// Reuses the cycle-2 fixtures, whose timings already have the property this
+/// needs: `FIX_REF_RICH_CHI` holds retained CHI utterances at 500 and 5000,
+/// and `FIX_ASR_LABELED_RICH`'s single INV utterance sits at 3500, BETWEEN
+/// them. So the timeline sort has to interleave, and a merge that simply
+/// concatenated its two origin lists would answer
+/// `[Retained, Retained, Inserted]` and fail here.
+#[test]
+fn merge_reports_the_origin_of_every_output_utterance() {
+    let options = ParseValidateOptions::default();
+    let f1 = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone())
+        .expect("file 1 fixture should parse");
+    let f2 = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options)
+        .expect("file 2 fixture should parse");
+    let retain = vec![SpeakerCode::new("CHI")];
+
+    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
+        .expect("merge should succeed on valid inputs");
+
+    // Paired through the accessor that cannot be mis-zipped, which is also the
+    // one a consumer should reach for.
+    let paired: Vec<(&str, MergeOrigin)> = merged
+        .utterances_with_origin()
+        .map(|(u, origin)| (u.main.speaker.as_str(), origin))
+        .collect();
+
+    assert_eq!(
+        paired,
+        vec![
+            ("CHI", MergeOrigin::Retained(UtteranceIdx::new(0))),
+            ("INV", MergeOrigin::Inserted(UtteranceIdx::new(0))),
+            ("CHI", MergeOrigin::Retained(UtteranceIdx::new(1))),
+        ],
+        "the donor utterance sorts BETWEEN the two retained ones, so the origins \
+         must interleave and stay attached to the right speakers"
+    );
+}
+
+/// A `Retained` ordinal indexes File 1's UTTERANCES, not the retained subset.
+///
+/// The adversarial case for the origin test above, which cannot distinguish
+/// the two because every speaker in its File 1 is retained. Here MOT is
+/// utterance 1 and is not retained, so the second retained utterance is
+/// ordinal 2. A merge counting only what it kept would say 1.
+#[test]
+fn a_retained_ordinal_counts_every_file_one_utterance_not_only_the_kept_ones() {
+    let options = ParseValidateOptions::default();
+    let f1 =
+        talkbank_transform::parse_and_validate(FIX_REF_WITH_UNRETAINED_SPEAKER, options.clone())
+            .expect("file 1 fixture should parse");
+    let f2 = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options)
+        .expect("file 2 fixture should parse");
+    let retain = vec![SpeakerCode::new("CHI")];
+
+    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
+        .expect("merge should succeed on valid inputs");
+
+    let origins: Vec<MergeOrigin> = merged.origins().to_vec();
+    assert_eq!(
+        origins,
+        vec![
+            MergeOrigin::Retained(UtteranceIdx::new(0)),
+            MergeOrigin::Inserted(UtteranceIdx::new(0)),
+            MergeOrigin::Retained(UtteranceIdx::new(2)),
+        ],
+        "MOT is File 1's utterance 1 and is not retained, so the CHI utterance \
+         after it is ordinal 2; a counter over the retained subset would say 1"
+    );
+}
+
+/// The merge reports what became of every donor utterance, not only the ones
+/// it carried over.
+///
+/// Without this, a consumer joining the merged file back to the donor cannot
+/// tell "excluded by policy" from "vanished", because both look like an
+/// ordinal absent from `origins`.
+#[test]
+fn merge_reports_the_fate_of_every_donor_utterance() {
+    let options = ParseValidateOptions::default();
+    let f1 = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone())
+        .expect("file 1 fixture should parse");
+    let f2 = talkbank_transform::parse_and_validate(FIX_DONOR_WITH_RETAINED_SPEAKER, options)
+        .expect("donor fixture should parse");
+    let retain = vec![SpeakerCode::new("CHI")];
+
+    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
+        .expect("merge should succeed on valid inputs");
+
+    // One fate per donor utterance, in donor order: INV inserted, CHI kept out
+    // because CHI is retained from file 1.
+    assert_eq!(
+        merged.donor_fates(),
+        &[DonorFate::Inserted, DonorFate::ExcludedByRetain],
+        "the donor's retained-speaker utterance must be reported as excluded, \
+         not merely absent from the origins"
+    );
+
+    // The pointwise query a consumer actually asks.
+    assert_eq!(
+        merged.donor_fate(UtteranceIdx::new(1)),
+        Some(DonorFate::ExcludedByRetain)
+    );
+    assert_eq!(merged.donor_fate(UtteranceIdx::new(9)), None);
+
+    let excluded: Vec<UtteranceIdx> = merged.excluded_by_retain().collect();
+    assert_eq!(excluded, vec![UtteranceIdx::new(1)]);
+}
