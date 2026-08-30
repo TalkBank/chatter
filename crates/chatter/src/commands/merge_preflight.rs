@@ -14,6 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use talkbank_model::ParseValidateOptions;
+use talkbank_model::model::ChatFile;
 use talkbank_transform::parse_and_validate;
 
 use crate::exit_codes::EXIT_PRECONDITION;
@@ -30,9 +31,19 @@ pub struct InvalidInput {
 }
 
 /// Validate already-read CHAT content with full `chatter validate`
-/// semantics. `Ok(())` when valid; `Err(reason)` carrying the CHAT
-/// errors otherwise.
-pub fn validate_chat_content(content: &str) -> Result<(), String> {
+/// semantics, RETURNING the parsed file.
+///
+/// It used to answer `Ok(())` and drop the `ChatFile` it had just built, which
+/// is a total function discarding information it had. The cost was a whole
+/// extra parse: `chatter pipeline` gated the reference here and then parsed
+/// the same bytes again for the merge, on the path `chatter batch` drives per
+/// session. Callers that want only the verdict write `Ok(_)`.
+///
+/// The model is safe to reuse across the option difference. This parses with
+/// `.with_alignment()` and the merge with `default()`; alignment adds
+/// validation passes over the same AST rather than building a different one,
+/// so the stricter parse's file is usable wherever the looser one's would be.
+pub fn validate_chat_content(content: &str) -> Result<ChatFile, String> {
     // The gate's contract is "input passes `chatter validate`" (the
     // CHAT-validity authority), so it must run exactly what `chatter
     // validate` runs by default: structural validation PLUS cross-tier
@@ -41,14 +52,14 @@ pub fn validate_chat_content(content: &str) -> Result<(), String> {
     // input the authority would reject.
     let options = ParseValidateOptions::default().with_alignment();
     match parse_and_validate(content, options) {
-        Ok(_) => Ok(()),
+        Ok(file) => Ok(file),
         Err(e) => Err(format!("{e}")),
     }
 }
 
 /// Validate a CHAT file on disk. Read failures are themselves a
 /// gate failure (an input we cannot read is not a usable input).
-pub fn validate_chat_input(path: &Path) -> Result<(), String> {
+pub fn validate_chat_input(path: &Path) -> Result<ChatFile, String> {
     let content = fs::read_to_string(path).map_err(|e| format!("cannot read file: {e}"))?;
     validate_chat_content(&content)
 }

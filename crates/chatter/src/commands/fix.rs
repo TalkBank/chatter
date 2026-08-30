@@ -4,7 +4,7 @@
 //! on the span-splicing engine (`talkbank_transform::splice`) rather than a
 //! bespoke three-code rewriter. It covers the whole fix catalog, applies
 //! fixes at exact byte spans validated against the source text, and, because
-//! [`admit_edits`](talkbank_transform::splice::admit_edits) gates every edit
+//! [`admit_edits`] gates every edit
 //! on the health of its enclosing utterance, repairs a clean utterance even
 //! in a file whose other regions did not parse.
 //!

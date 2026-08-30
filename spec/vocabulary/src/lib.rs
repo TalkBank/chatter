@@ -250,7 +250,7 @@ fn is_exact_code(token: &str) -> bool {
 
 /// Was this token plainly MEANT to be an error code? `E` or `W` then a digit.
 ///
-/// Deliberately looser than [`is_exact_code`]: its job is to separate a typo
+/// Deliberately looser than the private `is_exact_code`: its job is to separate a typo
 /// from an ordinary word, so it must accept exactly the things that are wrong.
 /// Also the filename test for "is this file an error spec", which is the same
 /// question asked of a stem rather than a token.

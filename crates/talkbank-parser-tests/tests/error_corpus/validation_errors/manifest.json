@@ -1707,6 +1707,13 @@
       "source_spec": "spec/errors/E544.md"
     },
     {
+      "fixture": "E544_3.cha",
+      "code": "E544",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E544.md"
+    },
+    {
       "fixture": "E545_1.cha",
       "code": "E545",
       "claim": "violates",

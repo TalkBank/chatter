@@ -293,15 +293,18 @@ pub fn run(request: &Request) -> Result<Report, String> {
         .chain(NOT_YET_IN_CORPUS.iter().copied())
         .collect();
 
+    let language: tree_sitter::Language = LANGUAGE.into();
     let mut parser = TSParser::new();
     parser
-        .set_language(&LANGUAGE.into())
+        .set_language(&language)
         .map_err(|err| format!("failed to set tree-sitter language: {err}"))?;
 
-    // `&'static str` throughout: `Node::kind()` already returns one, so the
-    // predecessor's `to_owned()` plus `clone()` per named-node visit allocated
-    // twice for every node in the corpus and dropped both.
-    let mut exercised: BTreeSet<&'static str> = BTreeSet::new();
+    // Keep Tree-sitter's typed symbol identity while walking. Tree-sitter 0.27
+    // correctly ties `Node::kind()` to the node lifetime, so pretending those
+    // names are static no longer compiles. IDs also preserve the predecessor's
+    // no-allocation-per-node property; names are resolved once at the reporting
+    // boundary through the exact Language that produced them.
+    let mut exercised: BTreeSet<TreeSitterKindId> = BTreeSet::new();
     // Files are recorded ONLY for the invalid-by-construction types, which are
     // the only ones any message names a file for. The predecessor indexed every
     // type against every file, with a linear scan per visit to dedupe, to serve
@@ -333,12 +336,19 @@ pub fn run(request: &Request) -> Result<Report, String> {
             .unwrap_or(path)
             .to_string_lossy()
             .into_owned();
-        let mut seen_here: BTreeSet<&'static str> = BTreeSet::new();
+        let mut seen_here: BTreeSet<TreeSitterKindId> = BTreeSet::new();
         collect_node_types(root, &mut exercised, &mut seen_here);
-        for kind in seen_here {
-            if invalid.contains_key(kind) {
+        for kind_id in seen_here {
+            let kind = language.node_kind_for_id(kind_id.raw()).ok_or_else(|| {
+                format!(
+                    "tree-sitter returned unknown node-kind id {} while parsing {}",
+                    kind_id.raw(),
+                    path.display()
+                )
+            })?;
+            if let Some((&canonical_kind, _)) = invalid.get_key_value(kind) {
                 invalid_files
-                    .entry(kind)
+                    .entry(canonical_kind)
                     .or_default()
                     .push(file_name.clone());
             }
@@ -352,15 +362,27 @@ pub fn run(request: &Request) -> Result<Report, String> {
         ));
     }
 
+    let exercised_names = exercised
+        .iter()
+        .map(|kind_id| {
+            language.node_kind_for_id(kind_id.raw()).ok_or_else(|| {
+                format!(
+                    "tree-sitter returned unknown exercised node-kind id {}",
+                    kind_id.raw()
+                )
+            })
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+
     let missing: Vec<String> = concrete
         .iter()
-        .filter(|kind| !excused.contains(kind.as_str()) && !exercised.contains(kind.as_str()))
+        .filter(|kind| !excused.contains(kind.as_str()) && !exercised_names.contains(kind.as_str()))
         .cloned()
         .collect();
 
     let invalid_present: Vec<InvalidNodePresent> = INVALID_BY_CONSTRUCTION
         .iter()
-        .filter(|(kind, _)| exercised.contains(kind))
+        .filter(|(kind, _)| exercised_names.contains(kind))
         .map(|(kind, code)| InvalidNodePresent {
             kind,
             code,
@@ -371,7 +393,7 @@ pub fn run(request: &Request) -> Result<Report, String> {
     let stale_exclusions: Vec<&'static str> = NOT_YET_IN_CORPUS
         .iter()
         .copied()
-        .filter(|kind| exercised.contains(kind))
+        .filter(|kind| exercised_names.contains(kind))
         .collect();
 
     Ok(Report {
@@ -396,15 +418,36 @@ fn has_error_node(node: tree_sitter::Node) -> bool {
     node.children(&mut cursor).any(has_error_node)
 }
 
+/// A node-kind ID proven to come from Tree-sitter's current parse language.
+///
+/// Keeping this distinct from byte offsets, field IDs, and ordinary counts
+/// prevents the primitive `u16` from crossing the collection boundary with an
+/// ambiguous meaning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct TreeSitterKindId(u16);
+
+impl TreeSitterKindId {
+    const fn raw(self) -> u16 {
+        self.0
+    }
+}
+
+impl From<tree_sitter::Node<'_>> for TreeSitterKindId {
+    fn from(node: tree_sitter::Node<'_>) -> Self {
+        Self(node.kind_id())
+    }
+}
+
 /// Record every named node kind in this tree, both globally and per file.
 fn collect_node_types(
     node: tree_sitter::Node,
-    exercised: &mut BTreeSet<&'static str>,
-    seen_here: &mut BTreeSet<&'static str>,
+    exercised: &mut BTreeSet<TreeSitterKindId>,
+    seen_here: &mut BTreeSet<TreeSitterKindId>,
 ) {
     if node.is_named() {
-        exercised.insert(node.kind());
-        seen_here.insert(node.kind());
+        let kind = TreeSitterKindId::from(node);
+        exercised.insert(kind);
+        seen_here.insert(kind);
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {

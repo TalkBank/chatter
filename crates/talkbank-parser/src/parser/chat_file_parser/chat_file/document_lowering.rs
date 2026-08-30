@@ -60,6 +60,7 @@ use crate::generated_traversal::{
 };
 use crate::model::{Header, Line};
 use crate::node_types::{BLANK_LINE, PRE_BEGIN_HEADER, UNSUPPORTED_LINE};
+use crate::parser::ChildCapacity;
 use crate::parser::chat_file_parser::header_parser::{
     handle_pre_begin_header, helpers::header_separator, parse_header_node,
 };
@@ -95,11 +96,11 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// Construct a `DocumentLowering` over `source`, reporting to `errors`, with
     /// `capacity` reserved for the line accumulator (the `full_document` child
     /// count is a good upper bound).
-    pub(super) fn new(source: &'a str, errors: &'a S, capacity: usize) -> Self {
+    pub(super) fn new(source: &'a str, errors: &'a S, capacity: ChildCapacity) -> Self {
         Self {
             source,
             errors,
-            lines: Vec::with_capacity(capacity),
+            lines: capacity.into_vec(),
         }
     }
 

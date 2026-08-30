@@ -1,7 +1,7 @@
 # Speaker-ID (`chatter speaker-id`)
 
 **Status:** Draft
-**Last modified:** 2026-07-01 21:55 EDT
+**Last modified:** 2026-08-30 16:02 EDT
 
 `chatter speaker-id` assigns CHAT-conformant speaker codes and role
 tags to a CHAT file whose speakers carry anonymous or placeholder
@@ -148,6 +148,13 @@ REFERENCE-MODE OPTIONS:
       command prints per-speaker scores to stderr so the operator
       can inspect. Default: 2.0.
 
+  --write-match-report <NEW-FILE.json>
+      Write a typed report for the complete reference-mode attempt.
+      Matched outcomes record reference, donor, shared, and union token
+      counts plus the derived score and margin. Structural and input
+      refusals record their own outcome-specific evidence. The report
+      never overwrites an existing file.
+
   --write-override <FILE>
       When auto-decide succeeds, append the decision to FILE in
       override-file format (creates if missing). Captures the
@@ -277,6 +284,31 @@ margin  = scores[winner] / scores[loser]    # ∞ when loser score = 0
   authoritatively covers them).
 - `loser` (and any other lower-scoring speakers, in the multi-speaker
   case) → renamed to the role given by `--inserted-role`.
+
+### Match-evidence report
+
+`--write-match-report` preserves the observations behind the scalar score and
+the typed reason when matching could not begin.
+This matters because a ratio alone cannot distinguish a winner supported by
+one shared token from one supported by hundreds. The JSON schema records, for
+each donor speaker, `reference_tokens`, `donor_tokens`, `shared_tokens`,
+`union_tokens`, and the derived `score`. Its margin is one of
+`no_information`, `finite`, or `unbounded`; no-information and a zero-scoring
+runner-up are not represented by floating-point sentinels.
+
+The outer outcome is `accepted`, `low_confidence`,
+`reference_missing_anchor`, `donor_too_few_speakers`, or `input_rejected`.
+Matched outcomes contain the lexical report; other outcomes cannot pretend to
+contain one. Input rejection records donor versus reference, the typed
+pipeline-failure category, and TalkBank diagnostic codes when available.
+
+The option is intended for audit and calibration tooling. It does not change
+which speaker wins or the confidence threshold. Chatter stages the complete
+JSON beside its destination and persists it without clobbering, so a later run
+cannot silently replace the evidence used for an earlier decision and a failed
+write cannot leave a partial final report. The no-clobber persist is not
+guaranteed to be atomic on every platform; an interrupted persist can leave
+the staging link behind, but it never replaces an existing report.
 
 If `margin < --confidence-threshold` (default 2.0), the command
 exits with code 4 and prints per-speaker scores to stderr. The
@@ -433,13 +465,13 @@ remains intact.
 
 ## Implementation notes (for contributors)
 
-- Source: `crates/talkbank-transform/src/speaker_id/` (proposed
-  layout).
+- Source: `crates/talkbank-transform/src/speaker_id/`.
 - CLI surface: `crates/chatter/src/commands/speaker_id/`.
-- Domain types (`SpeakerCode`, `RoleTag`, `SpeakerMapping`,
-  `MergeOverride`, `JaccardScore`, `ConfidenceThreshold`,
-  `Margin`) live in `talkbank-model` and are shared with
-  `chatter merge` plus any future adjudication UI.
+- CHAT-domain types such as `SpeakerCode` and `ParticipantRole` live in
+  `talkbank-model`. Speaker-identification types such as `MappingSpec`,
+  `MergeOverride`, `LexicalMatchEvidence`, `JaccardScore`,
+  `ConfidenceThreshold`, and `ConfidenceMargin` live beside the algorithms in
+  `talkbank-transform::speaker_id`.
 - The Jaccard cleaner walks `talkbank-model::ChatFile` directly
   via the existing content walker
   (`talkbank-model::walk_words`); it does NOT re-implement CHAT
@@ -448,7 +480,6 @@ remains intact.
   `spec/constructs/speaker-id/`. Every invariant on this page has
   a spec; regenerate them with the current `spec/tools` commands from
   [Spec Workflow](../../contributing/spec-workflow.md).
-- The override-file reader/writer is a typed `serde` round-trip on
-  a TOML representation; the schema lives in `talkbank-model` so
-  the format is one shared type across the codebase, not duplicated
-  parsing logic in each consumer.
+- The override-file reader/writer is a typed `serde` round-trip on a TOML
+  representation owned by `talkbank-transform::speaker_id`, so consumers use
+  one shared parser rather than duplicating the format.

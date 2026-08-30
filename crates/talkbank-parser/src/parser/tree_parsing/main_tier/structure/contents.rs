@@ -393,7 +393,7 @@ fn parse_content_item(
     let child_count = node.child_count();
 
     for idx in 0..child_count {
-        let Some(child) = node.child(idx as u32) else {
+        let Some(child) = node.child(idx) else {
             continue;
         };
 

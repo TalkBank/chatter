@@ -235,7 +235,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "l'escargot",
@@ -599,7 +598,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "un",

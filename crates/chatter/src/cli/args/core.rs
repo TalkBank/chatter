@@ -2,6 +2,7 @@ use clap::Subcommand;
 use std::path::PathBuf;
 
 use talkbank_transform::sanity_scan::SanityScanThreshold;
+use talkbank_transform::speaker_id::ConfidenceThreshold;
 
 use super::cache_commands::CacheCommands;
 use super::cli_types::{AlignmentTier, OutputFormat, ParserBackend};
@@ -190,8 +191,14 @@ pub enum Commands {
         /// for the auto-decision to stand. Default 2.0×; below
         /// threshold the command refuses (exit 4) and prints
         /// per-speaker scores to stderr.
-        #[arg(long, default_value_t = 2.0)]
-        confidence_threshold: f64,
+        #[arg(long, default_value = "2.0")]
+        confidence_threshold: ConfidenceThreshold,
+
+        /// Reference-mode: write the complete lexical-support report used by
+        /// the decision to a new JSON file. Refuses to overwrite an existing
+        /// file.
+        #[arg(long = "write-match-report", requires = "reference")]
+        write_match_report: Option<PathBuf>,
 
         /// Reference-mode: when the auto-decide succeeds, append the
         /// decision to this override file (created if absent). The
@@ -303,8 +310,8 @@ pub enum Commands {
         retain: Vec<String>,
 
         /// Minimum winner→runner-up Jaccard margin (default 2.0×).
-        #[arg(long, default_value_t = 2.0)]
-        confidence_threshold: f64,
+        #[arg(long, default_value = "2.0")]
+        confidence_threshold: ConfidenceThreshold,
 
         /// Aggregate low-confidence refusals into this pending file.
         /// One operator run of `chatter adjudicate` resolves them all.
@@ -386,8 +393,8 @@ pub enum Commands {
         retain: Vec<String>,
 
         /// Minimum winner→runner-up Jaccard margin (default 2.0×).
-        #[arg(long, default_value_t = 2.0)]
-        confidence_threshold: f64,
+        #[arg(long, default_value = "2.0")]
+        confidence_threshold: ConfidenceThreshold,
 
         /// On low-confidence refusal, append a pending-adjudication
         /// entry to this file (created if absent). Exit code 4 still

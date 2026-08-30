@@ -72,9 +72,9 @@
 //! - **E506** (LSP: `replace_diagnostic_range` with a participant
 //!   template): every real E506 diagnostic observed here carries
 //!   `location.span == Span::DUMMY` (`{0, 0}`), regardless of where the
-//!   empty `@Participants` header actually is. [`super::engine::apply_edits`]
+//!   empty `@Participants` header actually is. [`crate::splice::apply_edits`]
 //!   correctly refuses a `Replace` on the dummy span
-//!   ([`super::engine::SpliceError::DummySpan`]) rather than guessing at
+//!   ([`crate::splice::SpliceError::DummySpan`]) rather than guessing at
 //!   file start, so this module does not build an edit it knows will be
 //!   rejected. This is a `chatter` diagnostic-emission defect (E506 should
 //!   carry a real span), not a catalog design gap; fixing it is out of
@@ -121,7 +121,7 @@
 //!
 //! # Header-scoped codes need a recovery-free parse, not utterance gating
 //!
-//! [`super::admit::admit_edits`] admits an edit only when
+//! [`crate::splice::admit_edits`] admits an edit only when
 //! `ChatFile::utterance_containing` finds an enclosing utterance whose
 //! parse health is `Clean`. E501, E502, E503, E504, E506, E507 are all
 //! header-region diagnostics: their fixes land before the first utterance
@@ -206,6 +206,7 @@ pub fn catalog_fix(error: &ParseError, source: &str) -> Option<CatalogFix> {
         ErrorCode::MissingRequiredHeader => e504_missing_required_header(error, source),
         ErrorCode::EmptyLanguagesHeader => e507_empty_languages_header(error, source),
         ErrorCode::GraWithoutMor => e604_gra_without_mor(error, source),
+        ErrorCode::SpaceInsideAngleGroup => e750_space_inside_angle_group(error, source),
 
         // E301: seed source aliased this to E305's terminator fix, but the
         // real diagnostic is "Empty speaker code", unrelated to terminators
@@ -603,4 +604,67 @@ fn e604_gra_without_mor(error: &ParseError, source: &str) -> Option<CatalogFix> 
         EditProvenance::Diagnostic(error.code),
     );
     Some(single_edit_fix(BatchSafety::Semantic, edit))
+}
+
+/// E750 `SpaceInsideAngleGroup`: remove the whitespace run immediately after
+/// `<` or immediately before `>`. This is mechanical because delimiters must
+/// hug the same group content; deleting only that separator changes neither
+/// tokens nor group structure.
+fn e750_space_inside_angle_group(error: &ParseError, source: &str) -> Option<CatalogFix> {
+    let span = error.location.span;
+    let whitespace = source.get(span.to_range())?;
+    if whitespace.is_empty() || !whitespace.bytes().all(|byte| byte == b' ') {
+        return None;
+    }
+    let bytes = source.as_bytes();
+    let follows_open = span.start > 0 && bytes.get(span.start as usize - 1) == Some(&b'<');
+    let precedes_close = bytes.get(span.end as usize) == Some(&b'>');
+    if !follows_open && !precedes_close {
+        return None;
+    }
+    let edit = SpliceEdit::new_recovery_repair(
+        EditTarget::Replace(span),
+        Replacement::new(""),
+        error.code,
+    );
+    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+}
+
+#[cfg(test)]
+mod tests {
+    use talkbank_model::ErrorCollector;
+    use talkbank_parser::TreeSitterParser;
+
+    use super::{BatchSafety, FixKind, catalog_fix};
+    use crate::splice::apply_edits;
+
+    #[test]
+    fn e750_mechanically_removes_only_the_space_inside_group_delimiters() {
+        let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog > [/] dog .\n@End\n";
+        let parser = TreeSitterParser::new().expect("tree-sitter parser initializes");
+        let errors = ErrorCollector::new();
+        let _file = parser.parse_chat_file_streaming(source, &errors);
+        let diagnostics = errors.into_vec();
+        let fixes = diagnostics
+            .iter()
+            .filter(|error| error.code.as_str() == "E750")
+            .map(|error| catalog_fix(error, source).expect("E750 has a catalog fix"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(fixes.len(), 2);
+        assert!(
+            fixes
+                .iter()
+                .all(|fix| fix.safety == BatchSafety::Mechanical)
+        );
+        let edits = fixes
+            .into_iter()
+            .flat_map(|fix| match fix.kind {
+                FixKind::Deterministic(edits) => edits,
+                FixKind::Alternatives(_) => panic!("E750 has only one correct repair"),
+            })
+            .collect::<Vec<_>>();
+        let fixed = apply_edits(source, &edits).expect("non-overlapping E750 edits apply");
+        assert!(fixed.contains("*CHI:\t<dog> [/] dog ."), "got {fixed:?}");
+    }
 }

@@ -53,8 +53,8 @@ pub enum SpeakerIdError {
     #[error(
         "speaker-id below confidence threshold (margin {margin}, threshold {threshold}); \
          scores={scores:?}",
-        margin = report.margin,
-        scores = report.scores,
+        margin = report.margin(),
+        scores = report.scores_to_serializable(),
     )]
     LowConfidence {
         /// The full match report, the winner the algorithm

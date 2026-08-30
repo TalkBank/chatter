@@ -45,7 +45,7 @@ pub(super) fn parse_linkers(
     };
 
     for idx in 0..child_count {
-        if let Some(child) = node.child(idx as u32) {
+        if let Some(child) = node.child(idx) {
             if child.kind() == LINKER {
                 if let Some(linker_child) = child.child(0u32) {
                     if let Some(kind) = make_linker_kind(linker_child.kind()) {

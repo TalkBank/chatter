@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-08-16 01:41 EDT
+**Last modified:** 2026-08-30 16:26 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -128,35 +128,28 @@ The number of `%mor` items must match the number of alignable words on the main 
   home, ⊖
 ```
 
-### E714 / E715: `%pho`, `%mod`, or `%wor` count mismatch
+### E714 / E715 and E733 / E734: phonology count mismatch
 
-The same two codes are reused for "too few" / "too many" count mismatches on
-`%pho`, `%mod`, and `%wor`.
+E714 and E715 report too few or too many `%pho` tokens. E733 and E734 report
+the corresponding `%mod` mismatch. The tier names use distinct codes because
+actual and model phonology are different evidence layers.
 
-For `%wor`, the main-tier side is a spoken-token inventory:
+`%wor` does **not** use any of these codes. It is a timing sidecar, and a count
+mismatch does not make legacy CHAT invalid. Timing consumers handle the state
+explicitly:
 
-- regular words and fillers count
-- fragments, nonwords, and `xxx`/`yyy`/`www` count
-- retrace does not change `%wor` membership
-- replacements keep the original spoken surface word for `%wor`
+- `Missing`: no `%wor` tier;
+- `Drifted`: current main-tier and `%wor` slot counts differ;
+- `CountMatched`: counts match, but no timing is exposed yet;
+- `Uncorroborated`: canonical display tokens differ;
+- `Corroborated`: positional slots are available, with lexical identity from
+  the main tier and timing from `%wor` word bullets.
 
-That context-sensitivity decides **membership**, not leniency. Once an item is
-in the `%wor` set, alignment is still **strict 1:1**. So if a filler like
-`&-mm` counts on the main tier and `%wor` omits it, E714 is the correct result.
-
-So this is valid:
-
-```chat
-*CHI:	<one &+ss> [/] one play ground .
-%wor:	one •321008_321148• ss •321148_321368• one •321809_321969• play •322049_322310• ground •322390_322890• .
-```
-
-But this is also valid:
-
-```chat
-*EXP:	&+ih <the what> [/] what's letter &+th is this ?
-%wor:	ih •49063_49103• the •49103_49163• what •49183_50205• what's •50205_50405• letter •50405_50685• th •50886_50946• is •50946_51046• this •51086_51586• ?
-```
+The current `FilteredLexicalV1` policy includes regular words, fillers,
+retraced regular words, and the original spoken word of a replacement. It
+excludes fragments, nonwords, `xxx`/`yyy`/`www`, omissions, pauses, and actions.
+Changing that policy requires a new named policy and evaluation; it must not
+silently reinterpret existing `%wor` data.
 
 And this is valid too:
 
@@ -193,7 +186,11 @@ not flagged.
 Group delimiters hug their content: write `<dog> [/]`, never `< dog>`
 or `<dog >`. Mirrors CLAN CHECK error 160. Each offending space gets
 its own diagnostic; the group still parses, so downstream tooling sees
-the intended structure.
+the intended structure. `chatter fix --apply --code E750` removes only the
+offending delimiter-adjacent space. This mechanical catalog repair carries a
+distinct recovery-safe edit state, so it may repair the parser recovery that
+tainted its own utterance while ordinary edits remain barred from recovered
+content; the standard post-splice reparse still has to prove the result.
 
 ### E751: Pause glued to the preceding word
 

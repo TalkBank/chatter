@@ -592,15 +592,15 @@ fn parse_health_taints_only_gra_alignment_when_gra_tier_is_tainted() -> Result<(
             .ok_or_else(|| "Expected main↔%pho alignment".to_string())?
             .is_error_free()
     );
-    // `%wor` is a sidecar, presence of `Positional` is the analogue of
-    // the old `is_error_free()` check on the other alignments.
-    assert!(
+    // `%wor` metadata records the count relationship rather than structural
+    // validity or acoustic timing quality.
+    assert!(matches!(
         alignments
             .wor_timings
             .as_ref()
-            .ok_or_else(|| "Expected main↔%wor timing sidecar".to_string())?
-            .is_positional()
-    );
+            .ok_or_else(|| "Expected main↔%wor timing sidecar".to_string())?,
+        crate::alignment::WorTimingSidecar::Positional { .. }
+    ));
 
     let gra = alignments
         .gra

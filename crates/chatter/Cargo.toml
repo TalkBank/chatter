@@ -39,6 +39,7 @@ ratatui = { workspace = true }
 send2clan = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 toml = { workspace = true }
 talkbank-llm = { workspace = true }
 talkbank-model = { workspace = true }
@@ -59,7 +60,6 @@ assert_cmd = { workspace = true }
 httpmock = "0.8.3"
 predicates = { workspace = true }
 serde_json = { workspace = true }
-tempfile = { workspace = true }
 
 # Panic-site audit completed 2026-04-29 (see
 # `docs/panic-audit/chatter.md`). 14 non-test sites annotated.

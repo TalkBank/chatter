@@ -88,13 +88,13 @@ pub fn run_rediarize(
             std::process::exit(code);
         }
     };
-    if let Some(source) = &turns_file.source {
+    if let Some(source) = turns_file.source() {
         info!("diarization source: {source}");
     }
 
     let (rewritten, outcome) = match rediarize_content(
         &content,
-        &turns_file.turns,
+        turns_file.timeline(),
         ParseValidateOptions::default(),
         contested_at,
     ) {
@@ -124,7 +124,7 @@ pub fn run_rediarize(
     // of scraping the human-readable stderr text below. Written after
     // the CHAT output so it, too, describes a completed operation.
     if let Some(summary_path) = summary_json {
-        let summary = RediarizeSummary::new(turns_file.source.as_ref(), &outcome);
+        let summary = RediarizeSummary::new(turns_file.source(), &outcome);
         let json = match serde_json::to_string_pretty(&summary) {
             Ok(json) => json,
             Err(e) => {

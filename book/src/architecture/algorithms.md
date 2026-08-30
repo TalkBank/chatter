@@ -96,16 +96,20 @@ annotations).
 > combinator-based fragment parsing. It was removed in March 2026; tree-sitter
 > is now the sole parser.
 
-## Tier Alignment (1:1 Positional)
+## Structural Tier Alignment
 
 **Location:** `talkbank-model/src/alignment/traits.rs`
 
 Generic `positional_align()` pairs main-tier words with dependent-tier items by
 position (O(n)). Traits: `AlignableTier`, `TierAlignmentResult`, `AlignableContent`.
 
-- `%pho`, `%sin`, `%wor`, use generic positional alignment
+- `%pho` and `%sin` use generic positional alignment
 - `%mor`, `%gra`, domain-specific custom implementations
 - Mismatch diagnostics via `similar` crate (Patience diff algorithm, O(n log n))
+
+`%wor` is not part of this structural alignment family. Timing consumers use
+the checked `Missing | Drifted | CountMatched` transition documented in
+[`%wor` Timing Semantics](wor-timing.md).
 
 ## Caching
 

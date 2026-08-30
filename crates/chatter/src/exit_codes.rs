@@ -19,6 +19,10 @@ pub const EXIT_INPUT_ERROR: i32 = 1;
 /// mismatch, invalid mapping spec, etc.
 pub const EXIT_PRECONDITION: i32 = 2;
 
+/// Internal failure while encoding or materializing an output whose inputs
+/// have already been admitted.
+pub const EXIT_INTERNAL_ERROR: i32 = 3;
+
 /// Reference-mode speaker-id refused on low Jaccard margin. The
 /// operator must adjudicate (typically via `chatter adjudicate`).
 /// Batch drivers treat this as "needs adjudication" rather than a

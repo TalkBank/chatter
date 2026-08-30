@@ -5,10 +5,11 @@
 //! final merged file."
 //!
 //! Thin orchestrator: invokes `run_reference_mode` (from the
-//! `speaker_id` shim) to relabel the donor, then calls the
-//! library-level `merge_chats` directly. LowConfidence / pending /
-//! parse-error / precondition exit codes all bubble through the
-//! existing `speaker_id` and `transcript_merge` exit machinery.
+//! `speaker_id` shim) to relabel the donor, then merges through
+//! `merge_chat_files` and reports the merge's notices with the same
+//! `report_merge_notices` `chatter merge` uses. LowConfidence / pending /
+//! parse-error / precondition exit codes all bubble through the existing
+//! `speaker_id` and `transcript_merge` exit machinery.
 
 use std::fs;
 use std::path::Path;
@@ -16,16 +17,18 @@ use std::path::Path;
 use tracing::{Level, info, span, warn};
 
 use crate::cli::JudgmentMode;
-use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
+use crate::exit_codes::EXIT_INPUT_ERROR;
 use talkbank_model::{ParseValidateOptions, SpeakerCode};
+use talkbank_transform::parse_and_validate;
+use talkbank_transform::serialize::to_chat_string;
 use talkbank_transform::speaker_id::{ConfidenceThreshold, OverrideFile};
-use talkbank_transform::transcript_merge::{default_strip_tiers, merge_chats};
+use talkbank_transform::transcript_merge::{default_strip_tiers, merge_chat_files};
 
 use super::merge_preflight::{InvalidInput, abort_if_any_invalid, validate_chat_content};
 use super::speaker_id::{
     HolisticModeArgs, ReferenceModeArgs, apply_override_entry, derive_session_id,
-    run_holistic_mode, run_reference_mode, warn_session_context_ignored_if_configured,
-    write_override_entry,
+    exit_with_override_file_error, run_holistic_mode, run_reference_mode,
+    warn_session_context_ignored_if_configured, write_override_entry,
 };
 
 /// All inputs for one `chatter pipeline` invocation.
@@ -51,7 +54,7 @@ pub struct PipelineArgs<'a> {
     pub retain: &'a [String],
     /// Minimum Jaccard-margin confidence accepted by speaker-id;
     /// lower margins refuse to a pending entry instead of merging.
-    pub confidence_threshold: f64,
+    pub confidence_threshold: ConfidenceThreshold,
     /// If set, low-confidence sessions append a pending entry here
     /// rather than failing the operator pipeline silently.
     pub write_pending_path: Option<&'a Path>,
@@ -153,6 +156,9 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
     // validation-only invalidity (parseable but failing `chatter
     // validate`) that the lenient merge parse would otherwise pass
     // through.
+    // The gate KEEPS the reference it parses. It used to discard it and the
+    // merge re-parsed the same bytes further down, which is a whole extra
+    // parse per session on the path `chatter batch` drives over a corpus.
     let mut invalid: Vec<InvalidInput> = Vec::new();
     if let Err(reason) = validate_chat_content(&donor_content) {
         invalid.push(InvalidInput {
@@ -160,13 +166,26 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
             reason,
         });
     }
-    if let Err(reason) = validate_chat_content(&reference_content) {
-        invalid.push(InvalidInput {
-            path: reference.to_path_buf(),
-            reason,
-        });
-    }
+    let gated_reference = match validate_chat_content(&reference_content) {
+        Ok(file) => Some(file),
+        Err(reason) => {
+            invalid.push(InvalidInput {
+                path: reference.to_path_buf(),
+                reason,
+            });
+            None
+        }
+    };
     abort_if_any_invalid(&invalid);
+    // `abort_if_any_invalid` exits when anything failed, so reaching here with
+    // `None` is not possible; the `match` states that rather than unwrapping.
+    let reference_file = match gated_reference {
+        Some(file) => file,
+        None => {
+            warn!("reference failed the gate but the gate did not abort");
+            std::process::exit(EXIT_INPUT_ERROR);
+        }
+    };
 
     // Holistic judgment is pending-only: ask the LLM, write an engine=llm
     // pending entry, and produce NO merged file. Deterministic reference
@@ -195,12 +214,14 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
 
     let options = ParseValidateOptions::default();
     let session_id = derive_session_id(donor);
-    // Pre-parse the override file when one is supplied so the replay
-    // path doesn't re-read it. Read errors here (schema-version
-    // mismatch, malformed TOML) fall through to reference mode, which
-    // surfaces a real error via its own machinery if the run fails.
-    let override_file_loaded =
-        override_file_path.and_then(|p| OverrideFile::read_or_default(p).ok());
+    // Pre-parse the override file when one is supplied so the replay path
+    // doesn't re-read it. Configuration absence and invalid operator input are
+    // different states: an unreadable, malformed, or schema-incompatible file
+    // must refuse rather than silently triggering a fresh automatic match.
+    let override_file_loaded = override_file_path.map(|path| {
+        OverrideFile::read_or_default(path)
+            .unwrap_or_else(|error| exit_with_override_file_error(path, error))
+    });
     let override_entry = override_file_loaded
         .as_ref()
         .and_then(|f| f.get(&session_id));
@@ -212,7 +233,8 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
                 reference_path: reference,
                 anchor,
                 inserted_role_spec: inserted_role,
-                threshold: ConfidenceThreshold(confidence_threshold),
+                threshold: confidence_threshold,
+                write_match_report_path: None,
                 write_pending_path,
                 input_path: donor,
                 options: options.clone(),
@@ -226,26 +248,36 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
 
     let retain_codes: Vec<SpeakerCode> = retain.iter().map(SpeakerCode::new).collect();
     let strip = default_strip_tiers();
-    let merged = match merge_chats(
-        &reference_content,
-        &relabeled,
-        &retain_codes,
-        &strip,
-        options,
-    ) {
-        Ok(s) => s,
+    // Through the typed API so the command receives what the merge dropped;
+    // a string-only return could not carry that evidence, and this command was
+    // silently losing File 1 speakers while `chatter merge` warned about them.
+    // `chatter batch` drives this path, so the silent one was the path that
+    // runs hundreds of sessions.
+    let parse = |label: &str, content: &str| match parse_and_validate(content, options.clone()) {
+        Ok(file) => file,
+        Err(e) => {
+            warn!("failed to parse {}: {}", label, e);
+            eprintln!("Error parsing {label}: {e}");
+            std::process::exit(EXIT_INPUT_ERROR);
+        }
+    };
+    let donor_file = parse("the relabeled donor transcript", &relabeled);
+
+    let merged = match merge_chat_files(&reference_file, &donor_file, &retain_codes, &strip) {
+        Ok(m) => m,
         Err(e) => {
             warn!("merge step failed: {}", e);
             eprintln!("Error: {}", e);
-            // Mirror the exit-code contract of `chatter merge`:
-            // precondition violations → 2, parse errors → 1.
-            let code = match e {
-                talkbank_transform::transcript_merge::MergeError::Parse(_) => EXIT_INPUT_ERROR,
-                _ => EXIT_PRECONDITION,
-            };
-            std::process::exit(code);
+            // The same owner `chatter merge` uses, exhaustively matched, so a
+            // new variant is a compile error rather than a silent exit 2 here.
+            std::process::exit(crate::commands::transcript_merge::merge_exit_code(&e));
         }
     };
+
+    // The SAME reporter `chatter merge` calls.
+    let merged = to_chat_string(
+        &crate::commands::transcript_merge::report_merge_notices(merged, reference).into_file(),
+    );
 
     if let Err(e) = fs::write(output, merged) {
         warn!("failed to write {}: {}", output.display(), e);

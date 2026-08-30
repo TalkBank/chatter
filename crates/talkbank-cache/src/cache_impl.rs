@@ -4,7 +4,7 @@
 //! callers (crossbeam worker threads in `validate_parallel.rs`) remain
 //! synchronous while database operations run async internally.
 //!
-//! Every one of those bridges goes through [`blocking::ConfinedRuntime::block_on`], never
+//! Every one of those bridges goes through `blocking::ConfinedRuntime::block_on`, never
 //! `Runtime::block_on` directly, so that a caller which is itself driving a
 //! runtime cannot nest one runtime inside another. See that module for the
 //! four-week outage that rule was written from.
@@ -36,7 +36,7 @@ use crate::{CacheOutcome, ValidationCache};
 ///
 /// The `ValidationCache` trait is sync (required by crossbeam worker threads),
 /// so `CachePool` holds a dedicated single-threaded tokio runtime and bridges
-/// sync ↔ async through [`blocking::ConfinedRuntime::block_on`], which is safe to call from any
+/// sync ↔ async through `blocking::ConfinedRuntime::block_on`, which is safe to call from any
 /// thread including one already driving a runtime.
 ///
 /// Every read and write binds `rules_version` into the `version` column, so a

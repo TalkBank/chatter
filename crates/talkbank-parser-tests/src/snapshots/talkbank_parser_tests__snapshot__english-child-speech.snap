@@ -300,7 +300,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "let's",
@@ -683,7 +682,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "just",
@@ -831,7 +829,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "anything",

@@ -28,6 +28,7 @@ use crate::node_types::*;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{
@@ -119,12 +120,12 @@ pub fn parse_participants_header(
     // Position 1: comma, 2: whitespaces, 3: participant, etc.
     let child_count = contents.child_count();
     // Pre-allocate: typically (child_count + 2) / 3 participants (comma, whitespace, participant pattern)
-    let mut entries = Vec::with_capacity(child_count.div_ceil(3));
+    let mut entries = ChildCapacity::from_upper_bound(child_count.div_ceil(3)).into_vec();
     let mut idx = 0;
 
     // First participant (required)
     if idx < child_count
-        && let Some(child) = contents.child(idx as u32)
+        && let Some(child) = contents.child(idx)
     {
         // CRITICAL: Check for MISSING nodes before processing
         if !check_not_missing(child, source, errors, "participants_contents") {
@@ -158,7 +159,7 @@ pub fn parse_participants_header(
     // Subsequent participants (optional)
     while idx < child_count {
         // Check for comma
-        if let Some(child) = contents.child(idx as u32) {
+        if let Some(child) = contents.child(idx) {
             // CRITICAL: Check for MISSING nodes
             if !check_not_missing(child, source, errors, "participants_contents") {
                 idx += 1;
@@ -187,7 +188,7 @@ pub fn parse_participants_header(
         }
 
         // Check for whitespaces
-        if let Some(child) = contents.child(idx as u32) {
+        if let Some(child) = contents.child(idx) {
             // CRITICAL: Check for MISSING nodes
             if !check_not_missing(child, source, errors, "participants_contents") {
                 idx += 1;
@@ -217,7 +218,7 @@ pub fn parse_participants_header(
         }
 
         // Check for participant
-        if let Some(child) = contents.child(idx as u32) {
+        if let Some(child) = contents.child(idx) {
             // CRITICAL: Check for MISSING nodes
             if !check_not_missing(child, source, errors, "participants_contents") {
                 idx += 1;

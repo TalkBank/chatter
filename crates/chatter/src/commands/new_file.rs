@@ -4,7 +4,7 @@
 //! `@End`, `@Languages`, `@Participants`, `@ID`) so the output is immediately parseable
 //! by `chatter validate`. An optional utterance line can be included as a starting point.
 //!
-//! The file is built as a typed [`ChatFile`] and rendered with [`WriteChat`],
+//! The file is built as a typed [`talkbank_model::model::ChatFile`] and rendered with [`WriteChat`],
 //! the same path every other CHAT-emitting surface takes.
 //!
 //! It used to delegate to a `MinimalChatFile` template in the parser-tests

@@ -18,7 +18,10 @@ use tracing::{Level, info, span, warn};
 use crate::cli::JudgmentMode;
 use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
 use talkbank_model::ParseValidateOptions;
-use talkbank_transform::speaker_id::ConfidenceThreshold;
+use talkbank_transform::PipelineError;
+use talkbank_transform::speaker_id::{
+    ConfidenceThreshold, RecordedSpeakerIdentificationAttempt, RecordedSpeakerIdentificationInput,
+};
 
 mod modes;
 mod support;
@@ -34,7 +37,7 @@ pub(crate) use modes::{
     run_holistic_mode, run_override_file_mode, run_reference_mode,
     warn_session_context_ignored_if_configured,
 };
-pub(crate) use support::derive_session_id;
+pub(crate) use support::{derive_session_id, exit_with_override_file_error};
 pub(crate) use writes::write_override_entry;
 
 use modes::run_explicit_mode;
@@ -59,7 +62,9 @@ pub struct SpeakerIdArgs<'a> {
     pub inserted_role: Option<&'a str>,
     /// Jaccard winner→runner-up confidence threshold for reference
     /// mode.
-    pub confidence_threshold: f64,
+    pub confidence_threshold: ConfidenceThreshold,
+    /// New JSON evidence report written in reference mode, if requested.
+    pub write_match_report_path: Option<&'a Path>,
     /// If set, reference-mode auto-decisions append an audit entry
     /// here.
     pub write_override_path: Option<&'a Path>,
@@ -121,6 +126,7 @@ pub fn run_speaker_id(args: SpeakerIdArgs<'_>) {
         anchor,
         inserted_role,
         confidence_threshold,
+        write_match_report_path,
         write_override_path,
         write_pending_path,
         override_file_path,
@@ -145,8 +151,19 @@ pub fn run_speaker_id(args: SpeakerIdArgs<'_>) {
     let input_content = match fs::read_to_string(input) {
         Ok(s) => s,
         Err(e) => {
-            warn!("failed to read {}: {}", input.display(), e);
-            eprintln!("Error reading {}: {}", input.display(), e);
+            let message = e.to_string();
+            if let Some(path) = write_match_report_path {
+                let error = PipelineError::Io(e);
+                writes::write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::input_rejected(
+                        RecordedSpeakerIdentificationInput::Donor,
+                        &error,
+                    ),
+                );
+            }
+            warn!("failed to read {}: {}", input.display(), message);
+            eprintln!("Error reading {}: {}", input.display(), message);
             std::process::exit(EXIT_INPUT_ERROR);
         }
     };
@@ -210,7 +227,8 @@ pub fn run_speaker_id(args: SpeakerIdArgs<'_>) {
                 reference_path: ref_path,
                 anchor,
                 inserted_role_spec: inserted_role,
-                threshold: ConfidenceThreshold(confidence_threshold),
+                threshold: confidence_threshold,
+                write_match_report_path,
                 write_pending_path,
                 input_path: input,
                 options,

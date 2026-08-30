@@ -1,0 +1,3 @@
+# Exact generator used for crates/talkbank-parser-re2c/src/generated/lexer.rs.
+[re2c]
+version = "4.6"

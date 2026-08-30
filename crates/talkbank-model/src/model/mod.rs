@@ -289,6 +289,7 @@ pub use dependent_tier::{
     // error type must be nameable downstream; see BUG-3 2026-07-08)
     PhoalnParseError,
     PosCategory,
+    RecordedWorTiming,
     // SIN
     SinGroupGestures,
     SinItem,
@@ -303,6 +304,7 @@ pub use dependent_tier::{
     TextTier,
     UserDefinedDependentTier,
     WorTier,
+    WorTimingEvidence,
     XphointParseError,
 };
 

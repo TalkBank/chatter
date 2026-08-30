@@ -23,6 +23,7 @@ use super::merge_preflight::{InvalidInput, abort_if_any_invalid, validate_chat_i
 use super::pipeline::PipelineArgs;
 use super::speaker_id::{ENV_SESSION_CONTEXT, warn_session_context_ignored_if_configured};
 use crate::cli::JudgmentMode;
+use talkbank_transform::speaker_id::ConfidenceThreshold;
 
 /// All inputs for one `chatter batch` invocation.
 ///
@@ -43,7 +44,7 @@ pub struct BatchArgs<'a> {
     /// Retain set (passed through to every per-session run).
     pub retain: &'a [String],
     /// Confidence threshold (passed through to every per-session run).
-    pub confidence_threshold: f64,
+    pub confidence_threshold: ConfidenceThreshold,
     /// Optional pending-entries TOML (passed through; accumulates
     /// across sessions).
     pub write_pending_path: Option<&'a Path>,
@@ -405,7 +406,7 @@ fn run_pipeline_subprocess(self_exe: &Path, args: &PipelineArgs<'_>) -> SessionO
         .arg("--inserted-role")
         .arg(args.inserted_role)
         .arg("--confidence-threshold")
-        .arg(args.confidence_threshold.to_string())
+        .arg(args.confidence_threshold.value().to_string())
         .arg("-o")
         .arg(args.output);
     for r in args.retain {

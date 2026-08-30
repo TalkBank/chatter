@@ -25,6 +25,9 @@ pub mod document_root;
 pub mod tier_parsers;
 pub mod tree_parsing;
 
+mod child_capacity;
+pub(crate) use child_capacity::ChildCapacity;
+
 /// The one `Node` to [`talkbank_model::Span`] conversion, shared by every region.
 mod node_span;
 

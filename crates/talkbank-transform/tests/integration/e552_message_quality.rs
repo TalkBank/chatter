@@ -38,27 +38,28 @@ fn workspace_root() -> PathBuf {
     dir
 }
 
+/// Validation errors for CHAT content, raw from `parse_and_validate`.
+fn errors_for_content(content: &str) -> Vec<ParseError> {
+    // `%wor` timing evidence is read from the typed tier itself. Alignment is
+    // deliberately disabled here so this command-boundary test pins that the
+    // E552 verdict cannot depend on optional correspondence metadata.
+    let options = ParseValidateOptions::default().with_validation();
+    match parse_and_validate(content, options) {
+        Err(PipelineError::Validation(errors)) => errors,
+        Err(PipelineError::Parse(parse_errors)) => parse_errors.errors,
+        other => panic!("expected validation errors, got {other:?}"),
+    }
+}
+
 /// Validation errors for a committed fixture, raw from `parse_and_validate`.
 fn errors_for(rel_fixture: &str) -> Vec<ParseError> {
     let fixture = workspace_root().join(rel_fixture);
     let content = fs::read_to_string(&fixture)
         .unwrap_or_else(|e| panic!("read fixture {}: {e}", fixture.display()));
-    // Alignment must be on: %wor timing surfaces reach the E552 check via
-    // `utt.alignments`, which only populate under alignment processing (the
-    // CLI default). Note the corollary, verified by this test's first RED
-    // run: `--skip-alignment` also skips %wor-based E552 detection.
-    let options = ParseValidateOptions::default()
-        .with_validation()
-        .with_alignment();
-    match parse_and_validate(&content, options) {
-        Err(PipelineError::Validation(errors)) => errors,
-        Err(PipelineError::Parse(parse_errors)) => parse_errors.errors,
-        other => panic!("expected errors from {rel_fixture}, got {other:?}"),
-    }
+    errors_for_content(&content)
 }
 
-fn e552_message(rel_fixture: &str) -> String {
-    let errors = errors_for(rel_fixture);
+fn only_e552_message(errors: &[ParseError], source: &str) -> String {
     let e552: Vec<_> = errors
         .iter()
         .filter(|e| e.code.as_str() == "E552")
@@ -66,10 +67,15 @@ fn e552_message(rel_fixture: &str) -> String {
     assert_eq!(
         e552.len(),
         1,
-        "expected exactly one E552 from {rel_fixture}, got: {:?}",
+        "expected exactly one E552 from {source}, got: {:?}",
         errors.iter().map(|e| e.code.as_str()).collect::<Vec<_>>()
     );
     e552[0].message.clone()
+}
+
+fn e552_message(rel_fixture: &str) -> String {
+    let errors = errors_for(rel_fixture);
+    only_e552_message(&errors, rel_fixture)
 }
 
 /// %wor-only timing: the message must say the evidence lives in the %wor tier

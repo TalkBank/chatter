@@ -1292,14 +1292,14 @@ status = "implemented"
 [[code]]
 code = "E714"
 variant = "PhoCountMismatchTooFew"
-summary = "`%pho`, `%mod`, or `%wor` tier has fewer alignable words than main tier."
+summary = "`%pho` tier has fewer alignable words than main tier."
 kind = "Invalidity"
 status = "implemented"
 
 [[code]]
 code = "E715"
 variant = "PhoCountMismatchTooMany"
-summary = "`%pho`, `%mod`, or `%wor` tier has more alignable words than main tier."
+summary = "`%pho` tier has more alignable words than main tier."
 kind = "Invalidity"
 status = "implemented"
 
@@ -1551,7 +1551,7 @@ status = "implemented"
 [[code]]
 code = "E752"
 variant = "TimingWithoutMedia"
-summary = "Transcript carries timing evidence (main-tier bullets or a\npositional `%wor` timing sidecar) but no `@Media` header declares\nthe media timeline the timestamps index. Inverse direction of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)\n(E544); corresponds to CLAN CHECK error 112."
+summary = "Transcript carries timing evidence (a main-tier bullet or an\nactual recorded `%wor` bullet) but no `@Media` header declares the\nmedia timeline the timestamps index. Equal word counts without a\nbullet are not timing evidence. Inverse direction of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)\n(E544); corresponds to CLAN CHECK error 112."
 kind = "Invalidity"
 status = "implemented"
 

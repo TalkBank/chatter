@@ -1,7 +1,9 @@
 //! Side-effect writers for `chatter speaker-id` reference mode:
-//! the `--write-override` audit entry (auto-decision path) and the
-//! `--write-pending` adjudication entry (low-confidence path).
+//! the `--write-override` audit entry (auto-decision path), the
+//! `--write-pending` adjudication entry (low-confidence path), and the
+//! immutable lexical-support report shared by both paths.
 
+use std::io::Write;
 use std::path::Path;
 use tracing::{info, warn};
 
@@ -13,13 +15,53 @@ use talkbank_transform::adjudication::{
 };
 use talkbank_transform::speaker_id::{
     ConfidenceThreshold, DonorMatchReport, InsertedRoleSpec, MergeOverride, OverrideFile,
-    SpeakerAction,
+    RecordedSpeakerIdentificationAttempt, SpeakerAction,
 };
 
 use super::modes::ReferenceModeOutcome;
 use super::support::{
     derive_session_id, exit_with_adjudication_error, exit_with_override_file_error,
 };
+
+/// Write one complete match report without overwriting prior evidence.
+pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentificationAttempt) {
+    let payload = match serde_json::to_vec_pretty(attempt) {
+        Ok(mut bytes) => {
+            bytes.push(b'\n');
+            bytes
+        }
+        Err(error) => {
+            eprintln!("Error encoding match report {}: {error}", path.display());
+            std::process::exit(crate::exit_codes::EXIT_INTERNAL_ERROR);
+        }
+    };
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty());
+    let mut staging =
+        match tempfile::NamedTempFile::new_in(parent.unwrap_or_else(|| Path::new("."))) {
+            Ok(staging) => staging,
+            Err(error) => {
+                eprintln!("Error staging match report {}: {error}", path.display());
+                std::process::exit(crate::exit_codes::EXIT_INPUT_ERROR);
+            }
+        };
+    if let Err(error) = staging
+        .write_all(&payload)
+        .and_then(|()| staging.as_file().sync_all())
+    {
+        eprintln!("Error writing match report {}: {error}", path.display());
+        std::process::exit(crate::exit_codes::EXIT_INPUT_ERROR);
+    }
+    if let Err(error) = staging.persist_noclobber(path) {
+        eprintln!(
+            "Error creating match report {}: {}",
+            path.display(),
+            error.error
+        );
+        std::process::exit(crate::exit_codes::EXIT_INPUT_ERROR);
+    }
+}
 
 /// Append (or update) an entry for the current session in the
 /// override file. The session ID defaults to the input CHAT file's
@@ -88,14 +130,14 @@ pub(super) fn write_pending_entry(
     let session_id = derive_session_id(input);
     let mut suggested_mapping: std::collections::BTreeMap<String, SpeakerAction> =
         std::collections::BTreeMap::new();
-    suggested_mapping.insert(report.winner.as_str().to_string(), SpeakerAction::Drop);
+    suggested_mapping.insert(report.winner().as_str().to_string(), SpeakerAction::Drop);
     // Every non-winner speaker is a Rename candidate; give each the same
     // inserted role (reference mode's single --inserted-role), keyed by
     // its own donor code in the adult_roles map.
     let mut adult_roles: std::collections::BTreeMap<String, InsertedRoleSpec> =
         std::collections::BTreeMap::new();
     for spk in donor_chat.unique_utterance_speakers() {
-        if spk != report.winner {
+        if &spk != report.winner() {
             suggested_mapping.insert(spk.as_str().to_string(), SpeakerAction::Rename);
             adult_roles.insert(
                 spk.as_str().to_string(),
@@ -114,7 +156,7 @@ pub(super) fn write_pending_entry(
         },
         scores: report.scores_to_serializable(),
         margin: report.margin_to_serializable(),
-        threshold_used: Some(threshold.0),
+        threshold_used: Some(threshold.value()),
         engine: talkbank_transform::speaker_id::DecisionEngine::Deterministic,
         judgment: None,
     };

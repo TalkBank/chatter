@@ -80,7 +80,7 @@ pub(crate) fn parse_group_content(
 
     // Position 0: '<' (required)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == LESS_THAN {
             idx += 1;
@@ -103,7 +103,7 @@ pub(crate) fn parse_group_content(
     // it so the parse recovers, but it is invalid CHAT (CLAN CHECK
     // 160): report E750 instead of silently dropping the space.
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
         && child.kind() == WHITESPACES
     {
         report_space_inside_angle_group(child, source, errors, AngleSide::AfterOpen);
@@ -112,7 +112,7 @@ pub(crate) fn parse_group_content(
 
     // Next: contents (required)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == CONTENTS {
             // In the real CST the delimiter-hugging whitespace lands
@@ -130,7 +130,7 @@ pub(crate) fn parse_group_content(
                     report_space_inside_angle_group(first, source, errors, AngleSide::AfterOpen);
                 }
                 if contents_children > 1
-                    && let Some(last) = child.child((contents_children - 1) as u32)
+                    && let Some(last) = child.child(contents_children - 1)
                     && last.kind() == WHITESPACES
                 {
                     report_space_inside_angle_group(last, source, errors, AngleSide::BeforeClose);
@@ -156,7 +156,7 @@ pub(crate) fn parse_group_content(
     // Next: optional whitespaces before >. Same E750 contract as the
     // after-`<` position above.
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
         && child.kind() == WHITESPACES
     {
         report_space_inside_angle_group(child, source, errors, AngleSide::BeforeClose);
@@ -165,7 +165,7 @@ pub(crate) fn parse_group_content(
 
     // Next: '>' (required)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == GREATER_THAN {
             idx += 1;
@@ -186,7 +186,7 @@ pub(crate) fn parse_group_content(
 
     // Next: base_annotations (required for groups)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == BASE_ANNOTATIONS {
             markers = parse_scoped_annotations(child, source, errors);
@@ -209,7 +209,7 @@ pub(crate) fn parse_group_content(
     // Check for unexpected extra children
     if idx < child_count {
         for extra_idx in idx..child_count {
-            if let Some(extra) = node.child(extra_idx as u32) {
+            if let Some(extra) = node.child(extra_idx) {
                 errors.report(ParseError::new(
                     ErrorCode::TreeParsingError,
                     Severity::Error,

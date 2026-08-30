@@ -641,10 +641,10 @@ pub enum ErrorCode {
     /// `%gra` head index is out of range.
     #[code("E713")]
     GraInvalidHeadIndex,
-    /// `%pho`, `%mod`, or `%wor` tier has fewer alignable words than main tier.
+    /// `%pho` tier has fewer alignable words than main tier.
     #[code("E714")]
     PhoCountMismatchTooFew,
-    /// `%pho`, `%mod`, or `%wor` tier has more alignable words than main tier.
+    /// `%pho` tier has more alignable words than main tier.
     #[code("E715")]
     PhoCountMismatchTooMany,
     /// `%mor` tier terminator value does not match main tier.
@@ -849,9 +849,10 @@ pub enum ErrorCode {
     /// ends.
     #[code("E751")]
     PauseGluedToWord,
-    /// Transcript carries timing evidence (main-tier bullets or a
-    /// positional `%wor` timing sidecar) but no `@Media` header declares
-    /// the media timeline the timestamps index. Inverse direction of
+    /// Transcript carries timing evidence (a main-tier bullet or an
+    /// actual recorded `%wor` bullet) but no `@Media` header declares the
+    /// media timeline the timestamps index. Equal word counts without a
+    /// bullet are not timing evidence. Inverse direction of
     /// [`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)
     /// (E544); corresponds to CLAN CHECK error 112.
     #[code("E752")]

@@ -198,7 +198,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "вот",
@@ -439,7 +438,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "что",

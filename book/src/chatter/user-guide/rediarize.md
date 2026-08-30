@@ -1,7 +1,7 @@
 # Rediarize (`chatter rediarize`)
 
 **Status:** Draft
-**Last updated:** 2026-08-27 16:57 EDT
+**Last updated:** 2026-08-30 16:26 EDT
 
 `chatter rediarize` re-attributes utterance speakers in a CHAT file
 from an external diarization. Given a transcript whose utterances
@@ -106,10 +106,13 @@ chatter rediarize INPUT.cha --turns TURNS.json \
   tracks, empty unless `--contested-at` was given. These were still
   reattributed, to `assigned`, so they are NOT in `flagged`, which means
   "declined". `ownership.shares` is every overlapping track with its
-  summed milliseconds, descending; `ownership.total_ms` is the
-  denominator. The whole distribution is emitted rather than a winner
-  and a runner-up, because that narrower shape cannot tell a 55/45 split
-  from 55/23/22 and the difference is the point.
+  union-held milliseconds, descending; overlapping turns for the SAME
+  track count their shared interval once. `ownership.total_ms` is the sum
+  of those per-track values and is the denominator. Simultaneous DIFFERENT
+  tracks each retain the shared interval, so `total_ms` can exceed the
+  utterance bullet's duration. The whole distribution is emitted rather
+  than a winner and a runner-up, because that narrower shape cannot tell a
+  55/45 split from 55/23/22 and the difference is the point.
 
 Field names and the `reason` strings are a stable output contract.
 The summary is written only on exit 0, after the CHAT output.
@@ -126,9 +129,10 @@ chatter rediarize INPUT.cha --turns TURNS.json --contested-at 0.25
 ```
 
 Reports an utterance as contested when the RUNNER-UP track holds at
-least that share of the utterance's overlapped time. Two rivals at 20%
-each is a different situation from one at 40%, and this is the latter
-question.
+least that share of the total track-held time. Two rivals at 20% each
+is a different situation from one at 40%, and this is the latter
+question. Same-track duplicate coverage never inflates the denominator;
+cross-track overlap remains evidence for both simultaneous speakers.
 
 **There is no default, deliberately.** Omit the flag and nothing is
 reported as contested. What share makes an utterance genuinely mixed
@@ -141,10 +145,11 @@ and without it. A value outside `0.0` to `1.0`, or `NaN`, fails the
 command before any file is read, rather than silently meaning "nothing
 is ever contested".
 
-Known limitation: summed milliseconds per track cannot distinguish a
-speaker change INSIDE an utterance (one track holds the first half, the
-other the second) from crosstalk (both across the whole), and those want
-opposite remedies. Contested says the time is split, not how.
+Known limitation: per-track union-held totals cannot distinguish a speaker
+change INSIDE an utterance (one track holds the first half, the other the
+second) from crosstalk (both across the whole), and those want opposite
+remedies. Contested says ownership is divided, not how it is arranged on
+the timeline.
 
 ## The turns JSON format
 
@@ -173,15 +178,18 @@ the caller's concern; the format is:
     milliseconds, half-open `[start_ms, end_ms)`, with
     `end_ms >= start_ms`.
 
-Turns MAY overlap each other (diarizers that permit overlapping
-speech produce such turns); max-overlap attribution handles that
-naturally. Unknown fields anywhere in the file are rejected, so a
-misspelled field fails loudly instead of being silently ignored.
+Turns MAY overlap each other (diarizers that permit overlapping speech
+produce such turns). Overlap between turns for the same track is unioned;
+overlap between different tracks is retained for each track as crosstalk
+evidence. Input order is immaterial: chatter admits the turns to a typed,
+start-ordered timeline before attribution. Unknown fields anywhere in the
+file are rejected, so a misspelled field fails loudly instead of being
+silently ignored.
 
 ## Behavior contract
 
-- Every utterance with a time bullet is assigned to the turn track
-  with the greatest millisecond overlap against the bullet's span.
+- Every utterance with a time bullet is assigned to the track with the
+  greatest union of millisecond coverage against the bullet's span.
   An utterance already on its max-overlap track counts as
   `unchanged`.
 - An utterance with **no bullet**, or whose bullet **overlaps no

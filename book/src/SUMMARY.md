@@ -76,6 +76,7 @@
 - [CA Terminator Resolution](architecture/parser-and-grammar/ca-terminator-resolution.md)
 - [Validation Cache](architecture/parser-and-grammar/validation-cache.md)
 - [Alignment](architecture/alignment.md)
+- [`%wor` Timing Semantics](architecture/wor-timing.md)
 - [Memory and Ownership](architecture/memory-and-ownership.md)
 - [Algorithms and Data Structures](architecture/algorithms.md)
 

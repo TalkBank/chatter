@@ -1,7 +1,7 @@
 # Installation
 
 **Status:** Current
-**Last modified:** 2026-07-07 21:20 EDT
+**Last modified:** 2026-08-30 14:11 EDT
 
 `chatter` targets **Windows, macOS, and Linux**. There are two ways to
 install it: the **prebuilt binaries** (recommended for most people,
@@ -16,8 +16,8 @@ attaches prebuilt binaries for macOS (Apple Silicon and Intel), Linux
 
 ### chatter CLI
 
-One-line installers (they download the binary for your platform, place
-it on your PATH, and also install the `chatter-update` self-updater):
+One-line installers (they download the binary for your platform and place
+it on your PATH):
 
 - **macOS and Linux:**
 
@@ -72,11 +72,11 @@ hand.
   chatter update
   ```
 
-  This runs the bundled `chatter-update` program, which checks GitHub
-  Releases and installs the newest release in place. (The self-update
-  facility is experimental. It is installed only by the one-line
-  installers above; if you installed another way, update the same way you
-  installed.)
+  This self-update runs **in-process**: `chatter update` embeds `axoupdater`
+  as a library and downloads the newest release from GitHub Releases
+  directly, without a separate bundled `chatter-update` program. (The
+  self-update facility is experimental and works the same way regardless of
+  how you installed the CLI.)
 - **Desktop app:** the app checks for updates on launch and offers to
   install a new version when one is available.
 
@@ -84,8 +84,10 @@ hand.
 
 Building from source needs only a stable **Rust** toolchain (install via
 [rustup](https://rustup.rs/), which supports Windows, macOS, and Linux).
-Node.js and the tree-sitter CLI (`cargo install tree-sitter-cli`) are
-needed only when working on the grammar or generated artifacts.
+Node.js and the Tree-sitter CLI are needed only when working on the grammar
+or generated artifacts. Use the Node version in `grammar/.nvmrc`, then run
+`npm ci` in `grammar/`; its lockfile pins the CLI to 0.27.0 so regeneration
+uses the same toolchain as CI.
 
 Clone and install the CLI:
 

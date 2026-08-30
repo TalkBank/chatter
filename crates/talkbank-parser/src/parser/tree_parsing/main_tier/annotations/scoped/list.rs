@@ -7,6 +7,7 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::node_types::WHITESPACES;
+use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::parser_helpers::is_base_annotation;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
@@ -48,14 +49,14 @@ pub(crate) fn parse_scoped_annotations(
 ) -> Vec<ParsedAnnotation> {
     let child_count = node.child_count();
     // Pre-allocate: child_count / 2 pairs of (whitespace, annotation)
-    let mut markers = Vec::with_capacity(child_count / 2);
+    let mut markers = ChildCapacity::from_upper_bound(child_count / 2).into_vec();
     let mut idx = 0;
 
     // Grammar: repeat1(seq(whitespaces, base_annotation))
     // Expect alternating whitespaces and base_annotation
     while idx < child_count {
         // Expect whitespaces
-        if let Some(child) = node.child(idx as u32) {
+        if let Some(child) = node.child(idx) {
             if child.kind() == WHITESPACES {
                 idx += 1;
             } else {
@@ -79,7 +80,7 @@ pub(crate) fn parse_scoped_annotations(
 
         // Expect base_annotation (or one of its concrete subtypes)
         if idx < child_count
-            && let Some(child) = node.child(idx as u32)
+            && let Some(child) = node.child(idx)
         {
             if is_base_annotation(child.kind()) {
                 if let ParseOutcome::Parsed(ann) = parse_single_annotation(child, source, errors) {

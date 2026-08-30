@@ -46,7 +46,7 @@ pub(crate) fn parse_nested_content(
     let mut results = Vec::new();
 
     for idx in 0..child_count {
-        let Some(child) = node.child(idx as u32) else {
+        let Some(child) = node.child(idx) else {
             continue;
         };
 
@@ -143,7 +143,7 @@ fn parse_content_item_nested(
     let child_count = node.child_count();
 
     for idx in 0..child_count {
-        let Some(child) = node.child(idx as u32) else {
+        let Some(child) = node.child(idx) else {
             continue;
         };
 

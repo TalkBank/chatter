@@ -165,7 +165,7 @@ pub trait AlignableTier {
 /// Output of [`positional_align`]: the aligned `(source, target)` pairs
 /// plus any `ParseError` diagnostics surfaced during matching. Callers
 /// wrap this into their domain-specific result (`PhoAlignment`,
-/// `SinAlignment`, `WorAlignment`).
+/// `SinAlignment`).
 pub type PositionalAlignment<T> = (
     Vec<AlignmentPair<<T as AlignableTier>::Source, <T as AlignableTier>::Target>>,
     Vec<ParseError>,
@@ -173,7 +173,7 @@ pub type PositionalAlignment<T> = (
 
 /// Generic 1:1 positional alignment of a main tier against any [`AlignableTier`].
 ///
-/// Implements the shared algorithm used by `%pho`, `%sin`, and `%wor` alignment:
+/// Implements the shared algorithm used by `%pho`, `%mod`, and `%sin` alignment:
 ///
 /// 1. Count alignable items on the main tier (using `T::DOMAIN`).
 /// 2. Count target items via [`AlignableTier::target_count`].

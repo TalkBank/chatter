@@ -43,7 +43,6 @@ book/src/chatter/user-guide/chat-processing-playbook.md
 book/src/chatter/user-guide/ci-integration.md
 book/src/chatter/user-guide/clan-line-numbering.md
 book/src/chatter/user-guide/sanitize.md
-book/src/chatter/user-guide/speaker-id.md
 book/src/contributing/chat-processing-playbook.md
 book/src/contributing/coding-standards-extended.md
 book/src/contributing/compile-times.md
@@ -89,8 +88,6 @@ grammar/docs/precedence-decisions.md
 grammar/docs/structuring-opaque-tokens.md
 grammar/docs/tokenization-rules.md
 spec/VALIDATION_INFRASTRUCTURE.md
-spec/docs/ALIGNMENT_RULES.md
-spec/docs/CHAT_TO_JSON_PIPELINE.md
 spec/docs/CURATION_WORKFLOW.md
 spec/docs/GRAMMAR_PATTERNS.md
 spec/docs/README.md

@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-07-18 03:14 EDT
+**Last modified:** 2026-08-30 15:12 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -213,14 +213,39 @@ rule above.
   `--retain` to disambiguate).
 - File 2 is missing or unparseable.
 
-`chatter merge` does NOT refuse on these (proceeds with warning):
+`chatter merge` WARNS and proceeds on:
+
+- A File 1 speaker not in `--retain`. Every one of its utterances is
+  dropped, but its `@Participants` row survives, so the output declares a
+  speaker who says nothing. The warning names each such speaker and how many
+  utterances it lost. `AmbiguousSpeaker` does not cover this: that refuses
+  only when a code appears in BOTH files. `chatter pipeline` prints the same
+  warning from the same reporter.
+
+`chatter merge` accepts these silently BY DESIGN, because a diagnostic on
+every run is one nobody reads:
 
 - Small backward-time bullets in either input (one utterance ends
   slightly after the next starts), common in hand transcripts, not
   corrupting; downstream `batchalign3 align` cleans these.
-- File 2's `@Media` modality disagrees with File 1's (`audio` vs
-  `video`).
-- File 1 has fewer utterances than File 2, or vice versa.
+- File 1 has fewer utterances than File 2, or vice versa. Every merge has
+  this; it is the normal case.
+- Donor headers other than `@ID` and `@Comment` are not carried into the
+  output. That is the documented policy, fixed rather than data-dependent,
+  so this page is the right place to learn it.
+
+`chatter merge` accepts these silently and ARGUABLY SHOULD NOT. Listed
+separately because "settled" and "not done yet" are different states, and a
+single list hides which is which:
+
+- `--strip-tiers` removes dependent tiers from inserted donor utterances. The
+  merge now records how many it removed per utterance, and no command reports
+  it.
+- File 2's `@Media` modality disagrees with File 1's (`audio` vs `video`).
+  The merge does not inspect `@Media` at all, which is worth stating plainly:
+  a donor over-claiming a LANGUAGE is a hard refusal, reasoned as evidence of
+  a wrong-file pairing, and a modality disagreement is the same evidence
+  treated as nothing.
 
 ## Speaker identity in File 2 must already be coherent
 

@@ -20,7 +20,12 @@ mod types;
 
 pub use apply::{apply_mapping, apply_mapping_chat};
 pub use error::SpeakerIdError;
-pub use identify::{DEFAULT_CONFIDENCE_THRESHOLD, DonorMatchReport, identify_mapping};
+pub use identify::{
+    DEFAULT_CONFIDENCE_THRESHOLD, DonorMatchReport, LexicalMatchEvidence, RecordedConfidenceMargin,
+    RecordedDonorMatchReport, RecordedInputFailureKind, RecordedLexicalMatchEvidence,
+    RecordedSpeakerIdentificationAttempt, RecordedSpeakerIdentificationInput,
+    RecordedSpeakerIdentificationOutcome, identify_mapping,
+};
 pub use judgment::{
     AdultRole, AgeMonths, BlankLabelError, CURRENT_PROMPT_VERSION, ChatMessage, ConsentTierLabel,
     ConsumeError, DonorCode, HolisticJudgment, JudgmentContext, JudgmentError, JudgmentProvider,
@@ -38,4 +43,7 @@ pub use provenance::{
     Confidence, ConfidenceField, DecisionEngine, EndpointUrl, JudgmentProvenance, ModelId,
     PromptVersion,
 };
-pub use types::{ConfidenceMargin, ConfidenceThreshold, JaccardScore};
+pub use types::{
+    ConfidenceMargin, ConfidenceThreshold, ConfidenceThresholdError, FiniteConfidenceMargin,
+    JaccardScore, ParseConfidenceThresholdError,
+};

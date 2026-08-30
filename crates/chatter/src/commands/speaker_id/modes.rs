@@ -11,14 +11,15 @@ use tracing::{info, warn};
 
 use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
 use talkbank_model::{ParseValidateOptions, ParticipantRole, SpeakerCode};
-use talkbank_transform::parse_and_validate;
 use talkbank_transform::speaker_id::{CURRENT_PROMPT_VERSION, JudgmentProvider, PromptVersion};
 use talkbank_transform::speaker_id::{
     ConfidenceThreshold, EndpointUrl, JudgmentRequest, MappingSpec, MergeOverride, ModelId,
-    OverrideFile, ProvenanceMeta, SampleBudget, SessionContextFile, SessionId, SpeakerAssignment,
-    SpeakerIdError, apply_mapping, apply_mapping_chat, identify_mapping, judgment_to_pending,
-    parse_mapping_spec, sample_session, session_context,
+    OverrideFile, ProvenanceMeta, RecordedSpeakerIdentificationAttempt,
+    RecordedSpeakerIdentificationInput, SampleBudget, SessionContextFile, SessionId,
+    SpeakerAssignment, SpeakerIdError, apply_mapping, apply_mapping_chat, identify_mapping,
+    judgment_to_pending, parse_mapping_spec, sample_session, session_context,
 };
+use talkbank_transform::{PipelineError, parse_and_validate};
 
 use talkbank_llm::{
     ApiKey, CachePath, HttpJudgmentProvider, HttpProviderConfig, ResponseCache, RetryCount,
@@ -29,7 +30,7 @@ use super::support::{
     derive_session_id, exit_with_override_file_error, exit_with_speaker_id_error,
     parse_inserted_role,
 };
-use super::writes::{append_pending_entry, write_pending_entry};
+use super::writes::{append_pending_entry, write_match_report, write_pending_entry};
 
 /// Carries the relabeled CHAT plus everything an override-file entry
 /// needs to record about the decision. Exposed `pub(crate)` so the
@@ -90,6 +91,9 @@ pub(crate) struct ReferenceModeArgs<'a> {
     pub inserted_role_spec: &'a str,
     /// Jaccard winner→runner-up margin threshold.
     pub threshold: ConfidenceThreshold,
+    /// New JSON report that receives the complete lexical support before an
+    /// auto-decision succeeds or refuses.
+    pub write_match_report_path: Option<&'a Path>,
     /// If set, low-confidence refusals append a pending entry here
     /// before exit 4.
     pub write_pending_path: Option<&'a Path>,
@@ -107,6 +111,7 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
         anchor,
         inserted_role_spec,
         threshold,
+        write_match_report_path,
         write_pending_path,
         input_path,
         options,
@@ -114,8 +119,19 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
     let reference_content = match fs::read_to_string(reference_path) {
         Ok(s) => s,
         Err(e) => {
-            warn!("failed to read {}: {}", reference_path.display(), e);
-            eprintln!("Error reading {}: {}", reference_path.display(), e);
+            let message = e.to_string();
+            if let Some(path) = write_match_report_path {
+                let error = PipelineError::Io(e);
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::input_rejected(
+                        RecordedSpeakerIdentificationInput::Reference,
+                        &error,
+                    ),
+                );
+            }
+            warn!("failed to read {}: {}", reference_path.display(), message);
+            eprintln!("Error reading {}: {}", reference_path.display(), message);
             std::process::exit(EXIT_INPUT_ERROR);
         }
     };
@@ -123,6 +139,15 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
     let donor_chat = match parse_and_validate(donor_content, options.clone()) {
         Ok(c) => c,
         Err(e) => {
+            if let Some(path) = write_match_report_path {
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::input_rejected(
+                        RecordedSpeakerIdentificationInput::Donor,
+                        &e,
+                    ),
+                );
+            }
             warn!("donor parse failed: {}", e);
             eprintln!("Error parsing donor: {}", e);
             std::process::exit(EXIT_INPUT_ERROR);
@@ -131,6 +156,15 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
     let reference_chat = match parse_and_validate(&reference_content, options.clone()) {
         Ok(c) => c,
         Err(e) => {
+            if let Some(path) = write_match_report_path {
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::input_rejected(
+                        RecordedSpeakerIdentificationInput::Reference,
+                        &e,
+                    ),
+                );
+            }
             warn!("reference parse failed: {}", e);
             eprintln!("Error parsing reference: {}", e);
             std::process::exit(EXIT_INPUT_ERROR);
@@ -150,8 +184,22 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
 
     let anchor_code = SpeakerCode::new(anchor);
     let report = match identify_mapping(&reference_chat, &anchor_code, &donor_chat, threshold) {
-        Ok(r) => r,
+        Ok(report) => {
+            if let Some(path) = write_match_report_path {
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::accepted(&report, threshold),
+                );
+            }
+            report
+        }
         Err(SpeakerIdError::LowConfidence { report, threshold }) => {
+            if let Some(path) = write_match_report_path {
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::low_confidence(&report, threshold),
+                );
+            }
             if let Some(pending_path) = write_pending_path {
                 write_pending_entry(
                     pending_path,
@@ -165,13 +213,31 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
             }
             exit_with_speaker_id_error(SpeakerIdError::LowConfidence { report, threshold })
         }
-        Err(e) => exit_with_speaker_id_error(e),
+        Err(SpeakerIdError::ReferenceMissingAnchor { anchor }) => {
+            if let Some(path) = write_match_report_path {
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::reference_missing_anchor(&anchor),
+                );
+            }
+            exit_with_speaker_id_error(SpeakerIdError::ReferenceMissingAnchor { anchor })
+        }
+        Err(SpeakerIdError::DonorTooFewSpeakers { speakers }) => {
+            if let Some(path) = write_match_report_path {
+                write_match_report(
+                    path,
+                    &RecordedSpeakerIdentificationAttempt::donor_too_few_speakers(&speakers),
+                );
+            }
+            exit_with_speaker_id_error(SpeakerIdError::DonorTooFewSpeakers { speakers })
+        }
+        Err(error) => exit_with_speaker_id_error(error),
     };
 
     let mut mapping = MappingSpec::new();
-    mapping.insert(report.winner.clone(), SpeakerAssignment::Drop);
+    mapping.insert(report.winner().clone(), SpeakerAssignment::Drop);
     for spk in donor_chat.unique_utterance_speakers() {
-        if spk != report.winner {
+        if &spk != report.winner() {
             mapping.insert(
                 spk,
                 SpeakerAssignment::Rename {

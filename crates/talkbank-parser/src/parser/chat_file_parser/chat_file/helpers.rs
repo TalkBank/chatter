@@ -315,7 +315,11 @@ pub(super) fn parse_lines_with_old_tree(
     // analyze path, and each present `line` is dispatched to the unchanged inner
     // hand-walk. `DocumentLowering` borrows the Tee'd sink so its emissions are
     // recorded for the backstop's span-dedup below.
-    let mut lowering = DocumentLowering::new(input, errors, root_node.child_count());
+    let mut lowering = DocumentLowering::new(
+        input,
+        errors,
+        crate::parser::ChildCapacity::for_node(root_node),
+    );
     // A recovered document lowers exactly like a complete one: the ERROR
     // standing in for a `full_document` carries the same children, so a missing
     // `@End` still recovers every line and the absent trailer surfaces as an

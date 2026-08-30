@@ -259,6 +259,108 @@ fn speaker_id_reference_low_confidence_exits_4() -> Result<(), TestError> {
     Ok(())
 }
 
+/// A requested match report covers failures that happen before CHAT parsing,
+/// too. This is what makes it an attempt record rather than merely a score
+/// dump: an automation run can account for every donor/reference pair without
+/// guessing why one pair produced no lexical evidence.
+#[test]
+fn speaker_id_match_report_records_input_read_failures() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+
+    for missing_input in ["donor", "reference"] {
+        let case_dir = dir.path().join(missing_input);
+        fs::create_dir(&case_dir)?;
+        let donor = case_dir.join("donor.cha");
+        let reference = case_dir.join("reference.cha");
+        let report = case_dir.join("attempt.json");
+        if missing_input != "donor" {
+            fs::write(&donor, FIX_DONOR_BORDERLINE)?;
+        }
+        if missing_input != "reference" {
+            fs::write(&reference, FIX_REF_CHI_POND)?;
+        }
+
+        harness
+            .chatter_cmd()
+            .arg("speaker-id")
+            .arg(&donor)
+            .arg("--reference")
+            .arg(&reference)
+            .arg("--anchor")
+            .arg("CHI")
+            .arg("--inserted-role")
+            .arg("INV:Investigator")
+            .arg("--write-match-report")
+            .arg(&report)
+            .assert()
+            .failure()
+            .code(1);
+
+        let recorded: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&report)?).expect("typed attempt JSON");
+        assert_eq!(recorded["outcome"], "input_rejected");
+        assert_eq!(recorded["input"], missing_input);
+        assert_eq!(recorded["failure_kind"], "io");
+        assert_eq!(recorded["diagnostic_codes"], serde_json::json!([]));
+    }
+
+    Ok(())
+}
+
+/// Match evidence is complete enough for calibration and immutable once
+/// published. A retry must fail rather than replace the observations behind a
+/// prior decision.
+#[test]
+fn speaker_id_match_report_records_support_and_refuses_overwrite() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let donor = dir.path().join("donor.cha");
+    let reference = dir.path().join("reference.cha");
+    let report = dir.path().join("attempt.json");
+    fs::write(&donor, FIX_DONOR_BORDERLINE)?;
+    fs::write(&reference, FIX_REF_CHI_POND)?;
+
+    let command = || {
+        let mut command = harness.chatter_cmd();
+        command
+            .arg("speaker-id")
+            .arg(&donor)
+            .arg("--reference")
+            .arg(&reference)
+            .arg("--anchor")
+            .arg("CHI")
+            .arg("--inserted-role")
+            .arg("INV:Investigator")
+            .arg("--write-match-report")
+            .arg(&report);
+        command
+    };
+
+    command().assert().failure().code(4);
+    let original = fs::read(&report)?;
+    let recorded: serde_json::Value =
+        serde_json::from_slice(&original).expect("typed match report JSON");
+    assert_eq!(recorded["outcome"], "low_confidence");
+    assert_eq!(recorded["threshold"], 2.0);
+    assert!(recorded["match_report"]["speakers"]["PAR0"]["reference_tokens"].is_number());
+    assert!(recorded["match_report"]["speakers"]["PAR0"]["shared_tokens"].is_number());
+    assert!(recorded["match_report"]["speakers"]["PAR1"]["union_tokens"].is_number());
+
+    command()
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Error creating match report"));
+    assert_eq!(
+        fs::read(&report)?,
+        original,
+        "retry must not replace evidence"
+    );
+
+    Ok(())
+}
+
 /// On a low-confidence reference-mode run, `--write-pending` records
 /// a `PendingEntry` so the orchestrator can hand it to
 /// `chatter adjudicate` in a later step. Exit code is still 4, the
@@ -360,19 +462,18 @@ const FIX_DONOR_CLEAN_WINNER: &str = "@UTF8
 @End
 ";
 
-/// `chatter speaker-id` in reference mode with `--write-override`
-/// appends the auto-decided record to the named override file,
-/// creating it if absent. The file is the durable audit trail of
-/// batch runs: years later the entry tells a researcher *why* PAR0
-/// was dropped and PAR1 became INV, on the basis of which Jaccard
-/// scores.
+/// A clean reference-mode decision can write both the replayable override and
+/// the immutable support report in one run. The two artifacts answer different
+/// questions: what mapping to replay, and how much lexical evidence supported
+/// it.
 #[test]
-fn speaker_id_reference_writes_override() -> Result<(), TestError> {
+fn speaker_id_reference_writes_override_and_match_report() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let dir = tempdir()?;
     let donor = dir.path().join("donor.cha");
     let reference = dir.path().join("ref.cha");
     let overrides = dir.path().join("batch.overrides.toml");
+    let report = dir.path().join("attempt.json");
     let out = dir.path().join("relabeled.cha");
     fs::write(&donor, FIX_DONOR_CLEAN_WINNER)?;
     fs::write(&reference, FIX_REF_CHI_FROG)?;
@@ -389,6 +490,8 @@ fn speaker_id_reference_writes_override() -> Result<(), TestError> {
         .arg("INV:Investigator")
         .arg("--write-override")
         .arg(&overrides)
+        .arg("--write-match-report")
+        .arg(&report)
         .arg("-o")
         .arg(&out)
         .assert()
@@ -408,6 +511,22 @@ fn speaker_id_reference_writes_override() -> Result<(), TestError> {
     assert!(
         relabeled.contains("*INV:"),
         "PAR1 should be renamed to *INV: per --inserted-role:\n{relabeled}"
+    );
+
+    let recorded: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&report)?).expect("typed match report JSON");
+    assert_eq!(recorded["outcome"], "accepted");
+    assert_eq!(recorded["match_report"]["winner"], "PAR0");
+    assert_eq!(recorded["match_report"]["margin"]["kind"], "finite");
+    assert!(
+        recorded["match_report"]["margin"]["ratio"]
+            .as_f64()
+            .is_some_and(|ratio| ratio >= 2.0)
+    );
+    assert!(
+        recorded["match_report"]["speakers"]["PAR0"]["shared_tokens"]
+            .as_u64()
+            .is_some_and(|count| count > 0)
     );
 
     // Override file exists and carries the decision.

@@ -41,7 +41,7 @@ fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), S
         }
 
         for i in 0..node.child_count() {
-            if let Some(child) = node.child(i as u32)
+            if let Some(child) = node.child(i)
                 && let Some(found) = find_tier_node(child)
             {
                 return Some(found);

@@ -38,7 +38,7 @@
 //!
 //! # The ratchet, and what 100% means
 //!
-//! [`UNCOVERED_PAIRS`] lists combinations real transcripts contain that the
+//! `UNCOVERED_PAIRS` lists combinations real transcripts contain that the
 //! reference corpus does not. An entry that becomes covered FAILS, so the list
 //! cannot rot into a permanent excuse after somebody adds the fixture and
 //! forgets to prune it. The finish line is the list being empty, which is what
@@ -65,28 +65,68 @@ use std::path::{Path, PathBuf};
 use crate::gate::{Gate, GateOutcome, listing};
 use crate::test_error::TestError;
 
-/// One construct written directly inside another: `group` containing
-/// `long_feature_begin`.
+/// Tree-sitter node-kind identity within one grammar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct TreeSitterKindId(u16);
+
+/// One grammar-scoped construct written directly inside another.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ConstructPair {
+    parent: TreeSitterKindId,
+    child: TreeSitterKindId,
+}
+
+/// A policy pair named at the source boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NamedConstructPair {
     parent: &'static str,
     child: &'static str,
 }
 
-impl std::fmt::Display for ConstructPair {
+impl std::fmt::Display for NamedConstructPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} -> {}", self.parent, self.child)
     }
 }
 
+/// Covered pairs bound to the exact grammar that assigned their IDs.
+struct CoveredPairs {
+    language: tree_sitter::Language,
+    pairs: BTreeSet<ConstructPair>,
+}
+
+impl CoveredPairs {
+    fn len(&self) -> usize {
+        self.pairs.len()
+    }
+
+    fn contains_named(&self, pair: NamedConstructPair) -> Result<bool, String> {
+        let parent = self.resolve_named_kind(pair.parent)?;
+        let child = self.resolve_named_kind(pair.child)?;
+        Ok(self.pairs.contains(&ConstructPair { parent, child }))
+    }
+
+    fn resolve_named_kind(&self, name: &str) -> Result<TreeSitterKindId, String> {
+        let id = self.language.id_for_node_kind(name, true);
+        if self.language.node_kind_for_id(id) == Some(name) {
+            Ok(TreeSitterKindId(id))
+        } else {
+            Err(format!(
+                "coverage policy names unknown grammar node kind `{name}`"
+            ))
+        }
+    }
+}
+
 /// Collect every parent-to-child pair the given files produce.
 ///
-/// `tree_sitter::Node::kind()` returns `&'static str`, so the census borrows
-/// throughout and allocates nothing per node.
-fn pairs_in(files: &[PathBuf]) -> Result<BTreeSet<ConstructPair>, TestError> {
+/// Kind IDs are collected without per-node allocation and remain bundled with
+/// the [`tree_sitter::Language`] that gives those IDs meaning.
+fn pairs_in(files: &[PathBuf]) -> Result<CoveredPairs, TestError> {
+    let language: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
     let mut parser = tree_sitter::Parser::new();
     parser
-        .set_language(&tree_sitter_talkbank::LANGUAGE.into())
+        .set_language(&language)
         .map_err(|e| TestError::ParserInit(format!("cannot load the CHAT grammar: {e}")))?;
 
     let mut pairs = BTreeSet::new();
@@ -105,7 +145,7 @@ fn pairs_in(files: &[PathBuf]) -> Result<BTreeSet<ConstructPair>, TestError> {
             files.len()
         )));
     }
-    Ok(pairs)
+    Ok(CoveredPairs { language, pairs })
 }
 
 /// Record each named child against its parent, then descend.
@@ -113,8 +153,8 @@ fn walk(node: tree_sitter::Node<'_>, pairs: &mut BTreeSet<ConstructPair>) {
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         pairs.insert(ConstructPair {
-            parent: node.kind(),
-            child: child.kind(),
+            parent: TreeSitterKindId(node.kind_id()),
+            child: TreeSitterKindId(child.kind_id()),
         });
         walk(child, pairs);
     }
@@ -208,11 +248,13 @@ impl Gate for ConstructCoverageGate {
             cha_files_under(&root).map_err(|e| format!("cannot list the reference corpus: {e}"))?;
         let covered = pairs_in(&files).map_err(|e| format!("cannot measure coverage: {e}"))?;
 
-        let retired: Vec<ConstructPair> = UNCOVERED_PAIRS
-            .iter()
-            .map(|(parent, child)| ConstructPair { parent, child })
-            .filter(|pair| covered.contains(pair))
-            .collect();
+        let mut retired = Vec::new();
+        for &(parent, child) in UNCOVERED_PAIRS {
+            let pair = NamedConstructPair { parent, child };
+            if covered.contains_named(pair)? {
+                retired.push(pair);
+            }
+        }
 
         if retired.is_empty() {
             return Ok(format!(

@@ -66,7 +66,7 @@ fn build_rule_selection(strict_linkers: bool) -> talkbank_model::RuleSelection {
 /// (They did: a string-set filter and a typed cache-key builder each
 /// interpreted the list separately, and only one of them was ever right.)
 ///
-/// Values are matched case-insensitively against real [`ErrorCode`]s, and a
+/// Values are matched case-insensitively against real [`talkbank_model::ErrorCode`]s, and a
 /// value naming no real code is skipped: an unrecognised string would never
 /// have matched a diagnostic either. Unlike `validate_paths_parallel`'s
 /// `--suppress` there is no named-group expansion (`xphon`, etc.); `chatter

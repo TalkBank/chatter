@@ -205,6 +205,61 @@ fn rediarize_writes_summary_json() -> Result<(), TestError> {
     Ok(())
 }
 
+/// The JSON boundary reports union-held time for repeated turns from one
+/// track. This is a wire-format measurement: the ordered timeline type keeps
+/// callers from bypassing ordering, but no type can prohibit a diarizer from
+/// legitimately emitting overlapping segments for the same speaker.
+#[test]
+fn rediarize_counts_same_track_overlap_once_in_summary_json() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let input = dir.path().join("overlapping-turns.cha");
+    let turns = dir.path().join("overlapping-turns.json");
+    let out = dir.path().join("rediarized.cha");
+    let summary_path = dir.path().join("summary.json");
+    fs::write(&input, FIX_UNDERCOUNTED_2SPK)?;
+    fs::write(
+        &turns,
+        r#"{"turns": [
+            {"track": "PAR0", "start_ms": 0, "end_ms": 1000},
+            {"track": "PAR2", "start_ms": 1000, "end_ms": 1600},
+            {"track": "PAR2", "start_ms": 1400, "end_ms": 1800},
+            {"track": "PAR1", "start_ms": 1800, "end_ms": 3000}
+        ]}"#,
+    )?;
+
+    let output = harness.run_output(&[
+        "rediarize",
+        input.to_str().expect("utf-8 temp path"),
+        "--turns",
+        turns.to_str().expect("utf-8 temp path"),
+        "-o",
+        out.to_str().expect("utf-8 temp path"),
+        "--contested-at",
+        "0.19",
+        "--summary-json",
+        summary_path.to_str().expect("utf-8 temp path"),
+    ])?;
+    crate::common::assert_success(&output, "chatter rediarize with overlapping turns");
+
+    let summary: serde_json::Value = serde_json::from_str(&fs::read_to_string(&summary_path)?)?;
+    let contested = summary["contested"]
+        .as_array()
+        .expect("contested should be an array");
+    assert_eq!(
+        contested.len(),
+        1,
+        "PAR1 holds 200 of 1000 track-ms, so the second utterance is contested: {summary}"
+    );
+    assert_eq!(
+        contested[0]["ownership"]["shares"],
+        serde_json::json!([["PAR2", 800], ["PAR1", 200]]),
+        "same-track overlap must count once: {summary}"
+    );
+    assert_eq!(contested[0]["ownership"]["total_ms"], 1000, "{summary}");
+    Ok(())
+}
+
 /// A turns file with an inverted span (`end_ms < start_ms`) is a
 /// defective diarization input: the command must refuse it with a
 /// diagnostic naming the problem, not silently proceed.

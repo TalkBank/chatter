@@ -1,7 +1,7 @@
 # Dependent Tiers
 
 **Status:** Reference
-**Last updated:** 2026-07-31 09:51 EDT
+**Last updated:** 2026-08-30 15:51 EDT
 
 Dependent tiers appear on lines beginning with `%` immediately after an utterance. They provide annotations linked to the main tier content.
 
@@ -72,8 +72,10 @@ Multiple simultaneous gestures use bracket grouping: `〔g:toy:hold g:toy:shake�
 ### %wor, Word Timing
 
 The `%wor` tier carries word-level timing annotations for media synchronization.
-Words may include inline bullets with millisecond timestamps. Word text is
-display-only ("eye candy"); timing data comes from the bullet fields.
+Words may include inline bullets with millisecond timestamps. Timing data comes
+from the bullet fields. Word text is not lexical authority, but consumers may
+compare it with chatter's canonical generated display sequence to refuse stale
+same-count timing reuse.
 
 > **⚠ IMPORTANT: `%wor` word text is the *cleaned* form, by design.** When
 > chatter serializes a `%wor` word it writes the word's **cleaned text**, the
@@ -112,9 +114,11 @@ word-level alignment rule:
 - **Overlap markers do not change `%wor` membership.**
 
 `%wor` is a timing-annotation tier. Its word count equals the number of Wor-domain
-words and may differ from a naive main-tier word count. There is no downstream
-positional indexing into `%wor`; the `%wor` count is not validated against the
-main-tier word count.
+words and may differ from a naive main-tier word count. CHAT validation does not
+require the `%wor` count to match the current main tier. Timing consumers first
+require equal counts and then require every `%wor` display token to match the
+canonical token derived from its main-tier position. A mismatch refuses timing
+reuse without making the legacy CHAT file invalid.
 
 ```chat
 *CHI:	I want cookies .

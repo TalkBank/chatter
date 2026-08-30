@@ -118,15 +118,17 @@ pub(crate) fn build_alignment_sidecar(
                     .map(|a| collect_alignment_pairs(&a.pairs))
                     .unwrap_or_default(),
                 // `%wor` is a timing sidecar, not a structural alignment
-                // (see KIB-016). When the tier is present and its filtered
-                // count matches the main tier's Wor-filtered count, the
-                // correspondence is trivially positional 0↔0, 1↔1, …, so
-                // we synthesize the per-index pairs for wire compatibility
-                // with the TS client. When drifted, we emit an empty list
-                //, no positional recovery is safe.
+                // (see KIB-016). Equal filtered counts make the legacy
+                // positional convention available, but do not prove common
+                // origin after a same-count edit. We synthesize those
+                // convention-based pairs for wire compatibility with the TS
+                // client. Count drift emits no pairs.
                 wor: alignments
                     .and_then(|a| a.wor_timings.as_ref())
-                    .and_then(|s| s.positional_count())
+                    .and_then(|sidecar| match sidecar {
+                        talkbank_model::WorTimingSidecar::Positional { count } => Some(*count),
+                        talkbank_model::WorTimingSidecar::Drifted { .. } => None,
+                    })
                     .map(|n| {
                         (0..n)
                             .map(|i| AlignmentPairView {

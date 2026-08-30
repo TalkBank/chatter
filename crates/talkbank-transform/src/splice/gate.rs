@@ -11,14 +11,14 @@
 //! # Gap-walk, not re-apply-and-compare
 //!
 //! chatter runs over corpora of six figures of files. Rebuilding a second
-//! copy of every fixed file (via [`apply_edits`](super::engine::apply_edits))
+//! copy of every fixed file (via [`crate::splice::apply_edits`])
 //! just to diff it against the copy already in hand is a real, avoidable
 //! per-file cost at that scale, not a style question; a prior release had
 //! to be pulled for a per-file cost that was quadratic at that scale. The
 //! gap-walk makes no second allocation: it reads bytes directly out of
 //! `original` and `spliced` using the same edit-to-span mapping
-//! ([`super::engine::mapped_edit_sites`]) that
-//! [`apply_edits`](super::engine::apply_edits) itself builds its output
+//! ([`crate::splice::mapped_edit_sites`]) that
+//! [`crate::splice::apply_edits`] itself builds its output
 //! from, so the two computations cannot drift apart, and `chatter fix`'s
 //! post-splice re-check shares the same mapping rather than folding its
 //! own copy of the cumulative-delta arithmetic.
@@ -36,7 +36,7 @@
 //! would have waved every one of those 674 undetected files straight
 //! through.
 //!
-//! That incident is why [`super::BatchSafety`] gates the DEFAULT write set
+//! That incident is why [`crate::splice::BatchSafety`] gates the DEFAULT write set
 //! in `chatter fix` (mechanical fixes only, unattended; semantic fixes
 //! require a human to name the code; ambiguous fixes are never
 //! batch-applied) instead of this gate, or the diagnostic re-check layered
@@ -48,7 +48,7 @@
 //!
 //! [`apply_edits_verified`] splices and verifies in one call, returning the
 //! checked string. That is the intended default for anything that reaches
-//! disk: prefer it over calling [`apply_edits`](super::engine::apply_edits)
+//! disk: prefer it over calling [`crate::splice::apply_edits`]
 //! and then this module's `verify_splice` separately, which a future
 //! caller could forget to do. Reach for the two functions separately only
 //! when a caller genuinely needs the raw, unverified splice (this
@@ -92,9 +92,9 @@ pub enum GateError {
 ///
 /// See the module docs for what this check does NOT prove.
 ///
-/// A thin wrapper over [`verify_splice_mapped`] that computes the mapping
+/// A thin wrapper over `verify_splice_mapped` that computes the mapping
 /// itself; [`apply_edits_verified`] already has the mapping in hand (from
-/// [`splice_with_sites`]) and calls that entry point directly instead, so
+/// `splice_with_sites`) and calls that entry point directly instead, so
 /// a splice-then-verify never folds [`mapped_edit_sites`] twice over the
 /// same inputs.
 pub fn verify_splice(
@@ -109,7 +109,7 @@ pub fn verify_splice(
 /// The gap-walk itself, over an ALREADY-COMPUTED edit mapping.
 ///
 /// Exists so [`apply_edits_verified`] can share the one [`MappedEdit`]
-/// fold [`splice_with_sites`] already did to build `spliced`, rather than
+/// fold `splice_with_sites` already did to build `spliced`, rather than
 /// [`verify_splice`] recomputing [`mapped_edit_sites`] on the identical
 /// `(original, applied)` a second time: that second fold could never
 /// disagree with the first (both are the same deterministic function on
@@ -117,7 +117,7 @@ pub fn verify_splice(
 /// real value of this gap-walk is checking the ASSEMBLY loop's output
 /// bytes, which sharing the mapping preserves completely. Not exported
 /// beyond this crate: `mapped` must be the actual mapping the caller used
-/// to build `spliced`, which only [`splice_with_sites`] and
+/// to build `spliced`, which only `splice_with_sites` and
 /// [`mapped_edit_sites`] can honestly produce.
 pub(crate) fn verify_splice_mapped(
     original: &str,
@@ -177,11 +177,11 @@ pub(crate) fn verify_splice_mapped(
 ///
 /// The single ergonomic way to get gated splice output: see the module
 /// docs' "obvious way to get a gated result" section. Built on
-/// [`splice_with_sites`] rather than [`apply_edits`](super::engine::apply_edits)
+/// `splice_with_sites` rather than [`crate::splice::apply_edits`]
 /// plus [`verify_splice`]: the two functions together would fold
 /// [`mapped_edit_sites`] twice over the identical `(source, edits)`, once
 /// inside `apply_edits` and again inside `verify_splice`, which cannot
-/// catch anything a single fold does not (see [`verify_splice_mapped`]'s
+/// catch anything a single fold does not (see `verify_splice_mapped`'s
 /// docs). This computes the mapping once and hands it to both the
 /// assembly step and the gap-walk.
 pub fn apply_edits_verified(source: &str, edits: &[SpliceEdit]) -> Result<String, GateError> {

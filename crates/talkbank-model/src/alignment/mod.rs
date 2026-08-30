@@ -28,6 +28,11 @@
 //!   bullets attached to the subset of main-tier words that passed the
 //!   Wor-domain filter at `align` time.
 //! - Expressed as [`WorTimingSidecar`] (see `wor.rs`), not a `TierAlignmentResult`.
+//! - [`WorTimingBinding`] proves only whether slot counts match under the named
+//!   membership policy. Count matching exposes no timing slots.
+//! - [`WorTimingCorrespondence`] then compares `%wor` display tokens with the
+//!   canonical tokens derived from the main tier. Only `Corroborated` exposes
+//!   timing. `%wor` text can refuse reuse but never becomes lexical authority.
 //! - No positional indexing is defined when filtered counts differ; this
 //!   is the normal state of any transcript edited without re-running `align`.
 //! - Count mismatches are reported as [`WorTimingSidecar::Drifted`], never as
@@ -128,4 +133,13 @@ pub use pho::{PhoAlignment, align_main_to_pho};
 pub use sin::{SinAlignment, align_main_to_sin};
 pub use traits::{AlignableTier, IndexPair, TierAlignmentResult, TierCountable, positional_align};
 pub use types::AlignmentPair;
-pub use wor::{WorTimingSidecar, resolve_wor_timing_sidecar};
+pub use wor::{
+    CompleteWorTimingSlot, CompleteWorTimings, CorroboratedWorTimingSlot, CorroboratedWorTimings,
+    CountMatchedWorTimings, EmptyWorTimingSequence, MainWorSlotCount, MissingWorTimings,
+    RejectedWorTimingSequence, UncorroboratedWorTimings, WorAdjacentTimingRelation, WorDurationMs,
+    WorLexicalMismatch, WorMainTierProjection, WorMediaOffsetMs, WorRecordedInterval, WorSlotIndex,
+    WorSlotMembershipPolicy, WorSlotTiming, WorTierSlotCount, WorTimingBinding,
+    WorTimingCorrespondence, WorTimingDrift, WorTimingHull, WorTimingSequence,
+    WorTimingSequenceIssue, WorTimingSidecar, assess_wor_timing_sequence, bind_wor_timing,
+    corroborate_wor_timing, resolve_wor_timing_sidecar,
+};

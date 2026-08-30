@@ -13,7 +13,7 @@ pub(super) fn expect_child_kind(
     child: Node,
     expected: &str,
     context: &str,
-    index: usize,
+    index: u32,
     errors: &impl ErrorSink,
 ) -> bool {
     if child.kind() == expected {

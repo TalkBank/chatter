@@ -59,6 +59,13 @@ const PARTIAL_FIXTURE: &str = "@UTF8\n@Begin\n*CHI:\txx .\n*MOT:\t&- .\n@End\n";
 /// on exactly these two, with no other diagnostic muddying either result.
 const MECHANICAL_AND_SEMANTIC_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|test|CHI|||||Child|||\n*CHI:\t, xx .\n@End\n";
 
+/// E750 is unusual among mechanical fixes: its invalid delimiter whitespace
+/// is dropped from the parsed model and therefore taints the utterance that
+/// contains the repair site. The catalog-owned deletion must be admitted into
+/// that one recovered region, then prove itself through the normal post-splice
+/// reparse gate.
+const RECOVERY_REPAIR_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|test|CHI|||||Child|||\n*CHI:\t< dog > [/] dog .\n@End\n";
+
 /// Convert a fixture path to the `&str` the CLI takes, or fail the test
 /// with a real reason instead of a bare `Option`-unwrap panic.
 fn path_arg(path: &std::path::Path) -> Result<&str, TestError> {
@@ -271,6 +278,39 @@ fn fixed_file_clears_the_targeted_code_under_independent_validation() -> Result<
         !validate_stderr.contains("E241"),
         "E241 still fires under independent validation after the fix that was \
          supposed to clear it: {validate_stderr}"
+    );
+    Ok(())
+}
+
+/// The typed recovery-repair exception is exercised at the real command
+/// boundary. Both delimiter spaces are removed, the file is written only
+/// after reparsing, and an independent validation run confirms E750 is gone.
+#[test]
+fn catalog_recovery_repair_clears_e750_after_reparse() -> Result<(), TestError> {
+    let (harness, path) = harness_with_fixture("recovery-repair.cha", RECOVERY_REPAIR_FIXTURE)?;
+
+    let fix_output = harness.run_output(&["fix", path_arg(&path)?, "--apply"])?;
+    assert!(
+        fix_output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&fix_output.stderr)
+    );
+    let after = fs::read_to_string(&path)?;
+    assert!(
+        after.contains("*CHI:\t<dog> [/] dog ."),
+        "the E750 repair did not preserve the group while removing both spaces: {after}"
+    );
+
+    let validate_output = harness.run_output(&["validate", path_arg(&path)?, "--force"])?;
+    assert!(
+        validate_output.status.success(),
+        "fixed file did not validate: {}",
+        String::from_utf8_lossy(&validate_output.stderr)
+    );
+    let validate_stderr = String::from_utf8_lossy(&validate_output.stderr);
+    assert!(
+        !validate_stderr.contains("E750"),
+        "E750 still fires after its catalog repair: {validate_stderr}"
     );
     Ok(())
 }

@@ -18,7 +18,7 @@
 //!
 //! Below a fixed prelude (module docs, `#![allow(...)]`, `use` lines, and the
 //! three `impl_inspect_*!` `macro_rules!` definitions, kept verbatim in
-//! [`PRELUDE`]) the generator emits four mechanical sections, parsed out of the
+//! `PRELUDE`) the generator emits four mechanical sections, parsed out of the
 //! typed traversal with `syn`:
 //!
 //! 1. **Leaf list**: one `impl_inspect_leaf!(...)` listing every

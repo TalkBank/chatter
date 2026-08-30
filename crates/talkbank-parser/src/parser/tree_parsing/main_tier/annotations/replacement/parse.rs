@@ -10,6 +10,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::helpers::{expect_child_kind, report_unexpected_kind};
+use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::main_tier::word::convert_word_node;
 
 /// Parse a replacement annotation node into `Replacement`.
@@ -19,11 +20,11 @@ pub(crate) fn parse_replacement(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Replacement> {
     let child_count = node.child_count();
-    let mut words = Vec::with_capacity((child_count / 2).max(1));
+    let mut words = ChildCapacity::from_upper_bound((child_count / 2).max(1)).into_vec();
     let mut idx = 0;
 
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         // Report error if not the expected kind, but always advance
         expect_child_kind(
@@ -39,7 +40,7 @@ pub(crate) fn parse_replacement(
     }
 
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         // Report error if not the expected kind, but always advance
         expect_child_kind(node, source, child, "colon", "replacement", idx, errors);
@@ -47,7 +48,7 @@ pub(crate) fn parse_replacement(
     }
 
     while idx < child_count {
-        if let Some(child) = node.child(idx as u32) {
+        if let Some(child) = node.child(idx) {
             match child.kind() {
                 WHITESPACES => {
                     idx += 1;
@@ -114,7 +115,7 @@ pub(crate) fn parse_replacement(
     }
 
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
         && child.kind() != RIGHT_BRACKET
     {
         errors.report(ParseError::new(

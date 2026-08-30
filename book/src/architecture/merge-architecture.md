@@ -1,7 +1,7 @@
 # Merge Pipeline, Crate Architecture
 
 **Status:** Draft
-**Last modified:** 2026-07-31 06:13 EDT
+**Last modified:** 2026-08-30 15:12 EDT
 
 This page explains where the new merge-pipeline code lives in the
 `chatter` workspace, which crates gain modules, what
@@ -153,8 +153,8 @@ crates/talkbank-transform/src/speaker_id/
                        prompt rendering, provider, consume)
 
 crates/talkbank-transform/src/transcript_merge.rs
-    merge_chats (preconditions, header reconciliation, timeline
-    interleave, tier strip), MergeError, DEFAULT_STRIP_TIERS
+    merge_chat_files (preconditions, header reconciliation, timeline
+    interleave, tier strip) -> Merged, MergeError, DEFAULT_STRIP_TIERS
 
 crates/talkbank-transform/src/adjudication.rs
     run_adjudication core, Prompter trait, ScriptedPrompter,
@@ -195,8 +195,10 @@ crates/chatter/src/commands/speaker_id/
                   derivation, typed error-to-exit-code mapping)
 
 crates/chatter/src/commands/transcript_merge.rs
-    run_merge: drives talkbank_transform::transcript_merge::merge_chats,
-    maps MergeError to exit codes
+    run_merge: parses both inputs, drives merge_chat_files, reports
+    MergeNotice values, maps MergeError to exit codes
+    MergeNotice / report_merge_notices: the operator-facing warnings,
+    shared with commands::pipeline so both merge paths say the same thing
 
 crates/chatter/src/commands/adjudicate.rs   chatter adjudicate
 crates/chatter/src/commands/pipeline.rs     chatter pipeline (speaker-id
@@ -249,29 +251,38 @@ sequenceDiagram
     actor Operator
     participant CLI as chatter<br/>(cli/args/core.rs, Commands::Merge)
     participant Runner as commands::transcript_merge<br/>(run_merge)
-    participant Merge as talkbank-transform::transcript_merge<br/>(merge_chats)
+    participant Merge as talkbank-transform::transcript_merge<br/>(merge_chat_files)
 
     Operator->>CLI: chatter merge file1 file2 --retain CHI
     CLI->>Runner: run_merge(file1, file2, retain, output)
-    Runner->>Merge: merge_chats(content1, content2, retain, strip_tiers, options)
-    Merge->>Merge: parse_and_validate both inputs
+    Runner->>Runner: read and parse_and_validate both inputs
+    Runner->>Merge: merge_chat_files(f1, f2, retain, strip_tiers)
     Merge->>Merge: preconditions (retain / timeline /<br/>languages / ambiguous / already-declared)
     Merge->>Merge: header reconcile (@Participants concat<br/>with dedupe-on-insert; @ID / @Comment injection)
     Merge->>Merge: tier strip on inserted utts · timeline sort
-    Merge-->>Runner: merged CHAT String or MergeError
+    Merge-->>Runner: Merged (file + origins + per-input fates) or MergeError
     alt Ok(merged)
-        Runner->>Runner: write to -o path (or stdout)
+        Runner->>Operator: stderr: MergeNotice sentences<br/>(e.g. File 1 speakers dropped by --retain)
+        Runner->>Runner: serialize via into_file, write to -o path (or stdout)
         Runner-->>Operator: exit 0
     else Err(MergeError)
         Runner-->>Operator: formatted stderr + exit code 2 (Parse: exit 1)
     end
 ```
 
-The CLI layer is thin: clap parses arguments into the `Commands::Merge`
-variant, `run_merge` calls the transform layer's `merge_chats`
-function, and translates the `Result<String, MergeError>` into
-stdout/stderr/exit-code output. All algorithm logic lives in
-`talkbank-transform`.
+The CLI layer is thin, but it is no longer a pass-through: clap parses
+arguments into the `Commands::Merge` variant, `run_merge` reads and parses
+both inputs, calls the transform layer's `merge_chat_files`, and translates
+the `Result<Merged, MergeError>` into stdout/stderr/exit-code output. All
+algorithm logic lives in `talkbank-transform`.
+
+It parses because the merge returns a `Merged`, not text: the provenance is
+what lets it report what the merge DROPPED. A
+File 1 speaker outside `--retain` loses every utterance while keeping its
+`@Participants` row, and that was invisible to every operator until the CLI
+moved onto the typed API. `commands::pipeline` does the same and calls the
+same `report_merge_notices`, because a warning written at one call site is a
+warning the other command silently lacks.
 
 ## Data flow for `chatter speaker-id`
 
@@ -364,7 +375,9 @@ library consumer would see):
 | Crate | New `pub` items | Stability |
 |---|---|---|
 | `talkbank-model` | None; the merge work reuses the existing CHAT vocabulary (`SpeakerCode`, `ParticipantRole`, `ParticipantEntry`, `IDHeader`, `ChatFile`) unmodified | Unchanged |
-| `talkbank-transform` | `speaker_id::{identify_mapping, apply_mapping, apply_mapping_chat, parse_mapping_spec, MappingSpec, SpeakerAssignment, DonorMatchReport, SpeakerIdError, CURRENT_SCHEMA_VERSION, OverrideFile, MergeOverride, OverrideMode, SpeakerAction, InsertedRoleSpec, OverrideFileError, ...}` (plus the `judgment` and provenance surfaces); `transcript_merge::{merge_chats, MergeError, DEFAULT_STRIP_TIERS}`; `adjudication::*`; `sanity_scan::*` | Stable, algorithms behind these are pinned by the test plan's L2 tests |
+| `talkbank-transform` | `speaker_id::{identify_mapping, apply_mapping, apply_mapping_chat, parse_mapping_spec, MappingSpec, SpeakerAssignment, DonorMatchReport, SpeakerIdError, CURRENT_SCHEMA_VERSION, OverrideFile, MergeOverride, OverrideMode, SpeakerAction, InsertedRoleSpec, OverrideFileError, ...}` (plus the `judgment` and provenance surfaces); `transcript_merge::{merge_chat_files, MergeError, DEFAULT_STRIP_TIERS,
+  Merged, Reported, MergeOrigin, ReferenceFate, DonorFate, ReferenceIdx,
+  DonorIdx}`; `adjudication::*`; `sanity_scan::*` | Stable, algorithms behind these are pinned by the test plan's L2 tests |
 | `chatter` | New `Commands` enum variants (`Merge`, `SpeakerId`, `Adjudicate`, `Pipeline`, `Batch`, `SanityScan`) | Internal to the binary, not a library surface |
 
 No existing public surface is modified or removed; this is a

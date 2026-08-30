@@ -124,6 +124,51 @@ fn pipeline_clean_winner_end_to_end() -> Result<(), TestError> {
     Ok(())
 }
 
+/// An explicitly supplied override file is authoritative operator input.
+/// Malformed content must stop the pipeline instead of being erased into
+/// "no override configured" and silently triggering a fresh automatic match.
+#[test]
+fn pipeline_refuses_malformed_override_file() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let donor = dir.path().join("donor.cha");
+    let reference = dir.path().join("ref.cha");
+    let overrides = dir.path().join("overrides.toml");
+    let out = dir.path().join("merged.cha");
+    fs::write(&donor, FIX_DONOR_CLEAN_WINNER)?;
+    fs::write(&reference, FIX_REF_CHI_FROG)?;
+    fs::write(&overrides, "this is not = valid TOML [")?;
+
+    let assert = harness
+        .chatter_cmd()
+        .arg("pipeline")
+        .arg(&donor)
+        .arg(&reference)
+        .arg("--anchor")
+        .arg("CHI")
+        .arg("--inserted-role")
+        .arg("INV:Investigator")
+        .arg("--retain")
+        .arg("CHI")
+        .arg("--override-file")
+        .arg(&overrides)
+        .arg("-o")
+        .arg(&out)
+        .assert()
+        .failure();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("overrides.toml"),
+        "the refusal must name the malformed operator input:\n{stderr}"
+    );
+    assert!(
+        !out.exists(),
+        "no merged output may be written after override-file refusal"
+    );
+    Ok(())
+}
+
 /// Reference that PARSES cleanly but fails `chatter validate`: a
 /// well-formed-but-wrong `@ID` where `Target_Child` lands in the SES
 /// field (3 pipes after the age, role field left empty), triggering
@@ -187,6 +232,80 @@ fn pipeline_refuses_validation_invalid_reference() -> Result<(), TestError> {
     assert!(
         !out.exists(),
         "no merged output may be written when an input is invalid CHAT"
+    );
+    Ok(())
+}
+
+/// A reference whose MOT is outside `--retain`, so the pipeline drops it.
+///
+/// Same shape as `FIX_REF_CHI_FROG` plus one `*MOT:` utterance. MOT appears in
+/// the reference only, so `AmbiguousSpeaker` does not refuse it.
+const FIX_REF_CHI_FROG_WITH_MOT: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child, MOT Mother
+@ID:\teng|frogstory|CHI|3;06.||||Target_Child|||
+@ID:\teng|frogstory|MOT|||||Mother|||
+@Media:\tpipeline_smoke, audio
+*CHI:\twhere did the frog go . \u{15}0_2000\u{15}
+*MOT:\tit went that way . \u{15}2100_2400\u{15}
+*CHI:\tthe frog fell in the jar . \u{15}2500_4500\u{15}
+*CHI:\twhere is my frog . \u{15}5000_6500\u{15}
+@End
+";
+
+/// `chatter pipeline` warns about dropped File 1 speakers, exactly as
+/// `chatter merge` does.
+///
+/// This test exists because the warning was added to `chatter merge` first and
+/// the pipeline stayed silent, which was the worse half: `chatter batch`
+/// drives THIS path, so the silent one was the path that runs whole corpora.
+/// Without a case here, deleting the reporter call from `run_pipeline` leaves
+/// the suite green, and the fix's own stated reason for existing is unpinned.
+#[test]
+fn pipeline_warns_when_a_reference_speaker_is_dropped_by_retain() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let donor = dir.path().join("donor.cha");
+    let reference = dir.path().join("ref.cha");
+    let out = dir.path().join("merged.cha");
+    fs::write(&donor, FIX_DONOR_CLEAN_WINNER)?;
+    fs::write(&reference, FIX_REF_CHI_FROG_WITH_MOT)?;
+
+    let assert = harness
+        .chatter_cmd()
+        .arg("pipeline")
+        .arg(&donor)
+        .arg(&reference)
+        .arg("--anchor")
+        .arg("CHI")
+        .arg("--inserted-role")
+        .arg("INV:Investigator")
+        .arg("--retain")
+        .arg("CHI")
+        .arg("-o")
+        .arg(&out)
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(
+        stderr.contains("--retain: MOT (1)"),
+        "pipeline must name MOT as the dropped speaker with its count, the same \
+         way `chatter merge` does; stderr was:\n{stderr}"
+    );
+
+    // And the drop itself is unchanged: MOT's utterance is gone, its
+    // declaration survives, which is what the warning explains.
+    let merged = fs::read_to_string(&out)?;
+    assert!(
+        !merged.contains("it went that way"),
+        "MOT's utterance should still be dropped:\n{merged}"
+    );
+    assert!(
+        merged.contains("MOT Mother"),
+        "MOT's participant declaration survives, which is the confusing part \
+         the warning explains:\n{merged}"
     );
     Ok(())
 }

@@ -61,7 +61,7 @@ pub(super) fn exit_with_speaker_id_error(e: SpeakerIdError) -> ! {
 /// Render an `OverrideFileError` to stderr. I/O / TOML failures exit
 /// 1 (treated as input issues); unsupported schema versions exit 2
 /// (operator must upgrade or re-adjudicate).
-pub(super) fn exit_with_override_file_error(path: &Path, e: OverrideFileError) -> ! {
+pub(crate) fn exit_with_override_file_error(path: &Path, e: OverrideFileError) -> ! {
     warn!(
         "override-file operation on {} failed: {}",
         path.display(),

@@ -17,6 +17,7 @@ use crate::node_types::{
 use tree_sitter::Node;
 
 use super::nested::parse_nested_content;
+use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
 /// Converts a `contents` CST node into `BracketedItem`s.
@@ -38,10 +39,10 @@ pub(crate) fn parse_group_contents(
 ) -> Vec<BracketedItem> {
     let child_count = node.child_count();
     // Pre-allocate: each child is typically one content item
-    let mut group_items = Vec::with_capacity(child_count);
+    let mut group_items = ChildCapacity::for_node(node).into_vec();
 
     for idx in 0..child_count {
-        if let Some(child) = node.child(idx as u32) {
+        if let Some(child) = node.child(idx) {
             match child.kind() {
                 // One arm: `CONTENT_ITEM` and the CA/separator kinds had
                 // byte-identical bodies once the converter became total, and

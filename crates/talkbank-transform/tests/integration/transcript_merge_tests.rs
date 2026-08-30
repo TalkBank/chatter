@@ -10,7 +10,7 @@
     clippy::unimplemented
 )]
 
-//! L2 tests for `talkbank_transform::transcript_merge::merge_chats`.
+//! L2 tests for `talkbank_transform::transcript_merge::merge_chat_files`.
 //!
 //! These tests exercise the merge over parsed `ChatFile` values
 //! directly (no CLI subprocess). See
@@ -22,8 +22,10 @@
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::SpeakerCode;
 use talkbank_model::UtteranceIdx;
+use talkbank_model::model::ChatFile;
 use talkbank_transform::transcript_merge::{
-    DonorFate, MergeError, MergeOrigin, default_strip_tiers, merge_chat_files, merge_chats,
+    DonorFate, DonorIdx, MergeError, MergeOrigin, Merged, ReferenceFate, ReferenceIdx,
+    default_strip_tiers, merge_chat_files,
 };
 
 /// File 1 fixture for cycle 2. CHI carries:
@@ -62,13 +64,11 @@ const FIX_ASR_LABELED_RICH: &str = "@UTF8
 /// utterances, appears in the merged output exactly as in File 1.
 #[test]
 fn merge_retained_speakers_byte_stable() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_RICH_CHI,
         FIX_ASR_LABELED_RICH,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -169,13 +169,11 @@ const FIX_ASR_INV_WITH_DERIVED: &str = "@UTF8
 /// utterances are preserved.
 #[test]
 fn merge_strips_default_derived_tiers() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CHI_WITH_COM,
         FIX_ASR_INV_WITH_DERIVED,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -227,14 +225,12 @@ fn merge_strips_default_derived_tiers() {
 /// the right tier mix.
 #[test]
 fn merge_strip_tiers_configurable() {
-    let options = ParseValidateOptions::default();
     let custom_strip = vec!["com".to_string()];
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CHI_WITH_COM,
         FIX_ASR_INV_WITH_DERIVED,
         &[SpeakerCode::new("CHI")],
         &custom_strip,
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -275,14 +271,12 @@ fn merge_strip_tiers_configurable() {
 /// regenerate them).
 #[test]
 fn merge_strip_tiers_empty_preserves_all() {
-    let options = ParseValidateOptions::default();
     let empty_strip: Vec<String> = Vec::new();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CHI_WITH_COM,
         FIX_ASR_INV_WITH_DERIVED,
         &[SpeakerCode::new("CHI")],
         &empty_strip,
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -325,13 +319,11 @@ fn merge_strip_tiers_empty_preserves_all() {
 /// the assertion is on the header rather than the body.
 #[test]
 fn merge_header_participants_concatenates() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CHI_WITH_COM,
         FIX_ASR_INV_WITH_DERIVED,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -389,13 +381,11 @@ fn merge_header_participants_concatenates() {
 /// sourced from File 2.
 #[test]
 fn merge_header_id_concatenates() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CHI_WITH_COM,
         FIX_ASR_INV_WITH_DERIVED,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -459,13 +449,11 @@ fn merge_header_id_concatenates() {
 /// File 1's first.
 #[test]
 fn merge_header_comments_concatenate() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CHI_WITH_COM,
         FIX_ASR_INV_WITH_DERIVED,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -535,13 +523,11 @@ const FIX_ASR_CYCLE8B: &str = "@UTF8
 /// the matching-language case) is discarded silently.
 #[test]
 fn merge_header_languages_passthrough() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CYCLE8B,
         FIX_ASR_CYCLE8B,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -572,13 +558,11 @@ fn merge_header_languages_passthrough() {
 /// File 1's video), File 1's value is the one preserved.
 #[test]
 fn merge_header_media_file1_wins() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_CYCLE8B,
         FIX_ASR_CYCLE8B,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed on valid inputs");
 
@@ -614,7 +598,7 @@ fn merge_header_media_file1_wins() {
 // failure into a generic "empty merge" arm.
 
 /// File 1 has only `*PAR:` utterances; the retain set is `["CHI"]`.
-/// `merge_chats` must refuse before any timeline / language check,
+/// `merge_chat_files` must refuse before any timeline / language check,
 /// retain-set membership is the most fundamental shape question
 /// (without any retained-speaker utterance, the entire merge is
 /// ill-defined regardless of every other invariant).
@@ -628,21 +612,19 @@ const FIX_REF_PAR_ONLY_L2: &str = "@UTF8
 @End
 ";
 
-/// `merge_chats` returns `MergeError::RetainSpeakersMissing { retain }`
+/// `merge_chat_files` returns `MergeError::RetainSpeakersMissing { retain }`
 /// when File 1 declares no utterances for any speaker in the retain
 /// set. The variant's `retain` payload echoes the caller's input set
 /// so an operator reading the error knows *which* set was searched
 /// for.
 #[test]
 fn merge_no_retain_speakers_in_file1_returns_err() {
-    let options = ParseValidateOptions::default();
     let retain = vec![SpeakerCode::new("CHI")];
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_PAR_ONLY_L2,
         FIX_ASR_INV_PRECOND_L2,
         &retain,
         &default_strip_tiers(),
-        options,
     )
     .expect_err("merge should refuse when File 1 has no utterances for any retain-set speaker");
 
@@ -685,20 +667,18 @@ const FIX_ASR_INV_PRECOND_L2: &str = "@UTF8
 @End
 ";
 
-/// `merge_chats` returns `MergeError::NoTimelineInFile1` when File 1
+/// `merge_chat_files` returns `MergeError::NoTimelineInFile1` when File 1
 /// contains retained-speaker utterances but none of them carry a
 /// time bullet. The merge has no shared timeline to anchor File 2's
 /// content against, so it must refuse rather than emit a
 /// meaningless start-time-less concatenation.
 #[test]
 fn merge_no_timeline_in_file1_returns_err() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_CHI_NO_BULLETS_L2,
         FIX_ASR_INV_PRECOND_L2,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err("merge should refuse when File 1 has no bulleted utterances");
 
@@ -738,20 +718,18 @@ const FIX_ASR_INV_YUE_L2: &str = "@UTF8
 @End
 ";
 
-/// `merge_chats` returns `MergeError::LanguageMismatch` carrying both
+/// `merge_chat_files` returns `MergeError::LanguageMismatch` carrying both
 /// files' declared `@Languages` codes when they disagree. Cross-language
 /// merging would corrupt downstream language-aware stages (morphotag,
 /// alignment, segmentation), so the merge refuses on disagreement
 /// rather than emitting a mixed-language file.
 #[test]
 fn merge_language_mismatch_returns_err() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_CHI_ENG_L2,
         FIX_ASR_INV_YUE_L2,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err("merge should refuse when @Languages disagree");
 
@@ -815,20 +793,18 @@ const FIX_ASR_INV_AMBIG_L2: &str = "@UTF8
 @End
 ";
 
-/// `merge_chats` returns `MergeError::AmbiguousSpeaker { speaker }`
+/// `merge_chat_files` returns `MergeError::AmbiguousSpeaker { speaker }`
 /// when a speaker code outside the retain set appears in both files.
 /// The payload names the conflicting code so the operator can either
 /// add it to `--retain` (favoring File 1's version) or rename File 2's
 /// usage as a preprocessing step.
 #[test]
 fn merge_ambiguous_speaker_returns_err() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_CHI_PLUS_INV_L2,
         FIX_ASR_INV_AMBIG_L2,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err("merge should refuse when a non-retained speaker code appears in both files");
 
@@ -882,13 +858,11 @@ const FIX_DONOR_REAL_INV: &str = "@UTF8
 /// merged in under it.
 #[test]
 fn merge_dedupes_vestigial_participant_declaration() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_VESTIGIAL_INV,
         FIX_DONOR_REAL_INV,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("merge should succeed: file1's INV declaration is vestigial and matches the donor's");
 
@@ -931,13 +905,11 @@ const FIX_DONOR_INV_ROLE_CONFLICT: &str = "@UTF8
 
 #[test]
 fn merge_refuses_on_role_conflicting_declared_participant() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_VESTIGIAL_INV,
         FIX_DONOR_INV_ROLE_CONFLICT,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err("merge must refuse: file1 says INV is Investigator, donor says INV is Adult");
 
@@ -983,13 +955,11 @@ const FIX_DONOR_INV_NAME_CONFLICT: &str = "@UTF8
 /// conflicting one.
 #[test]
 fn merge_refuses_on_name_conflicting_declared_participant() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_VESTIGIAL_INV_NAMED,
         FIX_DONOR_INV_NAME_CONFLICT,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err("merge must refuse: file1 says INV is named Bob, donor says INV is named Carol");
 
@@ -1035,13 +1005,11 @@ const FIX_DONOR_DECLARED_INV_NO_UTTERANCES: &str = "@UTF8
 
 #[test]
 fn merge_refuses_on_nonvestigial_declared_participant() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_REF_NONVESTIGIAL_INV,
         FIX_DONOR_DECLARED_INV_NO_UTTERANCES,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err(
         "merge must refuse: file1's INV is not vestigial (has real utterances), even \
@@ -1083,13 +1051,11 @@ const FIX_DONOR_MONOLINGUAL_ENG: &str = "@UTF8
 /// This must succeed today it does not (exact-equality check refuses).
 #[test]
 fn merge_succeeds_when_donor_languages_are_a_subset_of_reference() {
-    let options = ParseValidateOptions::default();
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_BILINGUAL,
         FIX_DONOR_MONOLINGUAL_ENG,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        options,
     )
     .expect("donor's [eng] is a subset of reference's [eng, spa]; merge must succeed");
     assert!(
@@ -1102,13 +1068,11 @@ fn merge_succeeds_when_donor_languages_are_a_subset_of_reference() {
 /// over-claiming relative to reference; must still refuse.
 #[test]
 fn merge_refuses_when_donor_languages_exceed_reference() {
-    let options = ParseValidateOptions::default();
-    let err = merge_chats(
+    let err = merge_to_string(
         FIX_DONOR_MONOLINGUAL_ENG, // reused as file1: declares only eng
         FIX_REF_BILINGUAL,         // reused as file2: declares eng, spa
         &[SpeakerCode::new("INV")],
         &default_strip_tiers(),
-        options,
     )
     .expect_err("donor declaring spa when reference only declares eng must refuse");
     assert!(
@@ -1165,12 +1129,11 @@ const FIX_ASR_WITH_PROVENANCE: &str = "@UTF8
 /// branch ran.
 #[test]
 fn donor_comments_survive_a_reference_that_has_none() {
-    let merged = merge_chats(
+    let merged = merge_to_string(
         FIX_REF_NO_COMMENT,
         FIX_ASR_WITH_PROVENANCE,
         &[SpeakerCode::new("CHI")],
         &default_strip_tiers(),
-        ParseValidateOptions::default(),
     )
     .expect("merge should succeed on valid inputs");
 
@@ -1229,9 +1192,9 @@ const FIX_REF_WITH_UNRETAINED_SPEAKER: &str = "@UTF8
 /// A donor that also speaks a RETAINED code, so the retain filter has
 /// something to keep out.
 ///
-/// A new fixture rather than a reused one, and the reason is the point: of the
-/// 24 pre-existing fixtures none is a donor containing a retained speaker,
-/// because until now nothing observed what the filter dropped.
+/// A new fixture rather than a reused one: of the 24 pre-existing fixtures
+/// none is a donor containing a retained speaker, because until now nothing
+/// observed what the filter dropped.
 const FIX_DONOR_WITH_RETAINED_SPEAKER: &str = "@UTF8
 @Begin
 @Languages:\teng
@@ -1244,25 +1207,71 @@ const FIX_DONOR_WITH_RETAINED_SPEAKER: &str = "@UTF8
 @End
 ";
 
+/// Short spellings for the two index spaces, so the assertions stay readable.
+fn reference_idx(n: usize) -> ReferenceIdx {
+    ReferenceIdx::new(UtteranceIdx::new(n))
+}
+
+fn donor_idx(n: usize) -> DonorIdx {
+    DonorIdx::new(UtteranceIdx::new(n))
+}
+
+/// Merge two fixture sources and serialize, for assertions about the output
+/// TEXT.
+///
+/// This is what `merge_chats` used to be. It was deleted from the library once
+/// it had no non-test caller: both CLI commands and the one external consumer
+/// work on parsed files, because a `String` return cannot carry the merge's
+/// provenance. Keeping a public entry point alive for its own tests is how a
+/// second path drifts from the one people use, so the shape lives here instead.
+fn merge_to_string(
+    f1_src: &str,
+    f2_src: &str,
+    retain: &[SpeakerCode],
+    strip_tiers: &[String],
+) -> Result<String, MergeError> {
+    // `expect`, not `?`: these are fixtures, and a fixture that does not parse
+    // is a broken test rather than a merge outcome. `MergeError` no longer has
+    // a `Parse` variant to carry it into, which is the point of the deletion.
+    let options = ParseValidateOptions::default();
+    let f1 = talkbank_transform::parse_and_validate(f1_src, options.clone())
+        .expect("file 1 fixture should parse");
+    let f2 = talkbank_transform::parse_and_validate(f2_src, options)
+        .expect("file 2 fixture should parse");
+    Ok(talkbank_transform::serialize::to_chat_string(
+        &merge_chat_files(&f1, &f2, retain, strip_tiers)?
+            .report(|_, _| {})
+            .into_file(),
+    ))
+}
+
+/// Parse two fixtures and merge them, retaining `CHI`.
+///
+/// The four provenance tests below opened with a byte-identical eleven-line
+/// prelude. Returning the inputs as well as the result keeps the totality
+/// assertions writable without each test re-parsing.
+fn merge_fixtures(f1_src: &str, f2_src: &str) -> (ChatFile, ChatFile, Merged) {
+    let options = ParseValidateOptions::default();
+    let f1 = talkbank_transform::parse_and_validate(f1_src, options.clone())
+        .expect("file 1 fixture should parse");
+    let f2 = talkbank_transform::parse_and_validate(f2_src, options)
+        .expect("file 2 fixture should parse");
+    let retain = vec![SpeakerCode::new("CHI")];
+    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
+        .expect("merge should succeed on valid inputs");
+    (f1, f2, merged)
+}
+
 /// The merge reports, for every output utterance, which input it came from.
 ///
-/// Reuses the cycle-2 fixtures, whose timings already have the property this
-/// needs: `FIX_REF_RICH_CHI` holds retained CHI utterances at 500 and 5000,
-/// and `FIX_ASR_LABELED_RICH`'s single INV utterance sits at 3500, BETWEEN
-/// them. So the timeline sort has to interleave, and a merge that simply
+/// The cycle-2 fixtures already have the property this needs: retained CHI
+/// utterances at 500 and 5000 with the donor's single INV utterance at 3500,
+/// BETWEEN them. So the timeline sort has to interleave, and a merge that
 /// concatenated its two origin lists would answer
 /// `[Retained, Retained, Inserted]` and fail here.
 #[test]
 fn merge_reports_the_origin_of_every_output_utterance() {
-    let options = ParseValidateOptions::default();
-    let f1 = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone())
-        .expect("file 1 fixture should parse");
-    let f2 = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options)
-        .expect("file 2 fixture should parse");
-    let retain = vec![SpeakerCode::new("CHI")];
-
-    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
-        .expect("merge should succeed on valid inputs");
+    let (_, _, merged) = merge_fixtures(FIX_REF_RICH_CHI, FIX_ASR_LABELED_RICH);
 
     // Paired through the accessor that cannot be mis-zipped, which is also the
     // one a consumer should reach for.
@@ -1274,9 +1283,9 @@ fn merge_reports_the_origin_of_every_output_utterance() {
     assert_eq!(
         paired,
         vec![
-            ("CHI", MergeOrigin::Retained(UtteranceIdx::new(0))),
-            ("INV", MergeOrigin::Inserted(UtteranceIdx::new(0))),
-            ("CHI", MergeOrigin::Retained(UtteranceIdx::new(1))),
+            ("CHI", MergeOrigin::Retained(reference_idx(0))),
+            ("INV", MergeOrigin::Inserted(donor_idx(0))),
+            ("CHI", MergeOrigin::Retained(reference_idx(1))),
         ],
         "the donor utterance sorts BETWEEN the two retained ones, so the origins \
          must interleave and stay attached to the right speakers"
@@ -1291,24 +1300,14 @@ fn merge_reports_the_origin_of_every_output_utterance() {
 /// ordinal 2. A merge counting only what it kept would say 1.
 #[test]
 fn a_retained_ordinal_counts_every_file_one_utterance_not_only_the_kept_ones() {
-    let options = ParseValidateOptions::default();
-    let f1 =
-        talkbank_transform::parse_and_validate(FIX_REF_WITH_UNRETAINED_SPEAKER, options.clone())
-            .expect("file 1 fixture should parse");
-    let f2 = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options)
-        .expect("file 2 fixture should parse");
-    let retain = vec![SpeakerCode::new("CHI")];
+    let (_, _, merged) = merge_fixtures(FIX_REF_WITH_UNRETAINED_SPEAKER, FIX_ASR_LABELED_RICH);
 
-    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
-        .expect("merge should succeed on valid inputs");
-
-    let origins: Vec<MergeOrigin> = merged.origins().to_vec();
     assert_eq!(
-        origins,
+        merged.origins().to_vec(),
         vec![
-            MergeOrigin::Retained(UtteranceIdx::new(0)),
-            MergeOrigin::Inserted(UtteranceIdx::new(0)),
-            MergeOrigin::Retained(UtteranceIdx::new(2)),
+            MergeOrigin::Retained(reference_idx(0)),
+            MergeOrigin::Inserted(donor_idx(0)),
+            MergeOrigin::Retained(reference_idx(2)),
         ],
         "MOT is File 1's utterance 1 and is not retained, so the CHI utterance \
          after it is ordinal 2; a counter over the retained subset would say 1"
@@ -1317,38 +1316,91 @@ fn a_retained_ordinal_counts_every_file_one_utterance_not_only_the_kept_ones() {
 
 /// The merge reports what became of every donor utterance, not only the ones
 /// it carried over.
-///
-/// Without this, a consumer joining the merged file back to the donor cannot
-/// tell "excluded by policy" from "vanished", because both look like an
-/// ordinal absent from `origins`.
 #[test]
 fn merge_reports_the_fate_of_every_donor_utterance() {
-    let options = ParseValidateOptions::default();
-    let f1 = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone())
-        .expect("file 1 fixture should parse");
-    let f2 = talkbank_transform::parse_and_validate(FIX_DONOR_WITH_RETAINED_SPEAKER, options)
-        .expect("donor fixture should parse");
-    let retain = vec![SpeakerCode::new("CHI")];
-
-    let merged = merge_chat_files(&f1, &f2, &retain, &default_strip_tiers())
-        .expect("merge should succeed on valid inputs");
+    let (_, f2, merged) = merge_fixtures(FIX_REF_RICH_CHI, FIX_DONOR_WITH_RETAINED_SPEAKER);
 
     // One fate per donor utterance, in donor order: INV inserted, CHI kept out
     // because CHI is retained from file 1.
     assert_eq!(
         merged.donor_fates(),
-        &[DonorFate::Inserted, DonorFate::ExcludedByRetain],
+        // Zero stripped: this donor's utterances carry no dependent tiers, so
+        // `Inserted` reports that it arrived byte-preserved.
+        &[
+            DonorFate::Inserted { tiers_stripped: 0 },
+            DonorFate::ExcludedByRetain,
+        ],
         "the donor's retained-speaker utterance must be reported as excluded, \
          not merely absent from the origins"
     );
+    assert_eq!(merged.donor_fates().len(), f2.utterance_count());
 
-    // The pointwise query a consumer actually asks.
     assert_eq!(
-        merged.donor_fate(UtteranceIdx::new(1)),
-        Some(DonorFate::ExcludedByRetain)
+        merged.donor_fate(donor_idx(1)),
+        Some(&DonorFate::ExcludedByRetain)
     );
-    assert_eq!(merged.donor_fate(UtteranceIdx::new(9)), None);
+    assert_eq!(merged.donor_fate(donor_idx(9)), None);
 
-    let excluded: Vec<UtteranceIdx> = merged.excluded_by_retain().collect();
-    assert_eq!(excluded, vec![UtteranceIdx::new(1)]);
+    let excluded: Vec<DonorIdx> = merged.excluded_by_retain().collect();
+    assert_eq!(excluded, vec![donor_idx(1)]);
+}
+
+/// The merge reports what became of every FILE 1 utterance too.
+///
+/// The mirror of the donor test, and the asymmetry left when the donor side
+/// was closed first. See [`ReferenceFate`] for why `AmbiguousSpeaker` does not
+/// already catch this.
+#[test]
+fn merge_reports_the_fate_of_every_file_one_utterance() {
+    let (f1, _, merged) = merge_fixtures(FIX_REF_WITH_UNRETAINED_SPEAKER, FIX_ASR_LABELED_RICH);
+
+    // CHI, MOT, CHI in file order: the middle one is dropped because MOT is
+    // not in the retain set.
+    assert_eq!(
+        merged.reference_fates(),
+        &[
+            ReferenceFate::Retained,
+            ReferenceFate::DroppedNotRetained {
+                speaker: SpeakerCode::new("MOT"),
+            },
+            ReferenceFate::Retained,
+        ],
+        "a File 1 utterance whose speaker is not retained must be reported as \
+         dropped, not merely absent from the origins"
+    );
+    assert_eq!(merged.reference_fates().len(), f1.utterance_count());
+
+    assert_eq!(
+        merged.reference_fate(reference_idx(1)),
+        Some(&ReferenceFate::DroppedNotRetained {
+            speaker: SpeakerCode::new("MOT"),
+        })
+    );
+    assert_eq!(merged.reference_fate(reference_idx(9)), None);
+
+    let dropped: Vec<ReferenceIdx> = merged.dropped_not_retained().collect();
+    assert_eq!(dropped, vec![reference_idx(1)]);
+}
+
+/// `Inserted` says whether the utterance was EDITED on the way in.
+///
+/// `strip_tiers` removes dependent tiers from donor utterances and from those
+/// only, so a bare `Inserted` claimed "carried over" for an utterance that was
+/// carried over AND altered. The merge knew how many tiers it removed and
+/// discarded the fact at the point it was known.
+///
+/// The donor here carries `%wor`, `%mor` and `%com`. The default strip set is
+/// `wor, mor, gra, pho`, so two go and `%com` stays: its one inserted utterance
+/// reports two stripped tiers. File 1's retained utterances are byte-preserved
+/// by contract, which is why `ReferenceFate::Retained` has no such field.
+#[test]
+fn an_inserted_utterance_reports_how_many_tiers_were_stripped_from_it() {
+    let (_, _, merged) = merge_fixtures(FIX_REF_RICH_CHI, FIX_ASR_INV_WITH_DERIVED);
+
+    assert_eq!(
+        merged.donor_fates(),
+        &[DonorFate::Inserted { tiers_stripped: 2 }],
+        "the donor utterance carries %wor and %mor, both stripped by default, \
+         so `Inserted` must say two rather than implying it arrived untouched"
+    );
 }

@@ -1,4 +1,4 @@
-//! Word timing tier (%wor) - word-level timing annotations.
+//! Word timing tier (`%wor`) with word-level timing annotations.
 //!
 //! The %wor tier provides word-level timing information. It is a **flat** list
 //! of items, primarily words, each optionally paired with a timing bullet,
@@ -44,30 +44,23 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// in %mor. They are never timed and do not count toward alignment with the
 /// main tier's word slots.
 ///
-/// # CRITICAL: Word Text is "Eye Candy" Only
-///
-/// **The word text in %wor tier items is NEVER reparsed or used for processing.**
+/// # Word Text Is Corroboration, Not Lexical Authority
 ///
 /// The word text exists solely for:
 /// - Human readability when viewing CHAT files
-/// - Error messages (alignment mismatch diagnostics)
+/// - Canonical lexical-correspondence diagnostics
 /// - CHAT format serialization compliance
 ///
 /// **The word text is NOT used for:**
 /// - Forced alignment (uses main tier words)
 /// - Morphosyntax processing (uses main tier words)
-/// - Any computational processing (timing comes from `inline_bullet`, not text)
+/// - Lexical identity (always comes from the typed main tier)
 ///
-/// This means we have complete freedom to put any "reasonable eye candy" in
-/// the word text field, as long as it:
-/// - Looks sensible to humans reading the CHAT file
-/// - Serializes correctly (no CHAT-breaking characters)
-/// - Maintains word count alignment with main tier (structural requirement)
-///
-/// **Current convention**: We copy `cleaned_text` from main tier words via
-/// `generate_wor_tier()`. This is a display choice, not a semantic requirement.
-/// We could equally well use `raw_text`, placeholders (`_`), or indices (`w0`),
-/// and no processing would break.
+/// **Current convention**: `generate_wor_tier()` copies `cleaned_text` from
+/// main-tier words. Timing consumers may compare a parsed `%wor` sequence with
+/// that canonical generated sequence to refuse unsafe positional reuse after a
+/// same-count edit. A different display convention therefore requires a new,
+/// explicitly named correspondence policy. It cannot change silently.
 ///
 /// **What matters**: The `inline_bullet` field on each word, which contains
 /// the actual timing data (start_ms, end_ms). This is parsed, stored, and
@@ -81,9 +74,9 @@ use talkbank_derive::{SemanticEq, SpanShift};
 pub enum WorItem {
     /// A word with optional timing bullet.
     ///
-    /// **IMPORTANT**: The `Word.cleaned_text` and `Word.raw_text` fields are
-    /// "eye candy", display-only text never used for processing. The real
-    /// data is in `Word.inline_bullet` (timing information).
+    /// The `Word.cleaned_text` and `Word.raw_text` fields are display material
+    /// and optional lexical corroboration. They never replace main-tier lexical
+    /// identity. Timing data remains in `Word.inline_bullet`.
     #[serde(rename = "word")]
     Word(Box<Word>),
 
@@ -116,18 +109,17 @@ impl WorItem {
 /// Flat %wor tier: a list of `WorItem`s (words and separators) with a terminator.
 ///
 /// Words carry `inline_bullet` set to a `Bullet` if an inline bullet followed
-/// them in the source, or `None` if not.
+/// them in the source, or `None` if not. `%wor` has no tier-level bullet:
+/// timing belongs to individual word entries.
 /// Separators are always untimed and not counted for alignment.
 ///
 /// This model is intentionally simple. Unlike the main tier, %wor tiers
 /// do not contain groups, annotations, events, or nested structures.
 /// Use `words()` to iterate only over `Word` items for alignment purposes.
 ///
-/// # CRITICAL: Word Text is Write-Only "Eye Candy"
+/// # Word Text Is Corroboration, Not Authority
 ///
-/// **The word text in %wor tiers is NEVER reparsed for processing.**
-///
-/// Data flow is strictly one-way:
+/// Generation remains one-way:
 /// ```text
 /// Main tier AST
 ///   ↓
@@ -138,25 +130,24 @@ impl WorItem {
 /// write_chat() serializes to CHAT format
 ///   ↓
 /// %wor: word 1000_1200 another 1200_1500 .
-///       ^^^^ "eye candy" (never reparsed)
+///       ^^^^ canonical display token
 ///            ^^^^^^^^^^^ REAL DATA (timing)
-///   ↓
-/// Human reads it (END - never parsed back for processing)
 /// ```
 ///
 /// When we parse a CHAT file with %wor tiers back:
-/// 1. Parser builds WorTier AST (word text is stored but never used)
-/// 2. Validation checks word count (text only used for error messages)
-/// 3. Forced alignment **DELETES** %wor tier and regenerates from main tier
-/// 4. TextGrid export uses cleaned_text from **main tier**, not %wor
+/// 1. Parser builds a `WorTier` AST and retains its display tokens
+/// 2. Timing consumers bind the tier to a typed main-tier projection
+/// 3. Count drift prevents positional comparison without invalidating CHAT
+/// 4. Canonical token drift prevents positional timing recovery
+/// 5. Only corroborated slots expose timing from `inline_bullet`
 ///
 /// **What this means**:
-/// - Word text is a **display format choice**, not data integrity concern
-/// - We could put anything reasonable in word text (cleaned, raw, placeholders)
-/// - Current choice (cleaned_text) is convention for human readability
-/// - The **only** processing-critical data is `inline_bullet` (timing)
+/// - Main-tier words remain the only lexical authority
+/// - `%wor` text can refuse reuse but cannot supply replacement lexical data
+/// - Current `cleaned_text` output is a named canonical convention
+/// - Timing itself comes only from `inline_bullet`
 ///
-/// See: `docs/wor-tier-text-audit.md` for comprehensive analysis.
+/// See: `book/src/architecture/wor-timing.md` for comprehensive analysis.
 ///
 /// # References
 ///
@@ -173,17 +164,40 @@ pub struct WorTier {
     /// Terminator punctuation (`.`, `?`, `!`, etc.)
     pub terminator: Option<Terminator>,
 
-    /// Optional utterance-level bullet
-    pub bullet: Option<Bullet>,
-
     /// Source span for error reporting (not serialized to JSON)
     #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
 }
 
+/// Presence of an actual timing bullet on a typed `%wor` tier.
+///
+/// This state is deliberately independent of main-tier correspondence. Equal
+/// word counts do not create timing evidence, and count drift does not erase a
+/// bullet that is physically present in CHAT.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WorTimingEvidence<'tier> {
+    /// No word-level bullet is present.
+    Absent,
+    /// A real parsed or generated bullet is present.
+    Recorded(RecordedWorTiming<'tier>),
+}
+
+/// First recorded timing bullet found on a typed `%wor` tier.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RecordedWorTiming<'tier> {
+    bullet: &'tier Bullet,
+}
+
+impl<'tier> RecordedWorTiming<'tier> {
+    /// Bullet that supplies the timing observation.
+    pub fn bullet(self) -> &'tier Bullet {
+        self.bullet
+    }
+}
+
 impl Default for WorTier {
-    /// Returns an empty `%wor` tier with unset language/terminator/bullet fields.
+    /// Returns an empty `%wor` tier with unset language and terminator fields.
     ///
     /// `Default` is primarily for builder-style assembly and test fixtures.
     /// Parser output should still attach real spans and parsed content explicitly.
@@ -192,7 +206,6 @@ impl Default for WorTier {
             language_code: None,
             items: Vec::new(),
             terminator: None,
-            bullet: None,
             span: Span::DUMMY,
         }
     }
@@ -208,7 +221,6 @@ impl WorTier {
             language_code: None,
             items,
             terminator: None,
-            bullet: None,
             span: Span::DUMMY,
         }
     }
@@ -230,8 +242,9 @@ impl WorTier {
     ///
     /// Use this for alignment counting, separators are not alignable.
     ///
-    /// **RESTRICTED**: Only for timing extraction and TextGrid export.
-    /// The word TEXT in %wor tiers is "eye candy", timing comes from inline_bullet.
+    /// **RESTRICTED**: Used for timing extraction, canonical lexical
+    /// corroboration, and TextGrid export. Lexical processing still uses the
+    /// main tier.
     pub fn words(&self) -> impl Iterator<Item = &Word> {
         self.items.iter().filter_map(WorItem::as_word)
     }
@@ -245,6 +258,17 @@ impl WorTier {
             .iter()
             .filter(|item| matches!(item, WorItem::Word(_)))
             .count()
+    }
+
+    /// Return whether this tier contains an actual recorded timing bullet.
+    ///
+    /// The operation inspects the typed tier directly. It never substitutes a
+    /// word-count relationship for timing evidence.
+    pub fn timing_evidence(&self) -> WorTimingEvidence<'_> {
+        match self.words().find_map(|word| word.inline_bullet.as_ref()) {
+            Some(bullet) => WorTimingEvidence::Recorded(RecordedWorTiming { bullet }),
+            None => WorTimingEvidence::Absent,
+        }
     }
 
     /// Create with terminator.
@@ -265,15 +289,6 @@ impl WorTier {
         self
     }
 
-    /// Set the bullet (builder pattern).
-    ///
-    /// This attaches an utterance-level bullet that appears after the terminator
-    /// when serializing the `%wor` line.
-    pub fn with_bullet(mut self, bullet: Option<Bullet>) -> Self {
-        self.bullet = bullet;
-        self
-    }
-
     /// Set the source span (builder pattern).
     ///
     /// Parser paths should set concrete spans so `%wor` mismatch diagnostics can
@@ -285,7 +300,7 @@ impl WorTier {
 }
 
 impl crate::model::WriteChat for WorTier {
-    /// Serializes `%wor` items, inline timing bullets, optional terminator, and trailing bullet.
+    /// Serializes `%wor` items, inline timing bullets, and an optional terminator.
     fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
         write!(w, "%wor:\t")?;
 
@@ -295,8 +310,8 @@ impl crate::model::WriteChat for WorTier {
         }
 
         // Items: words with optional timing bullets, and separators.
-        // Prefer the first-class inline_bullet (direct parse data) over
-        // timing_alignment (computed alignment result) for serialization.
+        // The word's first-class inline bullet is the only `%wor` timing
+        // surface; correspondence metadata does not synthesize timing.
         for (i, item) in self.items.iter().enumerate() {
             if i > 0 {
                 w.write_char(' ')?;
@@ -323,12 +338,9 @@ impl crate::model::WriteChat for WorTier {
             term.write_chat(w)?;
         }
 
-        // Bullet
-        if let Some(ref bullet) = self.bullet {
-            w.write_char(' ')?;
-            bullet.write_chat(w)?;
-        }
-
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -8,6 +8,7 @@
 use std::collections::HashSet;
 
 use crate::Header;
+use crate::model::{RecordedWorTiming, WorTimingEvidence};
 use crate::validation::ValidationState;
 
 use super::ChatFile;
@@ -25,6 +26,20 @@ fn media_headers<'a>(
     headers.iter().filter_map(|(header, span)| match header {
         Header::Media(media_header) => Some((media_header, *span)),
         _ => None,
+    })
+}
+
+/// First actual `%wor` word-timing bullet in file order.
+///
+/// Correspondence metadata is intentionally not consulted: equal counts do
+/// not create a bullet, and count drift does not erase one.
+fn first_wor_timing<S: ValidationState>(file: &ChatFile<S>) -> Option<RecordedWorTiming<'_>> {
+    file.utterances().find_map(|utterance| {
+        let tier = utterance.wor_tier()?;
+        match tier.timing_evidence() {
+            WorTimingEvidence::Absent => None,
+            WorTimingEvidence::Recorded(recorded) => Some(recorded),
+        }
     })
 }
 
@@ -51,7 +66,7 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 /// carries no timing evidence. Timing evidence is the union of:
 /// - main-tier bullets (already collected by the caller and passed as
 ///   `main_bullets`, avoids a second walk)
-/// - any positional `%wor` timing sidecar on any utterance
+/// - any actual `%wor` word bullet on any utterance
 ///
 /// The caller passes the already-collected main-tier bullets to avoid a
 /// duplicate walk; all other timing surfaces are discovered here.
@@ -79,15 +94,9 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
         return;
     }
 
-    // Check for any positional %wor timing sidecar as a broader timing
-    // surface. Forced-alignment output typically has %wor bullets even when
-    // the main tier does not.
-    let has_wor_timing = file.utterances().any(|utt| {
-        utt.alignments
-            .as_ref()
-            .and_then(|a| a.wor_timings.as_ref())
-            .is_some_and(|w| w.is_positional())
-    });
+    // Forced-alignment output typically has %wor bullets even when the main
+    // tier does not. Count correspondence alone is not timing evidence.
+    let has_wor_timing = first_wor_timing(file).is_some();
     if has_wor_timing {
         return;
     }
@@ -104,7 +113,7 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
 /// E752: transcript has timing evidence but NO `@Media` header at all.
 ///
 /// Fires when the file carries timing evidence (main-tier bullets, or a
-/// positional `%wor` timing sidecar: the same union E544 uses) and the
+/// actual `%wor` word bullet: the same union E544 uses) and the
 /// header block contains no `@Media` header of any form. A timestamp
 /// into an undeclared media timeline fails to make sense: consumers
 /// cannot resolve what the offsets index. Corresponds to CLAN CHECK
@@ -136,19 +145,11 @@ pub(super) fn check_timing_has_media<S: ValidationState>(
     }
 
     // Locate the first timing surface so the diagnostic points at real
-    // evidence: a main-tier bullet if any, else a positional %wor sidecar.
+    // evidence: a main-tier bullet if any, else an actual %wor bullet.
     let first_timing_offset = main_bullets
         .first()
         .map(|bullet| bullet.span.start as usize)
-        .or_else(|| {
-            file.utterances().find_map(|utt| {
-                utt.alignments
-                    .as_ref()
-                    .and_then(|a| a.wor_timings.as_ref())
-                    .is_some_and(|w| w.is_positional())
-                    .then_some(utt.main.span.start as usize)
-            })
-        });
+        .or_else(|| first_wor_timing(file).map(|recorded| recorded.bullet().span.start as usize));
     let Some(offset) = first_timing_offset else {
         // No timing evidence anywhere: nothing requires @Media.
         return;
@@ -274,7 +275,7 @@ pub(super) fn check_separator_trailing_space<S: ValidationState>(
 /// there, declared linkage lacks timing; here, declared `unlinked` has timing.
 ///
 /// The caller passes the already-collected main-tier bullets to avoid a
-/// duplicate walk; any positional `%wor` timing sidecar is the other timing
+/// duplicate walk; any actual `%wor` word bullet is the other timing
 /// surface checked here. Corresponds to CLAN CHECK error 124 ("remove
 /// \"unlinked\" from @Media header").
 pub(super) fn check_media_unlinked_has_no_timing<S: ValidationState>(
@@ -297,14 +298,9 @@ pub(super) fn check_media_unlinked_has_no_timing<S: ValidationState>(
         return;
     };
 
-    // Any timing surface (main-tier bullets, or a positional %wor sidecar)
+    // Any timing surface (main-tier bullets, or an actual %wor bullet)
     // contradicts the `unlinked` declaration.
-    let has_wor_timing = file.utterances().any(|utt| {
-        utt.alignments
-            .as_ref()
-            .and_then(|a| a.wor_timings.as_ref())
-            .is_some_and(|w| w.is_positional())
-    });
+    let has_wor_timing = first_wor_timing(file).is_some();
     if main_bullets.is_empty() && !has_wor_timing {
         // `unlinked` with no timing is the correct, expected state.
         return;

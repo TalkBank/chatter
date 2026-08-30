@@ -539,13 +539,19 @@ form-markers-gen:
 verify-vendored-lexer:
     #!/usr/bin/env bash
     set -euo pipefail
+    expected="$(python3 -c 'import tomllib; print(tomllib.load(open("{{ justfile_directory() }}/re2c-version.toml", "rb"))["re2c"]["version"])')"
+    actual="$(re2rust --version | awk '{print $2}')"
+    if [[ "$actual" != "$expected" ]]; then
+        echo "error: re2rust $actual is installed; expected exactly $expected from re2c-version.toml" >&2
+        exit 1
+    fi
     cd {{ justfile_directory() }}/crates/talkbank-parser-re2c
     regenerated="$(mktemp)"
     trap 'rm -f "$regenerated"' EXIT
     re2rust -W -Wno-nondeterministic-tags --input-encoding utf8 --utf8 \
         --no-generation-date --conditions -o "$regenerated" src/lexer.re
     if cmp -s "$regenerated" src/generated/lexer.rs; then
-        echo "vendored lexer is current"
+        echo "vendored lexer is current under re2rust $actual"
     else
         echo "STALE: src/generated/lexer.rs does not match src/lexer.re." >&2
         echo "Regenerate it with the invocation in build.rs, in the same commit." >&2

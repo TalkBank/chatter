@@ -26,7 +26,7 @@ use tree_sitter::Node;
 /// ```
 pub fn assert_child_count_exact(
     node: Node,
-    expected: usize,
+    expected: u32,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
@@ -55,7 +55,7 @@ pub fn assert_child_count_exact(
 /// **Purpose:** Catch grammar changes that remove required children
 pub fn assert_child_count_min(
     node: Node,
-    minimum: usize,
+    minimum: u32,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,

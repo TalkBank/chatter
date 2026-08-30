@@ -1,7 +1,7 @@
 # Merge Pipeline, Domain Types
 
 **Status:** Draft
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-08-30 15:51 EDT
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and the
@@ -57,10 +57,10 @@ paths are relative to `crates/talkbank-transform/src/`.
 | `MappingAction` | `SpeakerAction` (`speaker_id/override_file.rs`): `Rename` / `Drop` |
 | `DecisionMode` | `OverrideMode` (`speaker_id/override_file.rs`): `Auto` / `Explicit` / `Override` |
 | `SpeakerMapping` (single shared `inserted_role`) | On disk: `MergeOverride.mapping` plus the per-speaker `MergeOverride.adult_roles` map (schema v2). In memory: `MappingSpec = HashMap<SpeakerCode, SpeakerAssignment>` (`speaker_id/mapping.rs`), each `Rename` carrying its own code / role / specific-role |
-| `Margin` enum (`Finite` / `Unbounded`) | `ConfidenceMargin(f64)` (`speaker_id/types.rs`); the unbounded case is `f64::INFINITY`, and the on-disk `margin` is a plain number |
-| `JaccardScore` (fallible serde newtype) | `JaccardScore(pub f64)` (`speaker_id/types.rs`), a plain newtype; on-disk scores are bare `f64` values |
-| `ConfidenceThreshold` (associated `DEFAULT`) | `ConfidenceThreshold(pub f64)` (`speaker_id/types.rs`) plus `DEFAULT_CONFIDENCE_THRESHOLD` (`speaker_id/identify.rs`) |
-| `RetainSet` newtype | Not shipped; `merge_chats` takes `retain: &[SpeakerCode]` (`transcript_merge.rs`) |
+| `Margin` enum (`Finite` / `Unbounded`) | `ConfidenceMargin::{NoInformation, Finite, Unbounded}` (`speaker_id/types.rs`); the stable JSON evidence report uses corresponding tagged states |
+| `JaccardScore` (fallible serde newtype) | `JaccardScore(f64)` (`speaker_id/types.rs`), privately constructed from admitted multiset counts; on-disk override scores remain bare `f64` values |
+| `ConfidenceThreshold` (associated `DEFAULT`) | `ConfidenceThreshold(f64)` with checked `new` and `FromStr` boundaries (`speaker_id/types.rs`) plus `DEFAULT_CONFIDENCE_THRESHOLD` (`speaker_id/identify.rs`) |
+| `RetainSet` newtype | Not shipped; `merge_chat_files` takes `retain: &[SpeakerCode]` (`transcript_merge.rs`) |
 | `MergeFlag` enum | Not shipped; `MergeOverride.flags` is `Vec<String>` |
 | `OperatorId` / `SessionId` newtypes | `MergeOverride.operator` is `String`; override entries are keyed by `String` session IDs (a `SessionId` newtype exists in the `speaker_id/judgment/` submodule for the LLM-judgment surface) |
 | `OverrideFile::CURRENT_SCHEMA_VERSION = 1` | Module-level `CURRENT_SCHEMA_VERSION: u32 = 2` (`speaker_id/override_file.rs`) |
@@ -89,9 +89,10 @@ the speaker-mapping pair, `OverrideMode`, `MergeOverride`,
 place to the shipped form. The remaining subsections
 (`JaccardScore`, `ConfidenceThreshold`, `Margin`, `RetainSet`,
 `MergeFlag`, `OperatorId`, `SessionId`) are preserved as the
-original design; where the shipped form differs (it does for each of
-those), the designed-vs-shipped table above is authoritative for the
-current symbol and shape.
+original design; where the shipped form differs, the designed-vs-shipped table
+above is authoritative for the current symbol and shape.
+`LexicalMatchEvidence` and the recorded report types were added after the
+original design so absolute support cannot be discarded.
 
 ### `JaccardScore`
 
@@ -122,11 +123,10 @@ impl TryFrom<f64> for JaccardScore { /* validates range */ }
 impl From<JaccardScore> for f64 { /* infallible widen */ }
 ```
 
-Construction is fallible: `JaccardScore::new(1.5)` returns
-`Err(JaccardScoreError::OutOfRange(1.5))`. NaN is also rejected.
-Internal computation that's guaranteed in-range by construction
-(the multiset formula) uses an internal `from_unchecked` private
-constructor; public API is fallible.
+The shipped type has no public scalar constructor. It is born from admitted
+multiset intersection and union counts and exposes only `value()`. This is
+stronger than validating an arbitrary scalar after the relationship that
+produced it has already been discarded.
 
 ### `ConfidenceThreshold`
 
@@ -160,10 +160,9 @@ runner-up. Distinguished from `ConfidenceThreshold` by intent
 (this is observed; the threshold is configured) and from
 `JaccardScore` by range (margin is `≥ 1.0`; score is `≤ 1.0`).
 
-Uses an enum rather than a bare float to model the
-divide-by-zero case (runner-up has zero Jaccard) cleanly. Avoids
-the `f64::INFINITY` sentinel that doesn't round-trip through
-all serializers.
+Uses an enum rather than a bare float to model both divide-by-zero and the
+zero/zero no-information case. The shipped type is `ConfidenceMargin`, with
+`NoInformation`, `Finite(FiniteConfidenceMargin)`, and `Unbounded` variants.
 
 ```rust,ignore
 /// Ratio of winning speaker's score to runner-up's score.
@@ -759,7 +758,9 @@ crates/talkbank-transform/src/speaker_id/
                        adult_roles same-role auto-disambiguation)
 
 crates/talkbank-transform/src/transcript_merge.rs
-    merge_chats, MergeError, DEFAULT_STRIP_TIERS
+    merge_chat_files, MergeError, DEFAULT_STRIP_TIERS,
+    Merged, Reported, MergeOrigin, ReferenceFate, DonorFate,
+    ReferenceIdx, DonorIdx
 ```
 
 Each file aims for the ≤400-line target; concerns that outgrew a
@@ -773,8 +774,8 @@ A spot-check against the cross-cutting design rules in this repo's
 root `CLAUDE.md`, restated against the shipped code:
 
 - **Newtypes over primitives.** Every numeric domain value
-  (`JaccardScore`, `ConfidenceMargin`, `ConfidenceThreshold`) is
-  wrapped; CHAT-domain strings reuse the existing `SpeakerCode` /
+  (`JaccardScore`, `FiniteConfidenceMargin`, `ConfidenceThreshold`) is
+  wrapped; `ConfidenceMargin` is a sum type; CHAT-domain strings reuse the existing `SpeakerCode` /
   `ParticipantRole` / `ParticipantName` wrappers. (The designed
   `SessionId` / `OperatorId` newtypes shipped as plain `String` at
   the on-disk serialization boundary; see the designed-vs-shipped
@@ -782,11 +783,9 @@ root `CLAUDE.md`, restated against the shipped code:
 - **No tuple-packed seams.** `InsertedRoleSpec` is a struct, not
   `(code, tag)`; `SpeakerAssignment::Rename` carries named fields;
   `MergeOverride` likewise. ✓
-- **No boolean blindness.** `SpeakerAction` and `OverrideMode` are
-  enums, not bools. (The designed `Margin::Finite/Unbounded` enum
-  shipped as `ConfidenceMargin(f64)` with `f64::INFINITY` for the
-  unbounded case, a deliberate simplification recorded in the
-  table.) ✓
+- **No boolean blindness.** `SpeakerAction`, `OverrideMode`, and
+  `ConfidenceMargin` are enums. No-information, finite, and unbounded
+  confidence states cannot be conflated. ✓
 - **Typed errors.** Three `thiserror` enums (`SpeakerIdError`,
   `MergeError`, `OverrideFileError`) with named-field variants
   carrying full context. ✓

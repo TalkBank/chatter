@@ -29,10 +29,9 @@ use talkbank_model::ParseValidateOptions;
 use talkbank_model::{ParticipantRole, SpeakerCode};
 use talkbank_transform::parse_and_validate;
 use talkbank_transform::speaker_id::{
-    Confidence, ConfidenceField, ConfidenceMargin, DEFAULT_CONFIDENCE_THRESHOLD, DecisionEngine,
-    DonorMatchReport, EndpointUrl, InsertedRoleSpec, JaccardScore, JudgmentProvenance, MappingSpec,
-    MergeOverride, ModelId, OverrideFile, PromptVersion, SpeakerAssignment, SpeakerIdError,
-    apply_mapping, identify_mapping,
+    Confidence, ConfidenceField, DEFAULT_CONFIDENCE_THRESHOLD, DecisionEngine, EndpointUrl,
+    InsertedRoleSpec, JudgmentProvenance, MappingSpec, MergeOverride, ModelId, OverrideFile,
+    PromptVersion, SpeakerAssignment, SpeakerIdError, apply_mapping, identify_mapping,
 };
 
 /// Build a one-entry mapping renaming `PAR1` → `INV:Investigator`.
@@ -299,47 +298,70 @@ fn identify_mapping_clean_winner() {
     if std::env::var("TB_TEST_VERBOSE").is_ok() {
         eprintln!(
             "=== identify_mapping report ===\nwinner: {:?}\nmargin: {}\nscores: {:?}\n=== end ===",
-            report.winner, report.margin, report.scores
+            report.winner(),
+            report.margin(),
+            report.lexical_evidence().collect::<Vec<_>>()
         );
     }
 
     // PAR0 (child lexicon, matches CHI) wins.
     assert_eq!(
-        report.winner,
-        SpeakerCode::new("PAR0"),
+        report.winner(),
+        &SpeakerCode::new("PAR0"),
         "expected PAR0 to win (matches CHI lexicon), got: {:?}",
-        report.winner
+        report.winner()
     );
 
     // Both donor speakers got scored.
     assert!(
-        report.scores.contains_key(&SpeakerCode::new("PAR0")),
+        report.evidence_for(&SpeakerCode::new("PAR0")).is_some(),
         "scores should include PAR0; got: {:?}",
-        report.scores
+        report.lexical_evidence().collect::<Vec<_>>()
     );
     assert!(
-        report.scores.contains_key(&SpeakerCode::new("PAR1")),
+        report.evidence_for(&SpeakerCode::new("PAR1")).is_some(),
         "scores should include PAR1; got: {:?}",
-        report.scores
+        report.lexical_evidence().collect::<Vec<_>>()
     );
 
     // PAR0's score is strictly greater than PAR1's.
-    let par0_score = report.scores[&SpeakerCode::new("PAR0")];
-    let par1_score = report.scores[&SpeakerCode::new("PAR1")];
+    let par0_score = report
+        .evidence_for(&SpeakerCode::new("PAR0"))
+        .expect("PAR0 was ranked")
+        .score();
+    let par1_score = report
+        .evidence_for(&SpeakerCode::new("PAR1"))
+        .expect("PAR1 was ranked")
+        .score();
     assert!(
         par0_score > par1_score,
         "PAR0 score ({par0_score}) should beat PAR1 score ({par1_score})"
     );
 
+    // The report retains the absolute lexical support from which each
+    // Jaccard score was derived. A ratio by itself cannot distinguish a
+    // one-token accident from a complete transcript match.
+    let par0_evidence = report
+        .evidence_for(&SpeakerCode::new("PAR0"))
+        .expect("PAR0 evidence is retained");
+    assert_eq!(par0_evidence.reference_tokens(), 15);
+    assert_eq!(par0_evidence.donor_tokens(), 15);
+    assert_eq!(par0_evidence.shared_tokens(), 15);
+    assert_eq!(par0_evidence.union_tokens(), 15);
+    assert_eq!(par0_evidence.score().value(), 1.0);
+
     // The clean-winner margin is well above the default 2.0× threshold
     //, the test would expect ≥3.0× per the validation sweep findings.
     // PAR1 may legitimately score 0 if it shares no content tokens
-    // with the reference; the infinite-margin case is reported as
-    // f64::INFINITY by the implementation.
+    // with the reference; the zero-runner-up case is the explicit
+    // `Unbounded` margin state.
     assert!(
-        report.margin.0 >= 3.0,
+        report.margin().meets(
+            talkbank_transform::speaker_id::ConfidenceThreshold::new(3.0)
+                .expect("3.0 is a valid confidence threshold"),
+        ),
         "clean-winner margin should be ≥3.0 (got {}); fixture content needs adjusting if not",
-        report.margin
+        report.margin()
     );
 }
 
@@ -402,15 +424,17 @@ fn identify_mapping_borderline_refuses() {
             if std::env::var("TB_TEST_VERBOSE").is_ok() {
                 eprintln!(
                     "=== borderline report ===\nwinner: {:?}\nmargin: {}\nthreshold: {threshold}\nscores: {:?}\n=== end ===",
-                    report.winner, report.margin, report.scores
+                    report.winner(),
+                    report.margin(),
+                    report.lexical_evidence().collect::<Vec<_>>()
                 );
             }
             // Margin is strictly below the threshold (the whole point
             // of refusing).
             assert!(
-                !report.margin.meets(threshold),
+                !report.margin().meets(threshold),
                 "margin ({}) should not meet threshold ({threshold})",
-                report.margin
+                report.margin()
             );
             // Threshold echoed verbatim from the call.
             assert_eq!(
@@ -419,16 +443,17 @@ fn identify_mapping_borderline_refuses() {
             );
             // Both donor speakers scored, the operator can inspect.
             assert!(
-                report.scores.contains_key(&SpeakerCode::new("PAR0"))
-                    && report.scores.contains_key(&SpeakerCode::new("PAR1")),
+                report.evidence_for(&SpeakerCode::new("PAR0")).is_some()
+                    && report.evidence_for(&SpeakerCode::new("PAR1")).is_some(),
                 "scores should include both donor speakers; got: {:?}",
-                report.scores
+                report.lexical_evidence().collect::<Vec<_>>()
             );
             // Both got a non-zero score; they really are borderline,
             // not one zero / one positive.
-            for (spk, score) in report.scores.iter() {
+            for (spk, evidence) in report.lexical_evidence() {
+                let score = evidence.score();
                 assert!(
-                    score.0 > 0.0,
+                    score.value() > 0.0,
                     "borderline speaker {spk} should have a positive score, got {score}"
                 );
             }
@@ -436,9 +461,9 @@ fn identify_mapping_borderline_refuses() {
             // (or `--write-pending`) needs to know which speaker the
             // algorithm WOULD have picked.
             assert!(
-                report.scores.contains_key(&report.winner),
+                report.evidence_for(report.winner()).is_some(),
                 "winner {:?} should be one of the scored donor speakers",
-                report.winner
+                report.winner()
             );
         }
         other => panic!("expected SpeakerIdError::LowConfidence, got: {other:?}"),
@@ -503,14 +528,17 @@ fn llm_entries_filters_by_engine() {
     // is immaterial here (the test only checks the engine tag), so reuse
     // the shared PAR1->INV fixture.
     let mapping = par1_to_inv();
-    let report = DonorMatchReport {
-        winner: SpeakerCode::new("PAR0"),
-        scores: HashMap::from([
-            (SpeakerCode::new("PAR0"), JaccardScore(0.8)),
-            (SpeakerCode::new("PAR1"), JaccardScore(0.1)),
-        ]),
-        margin: ConfidenceMargin(8.0),
-    };
+    let options = ParseValidateOptions::default();
+    let reference =
+        parse_and_validate(FIX_REF_CHI_FROG, options.clone()).expect("reference parses");
+    let donor = parse_and_validate(FIX_DONOR_CLEAN_WINNER, options).expect("donor parses");
+    let report = identify_mapping(
+        &reference,
+        &SpeakerCode::new("CHI"),
+        &donor,
+        DEFAULT_CONFIDENCE_THRESHOLD,
+    )
+    .expect("clean fixture is decisive");
     let adult_roles = std::collections::BTreeMap::from([(
         "PAR1".to_string(),
         InsertedRoleSpec {

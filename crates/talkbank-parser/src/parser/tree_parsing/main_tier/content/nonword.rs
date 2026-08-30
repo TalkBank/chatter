@@ -86,7 +86,7 @@ pub(crate) fn parse_nonword_content(
     }
 
     // Position 1+: optional whitespaces and base_annotations
-    while (idx as usize) < child_count {
+    while idx < child_count {
         if let Some(child) = node.child(idx) {
             match child.kind() {
                 WHITESPACES => {

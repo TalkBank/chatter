@@ -2108,6 +2108,15 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E544.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E544"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E545.md",
       "example": 1,
       "parse": [],

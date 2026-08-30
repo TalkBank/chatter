@@ -24,6 +24,7 @@ use crate::generated_traversal::{
 use crate::parser::tree_parsing::parser_helpers::{present, surface_unexpected};
 
 use super::group::{convert_to_group_content, parse_nested_content};
+use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
 /// Converts a CST `quotation` node into `UtteranceContent`.
@@ -62,7 +63,7 @@ fn parse_quotation_content(
 
     // Position 0: Opening quote mark (LEFT DOUBLE QUOTATION MARK)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == LEFT_DOUBLE_QUOTE {
             idx += 1;
@@ -83,7 +84,7 @@ fn parse_quotation_content(
 
     // Optional whitespace after opening quote - skip it (not semantic content)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
         && child.kind() == WHITESPACES
     {
         idx += 1;
@@ -91,7 +92,7 @@ fn parse_quotation_content(
 
     // Parse contents
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == CONTENTS {
             group_items = parse_quotation_contents_items(child, source, errors);
@@ -110,7 +111,7 @@ fn parse_quotation_content(
 
     // Optional whitespace before closing quote - skip it (not semantic content)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
         && child.kind() == WHITESPACES
     {
         idx += 1;
@@ -118,7 +119,7 @@ fn parse_quotation_content(
 
     // Position last: Closing quote mark (RIGHT DOUBLE QUOTATION MARK)
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == RIGHT_DOUBLE_QUOTE {
             idx += 1;
@@ -140,7 +141,7 @@ fn parse_quotation_content(
     // Check for unexpected extra children
     if idx < child_count {
         for extra_idx in idx..child_count {
-            if let Some(extra) = node.child(extra_idx as u32) {
+            if let Some(extra) = node.child(extra_idx) {
                 errors.report(ParseError::new(
                     ErrorCode::TreeParsingError,
                     Severity::Error,
@@ -181,9 +182,9 @@ fn parse_quotation_contents_items(
 ) -> Vec<crate::model::BracketedItem> {
     let child_count = node.child_count();
     // Pre-allocate: each child is typically one content item
-    let mut group_items = Vec::with_capacity(child_count);
+    let mut group_items = ChildCapacity::for_node(node).into_vec();
     for idx in 0..child_count {
-        if let Some(child) = node.child(idx as u32) {
+        if let Some(child) = node.child(idx) {
             match child.kind() {
                 CONTENT_ITEM
                 | OVERLAP_POINT

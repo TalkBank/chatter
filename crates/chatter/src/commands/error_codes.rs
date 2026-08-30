@@ -11,7 +11,7 @@
 //! This module resolves; it does not decide what an unrecognized value
 //! means. `chatter fix` fails closed on one (see `fix::resolve_requested_codes`);
 //! `chatter validate --suppress` also fails closed today, but via its own
-//! [`SuppressionSelector`](super::validate::SuppressionSelector) wrapper
+//! private `SuppressionSelector` wrapper
 //! that additionally recognizes named groups (`xphon`). Each caller keeps
 //! its own policy; only the per-value parse is shared.
 

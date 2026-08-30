@@ -96,6 +96,18 @@ pub struct SpliceEdit {
     target: EditTarget,
     replacement: Replacement,
     provenance: EditProvenance,
+    recovery_safety: RecoverySafety,
+}
+
+/// Whether an edit requires clean parser provenance or is itself the exact
+/// mechanical repair for syntax recovery at its site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RecoverySafety {
+    /// Never write into an utterance whose parsed model needed recovery.
+    RequiresClean,
+    /// The catalog edit removes the syntax defect that caused recovery; the
+    /// caller must still reparse and verify the result after splicing.
+    RepairsTaintingSyntax,
 }
 
 impl SpliceEdit {
@@ -106,7 +118,29 @@ impl SpliceEdit {
             target,
             replacement,
             provenance,
+            recovery_safety: RecoverySafety::RequiresClean,
         }
+    }
+
+    /// Build a catalog-owned edit that repairs the syntax recovery at its own
+    /// site. Crate-private so external callers cannot forge this proof state
+    /// merely by attaching a diagnostic label.
+    pub(crate) fn new_recovery_repair(
+        target: EditTarget,
+        replacement: Replacement,
+        diagnostic: ErrorCode,
+    ) -> Self {
+        Self {
+            target,
+            replacement,
+            provenance: EditProvenance::Diagnostic(diagnostic),
+            recovery_safety: RecoverySafety::RepairsTaintingSyntax,
+        }
+    }
+
+    /// Parser-recovery admission state carried with this edit.
+    pub(crate) fn recovery_safety(&self) -> RecoverySafety {
+        self.recovery_safety
     }
 
     /// What this edit does to the source text: replace a range or insert at
@@ -240,7 +274,7 @@ fn validate_target(source: &str, len: u32, edit: &SpliceEdit) -> Result<(), Spli
 /// start-offset order) has grown or shrunk the text ahead of it. Computed
 /// once by [`mapped_edit_sites`] so no caller reimplements the
 /// cumulative-delta fold that produces it, and, within this crate,
-/// [`splice_with_sites`] folds it exactly once per splice: `apply_edits`
+/// `splice_with_sites` folds it exactly once per splice: `apply_edits`
 /// and [`gate::apply_edits_verified`](super::gate::apply_edits_verified)
 /// both build on it rather than each calling [`mapped_edit_sites`]
 /// separately on the same `(source, edits)`.
@@ -395,7 +429,7 @@ pub(super) fn splice_with_sites(
 
 /// Apply every edit to `source`, returning the spliced text.
 ///
-/// Built entirely on [`mapped_edit_sites`] (via [`splice_with_sites`]):
+/// Built entirely on [`mapped_edit_sites`] (via `splice_with_sites`):
 /// every target indexes the ORIGINAL source, which is the only text it was
 /// ever valid against, so copying the mapped gaps and replacements
 /// forward, in ascending original order, means no edit can invalidate

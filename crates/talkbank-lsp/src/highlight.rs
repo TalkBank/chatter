@@ -225,7 +225,7 @@ impl HighlightConfig {
     pub fn highlight(&mut self, text: &str) -> Result<Vec<HighlightToken>, String> {
         let highlights = self
             .highlighter
-            .highlight(&self.config, text.as_bytes(), None, |_| None)
+            .highlight(&self.config, text.as_bytes(), None, None, |_| None)
             .map_err(|e| format!("Highlight failed: {:?}", e))?;
 
         let mut tokens = Vec::new();

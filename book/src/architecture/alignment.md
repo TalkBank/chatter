@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-07-31 09:51 EDT
+**Last modified:** 2026-08-30 13:26 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -10,7 +10,8 @@ indices).
 
 | Layer | Where | Purpose |
 |---|---|---|
-| **Tier alignment** | `talkbank-model::alignment` | 1:1 mapping between main tier and dependent tiers (`%mor`, `%pho`, `%wor`, `%sin`, `%gra`) |
+| **Tier alignment** | `talkbank-model::alignment` | 1:1 mapping between main tier and structural dependent tiers (`%mor`, `%pho`, `%sin`, `%gra`) |
+| **Word timing binding** | `talkbank-model::alignment` | Count-matched positional convention between main-tier lexical slots and `%wor` timing observations |
 | **Word extraction** | `talkbank-transform::extract` | Pull NLP-ready words from the AST in domain order |
 
 ## Tier Alignment
@@ -85,7 +86,6 @@ insertion / deletion placeholder for mismatch diagnostics.
 | `MorAlignment` | `align_main_to_mor()` | Main → `%mor` items |
 | `PhoAlignment` | `align_main_to_pho()` | Main → `%pho` tokens |
 | `SinAlignment` | `align_main_to_sin()` | Main → `%sin` tokens |
-| `WorAlignment` | `align_main_to_wor()` | Main → `%wor` tokens |
 | `GraAlignment` | `align_mor_to_gra()` | `%mor` chunks → `%gra` relations |
 
 `%gra` aligns to `%mor` *chunks*, not items. Clitics create additional
@@ -96,24 +96,42 @@ chunks (`pro|it~v|be&PRES` = 2 chunks: pre-clitic + main).
 | Trait | Purpose | Implementors |
 |---|---|---|
 | `IndexPair` | `source()`/`target()` on any pair type | `AlignmentPair`, `GraAlignmentPair` |
-| `TierAlignmentResult` | `pairs()`/`errors()`/`push_*()` accumulator | All 5 alignment result types |
-| `AlignableTier` | What a tier provides for generic alignment | `PhoTier`, `SinTier`, `WorTier` |
+| `TierAlignmentResult` | `pairs()`/`errors()`/`push_*()` accumulator | Structural alignment result types |
+| `AlignableTier` | What a structural tier provides for generic alignment | `PhoTier`, `SinTier` |
 | `TierCountable` | `count_tier_positions()` / `collect_tier_items()` methods | `[UtteranceContent]` |
 
 The generic `positional_align()` function uses `AlignableTier` to
-eliminate duplication: `align_main_to_{pho,sin,wor}()` are thin
-wrappers around it. `%mor` doesn't use it (additional terminator
-validation logic). `%gra` doesn't use it (source is `MorTier`, not
-`MainTier`). `WorTier` overrides `mismatch_format()` to `Diff` (LCS) since
-both sides are word sequences; the others use `Positional`.
+eliminate duplication: `align_main_to_pho()` and `align_main_to_sin()` are
+thin wrappers around it. `%mor` does not use it because it has additional
+terminator validation logic. `%gra` does not use it because its source is
+`MorTier`, not `MainTier`.
 
 ### `%wor` is not validated
 
-`%wor` is a timing-annotation tier. There is no downstream positional
-indexing into `%wor`, and `validate_alignments()` does **not** check
-`%wor` word count against the main tier. Old corpus files may have
-`xxx`, fragments, or nonwords in `%wor` (pre-2026-04 behavior) without
-producing false errors.
+`%wor` is a timing-annotation sidecar, not a structural dependent tier.
+`validate_alignments()` does **not** reject a `%wor` word-count mismatch.
+Old corpus files may have `xxx`, fragments, or nonwords in `%wor`
+(pre-2026-04 behavior) without producing false errors.
+
+Consumers that need timings call `bind_wor_timing()`. Its typestate result is
+one of `Missing`, `Drifted`, or `CountMatched`. A
+`CountMatchedWorTimings` value exposes only the common count after equal counts have
+been observed under the named `FilteredLexicalV1` membership policy. Position
+permits the next comparison; it does not yet expose timing. Callers must pass
+that state to `corroborate_wor_timing()`, which compares the parsed `%wor`
+display tokens with the canonical display sequence derived from the main tier.
+Only `CorroboratedWorTimings` exposes positional slots. Each such slot takes
+lexical identity from the main tier and timing from the corresponding `%wor`
+word bullet. `%wor` text may refuse unsafe reuse but cannot supply lexical
+identity. A present but untimed slot is `WorSlotTiming::Unaligned`; it is not
+conflated with a missing tier or count drift.
+
+`MainTier::wor_projection()` is the single owner of current Wor-domain
+selection. Both `%wor` generation and timing binding travel through that typed
+projection, so membership disagreement between two implementations cannot be
+represented. See
+[`%wor` Timing Semantics](wor-timing.md) for the complete contract and research
+boundary.
 
 ### Phon tier-to-tier alignment
 

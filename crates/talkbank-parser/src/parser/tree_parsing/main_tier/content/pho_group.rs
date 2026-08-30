@@ -16,6 +16,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::group::{convert_to_group_content, parse_nested_content};
+use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
 /// Parse a `main_pho_group` node into `UtteranceContent::PhoGroup`.
@@ -30,7 +31,7 @@ pub(crate) fn parse_pho_group_content(
 
     // Position 0: '‹'
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == PHO_BEGIN_GROUP {
             idx += 1;
@@ -51,7 +52,7 @@ pub(crate) fn parse_pho_group_content(
 
     // Position 1: contents
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == CONTENTS {
             group_items = parse_pho_group_contents_items(child, source, errors);
@@ -73,7 +74,7 @@ pub(crate) fn parse_pho_group_content(
 
     // Position 2: '›'
     if idx < child_count
-        && let Some(child) = node.child(idx as u32)
+        && let Some(child) = node.child(idx)
     {
         if child.kind() == PHO_END_GROUP {
             idx += 1;
@@ -95,7 +96,7 @@ pub(crate) fn parse_pho_group_content(
     // Check for unexpected extra children
     if idx < child_count {
         for extra_idx in idx..child_count {
-            if let Some(extra) = node.child(extra_idx as u32) {
+            if let Some(extra) = node.child(extra_idx) {
                 errors.report(ParseError::new(
                     ErrorCode::TreeParsingError,
                     Severity::Error,
@@ -128,9 +129,9 @@ fn parse_pho_group_contents_items(
 ) -> Vec<crate::model::BracketedItem> {
     let child_count = node.child_count();
     // Pre-allocate: each child is typically one content item
-    let mut group_items = Vec::with_capacity(child_count);
+    let mut group_items = ChildCapacity::for_node(node).into_vec();
     for idx in 0..child_count {
-        if let Some(child) = node.child(idx as u32) {
+        if let Some(child) = node.child(idx) {
             match child.kind() {
                 CONTENT_ITEM
                 | OVERLAP_POINT

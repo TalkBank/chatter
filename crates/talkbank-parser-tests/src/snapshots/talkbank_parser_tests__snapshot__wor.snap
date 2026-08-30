@@ -156,7 +156,6 @@ expression: snapshot
       "dependent_tiers": [
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "hello",
@@ -239,7 +238,6 @@ expression: snapshot
       "dependent_tiers": [
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "how",
@@ -348,7 +346,6 @@ expression: snapshot
       "dependent_tiers": [
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "我",

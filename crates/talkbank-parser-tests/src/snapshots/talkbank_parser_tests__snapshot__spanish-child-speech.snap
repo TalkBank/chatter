@@ -198,7 +198,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "hola",
@@ -422,7 +421,6 @@ expression: snapshot
         },
         {
           "data": {
-            "bullet": null,
             "items": [
               {
                 "cleaned_text": "qué",

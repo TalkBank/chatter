@@ -1,7 +1,7 @@
 # Merge Pipeline, Test Plan
 
 **Status:** Draft
-**Last modified:** 2026-07-07 21:17 EDT
+**Last modified:** 2026-08-30 16:02 EDT
 
 This page is the test-coverage roadmap for the new merge pipeline
 (`chatter speaker-id` + `chatter merge` + `chatter adjudicate` +
@@ -232,21 +232,22 @@ tests` section.
 
 Note on type names: several of the designed types referenced below
 shipped under different names or shapes (`InsertedRole` is
-`InsertedRoleSpec`; `Margin` is `ConfidenceMargin(f64)` with
-`f64::INFINITY` for the unbounded case; `RetainSet` and `MergeFlag`
-never shipped as newtypes). See the designed-vs-shipped table in
+`InsertedRoleSpec`; `Margin` is the explicit
+`ConfidenceMargin::{NoInformation, Finite, Unbounded}` sum type;
+`RetainSet` and `MergeFlag` never shipped as newtypes). See the
+designed-vs-shipped table in
 [Domain Types](./merge-domain-types.md#designed-vs-shipped-quick-map)
 before writing any still-pending test from this table against the
 current code.
 
 | Test | Type | Assertion |
 |---|---|---|
-| `jaccard_score_new_in_range` | `JaccardScore` | `new(0.5)` → `Ok`; `new(-0.1)` and `new(1.1)` → `Err`; `new(NaN)` → `Err` |
-| `jaccard_score_serde_round_trip` | `JaccardScore` | Serializes to `0.5` (bare float in JSON/TOML); deserializes back identically; out-of-range deserialize → error |
+| `lexical_match_retains_the_counts_that_produce_its_score` | `LexicalMatchEvidence` / `JaccardScore` | Reference, donor, and intersection counts derive union and score; no public scalar score constructor can detach them |
+| `recorded_report_preserves_support_and_margin_state` | recorded match report | Stable JSON retains every count and the typed margin state |
 | `confidence_threshold_default_is_2_0` | `ConfidenceThreshold` | `Default::default().value() == 2.0` |
 | `confidence_threshold_rejects_below_1` | `ConfidenceThreshold` | `new(0.5)` → `Err` |
-| `margin_from_scores_zero_loser` | `Margin` | `from_scores(JaccardScore::new(0.7), JaccardScore::zero()) == Margin::Unbounded` |
-| `margin_from_scores_zero_zero` | `Margin` | `from_scores(zero, zero) == Margin::Finite(0.0)` or explicit "degenerate" representation (decide and document) |
+| `margin_from_scores_zero_loser` | `Margin` | Positive evidence-derived score versus a zero evidence-derived score produces `Margin::Unbounded` |
+| `margin_from_scores_zero_zero` | `Margin` | Two zero evidence-derived scores produce `Margin::NoInformation` |
 | `margin_meets_threshold` | `Margin` | `Finite(3.81).meets(threshold=2.0) == true`; `Finite(1.5).meets(2.0) == false`; `Unbounded.meets(threshold) == true` for any threshold |
 | `retain_set_parse` | `RetainSet` | `"CHI".parse() == Ok({CHI})`; `"CHI,SI2".parse() == Ok({CHI, SI2})`; `"".parse() == Err`; `"CHI,,SI2".parse() == Err` |
 | `inserted_role_parse` | `InsertedRole` | `"INV:Investigator".parse() == Ok(_)`; `"INV".parse() == Err`; `":Investigator".parse() == Err` |

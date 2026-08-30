@@ -9,10 +9,10 @@
 //! (e.g. a bundled ASR that under-counts or mixes speakers).
 //!
 //! The diarizer is a pure DATA boundary: turns arrive as
-//! [`DiarizationTurn`] values (a track code plus a [`TimeSpanMs`]); this
-//! module never touches audio. It operates entirely on the typed CHAT
-//! model and re-serializes through the model, never string-assembling
-//! CHAT.
+//! [`DiarizationTurn`] values (a track code plus a [`TimeSpanMs`]), admitted
+//! once to a start-ordered [`DiarizationTimeline`]; this module never touches
+//! audio. It operates entirely on the typed CHAT model and re-serializes
+//! through the model, never string-assembling CHAT.
 //!
 //! Design contract:
 //! - An utterance with no bullet, or whose bullet overlaps NO turn, is
@@ -86,9 +86,40 @@ impl TimeSpanMs {
 
     /// Milliseconds of overlap between the two spans (0 if disjoint).
     pub fn overlap_ms(&self, other: &Self) -> u64 {
-        let start = self.start_ms.max(other.start_ms);
-        let end = self.end_ms.min(other.end_ms);
-        end.saturating_sub(start)
+        match self.intersection(other) {
+            Some(span) => span.duration_ms(),
+            None => 0,
+        }
+    }
+
+    /// Their positive intersection, with emptiness removed from the type.
+    fn intersection(&self, other: &Self) -> Option<NonEmptyTimeSpanMs> {
+        NonEmptyTimeSpanMs::new(
+            self.start_ms.max(other.start_ms),
+            self.end_ms.min(other.end_ms),
+        )
+    }
+}
+
+/// A time span proven to contain positive media time.
+///
+/// This is private algorithm evidence: an ordinary [`TimeSpanMs`] permits an
+/// empty half-open interval, while an interval admitted here can safely seed a
+/// track's union-held duration.
+#[derive(Debug, Clone, Copy)]
+struct NonEmptyTimeSpanMs {
+    start_ms: u64,
+    end_ms: u64,
+}
+
+impl NonEmptyTimeSpanMs {
+    fn new(start_ms: u64, end_ms: u64) -> Option<Self> {
+        (start_ms < end_ms).then_some(Self { start_ms, end_ms })
+    }
+
+    fn duration_ms(self) -> u64 {
+        // Construction proves the subtraction cannot underflow.
+        self.end_ms - self.start_ms
     }
 }
 
@@ -101,6 +132,42 @@ pub struct DiarizationTurn {
     pub track: SpeakerCode,
     /// The media time span this track speaks.
     pub span: TimeSpanMs,
+}
+
+/// Diarization turns admitted to the time-ordered transform boundary.
+///
+/// The overlap-window algorithm relies on start-time ordering. Keeping an
+/// arbitrary `&[DiarizationTurn]` in the public transform API made a wrong
+/// answer representable for every library caller that did not happen to pass
+/// through [`parse_turns_json`]. This type owns the one sorting transition and
+/// keeps the ordered storage private.
+#[derive(Debug, Clone)]
+pub struct DiarizationTimeline {
+    turns: Vec<DiarizationTurn>,
+    longest_turn_ms: u64,
+}
+
+impl DiarizationTimeline {
+    /// Admit turns to the transform timeline, ordering them once by start.
+    #[must_use]
+    pub fn new(mut turns: Vec<DiarizationTurn>) -> Self {
+        turns.sort_by_key(|turn| turn.span.start_ms());
+        let longest_turn_ms = turns
+            .iter()
+            .map(|turn| turn.span.end_ms().saturating_sub(turn.span.start_ms()))
+            .max()
+            .unwrap_or(0);
+        Self {
+            turns,
+            longest_turn_ms,
+        }
+    }
+
+    /// The admitted turns in nondecreasing start-time order.
+    #[must_use]
+    pub fn turns(&self) -> &[DiarizationTurn] {
+        &self.turns
+    }
 }
 
 /// Why an utterance was left unchanged instead of reassigned.
@@ -152,10 +219,22 @@ impl std::fmt::Display for DiarizationSource {
 /// contract: `book/src/chatter/user-guide/rediarize.md`.
 #[derive(Debug)]
 pub struct TurnsFile {
+    source: Option<DiarizationSource>,
+    timeline: DiarizationTimeline,
+}
+
+impl TurnsFile {
     /// Optional producer provenance (`"source"` in the JSON).
-    pub source: Option<DiarizationSource>,
-    /// The timestamped diarization turns, validated (no inverted spans).
-    pub turns: Vec<DiarizationTurn>,
+    #[must_use]
+    pub fn source(&self) -> Option<&DiarizationSource> {
+        self.source.as_ref()
+    }
+
+    /// The validated, ordered diarization timeline.
+    #[must_use]
+    pub fn timeline(&self) -> &DiarizationTimeline {
+        &self.timeline
+    }
 }
 
 /// Why a turns JSON file was rejected. `Json` is malformed input
@@ -214,20 +293,9 @@ pub fn parse_turns_json(text: &str) -> Result<TurnsFile, TurnsJsonError> {
             span,
         });
     }
-    // SORTED AT THE BOUNDARY, once, where the file is read.
-    //
-    // `TrackOwnership::of_span` finds the overlapping turns as a contiguous
-    // window instead of scanning all of them, which needs start order. The
-    // JSON format does not require a diarizer to emit turns in order and
-    // nothing checks that it did, so a precondition left to the caller is one
-    // a caller breaks: unsorted input silently produced a WRONG winner, not a
-    // slow one. Sorting here means every route into `rediarize` that goes
-    // through a turns file gets it, and it costs one sort of a few thousand
-    // elements per file against a per-utterance scan.
-    turns.sort_by_key(|t| t.span.start_ms());
     Ok(TurnsFile {
         source: raw.source.map(DiarizationSource),
-        turns,
+        timeline: DiarizationTimeline::new(turns),
     })
 }
 
@@ -317,17 +385,17 @@ impl<'a> RediarizeSummary<'a> {
 /// surface) calls, so frontends share one implementation.
 pub fn rediarize_content(
     content: &str,
-    turns: &[DiarizationTurn],
+    timeline: &DiarizationTimeline,
     options: ParseValidateOptions,
     contested_at: Option<ContestedThreshold>,
 ) -> Result<(String, RediarizeOutcome), PipelineError> {
     let chat = parse_and_validate(content, options)?;
-    let (rewritten, outcome) = rediarize(&chat, turns, contested_at);
+    let (rewritten, outcome) = rediarize(&chat, timeline, contested_at);
     Ok((to_chat_string(&rewritten), outcome))
 }
 
 /// Re-attribute every bulleted utterance in `chat` to the diarization track
-/// holding the most of it, SUMMED across that track's turns, returning the
+/// holding the greatest union of time across that track's turns, returning the
 /// rewritten [`ChatFile`] and an outcome report. Headers are reconciled to the
 /// set of tracks actually used.
 ///
@@ -338,7 +406,7 @@ pub fn rediarize_content(
 /// The input `chat` is not mutated; a new `ChatFile` is built.
 pub fn rediarize(
     chat: &ChatFile,
-    turns: &[DiarizationTurn],
+    timeline: &DiarizationTimeline,
     contested_at: Option<ContestedThreshold>,
 ) -> (ChatFile, RediarizeOutcome) {
     let mut outcome = RediarizeOutcome::default();
@@ -352,7 +420,7 @@ pub fn rediarize(
                 let index = utterance_index;
                 utterance_index += 1;
                 let bullet = u.main.content.bullet.as_ref();
-                match bullet.and_then(|b| TrackOwnership::of(b, turns)) {
+                match bullet.and_then(|b| TrackOwnership::of(b, timeline)) {
                     Some(ownership) => {
                         let track = ownership.winner().clone();
                         if contested_at.is_some_and(|at| at.contests(ownership.runner_up_share())) {
@@ -420,16 +488,49 @@ pub fn rediarize(
 /// of a file and the reader is a program, so verbosity is the cheap side.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TrackOwnership {
-    /// Every track that overlaps the bullet at all, with its SUMMED overlap,
-    /// descending. Never empty: [`Self::of`] returns `None` instead.
+    /// Every track that overlaps the bullet at all, with the union of time its
+    /// turns hold, descending. Never empty: [`Self::of`] returns `None` instead.
     shares: Vec<(SpeakerCode, u64)>,
-    /// Total overlapped milliseconds across every track.
+    /// Sum of each track's union-held milliseconds.
     total_ms: u64,
+}
+
+/// Union accumulator for one track over one bullet.
+///
+/// Named fields prevent a held duration and an absolute media endpoint from
+/// being exchanged in a three-element tuple. [`DiarizationTimeline`] proves
+/// calls to [`Self::include`] arrive in nondecreasing start order.
+struct TrackHold {
+    track: SpeakerCode,
+    held_ms: u64,
+    counted_until_ms: u64,
+}
+
+impl TrackHold {
+    fn first(track: SpeakerCode, span: NonEmptyTimeSpanMs) -> Self {
+        Self {
+            track,
+            held_ms: span.duration_ms(),
+            counted_until_ms: span.end_ms,
+        }
+    }
+
+    fn include(&mut self, span: NonEmptyTimeSpanMs) {
+        let new_start = span.start_ms.max(self.counted_until_ms);
+        self.held_ms = self
+            .held_ms
+            .saturating_add(span.end_ms.saturating_sub(new_start));
+        self.counted_until_ms = self.counted_until_ms.max(span.end_ms);
+    }
+
+    fn into_share(self) -> (SpeakerCode, u64) {
+        (self.track, self.held_ms)
+    }
 }
 
 impl TrackOwnership {
     /// The distribution for one bullet, or `None` when no turn overlaps it.
-    fn of(bullet: &talkbank_model::model::Bullet, turns: &[DiarizationTurn]) -> Option<Self> {
+    fn of(bullet: &talkbank_model::model::Bullet, timeline: &DiarizationTimeline) -> Option<Self> {
         // Through the checked constructor, not a struct literal. The accessor
         // docs above say "the fields are private so that `Self::new` is the
         // only route in and an inverted span cannot be built"; a literal here
@@ -437,7 +538,7 @@ impl TrackOwnership {
         // it. A bullet whose end precedes its start owns nothing, which is
         // what `None` already means here.
         let utt = TimeSpanMs::new(bullet.timing.start_ms, bullet.timing.end_ms).ok()?;
-        Self::of_span(utt, turns)
+        Self::of_span(utt, timeline)
     }
 
     /// The distribution for one time span over turns SORTED BY START.
@@ -456,43 +557,51 @@ impl TrackOwnership {
     /// the bullet and still overlap it, so it is not enough to start at the
     /// first turn with `start >= utt.start`: the search begins at the first
     /// turn that could reach the bullet at all, which is
-    /// `utt.start - longest_turn`. That is why `TurnsFile` records the longest
-    /// duration rather than recomputing it per bullet.
+    /// `utt.start - longest_turn`. That is why [`DiarizationTimeline`] records
+    /// the longest duration rather than recomputing it per bullet.
     ///
     /// `the_windowed_scan_agrees_with_a_full_scan_on_every_bullet` pins this
     /// against the old implementation over the shapes that break a naive
     /// window: a turn far longer than its neighbours, zero-length turns, turns
     /// touching the bullet's edges exactly, and turns wholly outside it.
-    fn of_span(utt: TimeSpanMs, turns: &[DiarizationTurn]) -> Option<Self> {
-        let longest = turns
-            .iter()
-            .map(|t| t.span.end_ms().saturating_sub(t.span.start_ms()))
-            .max()
-            .unwrap_or(0);
-        let first =
-            turns.partition_point(|t| t.span.start_ms().saturating_add(longest) < utt.start_ms());
+    fn of_span(utt: TimeSpanMs, timeline: &DiarizationTimeline) -> Option<Self> {
+        let turns = timeline.turns();
+        let first = turns.partition_point(|turn| {
+            turn.span
+                .start_ms()
+                .saturating_add(timeline.longest_turn_ms)
+                < utt.start_ms()
+        });
 
-        let mut shares: Vec<(SpeakerCode, u64)> = Vec::new();
-        let mut total_ms = 0u64;
+        // Global start ordering also orders each track's subsequence. Remember
+        // the end already counted for that track so a diarizer's overlapping
+        // same-track turns describe one held interval rather than extra time.
+        // Different tracks remain independent: simultaneous speakers each hold
+        // the shared media interval, which is exactly the crosstalk evidence the
+        // distribution is meant to retain.
+        let mut held: Vec<TrackHold> = Vec::new();
         for turn in &turns[first..] {
             // Sorted by start, so once a turn begins at or after the bullet
             // ends, so does every turn after it.
             if turn.span.start_ms() >= utt.end_ms() && utt.end_ms() > utt.start_ms() {
                 break;
             }
-            let overlap = utt.overlap_ms(&turn.span);
-            if overlap == 0 {
+            let Some(span) = utt.intersection(&turn.span) else {
                 continue;
-            }
-            total_ms = total_ms.saturating_add(overlap);
-            match shares.iter_mut().find(|(track, _)| *track == turn.track) {
-                Some((_, summed)) => *summed = summed.saturating_add(overlap),
-                None => shares.push((turn.track.clone(), overlap)),
+            };
+            match held.iter_mut().find(|hold| hold.track == turn.track) {
+                Some(hold) => hold.include(span),
+                None => held.push(TrackHold::first(turn.track.clone(), span)),
             }
         }
-        if shares.is_empty() {
+        if held.is_empty() {
             return None;
         }
+        let mut shares: Vec<(SpeakerCode, u64)> =
+            held.into_iter().map(TrackHold::into_share).collect();
+        let total_ms = shares
+            .iter()
+            .fold(0u64, |total, (_, held_ms)| total.saturating_add(*held_ms));
         // Descending by held time. Ties break on the track code so the winner
         // is a function of the input rather than of turn order, which would
         // otherwise make the output depend on how the diarizer sorted its file.
@@ -507,20 +616,20 @@ impl TrackOwnership {
         &self.shares[0].0
     }
 
-    /// Every overlapping track with its summed milliseconds, descending.
+    /// Every overlapping track with its union-held milliseconds, descending.
     #[must_use]
     pub fn shares(&self) -> &[(SpeakerCode, u64)] {
         &self.shares
     }
 
-    /// Total overlapped milliseconds across every track.
+    /// Sum of each track's union-held milliseconds.
     #[must_use]
     pub fn total_ms(&self) -> u64 {
         self.total_ms
     }
 
-    /// The runner-up's share of the overlapped time, `0.0` when one track
-    /// holds all of it.
+    /// The runner-up's share of total per-track union-held time, `0.0` when one
+    /// track holds all of it.
     ///
     /// The runner-up rather than "everyone but the winner": two rivals at 20%
     /// each are a different situation from one at 40%, and this is the
@@ -538,7 +647,7 @@ impl TrackOwnership {
     }
 }
 
-/// The share of a bullet's overlapped time a runner-up must hold for the
+/// The share of total per-track union-held time a runner-up must hold for the
 /// utterance to be reported as contested.
 ///
 /// There is deliberately NO DEFAULT: no threshold means no contested
@@ -568,8 +677,8 @@ impl ContestedThreshold {
         Ok(Self(share))
     }
 
-    /// Whether a runner-up holding this much of the overlapped time counts as
-    /// contested.
+    /// Whether a runner-up holding this much of the total track-held time
+    /// counts as contested.
     ///
     /// The comparison lives HERE rather than at the call site, and there is no
     /// accessor handing the raw `f64` back. Two `f64`s meaning different
@@ -584,7 +693,7 @@ impl ContestedThreshold {
     }
 }
 
-/// The runner-up track's share of a bullet's overlapped time.
+/// The runner-up track's share of total per-track union-held time.
 ///
 /// A newtype so it cannot be compared against anything but a
 /// [`ContestedThreshold`], and so a reader of a signature can tell it from the
@@ -804,7 +913,8 @@ mod tests {
             turn("PAR2", 2000, 3000),
         ];
 
-        let (out, outcome) = rediarize(&chat, &turns, None);
+        let timeline = DiarizationTimeline::new(turns);
+        let (out, outcome) = rediarize(&chat, &timeline, None);
         let text = crate::serialize::to_chat_string(&out);
 
         // The third utterance moved off PAR1 onto PAR2.
@@ -856,7 +966,8 @@ mod tests {
             turn("PAR1", 2000, 3000),
         ];
 
-        let (out, _outcome) = rediarize(&chat, &turns, None);
+        let timeline = DiarizationTimeline::new(turns);
+        let (out, _outcome) = rediarize(&chat, &timeline, None);
         let text = crate::serialize::to_chat_string(&out);
         assert!(
             text.contains("*PAR2:\thi yourself ."),
@@ -886,7 +997,8 @@ mod tests {
         ];
 
         let threshold = ContestedThreshold::new(0.25).expect("valid share");
-        let (_out, outcome) = rediarize(&chat, &turns, Some(threshold));
+        let timeline = DiarizationTimeline::new(turns);
+        let (_out, outcome) = rediarize(&chat, &timeline, Some(threshold));
 
         assert_eq!(outcome.contested.len(), 1, "one utterance is contested");
         let contested = &outcome.contested[0];
@@ -917,7 +1029,8 @@ mod tests {
             turn("PAR1", 1600, 2000),
         ];
 
-        let (_out, outcome) = rediarize(&chat, &turns, None);
+        let timeline = DiarizationTimeline::new(turns);
+        let (_out, outcome) = rediarize(&chat, &timeline, None);
         assert!(
             outcome.contested.is_empty(),
             "with no threshold supplied, nothing is reported as contested"
@@ -926,10 +1039,10 @@ mod tests {
 
     /// The windowed scan answers exactly what a full scan of every turn does.
     ///
-    /// `TrackOwnership::of` looked at EVERY turn for EVERY bullet, which is
-    /// O(utterances x turns) and invisible from the call site. Turns are time
-    /// ordered, so the overlapping ones are a contiguous window, and this
-    /// pins that the window is the right one rather than merely a faster one.
+    /// The production path searches one ordered window and unions same-track
+    /// coverage incrementally. This independent oracle scans every turn, then
+    /// sorts and unions each track's clipped intervals; agreement pins that
+    /// the optimized window is the right one rather than merely a faster one.
     ///
     /// The adversarial part is the shapes that break a naive window: a turn
     /// much LONGER than the others (so a turn starting well before the
@@ -937,19 +1050,39 @@ mod tests {
     /// bullet's edges exactly, and turns entirely outside it.
     #[test]
     fn the_windowed_scan_agrees_with_a_full_scan_on_every_bullet() {
-        /// The pre-windowing implementation, kept here as the oracle.
+        /// A deliberately direct full-scan, per-track interval-union oracle.
         fn full_scan(utt: TimeSpanMs, turns: &[DiarizationTurn]) -> Vec<(String, u64)> {
-            let mut shares: Vec<(String, u64)> = Vec::new();
+            let mut intervals: Vec<(String, Vec<(u64, u64)>)> = Vec::new();
             for turn in turns {
-                let overlap = utt.overlap_ms(&turn.span);
-                if overlap == 0 {
+                let start_ms = utt.start_ms().max(turn.span.start_ms());
+                let end_ms = utt.end_ms().min(turn.span.end_ms());
+                if end_ms <= start_ms {
                     continue;
                 }
-                match shares.iter_mut().find(|(t, _)| *t == turn.track.as_str()) {
-                    Some((_, summed)) => *summed += overlap,
-                    None => shares.push((turn.track.as_str().to_string(), overlap)),
+                match intervals
+                    .iter_mut()
+                    .find(|(track, _)| track == turn.track.as_str())
+                {
+                    Some((_, spans)) => spans.push((start_ms, end_ms)),
+                    None => {
+                        intervals.push((turn.track.as_str().to_string(), vec![(start_ms, end_ms)]))
+                    }
                 }
             }
+            let mut shares: Vec<(String, u64)> = intervals
+                .into_iter()
+                .map(|(track, mut spans)| {
+                    spans.sort_by_key(|(start_ms, _)| *start_ms);
+                    let mut held_ms = 0u64;
+                    let mut counted_until_ms = 0u64;
+                    for (start_ms, end_ms) in spans {
+                        let new_start = start_ms.max(counted_until_ms);
+                        held_ms += end_ms.saturating_sub(new_start);
+                        counted_until_ms = counted_until_ms.max(end_ms);
+                    }
+                    (track, held_ms)
+                })
+                .collect();
             shares.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
             shares
         }
@@ -959,19 +1092,19 @@ mod tests {
             turn("PAR1", 90, 90),   // zero length, touching
             turn("PAR2", 95, 105),  // straddles the boundary
             turn("PAR0", 100, 200), // starts exactly where a bullet ends
+            turn("PAR0", 50, 150),  // overlaps two turns of its own track
             turn("LONG", 0, 5_000), // longer than every other turn
             turn("PAR1", 300, 400),
             turn("PAR2", 4_900, 5_000),
         ];
-        let mut sorted = turns.clone();
-        sorted.sort_by_key(|t| t.span.start_ms());
+        let timeline = DiarizationTimeline::new(turns.clone());
 
         // Every bullet shape, including empty ones and ones past the end.
         for start in [0u64, 50, 95, 100, 299, 300, 1_000, 4_950, 6_000] {
             for len in [0u64, 1, 50, 100, 5_000] {
                 let utt = TimeSpanMs::new(start, start + len).expect("valid");
                 let expected = full_scan(utt, &turns);
-                let got = TrackOwnership::of_span(utt, &sorted)
+                let got = TrackOwnership::of_span(utt, &timeline)
                     .map(|o| {
                         o.shares()
                             .iter()
@@ -1012,7 +1145,7 @@ mod tests {
         ]}"#;
         let file = parse_turns_json(json)?;
 
-        let (out, _outcome) = rediarize(&chat, &file.turns, None);
+        let (out, _outcome) = rediarize(&chat, file.timeline(), None);
         let text = crate::serialize::to_chat_string(&out);
         assert!(
             text.contains("*PAR2:\thi yourself ."),
@@ -1038,7 +1171,8 @@ mod tests {
         // Turns cover only 0-1s; the two later utterances overlap nothing.
         let turns = vec![turn("PAR0", 0, 1000)];
 
-        let (_out, outcome) = rediarize(&chat, &turns, None);
+        let timeline = DiarizationTimeline::new(turns);
+        let (_out, outcome) = rediarize(&chat, &timeline, None);
         assert_eq!(
             outcome.flagged.len(),
             2,

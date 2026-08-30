@@ -23,12 +23,12 @@ use talkbank_model::model::CodTier;
 /// ```
 ///
 /// Delegates the whole five-state body policy to
-/// [`parse_optional_text_tier_content`], the owner shared with the seven
+/// `parse_optional_text_tier_content`, the owner shared with the seven
 /// text-like tiers. This file used to carry a private copy of that policy,
 /// differing in ONE state: a malformed body gets no `unexpected_node_error`
 /// here, because the removed hand-walk loop had none and simply fell through to
 /// the "Missing content" rejection. That difference is now
-/// [`MalformedBody::ReportMissingOnly`], a value rather than a fork, so the four
+/// `MalformedBody::ReportMissingOnly`, a value rather than a fork, so the four
 /// states nobody disputes cannot drift between the copies.
 ///
 /// The `Option` on the body slot is the grammar's `optional(...)` (E756

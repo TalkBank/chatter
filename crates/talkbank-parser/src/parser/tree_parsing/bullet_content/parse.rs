@@ -68,7 +68,7 @@ pub fn parse_bullet_content(node: Node, source: &str, errors: &impl ErrorSink) -
     let mut idx = 0;
 
     while idx < child_count {
-        let child = match node.child(idx as u32) {
+        let child = match node.child(idx) {
             Some(c) => c,
             None => {
                 errors.report(ParseError::new(

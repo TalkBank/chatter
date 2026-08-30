@@ -1,7 +1,7 @@
 # Validation
 
 **Status:** Current
-**Last modified:** 2026-08-12 21:45 EDT
+**Last modified:** 2026-08-30 13:21 EDT
 
 Validation levels and the pre/post gates a pipeline can build on. For the
 error-code infrastructure (codes, sinks, severities, layers) see
@@ -114,9 +114,12 @@ stays green. When a change makes a reference file fail, adjudicate the FILE.
   rather than error so legacy corpora remain processable while the issue is
   still surfaced.
 - **`%wor` word counts are not validated against the main tier.** `%wor` is a
-  timing-annotation tier with no downstream positional indexing, so legacy
-  files may carry `xxx`, fragments or nonwords in `%wor` without producing
-  alignment errors.
+  timing-annotation sidecar, so legacy files may carry `xxx`, fragments or
+  nonwords in `%wor` without producing alignment errors. Timing consumers can
+  request a typed binding. `Drifted` fails closed without making the legacy
+  file invalid. `CountMatched` permits a canonical display-token comparison
+  but exposes no timing slots. Only the later `Corroborated` state exposes
+  timing, so a detectable same-count lexical edit also fails closed.
 - **Cross-utterance quotation validation is off by default**
   (`enable_quotation_validation`): the walker exists but is not wired into the
   standard gate.

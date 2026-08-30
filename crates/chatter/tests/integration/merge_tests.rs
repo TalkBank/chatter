@@ -400,3 +400,78 @@ fn merge_language_mismatch() -> Result<(), TestError> {
     );
     Ok(())
 }
+
+/// A File 1 speaker outside `--retain` loses every utterance, and the CLI
+/// must SAY SO.
+///
+/// The silent loss this warns about is real and passes every precondition:
+/// `AmbiguousSpeaker` fires only when a code appears in both files, so a
+/// reference-only `MOT` under `--retain CHI` is dropped while its
+/// `@Participants` row survives in the output. The operator is then looking at
+/// a transcript that declares a speaker who says nothing, with nothing
+/// anywhere telling them the merge did it.
+///
+/// The library learned this (`Merged::dropped_not_retained`); until now the
+/// report stopped at the library seam and no human ever saw it.
+const FIX_REF_MOT_NOT_RETAINED: &str = "@UTF8
+@Begin
+@Languages:\teng
+@Participants:\tCHI Target_Child, MOT Mother
+@ID:\teng|corpus|CHI|2;06.||||Target_Child|||
+@ID:\teng|corpus|MOT|||||Mother|||
+@Media:\tdrop, audio
+*CHI:\thello world . \u{15}500_1500\u{15}
+*MOT:\tthis one disappears . \u{15}1600_2000\u{15}
+@End
+";
+
+#[test]
+fn merge_warns_when_a_file1_speaker_is_dropped_by_retain() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file1 = dir.path().join("ref.cha");
+    let file2 = dir.path().join("asr.cha");
+    let out = dir.path().join("merged.cha");
+    fs::write(&file1, FIX_REF_MOT_NOT_RETAINED)?;
+    fs::write(&file2, FIX_ASR_INV_PRECOND)?;
+
+    let assert = crate::common::chatter_cmd()
+        .arg("merge")
+        .arg(&file1)
+        .arg(&file2)
+        .arg("--retain")
+        .arg("CHI")
+        .arg("-o")
+        .arg(&out)
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    // Binds the speaker to the CAUSE rather than merely appearing somewhere:
+    // `contains("MOT")` alone would pass on any stderr that echoed a
+    // participant list.
+    assert!(
+        stderr.contains("--retain: MOT (1)"),
+        "the warning must name MOT AS the dropped speaker, with its count, \
+         since that is what the operator acts on; stderr was:\n{stderr}"
+    );
+    // The one computed number in the message, so the arithmetic is pinned.
+    assert!(
+        stderr.contains("dropped 1 utterance(s)"),
+        "the warning must state how many utterances were lost; stderr was:\n{stderr}"
+    );
+
+    // The drop itself is the documented behaviour and must not change: MOT's
+    // utterance is gone, and its `@Participants` declaration remains, which is
+    // exactly why the warning is needed.
+    let merged = fs::read_to_string(&out)?;
+    assert!(
+        !merged.contains("this one disappears"),
+        "MOT's utterance should still be dropped: {merged}"
+    );
+    assert!(
+        merged.contains("MOT Mother"),
+        "MOT's participant declaration survives, which is the confusing part \
+         the warning explains: {merged}"
+    );
+    Ok(())
+}

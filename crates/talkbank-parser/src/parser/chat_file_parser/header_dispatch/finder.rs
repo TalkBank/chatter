@@ -28,7 +28,7 @@ pub(super) fn find_header_node_in_tree(root: Node, index: usize) -> ParseResult<
     let mut found_count = 0;
 
     for i in 0..root.child_count() {
-        if let Some(child) = root.child(i as u32) {
+        if let Some(child) = root.child(i) {
             let kind = child.kind();
 
             // 1. Pre-begin header wrappers/subtypes
@@ -42,7 +42,7 @@ pub(super) fn find_header_node_in_tree(root: Node, index: usize) -> ParseResult<
                 } else {
                     // PRE_BEGIN_HEADER wrapper: look inside for header children
                     for j in 0..child.child_count() {
-                        if let Some(grandchild) = child.child(j as u32)
+                        if let Some(grandchild) = child.child(j)
                             && is_header(grandchild.kind())
                         {
                             if found_count == index {
@@ -58,7 +58,7 @@ pub(super) fn find_header_node_in_tree(root: Node, index: usize) -> ParseResult<
             // 2. LINE nodes: search inside for headers
             if kind == LINE {
                 for j in 0..child.child_count() {
-                    if let Some(grandchild) = child.child(j as u32) {
+                    if let Some(grandchild) = child.child(j) {
                         let gc_kind = grandchild.kind();
                         if gc_kind == HEADER {
                             // HEADER wrapper inside LINE: unwrap

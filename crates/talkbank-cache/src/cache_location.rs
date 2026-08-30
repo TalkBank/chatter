@@ -47,7 +47,7 @@ pub const CACHE_DIR_ENV: &str = "TALKBANK_CHAT_CACHE_DIR";
 /// Resolution order: [`CACHE_DIR_ENV`] if set and non-empty (used verbatim, with
 /// no name appended); otherwise the platform cache root (`~/Library/Caches` on
 /// macOS, `XDG_CACHE_HOME` or `~/.cache` on Linux, `%LocalAppData%` on Windows)
-/// plus [`CACHE_DIR_NAME`].
+/// plus `CACHE_DIR_NAME`.
 pub fn default_cache_dir() -> Result<PathBuf, CacheError> {
     if let Some(dir) = std::env::var_os(CACHE_DIR_ENV)
         && !dir.is_empty()

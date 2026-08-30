@@ -191,7 +191,7 @@ pub struct ValidateDirectoryOptions {
     /// Error codes to suppress, already resolved from raw `--suppress`
     /// values (named groups expanded to their member codes). Typed end to
     /// end so suppression can be fed straight into a
-    /// [`talkbank_model::ValidationConfig`] with no string round-trip.
+    /// [`talkbank_transform::ValidationConfig`] with no string round-trip.
     pub suppress: Vec<talkbank_model::ErrorCode>,
 }
 

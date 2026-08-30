@@ -201,7 +201,7 @@ pub(crate) fn parse_base_content(
         // Check for unexpected extra children
         if child_count > 1 {
             for idx in 1..child_count {
-                if let Some(extra) = node.child(idx as u32) {
+                if let Some(extra) = node.child(idx) {
                     errors.report(ParseError::new(
                         ErrorCode::TreeParsingError,
                         Severity::Error,

@@ -3254,12 +3254,12 @@
         },
         {
           "const": "E714",
-          "description": "`%pho`, `%mod`, or `%wor` tier has fewer alignable words than main tier.",
+          "description": "`%pho` tier has fewer alignable words than main tier.",
           "type": "string"
         },
         {
           "const": "E715",
-          "description": "`%pho`, `%mod`, or `%wor` tier has more alignable words than main tier.",
+          "description": "`%pho` tier has more alignable words than main tier.",
           "type": "string"
         },
         {
@@ -3439,7 +3439,7 @@
         },
         {
           "const": "E752",
-          "description": "Transcript carries timing evidence (main-tier bullets or a\npositional `%wor` timing sidecar) but no `@Media` header declares\nthe media timeline the timestamps index. Inverse direction of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)\n(E544); corresponds to CLAN CHECK error 112.",
+          "description": "Transcript carries timing evidence (a main-tier bullet or an\nactual recorded `%wor` bullet) but no `@Media` header declares the\nmedia timeline the timestamps index. Equal word counts without a\nbullet are not timing evidence. Inverse direction of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming)\n(E544); corresponds to CLAN CHECK error 112.",
           "type": "string"
         },
         {
@@ -7595,7 +7595,7 @@
       "type": "string"
     },
     "WorItem": {
-      "description": "A single item in a %wor tier: either a timed word or an untimed\ntag-marker separator.\n\nTag-marker separators (comma `,`, tag `„`, vocative `‡`) appear in %wor\nbetween timed words. They correspond to `cm|cm`, `end|end`, and `beg|beg`\nin %mor. They are never timed and do not count toward alignment with the\nmain tier's word slots.\n\n# CRITICAL: Word Text is \"Eye Candy\" Only\n\n**The word text in %wor tier items is NEVER reparsed or used for processing.**\n\nThe word text exists solely for:\n- Human readability when viewing CHAT files\n- Error messages (alignment mismatch diagnostics)\n- CHAT format serialization compliance\n\n**The word text is NOT used for:**\n- Forced alignment (uses main tier words)\n- Morphosyntax processing (uses main tier words)\n- Any computational processing (timing comes from `inline_bullet`, not text)\n\nThis means we have complete freedom to put any \"reasonable eye candy\" in\nthe word text field, as long as it:\n- Looks sensible to humans reading the CHAT file\n- Serializes correctly (no CHAT-breaking characters)\n- Maintains word count alignment with main tier (structural requirement)\n\n**Current convention**: We copy `cleaned_text` from main tier words via\n`generate_wor_tier()`. This is a display choice, not a semantic requirement.\nWe could equally well use `raw_text`, placeholders (`_`), or indices (`w0`),\nand no processing would break.\n\n**What matters**: The `inline_bullet` field on each word, which contains\nthe actual timing data (start_ms, end_ms). This is parsed, stored, and\nused for all timing-related operations.\n\n# Reference\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)",
+      "description": "A single item in a %wor tier: either a timed word or an untimed\ntag-marker separator.\n\nTag-marker separators (comma `,`, tag `„`, vocative `‡`) appear in %wor\nbetween timed words. They correspond to `cm|cm`, `end|end`, and `beg|beg`\nin %mor. They are never timed and do not count toward alignment with the\nmain tier's word slots.\n\n# Word Text Is Corroboration, Not Lexical Authority\n\nThe word text exists solely for:\n- Human readability when viewing CHAT files\n- Canonical lexical-correspondence diagnostics\n- CHAT format serialization compliance\n\n**The word text is NOT used for:**\n- Forced alignment (uses main tier words)\n- Morphosyntax processing (uses main tier words)\n- Lexical identity (always comes from the typed main tier)\n\n**Current convention**: `generate_wor_tier()` copies `cleaned_text` from\nmain-tier words. Timing consumers may compare a parsed `%wor` sequence with\nthat canonical generated sequence to refuse unsafe positional reuse after a\nsame-count edit. A different display convention therefore requires a new,\nexplicitly named correspondence policy. It cannot change silently.\n\n**What matters**: The `inline_bullet` field on each word, which contains\nthe actual timing data (start_ms, end_ms). This is parsed, stored, and\nused for all timing-related operations.\n\n# Reference\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)",
       "oneOf": [
         {
           "allOf": [
@@ -7603,7 +7603,7 @@
               "$ref": "#/$defs/Word"
             },
             {
-              "description": "A word with optional timing bullet.\n\n**IMPORTANT**: The `Word.cleaned_text` and `Word.raw_text` fields are\n\"eye candy\", display-only text never used for processing. The real\ndata is in `Word.inline_bullet` (timing information).",
+              "description": "A word with optional timing bullet.\n\nThe `Word.cleaned_text` and `Word.raw_text` fields are display material\nand optional lexical corroboration. They never replace main-tier lexical\nidentity. Timing data remains in `Word.inline_bullet`.",
               "properties": {
                 "kind": {
                   "const": "word",
@@ -7638,19 +7638,8 @@
       ]
     },
     "WorTier": {
-      "description": "Flat %wor tier: a list of `WorItem`s (words and separators) with a terminator.\n\nWords carry `inline_bullet` set to a `Bullet` if an inline bullet followed\nthem in the source, or `None` if not.\nSeparators are always untimed and not counted for alignment.\n\nThis model is intentionally simple. Unlike the main tier, %wor tiers\ndo not contain groups, annotations, events, or nested structures.\nUse `words()` to iterate only over `Word` items for alignment purposes.\n\n# CRITICAL: Word Text is Write-Only \"Eye Candy\"\n\n**The word text in %wor tiers is NEVER reparsed for processing.**\n\nData flow is strictly one-way:\n```text\nMain tier AST\n  ↓\ngenerate_wor_tier() copies {cleaned_text, inline_bullet}\n  ↓\nWorTier AST\n  ↓\nwrite_chat() serializes to CHAT format\n  ↓\n%wor: word 1000_1200 another 1200_1500 .\n      ^^^^ \"eye candy\" (never reparsed)\n           ^^^^^^^^^^^ REAL DATA (timing)\n  ↓\nHuman reads it (END - never parsed back for processing)\n```\n\nWhen we parse a CHAT file with %wor tiers back:\n1. Parser builds WorTier AST (word text is stored but never used)\n2. Validation checks word count (text only used for error messages)\n3. Forced alignment **DELETES** %wor tier and regenerates from main tier\n4. TextGrid export uses cleaned_text from **main tier**, not %wor\n\n**What this means**:\n- Word text is a **display format choice**, not data integrity concern\n- We could put anything reasonable in word text (cleaned, raw, placeholders)\n- Current choice (cleaned_text) is convention for human readability\n- The **only** processing-critical data is `inline_bullet` (timing)\n\nSee: `docs/wor-tier-text-audit.md` for comprehensive analysis.\n\n# References\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)\n- [Media bullets](https://talkbank.org/0info/manuals/CHAT.html#Bullets)",
+      "description": "Flat %wor tier: a list of `WorItem`s (words and separators) with a terminator.\n\nWords carry `inline_bullet` set to a `Bullet` if an inline bullet followed\nthem in the source, or `None` if not. `%wor` has no tier-level bullet:\ntiming belongs to individual word entries.\nSeparators are always untimed and not counted for alignment.\n\nThis model is intentionally simple. Unlike the main tier, %wor tiers\ndo not contain groups, annotations, events, or nested structures.\nUse `words()` to iterate only over `Word` items for alignment purposes.\n\n# Word Text Is Corroboration, Not Authority\n\nGeneration remains one-way:\n```text\nMain tier AST\n  ↓\ngenerate_wor_tier() copies {cleaned_text, inline_bullet}\n  ↓\nWorTier AST\n  ↓\nwrite_chat() serializes to CHAT format\n  ↓\n%wor: word 1000_1200 another 1200_1500 .\n      ^^^^ canonical display token\n           ^^^^^^^^^^^ REAL DATA (timing)\n```\n\nWhen we parse a CHAT file with %wor tiers back:\n1. Parser builds a `WorTier` AST and retains its display tokens\n2. Timing consumers bind the tier to a typed main-tier projection\n3. Count drift prevents positional comparison without invalidating CHAT\n4. Canonical token drift prevents positional timing recovery\n5. Only corroborated slots expose timing from `inline_bullet`\n\n**What this means**:\n- Main-tier words remain the only lexical authority\n- `%wor` text can refuse reuse but cannot supply replacement lexical data\n- Current `cleaned_text` output is a named canonical convention\n- Timing itself comes only from `inline_bullet`\n\nSee: `book/src/architecture/wor-timing.md` for comprehensive analysis.\n\n# References\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)\n- [Media bullets](https://talkbank.org/0info/manuals/CHAT.html#Bullets)",
       "properties": {
-        "bullet": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Bullet"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Optional utterance-level bullet"
-        },
         "items": {
           "description": "Flat list of items: words with timing and untimed tag-marker separators.",
           "items": {
@@ -7687,10 +7676,10 @@
       "type": "object"
     },
     "WorTimingSidecar": {
-      "description": "Describes the correspondence between the main tier's Wor-filtered words\nand the entries in a `%wor` tier, at the moment of read.\n\nVariants express *what is safely recoverable*, not *whether validation\npasses*. `%wor` has no validation contract against the main tier; the\npresence of drift is a fact to report to callers, not an error.\n\n- [`Positional`](Self::Positional), filtered counts matched, so the\n  i-th Wor-filtered main-tier word corresponds to the i-th entry in\n  `%wor.words()`. Callers may zip positionally; this is the only mode\n  in which timing recovery is defined.\n- [`Drifted`](Self::Drifted), filtered counts differ (typically a main\n  tier edit after `align` without a re-run). No positional correspondence\n  is available; timing recovery must be skipped or the file must be\n  re-aligned. Carries the two counts so callers can log or display them.\n\n`None` at the containing [`Option<WorTimingSidecar>`] level on\n[`AlignmentSet`](crate::model::AlignmentSet) means the utterance has no\n`%wor` tier at all.",
+      "description": "Describes the correspondence between the main tier's Wor-filtered words\nand the entries in a `%wor` tier, at the moment of read.\n\nVariants express the observed count relationship, not *whether validation\npasses* or whether common origin is proved. `%wor` has no validation\ncontract against the main tier; the presence of drift is a fact to report\nto callers, not an error.\n\n- [`Positional`](Self::Positional), filtered counts matched, so legacy\n  metadata records that the positional convention is available. Equal\n  counts do not prove that the two sequences share origin after a\n  same-count edit. Timing consumers should use [`bind_wor_timing`] so the\n  evidence limitation remains explicit in the returned state.\n- [`Drifted`](Self::Drifted), filtered counts differ (typically a main\n  tier edit after `align` without a re-run). No positional correspondence\n  is available; timing recovery must be skipped or the file must be\n  re-aligned. Carries the two counts so callers can log or display them.\n\n`None` at the containing [`Option<WorTimingSidecar>`] level on\n[`AlignmentSet`](crate::model::AlignmentSet) means the utterance has no\n`%wor` tier at all.",
       "oneOf": [
         {
-          "description": "Filtered main-tier and `%wor` word counts match. The i-th entry of\neach sequence corresponds to the other. `count` is the common length.",
+          "description": "Filtered main-tier and `%wor` word counts match. Position is the legacy\ncorrespondence convention; `count` is the common length.",
           "properties": {
             "count": {
               "description": "Shared length of the Wor-filtered main sequence and `%wor.words()`.",

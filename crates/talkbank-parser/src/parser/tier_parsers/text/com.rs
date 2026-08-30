@@ -22,7 +22,7 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 /// Driven by the generated typed visitor: `extract_com_dependent_tier` yields the
 /// prefix / tier-sep / body / newline as typed `Positioned` slots, and the body
 /// (`child_2.slot`, a `text_with_bullets_and_pics` node) is matched exhaustively by
-/// the shared [`parse_optional_text_tier_content`], which also surfaces the carrier's
+/// the shared `parse_optional_text_tier_content`, which also surfaces the carrier's
 /// `unexpected` sink (R2).
 pub fn parse_com_tier(
     typed: ComDependentTierNode<'_>,

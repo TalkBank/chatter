@@ -21,7 +21,7 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 ///
 /// Driven by the generated typed visitor: `extract_sit_dependent_tier` yields the
 /// body as `child_2.slot`, matched exhaustively by the shared
-/// [`parse_optional_text_tier_content`], which also surfaces the carrier's `unexpected`
+/// `parse_optional_text_tier_content`, which also surfaces the carrier's `unexpected`
 /// sink (R2).
 pub fn parse_sit_tier(
     typed: SitDependentTierNode<'_>,

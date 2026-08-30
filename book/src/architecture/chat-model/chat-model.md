@@ -180,9 +180,9 @@ pub struct Replacement {
 }
 ```
 
-Convention when extracting words for NLP: use replacement words if
-non-empty, else the surface form (Wor and Mor domains both follow this,
-each with its own `counts_for_tier` filter).
+Convention when extracting words for NLP depends on the domain. Mor uses
+replacement words when present because morphology follows the correction.
+Wor uses the original surface word because timing follows what was spoken.
 
 ## Tier Domains
 
@@ -281,18 +281,19 @@ semantic constraints:
 - Header consistency: `@ID` codes match `@Participants`.
 - Speaker references: all `*SPEAKER:` codes declared.
 
-Five parallel alignment flows are computed against the main tier:
+Structural alignment and `%wor` timing state are computed from the same typed
+main-tier model:
 
 ```mermaid
 flowchart TD
     main["MainTier content"]
     walker["walk_words()\ncount alignable words"]
 
-    subgraph "5 Parallel Alignment Flows"
+    subgraph "Structural Alignment and Timing State"
         mor["%mor\ncustom logic\n(clitic handling)"]
         pho["%pho\npositional_align()\n(skip PhoGroup)"]
         sin["%sin\npositional_align()\n(skip SinGroup)"]
-        wor["%wor\npositional_align()\n(LCS diff format)"]
+        wor["%wor timing sidecar\nMissing | Drifted | CountMatched\nmain lexical + %wor bullets"]
         gra["%gra\nalign to %mor chunks\n(not main tier)"]
     end
 

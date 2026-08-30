@@ -71,7 +71,7 @@ pub const REGISTRY_PATH: &str = "spec/codes/error-codes.toml";
 /// could not reach. With `kind` a per-CODE fact, the parameter has nothing
 /// left to abstract over and is gone.
 ///
-/// # Deserialized THROUGH [`Self::parse`], not by the derive
+/// # Deserialized THROUGH [`FromStr`], not by the derive
 ///
 /// A plain `Deserialize` derive would spell the four variant names a second
 /// time, in serde's generated code, where nothing holds them to
