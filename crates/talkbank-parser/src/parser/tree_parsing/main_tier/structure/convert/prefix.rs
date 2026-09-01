@@ -20,7 +20,7 @@ use crate::error::{
 };
 use crate::generated_traversal::{AsRawNode, MainTierChildren, NodeSlot};
 
-use super::{PrefixData, report_missing_child, report_unexpected_child};
+use super::{ParsedSpeakerPrefix, PrefixData, report_missing_child, report_unexpected_child};
 
 /// Positional labels used in the `StructuralOrderError` "unexpected child"
 /// diagnostics. The `star` slot keeps its bespoke `(*)` message inline below, so
@@ -80,8 +80,7 @@ pub(super) fn parse_prefix(
     // zero-width check, so they are collapsed into one `Option<Node>` up front
     // (exhaustive over all 5 states, no `_ =>`) rather than duplicating the
     // zero-width-check body per arm.
-    let mut speaker: Option<String> = None;
-    let mut speaker_span = Span::DUMMY;
+    let mut speaker = None;
     let speaker_raw_node = match main.speaker.slot() {
         NodeSlot::Present(speaker_node) => Some(speaker_node.raw_node()),
         NodeSlot::Missing(node) => Some(*node),
@@ -117,8 +116,10 @@ pub(super) fn parse_prefix(
                 .with_suggestion("Main tier should start with *SPEAKER:"),
             );
         } else {
-            speaker = Some(source[node.start_byte()..node.end_byte()].to_string());
-            speaker_span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+            speaker = Some(ParsedSpeakerPrefix {
+                code: source[node.start_byte()..node.end_byte()].to_string(),
+                span: Span::new(node.start_byte() as u32, node.end_byte() as u32),
+            });
         }
     }
 
@@ -167,10 +168,7 @@ pub(super) fn parse_prefix(
         ),
     }
 
-    PrefixData {
-        speaker,
-        speaker_span,
-    }
+    PrefixData { speaker }
 }
 
 /// Report the `EmptyColon` diagnostic for a zero-width colon slot.

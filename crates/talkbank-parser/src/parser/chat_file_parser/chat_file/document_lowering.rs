@@ -40,10 +40,10 @@
 //!
 //! Because `collect_recovery_nodes` STILL runs as a whole-tree backstop in this
 //! task, any recovery diagnostic emitted from a `NodeSlot::Error`/`Missing` here
-//! MUST be emitted at the EXACT span of the offending node. The backstop's call
-//! site dedups by span overlap, so an exact-span emission is auto-suppressed in
-//! the backstop and diagnostics never double up. The shared error helpers reused
-//! here already emit at the node span, so this property holds by construction.
+//! MUST stay within the offending node's span. The backstop's call site dedups
+//! by span overlap, so a structurally narrowed emission is still suppressed in
+//! the backstop and diagnostics never double up. The shared error helpers own
+//! that source binding.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -300,10 +300,11 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// 1. top-level dependent-tier reporting (taints a prior utterance, emits a
     ///    tier diagnostic at the node span);
     /// 2. `@Date:` / unknown-`@Header:` recovery into a `Line` (no diagnostic);
-    /// 3. otherwise `analyze_error_node` (emits at the node span).
+    /// 3. otherwise `analyze_error_node` (emits within the node's source span;
+    ///    a dedicated diagnostic may narrow to the exact malformed child).
     ///
-    /// Every emission is at the exact ERROR node span, so the whole-tree backstop
-    /// dedups against it (WATCH-ITEM: no double-emission).
+    /// The whole-tree backstop uses the same structural classifier and dedups
+    /// overlapping reported spans (WATCH-ITEM: no double-emission).
     fn handle_top_level_error(&mut self, error_node: tree_sitter::Node<'_>) {
         if report_top_level_dependent_tier_error(
             error_node,
@@ -490,13 +491,15 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// whole-tree backstop emits.
     ///
     /// Each node that filled no grammar position is routed through the shared
-    /// [`collect_recovery_nodes`] mapping (ERROR -> E316 `UnparsableContent`,
-    /// MISSING -> E342 `MissingRequiredElement`, with the same
+    /// [`collect_recovery_nodes`] mapping (a dedicated structural code or E316
+    /// `UnparsableContent` for ERROR; E342 `MissingRequiredElement` for MISSING,
+    /// with the same
     /// `wraps_document_structure` / trailing-newline exemptions and localized
-    /// recursion), reported at the offending node's exact span. Because the
+    /// recursion), reported within the offending node's span. Because the
     /// whole-tree backstop still runs in this task and dedups by span overlap, a
     /// node surfaced here auto-suppresses the backstop's duplicate, so the
-    /// diagnostic count is unchanged (WATCH-ITEM: one E316 per error). A
+    /// diagnostic count is unchanged (WATCH-ITEM: one recovery diagnostic per
+    /// error). A
     /// present-but-unexpected node contributes only the recovery nodes in its
     /// subtree, which the whole-tree backstop would find anyway, so this never
     /// introduces a NEW diagnostic while the backstop is present; it is the

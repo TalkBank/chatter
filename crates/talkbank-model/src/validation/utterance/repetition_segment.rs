@@ -44,7 +44,7 @@ fn classify_repetition_shape(word: &Word) -> Option<RepetitionShape> {
     let mut inside_span = false;
     let mut saw_delimiter = false;
     let mut stem_outside = false;
-    for part in word.content.iter() {
+    for part in word.content().iter() {
         match part {
             WordContent::CADelimiter(delimiter)
                 if delimiter.delimiter_type == CADelimiterType::SegmentRepetition =>

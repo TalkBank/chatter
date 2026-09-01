@@ -1349,9 +1349,9 @@
    "fixture": "CHECK_136_unmatched_open_quote.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316"
+    "E242"
    ],
-   "note": "Open curly quote U+201C on a tier with no matching close quote (qt > 0 at end of tier). Rejected as unparsable (E316); no dedicated code for the unmatched OPEN quote (contrast E242 for the close quote)."
+   "note": "Open curly quote U+201C on a tier with no matching close quote (qt > 0 at end of tier). Since 2026-09-01 E242 is decided from CST structure and names the unmatched OPEN quote too, where it used to surface only as unparsable E316 (the close-quote case, CHECK 137, was E242 already)."
   },
   {
    "check_code": 137,

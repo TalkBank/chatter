@@ -1,7 +1,7 @@
 # Sanitize (`chatter debug sanitize`)
 
 **Status:** Current
-**Last updated:** 2026-04-28 22:18 EDT
+**Last updated:** 2026-09-01 06:05 EDT
 
 `chatter debug sanitize` strips contributor lexical content from a CHAT
 file while preserving structure (timing bullets, `%wor` per-word offsets,
@@ -62,6 +62,7 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 | Source | Replacement |
 |---|---|
 | `WordContent::Text` | `wN` placeholder, indexed by document position |
+| `WordContent::Phonetic` (`@u`) | `wN` placeholder; phonetic speech can contain names |
 | `Shortening` text | `(x)` |
 | `%mor` lemmas (`MorWord.lemma`) | `lemmaN`; POS + features preserved |
 | `%pho` / `%mod` / `%modsyl` / `%phosyl` / `%phoaln` / `%sin` | tier dropped |
@@ -75,8 +76,8 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 
 ## Determinism + Idempotence
 
-Placeholder generation is keyed off `(utterance_index, word_index)`
-tree position, not a global counter. Two consequences:
+Placeholder generation uses one monotonic counter in deterministic document
+traversal order. Two consequences:
 
 - **Deterministic**: sanitizing the same input twice produces
   byte-identical output.
@@ -91,17 +92,25 @@ flowchart LR
     Parser --> Model["ChatFile model\n(talkbank-model)"]
     Model --> Sanitize["sanitize()\n(talkbank-transform::redact)"]
     Sanitize --> Walker["walk_words_mut\n+ header walker\n+ dep-tier walker\n+ scoped-annot walker"]
-    Walker --> Mutated["Mutated ChatFile\n(placeholders + redactions)"]
+    Walker --> WordMutation["Typed Word replacement\n+ derived-text refresh"]
+    WordMutation --> Mutated["Mutated ChatFile\n(placeholders + redactions)"]
     Mutated --> Writer["WriteChat\n(byte-exact bullets)"]
     Writer --> Output["Sanitized .cha\n(scratch path)"]
 ```
 
-The walker step replaces `WordContent::Text` segments inside
-`Word.content`, mutates `MorWord.lemma` fields, redacts free-text
+The walker step replaces lexical segments in the typed word-content sequence,
+mutates `MorWord.lemma` fields, redacts free-text
 header / dep-tier / scoped-annotation strings, and drops phonological
 tiers. `WriteChat` then re-serializes, and because it serializes from
-`Word.content` (not from `Word.raw_text`), every CA element, compound
+typed content (not from `Word.raw_text`), every CA element, compound
 marker, clitic boundary, and timing bullet round-trips byte-exact.
+
+Word content is externally read-only. Replacement must use `Word`'s mutation
+methods, which invalidate the derived `cleaned_text` cache. The sanitizer also
+rebuilds `raw_text` from the complete sanitized typed word on every path. That
+includes parser-recovery words containing only structural elements and the
+`xxx`/`yyy`/`www` pass-through path. This prevents either JSON-facing string
+field from retaining source lexical material or losing nonlexical word markers.
 
 ## Out of v1 scope
 
@@ -122,4 +131,3 @@ Documented for transparency; v2 work:
 Library module: `talkbank_transform::redact`. CLI surface: `chatter debug sanitize`.
 The strict policy is the only public preset in v1; future variants can
 grow on `SanitizationPolicy`.
-

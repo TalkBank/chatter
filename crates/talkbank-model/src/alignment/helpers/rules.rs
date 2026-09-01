@@ -133,7 +133,7 @@ fn is_linguistic_content(word: &Word) -> bool {
 fn is_wor_timing_token(word: &Word) -> bool {
     // %wor tiers interleave lexical tokens with timing markers like `100_200`.
     // Those markers are alignment metadata, not alignable lexical content.
-    let raw = word.raw_text.as_bytes();
+    let raw = word.raw_text().as_bytes();
     let Some(split_at) = raw.iter().position(|&byte| byte == b'_') else {
         return false;
     };

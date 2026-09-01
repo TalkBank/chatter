@@ -3,7 +3,7 @@
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Quotation marks must be balanced
-@Comment:	Invalid: '"hello' - Missing closing quote
-*CHI:	"hello .
+@Comment:	ERROR: Quotation delimiters must be balanced
+@Comment:	Invalid: opening U+201C has no closing U+201D
+*CHI:	“hello .
 @End

@@ -115,13 +115,13 @@ pub struct Word {
     /// - Overlap points
     ///
     /// Use this for exact reproduction of the original transcript.
-    pub(crate) raw_text: smol_str::SmolStr,
+    raw_text: smol_str::SmolStr,
 
     /// Structured content breakdown.
     ///
     /// Uses a SmallVec-backed newtype - most words are simple (1 item)
     /// or compounds (2-3 items).
-    pub content: WordContents,
+    content: WordContents,
 
     /// Word category prefix.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -200,6 +200,11 @@ impl Word {
         &self.raw_text
     }
 
+    /// Returns the typed elements that make up this word.
+    pub fn content(&self) -> &WordContents {
+        &self.content
+    }
+
     /// Returns cleaned lexical text suitable for downstream NLP.
     ///
     /// Computed from `content` by concatenating `Text` and `Shortening` elements.
@@ -267,7 +272,17 @@ impl Word {
     /// should use [`replace_simple_text`](Self::replace_simple_text) or set both.
     pub fn with_content(mut self, content: impl Into<WordContents>) -> Self {
         self.content = content.into();
+        self.cached_cleaned_text = CachedStr::default();
         self
+    }
+
+    /// Replaces one typed content element and invalidates derived lexical text.
+    ///
+    /// Content mutation must pass through `Word`: mutating the collection
+    /// alone cannot know that this word's `cleaned_text` cache is now stale.
+    pub fn replace_content_at(&mut self, index: usize, item: WordContent) {
+        self.content.replace_at(index, item);
+        self.cached_cleaned_text = CachedStr::default();
     }
 
     /// Sets the optional category prefix (for example fillers/fragments).
@@ -385,6 +400,7 @@ impl Word {
         self.content = WordContents::new(smallvec::smallvec![WordContent::Text(
             WordText::new_unchecked(text),
         )]);
+        self.cached_cleaned_text = CachedStr::default();
     }
 
     /// Serializes this word to an owned CHAT string.
@@ -395,6 +411,33 @@ impl Word {
         let mut s = String::new();
         let _ = self.write_chat(&mut s);
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every public content-replacement path must invalidate the derived text
+    /// cache. Keeping the paths in one test makes additions visible beside the
+    /// complete mutation API rather than duplicating lexical behavior tests.
+    #[test]
+    fn content_replacement_paths_invalidate_cleaned_text() {
+        let mut indexed = Word::simple("old");
+        assert_eq!(indexed.cleaned_text(), "old");
+        indexed.replace_content_at(0, WordContent::Text(WordText::new_unchecked("indexed")));
+        assert_eq!(indexed.cleaned_text(), "indexed");
+
+        let mut simple = Word::simple("old");
+        assert_eq!(simple.cleaned_text(), "old");
+        simple.replace_simple_text("simple");
+        assert_eq!(simple.cleaned_text(), "simple");
+
+        let warmed = Word::simple("old");
+        assert_eq!(warmed.cleaned_text(), "old");
+        let replaced =
+            warmed.with_content(vec![WordContent::Text(WordText::new_unchecked("builder"))]);
+        assert_eq!(replaced.cleaned_text(), "builder");
     }
 }
 

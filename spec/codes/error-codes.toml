@@ -209,7 +209,7 @@ status = "implemented"
 [[code]]
 code = "E242"
 variant = "UnbalancedQuotation"
-summary = "Unbalanced quotation marks within a word."
+summary = "Unbalanced quotation delimiters within an utterance."
 kind = "Invalidity"
 status = "implemented"
 
@@ -325,7 +325,7 @@ status = "implemented"
 [[code]]
 code = "E301"
 variant = "MissingMainTier"
-summary = "Missing main tier (speaker line) in utterance."
+summary = "Main tier has an empty speaker code."
 kind = "Invalidity"
 status = "implemented"
 

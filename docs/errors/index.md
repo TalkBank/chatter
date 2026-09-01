@@ -22,27 +22,27 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E213](E213.md) | Deprecated, replaced by E391 | Invalidity | word | ? |
 | [E220](E220.md) | Illegal digits in word content | Invalidity | word | ✅ |
 | [E230](E230.md) | Unbalanced CA delimiter | Invalidity | word | ✅ |
-| [E231](E231.md) | Auto-generated from corpus | Invalidity | word | ✅ |
+| [E231](E231.md) | Unbalanced shortening parenthesis | Invalidity | word | ✅ |
 | [E232](E232.md) | Compound marker at word start | Invalidity | word | ✅ |
 | [E233](E233.md) | Empty compound part | Invalidity | word | ✅ |
 | [E241](E241.md) | Auto-generated from corpus | Invalidity | word | ✅ |
 | [E241](E241.md) | Illegal Untranscribed Marker 'xx' | Invalidity | word | ✅ |
-| [E242](E242.md) | Unbalanced quotation marks | Invalidity | word, utterance | ✅ |
+| [E242](E242.md) | Unbalanced quotation delimiters | Invalidity | utterance | ✅ |
 | [E243](E243.md) | Illegal characters in word | Invalidity | word | ✅ |
 | [E243](E243.md) | Pipe character in main-tier word text | Invalidity | word | ✅ |
-| [E244](E244.md) | Auto-generated from corpus | Invalidity | word | ✅ |
+| [E244](E244.md) | Consecutive stress markers in word | Invalidity | word | ✅ |
 | [E245](E245.md) | Stress marker without following spoken material | Invalidity | word | ✅ |
 | [E246](E246.md) | Lengthening marker not after spoken material | Invalidity | word | ⏳ |
-| [E247](E247.md) | Auto-generated from corpus | Invalidity | word | ✅ |
+| [E247](E247.md) | Multiple primary stress markers in one word | Invalidity | word | ✅ |
 | [E248](E248.md) | Bare @s shortcut in tertiary language context | Invalidity | word | ✅ |
 | [E249](E249.md) | Bare @s shortcut with no secondary language | Invalidity | word | ✅ |
-| [E250](E250.md) | Auto-generated from corpus | Invalidity | word | ✅ |
+| [E250](E250.md) | Secondary stress without primary stress | Invalidity | word | ✅ |
 | [E251](E251.md) | Empty word content text | Invalidity | word | ⏳ |
 | [E252](E252.md) | Syntax error - caret at word start | Invalidity | word | ✅ |
 | [E253](E253.md) | Empty word content | Invalidity | word | ✅ |
 | [E255](E255.md) | Whole-utterance language switch should use precode | Invalidity | utterance | ✅ |
 | [E256](E256.md) | Illegal curly single quote | Invalidity | word | ✅ |
-| [E258](E258.md) | Consecutive commas | Invalidity | word | ✅ |
+| [E258](E258.md) | Consecutive commas | Invalidity | utterance | ✅ |
 | [E259](E259.md) | Comma after non-spoken content | Invalidity | word | ✅ |
 | [E301](E301.md) | Empty speaker code | Invalidity | utterance | ✅ |
 | [E302](E302.md) | Missing required node | Invalidity | utterance | ⏳ |
@@ -50,8 +50,8 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E304](E304.md) | Missing speaker code | Invalidity | utterance | ⏳ |
 | [E305](E305.md) | Missing terminator | Invalidity | utterance | ✅ |
 | [E306](E306.md) | Utterance has no content | Invalidity | utterance | ✅ |
-| [E307](E307.md) | Auto-generated from corpus | Invalidity | utterance | ✅ |
-| [E308](E308.md) | Invalid speaker format | Invalidity | utterance | ✅ |
+| [E307](E307.md) | Invalid speaker code | Invalidity | utterance | ✅ |
+| [E308](E308.md) | Undeclared speaker | Invalidity | utterance | ✅ |
 | [E309](E309.md) | Unexpected syntax | Invalidity | utterance | ⏳ |
 | [E310](E310.md) | Parser failed to produce valid parse tree | Invalidity | utterance | ⏳ |
 | [E311](E311.md) | Failed to parse utterance | Invalidity | utterance | ✅ |

@@ -12,7 +12,7 @@ fn word_with_shortening() {
     if let Ok(word) = &result {
         assert_eq!(word.raw_text(), "hel(lo)");
         assert_eq!(word.cleaned_text(), "hello");
-        assert!(!word.content.is_empty());
+        assert!(!word.content().is_empty());
     }
 
     snapshot("word_parsing_tests__word_with_shortening", &result);
@@ -26,7 +26,7 @@ fn word_with_multiple_shortenings() {
     if let Ok(word) = &result {
         assert_eq!(word.raw_text(), "h(e)l(lo)");
         assert_eq!(word.cleaned_text(), "hello");
-        assert!(word.content.len() >= 2);
+        assert!(word.content().len() >= 2);
     }
 
     snapshot(

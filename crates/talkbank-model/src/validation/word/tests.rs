@@ -577,8 +577,7 @@ fn test_e250_valid_secondary_with_primary() {
 /// semantic element.
 #[test]
 fn test_e253_empty_word_content_list() {
-    let mut word = Word::new_unchecked("test", "test");
-    word.content = WordContents::default();
+    let word = Word::new_unchecked("test", "test").with_content(WordContents::default());
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(

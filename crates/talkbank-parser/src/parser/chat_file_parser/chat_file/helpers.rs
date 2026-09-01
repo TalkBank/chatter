@@ -352,8 +352,9 @@ pub(super) fn parse_lines_with_old_tree(
 
     // Whole-tree recovery-node backstop. Gated on `has_error()` so valid files
     // (the overwhelming majority) pay nothing. Every surviving ERROR/MISSING node
-    // not already covered by a region diagnostic above is surfaced as invalidity
-    // (ERROR -> E316, MISSING -> E342). The parser still produced an AST; this only
+    // not already covered by a region diagnostic above is surfaced as invalidity.
+    // ERROR uses a structurally proven dedicated code when available and E316
+    // otherwise; MISSING uses E342. The parser still produced an AST; this only
     // reports, honoring lenient recovery while enforcing "recovery is not validity".
     if root_node.has_error() {
         let reported = collector.to_vec();

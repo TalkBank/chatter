@@ -13,7 +13,6 @@ SECURITY.md
 book/src/SUMMARY.md
 book/src/architecture/algorithms.md
 book/src/architecture/bullet-validation.md
-book/src/architecture/chat-model/chat-model.md
 book/src/architecture/chat-model/wide-structs.md
 book/src/architecture/cli-startup-and-stack.md
 book/src/architecture/crate-reference.md
@@ -42,7 +41,6 @@ book/src/chatter/user-guide/batch-workflows.md
 book/src/chatter/user-guide/chat-processing-playbook.md
 book/src/chatter/user-guide/ci-integration.md
 book/src/chatter/user-guide/clan-line-numbering.md
-book/src/chatter/user-guide/sanitize.md
 book/src/contributing/chat-processing-playbook.md
 book/src/contributing/coding-standards-extended.md
 book/src/contributing/compile-times.md

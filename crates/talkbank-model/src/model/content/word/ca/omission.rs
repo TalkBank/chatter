@@ -45,7 +45,7 @@ pub fn normalize_ca_omission_word(word: &mut Word) {
     }
 
     let mut found = None;
-    for (idx, item) in word.content.iter().enumerate() {
+    for (idx, item) in word.content().iter().enumerate() {
         match item {
             WordContent::Shortening(shortening) => {
                 // A second shortening means this is not a standalone omission.
@@ -83,8 +83,7 @@ pub fn normalize_ca_omission_word(word: &mut Word) {
     // The loop carries the shortening out with it, so there is no second
     // lookup and no `let ... else` branch that the loop already made
     // impossible to reach.
-    word.content
-        .replace_at(index, WordContent::Text(WordText::from(shortening)));
+    word.replace_content_at(index, WordContent::Text(WordText::from(shortening)));
     word.category = Some(WordCategory::CAOmission);
 }
 

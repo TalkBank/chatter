@@ -180,8 +180,11 @@ impl WordFeatureSignature {
     pub fn from_word(word: &Word) -> Self {
         let category = word.category.as_ref().map(WordCategoryClass::from_category);
 
-        let content_types: BTreeSet<ContentKind> =
-            word.content.iter().map(ContentKind::from_content).collect();
+        let content_types: BTreeSet<ContentKind> = word
+            .content()
+            .iter()
+            .map(ContentKind::from_content)
+            .collect();
 
         let form_type_class = word.form_type.as_ref().map(FormTypeClass::from_form_type);
 
@@ -197,7 +200,7 @@ impl WordFeatureSignature {
 
         let has_untranscribed = word.untranscribed().is_some();
 
-        let content_count = ContentCountClass::from_count(word.content.len());
+        let content_count = ContentCountClass::from_count(word.content().len());
 
         Self {
             category,

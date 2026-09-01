@@ -1,7 +1,7 @@
 # CHAT Data Model
 
 **Status:** Current
-**Last updated:** 2026-06-14 19:57 EDT
+**Last updated:** 2026-09-01 06:12 EDT
 
 The `talkbank-model` crate defines the typed AST for CHAT files. Every
 other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
@@ -14,11 +14,14 @@ extract → infer → inject pattern that all NLP tasks follow.
 The root type is `ChatFile`, representing a complete CHAT transcript:
 
 ```rust,ignore
-pub struct ChatFile {
-    pub lines: Vec<Line>,
+pub struct ChatFile<S: ValidationState = NotValidated> {
+    pub lines: ChatFileLines,
     pub participants: IndexMap<SpeakerCode, Participant>,
     pub languages: LanguageCodes,
     pub options: ChatOptionFlags,
+    pub media: Option<Box<MediaHeader>>,
+    pub line_map: Option<LineMap>,
+    _state: PhantomData<S>,
 }
 ```
 
@@ -27,11 +30,14 @@ tree:
 
 ```mermaid
 flowchart TD
-    chatfile["ChatFile\n(talkbank-model/src/model/file/chat_file/core.rs)"]
-    chatfile --> lines["lines: Vec&lt;Line&gt;"]
+    chatfile["ChatFile&lt;S: ValidationState&gt;\n(talkbank-model/src/model/file/chat_file/core.rs)"]
+    chatfile --> state["S: NotValidated or Validated\n(compile-time only)"]
+    chatfile --> lines["lines: ChatFileLines\n(ordered Line newtype)"]
     chatfile --> participants["participants:\nIndexMap&lt;SpeakerCode, Participant&gt;"]
     chatfile --> languages["languages: LanguageCodes"]
     chatfile --> options["options: ChatOptionFlags"]
+    chatfile --> media["media: Option&lt;MediaHeader&gt;"]
+    chatfile --> line_map["line_map: Option&lt;LineMap&gt;\n(not serialized)"]
 
     lines --> header_line["Line::Header (Header)"]
     lines --> utt_line["Line::Utterance (Utterance)"]
@@ -44,16 +50,16 @@ flowchart TD
     main --> speaker["speaker: SpeakerCode"]
     main --> tiercontent["content: TierContent"]
     tiercontent --> linkers["linkers: Vec&lt;Linker&gt;"]
-    tiercontent --> uttcontent["utterance_content:\nVec&lt;UtteranceContent&gt;\n(24 variants)"]
+    tiercontent --> uttcontent["utterance_content:\nVec&lt;UtteranceContent&gt;\n(28 variants)"]
     tiercontent --> terminator["terminator: Option&lt;Terminator&gt;"]
     tiercontent --> bullet["bullet: Option&lt;Bullet&gt;"]
 ```
 
-The `DependentTier` enum has 25 variants: structured linguistic
+The `DependentTier` enum has 32 variants: structured linguistic
 (`Mor`/`Gra`/`Pho`/`Mod`/`Sin`/`Act`/`Cod`/`Wor`), with-inline-bullets
 (`Add`/`Com`/`Exp`/`Gpx`/`Int`/`Sit`/`Spa`), text-only
 (`Alt`/`Coh`/`Def`/`Eng`/`Err`/`Fac`/`Flo`/`Gls`/`Ort`/`Par`/`Tim`),
-Phon-project (`Modsyl`/`Phosyl`/`Phoaln`), and `UserDefined` /
+Phon-project (`Modsyl`/`Phosyl`/`Phoaln`/`Xphoint`), and `UserDefined` /
 `Unsupported`.
 
 ## Three-Level Content Hierarchy
@@ -83,14 +89,15 @@ ChatFile
             └── terminator: Terminator
 ```
 
-### Level 1, `UtteranceContent` (24 variants)
+### Level 1, `UtteranceContent` (28 variants)
 
 What you iterate when walking `utterance.main.content.content.0`:
 
 | Category | Variants |
 |---|---|
 | Words | `Word`, `AnnotatedWord`, `ReplacedWord` |
-| Groups | `Group`, `AnnotatedGroup`, `PhoGroup`, `SinGroup`, `Quotation` |
+| Groups and quoted spans | `Group`, `AnnotatedGroup`, `PhoGroup`, `SinGroup`, `Quotation`, `AnnotatedQuotation` |
+| Retraces | `Retrace`, `AnnotatedRetrace` |
 | CA markers | `OverlapPoint`, `Separator` |
 | Events | `Event`, `AnnotatedEvent`, `OtherSpokenEvent` |
 | Actions | `Action`, `AnnotatedAction` |
@@ -99,7 +106,7 @@ What you iterate when walking `utterance.main.content.content.0`:
 | Other | `Freecode`, `Pause` |
 
 **Critical rule:** every `match` on `UtteranceContent` must explicitly
-list all 24 variants. No `_ =>` catch-alls. Project policy: silent data
+list all 28 variants. No `_ =>` catch-alls. Project policy: silent data
 loss when new variants are added is unacceptable.
 
 ### Level 2, `BracketedItem` (22 variants)
@@ -114,13 +121,14 @@ BracketedItems`, which has `.0: Vec<BracketedItem>`).
 both levels, not hidden inside `AnnotatedGroup`. Groups can nest
 arbitrarily deep.
 
-### Level 3, `WordContent` (11 variants)
+### Level 3, `WordContent` (13 variants)
 
-Content inside a single word token, accessed via `word.content`:
+Content inside a single word token, read through `word.content()`:
 
 | Variant | Example |
 |---|---|
 | `Text` | plain text segment |
+| `Phonetic` | `@u` phonetic transcription segment |
 | `Shortening` | `(lo)` omitted sound |
 | `OverlapPoint` | `butt⌈er⌉`, overlap inside a word |
 | `CAElement` | `↑ ↓` prosody markers |
@@ -129,6 +137,7 @@ Content inside a single word token, accessed via `word.content`:
 | `Lengthening` | `:` |
 | `SyllablePause` | `^` |
 | `CompoundMarker` | `+` in `ice+cream` |
+| `CliticBoundary` | `~` in a cliticized form |
 | `UnderlineBegin/End` | scope delimiters |
 
 **Key insight:** overlap markers can appear at all three levels, as
@@ -316,7 +325,7 @@ For the alignment algorithms themselves, see
    `Vec<UtteranceContent>`, use `walk_words` or equivalent in-order
    traversal.
 2. **Missing intra-word content.** Overlap markers, CA elements, and
-   other markers can appear inside `Word.content`. Checking only
+   other markers can appear inside `Word` content. Checking only
    `UtteranceContent::OverlapPoint` misses `WordContent::OverlapPoint`
    (e.g., `butt⌈er⌉`, `a⌈nd`).
 3. **Missing annotated variants.**

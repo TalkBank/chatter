@@ -421,10 +421,15 @@ fn e301_has_no_catalog_entry_despite_the_seed_aliasing_it_to_missing_terminator(
 /// seed source's `"+..."` trailing-off insertion, and no single answer is
 /// derivable from the diagnostic alone (a missing open and a missing close
 /// both look the same). No catalog entry.
+///
+/// The seed is the CHAT delimiter `“` (U+201C): since E242 is decided from
+/// CST structure, an ASCII straight quote is not a quotation delimiter and
+/// reaches E316/E342 instead, which would make this test assert about the
+/// wrong code.
 #[test]
 fn e242_has_no_catalog_entry_because_the_seed_fix_is_unrelated() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
-                  @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t\"hello .\n@End";
+                  @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t\u{201C}hello .\n@End";
     let error = single_error_with_code(source, "E242")?;
     assert!(
         catalog_fix(&error, source).is_none(),

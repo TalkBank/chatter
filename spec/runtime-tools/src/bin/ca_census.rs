@@ -362,7 +362,7 @@ fn census_word(
     file: &FileFacts,
     marks: &mut BTreeMap<String, MarkStats>,
 ) {
-    let contents: Vec<&WordContent> = word.content.iter().collect();
+    let contents: Vec<&WordContent> = word.content().iter().collect();
     let len = contents.len();
     for (index, content) in contents.iter().enumerate() {
         let slot = Slot::of(index, len);

@@ -76,8 +76,9 @@ pub(crate) fn check_for_errors_recursive_with_context(
 /// nodes and continuing, so the LSP and downstream repair always get an AST.
 /// But recovery is not validity: a document that needed a synthetic recovery
 /// node did not conform to the grammar, so each such node is a
-/// `Severity::Error`. `ERROR` -> [`ErrorCode::UnparsableContent`] (E316);
-/// `MISSING` -> [`ErrorCode::MissingRequiredElement`] (E342).
+/// `Severity::Error`. An `ERROR` becomes a dedicated code when its structure
+/// proves one, otherwise [`ErrorCode::UnparsableContent`] (E316); a `MISSING`
+/// node becomes [`ErrorCode::MissingRequiredElement`] (E342).
 ///
 /// This is the whole-tree BACKSTOP for the streaming lowering, which only
 /// inspects recovery nodes in the specific regions its per-region handlers
@@ -106,6 +107,17 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
             for child in node.children(&mut cursor) {
                 collect_recovery_nodes(child, source, out);
             }
+            return;
+        }
+
+        // E242: quotation balance is recoverable from typed delimiter nodes
+        // even when tree-sitter wraps the complete main tier in one ERROR.
+        // A matched pair inside an otherwise malformed region is explicitly
+        // not this diagnostic.
+        if let super::error_analysis::dedicated::QuotationDelimiterScan::Unbalanced(finding) =
+            super::error_analysis::dedicated::scan_quotation_delimiters(node)
+        {
+            out.push(finding.into_diagnostic(source));
             return;
         }
 
@@ -240,16 +252,16 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
 
 /// Surface a NEW-backend carrier's `unexpected` sink (spec Section 7: children
 /// that filled no grammar position) using the SAME [`collect_recovery_nodes`]
-/// mapping the whole-tree backstop uses (`ERROR` -> `UnparsableContent`/E316,
-/// `MISSING` -> `MissingRequiredElement`/E342), reported at each offending
-/// node's exact span.
+/// mapping the whole-tree backstop uses (dedicated recovery code or generic
+/// `UnparsableContent`/E316 for `ERROR`; `MissingRequiredElement`/E342 for
+/// `MISSING`), reported at the most specific structurally proven span.
 ///
 /// This is the shared mechanism every migrated visitor-driven carrier (Task
 /// B1 onward) uses to surface its own `unexpected` sink, mirroring the
 /// pattern `document_lowering.rs` established for Task B1
 /// (`DocumentLowering::surface_unexpected`). Because the whole-tree backstop
-/// still runs today and dedups by span overlap, an exact-span emission here
-/// is auto-suppressed as a backstop duplicate, so this can never introduce a
+/// still runs today and dedups by span overlap, an emission here is
+/// auto-suppressed as a backstop duplicate, so this can never introduce a
 /// NEW diagnostic while the backstop is present; it is the per-carrier
 /// mechanism that lets the backstop be deleted once every region surfaces its
 /// own recovery (migration Task D). In practice most carriers' `unexpected`

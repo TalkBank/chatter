@@ -126,13 +126,22 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E231.md", Conflicting),
     ("E232.md", Conflicting),
     ("E242.md#0", Conflicting),
+    // `#1` arrived 2026-09-01 with E242 decided from CST structure: an
+    // unmatched opener inside a longer utterance. re2c still answers its
+    // generic E321 there, the same Conflicting shape as `#0`.
+    ("E242.md#1", Conflicting),
     ("E243_auto.md", Conflicting),
     ("E245.md", Re2cExtra),
-    ("E252.md", Re2cExtra),
-    ("E253.md", Re2cIncomplete),
-    ("E301.md", Conflicting),
-    ("E306.md", Re2cIncomplete),
-    ("E307.md", Conflicting),
+    // `#0` since 2026-09-01, when E252, E253, E301, E306 and E307 were
+    // rewritten from auto-generated stubs into stated rules and gained a
+    // second example each; a bare name addresses a single-example spec. The
+    // divergences themselves are unchanged in kind: re2c has not implemented
+    // the rewritten rules, and its E321 stands where tree-sitter names one.
+    ("E252.md#0", Re2cExtra),
+    ("E253.md#0", Re2cIncomplete),
+    ("E301.md#0", Conflicting),
+    ("E306.md#0", Re2cIncomplete),
+    ("E307.md#0", Conflicting),
     // ADJUDICATED 2026-08-11 against real CLAN CHECK, and BOTH SIDES FIXED.
     // The case became visible only when E311's spec stopped being
     // `not_implemented`: it had been skipped, not agreed.

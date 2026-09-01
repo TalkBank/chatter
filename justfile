@@ -489,7 +489,7 @@ spec-coverage:
 # no amount of reading the spec files can answer.
 [doc("Do the error specs' examples produce the codes they declare?")]
 spec-validate-examples:
-    {{ spec_run }} validate_error_specs
+    {{ spec_run }} validate_error_specs -- --check-codes
 
 # Which grammar node types does `corpus/reference/` actually exercise?
 #

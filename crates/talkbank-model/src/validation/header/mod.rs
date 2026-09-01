@@ -19,7 +19,7 @@ mod checkers;
 mod unknown;
 mod validate;
 
-pub(crate) use checkers::check_speaker_id;
+pub(crate) use crate::validation::check_speaker_id;
 pub(crate) use validate::check_header;
 
 #[cfg(test)]

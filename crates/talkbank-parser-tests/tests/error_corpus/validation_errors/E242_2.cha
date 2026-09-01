@@ -1,7 +1,7 @@
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	TEA Teacher
-@ID:	eng|corpus|TEA|||||Teacher|||
-*TEA:	“plant” [//] what is “plant” ?
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello” .
 @End

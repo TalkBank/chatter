@@ -8,7 +8,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Line>
 
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -82,7 +81,8 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Format Rules (validator)
 ///
 /// - max length: 7 characters
-/// - allowed chars: `A-Z`, `0-9`, `_`, `-`, `'`
+/// - reserved chars: colon (the tier delimiter) and whitespace
+/// - other characters remain representable for legacy and international data
 ///
 /// # References
 ///
@@ -165,64 +165,47 @@ impl std::borrow::Borrow<str> for SpeakerCode {
     }
 }
 
-/// Maximum allowed length for speaker IDs (`ChatFileUtils.MAX_WHO` compatibility).
-///
-/// Keeping this limit aligned with legacy tooling avoids subtle cross-tool
-/// validation differences on shared corpora.
-const MAX_SPEAKER_ID_LENGTH: usize = 7;
-
 impl Validate for SpeakerCode {
     /// Enforces CHAT speaker-id constraints used by parser/validator compatibility checks.
     fn validate(&self, _context: &ValidationContext, errors: &impl crate::ErrorSink) {
-        // E308: Check speaker ID length
-        if self.0.len() > MAX_SPEAKER_ID_LENGTH {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::UndeclaredSpeaker,
-                    Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(self.as_str(), 0..self.0.len(), "speaker_code"),
-                    format!(
-                        "Speaker ID '{}' exceeds maximum length of {} characters (has {})",
-                        self.0,
-                        MAX_SPEAKER_ID_LENGTH,
-                        self.0.len()
-                    ),
-                )
-                .with_suggestion(
-                    "Speaker IDs should be 7 characters or less (e.g., CHI, MOT, FAT)",
-                ),
-            );
-        }
-
-        // E302: Check for invalid characters in speaker ID
-        // Valid characters: uppercase letters (A-Z), digits (0-9), underscore (_), hyphen (-), apostrophe (')
-        // Note: Some legacy CHAT files use hyphens and apostrophes in speaker IDs (e.g., F_A'-T)
-        if let Some(invalid_char) = self.0.chars().find(|c| {
-            !c.is_ascii_uppercase() && !c.is_ascii_digit() && *c != '_' && *c != '-' && *c != '\''
-        }) {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::MissingNode,
-                    Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(self.as_str(), 0..self.0.len(), "speaker_code"),
-                    format!(
-                        "Speaker ID '{}' contains invalid character '{}'",
-                        self.0, invalid_char
-                    ),
-                )
-                .with_suggestion(
-                    "Speaker IDs should use uppercase letters (A-Z), digits (0-9), underscores (_), hyphens (-), or apostrophes (')",
-                ),
-            );
-        }
+        crate::validation::check_speaker_id(self.as_str(), crate::Span::DUMMY, errors);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Direct validation uses the same E307 structural rule as headers and
+    /// main tiers instead of assigning unrelated parser/relationship codes.
+    #[test]
+    fn direct_validation_reports_canonical_structural_code() {
+        for malformed in ["CHILDREN", "CH:I"] {
+            let code = SpeakerCode::new(malformed);
+            let errors = crate::ErrorCollector::new();
+
+            code.validate(&ValidationContext::default(), &errors);
+
+            let diagnostics = errors.into_vec();
+            assert_eq!(
+                diagnostics.len(),
+                1,
+                "unexpected diagnostics: {diagnostics:?}"
+            );
+            assert_eq!(diagnostics[0].code, crate::ErrorCode::InvalidSpeaker);
+        }
+    }
+
+    /// The seven-character limit counts Unicode scalar values, not UTF-8 bytes.
+    #[test]
+    fn direct_validation_accepts_seven_unicode_characters() {
+        let code = SpeakerCode::new("ÄBCDEFG");
+        let errors = crate::ErrorCollector::new();
+
+        code.validate(&ValidationContext::default(), &errors);
+
+        assert!(errors.into_vec().is_empty());
+    }
 
     /// Standard speaker codes are interned to shared allocations.
     ///

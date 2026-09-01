@@ -207,6 +207,13 @@
     {
       "fixture": "E242_2.cha",
       "code": "E242",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E242.md"
+    },
+    {
+      "fixture": "E242_3.cha",
+      "code": "E242",
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E242.md"
@@ -237,6 +244,13 @@
       "source_spec": "spec/errors/E244.md"
     },
     {
+      "fixture": "E244_2.cha",
+      "code": "E244",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244.md"
+    },
+    {
       "fixture": "E245_1.cha",
       "code": "E245",
       "claim": "violates",
@@ -254,6 +268,13 @@
       "fixture": "E247_1.cha",
       "code": "E247",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E247.md"
+    },
+    {
+      "fixture": "E247_2.cha",
+      "code": "E247",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E247.md"
     },
@@ -279,6 +300,13 @@
       "source_spec": "spec/errors/E250.md"
     },
     {
+      "fixture": "E250_2.cha",
+      "code": "E250",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E250.md"
+    },
+    {
       "fixture": "E251_1.cha",
       "code": "E251",
       "claim": "violates",
@@ -293,9 +321,30 @@
       "source_spec": "spec/errors/E252.md"
     },
     {
+      "fixture": "E252_2.cha",
+      "code": "E252",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E252.md"
+    },
+    {
+      "fixture": "E252_3.cha",
+      "code": "E252",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E252.md"
+    },
+    {
       "fixture": "E253_1.cha",
       "code": "E253",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E253.md"
+    },
+    {
+      "fixture": "E253_2.cha",
+      "code": "E253",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E253.md"
     },
@@ -324,6 +373,13 @@
       "fixture": "E258_1.cha",
       "code": "E258",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258.md"
+    },
+    {
+      "fixture": "E258_2.cha",
+      "code": "E258",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E258.md"
     },
@@ -391,6 +447,13 @@
       "source_spec": "spec/errors/E301.md"
     },
     {
+      "fixture": "E301_2.cha",
+      "code": "E301",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E301.md"
+    },
+    {
       "fixture": "E302_1.cha",
       "code": "E302",
       "claim": {
@@ -431,6 +494,20 @@
       "source_spec": "spec/errors/E305.md"
     },
     {
+      "fixture": "E305_2.cha",
+      "code": "E305",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305.md"
+    },
+    {
+      "fixture": "E305_3.cha",
+      "code": "E305",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305.md"
+    },
+    {
       "fixture": "E306_1.cha",
       "code": "E306",
       "claim": "violates",
@@ -438,7 +515,28 @@
       "source_spec": "spec/errors/E306.md"
     },
     {
+      "fixture": "E306_2.cha",
+      "code": "E306",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E306.md"
+    },
+    {
       "fixture": "E307_1.cha",
+      "code": "E307",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E307.md"
+    },
+    {
+      "fixture": "E307_2.cha",
+      "code": "E307",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E307.md"
+    },
+    {
+      "fixture": "E307_3.cha",
       "code": "E307",
       "claim": "violates",
       "status": "implemented",
@@ -455,6 +553,13 @@
       "fixture": "E308_2.cha",
       "code": "E308",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E308.md"
+    },
+    {
+      "fixture": "E308_3.cha",
+      "code": "E308",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E308.md"
     },

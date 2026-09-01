@@ -145,7 +145,7 @@ pub(crate) fn check_shortening_balance(word: &Word, errors: &impl ErrorSink) {
     let mut depth = 0i32;
 
     // Use raw_text to preserve parser-recovered boundary information.
-    for ch in word.raw_text.chars() {
+    for ch in word.raw_text().chars() {
         if ch == '(' {
             depth += 1;
         } else if ch == ')' {
@@ -192,7 +192,7 @@ pub(crate) fn check_shortening_balance(word: &Word, errors: &impl ErrorSink) {
 /// Compound markers must separate non-empty lexical segments, so leading,
 /// trailing, or doubled markers are all rejected.
 pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
-    if matches!(word.content.first(), Some(WordContent::CompoundMarker(_))) {
+    if matches!(word.content().first(), Some(WordContent::CompoundMarker(_))) {
         errors.report(
             ParseError::new(
                 ErrorCode::InvalidCompoundMarkerPosition,
@@ -205,7 +205,7 @@ pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
         );
     }
 
-    if matches!(word.content.last(), Some(WordContent::CompoundMarker(_))) {
+    if matches!(word.content().last(), Some(WordContent::CompoundMarker(_))) {
         errors.report(
             ParseError::new(
                 ErrorCode::EmptyCompoundPart,
@@ -218,7 +218,7 @@ pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
         );
     }
 
-    if word.content.windows(2).any(|window| {
+    if word.content().windows(2).any(|window| {
         matches!(
             window,
             [
@@ -295,7 +295,7 @@ fn is_secondary_stress(marker_type: WordStressMarkerType) -> bool {
 /// - E250: Secondary stress requires primary stress in the same word
 /// - E252: Syllable pause (^) must be between spoken material
 pub(crate) fn check_prosodic_markers(word: &Word, errors: &impl ErrorSink) {
-    let content = &word.content;
+    let content = word.content();
 
     // Count stress markers for E247 and E250
     let mut primary_stress_count = 0;
@@ -440,7 +440,7 @@ fn is_spoken_material(content: &WordContent) -> bool {
 /// This is used by higher-level validators that need to gate marker checks on
 /// actual spoken content presence.
 pub(crate) fn has_spoken_material(word: &Word) -> bool {
-    word.content.iter().any(is_spoken_material)
+    word.content().iter().any(is_spoken_material)
 }
 
 /// Validate inline `@...` marker integrity from raw text.
@@ -467,13 +467,13 @@ pub(crate) fn has_spoken_material(word: &Word) -> bool {
 /// carries `*CHI:\thello@ .` and E202's own summary is "Missing form type on
 /// special word", so E202 is the code and it is used here now.
 ///
-/// STILL OWED: this reads `word.raw_text` and counts `@` bytes, which is the
+/// STILL OWED: this reads `word.raw_text()` and counts `@` bytes, which is the
 /// text-scanning this project bans. The grammar knows the answer structurally,
 /// in the node kind; the model cannot see it because `Word` has no slot for
 /// "the form marker was malformed, and how". That slot is the next change.
 pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
     let at_count = word
-        .raw_text
+        .raw_text()
         .as_bytes()
         .iter()
         .filter(|&&b| b == b'@')
@@ -500,7 +500,7 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
         return;
     }
 
-    if word.raw_text.ends_with('@') {
+    if word.raw_text().ends_with('@') {
         errors.report(
             ParseError::new(
                 ErrorCode::MissingFormType,
@@ -556,8 +556,8 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
 
     if let Some(form_type) = &word.form_type {
         let marker = format!("@{}", form_type.to_chat_marker());
-        if let Some(marker_pos) = word.raw_text.rfind(&marker) {
-            let trailing = &word.raw_text[marker_pos + marker.len()..];
+        if let Some(marker_pos) = word.raw_text().rfind(&marker) {
+            let trailing = &word.raw_text()[marker_pos + marker.len()..];
             if !trailing.is_empty() && !trailing.starts_with('@') && !trailing.starts_with('$') {
                 errors.report(
                     ParseError::new(
@@ -574,7 +574,7 @@ pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
         }
     }
 
-    if word.form_type.is_none() && word.lang.is_none() && !word.raw_text.ends_with('@') {
+    if word.form_type.is_none() && word.lang.is_none() && !word.raw_text().ends_with('@') {
         errors.report(
             ParseError::new(
                 ErrorCode::InvalidFormType,

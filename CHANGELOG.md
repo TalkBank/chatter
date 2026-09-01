@@ -7,6 +7,34 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Before 1.0, breaking changes to the CLI or library APIs bump the minor
 version and are listed under "Changed" / "Removed".
 
+## [Unreleased]
+
+### Changed
+
+- **`Word` lexical content is read-only outside its owning type.** Direct
+  access to the former public `content` field is replaced by `content()`;
+  callers that intentionally replace typed content use the named mutation
+  APIs, which invalidate derived `cleaned_text`. This prevents a content edit
+  from leaving stale lexical text in JSON. Direct crate-internal access to
+  `raw_text` is closed as well, so recovery spelling changes use the explicit
+  setter rather than bypassing the field boundary.
+
+- **Speaker-code structure now has one typed assessment across every model
+  surface.** Direct `SpeakerCode::validate` previously mislabeled an overlong
+  code as undeclared (E308), mislabeled a reserved character as a missing CST
+  node (E302), and enforced a different character policy from headers and main
+  tiers. All three routes now consume the same producer-issued valid/invalid
+  state and report E307. The seven-character limit counts Unicode scalar
+  values rather than UTF-8 bytes, and diagnostic context records the offending
+  code rather than an internal field label.
+
+- **Malformed regions now distinguish unpaired CHAT quotation delimiters from
+  unrelated parser recovery.** Structurally unpaired `“` or `”` delimiters
+  report E242 even when tree-sitter encloses them in a larger error node.
+  Balanced quotation delimiters inside some other malformed region no longer
+  produce a false E242, and ASCII straight quotes are not mislabeled as CHAT
+  quotation delimiters.
+
 ## [0.17.0] - 2026-08-30
 
 ### Changed

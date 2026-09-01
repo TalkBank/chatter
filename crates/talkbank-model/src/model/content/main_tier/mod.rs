@@ -209,8 +209,8 @@ impl MainTier {
     /// both explicit `CAOmission` words and standalone shortening-only forms.
     pub fn find_context_dependent_ca_omission_span(&self) -> Option<Span> {
         fn word_requires_ca_file_context(word: &Word) -> bool {
-            let standalone_shortening = word.content.len() == 1
-                && matches!(word.content[0], crate::model::WordContent::Shortening(_));
+            let standalone_shortening = word.content().len() == 1
+                && matches!(word.content()[0], crate::model::WordContent::Shortening(_));
 
             matches!(word.category, Some(crate::model::WordCategory::CAOmission))
                 || standalone_shortening
@@ -269,33 +269,7 @@ impl crate::validation::Validate for MainTier {
         // Validate speaker
         let speaker_str = self.speaker.as_str();
 
-        // Check length
-        if speaker_str.len() > 7 {
-            errors.report(ParseError::new(
-                ErrorCode::InvalidSpeaker,
-                Severity::Error,
-                SourceLocation::new(self.speaker_span),
-                ErrorContext::new(speaker_str, self.speaker_span, "speaker"),
-                format!(
-                    "Speaker ID '{}' exceeds maximum length of 7 characters",
-                    speaker_str
-                ),
-            ));
-        }
-
-        // Check for invalid characters
-        if let Some(invalid_char) = crate::validation::has_invalid_speaker_chars(speaker_str) {
-            errors.report(ParseError::new(
-                ErrorCode::InvalidSpeaker,
-                Severity::Error,
-                SourceLocation::new(self.speaker_span),
-                ErrorContext::new(speaker_str, self.speaker_span, "speaker"),
-                format!(
-                    "Speaker ID '{}' contains invalid character '{}'. Speaker IDs cannot contain colon (:) or whitespace",
-                    speaker_str, invalid_char
-                ),
-            ));
-        }
+        crate::validation::check_speaker_id(speaker_str, self.speaker_span, errors);
 
         // E308: Check if speaker is in participant list (unless speaker is "0" - unidentified)
         if !context.shared.participant_ids.is_empty()

@@ -14,7 +14,7 @@
 //!
 //! The real obstacle is that underline markers can appear INSIDE a word, and
 //! [`walk_content`] emits `ContentItem::Word` without descending into
-//! `word.content`, so word-internal markers are invisible to every consumer of
+//! `word.content()`, so word-internal markers are invisible to every consumer of
 //! that walker. That is a gap in the walker rather than a property of
 //! underline, and closing it (a `ContentItem` variant for word-internal
 //! underline markers, plus descent into a replacement's words) would let all

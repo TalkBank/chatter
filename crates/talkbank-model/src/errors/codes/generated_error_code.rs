@@ -99,7 +99,7 @@ pub enum ErrorCode {
     /// Illegal use of untranscribed marker.
     #[code("E241")]
     IllegalUntranscribed,
-    /// Unbalanced quotation marks within a word.
+    /// Unbalanced quotation delimiters within an utterance.
     #[code("E242")]
     UnbalancedQuotation,
     /// Illegal characters in word content.
@@ -150,7 +150,7 @@ pub enum ErrorCode {
     /// Comma after non-spoken content (paralinguistic event, filler, nonword, placeholder, omitted word)
     #[code("E259")]
     CommaAfterNonSpokenContent,
-    /// Missing main tier (speaker line) in utterance.
+    /// Main tier has an empty speaker code.
     #[code("E301")]
     MissingMainTier,
     /// Expected tree-sitter node is missing.

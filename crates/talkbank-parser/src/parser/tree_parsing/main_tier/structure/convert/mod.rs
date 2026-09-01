@@ -370,7 +370,10 @@ pub fn convert_main_tier_node(
     // No fabricated speaker fallback: if speaker could not be parsed, skip
     // main-tier construction. (All diagnostics above are still emitted first,
     // preserving the prior emit-then-reject ordering.)
-    let speaker = match prefix.speaker.filter(|speaker| !speaker.is_empty()) {
+    let ParsedSpeakerPrefix {
+        code: speaker,
+        span: speaker_span,
+    } = match prefix.speaker {
         Some(speaker) => speaker,
         None => return ParseOutcome::rejected(),
     };
@@ -391,7 +394,7 @@ pub fn convert_main_tier_node(
 
     let mut main_tier = MainTier::new(speaker, tier.content, tier.terminator)
         .with_span(span)
-        .with_speaker_span(prefix.speaker_span)
+        .with_speaker_span(speaker_span)
         .with_linkers(tier.linkers)
         .with_postcodes(tier.postcodes)
         .with_separator(separator);
@@ -421,8 +424,16 @@ pub fn convert_main_tier_node(
 
 /// Parsed prefix slice (`*`, speaker, `:`, tab).
 pub(super) struct PrefixData {
-    pub speaker: Option<String>,
-    pub speaker_span: Span,
+    speaker: Option<ParsedSpeakerPrefix>,
+}
+
+/// A speaker code that was parsed together with its real source span.
+///
+/// The two facts share one construction path so a caller cannot receive a
+/// speaker with the dummy span that previously initialized `PrefixData`.
+pub(super) struct ParsedSpeakerPrefix {
+    code: String,
+    span: Span,
 }
 
 /// Parsed `tier_body` payload: linkers, optional language code, content, and the

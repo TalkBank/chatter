@@ -57,9 +57,9 @@ impl Serialize for Word {
         if let Some(ref id) = self.word_id {
             state.serialize_field("word_id", id)?;
         }
-        state.serialize_field("raw_text", &self.raw_text)?;
+        state.serialize_field("raw_text", self.raw_text())?;
         state.serialize_field("cleaned_text", self.cleaned_text())?;
-        state.serialize_field("content", &self.content)?;
+        state.serialize_field("content", self.content())?;
         if let Some(ref cat) = self.category {
             state.serialize_field("category", cat)?;
         }
@@ -161,7 +161,7 @@ impl WriteChat for Word {
             w.write_char('(')?;
         }
 
-        for item in &self.content {
+        for item in self.content() {
             item.write_chat(w)?;
         }
 

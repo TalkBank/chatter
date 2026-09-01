@@ -2504,7 +2504,7 @@
         },
         {
           "const": "E242",
-          "description": "Unbalanced quotation marks within a word.",
+          "description": "Unbalanced quotation delimiters within an utterance.",
           "type": "string"
         },
         {
@@ -2584,7 +2584,7 @@
         },
         {
           "const": "E301",
-          "description": "Missing main tier (speaker line) in utterance.",
+          "description": "Main tier has an empty speaker code.",
           "type": "string"
         },
         {
@@ -6474,7 +6474,7 @@
       "type": "object"
     },
     "SpeakerCode": {
-      "description": "Interned speaker identifier used by main-tier prefixes and participant headers.\n\nSpeaker codes identify participants in:\n- main tiers (`*CHI:`)\n- participant-related headers (`@Participants`, `@ID`, `@Birth of ...`)\n\n## Memory Optimization\n\nThis type uses `Arc<str>` with interning for memory efficiency:\n- All codes are interned through a global interner\n- Standard codes (CHI, MOT, FAT, etc.) are pre-populated on first use\n- Cloning is O(1) (atomic reference count increment)\n- Multiple occurrences of the same code share a single Arc\n\nThis reduces memory usage by 10-50MB for large corpora.\n\n# Common Usage\n\n**In main tiers:**\n- `*CHI:` - Utterance by child participant\n- `*MOT:` - Utterance by mother\n- `*FAT:` - Utterance by father\n\n**In headers:**\n- `@Participants:` - Lists all speaker codes with names and roles\n- `@ID:` - Detailed participant information\n- `@Birth of SPK:` - Participant-specific metadata\n- `@Language of SPK:` - Participant language\n\n# CHAT Format Examples\n\n```text\n@Participants: CHI Target_Child, MOT Mother, FAT Father, INV Investigator\n@ID: eng|Corpus|CHI|2;06.15|male|||Target_Child|||\n@Birth of CHI: 15-JAN-2015\n*CHI: I want cookie.\n*MOT: here you go.\n*FAT: what do you say?\n*CHI: thank you!\n```\n\n# Common Codes\n\n**Family members:**\n- `CHI` - Target child (primary participant)\n- `MOT` - Mother\n- `FAT` - Father\n- `BRO` - Brother\n- `SIS` - Sister\n- `GRA` - Grandmother\n- `GRF` - Grandfather\n\n**Research roles:**\n- `INV` - Investigator/Researcher\n- `EXP` - Experimenter\n- `OBS` - Observer\n- `CAM` - Cameraman\n\n**Other:**\n- `TEA` - Teacher\n- `DOC` - Doctor\n- `NUR` - Nurse\n- `UNK` - Unknown speaker\n- `ENV` - Environment (background noise, etc.)\n\n# Format Rules (validator)\n\n- max length: 7 characters\n- allowed chars: `A-Z`, `0-9`, `_`, `-`, `'`\n\n# References\n\n- [CHAT Manual: Speaker Codes](https://talkbank.org/0info/manuals/CHAT.html#Speaker_Codes)\n- [Main Tier Format](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Participants Header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)",
+      "description": "Interned speaker identifier used by main-tier prefixes and participant headers.\n\nSpeaker codes identify participants in:\n- main tiers (`*CHI:`)\n- participant-related headers (`@Participants`, `@ID`, `@Birth of ...`)\n\n## Memory Optimization\n\nThis type uses `Arc<str>` with interning for memory efficiency:\n- All codes are interned through a global interner\n- Standard codes (CHI, MOT, FAT, etc.) are pre-populated on first use\n- Cloning is O(1) (atomic reference count increment)\n- Multiple occurrences of the same code share a single Arc\n\nThis reduces memory usage by 10-50MB for large corpora.\n\n# Common Usage\n\n**In main tiers:**\n- `*CHI:` - Utterance by child participant\n- `*MOT:` - Utterance by mother\n- `*FAT:` - Utterance by father\n\n**In headers:**\n- `@Participants:` - Lists all speaker codes with names and roles\n- `@ID:` - Detailed participant information\n- `@Birth of SPK:` - Participant-specific metadata\n- `@Language of SPK:` - Participant language\n\n# CHAT Format Examples\n\n```text\n@Participants: CHI Target_Child, MOT Mother, FAT Father, INV Investigator\n@ID: eng|Corpus|CHI|2;06.15|male|||Target_Child|||\n@Birth of CHI: 15-JAN-2015\n*CHI: I want cookie.\n*MOT: here you go.\n*FAT: what do you say?\n*CHI: thank you!\n```\n\n# Common Codes\n\n**Family members:**\n- `CHI` - Target child (primary participant)\n- `MOT` - Mother\n- `FAT` - Father\n- `BRO` - Brother\n- `SIS` - Sister\n- `GRA` - Grandmother\n- `GRF` - Grandfather\n\n**Research roles:**\n- `INV` - Investigator/Researcher\n- `EXP` - Experimenter\n- `OBS` - Observer\n- `CAM` - Cameraman\n\n**Other:**\n- `TEA` - Teacher\n- `DOC` - Doctor\n- `NUR` - Nurse\n- `UNK` - Unknown speaker\n- `ENV` - Environment (background noise, etc.)\n\n# Format Rules (validator)\n\n- max length: 7 characters\n- reserved chars: colon (the tier delimiter) and whitespace\n- other characters remain representable for legacy and international data\n\n# References\n\n- [CHAT Manual: Speaker Codes](https://talkbank.org/0info/manuals/CHAT.html#Speaker_Codes)\n- [Main Tier Format](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Participants Header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)",
       "type": "string"
     },
     "SylTier": {

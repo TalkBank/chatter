@@ -12,9 +12,7 @@
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::node_types::{CONTENT_ITEM, LINKER_QUICK_UPTAKE, TAB, WHITESPACES};
 use crate::parser::tree_parsing::parser_helpers::{find_child_by_kind, surface_unexpected};
-use talkbank_model::chars::{
-    LEFT_DOUBLE_QUOTE, LEFT_SINGLE_QUOTE, RIGHT_DOUBLE_QUOTE, RIGHT_SINGLE_QUOTE,
-};
+use talkbank_model::chars::{LEFT_SINGLE_QUOTE, RIGHT_SINGLE_QUOTE};
 use tree_sitter::Node;
 
 /// Where in the main tier a recovery node was found, stated by the caller that
@@ -164,16 +162,10 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         }
     };
 
-    // Recoverable semantic cases: keep parsing and delegate final reporting to validation.
-    if error_text.starts_with('"') && !error_text[1..].contains('"') {
-        return ParseError::new(
-            ErrorCode::UnbalancedQuotation,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Unbalanced quotation in word content".to_string(),
-        )
-        .with_suggestion("Close the quotation mark to balance the quoted segment");
+    if let crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::QuotationDelimiterScan::Unbalanced(finding) =
+        crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::scan_quotation_delimiters(error_node)
+    {
+        return finding.into_diagnostic(source);
     }
 
     if error_node.start_byte() > 0
@@ -360,40 +352,6 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     if error_text.contains(LEFT_SINGLE_QUOTE) || error_text.contains(RIGHT_SINGLE_QUOTE) {
         return illegal_curly_quote_error(error_node, source);
     }
-    if error_text.contains(LEFT_DOUBLE_QUOTE) || error_text.contains(RIGHT_DOUBLE_QUOTE) {
-        return ParseError::new(
-            ErrorCode::UnbalancedQuotation,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            format!(
-                "Could not parse the quoted material around {} on this tier",
-                if error_text.contains(LEFT_DOUBLE_QUOTE) {
-                    LEFT_DOUBLE_QUOTE
-                } else {
-                    RIGHT_DOUBLE_QUOTE
-                }
-            ),
-        )
-        // The message says what is KNOWN. This branch classifies an ERROR
-        // node by its raw text, so all it knows is that a curly double quote
-        // is somewhere inside a region that failed to parse; it said
-        // "Unmatched curly quote", which is a claim it cannot check and which
-        // was FALSE on the report that surfaced this (a line whose four
-        // quotes were two matched pairs).
-        //
-        // The suggestion said "Use straight double quotes (\") for CHAT
-        // quotation", which is backwards: `quotation` in the grammar is
-        // delimited by U+201C/U+201D, and a straight double quote does not
-        // parse at all (E316 + E342). Following that advice damages the file.
-        .with_suggestion(
-            "CHAT quotation uses curly double quotes (\u{201C} \u{201D}) as a \
-             matched pair; straight double quotes are not valid CHAT. To attach \
-             a scoped annotation to quoted material, bracket it: \
-             <\u{201C}text\u{201D}> [//]",
-        );
-    }
-
     // Closing bracket fragment "] word", other half of a broken annotation
     if error_text.trim_start().starts_with(']') {
         return ParseError::new(

@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Role_Field>
 
 use crate::model::{BulletContent, IDHeader, ValidationTagged};
-use crate::validation::speaker::has_invalid_speaker_chars;
+use crate::validation::check_speaker_id;
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 
 use super::metadata;
@@ -50,7 +50,7 @@ pub(super) fn check_id_header(id_header: &IDHeader, span: Span, errors: &impl Er
         errors.report(err);
     }
 
-    check_speaker_id(id_header.speaker.as_str(), "speaker_id", span, errors);
+    check_speaker_id(id_header.speaker.as_str(), span, errors);
 
     if id_header.role.is_empty() {
         let mut err = ParseError::new(
@@ -144,44 +144,6 @@ pub(super) fn check_birth_date_header(date: &str, span: Span, errors: &impl Erro
         return;
     }
     metadata::check_date_format(date, span, errors, ErrorCode::InvalidBirthDateFormat);
-}
-
-/// Validates speaker-code constraints shared by participant fields.
-pub(crate) fn check_speaker_id(
-    speaker: &str,
-    field_label: &str,
-    span: Span,
-    errors: &impl ErrorSink,
-) {
-    if speaker.len() > 7 {
-        let mut err = ParseError::new(
-            ErrorCode::InvalidSpeaker,
-            Severity::Error,
-            SourceLocation::at_offset(span.start as usize),
-            ErrorContext::new(speaker, 0..speaker.len(), field_label),
-            format!(
-                "Speaker ID '{}' exceeds maximum length of 7 characters",
-                speaker
-            ),
-        );
-        err.location.span = span;
-        errors.report(err);
-    }
-
-    if let Some(invalid_char) = has_invalid_speaker_chars(speaker) {
-        let mut err = ParseError::new(
-            ErrorCode::InvalidSpeaker,
-            Severity::Error,
-            SourceLocation::at_offset(span.start as usize),
-            ErrorContext::new(speaker, 0..speaker.len(), field_label),
-            format!(
-                "Speaker ID '{}' contains invalid character '{}'. Speaker IDs cannot contain colon (:) or whitespace",
-                speaker, invalid_char
-            ),
-        );
-        err.location.span = span;
-        errors.report(err);
-    }
 }
 
 /// Intentionally no-op for `@Comment` and `@Warning` payload bodies.

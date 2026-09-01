@@ -213,7 +213,7 @@ fn walk_underline_balance_in_word(
     } else {
         word.span
     };
-    for wc in &word.content {
+    for wc in word.content() {
         match wc {
             WordContent::UnderlineBegin(wb) => {
                 let span = if wb.span.is_dummy() {

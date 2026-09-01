@@ -73,7 +73,7 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
     }
 
     let compound_markers = word
-        .content
+        .content()
         .iter()
         .filter(|item| matches!(item, WordContent::CompoundMarker(_)))
         .count();
@@ -82,7 +82,7 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
     }
 
     if word
-        .content
+        .content()
         .iter()
         .any(|item| matches!(item, WordContent::Lengthening(_)))
     {
@@ -90,7 +90,7 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
     }
 
     if word
-        .content
+        .content()
         .iter()
         .any(|item| matches!(item, WordContent::OverlapPoint(_)))
     {
@@ -98,7 +98,7 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
     }
 
     if word
-        .content
+        .content()
         .iter()
         .any(|item| matches!(item, WordContent::Shortening(_)))
     {
@@ -106,7 +106,7 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
     }
 
     if word
-        .content
+        .content()
         .iter()
         .any(|item| matches!(item, WordContent::SyllablePause(_)))
     {
@@ -114,14 +114,14 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
     }
 
     if word
-        .content
+        .content()
         .iter()
         .any(|item| matches!(item, WordContent::StressMarker(_)))
     {
         features.push("stress markers".to_string());
     }
 
-    if word.content.iter().any(|item| {
+    if word.content().iter().any(|item| {
         matches!(
             item,
             WordContent::CAElement(_) | WordContent::CADelimiter(_)

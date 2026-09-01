@@ -66,7 +66,6 @@ impl crate::validation::Validate for ParticipantEntry {
 
         crate::validation::header::check_speaker_id(
             self.speaker_code.as_str(),
-            "speaker_code",
             crate::Span::DUMMY,
             errors,
         );

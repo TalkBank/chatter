@@ -77,11 +77,11 @@ impl crate::validation::Validate for Word {
         prefix_marker::check_prefix_marker_position(self, errors);
 
         // Validate word content elements via WordContents (text/shortenings)
-        self.content.validate(
+        self.content().validate(
             &context
                 .clone()
                 .with_field_span(self.span)
-                .with_field_text(self.raw_text.clone())
+                .with_field_text(self.raw_text())
                 .with_field_label("word"),
             errors,
         );
@@ -152,7 +152,7 @@ impl crate::validation::Validate for Word {
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
                         SourceLocation::new(self.span),
-                        ErrorContext::new(self.raw_text.as_str(), self.span, self.raw_text.as_str()),
+                        ErrorContext::new(self.raw_text(), self.span, self.raw_text()),
                         "CA omission '(word)' used outside CA mode",
                     )
                     .with_suggestion(
@@ -162,10 +162,10 @@ impl crate::validation::Validate for Word {
             }
 
             let has_spoken_text = self
-                .content
+                .content()
                 .iter()
                 .any(|item| matches!(item, WordContent::Text(text) if !text.as_ref().is_empty()));
-            let has_invalid_lexical = self.content.iter().any(|item| {
+            let has_invalid_lexical = self.content().iter().any(|item| {
                 matches!(
                     item,
                     WordContent::Shortening(_) | WordContent::CompoundMarker(_)
@@ -177,7 +177,7 @@ impl crate::validation::Validate for Word {
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
                         SourceLocation::new(self.span),
-                        ErrorContext::new(self.raw_text.as_str(), self.span, self.raw_text.as_str()),
+                        ErrorContext::new(self.raw_text(), self.span, self.raw_text()),
                         "CA omission must include spoken text and must not contain shortenings",
                     )
                     .with_suggestion(
@@ -188,19 +188,15 @@ impl crate::validation::Validate for Word {
         }
 
         if context.shared.ca_mode {
-            let is_standalone_shortening =
-                self.content.len() == 1 && matches!(self.content[0], WordContent::Shortening(_));
+            let is_standalone_shortening = self.content().len() == 1
+                && matches!(self.content()[0], WordContent::Shortening(_));
             if is_standalone_shortening {
                 errors.report(
                     ParseError::new(
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
                         SourceLocation::new(self.span),
-                        ErrorContext::new(
-                            self.raw_text.as_str(),
-                            self.span,
-                            self.raw_text.as_str(),
-                        ),
+                        ErrorContext::new(self.raw_text(), self.span, self.raw_text()),
                         "Standalone shortening should be represented as CA omission in CA mode",
                     )
                     .with_suggestion(

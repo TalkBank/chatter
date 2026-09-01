@@ -249,7 +249,7 @@ fn collect_ca_delimiters_from_bracketed_item(
 
 /// Extracts all CA delimiter markers present in a single word token.
 fn collect_ca_delimiters_from_word(word: &Word, delimiters: &mut Vec<CADelimiterOccurrence>) {
-    for content in &word.content {
+    for content in word.content() {
         if let WordContent::CADelimiter(delimiter) = content {
             delimiters.push(CADelimiterOccurrence {
                 delimiter_type: delimiter.delimiter_type,

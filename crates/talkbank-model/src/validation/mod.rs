@@ -85,7 +85,7 @@ pub use word::{GoverningMark, GoverningMarkKind, LanguageResolutionOutcome};
 // Public bullet validation function
 pub(crate) use bullet::check_bullet;
 pub use bullet::check_bullet_monotonicity;
-pub(crate) use speaker::has_invalid_speaker_chars;
+pub(crate) use speaker::check_speaker_id;
 pub(crate) use unparsed_tier::check_dependent_tier_content;
 
 // Re-export tests if they exist

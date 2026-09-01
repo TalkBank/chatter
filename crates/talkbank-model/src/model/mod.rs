@@ -357,10 +357,10 @@ mod tests {
                 WordContent::Shortening(WordShortening::new_unchecked("lo")),
             ]);
 
-        assert_eq!(word.raw_text, "hel(lo)@b");
+        assert_eq!(word.raw_text(), "hel(lo)@b");
         assert_eq!(word.cleaned_text(), "hello");
         assert_eq!(word.form_type, Some(FormType::B));
-        assert_eq!(word.content.len(), 2);
+        assert_eq!(word.content().len(), 2);
     }
 
     /// Main-tier JSON serialization includes core speaker and content fields.

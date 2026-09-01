@@ -255,7 +255,7 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
     word.form_type = form_type;
     word.lang = lang;
     word.part_of_speech = part_of_speech;
-    word.content = WordContents::new(content_items);
+    word = word.with_content(WordContents::new(content_items));
 
     ParseOutcome::parsed(word)
 }

@@ -38,6 +38,7 @@ use common::workspace_root;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use chatter_desktop_lib::commands::{ValidationState, resolve_open_in_clan};
 use chatter_desktop_lib::errors::TargetError;
@@ -53,7 +54,8 @@ use talkbank_transform::validation_runner::ValidationConfig;
 /// Test-only convenience wrapper: production always threads an explicit
 /// config and a cache pool selected for that config's active rule set (see
 /// `ValidationState::cache_for_rules` in `commands.rs`), but most tests here
-/// don't care about either, so this uses `ValidationConfig::default()`.
+/// don't care about either, so this uses the default rule configuration with a
+/// two-worker test-only limit.
 ///
 /// The cache is rooted in a temp directory, NOT the platform default. This
 /// used to call `initialize_cache()`, whose doc comment claimed the result was
@@ -64,17 +66,23 @@ use talkbank_transform::validation_runner::ValidationConfig;
 fn validate_target_streaming(
     target: PathBuf,
 ) -> Result<(Receiver<FrontendEvent>, Sender<()>), TargetError> {
-    validate_target_streaming_with_config(
-        target,
-        ValidationConfig::default(),
-        initialize_cache_at(test_cache_dir()),
-    )
+    let config = ValidationConfig {
+        // These integration tests exercise event semantics, not scheduler
+        // throughput. A bounded pool prevents parallel tests from each
+        // multiplying themselves by every host CPU.
+        jobs: Some(2),
+        ..ValidationConfig::default()
+    };
+    validate_target_streaming_with_config(target, config, initialize_cache_at(test_cache_dir()))
 }
 
 /// A cache root private to this test binary, so a test run can never touch the
 /// developer's real cache.
 fn test_cache_dir() -> PathBuf {
-    std::env::temp_dir().join("chatter-desktop-validation-bridge-cache")
+    std::env::temp_dir().join(format!(
+        "chatter-desktop-validation-bridge-cache-{}",
+        std::process::id()
+    ))
 }
 
 /// Reference corpus path. Every `.cha` file under it must be valid CHAT.
@@ -116,6 +124,20 @@ fn collect_events(target: &Path) -> Vec<FrontendEvent> {
     events
 }
 
+/// Collect the reference corpus once for every read-only assertion in this
+/// binary.
+///
+/// Seven tests used to launch seven identical 107-file validations in
+/// parallel. Each launch opened another cache runtime and created a
+/// CPU-sized worker pool, so the workspace-wide test run could lose worker
+/// progress even though this integration binary passed in isolation. The
+/// events are immutable evidence: sharing them removes duplicate work without
+/// sharing mutable test state or weakening any assertion.
+fn reference_corpus_events() -> &'static [FrontendEvent] {
+    static EVENTS: OnceLock<Vec<FrontendEvent>> = OnceLock::new();
+    EVENTS.get_or_init(|| collect_events(&reference_corpus()))
+}
+
 /// Collect events from a run whose cache is rooted at an explicit directory.
 ///
 /// The cache tests need a cache root of their own: one that is not the
@@ -123,9 +145,13 @@ fn collect_events(target: &Path) -> Vec<FrontendEvent> {
 /// binary. Passing the directory is what makes that possible without touching
 /// process-global state.
 fn collect_events_with_cache(target: &Path, cache_dir: &Path) -> Vec<FrontendEvent> {
+    let config = ValidationConfig {
+        jobs: Some(2),
+        ..ValidationConfig::default()
+    };
     let (rx, _cancel_tx) = validate_target_streaming_with_config(
         target.to_path_buf(),
-        ValidationConfig::default(),
+        config,
         initialize_cache_at(cache_dir.to_path_buf()),
     )
     .expect("desktop validation should start");
@@ -211,8 +237,8 @@ fn reference_corpus_no_hard_errors() {
         return;
     }
 
-    let events = collect_events(&corpus);
-    let summary = summarize(&events);
+    let events = reference_corpus_events();
+    let summary = summarize(events);
     let expected_files = reference_corpus_cha_count();
 
     assert!(summary.finished, "validation run did not finish");
@@ -252,7 +278,7 @@ fn event_lifecycle_has_correct_sequence() {
         return;
     }
 
-    let events = collect_events(&corpus);
+    let events = reference_corpus_events();
 
     // First event should be Discovering
     assert!(
@@ -294,9 +320,9 @@ fn frontend_events_serialize_to_expected_json_shape() {
         return;
     }
 
-    let events = collect_events(&corpus);
+    let events = reference_corpus_events();
 
-    for event in &events {
+    for event in events {
         let json = serde_json::to_value(event).unwrap();
 
         // Every event must have a "type" field (from #[serde(tag = "type")])
@@ -475,7 +501,7 @@ fn finished_stats_match_file_events() {
         return;
     }
 
-    let events = collect_events(&corpus);
+    let events = reference_corpus_events();
 
     let file_completes = events
         .iter()
@@ -512,11 +538,11 @@ fn nested_directory_produces_relative_paths_with_subdirs() {
         return;
     }
 
-    let events = collect_events(&corpus);
+    let events = reference_corpus_events();
 
     // Collect all file paths from Errors and FileComplete events
     let mut all_files: Vec<String> = Vec::new();
-    for event in &events {
+    for event in events {
         match event {
             FrontendEvent::Errors { file, .. } => {
                 all_files.push(file.clone());
@@ -566,10 +592,10 @@ fn files_with_any_errors_appear_in_error_events() {
         return;
     }
 
-    let events = collect_events(&corpus);
+    let events = reference_corpus_events();
 
     let mut error_files: Vec<String> = Vec::new();
-    for event in &events {
+    for event in events {
         if let FrontendEvent::Errors {
             file, diagnostics, ..
         } = event
@@ -660,9 +686,9 @@ fn rendered_html_present_for_errors() {
         return;
     }
 
-    let events = collect_events(&corpus);
+    let events = reference_corpus_events();
 
-    for event in &events {
+    for event in events {
         if let FrontendEvent::Errors { diagnostics, .. } = event {
             for diagnostic in diagnostics {
                 assert!(
@@ -1147,7 +1173,10 @@ fn a_run_starts_when_the_caller_is_driving_an_async_runtime() {
     }
 
     // Isolated cache root: never the developer's real cache.
-    let cache_dir = std::env::temp_dir().join("chatter-desktop-async-start-test");
+    let cache_dir = std::env::temp_dir().join(format!(
+        "chatter-desktop-async-start-test-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&cache_dir);
     let state = ValidationState::new_at(cache_dir.clone());
 

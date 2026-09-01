@@ -326,7 +326,7 @@ fn scan_word_visiting(
     word_count: &mut usize,
     visitor: &mut impl FnMut(OverlapPointVisit<'_>),
 ) {
-    for wc in word.content.iter() {
+    for wc in word.content().iter() {
         if let WordContent::OverlapPoint(m) = wc {
             visitor(OverlapPointVisit {
                 point: m,
@@ -437,7 +437,7 @@ fn pair_markers(markers: &[MarkerOccurrence]) -> Vec<OverlapRegion> {
 /// the word is counted; closing markers (⌉⌋) are recorded after.
 fn scan_word(word: &Word, word_count: &mut usize, markers: &mut Vec<MarkerOccurrence>) {
     // Opening markers (⌈⌊) record position BEFORE the word.
-    for wc in word.content.iter() {
+    for wc in word.content().iter() {
         if let WordContent::OverlapPoint(marker) = wc
             && matches!(
                 marker.kind,
@@ -453,7 +453,7 @@ fn scan_word(word: &Word, word_count: &mut usize, markers: &mut Vec<MarkerOccurr
     }
 
     // Closing markers (⌉⌋) record position AFTER the word.
-    for wc in word.content.iter() {
+    for wc in word.content().iter() {
         if let WordContent::OverlapPoint(marker) = wc
             && matches!(
                 marker.kind,

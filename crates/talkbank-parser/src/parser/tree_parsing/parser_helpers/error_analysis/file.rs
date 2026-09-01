@@ -17,6 +17,13 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
     let start = node.start_byte();
     let end = node.end_byte();
 
+    if let super::dedicated::QuotationDelimiterScan::Unbalanced(finding) =
+        super::dedicated::scan_quotation_delimiters(node)
+    {
+        errors.report(finding.into_diagnostic(source));
+        return;
+    }
+
     // Check if this is a dependent tier error (starts with %)
     if matches!(error_text.chars().next(), Some('%')) {
         // E710: Invalid %gra - non-numeric index
