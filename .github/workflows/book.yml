@@ -14,6 +14,8 @@ on:
     branches: [main]
     paths:
       - 'book/**'
+      - 'scripts/mdbook_git_dates.py'
+      - 'scripts/test_mdbook_git_dates.py'
       - '.github/workflows/book.yml'
   workflow_dispatch:
 
@@ -25,8 +27,9 @@ permissions:
 # justfile. The mermaid preprocessor rewrites fenced blocks; the mermaid assets
 # render them via book.toml additional-js.
 env:
-  MDBOOK_VERSION: '0.5.3'
-  MDBOOK_MERMAID_VERSION: '0.17.0'
+  MDBOOK_VERSION: '0.5.4'
+  MDBOOK_MERMAID_VERSION: '0.17.1'
+  LYCHEE_VERSION: '0.24.2'
 
 # One Pages deployment at a time; never cancel an in-progress publish.
 concurrency:
@@ -38,14 +41,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The git-dates preprocessor stamps every page with the date of its
+          # last commit and refuses a shallow clone, where every file would
+          # carry the checkout's date.
+          fetch-depth: 0
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: book-job
-      - name: Install mdbook + mdbook-mermaid
-        run: cargo install mdbook@"${MDBOOK_VERSION}" mdbook-mermaid@"${MDBOOK_MERMAID_VERSION}"
-      - name: mdbook build
-        run: cd book && mdbook build
+      - name: Install mdbook + mdbook-mermaid + lychee
+        run: |
+          cargo install \
+            mdbook@"${MDBOOK_VERSION}" \
+            mdbook-mermaid@"${MDBOOK_MERMAID_VERSION}" \
+            lychee@"${LYCHEE_VERSION}" \
+            --locked
+      - name: Build, date-verify and link-check the book
+        run: just book
       # Only stage the Pages artifact when Pages is live (the cutover). Pre-flip
       # the steps above still run as book-build validation.
       - name: Upload Pages artifact

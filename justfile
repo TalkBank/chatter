@@ -10,8 +10,8 @@ set shell := ["bash", "-c"]
 # preprocessor (it rewrites fenced mermaid blocks) plus the mermaid.min.js and
 # mermaid-init.js assets that book.toml loads via additional-js. Link-checking
 # is decoupled onto lychee (runs on the built HTML, independent of mdBook).
-mdbook_version := "0.5.3"
-mdbook_mermaid_version := "0.17.0"
+mdbook_version := "0.5.4"
+mdbook_mermaid_version := "0.17.1"
 lychee_version := "0.24.2"
 book_tools_root := justfile_directory() + "/.tooling/book-tools"
 
@@ -80,7 +80,7 @@ test-spec:
 # same "two cargo unit configurations, one target dir, no reuse" trap as
 # running `cargo check` before `cargo test`.
 #
-# Measured on ming, 2026-08-04, crates recompiled per alternation:
+# Measured on the development workstation, 2026-08-04, crates recompiled per alternation:
 #
 #                          shared target/     own target dir
 #   check-feature-off        68  (17.7 s)      1  ( 1.7 s)
@@ -571,13 +571,44 @@ book-install-tools:
       lychee@{{ lychee_version }} \
       --locked
 
+# Prove that the mdbook and mdbook-mermaid actually on PATH (the repo-local
+# root first, then whatever CI installed) are the pinned versions. Without
+# this a stale repo-local install is invisible: on 2026-09-01 the pin said
+# 0.5.x while `.tooling/book-tools` still held mdbook 0.4.52, and the only
+# symptom was the git-dates preprocessor not running (0.4.x gives it no cwd).
+book-tools-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{ book_tools_bin }}:$PATH"
+    fail=0
+    for pair in "mdbook={{ mdbook_version }}" "mdbook-mermaid={{ mdbook_mermaid_version }}" "lychee={{ lychee_version }}"; do
+        tool="${pair%%=*}"; want="${pair#*=}"
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            echo "book-tools-check: $tool is not installed; run: just book-install-tools" >&2; fail=1; continue
+        fi
+        got="$("$tool" --version 2>/dev/null | head -n 1 | sed -E 's/^[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')"
+        if [ "$got" != "$want" ]; then
+            echo "book-tools-check: $tool is $got, the pin is $want; run: just book-install-tools" >&2; fail=1
+        fi
+    done
+    exit "$fail"
+
 # Build the book and link-check it with the repo-local pinned toolchain.
 # mermaid renders diagrams; lychee validates internal links on the built
 # HTML (--offline skips web links; --root-dir resolves the 404 page's '/').
-book:
-    PATH="{{ book_tools_bin }}:$PATH" mdbook build {{ justfile_directory() }}/book
+# The git-dates preprocessor (book.toml) stamps every page with git-derived
+# "last changed" dates; its tests run first, and `verify` then proves the
+# rendered front page carries the same dates git reports, so a build in which
+# the preprocessor silently did not run cannot pass. Needs full git history.
+# mdbook runs with the book directory as its cwd (never `mdbook build book`
+# from the repo root): 0.4.x hands a preprocessor no cwd of its own, so the
+# `../scripts/...` command in book.toml only resolves from inside book/.
+book: book-tools-check
+    python3 -m unittest {{ justfile_directory() }}/scripts/test_mdbook_git_dates.py
+    cd {{ justfile_directory() }}/book && PATH="{{ book_tools_bin }}:$PATH" mdbook build
+    python3 {{ justfile_directory() }}/scripts/mdbook_git_dates.py verify --book-root {{ justfile_directory() }}/book --page introduction.md {{ justfile_directory() }}/book/build/index.html
     PATH="{{ book_tools_bin }}:$PATH" lychee --offline --root-dir {{ justfile_directory() }}/book/build {{ justfile_directory() }}/book/build
 
 # Serve the book locally with the repo-local pinned mdBook toolchain.
-book-serve:
-    PATH="{{ book_tools_bin }}:$PATH" mdbook serve {{ justfile_directory() }}/book
+book-serve: book-tools-check
+    cd {{ justfile_directory() }}/book && PATH="{{ book_tools_bin }}:$PATH" mdbook serve

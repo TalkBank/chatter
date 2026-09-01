@@ -12,6 +12,14 @@ create-missing = false
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
 
+# Git-derived "last changed" dates: `{{git-dates:page}}` and `{{git-dates:book}}`
+# are substituted wherever a page uses them, and every page gets a footer with
+# both. mdBook runs preprocessors with the book directory as cwd, hence `..`.
+# Needs full git history (refuses a shallow clone). `just book` verifies the
+# rendered front page carries the same dates git reports.
+[preprocessor.git-dates]
+command = "python3 ../scripts/mdbook_git_dates.py"
+
 
 [output.html]
 git-repository-url = "https://github.com/TalkBank/chatter"

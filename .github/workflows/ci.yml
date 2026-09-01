@@ -26,8 +26,8 @@ env:
   # lockstep with book.yml and the justfile. The mermaid preprocessor rewrites
   # fenced blocks; the mermaid assets render them via book.toml additional-js.
   # Link-checking is decoupled onto lychee (runs on the built HTML).
-  MDBOOK_VERSION: '0.5.3'
-  MDBOOK_MERMAID_VERSION: '0.17.0'
+  MDBOOK_VERSION: '0.5.4'
+  MDBOOK_MERMAID_VERSION: '0.17.1'
   LYCHEE_VERSION: '0.24.2'
 
 jobs:
@@ -173,6 +173,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The git-dates preprocessor stamps every page with the date of its
+          # last commit and refuses a shallow clone, where every file would
+          # carry the checkout's date.
+          fetch-depth: 0
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -190,11 +200,8 @@ jobs:
             lychee@"${LYCHEE_VERSION}" \
             --locked
 
-      - name: mdbook build
-        run: cd book && mdbook build
-
-      - name: Link-check book (lychee, offline)
-        run: lychee --offline --root-dir "${GITHUB_WORKSPACE}/book/build" "${GITHUB_WORKSPACE}/book/build"
+      - name: Build, date-verify and link-check the book
+        run: just book
 
   rust-version-sync:
     name: Rust version pins in sync
