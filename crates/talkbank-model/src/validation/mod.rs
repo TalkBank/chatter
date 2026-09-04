@@ -71,7 +71,7 @@ pub(crate) mod word;
 // Re-export public API
 pub use config::RuleSelection;
 pub use context::{SharedValidationData, ValidationContext, language_allows_numbers};
-pub use state::{NotValidated, Validated, ValidationState};
+pub use state::{AlignmentValidation, ValidChatFile, ValidationFailure, ValidationPolicy};
 pub use r#trait::Validate;
 
 // Re-export async helpers when feature is enabled

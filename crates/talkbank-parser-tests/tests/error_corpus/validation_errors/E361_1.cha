@@ -1,7 +1,8 @@
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-*CHI:	hello [^ bad[ .
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	sample, audio
+*CHI:	hello . abc_def
 @End

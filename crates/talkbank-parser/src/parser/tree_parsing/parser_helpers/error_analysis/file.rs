@@ -179,17 +179,27 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
             return;
         }
 
-        // @Comment with spaces instead of tab after colon
-        if error_text.starts_with("@Comment:") && !error_text.contains(":\t") {
+        // A header whose colon is not followed by a TAB. One rule for every
+        // header: until 2026-09-03 only `@Comment:` reached E303 and every
+        // other header fell to generic E316, and the message said "space"
+        // whatever actually followed the colon.
+        if let Some(HeaderColon {
+            after:
+                after @ (AfterHeaderColon::Space
+                | AfterHeaderColon::Nothing
+                | AfterHeaderColon::Other(_)),
+            ..
+        }) = HeaderColon::of(error_text)
+        {
             errors.report(
                 ParseError::new(
                     ErrorCode::SyntaxError,
                     Severity::Error,
                     SourceLocation::from_offsets(start, end),
                     ErrorContext::new(source, start..end, error_text),
-                    "Space character instead of TAB after header colon",
+                    format!("{after} after the header colon; CHAT requires a single TAB"),
                 )
-                .with_suggestion("Replace spaces after ':' with a single TAB character"),
+                .with_suggestion("Put exactly one TAB between the header's ':' and its value"),
             );
             return;
         }
@@ -362,4 +372,141 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
         )
         .with_suggestion("Check CHAT format specification for valid syntax at this position"),
     );
+}
+
+/// What a header line's colon is followed by.
+///
+/// CHAT separates a header name from its value with exactly one TAB; a space,
+/// nothing at all, or any other character is the same defect, and the message
+/// should say which one was found rather than guess "space".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AfterHeaderColon {
+    Tab,
+    Space,
+    Nothing,
+    Other(char),
+}
+
+impl std::fmt::Display for AfterHeaderColon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AfterHeaderColon::Tab => write!(f, "A TAB"),
+            AfterHeaderColon::Space => write!(f, "A space"),
+            AfterHeaderColon::Nothing => write!(f, "Nothing"),
+            AfterHeaderColon::Other(ch) => write!(f, "{ch:?}"),
+        }
+    }
+}
+
+/// A header-shaped ERROR line, split at its colon.
+///
+/// Built only by [`HeaderColon::of`], from an ERROR node's text that starts
+/// with `@`, a header name (letters and spaces, as in `@Time Duration`), and a
+/// colon; `@Begin`, `@End` and `@UTF8` have no colon and are not this shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct HeaderColon<'a> {
+    name: &'a str,
+    after: AfterHeaderColon,
+}
+
+impl<'a> HeaderColon<'a> {
+    fn of(error_text: &'a str) -> Option<HeaderColon<'a>> {
+        let body = error_text.strip_prefix('@')?;
+        let colon = body.find(':')?;
+        let name = &body[..colon];
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphabetic() || c == ' ') {
+            return None;
+        }
+        let after = match body[colon + 1..].chars().next() {
+            None | Some('\n') | Some('\r') => AfterHeaderColon::Nothing,
+            Some('\t') => AfterHeaderColon::Tab,
+            Some(' ') => AfterHeaderColon::Space,
+            Some(other) => AfterHeaderColon::Other(other),
+        };
+        Some(HeaderColon { name, after })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use talkbank_model::ErrorCollector;
+
+    fn document(header_line: &str) -> String {
+        format!(
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+             @ID:\teng|corpus|CHI|||||Target_Child|||\n{header_line}\n*CHI:\thello .\n@End\n"
+        )
+    }
+
+    fn diagnostics(input: &str) -> Vec<(String, String)> {
+        let parser = TreeSitterParser::new().expect("parser");
+        let errors = ErrorCollector::new();
+        let _file = parser.parse_chat_file_streaming(input, &errors);
+        errors
+            .into_vec()
+            .into_iter()
+            .map(|e| (e.code.as_str().to_owned(), e.message.clone()))
+            .collect()
+    }
+
+    /// The split names what followed the colon, and refuses non-header text.
+    #[test]
+    fn header_colon_split_names_what_follows() {
+        assert_eq!(
+            HeaderColon::of("@Situation: at home"),
+            Some(HeaderColon {
+                name: "Situation",
+                after: AfterHeaderColon::Space
+            })
+        );
+        assert_eq!(
+            HeaderColon::of("@Time Duration:\t00:00-01:00").map(|h| h.after),
+            Some(AfterHeaderColon::Tab)
+        );
+        assert_eq!(
+            HeaderColon::of("@Comment:note").map(|h| h.after),
+            Some(AfterHeaderColon::Other('n'))
+        );
+        assert_eq!(
+            HeaderColon::of("@Comment:\n").map(|h| h.after),
+            Some(AfterHeaderColon::Nothing)
+        );
+        assert_eq!(HeaderColon::of("@Begin"), None);
+        assert_eq!(HeaderColon::of("*CHI: hello ."), None);
+        assert_eq!(HeaderColon::of("@ID|x:"), None);
+    }
+
+    /// Every header with a space after its colon reaches E303, not only
+    /// `@Comment`, and the message says what was found.
+    #[test]
+    fn any_header_without_a_tab_after_its_colon_is_e303() {
+        for (line, expected) in [
+            ("@Situation: at home", "A space after the header colon"),
+            ("@Comment: a note", "A space after the header colon"),
+            ("@Date: 01-JAN-2020", "A space after the header colon"),
+            ("@Comment:note", "'n' after the header colon"),
+        ] {
+            let diags = diagnostics(&document(line));
+            let e303: Vec<&String> = diags
+                .iter()
+                .filter(|(c, _)| c == "E303")
+                .map(|(_, m)| m)
+                .collect();
+            assert_eq!(e303.len(), 1, "{line}: {diags:?}");
+            assert!(e303[0].starts_with(expected), "{line}: {}", e303[0]);
+            assert!(
+                !diags.iter().any(|(c, _)| c == "E316"),
+                "{line} must not also fall to E316: {diags:?}"
+            );
+        }
+    }
+
+    /// A tabbed header is not this rule's business.
+    #[test]
+    fn a_tabbed_header_is_not_e303() {
+        let diags = diagnostics(&document("@Situation:\tat home"));
+        assert!(!diags.iter().any(|(c, _)| c == "E303"), "{diags:?}");
+    }
 }

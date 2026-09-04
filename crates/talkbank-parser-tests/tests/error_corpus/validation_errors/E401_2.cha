@@ -2,9 +2,8 @@
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
-*CHI:	I want cookie .
-%mor:	pro|I v|want n|cookie .
-%mor:	pro|I v|want n|cookie .
-@Comment:	ERROR: Duplicate %mor tier should trigger E401
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
+%com:	one
+%com:	two
 @End

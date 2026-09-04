@@ -14,7 +14,10 @@
 use talkbank_model::ChatFile;
 use talkbank_model::ParseOutcome;
 use talkbank_model::ParseValidateOptions;
-use talkbank_model::{ErrorCode, ErrorCollector, ErrorSink, ParseError, ParseErrors, Severity};
+use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
+use talkbank_model::{
+    ErrorCode, ErrorCollector, ErrorSink, NullErrorSink, ParseError, ParseErrors, Severity,
+};
 use talkbank_parser::TreeSitterParser;
 
 use super::error::PipelineError;
@@ -103,6 +106,9 @@ pub fn parse_and_validate_named(
     options: ParseValidateOptions,
     name: TranscriptName<'_>,
 ) -> Result<ChatFile, PipelineError> {
+    if options.validate || options.alignment {
+        return required_validation(parser, content, options, name, &NullErrorSink);
+    }
     let parse_errors = ErrorCollector::new();
 
     let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, &parse_errors);
@@ -120,7 +126,7 @@ pub fn parse_and_validate_named(
         }));
     }
 
-    let mut chat_file = match chat_file_outcome {
+    let chat_file = match chat_file_outcome {
         ParseOutcome::Parsed(chat_file) => chat_file,
         ParseOutcome::Rejected => {
             return Err(PipelineError::ParserCreation(
@@ -128,29 +134,6 @@ pub fn parse_and_validate_named(
             ));
         }
     };
-
-    if options.validate || options.alignment {
-        let validation_errors = ErrorCollector::new();
-
-        // Which rules to run. `Option` would be boolean blindness with extra
-        // steps: the lenient case is a rule selection too, not the absence of
-        // one.
-        let rules = rule_selection(options.strict_linkers);
-
-        if options.alignment {
-            chat_file.validate_with_alignment_and_rules(rules, &validation_errors, name);
-        } else {
-            chat_file.validate_with_rules(rules, &validation_errors, name);
-        }
-
-        let validation_error_vec = validation_errors.into_vec();
-        let has_validation_errors = validation_error_vec
-            .iter()
-            .any(|e| matches!(e.severity, Severity::Error));
-        if has_validation_errors {
-            return Err(PipelineError::Validation(validation_error_vec));
-        }
-    }
 
     Ok(chat_file)
 }
@@ -238,9 +221,12 @@ pub fn parse_and_validate_streaming_named(
     errors: &impl ErrorSink,
     name: TranscriptName<'_>,
 ) -> Result<ChatFile, PipelineError> {
+    if options.validate || options.alignment {
+        return required_validation(parser, content, options, name, errors);
+    }
     let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, errors);
 
-    let mut chat_file = match chat_file_outcome {
+    let chat_file = match chat_file_outcome {
         ParseOutcome::Parsed(chat_file) => chat_file,
         ParseOutcome::Rejected => {
             let parse_error = ParseError::build(ErrorCode::ParseFailed)
@@ -252,17 +238,43 @@ pub fn parse_and_validate_streaming_named(
         }
     };
 
-    if options.validate || options.alignment {
-        let rules = rule_selection(options.strict_linkers);
-
-        if options.alignment {
-            chat_file.validate_with_alignment_and_rules(rules, errors, name);
-        } else {
-            chat_file.validate_with_rules(rules, errors, name);
-        }
-    }
-
     Ok(chat_file)
+}
+
+/// Compatibility APIs explicitly discard the accepted phase before returning a
+/// mutable model. Required parsing and validation still have one proof producer.
+fn required_validation(
+    parser: &TreeSitterParser,
+    content: &str,
+    options: ParseValidateOptions,
+    name: TranscriptName<'_>,
+    errors: &impl ErrorSink,
+) -> Result<ChatFile, PipelineError> {
+    let alignment = if options.alignment {
+        AlignmentValidation::IncludeTierAlignment
+    } else {
+        AlignmentValidation::Structure
+    };
+    super::validated::parse_validated_with_parser(
+        parser,
+        content,
+        ValidationPolicy::new(rule_selection(options.strict_linkers), alignment),
+        name,
+        errors,
+    )
+    .map(|accepted| accepted.into_unchecked())
+    .map_err(|error| match error {
+        super::validated::ValidatedParseError::Parse(product) => {
+            PipelineError::Parse(ParseErrors::from(product.diagnostics().to_vec()))
+        }
+        super::validated::ValidatedParseError::Validation(failure) => {
+            if failure.has_incomplete_parse() {
+                PipelineError::IncompleteValidation(Box::new(failure))
+            } else {
+                PipelineError::Validation(failure.diagnostics().to_vec())
+            }
+        }
+    })
 }
 
 #[cfg(test)]
@@ -271,6 +283,28 @@ mod tests {
     use talkbank_model::ErrorCode;
     use talkbank_model::ParseValidateOptions;
     use talkbank_parser::TreeSitterParser;
+
+    #[test]
+    fn required_streaming_validation_rejects_errors_with_null_sink() {
+        for source in [
+            include_str!(
+                "../../../../tests/error_corpus/parse_errors/E316_invalid_main_tier_syntax.cha"
+            ),
+            include_str!(
+                "../../../../tests/error_corpus/validation_errors/E552_unlinked_with_wor_timing.cha"
+            ),
+        ] {
+            let result = super::parse_and_validate_streaming(
+                source,
+                ParseValidateOptions::default().with_alignment(),
+                &talkbank_model::NullErrorSink,
+            );
+            assert!(
+                result.is_err(),
+                "required validation returned an unchecked model"
+            );
+        }
+    }
 
     #[test]
     fn test_span_preserved_through_pipeline() -> Result<(), PipelineError> {

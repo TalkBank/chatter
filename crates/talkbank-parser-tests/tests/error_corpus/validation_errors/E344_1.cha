@@ -1,7 +1,9 @@
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Target_Child
+@Participants:	CHI Target_Child, MOT Mother
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello <world <foo> bar> .
+@ID:	eng|corpus|MOT|||||Mother|||
+*MOT:	and then he said +".
+*CHI:	okay .
 @End

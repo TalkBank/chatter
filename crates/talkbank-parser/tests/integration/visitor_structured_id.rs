@@ -222,9 +222,10 @@ fn out_of_pattern_age_preserved_as_raw() {
     assert!(diags.is_empty(), "no parse diag expected: {diags:?}");
 }
 
-/// An all-optionals-absent @ID (E518 fixture) parses to its exact payload; the
-/// only diagnostic is the unrelated E501 (content after @End) elsewhere in the
-/// fixture, captured here to pin the full streaming behaviour.
+/// An all-optionals-absent @ID (E518 fixture) parses to its exact payload with
+/// no parse diagnostic. Until 2026-09-03 the fixture also put an utterance
+/// after `@End`, and this test pinned the resulting E501 as "unrelated"; the
+/// fixture now differs from the legal form in the date alone.
 #[test]
 fn auto_generated_id_preserves_fields() {
     let (headers, diags) = id_headers_and_diags(E518);
@@ -235,14 +236,9 @@ fn auto_generated_id_preserves_fields() {
         ],
         "auto-generated @ID must reproduce its payload"
     );
-    assert_eq!(
-        diags,
-        vec![(
-            "E501".to_string(),
-            "Duplicate @End header or content after @End: nothing may follow the @End line"
-                .to_string(),
-        )],
-        "only the unrelated E501 diagnostic is expected"
+    assert!(
+        diags.is_empty(),
+        "no parse diag expected once the fixture no longer places content after @End: {diags:?}"
     );
 }
 

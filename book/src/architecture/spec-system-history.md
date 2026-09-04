@@ -1,7 +1,7 @@
 # Why the Spec System Looks Like That
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:33 EDT
+**Last modified:** 2026-09-03 19:40 EDT
 
 [Spec System](spec-system.md) says what the spec files contain and what checks
 them. This page answers the questions that page raises and does not settle, all
@@ -9,7 +9,7 @@ of which a new contributor hits in the first hour:
 
 - Why are two thirds of the files named `_auto`?
 - Why can a spec for one code carry an example that expects a different one?
-- Why do eleven codes have two spec files?
+- Why did eleven codes have two spec files (one still does)?
 - Why do so many descriptions say "Auto-generated from corpus"?
 
 The short answer to all four is the same, and it is worth stating plainly
@@ -33,6 +33,22 @@ with the command named beside each number.
 | still carrying `[Add link to relevant CHAT manual section]` | 68 |
 | codes with NO example producing the code the spec is named for | **54** |
 | codes claimed by more than one spec file | 11 |
+
+The same measurements on 2026-09-03, after Phase 5 and Phase 6 were worked
+through (live `ls`/`grep` over `spec/errors/`, no tool):
+
+| Fact | Value |
+|---|---|
+| Error spec files | 225 |
+| of those, named `*_auto.md` | **1** (E519_auto.md) |
+| still carrying `Review and enhance this specification as needed` | **1** |
+| whose Description is the literal `Auto-generated from corpus.` | 1 |
+| still carrying `[Add link to relevant CHAT manual section]` | 1 |
+| codes claimed by more than one spec file | 1 (E519) |
+
+The one remaining case in every row is E519, which keeps its three files
+until it is ruled whether header-level and word-level ISO 639-3 membership
+are one spec (see below).
 
 ## Where `_auto` came from
 
@@ -107,8 +123,8 @@ that rule's code; if it does not, chatter has a gap, and the gap is the finding.
 
 ## Why some codes have two spec files
 
-Eleven do, and in every case the pair is one `_auto.md` plus one hand-written
-file:
+Eleven did, until 2026-09-03; one (E519) still does. In every case the pair
+was one `_auto.md` plus one hand-written file:
 
 ```
 E202_auto.md  +  E202_missing_form_type.md
@@ -149,9 +165,18 @@ a rule with two triggering sites could not be written as one spec. Phase 2
 (2026-08-21) moved `level` onto the example, so such pairs are now mergeable;
 merging them is part of R8's adjudication rather than automatic.
 
-For telling an unedited stub from an authored spec, 91 spec files still carry
-the generator's "Review and enhance this specification as needed" note, all of
-them `_auto` and none hand-named. That is a reliable signal of ORIGIN. It is not
+**Executed 2026-09-03.** The residue (E202, E241, E604 `_auto`) was deleted;
+`E243_auto.md`'s example was re-filed under E202; E316, E342, E375, E522,
+E360 and E502 were each merged into one bare `E###.md` with both bodies
+preserved. E519 alone keeps its three files, pending the ruling above. The
+merge changed every key the re2c parity baseline uses for those files, so
+`KNOWN_DIVERGENCES` is regenerated from the harness's own output as part of
+the same work.
+
+For telling an unedited stub from an authored spec, 91 spec files carried
+the generator's "Review and enhance this specification as needed" note on
+2026-08-15, all of them `_auto` and none hand-named; on 2026-09-03 one does
+(`E519_auto.md`). That is a reliable signal of ORIGIN. It is not
 a verdict about the file's worth, and neither is any declared field: only
 running the examples is.
 

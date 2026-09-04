@@ -1,6 +1,6 @@
 # Grammar, Tree-sitter Grammar for CHAT
 
-**Last modified:** 2026-08-27 13:44 EDT
+**Last modified:** 2026-09-04 16:20 EDT
 
 ## Overview
 Tree-sitter grammar definition for CHAT (`grammar.js`) plus generated parser and corpus tests.
@@ -169,7 +169,7 @@ generic_option_name: $ => /[^\s,\r\n\t]+/,
 - Fields where the regex IS the validation (like `age_format`)
 
 **Key pitfall:** When adding a catch-all, also audit error specs (`spec/errors/`) that referenced E316 (parse error) for the field. Those examples will now parse successfully, so:
-1. Remove them from E316_auto.md
+1. Remove them from E316.md
 2. Move them to the field-specific error spec (e.g., E518.md), changing
    the claim from `subsumed_by 'E316'` to `violates` (there is no authored
    layer since R4; which stage catches the rule is observed in the snapshot)

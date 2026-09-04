@@ -9,6 +9,8 @@ mod convert;
 mod error;
 mod io;
 mod parse;
+mod validated;
+pub use validated::{ValidatedParseError, parse_validated_with_parser};
 pub(crate) mod rewrite;
 
 pub use convert::{chat_to_json, chat_to_json_named, chat_to_json_unvalidated, normalize_chat};

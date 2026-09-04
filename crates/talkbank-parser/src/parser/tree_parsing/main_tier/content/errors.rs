@@ -478,31 +478,6 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         }
     }
 
-    // Control character immediately before the error position, the parser split
-    // the word at the control char, so we see the fragment after it as E316.
-    if error_node.start_byte() > 0 {
-        let prev_byte = source.as_bytes()[error_node.start_byte() - 1];
-        if prev_byte < 0x20 && prev_byte != b'\t' && prev_byte != b'\n' && prev_byte != b'\r' {
-            return ParseError::new(
-                ErrorCode::InvalidControlCharacter,
-                Severity::Error,
-                SourceLocation::from_offsets(error_node.start_byte() - 1, error_node.end_byte()),
-                ErrorContext::new(
-                    source,
-                    error_node.start_byte() - 1..error_node.end_byte(),
-                    "",
-                ),
-                format!(
-                    "Illegal control character (0x{:02X}) found in word",
-                    prev_byte
-                ),
-            )
-            .with_suggestion(
-                "Remove or replace the control character. Use Unicode standard characters.",
-            );
-        }
-    }
-
     // E316: Unparsable content (LOWEST PRIORITY fallback)
     // Use error_text with span 0..len to avoid span/source mismatch that causes OutOfBounds
     // This is safe because error_text is extracted from the ERROR node itself

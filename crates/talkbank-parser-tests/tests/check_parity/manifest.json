@@ -1010,9 +1010,10 @@
    "fixture": "CHECK_102_italics.cha",
    "status": "parity",
    "expected_chatter_codes": [
+    "E315",
     "E316"
    ],
-   "note": "Any character carrying the italic text attribute, encoded in the file as ATTMARKER 0x02 + 0x03 (italic start) / 0x02 + 0x04 (italic end) (check.cpp: multiple is_italic() sites, e.g. 4289/4433). Fixture embeds raw bytes \\x02\\x03hey\\x02\\x04; CLAN emits (102) twice (once per attributed char run). chatter rejects the control bytes as unparsable, so legacy attribute encoding cannot pass."
+   "note": "Any character carrying the italic text attribute, encoded in the file as ATTMARKER 0x02 + 0x03 (italic start) / 0x02 + 0x04 (italic end) (check.cpp: multiple is_italic() sites, e.g. 4289/4433). Fixture embeds raw bytes \\x02\\x03hey\\x02\\x04; CLAN emits (102) twice (once per attributed char run). chatter names each of the four control bytes as E315 (the lexical rule permits only the underline pairs 0x02 0x01 / 0x02 0x02) and the broken word as E316, so legacy attribute encoding cannot pass."
   },
   {
    "check_code": 103,

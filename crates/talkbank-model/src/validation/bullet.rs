@@ -9,10 +9,10 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 
 /// Validate one media bullet's internal timing invariants.
 ///
-/// Currently enforces `start_ms < end_ms` (`E515`) and reports diagnostics using
+/// Currently enforces `start_ms < end_ms` (`E362`) and reports diagnostics using
 /// reconstructed bullet text for user-facing context.
 pub(crate) fn check_bullet(bullet: &Bullet, errors: &impl ErrorSink) {
-    // E515: Check start < end
+    // E362: Check start < end
     if bullet.timing.start_ms >= bullet.timing.end_ms {
         // Use bullet's serialized form for error context
         let bullet_text = bullet.to_chat_string();
@@ -35,10 +35,11 @@ pub(crate) fn check_bullet(bullet: &Bullet, errors: &impl ErrorSink) {
 
 /// Validate chronological ordering across a sequence of bullets.
 ///
-/// Emits `E701` when a bullet starts before the previous bullet's start time.
+/// Emits `E362` when a bullet starts before the previous bullet's start time
+/// (the tier-level ordering rule, E701, is a separate check).
 pub fn check_bullet_monotonicity(bullets: &[&Bullet], errors: &impl ErrorSink) {
     for i in 1..bullets.len() {
-        // E701: Check monotonicity - each start time must be >= previous start time
+        // E362: Check monotonicity - each start time must be >= previous start time
         if bullets[i].timing.start_ms < bullets[i - 1].timing.start_ms {
             let bullet_text = bullets[i].to_chat_string();
 

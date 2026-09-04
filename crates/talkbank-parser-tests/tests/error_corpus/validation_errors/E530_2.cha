@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@G:	snack
+*CHI:	hello .
+@G:	play
+*CHI:	hi .
+@End

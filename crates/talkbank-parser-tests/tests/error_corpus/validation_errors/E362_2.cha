@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	sample, audio
+*CHI:	hello there . 10000_12000
+*CHI:	how are you . 8000_9000
+*CHI:	I am fine . 15000_17000
+@End

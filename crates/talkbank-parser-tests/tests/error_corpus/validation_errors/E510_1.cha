@@ -1,6 +1,7 @@
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-@ID:	|corpus|CHI|
+@Participants:	CHI Target_Child
+@ID:	|corpus|CHI|||||Target_Child|||
+*CHI:	hello .
 @End

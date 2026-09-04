@@ -2,7 +2,8 @@
 //!
 //! # Related CHAT Manual Sections
 //!
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Postcodes>
+//! - CHAT manual, "Utterance level error coding (post-codes)" (section 18.2;
+//!   it has no named anchor, `#_Toc208734963` in the 2026-09-03 build)
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};

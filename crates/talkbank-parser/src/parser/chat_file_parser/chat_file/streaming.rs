@@ -31,6 +31,11 @@ impl TreeSitterParser {
     pub fn parse_chat_file_streaming(&self, input: &str, errors: &impl ErrorSink) -> ChatFile {
         debug!("Parsing CHAT file ({} bytes) with streaming", input.len());
 
+        // Lexical rules first: a forbidden control character is decided over
+        // the whole input, so its diagnostic does not depend on whether the
+        // grammar happened to fail around it.
+        crate::parser::lexical::report_control_characters(input, errors);
+
         let mut lines = parse_lines(self, input, errors);
 
         // Build participant map from headers

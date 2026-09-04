@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use super::ChatFile;
 use super::transcript_name::TranscriptName;
-use crate::validation::{RuleSelection, Validate, ValidationState};
+use crate::validation::{RuleSelection, Validate};
 use crate::{ErrorSink, ParseError};
 use crate::{Header, Line};
 
@@ -110,8 +110,8 @@ fn build_validation_context(
 /// Factoring the sequence into one function makes that class of drift
 /// structurally impossible: there is only one place to add a new file-level
 /// check.
-fn run_validation_checks<S: ValidationState>(
-    file: &ChatFile<S>,
+fn run_validation_checks(
+    file: &ChatFile,
     context: &crate::validation::ValidationContext,
     errors: &impl crate::ErrorSink,
     name: TranscriptName<'_>,
@@ -187,7 +187,7 @@ fn run_validation_checks<S: ValidationState>(
     }
 }
 
-impl<S: ValidationState> ChatFile<S> {
+impl ChatFile {
     /// Run header-only validation and return the derived context.
     ///
     /// Useful for callers that need validated header-derived configuration
@@ -529,7 +529,7 @@ impl<S: ValidationState> ChatFile<S> {
 }
 
 // Implement Validate trait for ChatFile (all states)
-impl<S: ValidationState> Validate for ChatFile<S> {
+impl Validate for ChatFile {
     /// Delegates trait-based validation to full ChatFile validation pipeline.
     fn validate(&self, _context: &crate::validation::ValidationContext, errors: &impl ErrorSink) {
         // The `Validate` trait has no room for a name, so this path is

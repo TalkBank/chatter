@@ -1,8 +1,8 @@
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	Note: This may need adjustment after testing
-*CHI:	hello {{{ world }}} .
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Situation: at home
+*CHI:	hello .
 @End

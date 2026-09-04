@@ -77,8 +77,8 @@ use helpers::has_quoted_linker;
 /// This is the allocation-friendly convenience entrypoint used by callers that
 /// do not need to reuse a custom error sink. It always runs scoped-marker and
 /// overlap checks, while quotation-specific checks depend on runtime context flags.
-pub fn check_cross_utterance_patterns<S: crate::validation::ValidationState>(
-    file: &crate::model::ChatFile<S>,
+pub fn check_cross_utterance_patterns(
+    file: &crate::model::ChatFile,
     context: &crate::validation::ValidationContext,
 ) -> Vec<ParseError> {
     let errors = ErrorCollector::new();
@@ -91,8 +91,8 @@ pub fn check_cross_utterance_patterns<S: crate::validation::ValidationState>(
 /// This function centralizes the full rule dispatch order, including feature-
 /// gated quotation checks and always-on scoped-marker balancing. The ordering
 /// is intentionally deterministic so diagnostics remain stable across runs.
-pub(crate) fn check_cross_utterance_patterns_with_sink<S: crate::validation::ValidationState>(
-    file: &crate::model::ChatFile<S>,
+pub(crate) fn check_cross_utterance_patterns_with_sink(
+    file: &crate::model::ChatFile,
     context: &crate::validation::ValidationContext,
     errors: &impl ErrorSink,
 ) {
@@ -231,10 +231,7 @@ fn has_overlap_kind(
 /// from speaker A can be matched by bottom regions from speakers B, C, etc.
 /// Only orphaned tops (no matching bottom from any speaker) and orphaned
 /// bottoms (no matching top from any speaker) are reported.
-fn check_cross_utterance_overlap_balance<S: crate::validation::ValidationState>(
-    file: &crate::model::ChatFile<S>,
-    errors: &impl ErrorSink,
-) {
+fn check_cross_utterance_overlap_balance(file: &crate::model::ChatFile, errors: &impl ErrorSink) {
     let utterances = FileUtterances::of(file);
     use crate::{ErrorCode, ErrorContext, Severity, SourceLocation};
 

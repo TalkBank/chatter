@@ -28,6 +28,10 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 ///
 /// # Two entries left on 2026-08-21, and what they were measuring
 ///
+/// 2026-09-03: regenerated from the harness output after Phase 5 and Phase 6
+/// renamed and re-indexed most spec files (33 keys added, 8 retired, 46 stale
+/// removed; the divergence set itself is the same parser behaviour under new
+/// names, plus E315 now lexical on tree-sitter).
 /// `E502_wor_cascade_regression.md#0` and `#1` went when the spec format moved
 /// to frontmatter, and the reason is worth more than the entries were. That
 /// spec declares NO examples: its two ```` ```chat ```` blocks sit under
@@ -108,7 +112,6 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 /// belongs beside it as a comment. That is the case the docstring above asks
 /// for, and a comment carries it without requiring the other 98 to lie.
 pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
-    ("E202_auto.md", Conflicting),
     ("E202_missing_form_type.md#0", Conflicting),
     ("E202_missing_form_type.md#1", Conflicting),
     // `word@@`: tree-sitter names the repeated `@` run as E203, re2c's lexer
@@ -121,6 +124,7 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     // E209 plus E253). The new `#1`, `gumma@c@s:spa`, is deliberately absent:
     // both backends answer E203 there, so the case the at-most-one-suffix
     // ruling actually decided AGREES.
+    ("E202_missing_form_type.md#3", Conflicting),
     ("E203.md#0", Conflicting),
     ("E208.md", Conflicting),
     ("E231.md", Conflicting),
@@ -130,7 +134,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     // unmatched opener inside a longer utterance. re2c still answers its
     // generic E321 there, the same Conflicting shape as `#0`.
     ("E242.md#1", Conflicting),
-    ("E243_auto.md", Conflicting),
     ("E245.md", Re2cExtra),
     // `#0` since 2026-09-01, when E252, E253, E301, E306 and E307 were
     // rewritten from auto-generated stubs into stated rules and gained a
@@ -178,74 +181,54 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     // degraded it to E316. It exists so that route is never again covered only
     // by accident.
     ("E311.md#1", Conflicting),
-    ("E313.md", Conflicting),
-    ("E314.md", Conflicting),
-    ("E315.md", Conflicting),
-    ("E316_angle_bracket_in_mor_stem.md#0", Re2cSilent),
-    ("E316_angle_bracket_in_mor_stem.md#1", Conflicting),
-    ("E316_auto.md#0", Conflicting),
-    ("E316_auto.md#1", Conflicting),
-    ("E316_auto.md#2", Conflicting),
-    ("E316_auto.md#3", Conflicting),
-    ("E316_auto.md#4", Conflicting),
-    ("E316_auto.md#6", Conflicting),
-    ("E316_auto.md#7", Conflicting),
-    ("E324.md", Conflicting),
+    ("E313.md#0", Conflicting),
+    ("E314.md#0", Conflicting),
+    ("E315.md#0", Conflicting),
+    ("E315.md#1", Re2cSilent),
+    ("E316.md#0", Conflicting),
+    ("E316.md#1", Conflicting),
+    ("E316.md#2", Conflicting),
+    ("E316.md#3", Conflicting),
+    ("E316.md#4", Conflicting),
+    ("E316.md#5", Conflicting),
+    ("E316.md#6", Conflicting),
+    ("E316.md#7", Re2cSilent),
+    ("E316.md#8", Conflicting),
+    ("E324.md#0", Conflicting),
     ("E326.md", Conflicting),
-    ("E330.md", Conflicting),
     // These four arrived on 2026-08-11 without any parser change: E342_auto.md
     // was marked `not_implemented` by a stale auto-generated stub while its
     // real spec said `implemented`, so this gate had been skipping it. Fixing
     // the status brought four cases into scope, and they diverge in the E600
     // versus E605 way that already dominates the Conflicting family. A ratchet
     // that demands this be acknowledged rather than absorbed is the point.
-    ("E342_auto.md#0", Conflicting),
-    ("E342_auto.md#1", Conflicting),
-    ("E342_auto.md#2", Conflicting),
-    ("E342_auto.md#3", Conflicting),
-    ("E342_group_without_annotation.md", Re2cIncomplete),
-    ("E358.md", Conflicting),
-    ("E359.md", Conflicting),
-    ("E363.md", Conflicting),
-    ("E367.md", Conflicting),
-    ("E368.md", Conflicting),
+    ("E330.md#0", Conflicting),
+    ("E342.md#0", Re2cIncomplete),
+    ("E342.md#1", Conflicting),
+    ("E363.md#0", Re2cSilent),
+    ("E363.md#1", Conflicting),
     ("E373.md#1", Conflicting),
-    ("E375_auto.md#0", Conflicting),
-    ("E375_replacement_needs_preceding_space.md", Re2cSilent),
+    ("E375.md#0", Conflicting),
+    ("E375.md#1", Re2cSilent),
     ("E376.md", Conflicting),
     ("E404.md", Conflicting),
-    ("E501.md#1", Re2cIncomplete),
     ("E503.md", Re2cIncomplete),
     ("E505.md#0", Conflicting),
     ("E505.md#1", Conflicting),
     ("E505.md#2", Conflicting),
-    ("E506.md", Re2cIncomplete),
-    ("E507.md", Re2cIncomplete),
-    ("E508.md", Conflicting),
-    ("E509.md", Conflicting),
-    ("E510.md", Conflicting),
-    ("E512.md", Re2cIncomplete),
-    ("E513.md", Re2cIncomplete),
-    ("E515.md", Conflicting),
-    ("E518.md#0", Re2cIncomplete),
-    ("E518.md#1", Re2cIncomplete),
-    ("E518.md#2", Re2cIncomplete),
-    ("E518.md#3", Re2cIncomplete),
-    ("E518.md#5", Re2cIncomplete),
-    ("E522_auto.md#0", Re2cIncomplete),
-    ("E525.md#0", Re2cIncomplete),
-    ("E525.md#1", Re2cIncomplete),
-    ("E525.md#3", Conflicting),
-    ("E525.md#4", Conflicting),
-    ("E526.md", Conflicting),
-    ("E527.md", Conflicting),
-    ("E529.md", Re2cIncomplete),
-    ("E530.md", Re2cIncomplete),
-    ("E533.md", Conflicting),
+    ("E506.md#0", Re2cIncomplete),
+    ("E507.md#0", Re2cIncomplete),
+    ("E507.md#1", Re2cIncomplete),
+    ("E509.md#0", Conflicting),
+    ("E512.md#0", Conflicting),
+    ("E513.md#0", Re2cIncomplete),
+    ("E515.md#0", Conflicting),
+    ("E533.md#0", Conflicting),
     ("E550.md", Re2cSilent),
     ("E600.md", Conflicting),
-    ("E601.md", Conflicting),
-    ("E602.md", Re2cExtra),
+    ("E601.md#0", Conflicting),
+    ("E602.md#0", Re2cExtra),
+    ("E602.md#1", Re2cSilent),
     ("E709.md", Conflicting),
     ("E710.md", Conflicting),
     ("E747.md", Re2cSilent),

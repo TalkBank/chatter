@@ -1,7 +1,9 @@
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Target_Child
+@Participants:	CHI Target_Child, MOT Mother
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello world> [/] .
+@ID:	eng|corpus|MOT|||||Mother|||
+*MOT:	+" I am going home now .
+*CHI:	okay .
 @End

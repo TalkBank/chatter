@@ -189,7 +189,11 @@ pub fn validate_file(
         let error_sink = ErrorCollector::new();
 
         match parse_and_validate_streaming_for_path(path, &content, options.clone(), &error_sink) {
-            Ok(_) => error_sink.into_vec(),
+            Ok(_)
+            | Err(
+                talkbank_transform::PipelineError::Parse(_)
+                | talkbank_transform::PipelineError::Validation(_),
+            ) => error_sink.into_vec(),
             Err(e) => {
                 if matches!(format, OutputFormat::Json) {
                     let json_output = serde_json::json!({
@@ -215,7 +219,11 @@ pub fn validate_file(
         let error_sink = ErrorCollector::new();
 
         match parse_and_validate_streaming_for_path(path, &content, options.clone(), &error_sink) {
-            Ok(_) => error_sink.into_vec(),
+            Ok(_)
+            | Err(
+                talkbank_transform::PipelineError::Parse(_)
+                | talkbank_transform::PipelineError::Validation(_),
+            ) => error_sink.into_vec(),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -228,7 +236,11 @@ pub fn validate_file(
         let tee_sink = TeeErrorSink::new(&terminal_sink, &collecting_sink);
 
         match parse_and_validate_streaming_for_path(path, &content, options.clone(), &tee_sink) {
-            Ok(_) => collecting_sink.into_vec(),
+            Ok(_)
+            | Err(
+                talkbank_transform::PipelineError::Parse(_)
+                | talkbank_transform::PipelineError::Validation(_),
+            ) => collecting_sink.into_vec(),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

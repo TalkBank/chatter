@@ -28,7 +28,6 @@ use talkbank_model::alignment::helpers::{WordItemMut, walk_code_switch_spans, wa
 use talkbank_model::model::{
     ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, WordLanguageMarker,
 };
-use talkbank_model::validation::ValidationState;
 
 /// What a retag changed, per notation, so a caller can report the work done
 /// rather than the work requested.
@@ -69,8 +68,8 @@ pub enum RetagRefusal {
 ///
 /// Returns [`RetagRefusal::NamesCodeInSpan`] and changes NOTHING when the file
 /// names `from` in a span notation this cannot rewrite.
-pub fn retag_language<S: ValidationState>(
-    chat_file: &mut ChatFile<S>,
+pub fn retag_language(
+    chat_file: &mut ChatFile,
     from: &LanguageCode,
     to: &LanguageCode,
 ) -> Result<RetagStats, RetagRefusal> {
@@ -108,7 +107,7 @@ pub fn retag_language<S: ValidationState>(
 }
 
 /// Whether any `<...> [@s:code]` span names `from`.
-fn names_code_in_span<S: ValidationState>(chat_file: &ChatFile<S>, from: &LanguageCode) -> bool {
+fn names_code_in_span(chat_file: &ChatFile, from: &LanguageCode) -> bool {
     let mut found = false;
     for line in &chat_file.lines {
         let Line::Utterance(utterance) = line else {

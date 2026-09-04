@@ -1,7 +1,7 @@
 # CHAT Data Model
 
 **Status:** Current
-**Last updated:** 2026-09-01 06:12 EDT
+**Last updated:** 2026-09-04 06:45 EDT
 
 The `talkbank-model` crate defines the typed AST for CHAT files. Every
 other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
@@ -14,24 +14,27 @@ extract → infer → inject pattern that all NLP tasks follow.
 The root type is `ChatFile`, representing a complete CHAT transcript:
 
 ```rust,ignore
-pub struct ChatFile<S: ValidationState = NotValidated> {
+pub struct ChatFile {
     pub lines: ChatFileLines,
     pub participants: IndexMap<SpeakerCode, Participant>,
     pub languages: LanguageCodes,
     pub options: ChatOptionFlags,
     pub media: Option<Box<MediaHeader>>,
     pub line_map: Option<LineMap>,
-    _state: PhantomData<S>,
 }
 ```
+
+`validate_into` consumes the mutable model and returns either an immutable
+`ValidChatFile` with policy/name/diagnostics or a `ValidationFailure` retaining
+the rejected model. `into_unchecked` consumes a proof before editing.
 
 Each `Line` is either a `Header` or an `Utterance`. The full ownership
 tree:
 
 ```mermaid
 flowchart TD
-    chatfile["ChatFile&lt;S: ValidationState&gt;\n(talkbank-model/src/model/file/chat_file/core.rs)"]
-    chatfile --> state["S: NotValidated or Validated\n(compile-time only)"]
+    chatfile["ChatFile\n(talkbank-model/src/model/file/chat_file/core.rs)"]
+    valid["ValidChatFile (immutable validation evidence)"] --> chatfile
     chatfile --> lines["lines: ChatFileLines\n(ordered Line newtype)"]
     chatfile --> participants["participants:\nIndexMap&lt;SpeakerCode, Participant&gt;"]
     chatfile --> languages["languages: LanguageCodes"]

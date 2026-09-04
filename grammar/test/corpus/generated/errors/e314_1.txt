@@ -1,11 +1,11 @@
 ================================================================================
-e314_1 - Auto-generated from corpus
+e314_1 - Incomplete annotation
 ================================================================================
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	word [
 @End
 

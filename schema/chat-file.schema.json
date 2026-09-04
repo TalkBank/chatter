@@ -2729,12 +2729,12 @@
         },
         {
           "const": "E344",
-          "description": "Invalid nesting of scoped annotations.",
+          "description": "Quotation-precedes terminator (+\".) with no preceding same-speaker +\" utterance; runs only under enable_quotation_validation.",
           "type": "string"
         },
         {
           "const": "E346",
-          "description": "Unmatched scoped annotation end marker.",
+          "description": "Quoted-utterance linker (+\") with no +\"/. before it and no +\". after it by the same speaker; runs only under enable_quotation_validation.",
           "type": "string"
         },
         {

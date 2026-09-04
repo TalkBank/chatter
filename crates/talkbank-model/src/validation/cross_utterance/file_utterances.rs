@@ -54,9 +54,7 @@ impl<'a> FileUtterances<'a> {
     /// Generic over the file's VALIDATION STATE: a file's utterances are the
     /// same sequence whether or not it has been validated yet, so requiring one
     /// state here would force callers to launder the other.
-    pub(crate) fn of<S: crate::validation::ValidationState>(
-        file: &'a crate::model::ChatFile<S>,
-    ) -> Self {
+    pub(crate) fn of(file: &'a crate::model::ChatFile) -> Self {
         Self(file.utterances().collect())
     }
 

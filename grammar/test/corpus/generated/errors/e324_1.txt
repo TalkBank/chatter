@@ -1,11 +1,11 @@
 ================================================================================
-e324_1 - Auto-generated from corpus
+e324_1 - Unrecognized utterance-level parse failure
 ================================================================================
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello } .
 @End
 

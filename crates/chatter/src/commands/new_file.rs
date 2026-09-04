@@ -121,6 +121,7 @@ fn describe(
         comments: Vec::new(),
         utterances: utterance
             .map(|text| UtteranceDesc {
+                comment: None,
                 speaker: speaker.to_string(),
                 text: text.to_string(),
                 start_ms: None,
@@ -132,22 +133,7 @@ fn describe(
     }
 }
 
-/// Build the file, RUN VALIDATION on it, and refuse to write one that fails.
-///
-/// # The command's promise is a state, so it goes through the state transition
-///
-/// `new-file`'s contract is "a minimal VALID CHAT file". `build` returns a
-/// `ChatFile<NotValidated>`, so until this existed that contract lived in a doc
-/// comment and a test, and a `--speaker` the validator rejects would have been
-/// written to disk under a command that calls its output valid. The model
-/// already has the phase transition, `validate_into`, and this runs it.
-///
-/// Note what the marker does and does not prove. `validate_into` streams
-/// diagnostics into the sink and changes state UNCONDITIONALLY, so
-/// `ChatFile<Validated>` means validation RAN, not that it passed. The sink is
-/// therefore checked here rather than trusted to the type; a `Validated` that
-/// any input can reach is a label rather than a proof, and treating it as the
-/// latter is how this would go wrong.
+/// Build and serialize only a model accepted by the validation boundary.
 fn build_validated(
     speaker: &str,
     language: &str,
@@ -185,20 +171,12 @@ fn build_validated(
         None => TranscriptName::Anonymous,
     };
 
-    let validated = file.validate_into(&errors, name);
-
-    if errors.has_errors() {
-        return Err(format!(
+    let validated = file.validate_into(&errors, name).map_err(|failure| {
+        format!(
             "the requested file does not validate, so it was not written. \
-             `chatter validate` would reject it:\n{}",
-            errors
-                .to_vec()
-                .iter()
-                .map(|e| format!("  {} {}", e.code.as_str(), e.message))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ));
-    }
+                 `chatter validate` would reject it:\n{failure}"
+        )
+    })?;
     Ok(validated.to_chat_string())
 }
 

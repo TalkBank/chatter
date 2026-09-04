@@ -1,7 +1,7 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-08-27 13:44 EDT
+**Last modified:** 2026-09-04 16:20 EDT
 
 ## Read the book first
 
@@ -227,7 +227,7 @@ grammar rule so that previously-unparsable content now parses:
 
 1. Regenerate: the observation snapshot records the new stage per example, and
    corpus membership follows it (there is no authored `layer` to flip since R4)
-2. Audit `E316_auto.md`: remove examples that no longer produce E316
+2. Audit `E316.md`: remove examples that no longer produce E316
 3. Run `just spec-gen` and review the diff
 4. Run the concrete verification commands from `book/src/contributing/dev-checks.md`
 

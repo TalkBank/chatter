@@ -12,13 +12,13 @@
 //! # Example with tokio
 //!
 //! ```ignore
-//! use talkbank_model::{ChatFile, NotValidated};
+//! use talkbank_model::{ChatFile};
 //! use talkbank_model::validation::validate_async;
 //! use talkbank_model::ErrorCollector;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let file: ChatFile<NotValidated> = parse_file(content);
+//!     let file: ChatFile = parse_file(content);
 //!     let errors = ErrorCollector::new();
 //!
 //!     // Run validation on blocking thread pool
@@ -31,7 +31,7 @@
 
 use crate::ErrorSink;
 use crate::model::ChatFile;
-use crate::validation::{NotValidated, RuleSelection};
+use crate::validation::RuleSelection;
 
 /// Async wrapper errors emitted by validation task orchestration.
 #[cfg(feature = "async")]
@@ -40,6 +40,9 @@ pub enum AsyncValidationError {
     /// The Tokio blocking task failed to join successfully.
     #[error("failed to join async validation task: {0}")]
     Join(#[from] tokio::task::JoinError),
+    /// Model validation refused the document.
+    #[error(transparent)]
+    Validation(#[from] crate::validation::ValidationFailure),
 }
 
 /// Validate a `ChatFile` on Tokio's blocking pool and await completion.
@@ -55,7 +58,7 @@ pub enum AsyncValidationError {
 ///
 /// # Returns
 ///
-/// A `ChatFile<Validated>` after validation completes
+/// A `ValidChatFile` after validation completes
 ///
 /// # Example
 ///
@@ -68,16 +71,26 @@ pub enum AsyncValidationError {
 /// ```
 #[cfg(feature = "async")]
 pub async fn validate_async<S>(
-    file: ChatFile<NotValidated>,
+    file: ChatFile,
     errors: S,
     filename: Option<String>,
-) -> Result<ChatFile<crate::validation::Validated>, AsyncValidationError>
+) -> Result<crate::validation::ValidChatFile, AsyncValidationError>
 where
     S: ErrorSink + Send + 'static,
 {
-    tokio::task::spawn_blocking(move || file.validate_into(&errors, filename.as_deref()))
-        .await
-        .map_err(AsyncValidationError::from)
+    tokio::task::spawn_blocking(move || {
+        file.validate_into(
+            &errors,
+            filename
+                .as_deref()
+                .map_or(crate::model::TranscriptName::Anonymous, |stem| {
+                    crate::model::TranscriptName::Named(crate::model::FileStem::from_stem(stem))
+                }),
+        )
+    })
+    .await
+    .map_err(AsyncValidationError::from)?
+    .map_err(AsyncValidationError::from)
 }
 
 /// Validate a `ChatFile` asynchronously with a custom `RuleSelection`.
@@ -105,7 +118,7 @@ where
 /// ```
 #[cfg(feature = "async")]
 pub async fn validate_with_rules_async<S>(
-    file: ChatFile<NotValidated>,
+    file: ChatFile,
     rules: RuleSelection,
     errors: S,
     filename: Option<String>,
@@ -114,7 +127,15 @@ where
     S: ErrorSink + Send + 'static,
 {
     tokio::task::spawn_blocking(move || {
-        file.validate_with_rules(rules, &errors, filename.as_deref())
+        file.validate_with_rules(
+            rules,
+            &errors,
+            filename
+                .as_deref()
+                .map_or(crate::model::TranscriptName::Anonymous, |stem| {
+                    crate::model::TranscriptName::Named(crate::model::FileStem::from_stem(stem))
+                }),
+        )
     })
     .await
     .map_err(AsyncValidationError::from)
@@ -128,7 +149,7 @@ mod tests {
     use crate::model::{Header, Line};
 
     /// Builds a minimal syntactically valid test file.
-    fn make_test_file() -> ChatFile<NotValidated> {
+    fn make_test_file() -> ChatFile {
         ChatFile::new(vec![
             Line::header_with_span(Header::Utf8, Span::DUMMY),
             Line::header_with_span(Header::Begin, Span::DUMMY),
@@ -142,7 +163,8 @@ mod tests {
         let file = make_test_file();
         let errors = ErrorCollector::new();
 
-        let _validated = validate_async(file, errors, None).await?;
+        let rejected = validate_async(file, errors, None).await;
+        assert!(matches!(rejected, Err(AsyncValidationError::Validation(_))));
 
         // Should complete without panicking
         Ok(())

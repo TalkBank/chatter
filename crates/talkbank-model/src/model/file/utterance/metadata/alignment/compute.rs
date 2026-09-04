@@ -1,7 +1,4 @@
-use super::count_based::{
-    build_mor_tier_from_items, build_phonology_alignment_from_counts,
-    build_sin_alignment_from_counts, build_tier_to_tier_alignment,
-};
+use super::count_based::{build_mor_tier_from_items, build_tier_to_tier_alignment};
 use super::diagnostics::{
     first_non_dummy_span, skipped_alignment_warning, unknown_alignment_warning,
 };
@@ -174,16 +171,8 @@ impl Utterance {
         }
 
         if let Some(tier) = self.pho_tier() {
-            let item_count = tier.items.len();
             if health.can_align_main_to_pho() {
-                metadata.pho = Some(build_phonology_alignment_from_counts(
-                    &self.main,
-                    item_count,
-                    pho_span,
-                    "%pho",
-                    crate::ErrorCode::PhoCountMismatchTooFew,
-                    crate::ErrorCode::PhoCountMismatchTooMany,
-                ));
+                metadata.pho = Some(crate::alignment::align_main_to_pho(&self.main, tier));
             } else {
                 metadata.pho = Some(crate::alignment::PhoAlignment::new().with_error(
                     alignment_blocked_warning(
@@ -219,16 +208,8 @@ impl Utterance {
         }
 
         if let Some(tier) = self.mod_tier() {
-            let item_count = tier.items.len();
             if health.can_align_main_to_mod() {
-                metadata.mod_ = Some(build_phonology_alignment_from_counts(
-                    &self.main,
-                    item_count,
-                    mod_span,
-                    "%mod",
-                    crate::ErrorCode::ModCountMismatchTooFew,
-                    crate::ErrorCode::ModCountMismatchTooMany,
-                ));
+                metadata.mod_ = Some(crate::alignment::align_main_to_pho(&self.main, tier));
             } else {
                 metadata.mod_ = Some(crate::alignment::PhoAlignment::new().with_error(
                     alignment_blocked_warning(
@@ -250,11 +231,8 @@ impl Utterance {
         }
 
         if let Some(tier) = self.sin_tier() {
-            let item_count = tier.items.len();
             if health.can_align_main_to_sin() {
-                metadata.sin = Some(build_sin_alignment_from_counts(
-                    &self.main, item_count, sin_span,
-                ));
+                metadata.sin = Some(crate::alignment::align_main_to_sin(&self.main, tier));
             } else {
                 metadata.sin = Some(crate::alignment::SinAlignment::new().with_error(
                     alignment_blocked_warning(

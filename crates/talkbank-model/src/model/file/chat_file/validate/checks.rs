@@ -9,7 +9,6 @@ use std::collections::HashSet;
 
 use crate::Header;
 use crate::model::{RecordedWorTiming, WorTimingEvidence};
-use crate::validation::ValidationState;
 
 use super::ChatFile;
 
@@ -33,7 +32,7 @@ fn media_headers<'a>(
 ///
 /// Correspondence metadata is intentionally not consulted: equal counts do
 /// not create a bullet, and count drift does not erase one.
-fn first_wor_timing<S: ValidationState>(file: &ChatFile<S>) -> Option<RecordedWorTiming<'_>> {
+fn first_wor_timing(file: &ChatFile) -> Option<RecordedWorTiming<'_>> {
     file.utterances().find_map(|utterance| {
         let tier = utterance.wor_tier()?;
         match tier.timing_evidence() {
@@ -72,9 +71,9 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 /// duplicate walk; all other timing surfaces are discovered here.
 ///
 /// Spec: `spec/errors/E544.md`.
-pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
+pub(super) fn check_media_linkage_has_timing(
     headers: &[(&Header, crate::Span)],
-    file: &ChatFile<S>,
+    file: &ChatFile,
     main_bullets: &[&crate::model::Bullet],
     errors: &impl crate::ErrorSink,
 ) {
@@ -129,9 +128,9 @@ pub(super) fn check_media_linkage_has_timing<S: ValidationState>(
 /// duplicate walk.
 ///
 /// Spec: `spec/errors/E752.md`.
-pub(super) fn check_timing_has_media<S: ValidationState>(
+pub(super) fn check_timing_has_media(
     headers: &[(&Header, crate::Span)],
-    file: &ChatFile<S>,
+    file: &ChatFile,
     main_bullets: &[&crate::model::Bullet],
     errors: &impl crate::ErrorSink,
 ) {
@@ -176,10 +175,7 @@ pub(super) fn check_timing_has_media<S: ValidationState>(
 /// error, and double-flagging every precode against it would be noise.
 ///
 /// Spec: `spec/errors/E755.md`.
-pub(super) fn check_utterance_language_declared<S: ValidationState>(
-    file: &ChatFile<S>,
-    errors: &impl crate::ErrorSink,
-) {
+pub(super) fn check_utterance_language_declared(file: &ChatFile, errors: &impl crate::ErrorSink) {
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
     let declared = file.languages.as_slice();
@@ -226,10 +222,7 @@ pub(super) fn check_utterance_language_declared<S: ValidationState>(
 /// three line kinds, unlike the superseded main-tier-only
 /// `first_element_start` reconstruction: the re2c oracle's parser
 /// produces clean separators everywhere, so it simply reports no E758.
-pub(super) fn check_separator_trailing_space<S: ValidationState>(
-    file: &ChatFile<S>,
-    errors: &impl crate::ErrorSink,
-) {
+pub(super) fn check_separator_trailing_space(file: &ChatFile, errors: &impl crate::ErrorSink) {
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation, Span};
 
     /// Reports one E758 at the illegal trailing-space `span`.
@@ -278,9 +271,9 @@ pub(super) fn check_separator_trailing_space<S: ValidationState>(
 /// duplicate walk; any actual `%wor` word bullet is the other timing
 /// surface checked here. Corresponds to CLAN CHECK error 124 ("remove
 /// \"unlinked\" from @Media header").
-pub(super) fn check_media_unlinked_has_no_timing<S: ValidationState>(
+pub(super) fn check_media_unlinked_has_no_timing(
     headers: &[(&Header, crate::Span)],
-    file: &ChatFile<S>,
+    file: &ChatFile,
     main_bullets: &[&crate::model::Bullet],
     errors: &impl crate::ErrorSink,
 ) {
@@ -381,8 +374,8 @@ pub(super) fn check_media_filename_match(
 /// Cross-header consistency checks:
 /// - CHECK 122: @ID language not defined on @Languages
 /// - CHECK 142: Role on @ID differs from @Participants
-pub(super) fn check_cross_header_consistency<S: ValidationState>(
-    file: &ChatFile<S>,
+pub(super) fn check_cross_header_consistency(
+    file: &ChatFile,
     headers: &[(&Header, crate::Span)],
     errors: &impl crate::ErrorSink,
 ) {

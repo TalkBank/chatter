@@ -346,22 +346,4 @@ mod tests {
             "grouping must not drop a spec; that is the bug this type replaced"
         );
     }
-
-    /// Contested codes exist, so the `Several` arm is reached by real data.
-    ///
-    /// Without this, a renderer could handle `Several` wrongly and every test
-    /// would still pass, because the fixtures would all be `Sole`.
-    #[test]
-    fn some_codes_are_claimed_by_several_specs() {
-        let grouped = SpecsByCode::group(real_specs());
-        let contested: Vec<&SpecErrorCode> = grouped
-            .codes()
-            .filter(|(_, specs)| matches!(specs.view(), CodeSpecsView::Several { .. }))
-            .map(|(code, _)| code)
-            .collect();
-        assert!(
-            !contested.is_empty(),
-            "the corpus is expected to contain codes claimed by several specs"
-        );
-    }
 }

@@ -53,7 +53,6 @@ use talkbank_model::model::{
     BracketedContent, BracketedItem, Bullet, ChatFile, Line, MainTier, RetraceKind, TierContent,
     UtteranceContent,
 };
-use talkbank_model::validation::ValidationState;
 
 /// Controls which dangling-retrace kinds the join transform handles.
 ///
@@ -107,10 +106,7 @@ impl JoinRetraceStats {
 /// retrace kinds are eligible; see [`RetraceJoinScope`] for the exact gate
 /// applied per kind. See the module docs for the join, bullet-union, and
 /// dependent-tier rules.
-pub fn join_dangling_retraces<S: ValidationState>(
-    chat: &mut ChatFile<S>,
-    scope: RetraceJoinScope,
-) -> JoinRetraceStats {
+pub fn join_dangling_retraces(chat: &mut ChatFile, scope: RetraceJoinScope) -> JoinRetraceStats {
     let mut stats = JoinRetraceStats::default();
 
     // Index-based scan: a join removes a later line, so we cannot hold a
@@ -367,12 +363,7 @@ fn immediate_successor_utterance(lines: &[Line], from_index: usize) -> Option<us
 /// dangling retrace allowed by the scope, same speaker, and V carries no
 /// leading linkers or language code. `v_index > u_index`. The endpoint kinds
 /// are re-checked here so a violated precondition fails closed.
-fn perform_join<S: ValidationState>(
-    chat: &mut ChatFile<S>,
-    u_index: usize,
-    v_index: usize,
-    stats: &mut JoinRetraceStats,
-) {
+fn perform_join(chat: &mut ChatFile, u_index: usize, v_index: usize, stats: &mut JoinRetraceStats) {
     // Validate BOTH endpoints are utterances BEFORE any mutation. The
     // preconditions established by `obvious_join_target` make this guard
     // unreachable today, but checking up front means a future refactor that

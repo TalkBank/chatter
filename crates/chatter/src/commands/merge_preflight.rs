@@ -7,15 +7,17 @@
 //! refuses invalid input rather than silently merging it. `chatter
 //! validate` is the authority on CHAT validity, so the gate runs the
 //! same structural + alignment validation that `chatter validate`
-//! runs by default (via [`ParseValidateOptions::with_alignment`]),
+//! runs by default with tier alignment enabled,
 //! making "valid enough to merge" identical to "valid CHAT".
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use talkbank_model::ParseValidateOptions;
-use talkbank_model::model::ChatFile;
-use talkbank_transform::parse_and_validate;
+use talkbank_model::model::TranscriptName;
+use talkbank_model::validation::{AlignmentValidation, ValidChatFile, ValidationPolicy};
+use talkbank_model::{NullErrorSink, RuleSelection};
+use talkbank_parser::TreeSitterParser;
+use talkbank_transform::parse_validated_with_parser;
 
 use crate::exit_codes::EXIT_PRECONDITION;
 
@@ -30,36 +32,27 @@ pub struct InvalidInput {
     pub reason: String,
 }
 
-/// Validate already-read CHAT content with full `chatter validate`
-/// semantics, RETURNING the parsed file.
-///
-/// It used to answer `Ok(())` and drop the `ChatFile` it had just built, which
-/// is a total function discarding information it had. The cost was a whole
-/// extra parse: `chatter pipeline` gated the reference here and then parsed
-/// the same bytes again for the merge, on the path `chatter batch` drives per
-/// session. Callers that want only the verdict write `Ok(_)`.
-///
-/// The model is safe to reuse across the option difference. This parses with
-/// `.with_alignment()` and the merge with `default()`; alignment adds
-/// validation passes over the same AST rather than building a different one,
-/// so the stricter parse's file is usable wherever the looser one's would be.
-pub fn validate_chat_content(content: &str) -> Result<ChatFile, String> {
-    // The gate's contract is "input passes `chatter validate`" (the
-    // CHAT-validity authority), so it must run exactly what `chatter
-    // validate` runs by default: structural validation PLUS cross-tier
-    // alignment checks. `.with_alignment()` is that default
-    // (non-`--skip-alignment`) level; anything weaker could pass an
-    // input the authority would reject.
-    let options = ParseValidateOptions::default().with_alignment();
-    match parse_and_validate(content, options) {
-        Ok(file) => Ok(file),
-        Err(e) => Err(format!("{e}")),
-    }
+/// Validate already-read CHAT under its actual transcript name.
+/// The returned evidence owns the checked model and cannot be edited in place.
+/// Callers may borrow it for a merge; the merge produces a new unchecked model.
+pub fn validate_chat_content(content: &str) -> Result<ValidChatFile, String> {
+    let parser = TreeSitterParser::new().map_err(|e| e.to_string())?;
+    parse_validated_with_parser(
+        &parser,
+        content,
+        ValidationPolicy::new(
+            RuleSelection::new(),
+            AlignmentValidation::IncludeTierAlignment,
+        ),
+        TranscriptName::Anonymous,
+        &NullErrorSink,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Validate a CHAT file on disk. Read failures are themselves a
 /// gate failure (an input we cannot read is not a usable input).
-pub fn validate_chat_input(path: &Path) -> Result<ChatFile, String> {
+pub fn validate_chat_input(path: &Path) -> Result<ValidChatFile, String> {
     let content = fs::read_to_string(path).map_err(|e| format!("cannot read file: {e}"))?;
     validate_chat_content(&content)
 }

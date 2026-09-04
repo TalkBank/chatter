@@ -221,6 +221,14 @@ impl RecordedSpeakerIdentificationAttempt {
                 RecordedInputFailureKind::Validation,
                 errors.iter().map(|error| error.code.to_string()).collect(),
             ),
+            PipelineError::IncompleteValidation(failure) => (
+                RecordedInputFailureKind::Validation,
+                failure
+                    .diagnostics()
+                    .iter()
+                    .map(|error| error.code.to_string())
+                    .collect(),
+            ),
             PipelineError::JsonSerialization(_) => {
                 (RecordedInputFailureKind::JsonSerialization, Vec::new())
             }

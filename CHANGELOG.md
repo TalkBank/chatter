@@ -9,7 +9,51 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-04
+
 ### Changed
+
+- **Breaking: validation returns owned evidence rather than a mutable phase marker.**
+  `ChatFile` is no longer generic. `validate_into` returns
+  `Result<ValidChatFile, ValidationFailure>`; accepted payloads are read-only,
+  errors retain the rejected model, and unknown/recovered tier provenance cannot
+  pass. `validate_with_policy` records rules, alignment coverage and transcript
+  name. `parse_validated_with_parser` additionally requires error-free source
+  parsing. Remove the old `NotValidated`/`Validated`/`ValidationState` imports
+  and consume `into_unchecked()` before editing an accepted document. Serialized
+  transcript fields remain unchanged.
+
+  Required-validation compatibility APIs now use the same proof-producing
+  transition before returning an explicitly editable model. Their streaming
+  variants return `Err` after parse or validation failure even when the caller's
+  diagnostic sink discards messages. Merge preflight retains `ValidChatFile`
+  while reading the accepted reference and borrows its document for the merge.
+
+- **Breaking: utterance builders can retain an utterance comment.**
+  `UtteranceDesc` adds `comment: Option<ComTier>`; Rust struct literals must
+  supply this field. A supplied comment is emitted as `%com`. A comment on an
+  empty utterance is rejected instead of being silently discarded.
+
+- **`%pho`, `%mod` and `%sin` count mismatches are reported by one
+  algorithm.** The utterance metadata path used its own copy of the
+  positional alignment with the diagnostic codes passed in as parameters;
+  it now uses the `AlignableTier` route, which reads the tier's own type
+  (`%pho` or `%mod`) to choose E714/E715 or E733/E734. The codes are
+  unchanged; the messages are the positional form the `%sin` route already
+  used (a per-position table instead of a bare count).
+
+- **A control character is a lexical error anywhere in the file.** E315 is
+  now decided over the whole input before any parse, so a forbidden control
+  character in a word, a `%com` line or a header value is reported at its own
+  offset; previously a word's surfaced as generic E316 and free-text tiers
+  accepted it silently. Permitted are TAB, LF, CR, the bullet delimiter
+  U+0015 and the CA underline pairs U+0002 U+0001 / U+0002 U+0002; CLAN's
+  italics pairs are reported (CHECK 102).
+
+- **E303 covers every header whose colon is not followed by a TAB.** It used
+  to fire only for `@Comment:`, every other header fell to E316, and the
+  message said "space" whatever followed the colon; it now names what was
+  found (a space, nothing, or the character).
 
 - **`Word` lexical content is read-only outside its owning type.** Direct
   access to the former public `content` field is replaced by `content()`;
@@ -2307,7 +2351,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/TalkBank/chatter/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/TalkBank/chatter/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/TalkBank/chatter/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/TalkBank/chatter/compare/v0.14.0...v0.15.0

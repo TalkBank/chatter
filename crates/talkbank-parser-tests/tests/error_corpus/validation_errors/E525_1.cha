@@ -2,11 +2,7 @@
 @Begin
 @Languages:	eng
 @Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|2;06.|male|||Target_Child|||
-@Bg:test
-@Comment:	This is inside the first @Bg:test scope
-@Bg:test
-@Comment:	ERROR: This second @Bg:test should be invalid (nested @Bg with same label)
-@Eg:test
-@Eg:test
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@UnknownHeader:	this header does not exist
+*CHI:	hello .
 @End

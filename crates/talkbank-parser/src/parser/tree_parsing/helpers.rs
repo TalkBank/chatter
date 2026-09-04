@@ -91,18 +91,6 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, context: &str) -> Par
         .with_suggestion("Complete the annotation like [= comment] or [* error]");
     }
 
-    // Pattern: Invalid characters or Unicode issues
-    if error_text.chars().any(|c| c.is_control() && c != '\t') {
-        return ParseError::new(
-            ErrorCode::InvalidControlCharacter,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            format!("Invalid control characters in {}", context),
-        )
-        .with_suggestion("Remove or replace control characters (only tabs are allowed)");
-    }
-
     // Redundant terminator in utterance_end (. after .)
     if context == "utterance_end"
         && (error_text.trim() == "." || error_text.trim() == "!" || error_text.trim() == "?")

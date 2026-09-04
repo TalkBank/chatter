@@ -65,9 +65,7 @@ impl ChatParser for Re2cParser {
     ) -> ParseOutcome<ModelChatFile> {
         let mut file = crate::parser::parse_chat_file_to_model(input, errors);
         if offset > 0 {
-            // ChatFile<S> derives SpanShift but requires S: SpanShift, and
-            // NotValidated is a zero-size marker without that impl.
-            // Shift each line individually instead.
+            // Shift source lines to the caller's input offset.
             for line in file.lines.as_mut_slice().iter_mut() {
                 line.shift_spans_after(0, offset as i32);
             }

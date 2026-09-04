@@ -61,7 +61,8 @@ pub enum BuildChatError {
     MediaFilename(#[from] talkbank_model::model::MediaFilenameError),
 }
 
-/// Build a validated CHAT file from a typed transcript description.
+/// Build a mutable CHAT model from a typed transcript description.
+/// Run `validate_into` or `validate_with_policy` to obtain validation evidence.
 ///
 /// Returns [`BuildChatError`] if the description has no participants or an
 /// utterance/header value cannot be parsed into the model.

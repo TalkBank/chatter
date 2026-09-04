@@ -10,13 +10,12 @@
 
 use crate::model::header::IDHeader;
 use crate::model::{DeclaredSpeaker, Participant, Utterance};
-use crate::validation::ValidationState;
 use crate::{Header, Span, WriteChat};
 use tracing::{debug, info};
 
 use super::ChatFile;
 
-impl<S: ValidationState> ChatFile<S> {
+impl ChatFile {
     /// Iterates header lines in original file order.
     ///
     /// Order preservation matters because CHAT allows headers to appear between

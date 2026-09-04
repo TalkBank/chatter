@@ -263,7 +263,12 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
     };
     let donor_file = parse("the relabeled donor transcript", &relabeled);
 
-    let merged = match merge_chat_files(&reference_file, &donor_file, &retain_codes, &strip) {
+    let merged = match merge_chat_files(
+        reference_file.document(),
+        &donor_file,
+        &retain_codes,
+        &strip,
+    ) {
         Ok(m) => m,
         Err(e) => {
             warn!("merge step failed: {}", e);

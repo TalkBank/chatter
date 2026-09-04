@@ -1,7 +1,7 @@
 # talkbank-model
 
 **Status:** Current
-**Last modified:** 2026-05-30 07:15 EDT
+**Last updated:** 2026-09-04 06:45 EDT
 
 TalkBank data model and validation for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html).
 
@@ -35,25 +35,33 @@ tree-sitter parser (`talkbank-parser`) and the alternate re2c parser
 
 ## Usage
 
-`ChatFile` is generic over a `ValidationState` marker
-(`NotValidated` after parsing, `Validated` after the validation pass)
-so that consumers can statically distinguish parser output from
-validated AST values:
+`ChatFile` is the mutable AST, used by parsers, editors, recovery and transforms.
+`validate_into` consumes it and returns `Result<ValidChatFile, ValidationFailure>`.
+The accepted result owns a read-only model and records the rule selection,
+alignment coverage, transcript name and warnings. Errors or incomplete parse
+provenance return the rejected model and diagnostics for repair.
 
 ```rust,ignore
-use talkbank_model::ChatFile;
-use talkbank_model::validation::NotValidated;
+use talkbank_model::{ChatFile, ErrorCollector};
+use talkbank_model::model::TranscriptName;
 
-// ChatFile is typically produced by a parser, not constructed
-// directly. See talkbank-transform for the parse-and-validate
-// pipeline.
-let file: ChatFile<NotValidated> = ChatFile::default();
-assert_eq!(file.utterances().count(), 0);
+let parsed: ChatFile = /* parser or builder output */;
+let valid = parsed.validate_into(&ErrorCollector::new(), TranscriptName::Anonymous)?;
+let read_only = valid.document();
+// Consume the proof before changing the model:
+let mut editable: ChatFile = valid.into_unchecked();
 ```
 
-The `validate_into` method on `ChatFile<NotValidated>` produces a
-`ChatFile<Validated>`, which is the only state where JSON
-serialization is available.
+`validate_with_policy` selects structural or tier-alignment coverage explicitly.
+`talkbank_transform::parse_validated_with_parser` also requires source parsing
+without error diagnostics. Optional-validation/recovery APIs return mutable
+`ChatFile` and make no validity claim. Both mutable and accepted values can be
+serialized; JSON schema validation is distinct from CHAT model validation.
+
+Migration: remove the `ChatFile<S>` parameter and the `NotValidated`, `Validated`
+and `ValidationState` imports. Handle `validate_into` rejection instead of
+checking an unrelated sink. `ValidChatFile` has no deserialization or mutable
+access path. Existing serialized transcript fields are unchanged.
 
 ## License
 

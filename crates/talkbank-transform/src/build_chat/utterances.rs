@@ -29,7 +29,16 @@ pub(super) fn build_utterance_lines(
 
         if let Some(mut line) = built {
             apply_utterance_language_override(&mut line, utterance.lang.as_deref(), primary_lang)?;
+            if let Line::Utterance(ref mut built) = line
+                && let Some(comment) = &utterance.comment
+            {
+                built
+                    .dependent_tiers
+                    .push(talkbank_model::model::DependentTier::Com(comment.clone()).into());
+            }
             lines.push(line);
+        } else if utterance.comment.is_some() {
+            return Err("an utterance comment requires main-tier content".to_owned());
         }
     }
 

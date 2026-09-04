@@ -1,11 +1,11 @@
 ================================================================================
-e382_3 - Auto-generated from corpus
+e382_3 - %mor tier parse failure
 ================================================================================
 @UTF8
 @Begin
 @Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
 *CHI:	hello world .
 %mor:	v| n|world .
 @End

@@ -10,10 +10,9 @@
 //! newline placement.
 
 use super::ChatFile;
-use crate::validation::ValidationState;
 use crate::{Line, WriteChat};
 
-impl<S: ValidationState> WriteChat for ChatFile<S> {
+impl WriteChat for ChatFile {
     /// Serializes file contents in stored line order.
     ///
     /// Preserves header/utterance interleaving exactly as stored in `self.lines`.
@@ -38,7 +37,7 @@ impl<S: ValidationState> WriteChat for ChatFile<S> {
     }
 }
 
-impl<S: ValidationState> std::fmt::Display for ChatFile<S> {
+impl std::fmt::Display for ChatFile {
     /// Formats this file using canonical CHAT serialization.
     ///
     /// Intended for diagnostics/debugging; use [`WriteChat`] for buffer-oriented flows.

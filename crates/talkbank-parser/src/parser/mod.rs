@@ -25,6 +25,8 @@ pub mod document_root;
 pub mod tier_parsers;
 pub mod tree_parsing;
 
+mod lexical;
+
 mod child_capacity;
 pub(crate) use child_capacity::ChildCapacity;
 

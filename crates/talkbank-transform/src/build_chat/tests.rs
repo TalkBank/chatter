@@ -16,6 +16,7 @@ fn desc_with(status: Option<MediaStatus>) -> TranscriptDescription {
         transcriber: None,
         comments: vec![],
         utterances: vec![UtteranceDesc {
+            comment: None,
             speaker: "CHI".to_string(),
             text: "hello world .".to_string(),
             start_ms: None,
@@ -80,6 +81,7 @@ fn participant_demographics_reach_the_id_header() {
             .with_education(EducationDescription::new("ST")),
     ];
     desc.utterances = vec![UtteranceDesc {
+        comment: None,
         speaker: "S1".to_string(),
         text: "hello world .".to_string(),
         start_ms: None,
@@ -164,6 +166,7 @@ fn l1_of_and_comment_headers_are_emitted_in_order() {
             .with_l1_language(LanguageCode::new("est").expect("non-empty literal")),
     ];
     desc.utterances = vec![UtteranceDesc {
+        comment: None,
         speaker: "S1".to_string(),
         text: "hello .".to_string(),
         start_ms: None,

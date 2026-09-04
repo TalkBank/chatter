@@ -17,6 +17,8 @@ pub enum PipelineError {
     Parse(talkbank_model::ParseErrors),
     /// Validation errors
     Validation(Vec<talkbank_model::ParseError>),
+    /// Recovered or unknown parse provenance prevented complete validation.
+    IncompleteValidation(Box<talkbank_model::validation::ValidationFailure>),
     /// JSON serialization error
     JsonSerialization(String),
     /// Writing the serialized model over its source would DROP part of it.
@@ -39,6 +41,7 @@ impl std::fmt::Display for PipelineError {
             PipelineError::Validation(errors) => {
                 write!(f, "Validation failed with {} errors", errors.len())
             }
+            PipelineError::IncompleteValidation(failure) => write!(f, "{failure}"),
             PipelineError::JsonSerialization(msg) => {
                 write!(f, "JSON serialization failed: {}", msg)
             }

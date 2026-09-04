@@ -7,7 +7,6 @@ use talkbank_model::model::{
     ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, MainTier, ReplacedWord,
     UnspannedSwitchTarget, Word, WordLanguageMarker,
 };
-use talkbank_model::validation::ValidationState;
 
 /// Rewrite summary for one CHAT file.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -32,9 +31,7 @@ impl FixSRewriteStats {
 /// set the utterance precode and clear per-word markers that resolve to that
 /// same target language. Also appends any explicit `@s:LANG` codes missing from
 /// the file's `@Languages` header.
-pub fn rewrite_whole_utterance_language_switches<S: ValidationState>(
-    chat_file: &mut ChatFile<S>,
-) -> FixSRewriteStats {
+pub fn rewrite_whole_utterance_language_switches(chat_file: &mut ChatFile) -> FixSRewriteStats {
     let appended_language_codes = append_missing_explicit_language_declarations(chat_file);
     let default_language = chat_file.languages.first().cloned();
     let declared_languages = chat_file.languages.iter().cloned().collect::<Vec<_>>();
@@ -60,9 +57,7 @@ pub fn rewrite_whole_utterance_language_switches<S: ValidationState>(
     stats
 }
 
-fn append_missing_explicit_language_declarations<S: ValidationState>(
-    chat_file: &mut ChatFile<S>,
-) -> usize {
+fn append_missing_explicit_language_declarations(chat_file: &mut ChatFile) -> usize {
     let missing = collect_missing_explicit_language_codes(chat_file);
     if missing.is_empty() {
         return 0;
@@ -87,9 +82,7 @@ fn append_missing_explicit_language_declarations<S: ValidationState>(
     missing.len()
 }
 
-fn collect_missing_explicit_language_codes<S: ValidationState>(
-    chat_file: &ChatFile<S>,
-) -> Vec<LanguageCode> {
+fn collect_missing_explicit_language_codes(chat_file: &ChatFile) -> Vec<LanguageCode> {
     let mut known = chat_file.languages.iter().cloned().collect::<Vec<_>>();
     let mut missing = Vec::new();
 

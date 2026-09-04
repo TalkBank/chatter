@@ -1,7 +1,7 @@
 # Library Usage
 
 **Status:** Current
-**Last modified:** 2026-06-21 21:33 EDT
+**Last updated:** 2026-09-04 06:45 EDT
 
 The TalkBank Rust crates can be used as dependencies in your own Rust
 projects for parsing, validating, and manipulating CHAT files. This page
@@ -67,8 +67,9 @@ for utt in chat_file.utterances() {
 # }
 ```
 
-`ChatFile` is generic over a `ValidationState` parameter; the
-`parse_and_validate` return defaults to the validated state.
+`parse_and_validate` returns a mutable `ChatFile` and may skip validation
+according to its options. Use `parse_validated_with_parser` for an immutable
+`ValidChatFile` whose policy cannot skip validation.
 `chat_file.utterances()` returns an iterator over `&Utterance` derived
 from the file's `lines` (utterances are interleaved with headers and
 comments in source order).

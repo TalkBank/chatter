@@ -5,14 +5,12 @@
 //! - [Participants header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)
 //! - [ID header](https://talkbank.org/0info/manuals/CHAT.html#ID_Header)
 
-use super::transcript_name::TranscriptName;
 use crate::model::{ChatOptionFlags, Header, LanguageCodes, MediaHeader, Participant, SpeakerCode};
-use crate::validation::{NotValidated, Validate, Validated, ValidationContext, ValidationState};
+use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorSink, LineMap};
 use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
@@ -45,42 +43,8 @@ use crate::Line;
 /// - [CHAT Format Overview](https://talkbank.org/0info/manuals/CHAT.html)
 /// - [File Structure](https://talkbank.org/0info/manuals/CHAT.html#File_Headers)
 ///
-/// # Type-State Pattern
-///
-/// `ChatFile` uses a type-state pattern to enforce validation at compile-time:
-/// - `ChatFile<NotValidated>` - Fresh from parser, not yet validated
-/// - `ChatFile<Validated>` - Has been validated, can be exported to JSON
-///
-/// Only `ChatFile<Validated>` has JSON serialization methods available.
-///
-/// # Example
-///
-/// ```
-/// use talkbank_model::model::{ChatFile, Header, LanguageCode, Line, TranscriptName};
-/// use talkbank_model::{Span, ErrorCollector};
-///
-/// // Parsing returns NotValidated
-/// let chat_file = ChatFile::new(vec![
-///     Line::header_with_span(Header::Utf8, Span::DUMMY),
-///     Line::header_with_span(Header::Begin, Span::DUMMY),
-///     Line::header_with_span(Header::Languages { codes: vec![LanguageCode::new("eng")?].into() }, Span::DUMMY),
-///     // Utterances would be added here
-///     Line::header_with_span(Header::End, Span::DUMMY),
-/// ]);
-///
-/// // Validate to get Validated state
-/// let errors = ErrorCollector::new();
-/// let validated = chat_file.validate_into(&errors, TranscriptName::Anonymous);
-///
-/// // Only validated files can be serialized to JSON
-/// // let json = match validated.to_json_validated() {
-/// //     Ok(json) => json,
-/// //     Err(_) => return,
-/// // };
-/// # Ok::<_, Box<dyn std::error::Error>>(())
-/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
-pub struct ChatFile<S: ValidationState = NotValidated> {
+pub struct ChatFile {
     /// Sequence of lines (headers + utterances) in file order.
     ///
     /// The vector preserves exact interleaving from source text.
@@ -154,20 +118,6 @@ pub struct ChatFile<S: ValidationState = NotValidated> {
     #[semantic_eq(skip)]
     #[span_shift(skip)]
     pub line_map: Option<LineMap>,
-
-    /// Type-state marker for validation state.
-    ///
-    /// Zero runtime cost; used only for compile-time API gating.
-    #[serde(skip, default = "default_phantom_data")]
-    #[schemars(skip)]
-    #[semantic_eq(skip)]
-    #[span_shift(skip)]
-    _state: PhantomData<S>,
-}
-
-/// Provides the serde default for the type-state phantom parameter.
-fn default_phantom_data<S>() -> PhantomData<S> {
-    PhantomData
 }
 
 /// Scan `lines` once to extract `@Languages`, `@Options`, and `@Media` fields.
@@ -198,26 +148,8 @@ fn extract_header_fields(
     (languages, options, media)
 }
 
-impl<S: ValidationState> ChatFile<S> {
-    /// Re-tags the same payload with a different validation-state marker.
-    ///
-    /// Internal helper for type-state transitions. External callers should use
-    /// [`ChatFile::validate_into`] to move from `NotValidated` to `Validated`.
-    fn change_state<T: ValidationState>(self) -> ChatFile<T> {
-        ChatFile {
-            lines: self.lines,
-            participants: self.participants,
-            languages: self.languages,
-            options: self.options,
-            media: self.media,
-            line_map: self.line_map,
-            _state: PhantomData,
-        }
-    }
-}
-
-impl ChatFile<NotValidated> {
-    /// Build a `NotValidated` file from parsed lines with empty participant map.
+impl ChatFile {
+    /// Build a mutable file from parsed lines with empty participant map.
     ///
     /// Use when participant metadata has not been assembled yet (for example,
     /// intermediate parser stages before header post-processing).
@@ -230,11 +162,10 @@ impl ChatFile<NotValidated> {
             options,
             media,
             line_map: None,
-            _state: PhantomData,
         }
     }
 
-    /// Build a `NotValidated` file with parser-populated participant metadata.
+    /// Build a mutable file with parser-populated participant metadata.
     ///
     /// This constructor is used once `@Participants`/`@ID` reconciliation has
     /// produced the participant map but validation has not run yet.
@@ -250,11 +181,10 @@ impl ChatFile<NotValidated> {
             options,
             media,
             line_map: None,
-            _state: PhantomData,
         }
     }
 
-    /// Build a `NotValidated` file with participants and offset line map.
+    /// Build a mutable file with participants and offset line map.
     ///
     /// Use when source text is available and offset lookups should be preserved.
     pub fn with_line_map(
@@ -270,45 +200,7 @@ impl ChatFile<NotValidated> {
             options,
             media,
             line_map: Some(line_map),
-            _state: PhantomData,
         }
-    }
-
-    /// Validates this file and transitions type-state to `Validated`.
-    ///
-    /// Validation findings are streamed to `errors`; the returned value is always
-    /// the same file payload tagged as validated.
-    ///
-    /// # Parameters
-    ///
-    /// * `errors` - Error sink for streaming validation errors
-    /// * `filename` - Optional filename (without extension) for E531 media filename validation
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use talkbank_model::{ChatFile, ErrorCollector};
-    ///
-    /// let file: ChatFile<NotValidated> = parse_file(content);
-    /// let errors = ErrorCollector::new();
-    /// let validated: ChatFile<Validated> = file.validate_into(&errors, Some("myfile"));
-    ///
-    /// // Now can serialize to JSON
-    /// let json = match validated.to_json_validated() {
-    ///     Ok(json) => json,
-    ///     Err(_) => return,
-    /// };
-    /// ```
-    pub fn validate_into(
-        self,
-        errors: &impl ErrorSink,
-        name: TranscriptName<'_>,
-    ) -> ChatFile<Validated> {
-        // Run validation, streaming errors
-        self.validate(errors, name);
-
-        // Convert to Validated state
-        self.change_state()
     }
 }
 

@@ -21,7 +21,6 @@
 // Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
 #![deny(clippy::wildcard_enum_match_arm)]
 use crate::model::{Bullet, ChatFile, UtteranceContent, Word};
-use crate::validation::ValidationState;
 use crate::{ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 use std::collections::HashMap;
 
@@ -52,10 +51,7 @@ const SPEAKER_OVERLAP_TOLERANCE_MS: u64 = 500;
 /// kept CA-declared files, while disabling timing validation exactly where
 /// overlap is densest. E362 (bullet monotonicity) always ran on CA files, so
 /// the skip was also internally incoherent: one timing rule active, two off.
-pub fn validate_temporal_constraints<S: ValidationState>(
-    file: &ChatFile<S>,
-    errors: &impl ErrorSink,
-) {
+pub fn validate_temporal_constraints(file: &ChatFile, errors: &impl ErrorSink) {
     // Collect all relevant bullets in document order
     let bullets = collect_bullets(file);
 
@@ -87,7 +83,7 @@ struct BulletInfo<'a> {
 ///
 /// The collected vector preserves utterance order so monotonicity and overlap
 /// checks share a consistent traversal basis.
-fn collect_bullets<S: ValidationState>(file: &ChatFile<S>) -> Vec<BulletInfo<'_>> {
+fn collect_bullets(file: &ChatFile) -> Vec<BulletInfo<'_>> {
     let mut bullets = Vec::new();
 
     for (idx, utt) in file.utterances().enumerate() {

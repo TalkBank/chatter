@@ -2,7 +2,6 @@
 
 use smol_str::SmolStr;
 use talkbank_model::alignment::helpers::{ContentItemMut, walk_content_mut};
-use talkbank_model::validation::NotValidated;
 use talkbank_model::{ChatFile, EventType, Line, WriteChat};
 
 use super::REDACTED_TEXT;
@@ -19,7 +18,7 @@ use super::word::sanitize_word;
 /// them, but downstream JSON consumers should treat sanitized output as
 /// a fresh document with no offsets back into the original.
 pub struct SanitizedDocument {
-    inner: ChatFile<NotValidated>,
+    inner: ChatFile,
 }
 
 impl SanitizedDocument {
@@ -38,7 +37,7 @@ impl SanitizedDocument {
 
 /// Sanitizes a parsed `ChatFile` according to `policy`.
 pub fn sanitize(
-    mut input: ChatFile<NotValidated>,
+    mut input: ChatFile,
     _policy: &SanitizationPolicy,
 ) -> Result<SanitizedDocument, RedactError> {
     let mut state = PlaceholderState::new();

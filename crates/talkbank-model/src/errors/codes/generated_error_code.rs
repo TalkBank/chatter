@@ -257,11 +257,11 @@ pub enum ErrorCode {
     /// Tree-sitter inserted a MISSING placeholder for a required element.
     #[code("E342")]
     MissingRequiredElement,
-    /// Invalid nesting of scoped annotations.
+    /// Quotation-precedes terminator (+".) with no preceding same-speaker +" utterance; runs only under enable_quotation_validation.
     #[code("E344")]
     #[status(planned)]
     InvalidContentAnnotationNesting,
-    /// Unmatched scoped annotation end marker.
+    /// Quoted-utterance linker (+") with no +"/. before it and no +". after it by the same speaker; runs only under enable_quotation_validation.
     #[code("E346")]
     #[status(planned)]
     UnmatchedContentAnnotationEnd,

@@ -56,6 +56,28 @@ chat = '''
 *CHI:	word@@ .
 @End
 '''
+[[example]]
+level = 'word'
+claim = 'violates'
+title = 'the same dangling marker on another word (re-filed from E243_auto.md, whose example never demonstrated E243)'
+notes = '''
+Note: The example `hell@` triggers E202 (MissingFormType) rather than E243
+(IllegalCharactersInWord) because the parser detects the bare `@` as a missing
+form type marker. E243 fires at the validation layer on parsed words containing
+whitespace, control characters, or bullet markers, conditions that are
+difficult to reach via normal CHAT input.
+'''
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	ERROR: @ character only allowed for form markers
+@Comment:	Invalid: 'hell@' - @ in wrong position
+*CHI:	hell@ .
+@End
+'''
 +++
 
 ## Description

@@ -1,7 +1,7 @@
 # Merge Pipeline, Domain Types
 
 **Status:** Draft
-**Last modified:** 2026-08-30 15:51 EDT
+**Last updated:** 2026-09-04 06:45 EDT
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and the
@@ -75,7 +75,7 @@ paths are relative to `crates/talkbank-transform/src/`.
 | `ParticipantName` | `talkbank-model::model::header::codes::participant` | Optional participant name in `@Participants` |
 | `ParticipantEntry` | `talkbank-model::model::header::codes::participant` | Single `@Participants` row |
 | `IDHeader` | `talkbank-model::model::header::id` | Single `@ID` row |
-| `ChatFile<S>` | `talkbank-model::model::file::chat_file::core` | The merge stages' inputs and outputs (parameter `S: ValidationState`) |
+| `ChatFile` | `talkbank-model::model::file::chat_file::core` | The merge stages' inputs and outputs (mutable, without a validity proof) |
 
 None of these are redefined; the `speaker_id` and `transcript_merge`
 modules import and reference them.

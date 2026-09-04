@@ -168,6 +168,8 @@ impl ParticipantDesc {
 /// A single utterance, given as pre-formatted CHAT main-tier text.
 #[derive(Debug, Clone)]
 pub struct UtteranceDesc {
+    /// Optional utterance comment, retained as a typed `%com` tier.
+    pub comment: Option<talkbank_model::model::ComTier>,
     /// Speaker code for this utterance's main tier.
     pub speaker: String,
     /// The CHAT main-tier text, parsed via tree-sitter into a validated

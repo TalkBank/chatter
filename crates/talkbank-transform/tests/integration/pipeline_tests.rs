@@ -90,7 +90,11 @@ fn streaming_parse_collects_errors() -> Result<(), PipelineError> {
     let content = "@UTF8\n@Begin\n*CHI:\thello .\n";
     let options = ParseValidateOptions::default().with_validation();
     let errors = ErrorCollector::new();
-    let _chat_file = parse_and_validate_streaming(content, options, &errors)?;
+    let result = parse_and_validate_streaming(content, options, &errors);
+    assert!(
+        result.is_err(),
+        "required validation must reject invalid input"
+    );
     // Errors should be collected in the sink
     let error_vec = errors.into_vec();
     assert!(

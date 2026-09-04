@@ -528,14 +528,14 @@ status = "implemented"
 [[code]]
 code = "E344"
 variant = "InvalidContentAnnotationNesting"
-summary = "Invalid nesting of scoped annotations."
+summary = "Quotation-precedes terminator (+\".) with no preceding same-speaker +\" utterance; runs only under enable_quotation_validation."
 kind = "Invalidity"
 status = "not_implemented"
 
 [[code]]
 code = "E346"
 variant = "UnmatchedContentAnnotationEnd"
-summary = "Unmatched scoped annotation end marker."
+summary = "Quoted-utterance linker (+\") with no +\"/. before it and no +\". after it by the same speaker; runs only under enable_quotation_validation."
 kind = "Invalidity"
 status = "not_implemented"
 

@@ -36,7 +36,6 @@ book/src/chat-format/word-syntax.md
 book/src/chatter/integrating/diagnostic-contract.md
 book/src/chatter/integrating/json-output.md
 book/src/chatter/integrating/json-schema.md
-book/src/chatter/integrating/library-usage.md
 book/src/chatter/user-guide/batch-workflows.md
 book/src/chatter/user-guide/chat-processing-playbook.md
 book/src/chatter/user-guide/ci-integration.md
@@ -54,7 +53,6 @@ crates/send2clan/README.md
 crates/talkbank-lsp/ARCHITECTURE.md
 crates/talkbank-lsp/DEBUGGING.md
 crates/talkbank-lsp/README.md
-crates/talkbank-model/README.md
 crates/talkbank-parser-re2c/README.md
 crates/talkbank-parser-re2c/docs/parity-report.md
 crates/talkbank-parser-tests/clan-check-reference/check-error-codes.md
