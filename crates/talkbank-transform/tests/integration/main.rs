@@ -34,6 +34,7 @@ mod e552_message_quality;
 mod generate_schema;
 mod json_roundtrip_edges;
 mod json_tests;
+mod media_timing;
 mod num_words;
 mod pipeline_tests;
 mod render_parity;

@@ -9,6 +9,21 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-09-05
+
+### Added
+
+- **Timing-producing transforms now have a typed media-link transition.**
+  `reconcile_media_timing` consumes a `ChatFile` and returns either an
+  `UntimedChatFile` or a `LinkedMediaChatFile`. A timed document must have one
+  usable `@Media` declaration; the transition removes `unlinked`, accepts an
+  already-linked declaration, and returns typed errors for missing, ambiguous,
+  or contradictory media. Both states expose only an immutable document and
+  post-transition serialization. This prevents a forced-alignment pipeline
+  from writing fresh timing bullets while retaining the contradictory
+  `@Media: ..., unlinked` status rejected by E552. Validation verdicts are
+  unchanged.
+
 ## [0.18.0] - 2026-09-04
 
 ### Changed
@@ -2359,7 +2374,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.18.1...HEAD
+[0.18.1]: https://github.com/TalkBank/chatter/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/TalkBank/chatter/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/TalkBank/chatter/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/TalkBank/chatter/compare/v0.15.0...v0.16.0
