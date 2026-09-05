@@ -1,12 +1,66 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-08-27 00:33 EDT
+**Last modified:** 2026-09-04 22:14 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
 [Developer Verification Checks](dev-checks.md); how they relate to CI is in
 [Testing and Quality Gates](quality-gates.md).
+
+## Build artifact hygiene and runner choice
+
+Both Cargo workspaces set `split-debuginfo = "off"` for development and test
+profiles. Line tables stay in the linked artifacts, so diagnostics and stack
+traces retain source locations without macOS's default `unpacked` layout
+leaving one `.rcgu.o` file per codegen unit in `target/debug/deps`.
+
+The setting is based on a 2026-09-04 failure analysis, not a cosmetic
+preference. The root workspace had 55,141 entries in `target/debug/deps`; the
+generator-heavy specification workspace had 842,704 entries, occupied 40 GB,
+and took 29.3 seconds merely to enumerate with `os.scandir`. The exact spec
+test executable itself started, listed its tests and exited in 0.00 seconds,
+while a warm `cargo test --manifest-path spec/Cargo.toml --workspace --quiet`
+took 46.7 seconds. The file layout, rather than the test harness executable,
+was the first bottleneck to remove.
+
+To reproduce the diagnosis without running tests:
+
+```bash
+python3 - <<'PY'
+import os
+import time
+
+for path in ("target/debug/deps", "spec/target/debug/deps"):
+    started = time.perf_counter()
+    entries = sum(1 for _ in os.scandir(path))
+    elapsed = time.perf_counter() - started
+    print(path, entries, f"{elapsed:.3f}s")
+PY
+du -sh target spec/target
+```
+
+After changing this setting, remove the old unpacked artifacts once with
+`cargo clean` and `cargo clean --manifest-path spec/Cargo.toml`. Both commands
+delete derived build output only. A warm run should then be measured with
+`/usr/bin/time -p just test-spec` rather than inferred from the per-test times
+printed by libtest.
+
+The measured result after that cleanup was 586 entries, no `.rcgu.o` files and
+1.3 GB in `spec/target`. The full spec suite took 20.14 seconds from an empty
+target and 1.64 seconds warm. Its three generator commands and six runtime
+commands are declared with `test = false`, because their behavior is already
+covered by library and integration tests and their binary sources contain no
+tests. This avoids compiling and launching nine empty harnesses.
+
+The project continues to use plain `cargo test`. Whole-workspace nextest was
+removed after its eager test enumeration launched dozens of new binaries at
+once and repeatedly wedged macOS `syspolicyd`; the cache migration race that
+had required process isolation was fixed at its source. A future runner change
+needs measurements on a clean and a warm target and must demonstrate that it
+does not recreate that first-execution burst. Full Disk Access is unrelated to
+repository build artifacts, and Developer Tools permission is not a remedy for
+an oversized Cargo target directory.
 
 ## One integration binary per crate
 

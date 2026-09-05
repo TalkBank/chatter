@@ -20,3 +20,35 @@ generators = { path = "../tools" }
 talkbank-spec-vocabulary = { workspace = true }
 talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }
+
+# Command behavior belongs in the library and integration-test targets. These
+# executables themselves contain no tests, so exclude their empty harnesses.
+[[bin]]
+name = "ca_census"
+path = "src/bin/ca_census.rs"
+test = false
+
+[[bin]]
+name = "coverage"
+path = "src/bin/coverage.rs"
+test = false
+
+[[bin]]
+name = "extract_corpus_candidates"
+path = "src/bin/extract_corpus_candidates.rs"
+test = false
+
+[[bin]]
+name = "spec_gen"
+path = "src/bin/spec_gen.rs"
+test = false
+
+[[bin]]
+name = "spec_status"
+path = "src/bin/spec_status.rs"
+test = false
+
+[[bin]]
+name = "validate_error_specs"
+path = "src/bin/validate_error_specs.rs"
+test = false

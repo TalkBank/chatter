@@ -67,3 +67,15 @@ oxc_span = "0.116.0"
 # core generation crate in `spec/tools`.
 talkbank-model = { path = "../crates/talkbank-model" }
 talkbank-parser = { path = "../crates/talkbank-parser" }
+
+# macOS otherwise defaults to unpacked debug information. The generator-heavy
+# workspace then leaves every codegen object in `target/debug/deps`, where even
+# a warm `cargo test` must scan a directory that grows without a useful bound.
+# `off` embeds the configured line tables in linked artifacts instead.
+[profile.dev]
+split-debuginfo = "off"
+debug = "line-tables-only"
+
+[profile.test]
+split-debuginfo = "off"
+debug = "line-tables-only"

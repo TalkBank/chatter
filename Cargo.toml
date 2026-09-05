@@ -191,7 +191,11 @@ tempfile = "3.27"
 trybuild = "1.0"
 
 [profile.dev]
-split-debuginfo = "unpacked"
+# Keep line tables in the linked artifact. macOS defaults to `unpacked`, which
+# leaves one `.rcgu.o` per codegen unit in `target/debug/deps`; this workspace
+# accumulated tens of thousands of directory entries and paid for scanning
+# them before otherwise warm test runs.
+split-debuginfo = "off"
 debug = "line-tables-only"
 
 [profile.dev.build-override]
@@ -206,7 +210,7 @@ opt-level = 3                       # Optimize proc macros and build scripts
 # settings then, with evidence.
 
 [profile.test]
-split-debuginfo = "unpacked"
+split-debuginfo = "off"
 debug = "line-tables-only"
 
 # The profile that 'cargo dist' will build with

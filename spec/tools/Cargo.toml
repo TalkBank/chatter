@@ -39,3 +39,21 @@ tree-sitter-talkbank = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.8"
+
+# These are generator and audit commands. Their behavior is covered by the
+# library and integration tests; compiling each source again as a libtest
+# harness only launches an executable containing zero tests.
+[[bin]]
+name = "corpus_node_coverage"
+path = "src/bin/corpus_node_coverage.rs"
+test = false
+
+[[bin]]
+name = "gen_form_markers"
+path = "src/bin/gen_form_markers.rs"
+test = false
+
+[[bin]]
+name = "perturb_corpus"
+path = "src/bin/perturb_corpus.rs"
+test = false

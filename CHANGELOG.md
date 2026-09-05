@@ -13,6 +13,14 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Warm development tests no longer scan unpacked macOS codegen objects.**
+  The root and specification workspaces embed line-table debug information in
+  linked artifacts instead of retaining every `.rcgu.o`. This bounds the file
+  count in both target directories and removes filesystem enumeration from the
+  warm-test path while preserving source locations in diagnostics. Nine spec
+  generator commands are also excluded as empty libtest harnesses; their
+  library and integration tests remain in the suite.
+
 - **Breaking: validation returns owned evidence rather than a mutable phase marker.**
   `ChatFile` is no longer generic. `validate_into` returns
   `Result<ValidChatFile, ValidationFailure>`; accepted payloads are read-only,
