@@ -43,7 +43,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E259](E259.md) | Comma after non-spoken content | Invalidity | word | ✅ |
 | [E301](E301.md) | Empty speaker code | Invalidity | utterance | ✅ |
 | [E302](E302.md) | Missing required node | Invalidity | utterance | ⏳ |
-| [E303](E303.md) | Header colon not followed by a TAB | Invalidity | file | ⏳ |
+| [E303](E303.md) | Header colon not followed by a TAB | Invalidity | file | ✅ |
 | [E304](E304.md) | Missing speaker code | Invalidity | utterance | ⏳ |
 | [E305](E305.md) | Missing terminator | Invalidity | utterance | ✅ |
 | [E306](E306.md) | Utterance has no content | Invalidity | utterance | ✅ |

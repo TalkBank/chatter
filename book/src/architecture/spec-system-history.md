@@ -1,7 +1,7 @@
 # Why the Spec System Looks Like That
 
 **Status:** Current
-**Last modified:** 2026-09-03 19:40 EDT
+**Last modified:** 2026-09-04 21:31 EDT
 
 [Spec System](spec-system.md) says what the spec files contain and what checks
 them. This page answers the questions that page raises and does not settle, all

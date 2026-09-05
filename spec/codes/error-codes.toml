@@ -339,9 +339,9 @@ status = "not_implemented"
 [[code]]
 code = "E303"
 variant = "SyntaxError"
-summary = "General syntax error in CHAT input."
+summary = "Header colon not followed by a TAB."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E304"

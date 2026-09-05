@@ -450,21 +450,21 @@
       "fixture": "E303_1.cha",
       "code": "E303",
       "claim": "violates",
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
     {
       "fixture": "E303_2.cha",
       "code": "E303",
       "claim": "violates",
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
     {
       "fixture": "E303_3.cha",
       "code": "E303",
       "claim": "legal",
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
     {

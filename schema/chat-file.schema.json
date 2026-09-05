@@ -2594,7 +2594,7 @@
         },
         {
           "const": "E303",
-          "description": "General syntax error in CHAT input.",
+          "description": "Header colon not followed by a TAB.",
           "type": "string"
         },
         {

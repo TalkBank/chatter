@@ -13,7 +13,7 @@
 
 use crate::ast::*;
 use crate::token::Token;
-use talkbank_model::ErrorSink;
+use talkbank_model::{ErrorSink, ParseError, Severity, SourceLocation, Span};
 
 use super::{dependent_tiers, file, headers, lex_to_tokens, main_tier};
 
@@ -162,8 +162,70 @@ pub fn parse_chat_file(input: &str) -> ChatFile<'_> {
 
 /// Parse a complete CHAT file with streaming error reporting (AST, borrows).
 pub fn parse_chat_file_streaming<'a>(input: &'a str, errors: &impl ErrorSink) -> ChatFile<'a> {
+    report_header_colon_without_tab(input, errors);
     let (tokens, source) = super::lex_to_tokens_and_source(input, 0);
     file::parse_file_with_errors(tokens, source, errors)
+}
+
+/// Report E303 at the source boundary before lexing malformed headers.
+///
+/// The re2c lexer dispatches valid headers from their complete `@Name:\t`
+/// prefix. A colon followed by anything else cannot enter a header-content
+/// condition, so preserving the invalid separator as ordinary tokens loses
+/// the fact that this was a header separator. Inspecting the physical header
+/// line here keeps that provenance available to the diagnostic sink.
+fn report_header_colon_without_tab(input: &str, errors: &impl ErrorSink) {
+    let mut line_start = 0usize;
+    for physical_line in input.split_inclusive('\n') {
+        let current_line_start = line_start;
+        line_start += physical_line.len();
+        let without_lf = physical_line.strip_suffix('\n').unwrap_or(physical_line);
+        let line = without_lf.strip_suffix('\r').unwrap_or(without_lf);
+        let Some(header) = line.strip_prefix('@') else {
+            continue;
+        };
+        let Some(colon_in_header) = header.find(':') else {
+            continue;
+        };
+        let name = &header[..colon_in_header];
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|character| character.is_ascii_alphabetic() || character == ' ')
+        {
+            continue;
+        }
+
+        let after_colon = &header[colon_in_header + 1..];
+        if name == "Page"
+            || (["Languages", "Date", "Media"].contains(&name)
+                && after_colon
+                    .bytes()
+                    .all(|byte| byte == b'\t' || byte == b' '))
+        {
+            continue;
+        }
+        if after_colon.starts_with('\t') {
+            continue;
+        }
+        let found = match after_colon.chars().next() {
+            None => "Nothing".to_owned(),
+            Some(' ') => "A space".to_owned(),
+            Some(character) => format!("'{character}'"),
+        };
+        let span_start = current_line_start.min(u32::MAX as usize) as u32;
+        let span_end = (current_line_start + line.len()).min(u32::MAX as usize) as u32;
+        errors.report(
+            ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::SyntaxError,
+                Severity::Error,
+                SourceLocation::new(Span::new(span_start, span_end)),
+                None,
+                format!("{found} after the header colon; CHAT requires a single TAB"),
+            )
+            .with_suggestion("Put exactly one TAB between the header's ':' and its value"),
+        );
+    }
 }
 
 /// Parse a %mor tier body.
@@ -189,4 +251,52 @@ pub fn parse_gra_tier(input: &str) -> GraTier<'_> {
         .unwrap_or_else(|_| GraTier {
             relations: Vec::new(),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_chat_file_streaming;
+    use talkbank_model::ErrorCollector;
+
+    fn diagnostic_codes(input: &str) -> Vec<String> {
+        let errors = ErrorCollector::new();
+        let _file = parse_chat_file_streaming(input, &errors);
+        errors
+            .to_vec()
+            .into_iter()
+            .map(|error| error.code.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn malformed_header_separators_report_e303() {
+        for header in ["@Situation: at home", "@Comment:note", "@Comment:"] {
+            let input = format!("@UTF8\n@Begin\n{header}\n*CHI:\thello .\n@End\n");
+            let codes = diagnostic_codes(&input);
+            assert_eq!(
+                codes.iter().filter(|code| code.as_str() == "E303").count(),
+                1,
+                "{header}: {codes:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn valid_or_non_header_colons_do_not_report_e303() {
+        for header in [
+            "@Situation:\tat home",
+            "@Begin",
+            "@ID|x:",
+            "@Languages:",
+            "@Date: ",
+            "@Media:\t",
+            "@Page: 1",
+        ] {
+            let codes = diagnostic_codes(header);
+            assert!(
+                codes.iter().all(|code| code != "E303"),
+                "{header}: {codes:?}"
+            );
+        }
+    }
 }

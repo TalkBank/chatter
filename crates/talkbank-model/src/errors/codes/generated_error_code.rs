@@ -157,9 +157,8 @@ pub enum ErrorCode {
     #[code("E302")]
     #[status(planned)]
     MissingNode,
-    /// General syntax error in CHAT input.
+    /// Header colon not followed by a TAB.
     #[code("E303")]
-    #[status(planned)]
     SyntaxError,
     /// Missing speaker code on main tier line.
     #[code("E304")]
