@@ -50,6 +50,22 @@ impl<'source> LexedSource<'source> {
         (&self.tokens[index], self.spans[index].clone())
     }
 
+    /// The file cursor has consumed a nonempty logical header, including its
+    /// newline when present. Derive the extent from the same lexer storage.
+    pub(crate) fn header_provenance(
+        &self,
+        range: Range<usize>,
+        separator: talkbank_model::model::TierSeparator,
+    ) -> crate::ast::HeaderProvenance {
+        crate::ast::HeaderProvenance::from_lexed(
+            talkbank_model::Span::from_usize(
+                self.spans[range.start].start,
+                self.spans[range.end - 1].end,
+            ),
+            separator,
+        )
+    }
+
     /// Preserve exact source bytes and locations while inspecting a token range.
     /// Rich tokens can expose only a payload through `text()`; concatenating
     /// those payloads would lose spelling and positions in malformed content.

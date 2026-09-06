@@ -6,7 +6,7 @@ use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, S
 
 /// Only admission can produce a header accounting for the complete fragment.
 pub(crate) struct HeaderFragment<'source> {
-    header: HeaderParsed<'source>,
+    header: Box<HeaderParsed<'source>>,
 }
 
 impl<'source> HeaderFragment<'source> {

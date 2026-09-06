@@ -209,7 +209,7 @@ fn test_full_document_extraction() {
 
     let c = extract_full_document(classify::<FullDocumentNode>(full_doc));
     assert!(
-        matches!(c.child_0.slot(), NodeSlot::Present(_)),
+        matches!(c.child_0.slot(), Some(NodeSlot::Present(_))),
         "utf8_header: {:?}",
         c.child_0.slot()
     );

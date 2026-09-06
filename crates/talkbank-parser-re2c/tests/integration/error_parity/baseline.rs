@@ -93,6 +93,13 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete};
 ///
 /// # Retired since
 ///
+/// 2026-09-06: E503's document without `@UTF8` now agrees. The canonical
+/// grammar had discarded the document and added false missing-header errors;
+/// re2c's smaller diagnostic set was correct. Both retain the document and
+/// report only E503, matching CHECK (69). The paired declaration-present
+/// example is clean. The old `Re2cIncomplete` shape did not assign correctness.
+///
+///
 /// **2026-08-15, three at once**: `E511.md`, `E523.md` and
 /// `E524.md`. All three were the same defect. The re2c backend lowered a
 /// file through an infallible `From`, which had nowhere to put a diagnostic,
@@ -212,7 +219,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E375.md#0", Conflicting),
     ("E376.md", Conflicting),
     ("E404.md", Conflicting),
-    ("E503.md", Re2cIncomplete),
     ("E505.md#0", Conflicting),
     ("E505.md#1", Conflicting),
     ("E505.md#2", Conflicting),

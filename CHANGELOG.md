@@ -11,10 +11,18 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- re2c parsed header lines carry `HeaderProvenance` in place of a standalone
+  separator field, and box their header payload. The owned lexer extent now
+  reaches model header spans; boxing keeps the file-line enum compact.
+
 - re2c pause tokens and parsed pause variants retain a `PauseLexeme` instead
   of discarding the full lexical extent. This changes their Rust payload types.
 
 ### Fixed
+
+- Documents missing `@UTF8` retain their headers and utterances and report
+  E503, without cascades claiming present headers are absent. Both parsers
+  locate the diagnostic at the end of the file, including rebased fragments.
 
 - Both parser backends admit complete fragment coordinate ranges before
   parsing. Origins above 2 GiB retain correct model and diagnostic spans;

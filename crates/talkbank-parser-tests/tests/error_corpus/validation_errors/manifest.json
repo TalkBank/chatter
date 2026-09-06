@@ -472,7 +472,7 @@
       "code": "E302",
       "claim": {
         "subsumed_by": [
-          "E505"
+          "E522"
         ]
       },
       "status": "not_implemented",
@@ -599,7 +599,7 @@
       "code": "E309",
       "claim": {
         "subsumed_by": [
-          "E505"
+          "E762"
         ]
       },
       "status": "not_implemented",
@@ -1523,6 +1523,13 @@
       "fixture": "E503_1.cha",
       "code": "E503",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E503.md"
+    },
+    {
+      "fixture": "E503_2.cha",
+      "code": "E503",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E503.md"
     },

@@ -6,9 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
-use crate::node_types::{
-    FULL_DOCUMENT, GRA_DEPENDENT_TIER, LINE, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER,
-};
+use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER};
 use tree_sitter::Node;
 
 use super::error_analysis::analyze_dependent_tier_error_with_context;
@@ -94,19 +92,16 @@ pub(crate) fn check_for_errors_recursive_with_context(
 pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<ParseError>) {
     if node.is_error() {
         // A structural-incompleteness ERROR wraps the recovered document: when a
-        // top-level element is missing (no @End, or a malformed @Begin), the whole
+        // top-level element is missing (for example no @End), the whole
         // `document` rule fails to complete and tree-sitter returns an ERROR node
         // AROUND the recovered headers/lines. The validation layer reports that
-        // precisely (E502 missing @End, E504 missing @Begin), so reporting the
+        // precisely (for example E502 missing @End), so reporting the
         // wrapper too would be a misleading, redundant whole-file E316. Recurse
         // into it to surface only LOCALIZED recovery nodes; do not report the
         // wrapper itself. A leaf/content ERROR (a stray token, a malformed code)
         // wraps no document structure and is reported normally below.
-        if wraps_document_structure(node) {
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                collect_recovery_nodes(child, source, out);
-            }
+        if let Some(wrapper) = DocumentRecoveryWrapper::admit(node, source.len()) {
+            wrapper.collect_nested(source, out);
             return;
         }
 
@@ -284,18 +279,83 @@ pub(crate) fn surface_unexpected(
     }
 }
 
-/// Whether an `ERROR` node is a structural-incompleteness WRAPPER, i.e. it
-/// directly contains recovered document-structure children (`line`, a
-/// `*_header`, or `full_document`). Such an ERROR appears when a top-level
-/// element is missing (no `@End`/`@Begin`) and tree-sitter wraps the whole
-/// recovered document in one ERROR node; the validation layer reports that
-/// precisely, so the backstop recurses into it rather than reporting the wrapper.
-/// A content/leaf ERROR (a stray token, a malformed inline code) wraps no such
-/// structure and returns false.
-fn wraps_document_structure(node: Node) -> bool {
-    let mut cursor = node.walk();
-    node.children(&mut cursor).any(|child| {
-        let kind = child.kind();
-        kind == LINE || kind == FULL_DOCUMENT || kind.ends_with("_header")
-    })
+/// An ERROR whose children are accounted for by the document grammar.
+/// Only this admitted wrapper may defer its own diagnostic to missing-header
+/// validation. A recognizable header beside unconsumed malformed text is not
+/// enough: suppressing that region would erase its only syntax diagnostic.
+struct DocumentRecoveryWrapper<'tree>(Node<'tree>);
+
+impl<'tree> DocumentRecoveryWrapper<'tree> {
+    fn admit(node: Node<'tree>, source_len: usize) -> Option<Self> {
+        use crate::generated_traversal::{
+            BeginHeaderNode, EndHeaderNode, FromNodeKind, FullDocumentNode, HeaderChoice, LineNode,
+            MainTierNode, PreBeginHeaderChoice, Utf8HeaderNode, UtteranceNode,
+        };
+        if !node.is_error() {
+            return None;
+        }
+        let mut has_structure = false;
+        let mut cursor = node.walk();
+        let mut children = node.children(&mut cursor);
+        while let Some(child) = children.next() {
+            // Nested recovery remains visible through collect_nested. Extras
+            // are grammar-owned trivia, not unconsumed header/body tokens.
+            if child.is_error() || child.is_missing() || child.is_extra() {
+                continue;
+            }
+            // Recovery can leave the last main tier unwrapped when @End is
+            // absent. Classify complete constructs through generated types;
+            // a prefix/contents token alone cannot certify a complete header.
+            let structural = FullDocumentNode::from_node(child).is_some()
+                || LineNode::from_node(child).is_some()
+                || MainTierNode::from_node(child).is_some()
+                || UtteranceNode::from_node(child).is_some()
+                || HeaderChoice::from_node(child).is_some()
+                || PreBeginHeaderChoice::from_node(child).is_some()
+                || Utf8HeaderNode::from_node(child).is_some()
+                || BeginHeaderNode::from_node(child).is_some()
+                || EndHeaderNode::from_node(child).is_some();
+            if !structural {
+                // Without the final newline, recovery may also flatten the
+                // final main tier. Admit only a complete terminal sequence,
+                // never arbitrary body tokens beside a recognizable header.
+                return (has_structure
+                    && node.end_byte() == source_len
+                    && TerminalMainTier::admit(child, children).is_some())
+                .then_some(Self(node));
+            }
+            has_structure = true;
+        }
+        has_structure.then_some(Self(node))
+    }
+
+    fn collect_nested(self, source: &str, out: &mut Vec<ParseError>) {
+        let mut cursor = self.0.walk();
+        for child in self.0.children(&mut cursor) {
+            collect_recovery_nodes(child, source, out);
+        }
+    }
+}
+
+/// The simple main-tier sequence left at EOF when its newline is absent.
+/// Complex endings remain unclassified here; only the generated grammar's
+/// token types, in order and with no leftover children, establish this proof.
+struct TerminalMainTier;
+
+impl TerminalMainTier {
+    fn admit<'tree>(
+        first: Node<'tree>,
+        mut remaining: impl Iterator<Item = Node<'tree>>,
+    ) -> Option<Self> {
+        use crate::generated_traversal::{
+            ColonNode, ContentsNode, FromNodeKind, SpeakerNode, StarNode, TabNode, TerminatorChoice,
+        };
+        StarNode::from_node(first)?;
+        SpeakerNode::from_node(remaining.next()?)?;
+        ColonNode::from_node(remaining.next()?)?;
+        TabNode::from_node(remaining.next()?)?;
+        ContentsNode::from_node(remaining.next()?)?;
+        TerminatorChoice::from_node(remaining.next()?)?;
+        remaining.next().is_none().then_some(Self)
+    }
 }

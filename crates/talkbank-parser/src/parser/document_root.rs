@@ -70,16 +70,11 @@ impl<'tree> DocumentRoot<'tree> {
     /// fallback is why the lowering used to walk a `source_file`'s children
     /// against `full_document`'s shape.
     ///
-    /// So a file whose document rule fails at its very first header, no `@UTF8`,
-    /// parses to `source_file(ERROR(..))` and is now `Recovered` where it was
-    /// once the `source_file` itself. That CHANGES A DIAGNOSTIC, and the change
-    /// is pinned by `a_document_that_fails_at_its_first_header_reports_once`:
-    /// two E316s naming tree-sitter become one E316 saying the file structure is
-    /// not valid CHAT and no lines could be recovered. The reconstruction
-    /// recovers nothing either way, because the ERROR's children begin with
-    /// something other than `utf8_header`, so no lines are lost or gained; only
-    /// the report changes, from two node-span messages that name an internal
-    /// tool to one whole-file message about the file.
+    /// Missing `@UTF8` alone now leaves a complete document with an absent
+    /// optional encoding slot; shared validation owns E503. Actual structural
+    /// recovery still enters through `Recovered`. Selecting a single child
+    /// does not account for additional recovery siblings at the source root;
+    /// that broader ownership question is separate from document admission.
     #[must_use]
     pub fn classify(tree: &'tree Tree) -> Self {
         let ts_root = tree.root_node();

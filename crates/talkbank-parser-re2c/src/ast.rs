@@ -517,7 +517,7 @@ pub enum HeaderParsed<'a> {
 // Full file AST
 // ═══════════════════════════════════════════════════════════════
 
-pub use file::{ChatFile, DependentTierEntryParsed, Line, Utterance};
+pub use file::{ChatFile, DependentTierEntryParsed, HeaderProvenance, Line, Utterance};
 
 /// A parsed dependent tier.
 #[derive(Debug, Clone, PartialEq, Serialize)]

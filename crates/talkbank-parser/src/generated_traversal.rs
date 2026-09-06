@@ -1,5 +1,5 @@
 //! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 569feb170cef
-//! Source grammar digest (sha256): grammar.json=ba8c3587b2332bab57b4d7e53e412992f595b27627bf55f915ff37081937d6f8 node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
+//! Source grammar digest (sha256): grammar.json=91caecee485fa0c3465c757598b7c7d57a6ccb0df93aa600a242b026d58cf622 node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
@@ -17560,7 +17560,7 @@ impl<'tree> FromNodeKind<'tree> for FullDocumentChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct FullDocumentChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, Utf8HeaderNode<'tree>>>,
+    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, Utf8HeaderNode<'tree>>>>,
     /// Positional member 1.
     pub child_1:
         Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, FullDocumentChild1Choice<'tree>>>>>,
@@ -17586,24 +17586,38 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
     {
         let child_0 = {
             let (leading_extras, __at) = __cur.take_leading_extras::<FixedArity>();
-            let slot = {
-                let mut __at = __at.skip_displaced_errors(&SHAPE_99, &cont_of(&SHAPES_38));
-                if let Some(__c) = __at.peek() {
-                    if __c.is_error() {
-                        __at.advance();
-                        NodeSlot::Error(__c)
-                    } else if __c.kind() == "utf8_header" {
-                        __at.advance();
-                        if __c.is_missing() {
-                            NodeSlot::Missing(__c)
+            let slot = match optional_split_inner(
+                &SHAPE_99,
+                &cont_of(&SHAPES_38),
+                __at.all(),
+                __at.index(),
+                __at.memo(),
+            )
+            .presence
+            {
+                Presence::Taken => Some({
+                    let mut __at = __at.skip_displaced_errors(&SHAPE_99, &cont_of(&SHAPES_38));
+                    if let Some(__c) = __at.peek() {
+                        if __c.is_error() {
+                            __at.advance();
+                            NodeSlot::Error(__c)
+                        } else if __c.kind() == "utf8_header" {
+                            __at.advance();
+                            if __c.is_missing() {
+                                NodeSlot::Missing(__c)
+                            } else {
+                                NodeSlot::Present(Utf8HeaderNode(__c))
+                            }
                         } else {
-                            NodeSlot::Present(Utf8HeaderNode(__c))
+                            NodeSlot::Absent
                         }
                     } else {
                         NodeSlot::Absent
                     }
-                } else {
-                    NodeSlot::Absent
+                }),
+                Presence::Empty => {
+                    __at.release();
+                    None
                 }
             };
             Positioned::new(leading_extras, slot)

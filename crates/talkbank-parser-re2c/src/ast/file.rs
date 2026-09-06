@@ -15,9 +15,9 @@ pub struct ChatFile<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Line<'a> {
     Header {
-        header: HeaderParsed<'a>,
+        header: Box<HeaderParsed<'a>>,
         #[serde(skip)]
-        separator: talkbank_model::model::TierSeparator,
+        provenance: HeaderProvenance,
     },
     Utterance(Box<Utterance<'a>>),
 }
@@ -35,4 +35,30 @@ pub struct DependentTierEntryParsed<'a> {
     pub tier: DependentTierParsed<'a>,
     #[serde(skip)]
     pub separator: talkbank_model::model::TierSeparator,
+}
+
+/// Source extent and separator carried together from a lexed header line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeaderProvenance {
+    span: talkbank_model::Span,
+    separator: talkbank_model::model::TierSeparator,
+}
+
+impl HeaderProvenance {
+    pub(crate) fn from_lexed(
+        span: talkbank_model::Span,
+        separator: talkbank_model::model::TierSeparator,
+    ) -> Self {
+        Self { span, separator }
+    }
+
+    /// Complete logical header extent, including its line terminator.
+    pub fn span(&self) -> talkbank_model::Span {
+        self.span
+    }
+
+    /// Separator recognized with this header's prefix.
+    pub fn separator(&self) -> talkbank_model::model::TierSeparator {
+        self.separator
+    }
 }

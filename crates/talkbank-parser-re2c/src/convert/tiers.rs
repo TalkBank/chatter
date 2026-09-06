@@ -436,11 +436,11 @@ pub fn chat_file_to_model(
         .map(|line| match line {
             ast::Line::Header {
                 header: h,
-                separator,
+                provenance,
             } => talkbank_model::model::Line::Header {
                 header: Box::new(crate::convert::header_to_model(h)),
-                span: Span::DUMMY,
-                separator: *separator,
+                span: provenance.span(),
+                separator: provenance.separator(),
             },
             ast::Line::Utterance(u) => talkbank_model::model::Line::Utterance(Box::new(
                 utterance_to_model(u.as_ref(), source, errors),

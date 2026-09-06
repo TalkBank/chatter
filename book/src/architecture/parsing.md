@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 14:57 EDT
+**Last updated:** 2026-09-06 15:15 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -248,6 +248,32 @@ admission of the original input range. This does not change the legacy
 the admitted parser paths replace their raw origin casts. The legacy `OffsetAdjustingErrorSink` remains exported by the model
 crate for compatibility, but the tree-sitter parser has no remaining callers.
 Its eventual removal is separate from migrating these owned parser paths.
+
+### Missing encoding declaration
+
+The document grammar admits an absent `@UTF8` anchor as an explicit optional
+slot. Lowering consumes that generated slot and retains the present headers
+and utterances without inventing an encoding declaration. Shared validation
+still rejects the file with E503. Previously the canonical parser discarded
+the entire document and reported several required headers as missing even
+though they were present. The authored E503 example and its declaration-present
+control exercise this recovery; CLAN CHECK reports the corresponding CHECK (69).
+
+The re2c file parser carries each header's lexer extent and separator together
+in `HeaderProvenance`. Lowering uses that extent instead of an unknown span,
+so shared missing-header diagnostics derive a real EOF from the final header.
+The cross-backend `missing_encoding_keeps_the_document_and_locates_the_single_refusal`
+test checks retained utterances, exact diagnostics, and EOF locations at zero,
+nonzero and maximum representable document origins.
+
+Recovery-wrapper suppression requires a private `DocumentRecoveryWrapper`
+proof: every direct child must be a generated document construct or separately
+reported recovery. A recognizable header beside malformed raw header tokens
+cannot suppress E316. At EOF, an exact simple main-tier token sequence also
+qualifies when its final newline is absent; the existing E502 example exercises
+both newline forms. This diagnostic classification does not guarantee that
+every flattened recovery tail has been retained in the model. Broader recovery
+root and tail ownership remain separate work.
 
 ### AST Structure
 

@@ -76,27 +76,10 @@ pub fn generate_e3xx_parser_errors(root: &Path) -> GenResult {
     )?;
     count += 1;
 
-    // E302: MissingNode
-    write_file(
-        &dir.join("E302_missing_node.cha"),
-        "@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n\
-         @Comment:\tExpected error: E302 (Missing required node)\n\
-         @Comment:\tTrigger: Speaker code format invalid\n\
-         *ch:\thello .\n@End\n"
-            .to_string(),
-    )?;
-    count += 1;
-
-    // E309: UnexpectedSyntax
-    write_file(
-        &dir.join("E309_unexpected_syntax.cha"),
-        "@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n\
-         @Comment:\tExpected error: E309 (Unexpected syntax)\n\
-         @Comment:\tTrigger: Unexpected characters in utterance context\n\
-         *CHI:\thello ## world .\n@End\n"
-            .to_string(),
-    )?;
-    count += 1;
+    // The former E302 (*ch:) and E309 (##) examples parse successfully;
+    // their actual errors are model validation (E308/E522 and E762).
+    // spec/errors owns those examples. Missing @UTF8 used to make the
+    // entire document fail parsing and concealed this misclassification.
 
     // E344: InvalidContentAnnotationNesting
     write_file(

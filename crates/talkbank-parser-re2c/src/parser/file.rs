@@ -233,6 +233,7 @@ pub(crate) fn parse_file_with_errors<'a>(
             | TokenDiscriminants::HeaderEnd
             | TokenDiscriminants::HeaderBlank
             | TokenDiscriminants::HeaderNewEpisode => {
+                let header_start = pos;
                 let tok = tokens[pos].clone();
                 pos += 1;
                 if pos < tokens.len()
@@ -241,11 +242,14 @@ pub(crate) fn parse_file_with_errors<'a>(
                     pos += 1;
                 }
                 lines.push(Line::Header {
-                    header: HeaderParsed::Other {
+                    header: Box::new(HeaderParsed::Other {
                         prefix: tok,
                         content: vec![],
-                    },
-                    separator: talkbank_model::model::TierSeparator::CLEAN,
+                    }),
+                    provenance: lexed.header_provenance(
+                        header_start..pos,
+                        talkbank_model::model::TierSeparator::CLEAN,
+                    ),
                 });
             }
 
@@ -254,6 +258,7 @@ pub(crate) fn parse_file_with_errors<'a>(
             | TokenDiscriminants::HeaderBirthOf
             | TokenDiscriminants::HeaderBirthplaceOf
             | TokenDiscriminants::HeaderL1Of => {
+                let header_start = pos;
                 let prefix = tokens[pos].clone();
                 pos += 1;
                 let separator = match &prefix {
@@ -294,7 +299,10 @@ pub(crate) fn parse_file_with_errors<'a>(
                 {
                     pos += 1;
                 }
-                lines.push(Line::Header { header, separator });
+                lines.push(Line::Header {
+                    header: Box::new(header),
+                    provenance: lexed.header_provenance(header_start..pos, separator),
+                });
             }
 
             // Main tier

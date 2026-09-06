@@ -113,9 +113,9 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// root node and process every slot exhaustively.
     ///
     /// The five slots map to the `full_document` production
-    /// `seq(utf8_header, repeat(pre_begin_header), begin_header, repeat(line),
+    /// `seq(optional(utf8_header), repeat(pre_begin_header), begin_header, repeat(line),
     /// end_header)`:
-    /// - `child_0`: the `@UTF8` anchor
+    /// - `child_0`: the optional `@UTF8` anchor (absence is E503 at validation)
     /// - `child_1`: the pre-begin-header repeat (`@PID`/`@Font`/`@Window`/`@Color words`)
     /// - `child_2`: the `@Begin` anchor
     /// - `child_3`: the line repeat (the transcript body)
@@ -182,7 +182,12 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// and the validation layer plus the whole-tree backstop cover that case;
     /// emitting one here would be a new diagnostic (regression). An `Error` here
     /// is still surfaced because the backstop walks the whole tree.
-    fn lower_utf8_anchor(&mut self, slot: &NodeSlot<'_, Utf8HeaderNode<'_>>) {
+    fn lower_utf8_anchor(&mut self, slot: &Option<NodeSlot<'_, Utf8HeaderNode<'_>>>) {
+        let Some(slot) = slot else {
+            // Preserve the complete document without inventing an encoding
+            // declaration. The shared header validator owns the E503 refusal.
+            return;
+        };
         match slot {
             NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::Utf8),
             NodeSlot::Missing(_) | NodeSlot::Absent => {

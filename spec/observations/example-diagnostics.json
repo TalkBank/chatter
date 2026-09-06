@@ -18,10 +18,9 @@
       "spec": "E101.md",
       "example": 1,
       "parse": [
-        "E316"
+        "E326"
       ],
       "validation": [
-        "E502",
         "E503",
         "E504"
       ],
@@ -546,15 +545,14 @@
     {
       "spec": "E302.md",
       "example": 1,
-      "parse": [
-        "E316"
-      ],
+      "parse": [],
       "validation": [
-        "E502",
+        "E308",
         "E503",
-        "E504"
+        "E522",
+        "W108"
       ],
-      "roundtrip": "diverged"
+      "roundtrip": "byte_exact"
     },
     {
       "spec": "E303.md",
@@ -704,15 +702,12 @@
     {
       "spec": "E309.md",
       "example": 1,
-      "parse": [
-        "E316"
-      ],
+      "parse": [],
       "validation": [
-        "E502",
         "E503",
-        "E504"
+        "E762"
       ],
-      "roundtrip": "diverged"
+      "roundtrip": "byte_exact"
     },
     {
       "spec": "E310.md",
@@ -952,13 +947,10 @@
       "spec": "E323.md",
       "example": 1,
       "parse": [
-        "E316",
-        "E505"
+        "E316"
       ],
       "validation": [
-        "E502",
-        "E503",
-        "E504"
+        "E503"
       ],
       "roundtrip": "diverged"
     },
@@ -1750,15 +1742,18 @@
     {
       "spec": "E503.md",
       "example": 1,
-      "parse": [
-        "E316"
-      ],
+      "parse": [],
       "validation": [
-        "E502",
-        "E503",
-        "E504"
+        "E503"
       ],
-      "roundtrip": "diverged"
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E503.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
     },
     {
       "spec": "E504.md",

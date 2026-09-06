@@ -178,3 +178,6 @@ mod header_fragment_tests;
 
 #[cfg(test)]
 mod fragment_range_tests;
+
+#[cfg(test)]
+mod header_recovery_tests;

@@ -165,13 +165,13 @@ export default grammar({
     ),
 
     // Full CHAT document structure:
-    // 1. @UTF8 (required, must be first non-whitespace content)
+    // 1. @UTF8 (required for validity; omission retained for E503 validation)
     // 2. Optional pre-@Begin headers (@PID, @Color words, @Window, @Font)
     // 3. @Begin (effectively required, but optional for lenient parsing)
     // 4. Main content headers and utterances
     // 5. @End (effectively required, but optional for lenient parsing)
     full_document: $ => seq(
-      $.utf8_header,
+      optional($.utf8_header),
 
       // Optional headers that can appear before @Begin
       // Pre-begin header order: pid? colorWords? window? font? BEG

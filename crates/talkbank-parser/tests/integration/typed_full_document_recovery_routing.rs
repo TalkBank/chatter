@@ -17,7 +17,7 @@
 //! # What this pins, and why it exists
 //!
 //! The `full_document` production is
-//! `seq(utf8_header, repeat(pre_begin_header), begin_header, repeat(line),
+//! `seq(optional(utf8_header), repeat(pre_begin_header), begin_header, repeat(line),
 //! end_header)`. A stray top-level `@Date:` that tree-sitter cannot parse as a
 //! date header is recovered as an `ERROR` node sitting INSIDE the `repeat(line)`
 //! run, BEFORE the real `@End`:
@@ -182,33 +182,6 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
             .iter()
             .map(|n| (n.kind(), n.start_byte(), n.end_byte()))
             .collect::<Vec<_>>()
-    );
-}
-
-/// A file whose document rule fails at its FIRST header reports once, about the
-/// file, rather than twice about tree-sitter.
-///
-/// Without `@UTF8` the tree is `source_file(ERROR(..))`. `DocumentRoot`
-/// classifies that ERROR as the document (`Recovered`), where the navigation it
-/// replaced fell back to the `source_file` and called it not-a-document. Both
-/// recover zero lines, because the ERROR's children begin with something other
-/// than `utf8_header`, so the difference is entirely in the REPORT:
-/// `recovered_at_root()` is now true, so the no-lines-recovered path fires and
-/// the whole-tree backstop's two candidates are suppressed as overlapping it.
-///
-/// Pinned because it is a diagnostics change that arrived as a side effect of
-/// giving the navigation one owner, and because no corpus file exercises it:
-/// every real transcript has `@UTF8`, so no corpus-derived test can see this.
-#[test]
-fn a_document_that_fails_at_its_first_header_reports_once() {
-    const NO_UTF8: &str = "@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
-        @ID:\teng|c|CHI|||||Target_Child|||\n*CHI:\thello world .\n@End\n";
-
-    let root = full_document_node(NO_UTF8);
-    assert!(
-        root.is_error(),
-        "the premise: without @UTF8 the document position holds an ERROR, got `{}`",
-        root.kind()
     );
 }
 
