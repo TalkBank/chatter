@@ -11,6 +11,9 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** re2c `Token::TierPrefix` carries `DependentPrefixToken`, including
+  the lexer-selected `DependentBodyKind`; dependent parsing matches that enum.
+
 - **Breaking:** `CacheStats::cache_dir` is optional: in-memory storage has no
   filesystem directory. File-backed statistics retain the opening directory.
 
@@ -42,6 +45,10 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- re2c no longer dispatches longer Phon labels through `%mod` or `%pho` body
+  parsers. Bare and x-prefixed syllabification, alignment and interval tiers
+  retain their own grammar without false E316 diagnostics.
 
 - Cache statistics report the directory actually opened instead of resolving
   the current default again, including for explicitly located maintenance pools.

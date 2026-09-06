@@ -41,3 +41,53 @@ impl<'a> PrefixToken<'a> {
         self.separator
     }
 }
+
+/// Body grammar selected by the exact dependent-prefix lexer rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum DependentBodyKind {
+    /// Morphology with rejected-tier provenance.
+    Mor,
+    /// Translation morphology with its existing text recovery.
+    Trn,
+    /// Actual phonology.
+    Pho,
+    /// Model phonology.
+    Mod,
+    /// Grammatical relations.
+    Gra,
+    /// Sign and gesture structure.
+    Sin,
+    /// Timed words.
+    Wor,
+    /// Text or a specialized tier lowered from text tokens.
+    Text,
+}
+
+/// Complete dependent prefix carrying the lexer-selected body grammar.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct DependentPrefixToken<'a> {
+    #[serde(flatten)]
+    prefix: PrefixToken<'a>,
+    kind: DependentBodyKind,
+}
+
+impl<'a> DependentPrefixToken<'a> {
+    pub(crate) fn from_lexed(prefix: PrefixToken<'a>, kind: DependentBodyKind) -> Self {
+        Self { prefix, kind }
+    }
+
+    /// Original prefix payload, excluding trailing separator spaces.
+    pub fn text(&self) -> &'a str {
+        self.prefix.text()
+    }
+
+    /// Separator evidence admitted by the lexer.
+    pub fn separator(&self) -> TierSeparator {
+        self.prefix.separator()
+    }
+
+    /// Exact body grammar admitted by the lexer.
+    pub fn kind(&self) -> DependentBodyKind {
+        self.kind
+    }
+}

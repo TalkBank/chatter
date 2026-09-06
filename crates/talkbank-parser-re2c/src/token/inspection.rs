@@ -242,8 +242,8 @@ impl<'a> Token<'a> {
             | Token::HeaderBirthOf(s)
             | Token::HeaderBirthplaceOf(s)
             | Token::HeaderL1Of(s)
-            | Token::TierPrefix(s)
             | Token::TierSep(s) => s.text(),
+            Token::TierPrefix(s) => s.text(),
             Token::MorWord { pos, .. } => pos,
             Token::GraRelation { index, .. } => index,
             Token::IdFields { language, .. } => language,

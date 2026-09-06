@@ -8,7 +8,7 @@ mod postcode;
 mod prefix;
 pub use inspection::{LexError, LexResult};
 pub use postcode::PostcodeToken;
-pub use prefix::PrefixToken;
+pub use prefix::{DependentBodyKind, DependentPrefixToken, PrefixToken};
 
 use serde::Serialize;
 use strum::EnumDiscriminants;
@@ -85,7 +85,7 @@ pub enum Token<'a> {
 
     // ── Dependent tier ──────────────────────────────────────
     /// Complete dependent tier prefix, including the required colon and tab.
-    TierPrefix(PrefixToken<'a>),
+    TierPrefix(DependentPrefixToken<'a>),
     /// A dependent tier label whose required colon-tab separator did not match.
     IncompleteTierPrefix(&'a str),
     /// Tier separator: ":\t" (colon + tab, after tier label)

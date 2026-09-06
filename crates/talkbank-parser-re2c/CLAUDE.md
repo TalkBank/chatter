@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-09-05 20:06 EDT
+**Last modified:** 2026-09-06 02:12 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -51,7 +51,7 @@ src/parser/
 
 **Borrowed source, temporary tokens.** Parser signatures separate `'tokens` from `'source`. The lexer borrows the caller's input and treats end-of-buffer as NUL without padding or unchecked reads. Local token and recovery vectors are dropped after parsing. `WordWithAnnotations::raw_text` is `Cow<str>`: borrowed for rich tokens, owned for reconstructed subtoken words. Never leak allocations to extend a lifetime.
 
-**Imperative file parser.** The file-level parser (`file.rs`) uses an imperative loop rather than chumsky because dependent tier dispatch is prefix-text-based (`%mor:` vs `%gra:` etc.), which doesn't map to chumsky's token-variant matching.
+**Imperative file parser.** The file-level parser (`file.rs`) uses an imperative loop for line ownership and recovery. Exact lexer rules emit `DependentPrefixToken` with a `DependentBodyKind`; the dependent-tier parser exhaustively dispatches that admitted kind. Never reclassify labels with prefix-string tests: `%modsyl` and `%mod` select different body grammars.
 
 **CA terminator promotion.** CA intonation arrows (⇗ ↗ → ↘ ⇘) serve dual roles: mid-content separators and utterance-final terminators. Chumsky always parses them as separators. `convert.rs` promotes trailing arrows to terminators at the AST-to-model boundary (same strategy as TreeSitterParser's `resolve_ca_terminator`).
 

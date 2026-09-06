@@ -80,6 +80,18 @@ impl<'a> Iterator for Lexer<'a> {
             }};
         }
 
+        macro_rules! emit_dependent_prefix {
+            ($kind:ident) => {{
+                let end = self.cursor;
+                let matched = &yyinput[start..end];
+                let prefix = crate::token::PrefixToken::from_lexed(matched, matched, start);
+                let admitted = crate::token::DependentPrefixToken::from_lexed(
+                    prefix, crate::token::DependentBodyKind::$kind,
+                );
+                return Some((Token::TierPrefix(admitted), start..end));
+            }};
+        }
+
         macro_rules! emit_prefix_speaker {
             ($variant:ident) => {{
                 let end = self.cursor;
@@ -379,33 +391,33 @@ impl<'a> Iterator for Lexer<'a> {
         // ── Tier dispatch: each tier class gets its own lexer condition ──
 
         // Structured tiers (parsed into typed AST)
-        <INITIAL> "%mor:\t" " "* => MOR_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%trn:\t" " "* => MOR_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%gra:\t" " "* => GRA_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%pho:\t" " "* => PHO_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%mod:\t" " "* => PHO_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%sin:\t" " "* => SIN_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%mor:\t" " "* => MOR_CONTENT { emit_dependent_prefix!(Mor); }
+        <INITIAL> "%trn:\t" " "* => MOR_CONTENT { emit_dependent_prefix!(Trn); }
+        <INITIAL> "%gra:\t" " "* => GRA_CONTENT { emit_dependent_prefix!(Gra); }
+        <INITIAL> "%pho:\t" " "* => PHO_CONTENT { emit_dependent_prefix!(Pho); }
+        <INITIAL> "%mod:\t" " "* => PHO_CONTENT { emit_dependent_prefix!(Mod); }
+        <INITIAL> "%sin:\t" " "* => SIN_CONTENT { emit_dependent_prefix!(Sin); }
 
         // %wor uses MAIN_CONTENT rules, same word tokenization as main tier
-        <INITIAL> "%wor:\t" " "* => MAIN_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%wor:\t" " "* => MAIN_CONTENT { emit_dependent_prefix!(Wor); }
 
         // %com: text_with_bullets_and_pics (adds inline_pic)
-        <INITIAL> "%com:\t" " "* => COM_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%com:\t" " "* => COM_CONTENT { emit_dependent_prefix!(Text); }
 
         // User-defined tiers (%x*): text_with_bullets
         // Must come before the catch-all since re2c uses first-match.
         <INITIAL> "%x" [a-zA-Z] [a-zA-Z0-9]* ":\t" " "* => USER_TIER_CONTENT {
-            emit_prefix!(TierPrefix);
+            emit_dependent_prefix!(Text);
         }
 
         // Phon project tiers: text_with_bullets
-        <INITIAL> "%modsyl:\t" " "* => TIER_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%phosyl:\t" " "* => TIER_CONTENT { emit_prefix!(TierPrefix); }
-        <INITIAL> "%phoaln:\t" " "* => TIER_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%modsyl:\t" " "* => TIER_CONTENT { emit_dependent_prefix!(Text); }
+        <INITIAL> "%phosyl:\t" " "* => TIER_CONTENT { emit_dependent_prefix!(Text); }
+        <INITIAL> "%phoaln:\t" " "* => TIER_CONTENT { emit_dependent_prefix!(Text); }
 
         // All other known tiers: text_with_bullets
         <INITIAL> "%" [a-zA-Z][a-zA-Z0-9]* ":\t" " "* => TIER_CONTENT {
-            emit_prefix!(TierPrefix);
+            emit_dependent_prefix!(Text);
         }
         // Dependent tier prefix without :\t (malformed)
         <INITIAL> "%" [a-zA-Z][a-zA-Z0-9]* => TIER_AFTER_LABEL {

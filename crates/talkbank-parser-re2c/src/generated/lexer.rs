@@ -136,6 +136,18 @@ impl<'a> Iterator for Lexer<'a> {
             }};
         }
 
+        macro_rules! emit_dependent_prefix {
+            ($kind:ident) => {{
+                let end = self.cursor;
+                let matched = &yyinput[start..end];
+                let prefix = crate::token::PrefixToken::from_lexed(matched, matched, start);
+                let admitted = crate::token::DependentPrefixToken::from_lexed(
+                    prefix, crate::token::DependentBodyKind::$kind,
+                );
+                return Some((Token::TierPrefix(admitted), start..end));
+            }};
+        }
+
         macro_rules! emit_prefix_speaker {
             ($variant:ident) => {{
                 let end = self.cursor;
@@ -2347,7 +2359,7 @@ impl<'a> Iterator for Lexer<'a> {
             123 => {
                 self.condition = YYC_TIER_CONTENT;
                 {
-            emit_prefix!(TierPrefix);
+            emit_dependent_prefix!(Text);
         }
             }
             124 => {
@@ -3278,7 +3290,7 @@ impl<'a> Iterator for Lexer<'a> {
             185 => {
                 self.condition = YYC_USER_TIER_CONTENT;
                 {
-            emit_prefix!(TierPrefix);
+            emit_dependent_prefix!(Text);
         }
             }
             186 => {
@@ -3847,7 +3859,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             225 => {
                 self.condition = YYC_COM_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Text); }
             }
             226 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -3865,7 +3877,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             227 => {
                 self.condition = YYC_GRA_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Gra); }
             }
             228 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -3883,7 +3895,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             229 => {
                 self.condition = YYC_PHO_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Mod); }
             }
             230 => {
                 yyaccept = 4;
@@ -3917,7 +3929,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             232 => {
                 self.condition = YYC_MOR_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Mor); }
             }
             233 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -3935,7 +3947,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             234 => {
                 self.condition = YYC_PHO_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Pho); }
             }
             235 => {
                 yyaccept = 4;
@@ -3985,7 +3997,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             238 => {
                 self.condition = YYC_SIN_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Sin); }
             }
             239 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -4003,7 +4015,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             240 => {
                 self.condition = YYC_MOR_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Trn); }
             }
             241 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -4021,7 +4033,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             242 => {
                 self.condition = YYC_MAIN_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Wor); }
             }
             243 => {
                 yyaccept = 2;
@@ -5588,7 +5600,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             342 => {
                 self.condition = YYC_TIER_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Text); }
             }
             343 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -5606,7 +5618,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             344 => {
                 self.condition = YYC_TIER_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Text); }
             }
             345 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -5624,7 +5636,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             346 => {
                 self.condition = YYC_TIER_CONTENT;
-                { emit_prefix!(TierPrefix); }
+                { emit_dependent_prefix!(Text); }
             }
             347 => {
                 yyaccept = 2;
