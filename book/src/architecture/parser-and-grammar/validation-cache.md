@@ -1,7 +1,7 @@
 # Validation Cache
 
 **Status:** Current
-**Last modified:** 2026-09-06 01:54 EDT
+**Last modified:** 2026-09-06 03:03 EDT
 
 The persistent CHAT validation cache, used by `chatter validate` and the
 desktop validation runner. The LSP maintains its own in-memory document cache. Distinct from the audio-task cache used by upstream
@@ -277,3 +277,23 @@ without destroying the whole cache.
 
 - Upstream `batchalign3` documents its own audio-task cache for FA /
   UTR ASR / media conversion.
+
+## Parser implementation changes
+
+Production cache generations include the grammar fingerprint and complete
+source fingerprints from both parser crates, including recovery, conversion,
+and the authored and vendored re2c lexer. The build-only `talkbank-build`
+helper hashes sorted relative paths and exact bytes inside each owning package;
+it never searches for a sibling checkout. The same helper fingerprints the
+model source tree. Unreadable entries and symbolic links fail the build.
+
+`parser_behavior_fingerprint()` composes both backends into one generation.
+Parser selection still separates rows inside that generation, preserving the
+two-generation retention budget while switching backends. The legacy
+`GRAMMAR_FINGERPRINT` re-export describes grammar changes only and is not the
+production cache identity. A parser-only source edit now causes a cold miss
+without requiring a package version bump.
+
+These are conservative source fingerprints, not binary attestations. Comment
+and test-only edits invalidate too. Compiler, dependency resolution, feature
+flags, and runtime environment are not independently fingerprinted.

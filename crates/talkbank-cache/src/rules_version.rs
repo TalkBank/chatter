@@ -50,7 +50,7 @@
 //! the parameter mandatory, rather than optional or defaulted, is
 //! deliberate: a caller cannot construct a production `RulesVersion` while
 //! forgetting the parser dimension, because there is no overload that
-//! allows it. See `talkbank_parser::GRAMMAR_FINGERPRINT` for how the value
+//! allows it. See `talkbank_transform::parser_behavior_fingerprint` for how the value
 //! itself is computed.
 //!
 //! # Related CHAT Manual Sections
@@ -99,7 +99,7 @@ impl RulesVersion {
     /// Combines the cache crate's package version with the active validation
     /// rule-set fingerprint from `talkbank-model`. This baseline is useful for
     /// storage tests. Production validation uses [`Self::current_with_rule_selection`]
-    /// with its required grammar fingerprint; administrative callers instead
+    /// with its required parser fingerprint; administrative callers instead
     /// open [`crate::MaintenanceCache`] without a rule generation at all.
     pub fn current() -> Self {
         let fingerprint = talkbank_model::validation_rules_fingerprint();
@@ -151,7 +151,7 @@ impl RulesVersion {
     /// an `Option` or a builder method with a `Default`, on purpose: a caller
     /// CANNOT build a production `RulesVersion` while forgetting the parser
     /// dimension, the exact defect this type exists to make unrepresentable.
-    /// Production callers pass `talkbank_parser::GRAMMAR_FINGERPRINT` (or its
+    /// Production callers pass `talkbank_transform::parser_behavior_fingerprint` (or its
     /// re-export through `talkbank-transform`); this crate treats the string as
     /// opaque bytes to fold in, never parsing or interpreting it. Tests that
     /// only need to model rule-set changes, independent of parse behaviour,
@@ -207,7 +207,7 @@ mod tests {
 
     /// A fixed stand-in parser/grammar fingerprint for tests that exercise the
     /// RULE-SELECTION dimension and want the parser dimension held constant.
-    /// Real callers pass `talkbank_parser::GRAMMAR_FINGERPRINT`; this crate
+    /// Real callers pass `talkbank_transform::parser_behavior_fingerprint`; this crate
     /// cannot depend on the parser crate (see the module doc comment), so tests
     /// here model the caller-supplied string with a literal.
     const TEST_PARSER_FINGERPRINT: &str = "grammar-fp-test";

@@ -45,3 +45,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
+
+[build-dependencies]
+talkbank-build = { workspace = true }

@@ -4,6 +4,7 @@ members = [
     "apps/chatter-desktop/src-tauri",
     "crates/send2clan",
     "crates/talkbank-cache",
+    "crates/talkbank-build",
     "crates/chatter",
     "crates/talkbank-derive",
     "crates/talkbank-llm",
@@ -171,6 +172,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 send2clan = { path = "crates/send2clan", version = "0.19.0" }
 talkbank-cache = { path = "crates/talkbank-cache", version = "0.19.0" }
 chatter = { path = "crates/chatter", version = "0.19.0" }
+talkbank-build = { path = "crates/talkbank-build", version = "0.19.0" }
 talkbank-derive = { path = "crates/talkbank-derive", version = "0.19.0" }
 talkbank-llm = { path = "crates/talkbank-llm", version = "0.19.0" }
 talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.19.0" }

@@ -115,7 +115,7 @@ impl ValidationConfig {
         talkbank_cache::CacheIdentity::new(
             talkbank_cache::RulesVersion::current_with_rule_selection(
                 &self.rules,
-                crate::GRAMMAR_FINGERPRINT,
+                crate::parser_behavior_fingerprint(),
             ),
             self.parser_kind,
         )

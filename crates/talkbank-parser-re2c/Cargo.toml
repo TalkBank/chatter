@@ -63,6 +63,7 @@ name = "parse_comparison"
 harness = false
 
 [build-dependencies]
+talkbank-build = { workspace = true }
 syn = { version = "3.0", features = ["full"] }
 quote = "1.0"
 

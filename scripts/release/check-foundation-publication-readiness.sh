@@ -18,6 +18,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 first_wave=(
+    talkbank-build
     tree-sitter-talkbank
     talkbank-derive
     talkbank-model
@@ -80,10 +81,10 @@ for package_name in first_wave:
         dep_name = dependency["name"]
         dep_path = dependency.get("path")
         dep_kind = dependency.get("kind")
-        if dep_path and dep_kind is None and dep_name in workspace_names:
+        if dep_path and dep_kind in (None, "build") and dep_name in workspace_names:
             require(
                 dep_name in first_wave,
-                f"{package_name} has a runtime dependency on held-back/internal crate {dep_name}",
+                f"{package_name} has a runtime/build dependency on held-back/internal crate {dep_name}",
             )
 
 # Dev-dependency-on-unpublished-crate hazard: `cargo publish` keeps a
@@ -130,10 +131,10 @@ for package_name in first_wave:
         dep_name = dependency["name"]
         dep_path = dependency.get("path")
         dep_kind = dependency.get("kind")
-        if dep_path and dep_kind is None and dep_name in first_wave_index:
+        if dep_path and dep_kind in (None, "build") and dep_name in first_wave_index:
             require(
                 first_wave_index[dep_name] < first_wave_index[package_name],
-                f"first-wave order is wrong: {package_name} appears before its runtime dependency {dep_name}",
+                f"first-wave order is wrong: {package_name} appears before its runtime/build dependency {dep_name}",
             )
 
 if errors:
@@ -150,7 +151,7 @@ for package_name in held_back:
     print(f"  - {package_name}")
 
 print(
-    "\nNote: only tree-sitter-talkbank can complete `cargo publish --dry-run` before the "
+    "\nNote: talkbank-build and tree-sitter-talkbank can complete `cargo publish --dry-run` before the "
     "bootstrap crates exist on crates.io. The remaining first-wave crates are validated "
     "here via metadata/readme/runtime-dependency checks; their real registry-resolution "
     "smoke test happens as the wave is published in order."
@@ -169,5 +170,7 @@ for package_name in "${first_wave[@]}"; do
 done
 
 echo
-echo "==> Running standalone crates.io dry-run for tree-sitter-talkbank"
-cargo publish --dry-run -p tree-sitter-talkbank --locked "${allow_dirty[@]}"
+echo "==> Running standalone crates.io dry-runs"
+for package_name in talkbank-build tree-sitter-talkbank; do
+    cargo publish --dry-run -p "$package_name" --locked "${allow_dirty[@]}"
+done

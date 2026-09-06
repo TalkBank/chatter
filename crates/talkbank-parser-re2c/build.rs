@@ -13,7 +13,12 @@ const VENDORED_LEXER: &str = "src/generated/lexer.rs";
 const LEXER_RUST_FILE: &str = "lexer.rs";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed={VENDORED_LEXER}");
+    println!("cargo:rerun-if-changed=src");
+    let root = std::path::PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").ok_or("missing CARGO_MANIFEST_DIR")?,
+    );
+    let fingerprint = talkbank_build::SourceFingerprint::read_tree(&root.join("src"))?;
+    println!("cargo:rustc-env=TALKBANK_PARSER_SOURCE_FINGERPRINT={fingerprint}");
 
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set by Cargo");
     let out_path = Path::new(&out_dir).join(LEXER_RUST_FILE);

@@ -6431,6 +6431,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "talkbank-build"
+version = "0.19.0"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "talkbank-cache"
 version = "0.19.0"
 dependencies = [
@@ -6511,6 +6518,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "smol_str",
+ "talkbank-build",
  "talkbank-derive",
  "text-size",
  "thiserror 2.0.20",
@@ -6529,6 +6537,7 @@ dependencies = [
  "rstest",
  "smallvec",
  "smol_str",
+ "talkbank-build",
  "talkbank-model",
  "talkbank-parser-tests",
  "thiserror 2.0.20",
@@ -6552,6 +6561,7 @@ dependencies = [
  "serde_json",
  "strum",
  "syn 3.0.4",
+ "talkbank-build",
  "talkbank-model",
  "talkbank-parser",
  "talkbank-parser-tests",

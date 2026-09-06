@@ -144,7 +144,7 @@ pub fn validate_file(
         talkbank_transform::CacheIdentity::new(
             talkbank_transform::RulesVersion::current_with_rule_selection(
                 &rule_selection,
-                talkbank_transform::GRAMMAR_FINGERPRINT,
+                talkbank_transform::parser_behavior_fingerprint(),
             ),
             talkbank_model::ParserKind::TreeSitter,
         ),

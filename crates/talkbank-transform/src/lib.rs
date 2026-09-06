@@ -153,14 +153,28 @@ pub use talkbank_cache::{
     RulesVersion, SpaceReclaimed, UnifiedCache, VacuumSkipped, VersionPruneOutcome,
     VersionPruneReport, cache_db_path, default_cache_dir,
 };
-// Re-exported alongside the cache types (rather than unconditionally at the
-// crate root) because its only use is composing a `RulesVersion`: a caller
-// with `validation-runner` disabled has no `RulesVersion` to compose it into
-// either. Lets a caller that depends on `talkbank-transform` but not
-// `talkbank-parser` directly (the desktop app) fold PARSE behaviour into a
-// cache-compatibility version without a new direct dependency.
+/// Grammar-only fingerprint, retained for consumers inspecting grammar changes.
+/// Validation caches use [`parser_behavior_fingerprint`] instead.
 #[cfg(feature = "validation-runner")]
 pub use talkbank_parser::GRAMMAR_FINGERPRINT;
+
+/// One build generation covering the grammar and both parser implementations.
+///
+/// Backend selection belongs in the row namespace, not the generation: keeping
+/// both fingerprints together avoids exhausting retention by alternating parsers.
+/// Each source digest was computed inside its own packaged crate at build time.
+#[cfg(feature = "validation-runner")]
+pub fn parser_behavior_fingerprint() -> &'static str {
+    static FINGERPRINT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+        format!(
+            "grammar.{}-tree-sitter.{}-re2c.{}",
+            talkbank_parser::GRAMMAR_FINGERPRINT,
+            talkbank_parser::SOURCE_FINGERPRINT,
+            talkbank_parser_re2c::SOURCE_FINGERPRINT
+        )
+    });
+    FINGERPRINT.as_str()
+}
 
 /// Compiles this crate's README so its examples cannot rot.
 ///

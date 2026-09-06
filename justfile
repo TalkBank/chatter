@@ -67,7 +67,7 @@ test-all: test test-spec
 # until 2026-08-04.
 [doc("Run the spec workspace's own tests.")]
 test-spec:
-    cargo test --manifest-path spec/Cargo.toml --workspace
+    cargo test --manifest-path spec/Cargo.toml --workspace --locked
 
 # The `validation-runner`-off configuration of talkbank-transform (the
 # SQL-free surface downstream consumers opt into with
@@ -347,6 +347,9 @@ gate:
     set -euo pipefail
     source scripts/gate-receipt.sh
     gate_begin
+    # Reject stale dependency graphs before any expensive verification.
+    cargo metadata --locked --format-version 1 >/dev/null
+    cargo metadata --manifest-path spec/Cargo.toml --locked --format-version 1 >/dev/null
     just fmt-check
     just actionlint
     just ci-gate-sync

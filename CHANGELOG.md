@@ -11,6 +11,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- Validation caches include both parser implementation source fingerprints,
+  closing stale verdict reuse after parser-only edits without a version bump.
+  Shared build-only source hashing reads each crate's own packaged files.
+
 - **Breaking:** re2c `Token::TierPrefix` carries `DependentPrefixToken`, including
   the lexer-selected `DependentBodyKind`; dependent parsing matches that enum.
 

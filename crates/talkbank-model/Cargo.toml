@@ -36,6 +36,7 @@ rstest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
+talkbank-build = { workspace = true }
 phf_codegen = { workspace = true }
 
 [features]

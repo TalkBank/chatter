@@ -292,3 +292,23 @@ fn cache_multiple_paths_independent() -> Result<(), CacheError> {
     assert_eq!(outcome_b, Some(CacheOutcome::Invalid));
     Ok(())
 }
+
+/// Source-level parser fixes must invalidate verdicts without a version bump.
+/// Backend row namespaces must still share one generation for retention.
+#[test]
+fn parser_implementations_extend_the_grammar_generation() {
+    let config = talkbank_transform::ValidationConfig::default();
+    let old = talkbank_cache::RulesVersion::current_with_rule_selection(
+        &config.rules,
+        talkbank_parser::GRAMMAR_FINGERPRINT,
+    );
+    assert_ne!(config.cache_identity().rules_version(), &old);
+    let alternative = talkbank_transform::ValidationConfig {
+        parser_kind: talkbank_model::ParserKind::Re2c,
+        ..config.clone()
+    };
+    assert_eq!(
+        config.cache_identity().rules_version(),
+        alternative.cache_identity().rules_version()
+    );
+}

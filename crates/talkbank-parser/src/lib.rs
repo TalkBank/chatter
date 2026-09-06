@@ -160,3 +160,8 @@ pub use tree_sitter_talkbank::GRAMMAR_FINGERPRINT;
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
 struct ReadmeDoctests;
+
+/// Build-time fingerprint of this crate's own complete source tree.
+/// Includes parser recovery and conversion code; re2c also includes its
+/// authored and vendored lexer. No sibling checkout is read at build time.
+pub const SOURCE_FINGERPRINT: &str = env!("TALKBANK_PARSER_SOURCE_FINGERPRINT");

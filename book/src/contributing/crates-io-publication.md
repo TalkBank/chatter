@@ -1,7 +1,7 @@
 # Crates.io Publication
 
 **Status:** Current
-**Last updated:** 2026-09-05 17:04 EDT
+**Last updated:** 2026-09-06 03:03 EDT
 
 ## Scope
 
@@ -11,13 +11,17 @@ tag-triggered release path.
 
 Wave 1A is:
 
-1. `tree-sitter-talkbank`
-2. `talkbank-derive`
-3. `talkbank-model`
-4. `talkbank-cache`
-5. `talkbank-parser`
-6. `talkbank-parser-re2c`
-7. `talkbank-transform`
+1. `talkbank-build`
+2. `tree-sitter-talkbank`
+3. `talkbank-derive`
+4. `talkbank-model`
+5. `talkbank-cache`
+6. `talkbank-parser`
+7. `talkbank-parser-re2c`
+8. `talkbank-transform`
+
+`talkbank-build` is build-only support for the model and parser source
+fingerprints and must be published before those consumers.
 
 `talkbank-parser-re2c` is part of the first wave because
 `talkbank-transform` has a **runtime dependency** on it. Holding it back would
@@ -53,10 +57,10 @@ The readiness check enforces:
   `categories`, `readme`)
 - readme-file existence
 - package assembly for every first-wave crate via `cargo package --list`
-- the first-wave runtime dependency graph
+- the first-wave runtime and build dependency graph
 - `publish = false` guards on every workspace crate outside Wave 1A
-- a real `cargo publish --dry-run` for the standalone `tree-sitter-talkbank`
-  crate
+- real `cargo publish --dry-run` checks for the standalone `talkbank-build`
+  and `tree-sitter-talkbank` crates
 
 The metadata-only mode uses locked Cargo metadata and reads README paths. It
 does not validate assembled package contents or registry resolution and cannot
@@ -72,7 +76,8 @@ its prerequisite `talkbank-derive` already exists on crates.io.
 
 So the current automation is intentionally honest:
 
-- `tree-sitter-talkbank` gets a real crates.io dry-run because it stands alone.
+- `talkbank-build` and `tree-sitter-talkbank` get real crates.io dry-runs
+  because neither depends on an unpublished workspace crate.
 - The remaining Wave 1A crates are validated by metadata, readme, and
   dependency checks before publication. (No MSRV is declared yet; set a
   deliberate `rust-version` and re-add an MSRV check when publication is
